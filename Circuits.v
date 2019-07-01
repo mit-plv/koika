@@ -9,7 +9,7 @@ Section circuits.
       circuit nOut -> circuit n' -> circuit nOut
   | CConst : forall (l: list bool),
       circuit (length l)
-  | CRef : forall nOut (var: nat),
+  | CVar : forall nOut (var: nat),
       circuit nOut
   | CLet : forall {n n'} (var: nat) (expr: circuit n) (body: circuit n'),
       circuit n'.
@@ -37,15 +37,15 @@ Section circuits.
   Definition max (l: list nat) :=
     List.fold_left max l 0.
 
-  Definition CRefBundle n var :=
-    {| consistent := CRef 1 var;
-       read0 := CRef _ var;
-       read1 := CRef _ var;
-       write0 := CRef _ var;
-       write1 := CRef _ var;
-       write0Data := CRef n var;
-       write1Data := CRef n var;
-       retVal := existT _ n (CRef n var) |}.
+  Definition CVarBundle n var :=
+    {| consistent := CVar 1 var;
+       read0 := CVar _ var;
+       read1 := CVar _ var;
+       write0 := CVar _ var;
+       write1 := CVar _ var;
+       write0Data := CVar n var;
+       write1Data := CVar n var;
+       retVal := existT _ n (CVar n var) |}.
 
   Definition CLetBundle {n n'} var (expr: Bundle n) (body: Bundle n') :=
     {| consistent := CLet var expr.(consistent) body.(consistent);
@@ -63,7 +63,7 @@ Section circuits.
       let '(cExpr, Gamma') := compile expr Gamma input in
       let '(cBody, Gamma'') := compile body Gamma' cExpr in
       (cBody, Gamma'')          (* FIXME merge *)
-    | Ref var =>
+    | Var var =>
       let (cst, size) :=
           match List.find (fun x => Nat.eqb (fst x) var) Gamma with
           | Some (_, size) => (CConst [true], size)
@@ -76,9 +76,9 @@ Section circuits.
           write1 := input.(write1);
           write0Data := input.(write0Data);
           write1Data := input.(write1Data);
-          retVal := existT _ n (CRef _ var) |},
+          retVal := existT _ n (CVar _ var) |},
        Gamma)
-    | PureUnit =>
+    | Skip =>
       ({| consistent := input.(consistent);
          read0 := input.(read0);
          read1 := input.(read1);
@@ -88,7 +88,7 @@ Section circuits.
          write1Data := input.(write1Data);
          retVal := existT _ 0 (CConst nil) |},
        Gamma)
-    | PureBits bits =>
+    | Const bits =>
       ({| consistent := input.(consistent);
           read0 := input.(read0);
           read1 := input.(read1);
@@ -101,8 +101,8 @@ Section circuits.
     | If cond tbranch fbranch =>
       let var := S (max (List.map fst Gamma)) in
       let '(cCond, Gamma') := compile cond Gamma input in
-      let '(cTbr, GammaT) := compile tbranch Gamma (CRefBundle n var) in
-      let '(cFbr, GammaF) := compile fbranch Gamma (CRefBundle n var) in
+      let '(cTbr, GammaT) := compile tbranch Gamma (CVarBundle n var) in
+      let '(cFbr, GammaF) := compile fbranch Gamma (CVarBundle n var) in
       (CLetBundle var cCond {| consistent := CAnd cTbr.(consistent) cTbr.(consistent);
           read0 := COr cTbr.(read0) cFbr.(read0);
           read1 := COr cTbr.(read1) cFbr.(read1);

@@ -49,34 +49,18 @@ Proof.
   unfold fenv_le, fenv_add; simpl; firstorder (subst; eauto).
 Qed.
 
-Record funsig {T} :=
-  {
-    argTypes: list T;
-    retType: T
-  }.
-
-Arguments funsig : clear implicits.
-
-Inductive SigKind {T} :=
-| SigVector (tau: T)
-| SigFunction (argTypes: list T) (retType: T).
-
-Arguments SigKind: clear implicits.
+Record FunSig T := SigFn { argTypes: list T; retType: T }.
+Arguments SigFn {_}.
 
 Hint Resolve @uniq : core.
 
-Lemma SigVector_inj {T} : forall (t1 t2: T),
-    SigVector t1 = SigVector t2 -> t1 = t2.
-Proof. now inversion 1. Qed.
-
 Lemma SigFunction_inj2 {T} :
   forall (argTypes argTypes': list T) (retType retType': T),
-    SigFunction argTypes retType =
-    SigFunction argTypes' retType' ->
+    SigFn argTypes retType =
+    SigFn argTypes' retType' ->
     retType = retType'.
 Proof. now inversion 1. Qed.
 
-Hint Extern 10 => eapply @SigVector_inj.
 Hint Extern 10 => eapply @SigFunction_inj2.
 
 Inductive Posed {P: Prop}: P -> Prop :=
@@ -148,40 +132,42 @@ Hint Resolve fenv_incl_domains_add.
 Hint Resolve fenv_add_increasing.
 
 Section TC.
-  Context {Var: Type}.
-  Context {Sigma: fenv nat (SigKind type)}.
+  Context {TVar TFn: Type}.
+  Context {Sigma__reg: fenv nat type}.
+  Context {Sigma__fn: fenv TFn (FunSig type)}.
 
+  Notation syntax := (syntax TVar TFn).
   Notation fenv_le := (fenv_le type_le).
-  
-  Inductive HasType : forall (Gamma: tenv Var) (s: syntax) (tau: type), Prop :=
+
+  Inductive HasType : forall (Gamma: tenv TVar) (s: syntax) (tau: type), Prop :=
   | HasTypePromote:
-      forall (Gamma: tenv Var) (s: syntax)
+      forall (Gamma: tenv TVar) (s: syntax)
         (tau: type) (tau': type),
         type_le tau tau' ->
         HasType Gamma s tau' ->
         HasType Gamma s tau
   | HasTypeBind:
-      forall (Gamma: tenv Var)
-        (var: Var) (expr: syntax) (body: syntax)
+      forall (Gamma: tenv TVar)
+        (var: TVar) (expr: syntax) (body: syntax)
         (tau tau': type),
         HasType Gamma expr tau' ->
         HasType (fenv_add Gamma var tau') body tau ->
         HasType Gamma (Bind var expr body) tau
-  | HasTypeRef:
-      forall (Gamma: tenv Var)
-        (var: Var)
+  | HasTypeVar:
+      forall (Gamma: tenv TVar)
+        (var: TVar)
         (tau: type),
         Gamma var tau ->
-        HasType Gamma (Ref var) tau
-  | HasTypePureUnit:
-      forall (Gamma: tenv Var),
-        HasType Gamma PureUnit unit
-  | HasTypePureBits:
-      forall (Gamma: tenv Var)
+        HasType Gamma (Var var) tau
+  | HasTypeSkip:
+      forall (Gamma: tenv TVar),
+        HasType Gamma Skip unit
+  | HasTypeConst:
+      forall (Gamma: tenv TVar)
         (bits: list bool) (cst: nat),
-        HasType Gamma (PureBits bits) (bit (length bits))
+        HasType Gamma (Const bits) (bit (length bits))
   | HasTypeIf:
-      forall (Gamma: tenv Var)
+      forall (Gamma: tenv TVar)
         (cond: syntax) (tbranch: syntax) (fbranch: syntax)
         (tau: type),
         HasType Gamma cond (bit 1) ->
@@ -189,29 +175,27 @@ Section TC.
         HasType Gamma fbranch tau ->
         HasType Gamma (If cond tbranch fbranch) tau
   | HasTypeFail:
-      forall (Gamma: tenv Var)
+      forall (Gamma: tenv TVar)
         (tau: type),
         HasType Gamma Fail tau
   | HasTypeRead:
-      forall (Gamma: tenv Var)
-        (level: bool) (idx: nat) (offset: syntax)
+      forall (Gamma: tenv TVar)
+        (level: bool) (idx: nat)
         (tau: type) (n: nat),
-        Sigma idx (SigVector tau) ->
-        HasType Gamma offset (bit n) ->
-        HasType Gamma (Read level idx offset) tau
+        Sigma__reg idx tau ->
+        HasType Gamma (Read level idx) tau
   | HasTypeWrite:
-      forall (Gamma: tenv Var)
-        (level: bool) (idx: nat) (offset: syntax) (value: syntax)
+      forall (Gamma: tenv TVar)
+        (level: bool) (idx: nat) (value: syntax)
         (tau: type) (n: nat),
-        Sigma idx (SigVector tau) ->
-        HasType Gamma offset (bit n) ->
+        Sigma__reg idx tau ->
         HasType Gamma value tau ->
-        HasType Gamma (Write level idx offset value) unit
+        HasType Gamma (Write level idx value) unit
   | HasTypeCall:
-      forall (Gamma: tenv Var)
-        (idx: nat) (args: list syntax)
+      forall (Gamma: tenv TVar)
+        (idx: TFn) (args: list syntax)
         (argTypes: list type) (retType: type),
-        Sigma idx (SigFunction argTypes retType) ->
+        Sigma__fn idx (SigFn argTypes retType) ->
         List.length args = List.length argTypes ->
         (forall (n: nat) (s: syntax) (tau: type),
             List.nth_error args n = Some s ->
@@ -222,9 +206,9 @@ Section TC.
   Hint Constructors HasType.
 
   Lemma HasType_morphism:
-    forall (Gamma1: tenv Var) s tau,
+    forall (Gamma1: tenv TVar) s tau,
       HasType Gamma1 s tau ->
-      forall (Gamma2: tenv Var),
+      forall (Gamma2: tenv TVar),
         fenv_le Gamma1 Gamma2 ->
         HasType Gamma2 s tau.
   Proof.
@@ -236,29 +220,29 @@ Section TC.
   Hint Resolve HasType_morphism.
   (* Note: no MaxType_morphism, since changing the environment changes the MaxType of the refs *)
 
-  Inductive MaxType : forall (Gamma: tenv Var) (s: syntax) (tau: type), Prop :=
+  Inductive MaxType : forall (Gamma: tenv TVar) (s: syntax) (tau: type), Prop :=
   | MaxTypeBind:
-      forall (Gamma: tenv Var)
-        (var: Var) (expr: syntax) (body: syntax)
+      forall (Gamma: tenv TVar)
+        (var: TVar) (expr: syntax) (body: syntax)
         (tau tau': type),
         MaxType Gamma expr tau' ->
         MaxType (fenv_add Gamma var tau') body tau ->
         MaxType Gamma (Bind var expr body) tau
-  | MaxTypeRef:
-      forall (Gamma: tenv Var)
-        (var: Var)
+  | MaxTypeVar:
+      forall (Gamma: tenv TVar)
+        (var: TVar)
         (tau: type),
         Gamma var tau ->
-        MaxType Gamma (Ref var) tau
-  | MaxTypePureUnit:
-      forall (Gamma: tenv Var),
-        MaxType Gamma PureUnit unit
-  | MaxTypePureBits:
-      forall (Gamma: tenv Var)
+        MaxType Gamma (Var var) tau
+  | MaxTypeSkip:
+      forall (Gamma: tenv TVar),
+        MaxType Gamma Skip unit
+  | MaxTypeConst:
+      forall (Gamma: tenv TVar)
         (bits: list bool) (cst: nat),
-        MaxType Gamma (PureBits bits) (bit (length bits))
+        MaxType Gamma (Const bits) (bit (length bits))
   | MaxTypeIfT:
-      forall (Gamma: tenv Var)
+      forall (Gamma: tenv TVar)
         (cond: syntax) (tbranch: syntax) (fbranch: syntax)
         (tauf taut: type),
         HasType Gamma cond (bit 1) ->
@@ -267,7 +251,7 @@ Section TC.
         type_le taut tauf ->
         MaxType Gamma (If cond tbranch fbranch) taut
   | MaxTypeIfF:
-      forall (Gamma: tenv Var)
+      forall (Gamma: tenv TVar)
         (cond: syntax) (tbranch: syntax) (fbranch: syntax)
         (tauf taut: type),
         HasType Gamma cond (bit 1) ->
@@ -276,28 +260,26 @@ Section TC.
         type_le tauf taut ->
         MaxType Gamma (If cond tbranch fbranch) tauf
   | MaxTypeFail:
-      forall (Gamma: tenv Var),
+      forall (Gamma: tenv TVar),
         MaxType Gamma Fail any
   | MaxTypeRead:
-      forall (Gamma: tenv Var)
-        (level: bool) (idx: nat) (offset: syntax)
+      forall (Gamma: tenv TVar)
+        (level: bool) (idx: nat)
         (tau: type) (n: nat),
-        Sigma idx (SigVector tau) ->
-        HasType Gamma offset (bit n) ->
-        MaxType Gamma (Read level idx offset) tau
+        Sigma__reg idx tau ->
+        MaxType Gamma (Read level idx) tau
   | MaxTypeWrite:
-      forall (Gamma: tenv Var)
-        (level: bool) (idx: nat) (offset: syntax) (value: syntax)
+      forall (Gamma: tenv TVar)
+        (level: bool) (idx: nat) (value: syntax)
         (tau: type) (n: nat),
-        Sigma idx (SigVector tau) ->
-        HasType Gamma offset (bit n) ->
+        Sigma__reg idx tau ->
         HasType Gamma value tau ->
-        MaxType Gamma (Write level idx offset value) unit
+        MaxType Gamma (Write level idx value) unit
   | MaxTypeCall:
-      forall (Gamma: tenv Var)
-        (idx: nat) (args: list syntax)
+      forall (Gamma: tenv TVar)
+        (idx: TFn) (args: list syntax)
         (argTypes: list type) (retType: type),
-        Sigma idx (SigFunction argTypes retType) ->
+        Sigma__fn idx (SigFn argTypes retType) ->
         List.length args = List.length argTypes ->
         (forall (n: nat) (s: syntax) (tau: type),
             List.nth_error args n = Some s ->
@@ -367,7 +349,7 @@ Section TC.
   (* The other copies of MaxType_increasing aren't very interesting, since they don't show existence (and existence implies their results, because of unicity) *)
   Lemma MaxType_increasing'' : forall s Gamma tau,
       MaxType Gamma s tau ->
-      forall (Gamma': tenv Var),
+      forall (Gamma': tenv TVar),
         fenv_le Gamma Gamma' ->
         exists tau',
           MaxType Gamma' s tau' /\
@@ -414,7 +396,7 @@ Section TC.
       HasType Gamma s tau ->
       exists tau', MaxType Gamma s tau' /\ tau ⩽ tau'.
   Proof.
-    induction 1; try solve [firstorder eauto].
+    induction 1; try solve [eauto || firstorder eauto].
     - t.
 
       pose proof (MaxType_increasing''

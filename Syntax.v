@@ -1,10 +1,15 @@
-Inductive syntax {Var} :=
-| Bind (var: Var) (expr: syntax) (body: syntax)
-| Ref (var: Var)
-| PureUnit
-| PureBits (bits: list bool)
+Inductive Level :=
+  P0 | P1.
+
+Inductive syntax {TVar TFn} :=
+| Bind (var: TVar) (expr: syntax) (body: syntax)
+| Var (var: TVar)
+| Skip
+| Const (bits: list bool)
 | If (cond: syntax) (tbranch: syntax) (fbranch: syntax)
 | Fail
-| Read (level: bool) (idx: nat) (offset: syntax)
-| Write (level: bool) (idx: nat) (offset: syntax) (value: syntax)
-| Call (idx: nat) (args: list syntax).
+| Read (level: Level) (idx: nat)
+| Write (level: Level) (idx: nat) (value: syntax)
+| Call (fn: TFn) (args: list syntax).
+
+Arguments syntax : clear implicits.
