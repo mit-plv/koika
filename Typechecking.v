@@ -1,36 +1,24 @@
-Require Import List.
-Require Import SGA.Common SGA.Syntax.
+Require Import SGA.Common SGA.Syntax SGA.Types.
 
-(** Environments **)
-Record fenv {Key Value} :=
+Tactic Notation "teauto" := eauto with types.
+Tactic Notation "teauto" integer(n) := eauto n with types.
+
+Record fenv {Key Value: Type} :=
   { fn :> Key -> Value -> Prop;
     uniq: forall k v v', fn k v -> fn k v' -> v = v' }.
 
 Arguments fenv: clear implicits.
+Hint Resolve @uniq : types.
 
-Definition fenv_lookup {Key Value} (env: fenv Key Value) k v := env.(fn) k v.
-
-Definition fenv_add {Key Value} (env: fenv Key Value) (k: Key) (v: Value) : fenv Key Value.
+Definition fenv_add {Key Value: Type} (env: fenv Key Value) (k: Key) (v: Value) : fenv Key Value.
   refine {| fn := (fun k' v' => (k = k' /\ v = v') \/ (k <> k' /\ env.(fn) k' v')) |};
-    abstract (destruct env; intuition (subst; eauto)).
+    abstract (destruct env; intuition (subst; teauto)).
 Defined.
 
-(* FIXME: remove *)
-Definition fenv_incl_domains {Key} {Value} (Gamma Gamma': fenv Key Value) :=
-  forall k v, Gamma k v -> exists v', Gamma' k v'.
-
-Lemma fenv_incl_domains_add {Key Value}:
-  forall (Gamma Gamma': fenv Key Value) k v v',
-    fenv_incl_domains Gamma Gamma' ->
-    fenv_incl_domains (fenv_add Gamma k v) (fenv_add Gamma' k v').
-Proof.
-  unfold fenv_incl_domains, fenv_add; simpl; firstorder (subst; eauto).
-Qed.
-
-Definition fenv_le {Key Value} (cmp : Value -> Value -> Prop) (Gamma Gamma': fenv Key Value) :=
+Definition fenv_le {Key Value: Type} (cmp : Value -> Value -> Prop) (Gamma Gamma': fenv Key Value) :=
   forall k v, Gamma k v -> exists v', Gamma' k v' /\ cmp v v'.
 
-Lemma fenv_le_refl {Key Value} :
+Lemma fenv_le_refl {Key Value: Type}:
   forall (cmp: _ -> _ -> Prop) (Gamma : fenv Key Value),
     (forall x, cmp x x) ->
     fenv_le cmp Gamma Gamma.
@@ -38,102 +26,25 @@ Proof.
   firstorder.
 Qed.
 
-Hint Resolve fenv_le_refl.
+Hint Resolve fenv_le_refl : types.
 
-Lemma fenv_add_increasing {Var Value}:
-  forall (cmp: _ -> _ -> Prop) (Gamma1 : fenv Var Value) (var : Var) (tau tau' : Value) (Gamma2 : fenv Var Value),
+Lemma fenv_add_increasing {Key Value: Type}:
+  forall (cmp: _ -> _ -> Prop) (Gamma1 : fenv Key Value) (var : Key) (tau tau' : Value) (Gamma2 : fenv Key Value),
     cmp tau tau' ->
     fenv_le cmp Gamma1 Gamma2 ->
     fenv_le cmp (fenv_add Gamma1 var tau) (fenv_add Gamma2 var tau').
 Proof.
-  unfold fenv_le, fenv_add; simpl; firstorder (subst; eauto).
+  unfold fenv_le, fenv_add; simpl; firstorder (subst; teauto).
 Qed.
 
-Record FunSig T := SigFn { argTypes: list T; retType: T }.
-Arguments SigFn {_}.
-
-Hint Resolve @uniq : core.
-
-Lemma SigFunction_inj2 {T} :
-  forall (argTypes argTypes': list T) (retType retType': T),
-    SigFn argTypes retType =
-    SigFn argTypes' retType' ->
-    retType = retType'.
-Proof. now inversion 1. Qed.
-
-Hint Extern 10 => eapply @SigFunction_inj2.
-
-Inductive Posed {P: Prop}: P -> Prop :=
-| AlreadyPosed : forall p: P, Posed p.
-
-Tactic Notation "pose_once" uconstr(thm) :=
-  (progress match goal with
-            | [ H: Posed ?thm' |- _ ] =>
-              unify thm thm'
-            | _ => pose proof thm;
-                  pose proof (AlreadyPosed thm)
-            end).
-
-Inductive type :=
-| unit_t
-| bit_t (n: nat)
-| any_t.
-
-Scheme Equality for type.
-
-Inductive type_le : type -> type -> Prop :=
-| TypeLeRefl : forall tau tau', tau' = tau -> type_le tau tau'
-| TypeLeAny : forall tau tau', tau' = any_t -> type_le tau tau'.
-
-Hint Constructors type_le.
-
-Lemma type_le_trans:
-  forall tau1 tau2 tau3,
-    type_le tau1 tau2 ->
-    type_le tau2 tau3 ->
-    type_le tau1 tau3.
-Proof.
-  intros * le12 le23. destruct le12, le23; subst; eauto.
-Qed.
-
-Hint Resolve type_le_trans.
-
-Lemma type_le_antisym:
-  forall tau1 tau2,
-    type_le tau1 tau2 ->
-    type_le tau2 tau1 ->
-    tau1 = tau2.
-Proof.
-  intros * le12 le23. destruct le12, le23; subst; eauto.
-Qed.
-
-Hint Resolve type_le_antisym.
-
-Lemma type_ge_any_t_eq_any_t :
-  forall tau,
-    type_le any_t tau ->
-    tau = any_t.
-Proof.
-  inversion 1; eauto.
-Qed.
-
-Hint Resolve type_ge_any_t_eq_any_t.
-
-(* Inductive unifiable : type -> type -> Prop := *)
-(* | urefl : forall tau, unifiable tau tau *)
-(* | uany_tl : forall tau, unifiable any_t tau *)
-(* | uany_tr : forall tau, unifiable tau any_t. *)
-
-Notation tenv A := (fenv A type).
-
-Hint Resolve fenv_incl_domains_add.
-
-Hint Resolve fenv_add_increasing.
+Hint Resolve fenv_add_increasing : types.
 
 Section TC.
+  Notation tenv A := (fenv A type).
+
   Context {TVar TFn: Type}.
-  Context (Sigma__reg: fenv nat type).
-  Context (Sigma__fn: fenv TFn (FunSig type)).
+  Context (Sigma__reg: tenv nat).
+  Context (Sigma__fn: fenv TFn (ExternalSignature type)).
 
   Notation syntax := (syntax TVar TFn).
   Notation fenv_le := (fenv_le type_le).
@@ -194,7 +105,7 @@ Section TC.
       forall (Gamma: tenv TVar)
         (idx: TFn) (args: list syntax)
         (argTypes: list type) (retType: type),
-        Sigma__fn idx (SigFn argTypes retType) ->
+        Sigma__fn idx (FunSig argTypes retType) ->
         List.length args = List.length argTypes ->
         (forall (n: nat) (s: syntax) (tau: type),
             List.nth_error args n = Some s ->
@@ -202,7 +113,7 @@ Section TC.
             HasType Gamma s tau) ->
         HasType Gamma (Call idx args) retType.
 
-  Hint Constructors HasType.
+  Hint Constructors HasType : types.
 
   Lemma HasType_morphism:
     forall (Gamma1: tenv TVar) s tau,
@@ -211,12 +122,12 @@ Section TC.
         fenv_le Gamma1 Gamma2 ->
         HasType Gamma2 s tau.
   Proof.
-    induction 1; intros Gamma2 le; eauto 6.
+    induction 1; intros Gamma2 le; teauto 6.
     specialize (le _ _ H).
-    firstorder eauto.
+    firstorder teauto.
   Qed.
 
-  Hint Resolve HasType_morphism.
+  Hint Resolve HasType_morphism : types.
   (* Note: no MaxType_morphism, since changing the environment changes the MaxType of the refs *)
 
   Inductive MaxType : forall (Gamma: tenv TVar) (s: syntax) (tau: type), Prop :=
@@ -278,7 +189,7 @@ Section TC.
       forall (Gamma: tenv TVar)
         (idx: TFn) (args: list syntax)
         (argTypes: list type) (retType: type),
-        Sigma__fn idx (SigFn argTypes retType) ->
+        Sigma__fn idx (FunSig argTypes retType) ->
         List.length args = List.length argTypes ->
         (forall (n: nat) (s: syntax) (tau: type),
             List.nth_error args n = Some s ->
@@ -287,7 +198,7 @@ Section TC.
         MaxType Gamma (Call idx args) retType.
   (* FIXME use single HasType premise in last three rules? *)
 
-  Hint Constructors MaxType.
+  Hint Constructors MaxType : types.
 
   Theorem maxtypes_unicity :
     forall Gamma s tau,
@@ -298,13 +209,13 @@ Section TC.
   Proof.
     induction 1; intros * HasType';
       inversion HasType'; subst.
-    1-12: solve [firstorder (subst; firstorder eauto)].
+    1-12: solve [firstorder (subst; firstorder teauto)].
   Qed.
 
-  Hint Resolve maxtypes_unicity.
+  Hint Resolve maxtypes_unicity : types.
 
   Lemma MaxType_HasType : forall Gamma s tau, MaxType Gamma s tau -> HasType Gamma s tau.
-    induction 1; eauto.
+    induction 1; teauto.
   Qed.
 
   Notation "Gamma [ k ↦ v ]" :=
@@ -322,7 +233,7 @@ Section TC.
       tau ⩽ tau' ->
       tau' = any_t \/ tau' = tau.
   Proof.
-    inversion 1; simpl; eauto.
+    inversion 1; simpl; teauto.
   Qed.
 
   Lemma type_le_upper_bounds_comparable :
@@ -334,7 +245,7 @@ Section TC.
   Proof.
     intros * le12 le11' le22';
       inversion le12; inversion le11'; inversion le22'; subst;
-        discriminate || eauto.
+        discriminate || teauto.
   Qed.
 
   Ltac t :=
@@ -354,7 +265,7 @@ Section TC.
           MaxType Gamma' s tau' /\
           type_le tau tau'.
   Proof.
-    induction 1; intros * le; t; eauto 7.
+    induction 1; intros * le; t; teauto 7.
 
     - specialize (IHMaxType1 _ le).
       t.
@@ -362,7 +273,7 @@ Section TC.
       { apply fenv_add_increasing; eassumption. }
       specialize (IHMaxType2 _ Hdiff).
       t.
-      eauto.
+      teauto.
 
     - specialize (IHMaxType1 _ le).
       t.
@@ -374,8 +285,8 @@ Section TC.
                   ltac:(eassumption)
                   ltac:(eassumption)
                   ltac:(eassumption)).
-      eauto.
-      eauto 6.
+      teauto.
+      teauto 6.
 
     - specialize (IHMaxType1 _ le).
       t.
@@ -387,31 +298,31 @@ Section TC.
                   ltac:(eassumption)
                   ltac:(eassumption)
                   ltac:(eassumption)).
-      eauto.
-      eauto 6.
+      teauto.
+      teauto 6.
   Qed.
 
   Lemma HasType_MaxType : forall Gamma s tau,
       HasType Gamma s tau ->
       exists tau', MaxType Gamma s tau' /\ tau ⩽ tau'.
   Proof.
-    induction 1; try solve [eauto || firstorder eauto].
+    induction 1; try solve [teauto || firstorder teauto].
     - t.
 
       pose proof (MaxType_increasing''
                     _ _ _ H1 Gamma[var ↦ x0]
-                    ltac:(eauto)).
+                    ltac:(teauto)).
       t.
-      eauto.
+      teauto.
     - t.
 
       destruct (type_le_upper_bounds_comparable
                   tau tau x x0
-                  ltac:(eauto)
+                  ltac:(teauto)
                   ltac:(eassumption)
                   ltac:(eassumption)).
-      eauto.
-      eauto.
+      teauto.
+      teauto.
   Qed.
 
   Lemma type_le_inv_not_any_t :
@@ -423,7 +334,8 @@ Section TC.
     inversion 1; congruence.
   Qed.
 
-  Hint Resolve type_le_inv_not_any_t.
+  Hint Resolve type_le_inv_not_any_t : types.
+  Hint Resolve MaxType_HasType : types.
 
   Theorem types_unicity :
     forall Gamma s tau,
@@ -435,16 +347,16 @@ Section TC.
     pose proof (HasType_MaxType _ _ _ H).
     t.
     destruct (type_eq_dec x any_t); subst.
-    - eauto using MaxType_HasType.
+    - teauto.
     - right.
       intros tau' H'.
       pose proof (HasType_MaxType _ _ _ H').
       t.
-      assert (x = x0) by eauto; subst.
+      assert (x = x0) by teauto; subst.
 
       transitivity x0.
-      eauto.
-      eauto.
+      teauto.
+      teauto.
   Qed.
 
   Print Assumptions types_unicity.
