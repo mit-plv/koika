@@ -1,5 +1,5 @@
 Require Import List.
-Require Import SGA.Syntax.
+Require Import SGA.Common SGA.Syntax.
 
 (** Environments **)
 Record fenv {Key Value} :=
@@ -74,17 +74,16 @@ Tactic Notation "pose_once" uconstr(thm) :=
                   pose proof (AlreadyPosed thm)
             end).
 
-Module T1.
 Inductive type :=
-| unit
-| bit (n: nat)
-| any.
+| unit_t
+| bit_t (n: nat)
+| any_t.
 
 Scheme Equality for type.
 
 Inductive type_le : type -> type -> Prop :=
 | TypeLeRefl : forall tau tau', tau' = tau -> type_le tau tau'
-| TypeLeAny : forall tau tau', tau' = any -> type_le tau tau'.
+| TypeLeAny : forall tau tau', tau' = any_t -> type_le tau tau'.
 
 Hint Constructors type_le.
 
@@ -110,20 +109,20 @@ Qed.
 
 Hint Resolve type_le_antisym.
 
-Lemma type_ge_any_eq_any :
+Lemma type_ge_any_t_eq_any_t :
   forall tau,
-    type_le any tau ->
-    tau = any.
+    type_le any_t tau ->
+    tau = any_t.
 Proof.
   inversion 1; eauto.
 Qed.
 
-Hint Resolve type_ge_any_eq_any.
+Hint Resolve type_ge_any_t_eq_any_t.
 
 (* Inductive unifiable : type -> type -> Prop := *)
 (* | urefl : forall tau, unifiable tau tau *)
-(* | uanyl : forall tau, unifiable any tau *)
-(* | uanyr : forall tau, unifiable tau any. *)
+(* | uany_tl : forall tau, unifiable any_t tau *)
+(* | uany_tr : forall tau, unifiable tau any_t. *)
 
 Notation tenv A := (fenv A type).
 
@@ -133,8 +132,8 @@ Hint Resolve fenv_add_increasing.
 
 Section TC.
   Context {TVar TFn: Type}.
-  Context {Sigma__reg: fenv nat type}.
-  Context {Sigma__fn: fenv TFn (FunSig type)}.
+  Context (Sigma__reg: fenv nat type).
+  Context (Sigma__fn: fenv TFn (FunSig type)).
 
   Notation syntax := (syntax TVar TFn).
   Notation fenv_le := (fenv_le type_le).
@@ -161,16 +160,16 @@ Section TC.
         HasType Gamma (Var var) tau
   | HasTypeSkip:
       forall (Gamma: tenv TVar),
-        HasType Gamma Skip unit
+        HasType Gamma Skip unit_t
   | HasTypeConst:
       forall (Gamma: tenv TVar)
         (bits: list bool) (cst: nat),
-        HasType Gamma (Const bits) (bit (length bits))
+        HasType Gamma (Const bits) (bit_t (length bits))
   | HasTypeIf:
       forall (Gamma: tenv TVar)
         (cond: syntax) (tbranch: syntax) (fbranch: syntax)
         (tau: type),
-        HasType Gamma cond (bit 1) ->
+        HasType Gamma cond (bit_t 1) ->
         HasType Gamma tbranch tau ->
         HasType Gamma fbranch tau ->
         HasType Gamma (If cond tbranch fbranch) tau
@@ -180,17 +179,17 @@ Section TC.
         HasType Gamma Fail tau
   | HasTypeRead:
       forall (Gamma: tenv TVar)
-        (level: bool) (idx: nat)
+        (level: Level) (idx: nat)
         (tau: type) (n: nat),
         Sigma__reg idx tau ->
         HasType Gamma (Read level idx) tau
   | HasTypeWrite:
       forall (Gamma: tenv TVar)
-        (level: bool) (idx: nat) (value: syntax)
+        (level: Level) (idx: nat) (value: syntax)
         (tau: type) (n: nat),
         Sigma__reg idx tau ->
         HasType Gamma value tau ->
-        HasType Gamma (Write level idx value) unit
+        HasType Gamma (Write level idx value) unit_t
   | HasTypeCall:
       forall (Gamma: tenv TVar)
         (idx: TFn) (args: list syntax)
@@ -236,16 +235,16 @@ Section TC.
         MaxType Gamma (Var var) tau
   | MaxTypeSkip:
       forall (Gamma: tenv TVar),
-        MaxType Gamma Skip unit
+        MaxType Gamma Skip unit_t
   | MaxTypeConst:
       forall (Gamma: tenv TVar)
         (bits: list bool) (cst: nat),
-        MaxType Gamma (Const bits) (bit (length bits))
+        MaxType Gamma (Const bits) (bit_t (length bits))
   | MaxTypeIfT:
       forall (Gamma: tenv TVar)
         (cond: syntax) (tbranch: syntax) (fbranch: syntax)
         (tauf taut: type),
-        HasType Gamma cond (bit 1) ->
+        HasType Gamma cond (bit_t 1) ->
         MaxType Gamma tbranch tauf ->
         MaxType Gamma fbranch taut ->
         type_le taut tauf ->
@@ -254,27 +253,27 @@ Section TC.
       forall (Gamma: tenv TVar)
         (cond: syntax) (tbranch: syntax) (fbranch: syntax)
         (tauf taut: type),
-        HasType Gamma cond (bit 1) ->
+        HasType Gamma cond (bit_t 1) ->
         MaxType Gamma tbranch tauf ->
         MaxType Gamma fbranch taut ->
         type_le tauf taut ->
         MaxType Gamma (If cond tbranch fbranch) tauf
   | MaxTypeFail:
       forall (Gamma: tenv TVar),
-        MaxType Gamma Fail any
+        MaxType Gamma Fail any_t
   | MaxTypeRead:
       forall (Gamma: tenv TVar)
-        (level: bool) (idx: nat)
+        (level: Level) (idx: nat)
         (tau: type) (n: nat),
         Sigma__reg idx tau ->
         MaxType Gamma (Read level idx) tau
   | MaxTypeWrite:
       forall (Gamma: tenv TVar)
-        (level: bool) (idx: nat) (value: syntax)
+        (level: Level) (idx: nat) (value: syntax)
         (tau: type) (n: nat),
         Sigma__reg idx tau ->
         HasType Gamma value tau ->
-        MaxType Gamma (Write level idx value) unit
+        MaxType Gamma (Write level idx value) unit_t
   | MaxTypeCall:
       forall (Gamma: tenv TVar)
         (idx: TFn) (args: list syntax)
@@ -321,7 +320,7 @@ Section TC.
   Lemma type_le_inv :
     forall tau tau',
       tau ⩽ tau' ->
-      tau' = any \/ tau' = tau.
+      tau' = any_t \/ tau' = tau.
   Proof.
     inversion 1; simpl; eauto.
   Qed.
@@ -415,27 +414,27 @@ Section TC.
       eauto.
   Qed.
 
-  Lemma type_le_inv_not_any :
+  Lemma type_le_inv_not_any_t :
     forall tau tau',
       tau' ⩽ tau ->
-      tau <> any ->
+      tau <> any_t ->
       tau' = tau.
   Proof.
     inversion 1; congruence.
   Qed.
 
-  Hint Resolve type_le_inv_not_any.
+  Hint Resolve type_le_inv_not_any_t.
 
   Theorem types_unicity :
     forall Gamma s tau,
       HasType Gamma s tau ->
-      HasType Gamma s any \/
+      HasType Gamma s any_t \/
       forall tau', HasType Gamma s tau' -> tau = tau'.
   Proof.
     intros Gamma s tau H.
     pose proof (HasType_MaxType _ _ _ H).
     t.
-    destruct (type_eq_dec x any); subst.
+    destruct (type_eq_dec x any_t); subst.
     - eauto using MaxType_HasType.
     - right.
       intros tau' H'.
@@ -450,4 +449,3 @@ Section TC.
 
   Print Assumptions types_unicity.
 End TC.
-End T1.
