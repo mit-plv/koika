@@ -1,11 +1,17 @@
 Require Import Coq.Lists.List.
-Require Import SGA.Common SGA.Syntax.
+Require Import SGA.Common SGA.Syntax SGA.Types.
 
 Import ListNotations.
 
 Inductive value :=
 | vtt
 | vbits (bits: list bool).
+
+Definition type_of_value (v: value) :=
+  match v with
+  | vtt => unit_t
+  | vbits bits => bit_t (length bits)
+  end.
 
 Inductive result {A} :=
 | Success (a: A)
@@ -53,12 +59,21 @@ Record LogEntry := LE
 
 Definition Log := list LogEntry.
 
+Require Import SGA.Types.
+
+Record ExternalFunction :=
+  ExtFun { sig: Types.ExternalSignature;
+           impl:> list (list bool) -> value;
+           type_ok: forall args: list (list bool),
+               List.length args = List.length sig.(argSizes) ->
+               type_of_value (impl args) = sig.(retType) }.
+
 Section Interp.
   Context {TVar: Type}.
   Context {TFn: Type}.
 
   Context {GammaEnv: Env TVar value}.
-  Context {SigmaEnv: Env TFn (list (list bool) -> value) }.
+  Context {SigmaEnv: Env TFn ExternalFunction }.
   Open Scope bool_scope.
 
   Definition log_find log reg (f: LogEntryKind -> Level -> value -> bool) :=
@@ -115,7 +130,7 @@ Section Interp.
   Fixpoint interp
            (Sigma: SigmaEnv.(env_t))
            (Gamma: GammaEnv.(env_t))
-           (V: list value)
+           (V: list (type * value))
            (sched_log: Log)
            (rule_log: Log)
            (s: syntax TVar TFn) :=
@@ -137,21 +152,25 @@ Section Interp.
     | Fail =>
       CannotRun
     | Read P0 idx =>
-      result_bind (may_read0 sched_log rule_log idx) (fun _ =>
-      result_map (opt_result Stuck (nth_error V idx)) (fun v =>
+      result_bind (opt_result Stuck (nth_error V idx)) (fun '(tau, v) =>
+      result_map (may_read0 sched_log rule_log idx) (fun _ =>
       ((LE LogRead P0 idx vtt) :: rule_log, v)))
     | Read P1 idx =>
-      result_bind (may_read1 sched_log rule_log idx) (fun latest_w0 =>
-      result_map (opt_result Stuck (nth_error V idx)) (fun v =>
+      result_bind (opt_result Stuck (nth_error V idx)) (fun '(tau, v) =>
+      result_map (may_read1 sched_log rule_log idx) (fun latest_w0 =>
       ((LE LogRead P1 idx vtt) :: rule_log, match latest_w0 with
                                            | Some v => v
                                            | None => v
                                            end)))
     | Write lvl idx val =>
+      result_bind (opt_result Stuck (nth_error V idx)) (fun '(tau, v) =>
       result_bind (interp Sigma Gamma V sched_log rule_log val) (fun '(rule_log, v) =>
-      result_map (may_write sched_log rule_log lvl idx) (fun _ =>
-      ((LE LogWrite lvl idx v) :: rule_log, vtt)))
+      result_bind (may_write sched_log rule_log lvl idx) (fun _ =>
+      if type_eq_dec tau (type_of_value v) then
+        Success ((LE LogWrite lvl idx v) :: rule_log, vtt)
+      else Stuck)))
     | Call fn args =>
+      result_bind (opt_result Stuck (getenv Sigma fn)) (fun fn =>
       result_bind
         (List.fold_left
            (fun (acc: result (Log * list (list bool))) arg =>
@@ -161,9 +180,10 @@ Section Interp.
               | vbits bits => Success (rule_log, bits :: argvs)
               | _ => Stuck
               end)))
-           args (Success (rule_log, [])))
-        (fun '(rule_log, argvs) =>
-           result_bind (opt_result Stuck (getenv Sigma fn)) (fun fn =>
-           Success (rule_log, (fn argvs))))
+           args (Success (rule_log, []))) (fun '(rule_log, argvs) =>
+        if (List.forallb (fun '(argv, size) => nat_beq (List.length argv) size) (List.combine argvs fn.(sig).(argSizes)) &&
+            nat_beq (List.length argvs) (List.length fn.(sig).(argSizes))) then
+          Success (rule_log, (fn argvs))
+        else Stuck))
     end.
 End Interp.

@@ -1,297 +1,15 @@
 Require Import SGA.Common SGA.Syntax SGA.Semantics SGA.Types SGA.Typechecking.
 
-Definition type_of_value (v: value) :=
-  match v with
-  | vtt => unit_t
-  | vbits bits => bit_t (length bits)
-  end.
-
 Definition fenv_tenv_consistent {K V V'} `{EV: Env K V} (ev: env_t EV) (fv: fenv K V') :=
   (forall k v, fv k v -> exists v', getenv ev k = v') /\
   (forall k v, getenv ev k = Some v -> exists v', fv k v').
 
 Section TypeSafety.
-  Section Interp.
   Context {TVar: Type}.
   Context {TFn: Type}.
 
   Context (GammaEnv: Env TVar value).
-  Context (SigmaEnv: Env TFn (list (list bool) -> value)).
-
-(* Definition fns_welltyped (Sigma: SigmaEnv.(env_t)) (Sigma__fn: fenv _ _) := *)
-(*   forall idx fn argSizes retType, *)
-(*     getenv Sigma idx = Some fn -> *)
-(*     Sigma__fn idx (FunSig argSizes retType) -> *)
-(*     forall args, *)
-(*       List.length args = List.length argSizes -> *)
-(*       (forall (n: nat) (v: list bool) (argSize: nat), *)
-(*           List.nth_error args n = Some v -> *)
-(*           List.nth_error argSizes n = Some argSize -> *)
-(*           length v = argSize) -> *)
-(*       fn args <> None. *)
-
-(* Generalizable Variables K V. *)
-
-(* Definition fenv_of_env {V'} `{EV: Env K V} (f: V -> V') (ev: env_t EV) : fenv K V' := *)
-(*   {| fn k v := match getenv ev k with *)
-(*               | Some v0 => f v0 = v *)
-(*               | None => False *)
-(*               end; *)
-(*      uniq := ltac:(cbn; intros; destruct (getenv ev k); (congruence || tauto)) |}. *)
-
-
-(* Lemma progress' : *)
-(*   forall (Sigma: SigmaEnv.(env_t)) (Gamma__types: fenv _ _) *)
-(*     Sigma__reg Sigma__fn, *)
-(*     fenv_tenv_consistent Sigma Sigma__fn -> *)
-(*     fns_welltyped Sigma Sigma__fn -> *)
-(*     forall (s: syntax TVar TFn) *)
-(*       (tau: Types.type) , *)
-(*       Typechecking.HasType *)
-(*         Sigma__reg Sigma__fn *)
-(*         Gamma__types s tau -> *)
-(*       forall (rule_log: Log) *)
-(*         (Gamma: GammaEnv.(env_t)), *)
-(*         fenv_tenv_consistent Gamma Gamma__types -> *)
-(*         interp _ _ Sigma V rule_log  s Gamma <> Stuck. *)
-(*   induction 3. *)
-(*   - eauto. *)
-(*   - *)
-
-(*     repeat match goal with *)
-(*            | _ => discriminate *)
-(*            | _ => progress (cbn; intros) *)
-(*            | [ p: _ * _ |- _ ] => destruct p *)
-(*            | [  |- _ (opt_result _ ?o) _ <> Stuck ] => *)
-(*              destruct o eqn:? *)
-(*            | [  |- result_bind ?r _ <> Stuck ] => *)
-(*              destruct r eqn:? *)
-(*            | [  |- result_map ?r _ <> Stuck ] => *)
-(*              destruct r eqn:? *)
-(*            | [  |- (if ?v then _ else _) <> Stuck ] => *)
-(*              destruct v eqn:? *)
-(*            | [ H: forall _ _, fenv_tenv_consistent _ ?Gamma -> _, *)
-(*                  H': fenv_tenv_consistent _ ?Gamma |- _ ] => *)
-(*              specialize (fun log => H log _ H') *)
-(*            | [ H: forall log, interp ?Gamma log ?s <> Stuck, *)
-(*                  H': interp ?Gamma _ ?s = Stuck |- _ ] => *)
-(*              elim (H _ H') *)
-(*            | _ => eauto *)
-(*            end. *)
-
-(*     apply IHHasType2. *)
-
-(*     admit. *)
-(*   - *)
-
-(*     repeat match goal with *)
-(*            | _ => discriminate *)
-(*            | _ => progress (cbn; intros) *)
-(*            | [ p: _ * _ |- _ ] => destruct p *)
-(*            | [  |- _ (opt_result _ ?o) _ <> Stuck ] => *)
-(*              destruct o eqn:? *)
-(*            | [  |- result_bind ?r _ <> Stuck ] => *)
-(*              destruct r eqn:? *)
-(*            | [  |- result_map ?r _ <> Stuck ] => *)
-(*              destruct r eqn:? *)
-(*            | [  |- (if ?v then _ else _) <> Stuck ] => *)
-(*              destruct v eqn:? *)
-(*            | [ H: forall _ _, fenv_tenv_consistent _ ?Gamma -> _, *)
-(*                  H': fenv_tenv_consistent _ ?Gamma |- _ ] => *)
-(*              specialize (fun log => H log _ H') *)
-(*            | [ H: forall log, interp ?Gamma log ?s <> Stuck, *)
-(*                  H': interp ?Gamma _ ?s = Stuck |- _ ] => *)
-(*              elim (H _ H') *)
-(*            | _ => eauto *)
-(*            end. *)
-
-(*     admit. *)
-
-(*   - repeat match goal with *)
-(*            | _ => discriminate *)
-(*            | _ => progress (cbn; intros) *)
-(*            | [ p: _ * _ |- _ ] => destruct p *)
-(*            | [  |- _ (opt_result _ ?o) _ <> Stuck ] => *)
-(*              destruct o eqn:? *)
-(*            | [  |- result_bind ?r _ <> Stuck ] => *)
-(*              destruct r eqn:? *)
-(*            | [  |- result_map ?r _ <> Stuck ] => *)
-(*              destruct r eqn:? *)
-(*            | [  |- (if ?v then _ else _) <> Stuck ] => *)
-(*              destruct v eqn:? *)
-(*            | [ H: forall _ _, fenv_tenv_consistent _ ?Gamma -> _, *)
-(*                  H': fenv_tenv_consistent _ ?Gamma |- _ ] => *)
-(*              specialize (fun log => H log _ H') *)
-(*            | [ H: forall log, interp ?Gamma log ?s <> Stuck, *)
-(*                  H': interp ?Gamma _ ?s = Stuck |- _ ] => *)
-(*              elim (H _ H') *)
-(*            | _ => eauto *)
-(*            end. *)
-
-(*   - repeat match goal with *)
-(*            | _ => discriminate *)
-(*            | _ => progress (cbn; intros) *)
-(*            | [ p: _ * _ |- _ ] => destruct p *)
-(*            | [  |- _ (opt_result _ ?o) _ <> Stuck ] => *)
-(*              destruct o eqn:? *)
-(*            | [  |- result_bind ?r _ <> Stuck ] => *)
-(*              destruct r eqn:? *)
-(*            | [  |- result_map ?r _ <> Stuck ] => *)
-(*              destruct r eqn:? *)
-(*            | [  |- (if ?v then _ else _) <> Stuck ] => *)
-(*              destruct v eqn:? *)
-(*            | [ H: forall _ _, fenv_tenv_consistent _ ?Gamma -> _, *)
-(*                  H': fenv_tenv_consistent _ ?Gamma |- _ ] => *)
-(*              specialize (fun log => H log _ H') *)
-(*            | [ H: forall log, interp ?Gamma log ?s <> Stuck, *)
-(*                  H': interp ?Gamma _ ?s = Stuck |- _ ] => *)
-(*              elim (H _ H') *)
-(*            | _ => eauto *)
-(*            end. *)
-
-(*   - repeat match goal with *)
-(*            | _ => discriminate *)
-(*            | _ => progress (cbn; intros) *)
-(*            | [ p: _ * _ |- _ ] => destruct p *)
-(*            | [  |- _ (opt_result _ ?o) _ <> Stuck ] => *)
-(*              destruct o eqn:? *)
-(*            | [  |- result_bind ?r _ <> Stuck ] => *)
-(*              destruct r eqn:? *)
-(*            | [  |- result_map ?r _ <> Stuck ] => *)
-(*              destruct r eqn:? *)
-(*            | [  |- (if ?v then _ else _) <> Stuck ] => *)
-(*              destruct v eqn:? *)
-(*            | [ H: forall _ _, fenv_tenv_consistent _ ?Gamma -> _, *)
-(*                  H': fenv_tenv_consistent _ ?Gamma |- _ ] => *)
-(*              specialize (fun log => H log _ H') *)
-(*            | [ H: forall log, interp ?Gamma log ?s <> Stuck, *)
-(*                  H': interp ?Gamma _ ?s = Stuck |- _ ] => *)
-(*              elim (H _ H') *)
-(*            | _ => eauto *)
-(*            end. *)
-
-(*   - repeat match goal with *)
-(*            | _ => discriminate *)
-(*            | _ => progress (cbn; intros) *)
-(*            | [ p: _ * _ |- _ ] => destruct p *)
-(*            | [  |- _ (opt_result _ ?o) _ <> Stuck ] => *)
-(*              destruct o eqn:? *)
-(*            | [  |- result_bind ?r _ <> Stuck ] => *)
-(*              destruct r eqn:? *)
-(*            | [  |- result_map ?r _ <> Stuck ] => *)
-(*              destruct r eqn:? *)
-(*            | [  |- (if ?v then _ else _) <> Stuck ] => *)
-(*              destruct v eqn:? *)
-(*            | [ H: forall _ _, fenv_tenv_consistent _ ?Gamma -> _, *)
-(*                  H': fenv_tenv_consistent _ ?Gamma |- _ ] => *)
-(*              specialize (fun log => H log _ H') *)
-(*            | [ H: forall log, interp ?Gamma log ?s <> Stuck, *)
-(*                  H': interp ?Gamma _ ?s = Stuck |- _ ] => *)
-(*              elim (H _ H') *)
-(*            | _ => eauto *)
-(*            end. *)
-
-(*   - repeat match goal with *)
-(*            | _ => discriminate *)
-(*            | _ => progress (cbn; intros) *)
-(*            | [ p: _ * _ |- _ ] => destruct p *)
-(*            | [  |- _ (opt_result _ ?o) _ <> Stuck ] => *)
-(*              destruct o eqn:? *)
-(*            | [  |- result_bind ?r _ <> Stuck ] => *)
-(*              destruct r eqn:? *)
-(*            | [  |- result_map ?r _ <> Stuck ] => *)
-(*              destruct r eqn:? *)
-(*            | [  |- (if ?v then _ else _) <> Stuck ] => *)
-(*              destruct v eqn:? *)
-(*            | [ H: forall _ _, fenv_tenv_consistent _ ?Gamma -> _, *)
-(*                  H': fenv_tenv_consistent _ ?Gamma |- _ ] => *)
-(*              specialize (fun log => H log _ H') *)
-(*            | [ H: forall log, interp ?Gamma log ?s <> Stuck, *)
-(*                  H': interp ?Gamma _ ?s = Stuck |- _ ] => *)
-(*              elim (H _ H') *)
-(*            | _ => eauto *)
-(*            end. *)
-
-(*     (* Sigma__reg consistent *) *)
-(*     exfalso; admit. *)
-
-(*     (* may_read stuck *) *)
-(*     exfalso; admit. *)
-
-(*     (* Sigma__reg consistent *) *)
-(*     exfalso; admit. *)
-
-(*     (* may_read stuck *) *)
-(*     exfalso; admit. *)
-
-
-(*   - repeat match goal with *)
-(*            | _ => discriminate *)
-(*            | _ => progress (cbn; intros) *)
-(*            | [ p: _ * _ |- _ ] => destruct p *)
-(*            | [  |- _ (opt_result _ ?o) _ <> Stuck ] => *)
-(*              destruct o eqn:? *)
-(*            | [  |- result_bind ?r _ <> Stuck ] => *)
-(*              destruct r eqn:? *)
-(*            | [  |- result_map ?r _ <> Stuck ] => *)
-(*              destruct r eqn:? *)
-(*            | [  |- (if ?v then _ else _) <> Stuck ] => *)
-(*              destruct v eqn:? *)
-(*            | [ H: forall _ _, fenv_tenv_consistent _ ?Gamma -> _, *)
-(*                  H': fenv_tenv_consistent _ ?Gamma |- _ ] => *)
-(*              specialize (fun log => H log _ H') *)
-(*            | [ H: forall log, interp ?Gamma log ?s <> Stuck, *)
-(*                  H': interp ?Gamma _ ?s = Stuck |- _ ] => *)
-(*              elim (H _ H') *)
-(*            | _ => eauto *)
-(*            end. *)
-
-(*     exfalso; admit.           (* may_write doesn't get stuck *) *)
-
-(*   - repeat match goal with *)
-(*            | _ => discriminate *)
-(*            | _ => progress (cbn; intros) *)
-(*            | [ p: _ * _ |- _ ] => destruct p *)
-(*            | [  |- _ (opt_result _ ?o) _ <> Stuck ] => *)
-(*              destruct o eqn:? *)
-(*            | [  |- result_bind ?r _ <> Stuck ] => *)
-(*              destruct r eqn:? *)
-(*            | [  |- result_map ?r _ <> Stuck ] => *)
-(*              destruct r eqn:? *)
-(*            | [  |- (if ?v then _ else _) <> Stuck ] => *)
-(*              destruct v eqn:? *)
-(*            | [ H: forall _ _, fenv_tenv_consistent _ ?Gamma -> _, *)
-(*                  H': fenv_tenv_consistent _ ?Gamma |- _ ] => *)
-(*              specialize (fun log => H log _ H') *)
-(*            | [ H: forall log, interp ?Gamma log ?s <> Stuck, *)
-(*                  H': interp ?Gamma _ ?s = Stuck |- _ ] => *)
-(*              elim (H _ H') *)
-(*            | _ => eauto *)
-(*            end. *)
-
-(*     (* Types are good but fn returns None *) *)
-(*     admit. *)
-
-(*     (* Consistent *) *)
-(*     admit. *)
-
-(*     (* Fold stuck despite proper types *) *)
-(*     admit. *)
-(* Admitted. *)
-
-(* Lemma progress : *)
-(*   forall (Gamma__types: fenv _ _) (Gamma: GammaEnv.(env_t)) Sigma__reg Sigma__fn, *)
-(*     fenv_tenv_consistent Sigma Sigma__fn -> *)
-(*     fenv_tenv_consistent Gamma Gamma__types -> *)
-(*     fns_welltyped Sigma__fn -> *)
-(*     forall (s: syntax TVar TFn) *)
-(*       (tau: Types.type), *)
-(*       Typechecking.HasType Sigma__reg Sigma__fn Gamma__types s tau -> *)
-(*       forall (rule_log: Log), *)
-(*         interp Gamma rule_log s <> Stuck. *)
-(* Proof. *)
-(*   eauto using progress'. *)
-(* Qed. *)
+  Context (SigmaEnv: Env TFn ExternalFunction).
 
 Definition correct_type (r: result (Log * value)) (tau: type) :=
   match r with
@@ -300,7 +18,41 @@ Definition correct_type (r: result (Log * value)) (tau: type) :=
   | Stuck => False
   end.
 
-Lemma progress'' :
+Ltac not_stuck :=
+  intros; unfold may_write, may_read0, may_read1;
+  repeat match goal with
+         | [  |- match ?x with _ => _ end <> Stuck ] => destruct x
+         end;
+  discriminate.
+
+Hint Transparent not.
+
+Lemma may_write_not_stuck sched_log rule_log level idx :
+    may_write sched_log rule_log level idx <> Stuck.
+Proof. not_stuck. Qed.
+
+Lemma may_read0_not_stuck sched_log rule_log idx :
+    may_read0 sched_log rule_log idx <> Stuck.
+Proof. not_stuck. Qed.
+
+Lemma may_read1_not_stuck sched_log rule_log idx :
+    may_read1 sched_log rule_log idx <> Stuck.
+Proof. not_stuck. Qed.
+
+Hint Extern 1 False => eapply may_write_not_stuck : types.
+Hint Extern 1 False => eapply may_read0_not_stuck : types.
+Hint Extern 1 False => eapply may_read1_not_stuck : types.
+
+Lemma type_of_value_le_eq :
+  forall tau tau' v,
+    type_le tau tau' ->
+    type_of_value v = tau' ->
+    type_of_value v = tau.
+Proof.
+  destruct v; cbn; inversion 1; congruence.
+Qed.
+
+Lemma type_safety :
   forall (Gamma__types: fenv _ _) V sched_log
     Sigma Sigma__reg Sigma__fn,
     fenv_tenv_consistent Sigma Sigma__fn ->
@@ -333,42 +85,62 @@ Proof.
                  H': fenv_tenv_consistent _ ?Gamma |- _ ] =>
              specialize (fun log => H log _ H')
            | [ H: forall log, correct_type (interp _ ?Gamma _ _ log ?s) _,
-                 H': interp _ ?Gamma _ _ ?log ?s = Stuck |- _ ] =>
-             specialize (H log); red in H;
-             rewrite H' in H
-           | _ => eauto
+                 l: Log |- _ ] =>
+             pose_once (H l)
+           | [ H: correct_type (interp _ ?Gamma _ _ ?log ?s) _,
+                  H': interp _ ?Gamma _ _ ?log ?s = Stuck |- _ ] =>
+             red in H; rewrite H' in H
+           | _ => eauto with types
+           end;
+    repeat match goal with
+           | [ H: Posed _ |- _ ] => clear H
            end.
 
   all: try solve [t].
 
-
   - t.
-    admit.                    (* tau must be = tau' since it can't be any *)
+    destruct (interp Sigma Gamma0 V sched_log rule_log s) as [ (? & ?) | | ]; cbn in *;
+      eauto using type_of_value_le_eq.
   - t.
     apply IHHasType2.
     admit.                    (* Consistent *)
   - t.
+
+    Lemma type_of_value_consistent:
+      forall (Gamma : fenv TVar type) (var : TVar) (tau : type),
+        Gamma var tau ->
+        forall Gamma0 : env_t GammaEnv,
+          fenv_tenv_consistent Gamma0 Gamma ->
+          forall a : value,
+            opt_result Stuck (getenv Gamma0 var) = Success a ->
+            type_of_value a = tau.
+    Proof.
+      intros * HGamma * (? & Hconsistent) * HSuccess.
+      red in Hconsistent.
+      
+      intros Gamma var tau H0 Gamma0 H1 a Heqr.
+      
+    Lemma 
     admit.                    (* Gamma well typed *)
     admit.                    (* Gamma consistent *)
   - t.
     admit.                    (* Sigma__reg well typed *)
     admit.                    (* Sigma__reg consistent *)
-    admit.                    (* may read doesn't get stuck *)
 
     admit.                    (* Combination of well-typed Sigma__reg and log *)
 
-    (* FIXME add well-typed log hyp *)
+    (* FIXME add well-typed log hyp; compute sigmareg and sigmafn from V and Sigma *)
     admit.                    (* Sigma__reg consistent *)
 
-    admit.                    (* may read doesn't get stuck *)
+  - t.
+    admit.                    (* Sigma__reg consistent with V *)
+    admit.                    (* Sigma__reg consistent with V *)
 
   - t.
-    admit.                    (* may write doesn't get stuck *)
 
-  - t.
-
-    admit.                    (* fns don't get stuck *)
-    admit.                    (* Sigma__fn consistent *)
+    admit.                    (* fns produce advertised values *)
+    admit.                    (* argvs have right length and types *)
     admit.                    (* Fold can't get stuck *)
+    admit.                    (* Sigma consistent *)
 Admitted.
 
