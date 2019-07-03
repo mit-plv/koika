@@ -1,4 +1,4 @@
-Require Import SGA.Common SGA.Syntax SGA.Semantics SGA.Types.
+Require Import SGA.Common SGA.Syntax SGA.Semantics SGA.Types SGA.Typechecking.
 
 Definition type_of_value (v: value) :=
   match v with
@@ -16,19 +16,19 @@ Section TypeSafety.
   Context {TFn: Type}.
 
   Context (GammaEnv: Env TVar value).
-  Context (SigmaEnv: Env TFn (list value -> option value)).
+  Context (SigmaEnv: Env TFn (list (list bool) -> value)).
 
-Definition fns_welltyped (Sigma: SigmaEnv.(env_t)) (Sigma__fn: fenv _ _) :=
-  forall idx fn argTypes retType,
-    getenv Sigma idx = Some fn ->
-    Sigma__fn idx (SigFn argTypes retType) ->
-    forall args,
-      List.length args = List.length argTypes ->
-      (forall (n: nat) (v: value) (tau: type),
-          List.nth_error args n = Some v ->
-          List.nth_error argTypes n = Some tau ->
-          type_of_value v = tau) ->
-      fn args <> None.
+(* Definition fns_welltyped (Sigma: SigmaEnv.(env_t)) (Sigma__fn: fenv _ _) := *)
+(*   forall idx fn argSizes retType, *)
+(*     getenv Sigma idx = Some fn -> *)
+(*     Sigma__fn idx (FunSig argSizes retType) -> *)
+(*     forall args, *)
+(*       List.length args = List.length argSizes -> *)
+(*       (forall (n: nat) (v: list bool) (argSize: nat), *)
+(*           List.nth_error args n = Some v -> *)
+(*           List.nth_error argSizes n = Some argSize -> *)
+(*           length v = argSize) -> *)
+(*       fn args <> None. *)
 
 (* Generalizable Variables K V. *)
 
@@ -47,7 +47,7 @@ Definition fns_welltyped (Sigma: SigmaEnv.(env_t)) (Sigma__fn: fenv _ _) :=
 (*     fns_welltyped Sigma Sigma__fn -> *)
 (*     forall (s: syntax TVar TFn) *)
 (*       (tau: Types.type) , *)
-(*       Types.HasType *)
+(*       Typechecking.HasType *)
 (*         Sigma__reg Sigma__fn *)
 (*         Gamma__types s tau -> *)
 (*       forall (rule_log: Log) *)
@@ -286,7 +286,7 @@ Definition fns_welltyped (Sigma: SigmaEnv.(env_t)) (Sigma__fn: fenv _ _) :=
 (*     fns_welltyped Sigma__fn -> *)
 (*     forall (s: syntax TVar TFn) *)
 (*       (tau: Types.type), *)
-(*       Types.HasType Sigma__reg Sigma__fn Gamma__types s tau -> *)
+(*       Typechecking.HasType Sigma__reg Sigma__fn Gamma__types s tau -> *)
 (*       forall (rule_log: Log), *)
 (*         interp Gamma rule_log s <> Stuck. *)
 (* Proof. *)
@@ -304,10 +304,9 @@ Lemma progress'' :
   forall (Gamma__types: fenv _ _) V sched_log
     Sigma Sigma__reg Sigma__fn,
     fenv_tenv_consistent Sigma Sigma__fn ->
-    fns_welltyped Sigma Sigma__fn ->
     forall (s: syntax TVar TFn)
       (tau: Types.type) ,
-      Types.HasType
+      Typechecking.HasType
         Sigma__reg Sigma__fn
         Gamma__types s tau ->
       forall (rule_log: Log)
@@ -315,7 +314,7 @@ Lemma progress'' :
         fenv_tenv_consistent Gamma Gamma__types ->
         correct_type (interp Sigma Gamma V sched_log rule_log s) tau.
 Proof.
-  induction 3; cbn; intros.
+  induction 2; cbn; intros.
 
   Ltac t :=
     repeat match goal with
@@ -368,7 +367,6 @@ Proof.
 
   - t.
 
-    admit.                    (* fns well typed *)
     admit.                    (* fns don't get stuck *)
     admit.                    (* Sigma__fn consistent *)
     admit.                    (* Fold can't get stuck *)

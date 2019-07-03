@@ -48,15 +48,14 @@ Qed.
 
 Hint Resolve type_ge_any_t_eq_any_t : types.
 
-Record ExternalSignature T :=
-  FunSig { argTypes: list T;
-          retType: T }.
-Arguments FunSig {_}.
+Record ExternalSignature :=
+  FunSig { argSizes: list nat;
+           retType: type }.
 
-Lemma ExternalSignature_inj2 {T} :
-  forall (argTypes argTypes': list T) (retType retType': T),
-    FunSig argTypes retType =
-    FunSig argTypes' retType' ->
+Lemma ExternalSignature_inj2 :
+  forall (argSizes argSizes': list nat) (retType retType': type),
+    FunSig argSizes retType =
+    FunSig argSizes' retType' ->
     retType = retType'.
 Proof. now inversion 1. Qed.
 

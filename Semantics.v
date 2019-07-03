@@ -58,7 +58,7 @@ Section Interp.
   Context {TFn: Type}.
 
   Context {GammaEnv: Env TVar value}.
-  Context {SigmaEnv: Env TFn (list value -> option value)}.
+  Context {SigmaEnv: Env TFn (list (list bool) -> value) }.
   Open Scope bool_scope.
 
   Definition log_find log reg (f: LogEntryKind -> Level -> value -> bool) :=
@@ -154,14 +154,16 @@ Section Interp.
     | Call fn args =>
       result_bind
         (List.fold_left
-           (fun (acc: result (Log * list value)) arg =>
+           (fun (acc: result (Log * list (list bool))) arg =>
               result_bind acc (fun '(rule_log, argvs) =>
-              result_map (interp Sigma Gamma V sched_log rule_log arg) (fun '(rule_log, argv) =>
-              (rule_log, argv :: argvs))))
+              result_bind (interp Sigma Gamma V sched_log rule_log arg) (fun '(rule_log, argv) =>
+              match argv with
+              | vbits bits => Success (rule_log, bits :: argvs)
+              | _ => Stuck
+              end)))
            args (Success (rule_log, [])))
         (fun '(rule_log, argvs) =>
            result_bind (opt_result Stuck (getenv Sigma fn)) (fun fn =>
-           result_bind (opt_result Stuck (fn argvs)) (fun resv =>
-           Success (rule_log, resv))))
+           Success (rule_log, (fn argvs))))
     end.
 End Interp.

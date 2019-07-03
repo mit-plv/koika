@@ -44,7 +44,7 @@ Section TC.
 
   Context {TVar TFn: Type}.
   Context (Sigma__reg: tenv nat).
-  Context (Sigma__fn: fenv TFn (ExternalSignature type)).
+  Context (Sigma__fn: fenv TFn ExternalSignature).
 
   Notation syntax := (syntax TVar TFn).
   Notation fenv_le := (fenv_le type_le).
@@ -104,13 +104,13 @@ Section TC.
   | HasTypeCall:
       forall (Gamma: tenv TVar)
         (idx: TFn) (args: list syntax)
-        (argTypes: list type) (retType: type),
-        Sigma__fn idx (FunSig argTypes retType) ->
-        List.length args = List.length argTypes ->
-        (forall (n: nat) (s: syntax) (tau: type),
+        (argSizes: list nat) (retType: type),
+        Sigma__fn idx (FunSig argSizes retType) ->
+        List.length args = List.length argSizes ->
+        (forall (n: nat) (s: syntax) (argSize: nat),
             List.nth_error args n = Some s ->
-            List.nth_error argTypes n = Some tau ->
-            HasType Gamma s tau) ->
+            List.nth_error argSizes n = Some argSize ->
+            HasType Gamma s (bit_t argSize)) ->
         HasType Gamma (Call idx args) retType.
 
   Hint Constructors HasType : types.
@@ -188,13 +188,13 @@ Section TC.
   | MaxTypeCall:
       forall (Gamma: tenv TVar)
         (idx: TFn) (args: list syntax)
-        (argTypes: list type) (retType: type),
-        Sigma__fn idx (FunSig argTypes retType) ->
-        List.length args = List.length argTypes ->
-        (forall (n: nat) (s: syntax) (tau: type),
+        (argSizes: list nat) (retType: type),
+        Sigma__fn idx (FunSig argSizes retType) ->
+        List.length args = List.length argSizes ->
+        (forall (n: nat) (s: syntax) (argSize: nat),
             List.nth_error args n = Some s ->
-            List.nth_error argTypes n = Some tau ->
-            HasType Gamma s tau) ->
+            List.nth_error argSizes n = Some argSize ->
+            HasType Gamma s (bit_t argSize)) ->
         MaxType Gamma (Call idx args) retType.
   (* FIXME use single HasType premise in last three rules? *)
 
