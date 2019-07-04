@@ -42,15 +42,15 @@ Proof.
     destruct (PeanoNat.Nat.eq_dec _ _); discriminate || eauto.
 Qed.
 
-Definition log_write_consistent `{Env nat bits} (log: Log) (V: env_t _):=
-  forall reg lvl val val0,
-    getenv V reg = Some val0 ->
-    List.In {| kind:= LogWrite; level:= lvl; reg:= reg; val:= val |} log ->
-    List.length val0 = List.length val.
+Definition log_write_consistent (log: Log) (v: fenv nat nat) :=
+  forall reg lvl val n,
+    v reg n ->
+    List.In {| kind := LogWrite; level:= lvl; reg:= reg; val:= val |} log ->
+    n = List.length val.
 
-Definition correct_type `{Env nat bits} V (r: result (Log * value)) (tau: type):=
+Definition correct_type `{Env nat bits} v (r: result (Log * value)) (tau: type):=
   match r with
-  | Success (l, v) => log_write_consistent l V /\ type_of_value v = tau
+  | Success (l, val) => log_write_consistent l v /\ type_of_value val = tau
   | CannotRun => True
   | Stuck => False
   end.
@@ -210,10 +210,10 @@ Ltac t_step:=
   | [ H: @fn ?K ?V ?ev ?k ?v, H': fn ?ev ?k ?v' |- _ ] =>
     pose_once (@uniq K V ev k v v') H H'
   | [ H: _ |- _ ] => apply forall2_fold_right2 in H
-  | [ H: @log_write_consistent ?Ev ?log ?V,
-      H': getenv ?V ?reg = Some ?v,
-      H'': In {| kind := LogWrite; reg := ?reg; level := ?lvl; val := ?val |} ?log |- _ ] =>
-    pose_once (H reg lvl val v) H' H''
+  | [ H: @log_write_consistent ?log ?v,
+         H': fn ?v ?reg ?val,
+             H'': In {| kind := LogWrite; reg := ?reg; level := ?lvl; val := ?val' |} ?log |- _ ] =>
+    pose_once (H reg lvl val' val) H' H''
   | [ H: forall log, log_write_consistent log _ -> correct_type _ (interp _ _ _ _ log _) _,
       H': log_write_consistent ?log _ |- _ ] =>
     pose_once H log H'
@@ -276,14 +276,14 @@ Qed.
 Hint Resolve log_read_consistent_add: types.
 
 Lemma log_write_consistent_add:
-  forall l V level reg val a,
-    getenv V reg = Some a ->
-    length a = length val ->
-    log_write_consistent l V ->
-    log_write_consistent ({| kind:= LogWrite; level:= level; reg:= reg; val:= val |} :: l) V.
+  forall l (v: fenv nat nat) level reg val sz,
+    v reg sz ->
+    sz = length val ->
+    log_write_consistent l v ->
+    log_write_consistent ({| kind:= LogWrite; level:= level; reg:= reg; val:= val |} :: l) v.
 Proof.
   unfold log_write_consistent; cbn; intros * Hget ? * Hconsistent * Hget' [Heq | ?].
-  - inversion Heq; subst; rewrite Hget in Hget'; inversion Hget'; subst; eauto.
+  - inversion Heq; subst; eauto with types.
   - eauto.
 Qed.
 
@@ -305,13 +305,13 @@ Lemma type_safe_call:
             (forall Gamma : env_t GammaEnv,
                 env_equiv type_of_value gamma Gamma ->
                 forall rule_log : Log,
-                  log_write_consistent rule_log V ->
-                  correct_type V (interp V Sigma Gamma sched_log rule_log arg) (bit_t argSize))) True args sizes) ->
+                  log_write_consistent rule_log v ->
+                  correct_type v (interp V Sigma Gamma sched_log rule_log arg) (bit_t argSize))) True args sizes) ->
       (fold_right2
          (fun arg argSize acc =>
             acc /\ HasType v sigma gamma arg (bit_t argSize)) True args sizes) ->
       forall (rule_log: Log),
-        log_write_consistent rule_log V ->
+        log_write_consistent rule_log v ->
         forall argvs0 res,
           fold_left2
             (fun (acc: result (Log * list bits)) arg size =>
@@ -324,7 +324,7 @@ Lemma type_safe_call:
           exists argvs rule_log',
             res = Success (rule_log', argvs ++ argvs0) /\
             length argvs = length sizes /\
-            log_write_consistent rule_log' V /\
+            log_write_consistent rule_log' v /\
             type_of_value (impl argvs) = retType.
 Proof.
   induction args; destruct sizes; inversion 1.
@@ -360,15 +360,15 @@ Lemma type_safety:
   forall sigma Sigma gamma v V sched_log,
     env_equiv (@length bool) v V ->
     env_equiv sig sigma Sigma ->
-    log_write_consistent sched_log V ->
+    log_write_consistent sched_log v ->
     forall (s: syntax TVar TFn)
       (tau: Types.type),
       Typechecking.HasType v sigma gamma s tau ->
       forall Gamma,
         env_equiv type_of_value gamma Gamma ->
         forall rule_log: Log,
-          log_write_consistent rule_log V ->
-          correct_type V (interp V Sigma Gamma sched_log rule_log s) tau.
+          log_write_consistent rule_log v ->
+          correct_type v (interp V Sigma Gamma sched_log rule_log s) tau.
 Proof.
   induction 4; cbn; intros.
 
@@ -379,6 +379,7 @@ Proof.
         firstorder eauto using type_of_value_le_eq.
 
   - t.
+
     all: eapply type_safe_call in Heqr0; eauto using type_ok.
     all: repeat match goal with
                 | [ H: exists _, _ |- _ ] => destruct H
@@ -392,14 +393,14 @@ Lemma type_safety':
     env_equiv sig sigma Sigma ->
     env_equiv (@length bool) v V ->
     env_equiv type_of_value gamma Gamma ->
-    log_write_consistent sched_log V ->
-    log_write_consistent rule_log V ->
+    log_write_consistent sched_log v ->
+    log_write_consistent rule_log v ->
     forall s tau,
       Typechecking.HasType v sigma gamma s tau ->
       interp V Sigma Gamma sched_log rule_log s <> CannotRun ->
-      exists rule_log' v,
-        log_write_consistent rule_log' V /\
-        type_of_value v = tau.
+      exists rule_log' val,
+        log_write_consistent rule_log' v /\
+        type_of_value val = tau.
 Proof.
   intros;
     pose proof (type_safety sigma Sigma gamma v V sched_log) as ts;
