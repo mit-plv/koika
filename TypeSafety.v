@@ -386,3 +386,24 @@ Proof.
                 | _ => t_step
                 end.
 Qed.
+
+Lemma type_safety':
+  forall sigma Sigma gamma Gamma v V sched_log rule_log,
+    env_equiv sig sigma Sigma ->
+    env_equiv (@length bool) v V ->
+    env_equiv type_of_value gamma Gamma ->
+    log_write_consistent sched_log V ->
+    log_write_consistent rule_log V ->
+    forall s tau,
+      Typechecking.HasType v sigma gamma s tau ->
+      interp V Sigma Gamma sched_log rule_log s <> CannotRun ->
+      exists rule_log' v,
+        log_write_consistent rule_log' V /\
+        type_of_value v = tau.
+Proof.
+  intros;
+    pose proof (type_safety sigma Sigma gamma v V sched_log) as ts;
+    repeat specialize (ts ltac:(eassumption));
+    unfold correct_type in ts.
+  destruct interp as [(? & ?) | | ]; cbn in *; (congruence || tauto || eauto).
+Qed.
