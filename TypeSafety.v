@@ -399,6 +399,7 @@ Lemma type_safety':
       Typechecking.HasType v sigma gamma s tau ->
       interp V Sigma Gamma sched_log rule_log s <> CannotRun ->
       exists rule_log' val,
+        interp V Sigma Gamma sched_log rule_log s = Success (rule_log', val) /\
         log_write_consistent rule_log' v /\
         type_of_value val = tau.
 Proof.
@@ -430,6 +431,7 @@ Lemma type_safety:
       Typechecking.HasType v sigma gamma s tau ->
       interp V Sigma Gamma sched_log rule_log s <> CannotRun ->
       exists rule_log' val,
+        interp V Sigma Gamma sched_log rule_log s = Success (rule_log', val) /\
         log_write_consistent rule_log' v /\
         type_of_value val = tau.
 Proof.
