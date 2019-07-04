@@ -3,7 +3,7 @@ Require Import SGA.Common SGA.Syntax SGA.Semantics SGA.Types SGA.Typechecking.
 Require Import Coq.Lists.List.
 Import ListNotations.
 
-Definition fenv_env_consistent {K V V'} `{EV: Env K V} (ev: env_t EV) (fv: fenv K V'):=
+Definition fenv_env_consistent {K V V'} `{EV: Env K V} (ev: env_t EV) (fv: fenv K V') :=
   (forall k v, fv k v -> exists v', getenv ev k = v') /\
   (forall k v, getenv ev k = Some v -> exists v', fv k v').
 
@@ -45,17 +45,17 @@ Qed.
 Definition log_write_consistent (log: Log) (v: fenv nat nat) :=
   forall reg lvl val n,
     v reg n ->
-    List.In {| kind := LogWrite; level:= lvl; reg:= reg; val:= val |} log ->
+    List.In {| kind := LogWrite; level := lvl; reg := reg; val := val |} log ->
     n = List.length val.
 
-Definition correct_type `{Env nat bits} v (r: result (Log * value)) (tau: type):=
+Definition correct_type `{Env nat bits} v (r: result (Log * value)) (tau: type) :=
   match r with
   | Success (l, val) => log_write_consistent l v /\ type_of_value val = tau
   | CannotRun => True
   | Stuck => False
   end.
 
-Ltac not_stuck:=
+Ltac not_stuck :=
   intros; unfold may_write, may_read0, may_read1;
   repeat match goal with
          | [  |- match ?x with _ => _ end <> Stuck ] => destruct x
@@ -98,7 +98,7 @@ Section EnvEquiv.
   Context {K V V': Type} {Env: Env K V}.
   Context (f: V -> V').
 
-  Definition env_equiv (Gamma: fenv K V') (gamma: env_t Env):=
+  Definition env_equiv (Gamma: fenv K V') (gamma: env_t Env) :=
     (forall var v, getenv gamma var = Some v -> Gamma var (f v)) /\
     (forall var, getenv gamma var = None -> forall tau, not (Gamma var tau)).
 
@@ -132,7 +132,7 @@ Section EnvEquiv.
   Proof. firstorder. Qed.
 End EnvEquiv.
 
-(*   Definition gamma_well_typed (Gamma: fenv TVar type) (gamma: env_t GammaEnv):= *)
+(*   Definition gamma_well_typed (Gamma: fenv TVar type) (gamma: env_t GammaEnv) := *)
 (*     (forall var v, getenv gamma var = Some v -> Gamma var (type_of_value v)) /\ *)
 (*     (forall var, getenv gamma var = None -> forall tau, not (Gamma var tau)). *)
 
@@ -183,10 +183,10 @@ Section TypeSafety.
 
   Hint Resolve (@env_equiv_putenv _ _ _ GammaEnv): types.
 
-Definition and_fst {A B}:= fun '(conj a _: and A B) => a.
-Definition and_snd {A B}:= fun '(conj _ b: and A B) => b.
+Definition and_fst {A B} := fun '(conj a _: and A B) => a.
+Definition and_snd {A B} := fun '(conj _ b: and A B) => b.
 
-Ltac t_step:=
+Ltac t_step :=
   match goal with
   | _ => discriminate
   | _ => progress (cbn in *; intros; subst)
@@ -217,7 +217,7 @@ Ltac t_step:=
   | [ H: forall log, log_write_consistent log _ -> correct_type _ (interp _ _ _ _ log _) _,
       H': log_write_consistent ?log _ |- _ ] =>
     pose_once H log H'
-  | [ H: env_equiv (Env:= ?Env) ?f ?tenv ?env,
+  | [ H: env_equiv (Env := ?Env) ?f ?tenv ?env,
       H': getenv ?env ?k = Some ?v |- _ ] =>
     pose_once (and_fst H k v) H'
   | [ H: env_equiv ?f ?tenv ?env,
@@ -251,14 +251,14 @@ Ltac t_step:=
   | _ => solve [eauto 4 using eq_trans with types]
   end.
 
-Ltac t:=
+Ltac t :=
   repeat t_step;
   repeat match goal with
          | [ H: Posed _ |- _ ] => clear H
          end.
 
 Definition tenv_of_env {K V V'} {env: Env K V} {f: V -> V'} (ev: env_t env): fenv K V'.
-  refine {| fn k v':= exists v, getenv ev k = Some v /\ v' = f v |}.
+  refine {| fn k v' := exists v, getenv ev k = Some v /\ v' = f v |}.
   abstract (intros * (? & Heq & Hfeq) (? & Heq' & Hfeq'); subst;
             rewrite Heq in Heq'; inversion Heq'; eauto).
 Defined.
@@ -266,7 +266,7 @@ Defined.
 Lemma log_read_consistent_add:
   forall l V level reg val,
     log_write_consistent l V ->
-    log_write_consistent ({| kind:= LogRead; level:= level; reg:= reg; val:= val |} :: l) V.
+    log_write_consistent ({| kind := LogRead; level := level; reg := reg; val := val |} :: l) V.
 Proof.
   unfold log_write_consistent; cbn; intros * Hconsistent * Hget' [Heq | ?].
   - inversion Heq.
@@ -280,7 +280,7 @@ Lemma log_write_consistent_add:
     v reg sz ->
     sz = length val ->
     log_write_consistent l v ->
-    log_write_consistent ({| kind:= LogWrite; level:= level; reg:= reg; val:= val |} :: l) v.
+    log_write_consistent ({| kind := LogWrite; level := level; reg := reg; val := val |} :: l) v.
 Proof.
   unfold log_write_consistent; cbn; intros * Hget ? * Hconsistent * Hget' [Heq | ?].
   - inversion Heq; subst; eauto with types.
@@ -356,7 +356,7 @@ Proof.
       left; revert dependent sizes; induction args; destruct sizes; cbn in *; eauto.
 Qed.
 
-Lemma type_safety:
+Lemma type_safety'':
   forall sigma Sigma gamma v V sched_log,
     env_equiv (@length bool) v V ->
     env_equiv sig sigma Sigma ->
@@ -403,8 +403,38 @@ Lemma type_safety':
         type_of_value val = tau.
 Proof.
   intros;
-    pose proof (type_safety sigma Sigma gamma v V sched_log) as ts;
+    pose proof (type_safety'' sigma Sigma gamma v V sched_log) as ts;
     repeat specialize (ts ltac:(eassumption));
     unfold correct_type in ts.
   destruct interp as [(? & ?) | | ]; cbn in *; (congruence || tauto || eauto).
+Qed.
+
+Lemma tenv_of_env_equiv  {K V V'} {env: Env K V} {f: V -> V'} :
+  forall (ev: env_t env),
+    env_equiv f (tenv_of_env (f := f) ev) ev.
+Proof.
+  intros; unfold env_equiv, tenv_of_env, not; cbn; split.
+  - firstorder.
+  - intros * Heq * Hex; rewrite Heq in Hex;
+      firstorder discriminate.
+Qed.
+
+Lemma type_safety:
+  forall Sigma Gamma V sched_log rule_log,
+    let sigma := tenv_of_env (f := sig) Sigma in
+    let v := tenv_of_env (f := (@length bool)) V in
+    let gamma := tenv_of_env (f := type_of_value) Gamma in
+    log_write_consistent sched_log v ->
+    log_write_consistent rule_log v ->
+    forall s tau,
+      Typechecking.HasType v sigma gamma s tau ->
+      interp V Sigma Gamma sched_log rule_log s <> CannotRun ->
+      exists rule_log' val,
+        log_write_consistent rule_log' v /\
+        type_of_value val = tau.
+Proof.
+  cbv zeta; intros.
+  eapply type_safety';
+    try eapply tenv_of_env_equiv.
+  all: revgoals; eauto.
 Qed.
