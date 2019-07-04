@@ -43,8 +43,8 @@ Section TC.
   Notation tenv A := (fenv A type).
 
   Context {TVar TFn: Type}.
-  Context (Sigma__reg: tenv nat).
-  Context (Sigma__fn: fenv TFn ExternalSignature).
+  Context (V: fenv nat nat).
+  Context (Sigma: fenv TFn ExternalSignature).
 
   Notation syntax := (syntax TVar TFn).
   Notation fenv_le := (fenv_le type_le).
@@ -74,8 +74,8 @@ Section TC.
         HasType Gamma Skip unit_t
   | HasTypeConst:
       forall (Gamma: tenv TVar)
-        (bits: list bool) (cst: nat),
-        HasType Gamma (Const bits) (bit_t (length bits))
+        (cst: bits),
+        HasType Gamma (Const cst) (bit_t (length cst))
   | HasTypeIf:
       forall (Gamma: tenv TVar)
         (cond: syntax) (tbranch: syntax) (fbranch: syntax)
@@ -91,21 +91,21 @@ Section TC.
   | HasTypeRead:
       forall (Gamma: tenv TVar)
         (level: Level) (idx: nat)
-        (tau: type) (n: nat),
-        Sigma__reg idx tau ->
-        HasType Gamma (Read level idx) tau
+        (size: nat) (n: nat),
+        V idx size ->
+        HasType Gamma (Read level idx) (bit_t size)
   | HasTypeWrite:
       forall (Gamma: tenv TVar)
         (level: Level) (idx: nat) (value: syntax)
-        (tau: type) (n: nat),
-        Sigma__reg idx tau ->
-        HasType Gamma value tau ->
+        (size: nat) (n: nat),
+        V idx size ->
+        HasType Gamma value (bit_t size) ->
         HasType Gamma (Write level idx value) unit_t
   | HasTypeCall:
       forall (Gamma: tenv TVar)
         (idx: TFn) (args: list syntax)
         (argSizes: list nat) (retType: type),
-        Sigma__fn idx (FunSig argSizes retType) ->
+        Sigma idx (FunSig argSizes retType) ->
         List.length args = List.length argSizes ->
         (forall (n: nat) (s: syntax) (argSize: nat),
             List.nth_error args n = Some s ->
@@ -149,8 +149,8 @@ Section TC.
         MaxType Gamma Skip unit_t
   | MaxTypeConst:
       forall (Gamma: tenv TVar)
-        (bits: list bool) (cst: nat),
-        MaxType Gamma (Const bits) (bit_t (length bits))
+        (cst: bits),
+        MaxType Gamma (Const cst) (bit_t (length cst))
   | MaxTypeIfT:
       forall (Gamma: tenv TVar)
         (cond: syntax) (tbranch: syntax) (fbranch: syntax)
@@ -175,21 +175,21 @@ Section TC.
   | MaxTypeRead:
       forall (Gamma: tenv TVar)
         (level: Level) (idx: nat)
-        (tau: type) (n: nat),
-        Sigma__reg idx tau ->
-        MaxType Gamma (Read level idx) tau
+        (size: nat) (n: nat),
+        V idx size ->
+        MaxType Gamma (Read level idx) (bit_t size)
   | MaxTypeWrite:
       forall (Gamma: tenv TVar)
         (level: Level) (idx: nat) (value: syntax)
-        (tau: type) (n: nat),
-        Sigma__reg idx tau ->
-        HasType Gamma value tau ->
+        (size: nat) (n: nat),
+        V idx size ->
+        HasType Gamma value (bit_t size) ->
         MaxType Gamma (Write level idx value) unit_t
   | MaxTypeCall:
       forall (Gamma: tenv TVar)
         (idx: TFn) (args: list syntax)
         (argSizes: list nat) (retType: type),
-        Sigma__fn idx (FunSig argSizes retType) ->
+        Sigma idx (FunSig argSizes retType) ->
         List.length args = List.length argSizes ->
         (forall (n: nat) (s: syntax) (argSize: nat),
             List.nth_error args n = Some s ->
@@ -250,8 +250,8 @@ Section TC.
 
   Ltac t :=
     repeat match goal with
-           | [ H: fn ?Gamma _ _, Hle: fenv_le ?Gamma _ |- _ ] =>
-             pose_once (Hle _ _ H)
+           | [ H: fn ?Gamma ?k ?v, Hle: fenv_le ?Gamma _ |- _ ] =>
+             pose_once Hle k v H
            | [ H: exists _, _ |- _ ] => destruct H
            | [ H: _ /\ _ |- _ ] => destruct H
            end.

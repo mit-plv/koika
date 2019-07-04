@@ -7,8 +7,8 @@ Section circuits.
       circuit nOut -> circuit nOut -> circuit nOut
   | CMux : forall {n nOut n'} (select: circuit n),
       circuit nOut -> circuit n' -> circuit nOut
-  | CConst : forall (l: list bool),
-      circuit (length l)
+  | CConst : forall (cst: bits),
+      circuit (length cst)
   | CVar : forall nOut (var: nat),
       circuit nOut
   | CLet : forall {n n'} (var: nat) (expr: circuit n) (body: circuit n'),
@@ -88,7 +88,7 @@ Section circuits.
          write1Data := input.(write1Data);
          retVal := existT _ 0 (CConst nil) |},
        Gamma)
-    | Const bits =>
+    | Const cst =>
       ({| consistent := input.(consistent);
           read0 := input.(read0);
           read1 := input.(read1);
@@ -96,7 +96,7 @@ Section circuits.
           write1 := input.(write1);
           write0Data := input.(write0Data);
           write1Data := input.(write1Data);
-          retVal := existT _ _ (CConst bits) |},
+          retVal := existT _ _ (CConst cst) |},
        Gamma)
     | If cond tbranch fbranch =>
       let var := S (max (List.map fst Gamma)) in

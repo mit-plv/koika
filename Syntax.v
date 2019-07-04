@@ -1,11 +1,13 @@
 Inductive Level :=
   P0 | P1.
 
+Notation bits := (list bool).
+
 Inductive syntax {TVar TFn} :=
 | Bind (var: TVar) (expr: syntax) (body: syntax)
 | Var (var: TVar)
 | Skip
-| Const (bits: list bool)
+| Const (cst: bits)
 | If (cond: syntax) (tbranch: syntax) (fbranch: syntax)
 | Fail
 | Read (level: Level) (idx: nat)

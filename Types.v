@@ -1,6 +1,9 @@
 Require Import List.
 Require Import SGA.Common SGA.Syntax.
 
+Create HintDb types discriminated.
+Hint Transparent not : types.
+
 Inductive type :=
 | unit_t
 | bit_t (n: nat)
