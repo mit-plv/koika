@@ -135,18 +135,18 @@ Section Interp.
     | _ => Stuck
     end.
 
-  Fixpoint interp
+  Fixpoint interp_rule
            (V: RegEnv.(env_t))
            (Sigma: SigmaEnv.(env_t))
            (Gamma: GammaEnv.(env_t))
            (sched_log: Log)
            (rule_log: Log)
-           (s: syntax TVar TFn)
+           (s: rule TVar TFn)
            {struct s} :=
     match s with
     | Bind var expr body =>
-      result_bind (interp V Sigma Gamma sched_log rule_log expr) (fun '(rule_log', v) =>
-      interp V Sigma (putenv Gamma var v) sched_log rule_log body)
+      result_bind (interp_rule V Sigma Gamma sched_log rule_log expr) (fun '(rule_log', v) =>
+      interp_rule V Sigma (putenv Gamma var v) sched_log rule_log body)
     | Var var =>
       result_map (opt_result Stuck (getenv Gamma var)) (fun val => (rule_log, val))
     | Skip =>
@@ -154,10 +154,10 @@ Section Interp.
     | Const cst =>
       Success (rule_log, vbits cst)
     | If cond tbranch fbranch =>
-      result_bind (interp V Sigma Gamma sched_log rule_log cond) (fun '(rule_log', condv) =>
+      result_bind (interp_rule V Sigma Gamma sched_log rule_log cond) (fun '(rule_log', condv) =>
       if condv
-      then interp V Sigma Gamma sched_log rule_log' tbranch
-      else interp V Sigma Gamma sched_log rule_log' fbranch)
+      then interp_rule V Sigma Gamma sched_log rule_log' tbranch
+      else interp_rule V Sigma Gamma sched_log rule_log' fbranch)
     | Fail =>
       CannotRun
     | Read P0 idx =>
@@ -174,7 +174,7 @@ Section Interp.
       ((LE LogRead P1 idx []) :: rule_log, vbits bs))))
     | Write lvl idx val =>
       result_bind (opt_result Stuck (getenv V idx)) (fun bs0 =>
-      result_bind (interp V Sigma Gamma sched_log rule_log val) (fun '(rule_log, v) =>
+      result_bind (interp_rule V Sigma Gamma sched_log rule_log val) (fun '(rule_log, v) =>
       result_bind (may_write sched_log rule_log lvl idx) (fun _ =>
       result_map (assert_bits v (List.length bs0)) (fun bs =>
       ((LE LogWrite lvl idx bs) :: rule_log, vtt)))))
@@ -185,11 +185,27 @@ Section Interp.
           (fold_left2
              (fun (acc: result (Log * list bits)) arg size =>
                 result_bind acc (fun '(rule_log, argvs) =>
-                result_bind (interp V Sigma Gamma sched_log rule_log arg) (fun '(rule_log, argv) =>
+                result_bind (interp_rule V Sigma Gamma sched_log rule_log arg) (fun '(rule_log, argv) =>
                 result_map (assert_bits argv size) (fun bs =>
                 (rule_log, bs :: argvs)))))
              args fn.(sig).(argSizes) (Success (rule_log, [])))
           (fun '(rule_log, argvs) => (rule_log, (fn argvs)))
       else Stuck)
+    end.
+
+  Fixpoint interp_scheduler
+           (V: RegEnv.(env_t))
+           (Sigma: SigmaEnv.(env_t))
+           (sched_log: Log)
+           (s: scheduler TVar TFn)
+           {struct s} :=
+    match s with
+    | Done => Some sched_log
+    | Try r s1 s2 =>
+      match interp_rule V Sigma env_nil sched_log [] r with
+      | Success (l, _) => interp_scheduler V Sigma (l ++ sched_log) s1
+      | CannotRun => interp_scheduler V Sigma sched_log s2
+      | Stuck => None
+      end
     end.
 End Interp.

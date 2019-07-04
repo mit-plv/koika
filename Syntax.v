@@ -3,15 +3,21 @@ Inductive Level :=
 
 Notation bits := (list bool).
 
-Inductive syntax {TVar TFn} :=
-| Bind (var: TVar) (expr: syntax) (body: syntax)
+Inductive rule {TVar TFn} :=
+| Bind (var: TVar) (expr: rule) (body: rule)
 | Var (var: TVar)
 | Skip
 | Const (cst: bits)
-| If (cond: syntax) (tbranch: syntax) (fbranch: syntax)
+| If (cond: rule) (tbranch: rule) (fbranch: rule)
 | Fail
 | Read (level: Level) (idx: nat)
-| Write (level: Level) (idx: nat) (value: syntax)
-| Call (fn: TFn) (args: list syntax).
+| Write (level: Level) (idx: nat) (value: rule)
+| Call (fn: TFn) (args: list rule).
 
-Arguments syntax : clear implicits.
+Arguments rule : clear implicits.
+
+Inductive scheduler {TVar TFn} :=
+| Done
+| Try (r: rule TVar TFn) (s1 s2: scheduler).
+
+Arguments scheduler : clear implicits.

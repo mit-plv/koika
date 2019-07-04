@@ -10,6 +10,10 @@ Record fenv {Key Value: Type} :=
 Arguments fenv: clear implicits.
 Hint Resolve @uniq : types.
 
+Definition fenv_nil {Key Value: Type} : fenv Key Value :=
+  {| fn k v := False;
+     uniq := ltac:(cbv in *; tauto) |}.
+
 Definition fenv_add {Key Value: Type} (env: fenv Key Value) (k: Key) (v: Value) : fenv Key Value.
   refine {| fn := (fun k' v' => (k = k' /\ v = v') \/ (k <> k' /\ env.(fn) k' v')) |};
     abstract (destruct env; intuition (subst; teauto)).
@@ -46,19 +50,19 @@ Section TC.
   Context (V: fenv nat nat).
   Context (Sigma: fenv TFn ExternalSignature).
 
-  Notation syntax := (syntax TVar TFn).
+  Notation rule := (rule TVar TFn).
   Notation fenv_le := (fenv_le type_le).
 
-  Inductive HasType : forall (Gamma: tenv TVar) (s: syntax) (tau: type), Prop :=
+  Inductive HasType : forall (Gamma: tenv TVar) (s: rule) (tau: type), Prop :=
   | HasTypePromote:
-      forall (Gamma: tenv TVar) (s: syntax)
+      forall (Gamma: tenv TVar) (s: rule)
         (tau: type) (tau': type),
         type_le tau tau' ->
         HasType Gamma s tau' ->
         HasType Gamma s tau
   | HasTypeBind:
       forall (Gamma: tenv TVar)
-        (var: TVar) (expr: syntax) (body: syntax)
+        (var: TVar) (expr: rule) (body: rule)
         (tau tau': type),
         HasType Gamma expr tau' ->
         HasType (fenv_add Gamma var tau') body tau ->
@@ -78,7 +82,7 @@ Section TC.
         HasType Gamma (Const cst) (bit_t (length cst))
   | HasTypeIf:
       forall (Gamma: tenv TVar)
-        (cond: syntax) (tbranch: syntax) (fbranch: syntax)
+        (cond: rule) (tbranch: rule) (fbranch: rule)
         (tau: type),
         HasType Gamma cond (bit_t 1) ->
         HasType Gamma tbranch tau ->
@@ -96,14 +100,14 @@ Section TC.
         HasType Gamma (Read level idx) (bit_t size)
   | HasTypeWrite:
       forall (Gamma: tenv TVar)
-        (level: Level) (idx: nat) (value: syntax)
+        (level: Level) (idx: nat) (value: rule)
         (size: nat) (n: nat),
         V idx size ->
         HasType Gamma value (bit_t size) ->
         HasType Gamma (Write level idx value) unit_t
   | HasTypeCall:
       forall (Gamma: tenv TVar)
-        (idx: TFn) (args: list syntax)
+        (idx: TFn) (args: list rule)
         (argSizes: list nat) (retType: type),
         Sigma idx (FunSig argSizes retType) ->
         List.length args = List.length argSizes ->
@@ -128,10 +132,10 @@ Section TC.
   Hint Resolve HasType_morphism : types.
   (* Note: no MaxType_morphism, since changing the environment changes the MaxType of the refs *)
 
-  Inductive MaxType : forall (Gamma: tenv TVar) (s: syntax) (tau: type), Prop :=
+  Inductive MaxType : forall (Gamma: tenv TVar) (s: rule) (tau: type), Prop :=
   | MaxTypeBind:
       forall (Gamma: tenv TVar)
-        (var: TVar) (expr: syntax) (body: syntax)
+        (var: TVar) (expr: rule) (body: rule)
         (tau tau': type),
         MaxType Gamma expr tau' ->
         MaxType (fenv_add Gamma var tau') body tau ->
@@ -151,7 +155,7 @@ Section TC.
         MaxType Gamma (Const cst) (bit_t (length cst))
   | MaxTypeIfT:
       forall (Gamma: tenv TVar)
-        (cond: syntax) (tbranch: syntax) (fbranch: syntax)
+        (cond: rule) (tbranch: rule) (fbranch: rule)
         (tauf taut: type),
         HasType Gamma cond (bit_t 1) ->
         MaxType Gamma tbranch tauf ->
@@ -160,7 +164,7 @@ Section TC.
         MaxType Gamma (If cond tbranch fbranch) taut
   | MaxTypeIfF:
       forall (Gamma: tenv TVar)
-        (cond: syntax) (tbranch: syntax) (fbranch: syntax)
+        (cond: rule) (tbranch: rule) (fbranch: rule)
         (tauf taut: type),
         HasType Gamma cond (bit_t 1) ->
         MaxType Gamma tbranch tauf ->
@@ -178,14 +182,14 @@ Section TC.
         MaxType Gamma (Read level idx) (bit_t size)
   | MaxTypeWrite:
       forall (Gamma: tenv TVar)
-        (level: Level) (idx: nat) (value: syntax)
+        (level: Level) (idx: nat) (value: rule)
         (size: nat) (n: nat),
         V idx size ->
         HasType Gamma value (bit_t size) ->
         MaxType Gamma (Write level idx value) unit_t
   | MaxTypeCall:
       forall (Gamma: tenv TVar)
-        (idx: TFn) (args: list syntax)
+        (idx: TFn) (args: list rule)
         (argSizes: list nat) (retType: type),
         Sigma idx (FunSig argSizes retType) ->
         List.length args = List.length argSizes ->
@@ -354,5 +358,14 @@ Section TC.
       teauto.
   Qed.
 
-  Print Assumptions types_unicity.
+  Notation scheduler := (scheduler TVar TFn).
+
+  Inductive SchedulerHasTypes: forall (s: scheduler), Prop :=
+  | SchedulerHasTypesDone : SchedulerHasTypes Done
+  | SchedulerHasTypesTry :
+      forall r tau s1 s2,
+        HasType fenv_nil r tau ->
+        SchedulerHasTypes s1 ->
+        SchedulerHasTypes s2 ->
+        SchedulerHasTypes (Try r s1 s2).
 End TC.

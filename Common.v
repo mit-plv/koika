@@ -1,7 +1,16 @@
 Class Env {K V: Type}: Type :=
   { env_t: Type;
+    env_nil: env_t;
     getenv: env_t -> K -> option V;
-    putenv: env_t -> K -> V -> env_t }.
+    putenv: env_t -> K -> V -> env_t;
+    getenv_nil: forall k, getenv env_nil k = None;
+    get_put_Some: forall ev k k' v v',
+        getenv (putenv ev k v) k' = Some v' ->
+        k = k' /\ v = v' \/ k <> k' /\ getenv ev k' = Some v';
+    get_put_None: forall ev k k' v,
+        getenv (putenv ev k v) k' = None ->
+        k <> k' /\ getenv ev k' = None
+  }.
 Arguments Env : clear implicits.
 Arguments env_t {_ _}.
 
@@ -40,6 +49,15 @@ Tactic Notation "pose_once" constr(thm) constr(arg) constr(arg') :=
 Tactic Notation "pose_once" constr(thm) constr(arg) constr(arg') constr(arg'') :=
   progress (let witness := constr:(AlreadyPosed4 thm arg arg' arg'') in
             _pose_once witness (thm arg arg' arg'')).
+
+Ltac constr_hd c :=
+      match c with
+      | ?f ?x => constr_hd f
+      | ?g => g
+      end.
+
+Definition and_fst {A B} := fun '(conj a _: and A B) => a.
+Definition and_snd {A B} := fun '(conj _ b: and A B) => b.
 
 Section fold_left2.
   Context {A B B': Type} (f: A -> B -> B' -> A).

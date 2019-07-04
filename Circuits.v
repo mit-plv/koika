@@ -57,7 +57,7 @@ Section circuits.
        write1Data := CLet var expr.(write1Data) body.(write1Data);
        retVal := existT _ _ (CLet var (projT2 expr.(retVal)) (projT2 body.(retVal))) |}.
 
-  Fixpoint compile {n} (s: @syntax nat) (Gamma: cenv) input : Bundle n * cenv :=
+  Fixpoint compile {n} (s: @rule nat) (Gamma: cenv) input : Bundle n * cenv :=
     match s with
     | Bind var expr body =>
       let '(cExpr, Gamma') := compile expr Gamma input in
