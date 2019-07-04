@@ -263,10 +263,16 @@ Definition tenv_of_env {K V V'} {env: Env K V} {f: V -> V'} (ev: env_t env): fen
             rewrite Heq in Heq'; inversion Heq'; eauto).
 Defined.
 
+Lemma log_write_consistent_nil:
+  forall v, log_write_consistent nil v.
+Proof.
+  unfold log_write_consistent; cbn; tauto.
+Qed.
+
 Lemma log_read_consistent_add:
-  forall l V level reg val,
-    log_write_consistent l V ->
-    log_write_consistent ({| kind := LogRead; level := level; reg := reg; val := val |} :: l) V.
+  forall l v level reg val,
+    log_write_consistent l v ->
+    log_write_consistent ({| kind := LogRead; level := level; reg := reg; val := val |} :: l) v.
 Proof.
   unfold log_write_consistent; cbn; intros * Hconsistent * Hget' [Heq | ?].
   - inversion Heq.
@@ -420,23 +426,24 @@ Proof.
       firstorder discriminate.
 Qed.
 
-Lemma type_safety:
-  forall Sigma Gamma V sched_log rule_log,
+Theorem type_safety:
+  forall Sigma Gamma V sched_log,
     let sigma := tenv_of_env (f := sig) Sigma in
     let v := tenv_of_env (f := (@length bool)) V in
     let gamma := tenv_of_env (f := type_of_value) Gamma in
     log_write_consistent sched_log v ->
-    log_write_consistent rule_log v ->
     forall s tau,
       Typechecking.HasType v sigma gamma s tau ->
-      interp V Sigma Gamma sched_log rule_log s <> CannotRun ->
+      interp V Sigma Gamma sched_log [] s = CannotRun \/
       exists rule_log' val,
-        interp V Sigma Gamma sched_log rule_log s = Success (rule_log', val) /\
+        interp V Sigma Gamma sched_log [] s = Success (rule_log', val) /\
         log_write_consistent rule_log' v /\
         type_of_value val = tau.
 Proof.
   cbv zeta; intros.
-  eapply type_safety';
+  destruct interp eqn:Heq; [right | eauto | right];
+    rewrite <- Heq;
+    eapply type_safety';
     try eapply tenv_of_env_equiv.
-  all: revgoals; eauto.
+  all: revgoals; eauto using log_write_consistent_nil || congruence.
 Qed.
