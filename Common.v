@@ -82,4 +82,53 @@ Proof.
     rewrite IHl; eauto.
 Qed.
 
+Section forall2.
+   Context {A B: Type}.
 
+   Definition forall2 (P: A -> B -> Prop) (lA: list A) (lB: list B) :=
+     forall (n: nat) (a: A) (b: B),
+       List.nth_error lA n = Some a ->
+       List.nth_error lB n = Some b ->
+       P a b.
+
+   Lemma forall2_fold_left2' args:
+     forall argSizes (P: _ -> _ -> Prop) Q,
+       forall2 P args argSizes /\ Q ->
+       fold_left2 (fun acc arg argSize => acc /\ P arg argSize) args argSizes Q.
+   Proof.
+     induction args; cbn; intros * (H & HP); destruct argSizes; try solve [intuition].
+     eapply IHargs.
+     repeat split; eauto.
+     - intros n' **.
+       apply (H (S n')); cbn; eauto.
+     - apply (H 0); cbn; eauto.
+   Qed.
+
+   Lemma forall2_fold_left2 args:
+     forall argSizes (P: _ -> _ -> Prop),
+       forall2 P args argSizes ->
+       fold_left2 (fun acc arg argSize => acc /\ P arg argSize) args argSizes True.
+   Proof.
+     eauto using forall2_fold_left2'.
+   Qed.
+
+   Lemma forall2_fold_right2' args:
+     forall argSizes (P: _ -> _ -> Prop) Q,
+       forall2 P args argSizes /\ Q ->
+       fold_right2 (fun arg argSize acc => acc /\ P arg argSize) Q args argSizes.
+   Proof.
+     induction args; cbn; intros * (H & HP); destruct argSizes; try solve [intuition].
+     split.
+     - eapply IHargs; split; eauto.
+       intros n' **; apply (H (S n')); cbn; eauto.
+     - apply (H 0); cbn; eauto.
+   Qed.
+
+   Lemma forall2_fold_right2 args:
+     forall argSizes (P: _ -> _ -> Prop),
+       forall2 P args argSizes ->
+       fold_right2 (fun arg argSize acc => acc /\ P arg argSize) True args argSizes.
+   Proof.
+     eauto using forall2_fold_right2'.
+   Qed.
+End forall2.

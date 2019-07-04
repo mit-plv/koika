@@ -42,64 +42,6 @@ Proof.
     destruct (PeanoNat.Nat.eq_dec _ _); discriminate || eauto.
 Qed.
 
-Lemma arg_types_forall_fold_left2' {TVar TFn}:
-  forall args argSizes (P: _ -> _ -> Prop) Q,
-  (forall (n: nat) (s: syntax TVar TFn) (argSize: nat),
-      List.nth_error args n = Some s ->
-      List.nth_error argSizes n = Some argSize ->
-      P s argSize) /\ Q ->
-  fold_left2 (fun acc arg argSize => acc /\ P arg argSize)
-             args argSizes Q.
-Proof.
-  induction args; cbn; intros * (H & HP); destruct argSizes; try solve [intuition].
-  eapply IHargs.
-  repeat split; eauto.
-  - intros n' **.
-    apply (H (S n')); cbn; eauto.
-  - apply (H 0); cbn; eauto.
-Qed.
-
-Lemma arg_types_forall_fold_left2 {TVar TFn}:
-  forall args argSizes (P: _ -> _ -> Prop),
-  (forall (n: nat) (s: syntax TVar TFn) (argSize: nat),
-      List.nth_error args n = Some s ->
-      List.nth_error argSizes n = Some argSize ->
-      P s argSize) ->
-  fold_left2 (fun acc arg argSize => acc /\ P arg argSize)
-             args argSizes True.
-Proof.
-  eauto using arg_types_forall_fold_left2'.
-Qed.
-
-
-Lemma arg_types_forall_fold_right2' {TVar TFn}:
-  forall args argSizes (P: _ -> _ -> Prop) Q,
-  (forall (n: nat) (s: syntax TVar TFn) (argSize: nat),
-      List.nth_error args n = Some s ->
-      List.nth_error argSizes n = Some argSize ->
-      P s argSize) /\ Q ->
-  fold_right2 (fun arg argSize acc => acc /\ P arg argSize)
-              Q args argSizes.
-Proof.
-  induction args; cbn; intros * (H & HP); destruct argSizes; try solve [intuition].
-  split.
-  - eapply IHargs; split; eauto.
-    intros n' **; apply (H (S n')); cbn; eauto.
-  - apply (H 0); cbn; eauto.
-Qed.
-
-Lemma arg_types_forall_fold_right2 {TVar TFn}:
-  forall args argSizes (P: _ -> _ -> Prop),
-  (forall (n: nat) (s: syntax TVar TFn) (argSize: nat),
-      List.nth_error args n = Some s ->
-      List.nth_error argSizes n = Some argSize ->
-      P s argSize) ->
-  fold_right2 (fun arg argSize acc => acc /\ P arg argSize)
-              True args argSizes.
-Proof.
-  eauto using arg_types_forall_fold_right2'.
-Qed.
-
 Definition log_write_consistent `{Env nat bits} (log: Log) (V: env_t _):=
   forall reg lvl val val0,
     getenv V reg = Some val0 ->
@@ -225,6 +167,12 @@ End EnvEquiv.
 (*       Gamma var tau -> False. *)
 (* Proof. firstorder. Qed. *)
 
+Ltac constr_hd c :=
+      match c with
+      | ?f ?x => constr_hd f
+      | ?g => g
+      end.
+
 Section TypeSafety.
   Context {TVar: Type}.
   Context {TFn: Type}.
@@ -242,14 +190,30 @@ Ltac t_step:=
   match goal with
   | _ => discriminate
   | _ => progress (cbn in *; intros; subst)
+  | [  |- _ /\ _ ] => split
   | [ H: _ /\ _ |- _ ] => destruct H
   | [ H: Success _ = Success _ |- _ ] =>
     inversion H; clear H
   | [ H: bit_t _ = bit_t _ |- _ ] =>
     inversion H; clear H
+  | [ H: ExternalFunction |- _ ] => destruct H
+  | [ H: ?a, H': ?a |- _ ] =>
+    let ta := type of a in
+    unify ta Prop; clear H'
+  | [ H: log_find _ _ _ = Some _ |- _ ] =>
+    unfold log_find in H; apply List.find_some in H
+  | [ H: List.In ?x (?a ++ ?b) |- _ ] =>
+    pose_once (List.in_app_or a b x) H
   | [ H: forall _, env_equiv _ ?Gamma _ -> _,
         H': env_equiv _ ?Gamma _ |- _ ] =>
     specialize (H _ H')
+  | [ H: @fn ?K ?V ?ev ?k ?v, H': fn ?ev ?k ?v' |- _ ] =>
+    pose_once (@uniq K V ev k v v') H H'
+  | [ H: _ |- _ ] => apply forall2_fold_right2 in H
+  | [ H: @log_write_consistent ?Ev ?log ?V,
+      H': getenv ?V ?reg = Some ?v,
+      H'': In {| kind := LogWrite; reg := ?reg; level := ?lvl; val := ?val |} ?log |- _ ] =>
+    pose_once (H reg lvl val v) H' H''
   | [ H: forall log, log_write_consistent log _ -> correct_type _ (interp _ _ _ _ log _) _,
       H': log_write_consistent ?log _ |- _ ] =>
     pose_once H log H'
@@ -279,6 +243,11 @@ Ltac t_step:=
   | [ H: correct_type _ (interp _ ?Gamma _ _ ?log ?s) _,
          H': interp _ ?Gamma _ _ ?log ?s = Stuck |- _ ] =>
     red in H; rewrite H' in H
+  | [ H: match ?x with _ => _ end = ?c |- _ ] =>
+    let c_hd := constr_hd c in
+    is_constructor c_hd; destruct x
+  | [ H: _ \/ _ |- _ ] => destruct H
+  | _ => progress (unfold assert_bits, may_read1 in *)
   | _ => solve [eauto 4 using eq_trans with types]
   end.
 
@@ -293,54 +262,6 @@ Definition tenv_of_env {K V V'} {env: Env K V} {f: V -> V'} (ev: env_t env): fen
   abstract (intros * (? & Heq & Hfeq) (? & Heq' & Hfeq'); subst;
             rewrite Heq in Heq'; inversion Heq'; eauto).
 Defined.
-
-
-Lemma fold_right2_result_length2':
-  forall V Sigma Gamma sched_log args sizes rule_log l bs bs0,
-    length args = length sizes ->
-    fold_right2
-      (fun arg size (acc: result (Log * list bits)) =>
-         result_bind acc (fun '(rule_log, argvs) =>
-         result_bind (interp V Sigma Gamma sched_log rule_log arg) (fun '(rule_log, argv) =>
-         result_map (assert_bits argv size) (fun bs =>
-         (rule_log, cons bs argvs)))))
-      (Success (rule_log, bs0)) args sizes =
-    Success (l, bs) ->
-    length bs = length sizes + length bs0.
-Proof.
-  induction args; simpl; destruct sizes; cbn; inversion 1.
-  - inversion 1; subst; reflexivity.
-  - intros.
-    destruct fold_right2 eqn:Heq; cbn in *; try discriminate.
-    destruct a0.
-    destruct (interp V Sigma Gamma sched_log l0 a); try discriminate; cbn in *.
-    destruct a0.
-    destruct (assert_bits _ _); try discriminate; cbn in *.
-    inversion H0; subst; cbn in *.
-    inversion H.
-    rewrite H3.
-    eauto.
-Qed.
-
-Lemma fold_right2_result_length2:
-  forall V Sigma Gamma sched_log args sizes rule_log l bs,
-    length args = length sizes ->
-    fold_right2
-      (fun arg size (acc: result (Log * list bits)) =>
-         result_bind acc (fun '(rule_log, argvs) =>
-         result_bind (interp V Sigma Gamma sched_log rule_log arg) (fun '(rule_log, argv) =>
-         result_map (assert_bits argv size) (fun bs =>
-         (rule_log, cons bs argvs)))))
-      (Success (rule_log, nil)) (List.rev args) (List.rev sizes) =
-    Success (l, bs) ->
-    length bs = length sizes.
-Proof.
-  intros; rewrite <- (PeanoNat.Nat.add_0_r (length sizes)).
-  rewrite <- (List.rev_length sizes).
-  eapply fold_right2_result_length2' with (bs0:= nil).
-  rewrite (List.rev_length args), (List.rev_length sizes); eassumption.
-  eauto.
-Qed.
 
 Lemma log_read_consistent_add:
   forall l V level reg val,
@@ -406,7 +327,6 @@ Lemma type_safe_call:
             log_write_consistent rule_log' V /\
             type_of_value (impl argvs) = retType.
 Proof.
-  (* setoid_rewrite fold_left2_rev_right2. *)
   induction args; destruct sizes; inversion 1.
   - cbn. intros **; destruct res; try discriminate.
     inversion H7; subst; right; exists nil; eexists; intuition eauto.
@@ -452,85 +372,17 @@ Lemma type_safety:
 Proof.
   induction 4; cbn; intros.
 
-  Hint Extern 1 => unfold not in *: types.
-
   all: try solve [t].
 
-  - t.
-    destruct (interp V Sigma Gamma0 sched_log rule_log s) as [ (? & ?) | | ]; cbn in *;
-      firstorder eauto using type_of_value_le_eq.
-  - t.
-    split; t.
-    split; t.
-
-    + destruct a0.
-      destruct l.
-      * t.
-      * t.
-
-    + destruct a0.
-      destruct l.
-      * unfold may_read1 in *.
-        destruct log_existsb; try discriminate.
-        inversion Heqr0; clear Heqr0.
-        unfold log_find in *.
-        apply List.find_some in H7.
-        t.
-        destruct PeanoNat.Nat.eq_dec; cbn in *; subst; try discriminate.
-        destruct kind; cbn in *; try discriminate.
-        destruct level; cbn in *; try discriminate.
-        t.
-        eapply List.in_app_or in H6.
-        destruct H6.
-        specialize (H4 _ _ _ _ Heqr H6).
-        congruence.
-        specialize (H1 _ _ _ _ Heqr H6).
-        congruence.
-      * t.
-
-  - t.
-
-    destruct v0; cbn in *; try discriminate.
-    split; t.
-
-    destruct v0; cbn in *; try discriminate.
-    t.
-
   - t;
-    match goal with
-    | [ H: @fn ?K ?V ?ev ?k ?v, H': fn ?ev ?k ?v' |- _ ] =>
-      pose_once (@uniq K V ev k v v') H H'
-    end.
+      destruct (interp V Sigma Gamma0 sched_log rule_log s) as [ (? & ?) | | ]; cbn in *;
+        firstorder eauto using type_of_value_le_eq.
 
-    destruct a; cbn in *.
-    destruct sig; cbn in *.
-    inversion H9; subst; cbn in *.
-    apply arg_types_forall_fold_right2 in H4.
-    apply arg_types_forall_fold_right2 in H5.
-
-    eapply type_safe_call in Heqr0; eauto using type_ok.
-    destruct Heqr0 as [ Heqr0 | Heqr0 ]; try discriminate.
-    destruct Heqr0 as (argvs & rule_log' & HeqSuccess & Heqlen & Hlog & Htypeof).
-    inversion HeqSuccess; subst; clear HeqSuccess.
-    rewrite app_nil_r.
-    split; eauto.
-
-    destruct a; cbn in *.
-    destruct sig; cbn in *.
-    inversion H9; subst; cbn in *.
-    apply arg_types_forall_fold_right2 in H4.
-    apply arg_types_forall_fold_right2 in H5.
-    eapply type_safe_call in Heqr0; eauto using type_ok.
-    destruct Heqr0 as [ Heqr0 | Heqr0 ]; try discriminate.
-    destruct Heqr0 as (argvs & rule_log' & HeqSuccess & Heqlen & Hlog & Htypeof); discriminate.
-
-    destruct a; cbn in *.
-    destruct sig; cbn in *.
-    inversion H9; subst; cbn in *.
-    apply arg_types_forall_fold_right2 in H4.
-    apply arg_types_forall_fold_right2 in H5.
-
-    clear Heqs.
-    cbn in *.
-    congruence.
+  - t.
+    all: eapply type_safe_call in Heqr0; eauto using type_ok.
+    all: repeat match goal with
+                | [ H: exists _, _ |- _ ] => destruct H
+                | [  |- context[_ ++ nil] ] => rewrite app_nil_r
+                | _ => t_step
+                end.
 Qed.

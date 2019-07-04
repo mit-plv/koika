@@ -107,13 +107,11 @@ Section TC.
         (argSizes: list nat) (retType: type),
         Sigma idx (FunSig argSizes retType) ->
         List.length args = List.length argSizes ->
-        (forall (n: nat) (s: syntax) (argSize: nat),
-            List.nth_error args n = Some s ->
-            List.nth_error argSizes n = Some argSize ->
-            HasType Gamma s (bit_t argSize)) ->
+        forall2 (fun arg argSize => HasType Gamma arg (bit_t argSize)) args argSizes ->
         HasType Gamma (Call idx args) retType.
 
   Hint Constructors HasType : types.
+  Hint Extern 1 => unfold forall2 in * : types.
 
   Lemma HasType_morphism:
     forall (Gamma1: tenv TVar) s tau,
@@ -191,10 +189,7 @@ Section TC.
         (argSizes: list nat) (retType: type),
         Sigma idx (FunSig argSizes retType) ->
         List.length args = List.length argSizes ->
-        (forall (n: nat) (s: syntax) (argSize: nat),
-            List.nth_error args n = Some s ->
-            List.nth_error argSizes n = Some argSize ->
-            HasType Gamma s (bit_t argSize)) ->
+        forall2 (fun arg argSize => HasType Gamma arg (bit_t argSize)) args argSizes ->
         MaxType Gamma (Call idx args) retType.
   (* FIXME use single HasType premise in last three rules? *)
 
@@ -256,7 +251,6 @@ Section TC.
            | [ H: _ /\ _ |- _ ] => destruct H
            end.
 
-  (* The other copies of MaxType_increasing aren't very interesting, since they don't show existence (and existence implies their results, because of unicity) *)
   Lemma MaxType_increasing'' : forall s Gamma tau,
       MaxType Gamma s tau ->
       forall (Gamma': tenv TVar),
@@ -265,7 +259,7 @@ Section TC.
           MaxType Gamma' s tau' /\
           type_le tau tau'.
   Proof.
-    induction 1; intros * le; t; teauto 7.
+    induction 1; intros * le; t; teauto 6.
 
     - specialize (IHMaxType1 _ le).
       t.
@@ -300,6 +294,7 @@ Section TC.
                   ltac:(eassumption)).
       teauto.
       teauto 6.
+    - teauto 8.
   Qed.
 
   Lemma HasType_MaxType : forall Gamma s tau,
