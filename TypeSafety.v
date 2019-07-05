@@ -42,28 +42,11 @@ Proof.
     destruct (PeanoNat.Nat.eq_dec _ _); discriminate || eauto.
 Qed.
 
-Ltac not_stuck :=
-  intros; unfold may_write, may_read0, may_read1;
-  repeat match goal with
-         | [  |- match ?x with _ => _ end <> Stuck ] => destruct x
-         end;
-  discriminate.
+Lemma bool_result_not_stuck b:
+    bool_result b <> Stuck.
+Proof. destruct b; cbn; intro; discriminate. Qed.
 
-Lemma may_write_not_stuck sched_log rule_log level idx:
-    may_write sched_log rule_log level idx <> Stuck.
-Proof. not_stuck. Qed.
-
-Lemma may_read0_not_stuck sched_log rule_log idx:
-    may_read0 sched_log rule_log idx <> Stuck.
-Proof. not_stuck. Qed.
-
-Lemma may_read1_not_stuck sched_log rule_log idx:
-    may_read1 sched_log rule_log idx <> Stuck.
-Proof. not_stuck. Qed.
-
-Hint Extern 1 False => eapply may_write_not_stuck: types.
-Hint Extern 1 False => eapply may_read0_not_stuck: types.
-Hint Extern 1 False => eapply may_read1_not_stuck: types.
+Hint Extern 1 False => eapply bool_result_not_stuck: types.
 
 Lemma type_of_value_le_eq:
   forall tau tau' v,
@@ -259,9 +242,9 @@ Section TypeSafety.
       red in H; rewrite H' in H
     | [ H: match ?x with _ => _ end = ?c |- _ ] =>
       let c_hd := constr_hd c in
-      is_constructor c_hd; destruct x
+      is_constructor c_hd; destruct x eqn:?
     | [ H: _ \/ _ |- _ ] => destruct H
-    | _ => progress (unfold assert_bits, may_read1 in *)
+    | _ => progress (unfold assert_bits, latest_write0 in *)
     | _ => solve [eauto 4 using eq_trans with types]
     end.
 

@@ -72,58 +72,59 @@ Section Interp.
   Context {TVar: Type}.
   Context {TFn: Type}.
 
-  Context {RegEnv: Env nat bits }.
-  Context {SigmaEnv: Env TFn ExternalFunction }.
+  Context {RegEnv: Env nat bits}.
+  Context {SigmaEnv: Env TFn ExternalFunction}.
   Context {GammaEnv: Env TVar value}.
   Open Scope bool_scope.
 
   Definition log_find log reg (f: LogEntryKind -> Level -> bits -> bool) :=
     List.find (fun '(LE kind lvl r v) => if PeanoNat.Nat.eq_dec reg r then f kind lvl v else false) log.
 
-  Definition log_existsb log reg (f: LogEntryKind -> Level -> bits -> bool) :=
-    List.existsb (fun '(LE kind lvl r v) => if PeanoNat.Nat.eq_dec reg r then f kind lvl v else false) log.
+  Definition log_forallb log reg (f: LogEntryKind -> Level -> bits -> bool) :=
+    List.forallb (fun '(LE kind lvl r v) => if PeanoNat.Nat.eq_dec reg r then f kind lvl v else true) log.
+
+  Definition bool_result (b: bool) : result unit :=
+    if b then Success tt else CannotRun.
 
   Definition may_read0 sched_log rule_log idx :=
-    if (log_existsb sched_log idx
-                    (fun kind lvl _ => match kind, lvl with
-                                    | LogWrite, P0 => true
-                                    | _, _ => false
-                                    end)) ||
-       (log_existsb (sched_log ++ rule_log) idx
-                    (fun kind lvl _ => match kind, lvl with
-                                    | _, P1 => true
-                                    | _, _ => false
-                                    end))
-    then CannotRun
-    else Success tt.
+    (log_forallb sched_log idx
+                 (fun kind lvl _ => match kind, lvl with
+                                 | LogWrite, P0 => false
+                                 | _, _ => true
+                                 end)) &&
+    (log_forallb (rule_log ++ sched_log) idx
+                 (fun kind lvl _ => match kind, lvl with
+                                 | _, P1 => false
+                                 | _, _ => true
+                                 end)).
 
-  Definition may_read1 sched_log rule_log idx :=
-    if (log_existsb sched_log idx
-                    (fun kind lvl _ => match kind, lvl with
-                                    | LogWrite, P1 => true
-                                    | _, _ => false
-                                    end))
-    then CannotRun
-    else Success (log_find (rule_log ++ sched_log) idx
-                           (fun kind lvl _ => match kind, lvl with
-                                           | LogWrite, P0 => true
-                                           | _, _ => false
-                                           end)).
+  Definition may_read1 sched_log idx :=
+    log_forallb sched_log idx
+                (fun kind lvl _ => match kind, lvl with
+                                | LogWrite, P1 => false
+                                | _, _ => true
+                                end).
+
+  Definition latest_write0 log idx :=
+    log_find log idx
+             (fun kind lvl _ => match kind, lvl with
+                             | LogWrite, P0 => true
+                             | _, _ => false
+                             end).
 
   Definition may_write sched_log rule_log lvl idx :=
-    if match lvl with
-       | P0 => (log_existsb (sched_log ++ rule_log) idx
-                           (fun kind lvl _ => match kind, lvl with
-                                           | LogRead, P1 | LogWrite, _ => true
-                                           | _, _ => false
-                                           end))
-       | P1 => (log_existsb (sched_log ++ rule_log) idx
-                           (fun kind lvl _ => match kind, lvl with
-                                           | LogWrite, P1 => true
-                                           | _, _ => false
-                                           end)) end
-    then CannotRun
-    else Success tt.
+    match lvl with
+       | P0 => log_forallb (rule_log ++ sched_log) idx
+                          (fun kind lvl _ => match kind, lvl with
+                                          | LogRead, P1 | LogWrite, _ => false
+                                          | _, _ => true
+                                          end)
+       | P1 => log_forallb (rule_log ++ sched_log) idx
+                          (fun kind lvl _ => match kind, lvl with
+                                          | LogWrite, P1 => false
+                                          | _, _ => true
+                                          end)
+    end.
 
   Definition assert_size (bs: bits) (size: nat) : result bits :=
     if PeanoNat.Nat.eq_dec (List.length bs) size then Success bs
@@ -162,12 +163,12 @@ Section Interp.
       CannotRun
     | Read P0 idx =>
       result_bind (opt_result Stuck (getenv V idx)) (fun v =>
-      result_map (may_read0 sched_log rule_log idx) (fun _ =>
+      result_map (bool_result (may_read0 sched_log rule_log idx)) (fun _ =>
       ((LE LogRead P0 idx []) :: rule_log, vbits v)))
     | Read P1 idx =>
       result_bind (opt_result Stuck (getenv V idx)) (fun bs0 =>
-      result_bind (may_read1 sched_log rule_log idx) (fun latest_le =>
-      result_map (match latest_le with
+      result_bind (bool_result (may_read1 sched_log idx)) (fun _ =>
+      result_map (match latest_write0 (rule_log ++ sched_log) idx with
                   | Some {| val := v |} => assert_size v (length bs0)
                   | None => Success bs0
                   end) (fun bs =>
@@ -175,7 +176,7 @@ Section Interp.
     | Write lvl idx val =>
       result_bind (opt_result Stuck (getenv V idx)) (fun bs0 =>
       result_bind (interp_rule V Sigma Gamma sched_log rule_log val) (fun '(rule_log, v) =>
-      result_bind (may_write sched_log rule_log lvl idx) (fun _ =>
+      result_bind (bool_result (may_write sched_log rule_log lvl idx)) (fun _ =>
       result_map (assert_bits v (List.length bs0)) (fun bs =>
       ((LE LogWrite lvl idx bs) :: rule_log, vtt)))))
     | Call fn args =>
