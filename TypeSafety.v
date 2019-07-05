@@ -152,7 +152,7 @@ Qed.
 
 Hint Resolve log_read_consistent_add: types.
 
-Lemma log_write_consistent_add:
+Lemma log_write_consistent_add_write:
   forall l (v: fenv nat nat) level reg val sz,
     v reg sz ->
     sz = length val ->
@@ -164,7 +164,18 @@ Proof.
   - eauto.
 Qed.
 
-Hint Resolve log_write_consistent_add: types.
+Lemma log_write_consistent_add_read:
+  forall l (v: fenv nat nat) level reg val,
+    log_write_consistent l v ->
+    log_write_consistent ({| kind := LogRead; level := level; reg := reg; val := val |} :: l) v.
+Proof.
+  unfold log_write_consistent; cbn; intros * Hget ? * Hconsistent * [Heq | ?].
+  - inversion Heq; subst; eauto with types.
+  - eauto.
+Qed.
+
+Hint Resolve log_write_consistent_add_write: types.
+Hint Resolve log_write_consistent_add_read: types.
 
 Section TypeSafety.
   Context {TVar: Type}.
@@ -278,13 +289,12 @@ Section TypeSafety.
         forall (rule_log: Log),
           log_write_consistent rule_log v ->
           forall argvs0 res,
-            fold_left2
-              (fun (acc: result (Log * list bits)) arg size =>
-                 result_bind acc (fun '(rule_log, argvs) =>
+            fold_left2_result
+              (fun '(rule_log, argvs) arg size =>
                  result_bind (interp_rule V Sigma Gamma sched_log rule_log arg) (fun '(rule_log, argv) =>
                  result_map (assert_bits argv size) (fun bs =>
-                 (rule_log, bs :: argvs)))))
-              args sizes (Success (rule_log, argvs0)) = res ->
+                 (rule_log, bs :: argvs))))
+              args sizes (rule_log, argvs0) = res ->
             res = CannotRun \/
             exists argvs rule_log',
               res = Success (rule_log', argvs ++ argvs0) /\
@@ -422,7 +432,7 @@ Section TypeSafety.
   Lemma scheduler_safety:
     forall s Sigma V sched_log,
       let sigma := tenv_of_env sig Sigma in
-      let v := tenv_of_env ((@length bool)) V in
+      let v := tenv_of_env (@length bool) V in
       log_write_consistent sched_log v ->
       SchedulerHasTypes v sigma s ->
       exists sched_log',

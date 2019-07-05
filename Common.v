@@ -4,6 +4,8 @@ Class Env {K V: Type}: Type :=
     getenv: env_t -> K -> option V;
     putenv: env_t -> K -> V -> env_t;
     getenv_nil: forall k, getenv env_nil k = None;
+    get_put_eq: forall ev k v, getenv (putenv ev k v) k = Some v;
+    get_put_neq: forall ev k k' v, k <> k' -> getenv (putenv ev k v) k' = getenv ev k';
     get_put_Some: forall ev k k' v v',
         getenv (putenv ev k v) k' = Some v' ->
         k = k' /\ v = v' \/ k <> k' /\ getenv ev k' = Some v';

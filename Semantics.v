@@ -136,6 +136,14 @@ Section Interp.
     | _ => Stuck
     end.
 
+
+  Definition fold_left2_result
+             {A B B': Type} (f: A -> B -> B' -> result A)
+             (l: list B) (l': list B') (a0: A) : result A :=
+    fold_left2 (fun acc b b' =>
+                  result_bind acc (fun acc =>
+                  f acc b b')) l l' (Success a0).
+
   Fixpoint interp_rule
            (V: RegEnv.(env_t))
            (Sigma: SigmaEnv.(env_t))
@@ -183,13 +191,12 @@ Section Interp.
       result_bind (opt_result Stuck (getenv Sigma fn)) (fun fn =>
       if PeanoNat.Nat.eq_dec (List.length args) (List.length fn.(sig).(argSizes)) then
         result_map
-          (fold_left2
-             (fun (acc: result (Log * list bits)) arg size =>
-                result_bind acc (fun '(rule_log, argvs) =>
+          (fold_left2_result
+             (fun '(rule_log, argvs) arg size =>
                 result_bind (interp_rule V Sigma Gamma sched_log rule_log arg) (fun '(rule_log, argv) =>
                 result_map (assert_bits argv size) (fun bs =>
-                (rule_log, bs :: argvs)))))
-             args fn.(sig).(argSizes) (Success (rule_log, [])))
+                (rule_log, bs :: argvs))))
+             args fn.(sig).(argSizes) (rule_log, []))
           (fun '(rule_log, argvs) => (rule_log, (fn argvs)))
       else Stuck)
     end.
