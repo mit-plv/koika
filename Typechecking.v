@@ -1,47 +1,7 @@
-Require Import SGA.Common SGA.Syntax SGA.Types.
+Require Import SGA.Common SGA.Syntax SGA.Environments SGA.Types.
 
 Tactic Notation "teauto" := eauto with types.
 Tactic Notation "teauto" integer(n) := eauto n with types.
-
-Record fenv {Key Value: Type} :=
-  { fn :> Key -> Value -> Prop;
-    uniq: forall k v v', fn k v -> fn k v' -> v = v' }.
-
-Arguments fenv: clear implicits.
-Hint Resolve @uniq : types.
-
-Definition fenv_nil {Key Value: Type} : fenv Key Value :=
-  {| fn k v := False;
-     uniq := ltac:(cbv in *; tauto) |}.
-
-Definition fenv_add {Key Value: Type} (env: fenv Key Value) (k: Key) (v: Value) : fenv Key Value.
-  refine {| fn := (fun k' v' => (k = k' /\ v = v') \/ (k <> k' /\ env.(fn) k' v')) |};
-    abstract (destruct env; intuition (subst; teauto)).
-Defined.
-
-Definition fenv_le {Key Value: Type} (cmp : Value -> Value -> Prop) (Gamma Gamma': fenv Key Value) :=
-  forall k v, Gamma k v -> exists v', Gamma' k v' /\ cmp v v'.
-
-Lemma fenv_le_refl {Key Value: Type}:
-  forall (cmp: _ -> _ -> Prop) (Gamma : fenv Key Value),
-    (forall x, cmp x x) ->
-    fenv_le cmp Gamma Gamma.
-Proof.
-  firstorder.
-Qed.
-
-Hint Resolve fenv_le_refl : types.
-
-Lemma fenv_add_increasing {Key Value: Type}:
-  forall (cmp: _ -> _ -> Prop) (Gamma1 : fenv Key Value) (var : Key) (tau tau' : Value) (Gamma2 : fenv Key Value),
-    cmp tau tau' ->
-    fenv_le cmp Gamma1 Gamma2 ->
-    fenv_le cmp (fenv_add Gamma1 var tau) (fenv_add Gamma2 var tau').
-Proof.
-  unfold fenv_le, fenv_add; simpl; firstorder (subst; teauto).
-Qed.
-
-Hint Resolve fenv_add_increasing : types.
 
 Section TC.
   Notation tenv A := (fenv A type).
@@ -153,24 +113,24 @@ Section TC.
       forall (Gamma: tenv TVar)
         (cst: bits),
         MaxType Gamma (Const cst) (bit_t (length cst))
-  | MaxTypeIfT:
-      forall (Gamma: tenv TVar)
-        (cond: rule) (tbranch: rule) (fbranch: rule)
-        (tauf taut: type),
-        HasType Gamma cond (bit_t 1) ->
-        MaxType Gamma tbranch tauf ->
-        MaxType Gamma fbranch taut ->
-        type_le taut tauf ->
-        MaxType Gamma (If cond tbranch fbranch) taut
   | MaxTypeIfF:
       forall (Gamma: tenv TVar)
         (cond: rule) (tbranch: rule) (fbranch: rule)
         (tauf taut: type),
         HasType Gamma cond (bit_t 1) ->
-        MaxType Gamma tbranch tauf ->
-        MaxType Gamma fbranch taut ->
+        MaxType Gamma tbranch taut ->
+        MaxType Gamma fbranch tauf ->
         type_le tauf taut ->
         MaxType Gamma (If cond tbranch fbranch) tauf
+  | MaxTypeIfT:
+      forall (Gamma: tenv TVar)
+        (cond: rule) (tbranch: rule) (fbranch: rule)
+        (tauf taut: type),
+        HasType Gamma cond (bit_t 1) ->
+        MaxType Gamma tbranch taut ->
+        MaxType Gamma fbranch tauf ->
+        type_le taut tauf ->
+        MaxType Gamma (If cond tbranch fbranch) taut
   | MaxTypeFail:
       forall (Gamma: tenv TVar),
         MaxType Gamma Fail any_t
@@ -213,7 +173,7 @@ Section TC.
 
   Hint Resolve maxtypes_unicity : types.
 
-  Lemma MaxType_HasType : forall Gamma s tau, MaxType Gamma s tau -> HasType Gamma s tau.
+  Lemma MaxType_HasType : forall Gamma s tau', MaxType Gamma s tau' -> forall tau, type_le tau tau' -> HasType Gamma s tau.
     induction 1; teauto.
   Qed.
 
@@ -279,7 +239,7 @@ Section TC.
       t.
 
       destruct (type_le_upper_bounds_comparable
-                  taut tauf _ _
+                  tauf taut _ _
                   ltac:(eassumption)
                   ltac:(eassumption)
                   ltac:(eassumption)).
@@ -292,7 +252,7 @@ Section TC.
       t.
 
       destruct (type_le_upper_bounds_comparable
-                  tauf taut _ _
+                  taut tauf _ _
                   ltac:(eassumption)
                   ltac:(eassumption)
                   ltac:(eassumption)).

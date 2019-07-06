@@ -1,39 +1,9 @@
-Require Import SGA.Common SGA.Syntax SGA.Semantics.
+Require Import SGA.Common SGA.Environments SGA.Syntax SGA.Semantics.
 
 Require Import List.
 Import ListNotations.
 
 Open Scope bool_scope.
-
-Definition rule_ind' {TVar TFn : Type} (P : rule TVar TFn -> Prop)
-           (f : forall (var : TVar) (expr : rule TVar TFn),
-               P expr -> forall body : rule TVar TFn, P body -> P (Bind var expr body))
-           (f0 : forall var : TVar, P (Var var)) (f1 : P Skip) (f2 : forall cst : bits, P (Const cst))
-           (f3 : forall cond : rule TVar TFn,
-               P cond ->
-               forall tbranch : rule TVar TFn,
-                 P tbranch -> forall fbranch : rule TVar TFn, P fbranch -> P (If cond tbranch fbranch))
-           (f4 : P Fail) (f5 : forall (level : Level) (idx : nat), P (Read level idx))
-           (f6 : forall (level : Level) (idx : nat) (value : rule TVar TFn), P value -> P (Write level idx value))
-           (f7: forall (fn : TFn) (args : list (rule TVar TFn)),
-               List.Forall P args ->
-               P (Call fn args)) : forall r, P r.
-  refine (fix F (r : rule TVar TFn) : P r :=
-    match r as r0 return (P r0) with
-    | Bind var expr body => f var expr (F expr) body (F body)
-    | Var var => f0 var
-    | Skip => f1
-    | Const cst => f2 cst
-    | If cond tbranch fbranch => f3 cond (F cond) tbranch (F tbranch) fbranch (F fbranch)
-    | Fail => f4
-    | Read level idx => f5 level idx
-    | Write level idx value => f6 level idx value (F value)
-    | Call fn args => f7 fn args _
-    end).
-  revert args.
-  fix fargs 1.
-  destruct args; cbn; econstructor; eauto.
-Defined.
 
 Section EnvUpdates.
   Context {RegEnv: Env nat bits}.
@@ -197,30 +167,6 @@ Section EnvUpdates.
       - intuition discriminate.
     Qed.
 
-    Ltac bool_step :=
-      match goal with
-      | [ H: _ && _ = true |- _ ] =>
-        apply andb_prop in H
-      | [ H: forallb _ (_ ++ _) = _ |- _ ] =>
-        rewrite forallb_app in H
-      | [ H: log_forallb (_ ++ _) _ _ = _ |- _ ] =>
-        rewrite log_forallb_app in H
-      | [ H: Some _ = Some _ |- _ ] =>
-        inversion H; subst; clear H
-      end.
-
-    Ltac cleanup_step :=
-      match goal with
-      | _ => discriminate
-      | _ => progress (subst; cbn)
-      | [ H: Some _ = Some _ |- _ ] =>
-        inversion H; subst; clear H
-      | [ H: (_, _) = (_, _) |- _ ] =>
-        inversion H; subst; clear H
-      | [ H: _ /\ _ |- _ ] =>
-        destruct H
-      end.
-
     Lemma find_none_notb {A}:
       forall (P: A -> bool) l,
         (forall a, List.In a l -> P a = false) ->
@@ -231,6 +177,13 @@ Section EnvUpdates.
       - pose proof (Hnot a).
         destruct (P a); firstorder discriminate.
     Qed.
+
+    Ltac bool_step :=
+      match goal with
+      | _ => progress Common.bool_step
+      | [ H: log_forallb (_ ++ _) _ _ = _ |- _ ] =>
+        rewrite log_forallb_app in H
+      end.
 
     Lemma may_read0_no_writes :
       forall sl l idx,
@@ -331,9 +284,9 @@ Section EnvUpdates.
     Require Import TypeSafety.
 
     Lemma log_write_consistent_latest_write :
-      forall l (v: Typechecking.fenv nat nat) idx e n,
+      forall l (v: fenv nat nat) idx e n,
         log_write_consistent l v ->
-        Typechecking.fn v idx n ->
+        fn v idx n ->
         latest_write l idx = Some e ->
         length (e.(val)) = n.
     Proof.
@@ -384,13 +337,13 @@ Section EnvUpdates.
       repeat t_step.
 
     Lemma interp_rule_Success_call_consistent:
-      forall (args : list (rule TVar TFn)) (V : env_t RegEnv) (v : Typechecking.fenv nat nat)
+      forall (args : list (rule TVar TFn)) (V : env_t RegEnv) (v : fenv nat nat)
         (Sigma : env_t SigmaEnv) (Gamma : env_t GammaEnv) (sched_log rule_log l : Log) argvs,
         env_equiv (length (A:=bool)) v V ->
         log_write_consistent rule_log v ->
         Forall
           (fun r : rule TVar TFn =>
-             forall (V : env_t RegEnv) (v : Typechecking.fenv nat nat) (Sigma : env_t SigmaEnv)
+             forall (V : env_t RegEnv) (v : fenv nat nat) (Sigma : env_t SigmaEnv)
                (Gamma : env_t GammaEnv) (sl rule_log l : Log) (val : value),
                env_equiv (length (A:=bool)) v V ->
                log_write_consistent rule_log v ->
@@ -433,7 +386,7 @@ Section EnvUpdates.
       forall args : list (rule TVar TFn),
         Forall
           (fun r : rule TVar TFn =>
-             forall (V : env_t RegEnv) (v : Typechecking.fenv nat nat) (Sigma : env_t SigmaEnv)
+             forall (V : env_t RegEnv) (v : fenv nat nat) (Sigma : env_t SigmaEnv)
                (Gamma : env_t GammaEnv) (sl sl' rule_log l : Log) (val : value),
                env_equiv (length (A:=bool)) v V ->
                log_write_consistent sl v ->
@@ -606,4 +559,4 @@ Section EnvUpdates.
         inversion Heq; subst.
         reflexivity.
   Qed.
-  End Semantics'.
+End Semantics'.

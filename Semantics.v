@@ -1,5 +1,5 @@
 Require Import Coq.Lists.List.
-Require Import SGA.Common SGA.Syntax SGA.Types.
+Require Import SGA.Common SGA.Syntax SGA.Environments SGA.Types.
 
 Import ListNotations.
 
@@ -59,14 +59,14 @@ Record LogEntry := LE
 
 Definition Log := list LogEntry.
 
-Require Import SGA.Types.
-
 Record ExternalFunction :=
-  ExtFun { sig: Types.ExternalSignature;
+  ExtFun { sig: ExternalSignature;
            impl:> list bits -> value;
            type_ok: forall args: list bits,
                List.length args = List.length sig.(argSizes) ->
                type_of_value (impl args) = sig.(retType) }.
+
+Require Import SGA.Environments SGA.Types.
 
 Section Interp.
   Context {TVar: Type}.

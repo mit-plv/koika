@@ -1,25 +1,29 @@
-Class Env {K V: Type}: Type :=
-  { env_t: Type;
-    env_nil: env_t;
-    getenv: env_t -> K -> option V;
-    putenv: env_t -> K -> V -> env_t;
-    getenv_nil: forall k, getenv env_nil k = None;
-    get_put_eq: forall ev k v, getenv (putenv ev k v) k = Some v;
-    get_put_neq: forall ev k k' v, k <> k' -> getenv (putenv ev k v) k' = getenv ev k';
-    get_put_Some: forall ev k k' v v',
-        getenv (putenv ev k v) k' = Some v' ->
-        k = k' /\ v = v' \/ k <> k' /\ getenv ev k' = Some v';
-    get_put_None: forall ev k k' v,
-        getenv (putenv ev k v) k' = None ->
-        k <> k' /\ getenv ev k' = None
-  }.
-Arguments Env : clear implicits.
-Arguments env_t {_ _}.
-
 Require Import Coq.Lists.List.
 Import ListNotations.
 
 Inductive DP {A: Type} (a: A) : Prop :=.
+
+Ltac bool_step :=
+  match goal with
+  | [ H: andb _ _ = true |- _ ] =>
+    apply andb_prop in H
+  | [ H: forallb _ (_ ++ _) = _ |- _ ] =>
+    rewrite forallb_app in H
+  | [ H: Some _ = Some _ |- _ ] =>
+    inversion H; subst; clear H
+  end.
+
+Ltac cleanup_step :=
+  match goal with
+  | _ => discriminate
+  | _ => progress (subst; cbn)
+  | [ H: Some _ = Some _ |- _ ] =>
+    inversion H; subst; clear H
+  | [ H: (_, _) = (_, _) |- _ ] =>
+    inversion H; subst; clear H
+  | [ H: _ /\ _ |- _ ] =>
+    destruct H
+  end.
 
 Inductive Posed : list Prop -> Prop :=
 | AlreadyPosed1 : forall {A} a, Posed [@DP A a]
@@ -105,11 +109,40 @@ Qed.
 Section forall2.
    Context {A B: Type}.
 
+   (* This doesn't generate good induction principles *)
+   (* Inductive Forall2 (P : A -> B -> Prop) : list A -> list B -> Prop := *)
+   (* | Forall_nil_l : forall lb, Forall2 P nil lb *)
+   (* | Forall_nil_r : forall la, Forall2 P la nil *)
+   (* | Forall_cons : forall a b la lb, P a b -> Forall2 P la lb -> Forall2 P (a :: la) (b :: lb). *)
+
    Definition forall2 (P: A -> B -> Prop) (lA: list A) (lB: list B) :=
      forall (n: nat) (a: A) (b: B),
        List.nth_error lA n = Some a ->
        List.nth_error lB n = Some b ->
        P a b.
+
+   Lemma forall2_nil_l P :
+     forall lb, forall2 P nil lb.
+   Proof.
+     unfold forall2; destruct n; cbn; inversion 1.
+   Qed.
+
+   Lemma forall2_nil_r P :
+     forall la, forall2 P la nil.
+   Proof.
+     unfold forall2; destruct n; cbn; inversion 2.
+   Qed.
+
+   Lemma forall2_cons (P: A -> B -> Prop) :
+     forall a b la lb,
+       P a b ->
+       forall2 P la lb ->
+       forall2 P (a :: la) (b :: lb).
+   Proof.
+     unfold forall2; destruct n; cbn.
+     - inversion 1; inversion 1; subst; eauto.
+     - eauto.
+   Qed.
 
    Lemma forall2_fold_left2' args:
      forall argSizes (P: _ -> _ -> Prop) Q,
@@ -150,5 +183,16 @@ Section forall2.
        fold_right2 (fun arg argSize acc => acc /\ P arg argSize) True args argSizes.
    Proof.
      eauto using forall2_fold_right2'.
+   Qed.
+
+   Lemma fold_right2_forall2 (P: A -> B -> Prop):
+     forall args argSizes Q,
+       fold_right2 (fun arg argSize acc => acc /\ P arg argSize) Q args argSizes ->
+       forall2 P args argSizes /\ Q.
+   Proof.
+     induction args; cbn; intros * H; destruct argSizes;
+       try solve [intuition eauto using forall2_nil_l, forall2_nil_r].
+     destruct H; destruct (IHargs argSizes Q ltac:(eassumption)).
+     split; eauto using forall2_cons.
    Qed.
 End forall2.

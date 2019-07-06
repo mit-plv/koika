@@ -1,11 +1,7 @@
-Require Import SGA.Common SGA.Syntax SGA.Semantics SGA.Types SGA.Typechecking.
+Require Import SGA.Common SGA.Environments SGA.Syntax SGA.Semantics SGA.Types SGA.Typechecking.
 
 Require Import Coq.Lists.List.
 Import ListNotations.
-
-Definition fenv_env_consistent {K V V'} `{EV: Env K V} (ev: env_t EV) (fv: fenv K V') :=
-  (forall k v, fv k v -> exists v', getenv ev k = v') /\
-  (forall k v, getenv ev k = Some v -> exists v', fv k v').
 
 Lemma opt_result_Success:
   forall {A} (o: option A) (a: A),
@@ -56,67 +52,6 @@ Lemma type_of_value_le_eq:
 Proof.
   destruct v; cbn; inversion 1; congruence.
 Qed.
-
-Section EnvEquiv.
-  Context {K V V': Type} {Env: Env K V}.
-  Context (f: V -> V').
-
-  Definition env_equiv (Gamma: fenv K V') (gamma: env_t Env) :=
-    (forall var v, getenv gamma var = Some v -> Gamma var (f v)) /\
-    (forall var, getenv gamma var = None -> forall tau, not (Gamma var tau)).
-
-  Lemma env_equiv_putenv:
-    forall (Gamma: fenv K V') (gamma: env_t _)
-      (k: K) (v': V') (v: V),
-      f v = v' ->
-      env_equiv Gamma gamma ->
-      env_equiv (fenv_add Gamma k v') (putenv gamma k v).
-  Proof.
-    unfold env_equiv; cbn. intros * ? (H & H') **.
-    split; intros; [
-      pose proof (get_put_Some _ _ _ _ _ ltac:(eassumption)) |
-      pose proof (get_put_None _ _ _ _ ltac:(eassumption))
-    ]; firstorder (subst; eauto).
-  Qed.
-
-  Lemma env_equiv_getenv_Some:
-    forall (Gamma: fenv K V') (k: K) (gamma: env_t _),
-      env_equiv Gamma gamma ->
-      forall v: V,
-        getenv gamma k = Some v ->
-        Gamma k (f v).
-  Proof. firstorder. Qed.
-
-  Lemma env_equiv_getenv_None:
-    forall (Gamma: fenv K V') (k: K) (gamma: env_t _),
-      env_equiv Gamma gamma ->
-      getenv gamma k = None ->
-      forall v', Gamma k v' -> False.
-  Proof. firstorder. Qed.
-
-  Definition tenv_of_env (ev: env_t Env): fenv K V'.
-    refine {| fn k v' := exists v, getenv ev k = Some v /\ v' = f v |}.
-    abstract (intros * (? & Heq & Hfeq) (? & Heq' & Hfeq'); subst;
-              rewrite Heq in Heq'; inversion Heq'; eauto).
-  Defined.
-
-  Lemma tenv_of_env_equiv :
-    forall (ev: env_t Env),
-      env_equiv (tenv_of_env ev) ev.
-  Proof.
-    intros; unfold env_equiv, tenv_of_env, not; cbn; split.
-    - firstorder.
-    - intros * Heq * Hex; rewrite Heq in Hex;
-        firstorder discriminate.
-  Qed.
-
-  Lemma tenv_of_env_nil :
-    env_equiv fenv_nil env_nil.
-    unfold env_equiv, fenv_nil; cbn; split; intros.
-    - rewrite getenv_nil in H; discriminate.
-    - tauto.
-  Qed.
-End EnvEquiv.
 
 Definition log_write_consistent (log: Log) (v: fenv nat nat) :=
   forall reg lvl val n,

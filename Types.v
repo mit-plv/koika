@@ -1,9 +1,6 @@
 Require Import List.
 Require Import SGA.Common SGA.Syntax.
 
-Create HintDb types discriminated.
-Hint Extern 1 => unfold not in *: types.
-
 Inductive type :=
 | unit_t
 | bit_t (n: nat)
