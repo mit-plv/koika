@@ -577,18 +577,38 @@ Section OneRuleAtATime.
       + discriminate.
   Qed.
 
+  Fixpoint scheduler_rules (s: scheduler TVar TFn) :=
+    match s with
+    | Done => []
+    | Try r s1 s2 => r :: scheduler_rules s1 ++ scheduler_rules s2
+    end.
+
+  Lemma scheduler_trace_in_scheduler :
+    forall V Sigma s log l0 rs,
+      interp_scheduler_trace V Sigma l0 s = Some (rs, log) ->
+      (forall r : rule TVar TFn, In r rs -> In r (scheduler_rules s)).
+  Proof.
+    induction s; cbn in *.
+    - inversion 1; subst; inversion 1.
+    - intros * H * H'; rewrite in_app_iff; t.
+      + inversion H'; subst; eauto.
+      + eauto.
+  Qed.
+
   Theorem OneRuleAtATime:
     forall V Sigma s log,
       interp_scheduler V Sigma [] s = Some log ->
-      exists rs, List.fold_left (update_one Sigma) rs (Some V) = Some (commit_update V log).
+      exists rs,
+        (forall r, List.In r rs -> List.In r (scheduler_rules s)) /\
+        List.fold_left (update_one Sigma) rs (Some V) = Some (commit_update V log).
   Proof.
     intros * H.
     apply interp_scheduler_trace_correct in H; destruct H as (rs & H).
-    exists rs.
-    (* change (Some V) with (Some (commit_update V [])). *)
-    eapply OneRuleAtATime' with (l0 := nil).
-    - eapply tenv_of_env_related.
-    - eapply log_write_consistent_nil.
-    - unfold interp_scheduler_trace_and_update; rewrite H; reflexivity.
+    exists rs; split.
+    - eauto using scheduler_trace_in_scheduler.
+    - eapply OneRuleAtATime' with (l0 := nil).
+      + eapply tenv_of_env_related.
+      + eapply log_write_consistent_nil.
+      + unfold interp_scheduler_trace_and_update; rewrite H; reflexivity.
   Qed.
 End OneRuleAtATime.
