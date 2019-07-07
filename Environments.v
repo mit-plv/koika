@@ -38,39 +38,39 @@ Class Env {K V: Type}: Type :=
 Arguments Env : clear implicits.
 Arguments env_t {_ _}.
 
-Section EnvEquiv.
+Section EnvRel.
   Context {K V V': Type} {Env: Env K V}.
   Context (f: V -> V').
 
-  Definition env_equiv (Gamma: fenv K V') (gamma: env_t Env) :=
+  Definition env_related (Gamma: fenv K V') (gamma: env_t Env) :=
     (forall var v, getenv gamma var = Some v -> Gamma var (f v)) /\
     (forall var, getenv gamma var = None -> forall tau, not (Gamma var tau)).
 
-  Lemma env_equiv_putenv:
+  Lemma env_related_putenv:
     forall (Gamma: fenv K V') (gamma: env_t _)
       (k: K) (v': V') (v: V),
       f v = v' ->
-      env_equiv Gamma gamma ->
-      env_equiv (fenv_add Gamma k v') (putenv gamma k v).
+      env_related Gamma gamma ->
+      env_related (fenv_add Gamma k v') (putenv gamma k v).
   Proof.
-    unfold env_equiv; cbn. intros * ? (H & H') **.
+    unfold env_related; cbn. intros * ? (H & H') **.
     split; intros; [
       pose proof (get_put_Some _ _ _ _ _ ltac:(eassumption)) |
       pose proof (get_put_None _ _ _ _ ltac:(eassumption))
     ]; firstorder (subst; eauto).
   Qed.
 
-  Lemma env_equiv_getenv_Some:
+  Lemma env_related_getenv_Some:
     forall (Gamma: fenv K V') (k: K) (gamma: env_t _),
-      env_equiv Gamma gamma ->
+      env_related Gamma gamma ->
       forall v: V,
         getenv gamma k = Some v ->
         Gamma k (f v).
   Proof. firstorder. Qed.
 
-  Lemma env_equiv_getenv_None:
+  Lemma env_related_getenv_None:
     forall (Gamma: fenv K V') (k: K) (gamma: env_t _),
-      env_equiv Gamma gamma ->
+      env_related Gamma gamma ->
       getenv gamma k = None ->
       forall v', Gamma k v' -> False.
   Proof. firstorder. Qed.
@@ -81,23 +81,23 @@ Section EnvEquiv.
               rewrite Heq in Heq'; inversion Heq'; eauto).
   Defined.
 
-  Lemma tenv_of_env_equiv :
+  Lemma tenv_of_env_related :
     forall (ev: env_t Env),
-      env_equiv (tenv_of_env ev) ev.
+      env_related (tenv_of_env ev) ev.
   Proof.
-    intros; unfold env_equiv, tenv_of_env, not; cbn; split.
+    intros; unfold env_related, tenv_of_env, not; cbn; split.
     - firstorder.
     - intros * Heq * Hex; rewrite Heq in Hex;
         firstorder discriminate.
   Qed.
 
   Lemma tenv_of_env_nil :
-    env_equiv fenv_nil env_nil.
-    unfold env_equiv, fenv_nil; cbn; split; intros.
+    env_related fenv_nil env_nil.
+    unfold env_related, fenv_nil; cbn; split; intros.
     - rewrite getenv_nil in H; discriminate.
     - tauto.
   Qed.
-End EnvEquiv.
+End EnvRel.
 
 Lemma fenv_le_refl {Key Value: Type}:
   forall (cmp: _ -> _ -> Prop) (Gamma : fenv Key Value),

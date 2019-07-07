@@ -120,7 +120,7 @@ Section TypeSafety.
   Context (SigmaEnv: Env TFn ExternalFunction).
   Context (RegEnv: Env nat bits).
 
-  Hint Resolve (@env_equiv_putenv _ _ _ GammaEnv): types.
+  Hint Resolve (@env_related_putenv _ _ _ GammaEnv): types.
 
   Definition correct_type `{Env nat bits} v (r: result (Log * value)) (tau: type) :=
     match r with
@@ -147,8 +147,8 @@ Section TypeSafety.
       unfold log_find in H; apply List.find_some in H
     | [ H: List.In ?x (?a ++ ?b) |- _ ] =>
       pose_once (List.in_app_or a b x) H
-    | [ H: forall _, env_equiv _ ?Gamma _ -> _,
-          H': env_equiv _ ?Gamma _ |- _ ] =>
+    | [ H: forall _, env_related _ ?Gamma _ -> _,
+          H': env_related _ ?Gamma _ |- _ ] =>
       specialize (H _ H')
     | [ H: @fn ?K ?V ?ev ?k ?v, H': fn ?ev ?k ?v' |- _ ] =>
       pose_once (@uniq K V ev k v v') H H'
@@ -160,10 +160,10 @@ Section TypeSafety.
     | [ H: forall log, log_write_consistent log _ -> correct_type _ (interp_rule _ _ _ _ log _) _,
         H': log_write_consistent ?log _ |- _ ] =>
       pose_once H log H'
-    | [ H: env_equiv (Env := ?Env) ?f ?tenv ?env,
+    | [ H: env_related (Env := ?Env) ?f ?tenv ?env,
         H': getenv ?env ?k = Some ?v |- _ ] =>
       pose_once (and_fst H k v) H'
-    | [ H: env_equiv ?f ?tenv ?env,
+    | [ H: env_related ?f ?tenv ?env,
            H': getenv ?env ?k = None |- _ ] =>
       pose_once (and_snd H k) H'
     | [ H: assert_size _ _ = Success _ |- _ ] =>
@@ -202,11 +202,11 @@ Section TypeSafety.
 
   Lemma type_safe_call:
     forall v V sigma Sigma gamma Gamma,
-      env_equiv (@length bool) v V ->
-      env_equiv sig sigma Sigma ->
+      env_related (@length bool) v V ->
+      env_related sig sigma Sigma ->
       forall sched_log retType args sizes impl,
         length args = length sizes ->
-        env_equiv type_of_value gamma Gamma ->
+        env_related type_of_value gamma Gamma ->
         (forall args : list bits,
             length args = length sizes ->
             type_of_value (impl args) = retType) ->
@@ -214,7 +214,7 @@ Section TypeSafety.
            (fun arg argSize acc =>
               acc /\
               (forall Gamma : env_t GammaEnv,
-                  env_equiv type_of_value gamma Gamma ->
+                  env_related type_of_value gamma Gamma ->
                   forall rule_log : Log,
                     log_write_consistent rule_log v ->
                     correct_type v (interp_rule V Sigma Gamma sched_log rule_log arg) (bit_t argSize))) True args sizes) ->
@@ -268,14 +268,14 @@ Section TypeSafety.
 
   Lemma rule_safety'':
     forall sigma Sigma gamma v V sched_log,
-      env_equiv (@length bool) v V ->
-      env_equiv sig sigma Sigma ->
+      env_related (@length bool) v V ->
+      env_related sig sigma Sigma ->
       log_write_consistent sched_log v ->
       forall (s: rule TVar TFn)
         (tau: Types.type),
         HasType v sigma gamma s tau ->
         forall Gamma,
-          env_equiv type_of_value gamma Gamma ->
+          env_related type_of_value gamma Gamma ->
           forall rule_log: Log,
             log_write_consistent rule_log v ->
             correct_type v (interp_rule V Sigma Gamma sched_log rule_log s) tau.
@@ -300,9 +300,9 @@ Section TypeSafety.
 
   Lemma rule_safety':
     forall sigma Sigma gamma Gamma v V sched_log rule_log,
-      env_equiv sig sigma Sigma ->
-      env_equiv (@length bool) v V ->
-      env_equiv type_of_value gamma Gamma ->
+      env_related sig sigma Sigma ->
+      env_related (@length bool) v V ->
+      env_related type_of_value gamma Gamma ->
       log_write_consistent sched_log v ->
       log_write_consistent rule_log v ->
       forall s tau,
@@ -338,7 +338,7 @@ Section TypeSafety.
       rewrite <- Heq;
       eapply rule_safety';
       try eapply tenv_of_env_nil;
-      try eapply tenv_of_env_equiv.
+      try eapply tenv_of_env_related.
     all: revgoals; eauto using log_write_consistent_nil || congruence.
   Qed.
 
@@ -346,8 +346,8 @@ Section TypeSafety.
     forall Sigma V s sigma v,
       SchedulerHasTypes v sigma s ->
       forall sched_log,
-        env_equiv sig sigma Sigma ->
-        env_equiv (@length bool) v V ->
+        env_related sig sigma Sigma ->
+        env_related (@length bool) v V ->
         log_write_consistent sched_log v ->
         exists sched_log',
           interp_scheduler V Sigma sched_log s = Some sched_log' /\
@@ -375,6 +375,6 @@ Section TypeSafety.
         log_write_consistent sched_log' v.
   Proof.
     cbv zeta; intros; eapply scheduler_safety';
-      try eapply tenv_of_env_equiv; eauto.
+      try eapply tenv_of_env_related; eauto.
   Qed.
 End TypeSafety.
