@@ -1,3 +1,5 @@
+Require Import SGA.Common.
+
 Create HintDb types discriminated.
 Hint Extern 1 => unfold not in *: types.
 
@@ -29,10 +31,10 @@ Class Env {K V: Type}: Type :=
     get_put_eq: forall ev k v, getenv (putenv ev k v) k = Some v;
     get_put_neq: forall ev k k' v, k <> k' -> getenv (putenv ev k v) k' = getenv ev k';
     get_put_Some: forall ev k k' v v',
-        getenv (putenv ev k v) k' = Some v' ->
+        getenv (putenv ev k v) k' = Some v' <->
         k = k' /\ v = v' \/ k <> k' /\ getenv ev k' = Some v';
     get_put_None: forall ev k k' v,
-        getenv (putenv ev k v) k' = None ->
+        getenv (putenv ev k v) k' = None <->
         k <> k' /\ getenv ev k' = None
   }.
 Arguments Env : clear implicits.
@@ -55,8 +57,8 @@ Section EnvRel.
   Proof.
     unfold env_related; cbn. intros * ? (H & H') **.
     split; intros; [
-      pose proof (get_put_Some _ _ _ _ _ ltac:(eassumption)) |
-      pose proof (get_put_None _ _ _ _ ltac:(eassumption))
+      pose proof (and_fst (get_put_Some _ _ _ _ _) ltac:(eassumption)) |
+      pose proof (and_fst (get_put_None _ _ _ _) ltac:(eassumption))
     ]; firstorder (subst; eauto).
   Qed.
 
@@ -98,6 +100,49 @@ Section EnvRel.
     - tauto.
   Qed.
 End EnvRel.
+
+Section FEnvRel.
+  Context {K V: Type} {Env: Env K V}.
+
+  Definition fenv_related (Gamma: fenv K V) (gamma: env_t Env) :=
+    forall var v, Gamma var v <-> getenv gamma var = Some v.
+
+  Lemma fenv_related_putenv:
+    forall (Gamma: fenv K V) (gamma: env_t _)
+      (k: K) (v: V),
+      fenv_related Gamma gamma ->
+      fenv_related (fenv_add Gamma k v) (putenv gamma k v).
+  Proof.
+    unfold fenv_related; cbn; intros * H **.
+    rewrite get_put_Some, <- H.
+    reflexivity.
+  Qed.
+
+  Lemma fenv_related_getenv_Some:
+    forall (Gamma: fenv K V) (k: K) (gamma: env_t _),
+      fenv_related Gamma gamma ->
+      forall v: V,
+        Gamma k v -> getenv gamma k = Some v.
+  Proof. firstorder. Qed.
+
+  Lemma fenv_related_getenv_None:
+    forall (Gamma: fenv K V) (k: K) (gamma: env_t _),
+      fenv_related Gamma gamma ->
+      (forall v', Gamma k v' -> False) ->
+      getenv gamma k = None.
+  Proof. firstorder.
+     destruct getenv eqn:Heq.
+     - apply H in Heq; exfalso; eauto.
+     - reflexivity.
+  Qed.
+
+  Lemma tenv_of_env_frelated :
+    forall (ev: env_t Env),
+      fenv_related (tenv_of_env id ev) ev.
+  Proof.
+    intros; unfold fenv_related, tenv_of_env, id; cbn; firstorder (subst; eauto).
+  Qed.
+End FEnvRel.
 
 Lemma fenv_le_refl {Key Value: Type}:
   forall (cmp: _ -> _ -> Prop) (Gamma : fenv Key Value),

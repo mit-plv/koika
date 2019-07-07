@@ -187,26 +187,6 @@ Section TC.
   Notation "tau ⩽ tau'" :=
     (type_le tau tau') (at level 10, no associativity).
 
-  Lemma type_le_inv :
-    forall tau tau',
-      tau ⩽ tau' ->
-      tau' = any_t \/ tau' = tau.
-  Proof.
-    inversion 1; simpl; teauto.
-  Qed.
-
-  Lemma type_le_upper_bounds_comparable :
-    forall tau1 tau2 tau1' tau2',
-      tau1 ⩽ tau2 ->
-      tau1 ⩽ tau1' ->
-      tau2 ⩽ tau2' ->
-      (tau1' ⩽ tau2' \/ tau2' ⩽ tau1').
-  Proof.
-    intros * le12 le11' le22';
-      inversion le12; inversion le11'; inversion le22'; subst;
-        discriminate || teauto.
-  Qed.
-
   Ltac t :=
     repeat match goal with
            | [ H: fn ?Gamma ?k ?v, Hle: fenv_le ?Gamma _ |- _ ] =>
@@ -284,16 +264,6 @@ Section TC.
       teauto.
   Qed.
 
-  Lemma type_le_inv_not_any_t :
-    forall tau tau',
-      tau' ⩽ tau ->
-      tau <> any_t ->
-      tau' = tau.
-  Proof.
-    inversion 1; congruence.
-  Qed.
-
-  Hint Resolve type_le_inv_not_any_t : types.
   Hint Resolve MaxType_HasType : types.
 
   Theorem types_unicity :

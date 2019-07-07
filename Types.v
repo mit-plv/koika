@@ -48,6 +48,38 @@ Qed.
 
 Hint Resolve type_ge_any_t_eq_any_t : types.
 
+Lemma type_le_inv_not_any_t :
+  forall tau tau',
+    type_le tau' tau ->
+    tau <> any_t ->
+    tau' = tau.
+Proof.
+  inversion 1; congruence.
+Qed.
+
+Lemma type_le_inv :
+  forall tau tau',
+    type_le tau tau' ->
+    tau' = any_t \/ tau' = tau.
+Proof.
+  inversion 1; simpl; teauto.
+Qed.
+
+Hint Resolve type_le_inv_not_any_t : types.
+
+Lemma type_le_upper_bounds_comparable :
+  forall tau1 tau2 tau1' tau2',
+    type_le tau1 tau2 ->
+    type_le tau1 tau1' ->
+    type_le tau2 tau2' ->
+    (type_le tau1' tau2' \/ type_le tau2' tau1').
+Proof.
+  intros * le12 le11' le22';
+    inversion le12; inversion le11'; inversion le22'; subst;
+      discriminate || teauto.
+Qed.
+
+
 Record ExternalSignature :=
   FunSig { argSizes: list nat;
            retType: type }.
