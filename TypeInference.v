@@ -9,12 +9,6 @@ Section TypeInference.
   Context (Sigma: SigmaEnv.(env_t)).
   Context (V: RegEnv.(env_t)).
 
-  Definition opt_bind {A B} (o: option A) (f: A -> option B) :=
-    match o with
-    | Some x => f x
-    | None => None
-    end.
-
   Open Scope bool_scope.
 
   Definition type_le_dec tau1 tau2:

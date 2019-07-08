@@ -1,3 +1,3 @@
 (coq.theory
  (name SGA)
- (modules Common Environments Syntax Types Typechecking TypeInference Semantics TypeSafety OneRuleAtATime))
+ (modules Common Environments Circuits Syntax Types Typechecking TypeInference Semantics TypeSafety OneRuleAtATime))

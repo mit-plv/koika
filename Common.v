@@ -196,3 +196,10 @@ Section forall2.
      split; eauto using forall2_cons.
    Qed.
 End forall2.
+
+Definition opt_bind {A B} (o: option A) (f: A -> option B) :=
+  match o with
+  | Some x => f x
+  | None => None
+  end.
+
