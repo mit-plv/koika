@@ -3,4 +3,4 @@
  (modules Common Environments Circuits Syntax
           Types Typechecking TypeInference
           Semantics TypeSafety OneRuleAtATime
-          Extraction))
+          Examples Extraction))

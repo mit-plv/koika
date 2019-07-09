@@ -2,7 +2,7 @@ type ptr_t = int
 
 module CircuitHash =
   struct
-    type t = Sga.tFn Sga.circuit
+    type t = Sga.extfuns Sga.circuit
     let equal o1 o2 = o1 == o2
     let hash o = Hashtbl.hash o
   end
@@ -26,7 +26,7 @@ type 'tFn circuit =
   | CConst of bool list (* TODO: keep constants shared? *)
   | CExternal of 'tFn * ptr_t list
 
-let dedup_circuit (cs: (Sga.tFn Sga.circuit) list) =
+let dedup_circuit (cs: ('a Sga.circuit) list) =
   let object_to_ptr = CircuitHashtbl.create 50 in
   let ptr_to_object = PtrHashtbl.create 50 in
   let nextptr = ref 0 in
@@ -61,8 +61,11 @@ let rec int_of_nat = function
   | Sga.S n -> succ (int_of_nat n)
 
 let print_external = function
-  | Sga.Even -> "even"
-  | Sga.ReadReg n -> Printf.sprintf "Reg %d" (int_of_nat n)
+| Sga.Even -> "even"
+| Sga.Odd -> "odd"
+| Sga.Divide -> "divide"
+| Sga.ThreeNPlusOne -> "threenplusone"
+| Sga.Register n -> Printf.sprintf "Reg %d" (int_of_nat n)
 
 let label_ptrs = function
   | CNot c -> Some ("Not", [c])
@@ -93,6 +96,7 @@ let dot_record_label head args =
 
 let print_deduped (roots, ptr_to_object) =
   Printf.printf "digraph {\n";
+  (* Printf.printf "rankdir=BT\n"; *)
   PtrHashtbl.iter (fun ptr v ->
       match label_ptrs v with
       | None -> ()
@@ -102,14 +106,14 @@ let print_deduped (roots, ptr_to_object) =
          Printf.printf "N%d [label=\"%s\", shape=\"record\"]\n" ptr lbl;
          List.iteri (fun i pl ->
              match pl with
-             | Ptr ptr' -> Printf.printf "N%d:f%d -> N%d:hd\n" ptr i ptr'
+             | Ptr ptr' -> Printf.printf "N%d:hd -> N%d:f%d\n" ptr' ptr i
              | _ -> ())
            args_or_ptrs)
     ptr_to_object;
   List.iteri (fun i rootptr ->
       Printf.printf "R%d [label=\"Register %d\", shape=\"record\"]\n" i i;
-      Printf.printf "R%d -> N%d:hd\n" i rootptr)
+      Printf.printf "N%d:hd -> R%d\n" rootptr i)
     roots;
   Printf.printf "}\n"
 
-let _  = print_deduped (dedup_circuit Sga.compiled_example_ls)
+let _  = print_deduped (dedup_circuit Sga.compiled_collatz_ls)
