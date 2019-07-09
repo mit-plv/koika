@@ -169,56 +169,52 @@ Section Example2.
   Check collatz.
 
   (* Manually we step through destructs to learn that those are the hypthesis that we need to reduce the computation *)
-  Variable   AEven : (forall r1 r0, { evenb & even ((r1 :: r0 :: nil) :: nil) = vbits (cons(evenb) nil)}) .
+  Variable AEven : (forall r1 r0, { evenb & even ((r1 :: r0 :: nil) :: nil) = vbits (cons(evenb) nil)}) .
 
-  Variable ADiv :  (forall r1 r0, { divide0 & { divide1 &  divide_abst ((r1 :: r0 :: nil) :: nil)= vbits (cons divide1 (cons divide0 nil))}}) .
+  Variable ADiv :  (forall r1 r0, { divide01 & divide_abst ((r1 :: r0 :: nil) :: nil)= vbits (cons (fst divide01) (cons (snd divide01) nil))}) .
 
   Variable AOdd : (forall dv1 dv0, { oddb & odd ((dv1 :: dv0 :: nil) :: nil) = vbits (cons(oddb) nil)}).
   (* Note that we do not need the relationship between Odd and Even at that level *)
   (* And nothing about Div *)
 
-   Lemma semanticFlattened : { t & (interp_scheduler
+   Lemma caract_collatz : { t & (interp_scheduler
            InitReg_abst
            sigma_abst
            nil
            collatz) = t}.
      cbn.
      eexists.
-     (* Tactic Notation (at level 0) "simDes" tactic(body) := *)
-     (*   instantiate (1:=ltac:(body)); body. *)
-     all:(destruct (AEven r1 r0) as [ev eqe]).
-     (* simDes (destruct (AEven r1 r0) as [ev eqe]). *)
-
-     rewrite eqe.
-     Show Existentials.
-     simDes (destruct ev).
+     rewrite (projT2 (AEven r1 r0)).
+     instantiate (1:=ltac:(destruct (projT1 (AEven r1 r0)))).
+     (destruct (projT1 (AEven _ _))).
      cbn.
-     simDes (destruct (ADiv r1 r0) as [dv0 [dv1 eqd]]).
-     rewrite eqd.
+     rewrite (projT2 (ADiv _ _)).
      cbn.
-     simDes (destruct (AOdd dv1 dv0)  as [ov eqo]).
-     rewrite eqo.
-     destruct ov.
+     rewrite (projT2 (AOdd _ _)).
      cbn.
-     simDes (destruct (ADiv dv1 dv0) as [dv0' [dv1' eqd']]).
-     rewrite eqd'.
+     instantiate (1:=ltac:(destruct (projT1 (AOdd (fst (projT1 (ADiv r1 r0))) (snd (projT1 (ADiv r1 r0))))))).
+     destruct ( projT1 (AOdd (fst (projT1 (ADiv r1 r0))) (snd (projT1 (ADiv r1 r0))))).
+     rewrite (projT2 (ADiv (fst (projT1 (ADiv r1 r0))) (snd (projT1 (ADiv r1 r0))))).
      cbn.
      reflexivity.
-     cbv.
+     cbn.
      reflexivity.
-     eexists;reflexivity.
-     destruct (AOdd r1 r0)  as [ov eqo].
-     rewrite eqo.
-     destruct ov.
+     rewrite (projT2 (AOdd _ _)).
+     simpl.
+     instantiate (1:=ltac:(destruct (projT1 (AOdd r1 r0)) )).
+     destruct (projT1 (AOdd r1 r0)).
      cbn.
-     destruct (ADiv r1 r0) as [dv0' [dv1' eqd']].
-     rewrite eqd'.
-     cbn.
-     eexists;reflexivity.
-     eexists;reflexivity.
+     rewrite (projT2(ADiv _ _)).
+     simpl.
+     reflexivity.
+     simpl.
+     reflexivity.
    Defined.
-   Print semanticFlattened.
+   Eval cbn in (projT1 caract_collatz).
+
+
+
 
    Compute (interp_rule InitReg sigma env_nil nil nil divide_collatz).
    Compute (interp_rule InitReg sigma env_nil nil nil multiply_collatz).
-End Example1.
+End Example2.
