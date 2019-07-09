@@ -140,7 +140,7 @@ Section Interp.
     match s with
     | Bind var expr body =>
       result_bind (interp_rule V Sigma Gamma sched_log rule_log expr) (fun '(rule_log', v) =>
-      interp_rule V Sigma (putenv Gamma var v) sched_log rule_log body)
+      interp_rule V Sigma (putenv Gamma var v) sched_log rule_log' body)
     | Var var =>
       result_map (opt_result Stuck (getenv Gamma var)) (fun val => (rule_log, val))
     | Skip =>

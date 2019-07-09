@@ -203,3 +203,8 @@ Definition opt_bind {A B} (o: option A) (f: A -> option B) :=
   | None => None
   end.
 
+Definition must {A} (o: option A) : if o then A else unit :=
+  match o with
+  | Some a => a
+  | None => tt
+  end.

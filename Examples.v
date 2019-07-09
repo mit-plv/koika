@@ -36,7 +36,8 @@ End Functions.
 Section Example1.
   Definition r := 0.
   Definition InitReg := putenv env_nil r (cons true (cons false nil)).
-  Inductive Extfuns := Even | Odd | Divide | ThreeNPlusOne.
+  Inductive Extfuns := Even | Odd | Divide | ThreeNPlusOne | Register (idx: nat).
+
   Scheme Equality for Extfuns.
   Definition SigmaEnv : Env Extfuns ExternalFunction := EqEnv Extfuns_eq_dec.
 
