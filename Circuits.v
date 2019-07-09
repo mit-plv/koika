@@ -135,7 +135,7 @@ Section CircuitCompilation.
       opt_bind (compile_rule Gamma cond input) (fun cCond =>
       opt_bind (compile_rule Gamma tbranch cCond) (fun cTbr =>
       opt_bind (compile_rule Gamma fbranch cCond) (fun cFbr =>
-      Some {| canFire := CMux cCond.(retVal) cTbr.(canFire) cTbr.(canFire);
+      Some {| canFire := cCond.(canFire) && CMux cCond.(retVal) cTbr.(canFire) cFbr.(canFire);
               retVal := CMux cCond.(retVal) cTbr.(retVal) cFbr.(retVal);
               regs := Vector.map2 (fun tReg fReg =>
                                     {| read0 := CMux cCond.(retVal) tReg.(read0) fReg.(read0);
