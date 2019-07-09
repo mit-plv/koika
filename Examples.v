@@ -30,6 +30,8 @@ Section Functions.
 
 
 End Functions.
+(* Do not open List scope as we define a joli bind *)
+
 
 Section Example1.
   Definition r := 0.
@@ -39,7 +41,6 @@ Section Example1.
   Definition SigmaEnv : Env Extfuns ExternalFunction := EqEnv Extfuns_eq_dec.
 
   Axiom magic : forall {A},A .
-
   Definition sigma : (SigmaEnv.(env_t)).
     refine (putenv _ Divide {| sig := {| argSizes := cons 2 nil;
                                          retType := bit_t 2 |};
@@ -61,8 +62,6 @@ Section Example1.
     exact magic.
   Defined.
 
-
-(* Do not open List scope as we define a joli bind *)
   Delimit Scope sga_scope with sga.
   Notation "'Let' a '<-' b 'in' c" := (Bind a b c) (at level 99, c at level 98, only parsing) : sga_scope.
   Notation " a ';' b " :=  (Bind "nobodynamesavariablelikethat" a b) (at level 99): sga_scope. (* Hack *)
@@ -73,7 +72,7 @@ Section Example1.
   Notation "f '[' arg ']'" := (Call f (cons arg nil)) (at level 99,arg at level 99) : sga_scope.
   Notation "f '<|' g" := (Try f%sga g g ) (at level 99, g at level 99, right associativity, only parsing).
 
-
+  (* Test of notations: *)
   Check (Let "test" <- Skip in Skip)%sga.
   Check (Let "used" <- Fail in Var "used")%sga.
   Check ( Fail; Skip)%sga.
@@ -112,4 +111,113 @@ Section Example1.
 
   Compute (interp_rule InitReg sigma env_nil nil nil divide_collatz).
   Compute (interp_rule InitReg sigma env_nil nil nil multiply_collatz).
+End Example1.
+
+
+Section Example2.
+  Variable r0 r1: bool.
+  Definition InitReg_abst := putenv env_nil r (cons r1 (cons r0 nil)).
+  Variable divide_abst: list bits -> value.
+  Variable threeNPlusOne_abst: list bits -> value.
+  Variable even: list bits -> value.
+    Variable odd: list bits -> value.
+  Definition sigma_abst : (SigmaEnv.(env_t)).
+    refine (putenv _ Divide {| sig := {| argSizes := cons 2 nil;
+                                         retType := bit_t 2 |};
+                               impl := divide_abst|}).
+    refine (putenv _ ThreeNPlusOne {| sig := {| argSizes := cons 2 nil;
+                                                retType := bit_t 2 |};
+                                      impl := threeNPlusOne |}).
+    refine (putenv _ Even {| sig := {| argSizes := cons 2 nil;
+                                       retType := bit_t 1 |};
+                             impl := even|}).
+    refine (putenv _ Odd {| sig := {| argSizes := cons 2 nil;
+                                      retType := bit_t 1 |};
+                            impl := odd|}).
+
+    exact env_nil.
+    exact magic.
+    exact magic.
+    exact magic.
+    exact magic.
+  Defined.
+
+
+  (* Redefine notations because they conflict with list and I do not know how to handle that properly without Custom_entries *)
+  Delimit Scope sga_scope with sga.
+  Notation "'Let' a '<-' b 'in' c" := (Bind a b c) (at level 99, c at level 98, only parsing) : sga_scope.
+  Notation " a ';' b " :=  (Bind "nobodynamesavariablelikethat" a b) (at level 99): sga_scope. (* Hack *)
+  Notation "reg '·' 'read_0'" := (Read P0 reg) (at level 99) :sga_scope.
+  Notation "reg '·' 'read_1'" := (Read P1 reg) (at level 99) :sga_scope.
+  Notation "reg '·' 'write_0(' value ')'" := (Write P0 reg value) (at level 99) :sga_scope.
+  Notation "reg '·' 'write_1(' value ')'" := (Write P1 reg value) (at level 99) :sga_scope.
+  Notation "f '[' arg ']'" := (Call f (cons arg nil)) (at level 99,arg at level 99) : sga_scope.
+  Notation "f '<|' g" := (Try f%sga g g ) (at level 99, g at level 99, right associativity, only parsing).
+
+  (* Test of notations: *)
+  Check (Let "test" <- Skip in Skip)%sga.
+  Check (Let "used" <- Fail in Var "used")%sga.
+  Check ( Fail; Skip)%sga.
+  Check (r·read_0)%sga.
+  Check (r·write_0(Skip))%sga.
+  Check (Let "used" <- r·read_0 in Var "used")%sga.
+  Check (Even[Skip])%sga.
+  Check (Skip <| Done).
+  Check (Skip <| Fail <| Skip <| Done).
+  Check ((r·read_0) <| Fail <| Skip <| r·write_0(Skip)<| Done).
+  Check collatz.
+
+  (* Manually we step through destructs to learn that those are the hypthesis that we need to reduce the computation *)
+  Variable   AEven : (forall r1 r0, { evenb & even ((r1 :: r0 :: nil) :: nil) = vbits (cons(evenb) nil)}) .
+
+  Variable ADiv :  (forall r1 r0, { divide0 & { divide1 &  divide_abst ((r1 :: r0 :: nil) :: nil)= vbits (cons divide1 (cons divide0 nil))}}) .
+
+  Variable AOdd : (forall dv1 dv0, { oddb & odd ((dv1 :: dv0 :: nil) :: nil) = vbits (cons(oddb) nil)}).
+  (* Note that we do not need the relationship between Odd and Even at that level *)
+  (* And nothing about Div *)
+
+   Lemma semanticFlattened : { t & (interp_scheduler
+           InitReg_abst
+           sigma_abst
+           nil
+           collatz) = t}.
+     cbn.
+     eexists.
+     (* Tactic Notation (at level 0) "simDes" tactic(body) := *)
+     (*   instantiate (1:=ltac:(body)); body. *)
+     all:(destruct (AEven r1 r0) as [ev eqe]).
+     (* simDes (destruct (AEven r1 r0) as [ev eqe]). *)
+
+     rewrite eqe.
+     Show Existentials.
+     simDes (destruct ev).
+     cbn.
+     simDes (destruct (ADiv r1 r0) as [dv0 [dv1 eqd]]).
+     rewrite eqd.
+     cbn.
+     simDes (destruct (AOdd dv1 dv0)  as [ov eqo]).
+     rewrite eqo.
+     destruct ov.
+     cbn.
+     simDes (destruct (ADiv dv1 dv0) as [dv0' [dv1' eqd']]).
+     rewrite eqd'.
+     cbn.
+     reflexivity.
+     cbv.
+     reflexivity.
+     eexists;reflexivity.
+     destruct (AOdd r1 r0)  as [ov eqo].
+     rewrite eqo.
+     destruct ov.
+     cbn.
+     destruct (ADiv r1 r0) as [dv0' [dv1' eqd']].
+     rewrite eqd'.
+     cbn.
+     eexists;reflexivity.
+     eexists;reflexivity.
+   Defined.
+   Print semanticFlattened.
+
+   Compute (interp_rule InitReg sigma env_nil nil nil divide_collatz).
+   Compute (interp_rule InitReg sigma env_nil nil nil multiply_collatz).
 End Example1.
