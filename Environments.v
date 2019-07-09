@@ -1,3 +1,4 @@
+Require Import Coq.Strings.String.
 Require Import SGA.Common.
 
 Create HintDb types discriminated.
@@ -39,6 +40,29 @@ Class Env {K V: Type}: Type :=
   }.
 Arguments Env : clear implicits.
 Arguments env_t {_ _}.
+
+Instance EqEnv {K V: Type} (eqdec: forall k k': K, {k = k'} + {k <> k'}) : Env K V.
+Proof.
+  refine ({| env_t := list (K * V);
+             env_nil := nil;
+             getenv e k :=
+               match List.find (fun '(k', v) => if eqdec k k' then true else false) e with
+               | Some (_, v) => Some v
+               | None => None
+               end;
+             putenv e k v := cons (k, v) e |}); intros.
+  - abstract (reflexivity).
+  - abstract (cbn; destruct eqdec; congruence).
+  - abstract (cbn; destruct eqdec; congruence).
+  - abstract (cbn; destruct eqdec; subst; split;
+              intuition; repeat cleanup_step; eauto; congruence).
+  - abstract (cbn; destruct eqdec; subst; split;
+              intuition; repeat cleanup_step; eauto; congruence).
+Defined.
+
+Scheme Equality for string.
+Instance StringEnv (V: Type) : Env string V := EqEnv string_eq_dec.
+Instance NatEnv (V: Type) : Env nat V := EqEnv PeanoNat.Nat.eq_dec.
 
 Section EnvRel.
   Context {K V V': Type} {Env: Env K V}.

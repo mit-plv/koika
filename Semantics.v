@@ -35,21 +35,6 @@ Definition opt_result {A} (default: result A) (o: option A) :=
   | None => default
   end.
 
-(* Definition bool_result (default: result unit) (b: bool) := *)
-(*   if b then Success tt else default. *)
-
-(* Inductive ReadLogEntry := *)
-(* | LogRead (level: Level) (vec: nat) (idx: nat). *)
-
-(* Inductive WriteLogEntry := *)
-(* | LogWrite (level: Level) (vec: nat) (idx: nat) (val: value). *)
-
-(* Definition ReadLog := list ReadLogEntry. *)
-(* Definition WriteLog := list ReadLogEntry. *)
-(* Definition Log := (ReadLog * WriteLog)%type. *)
-
-(* Scheme Equality for Level. *)
-
 Inductive LogEntryKind := LogRead | LogWrite.
 Record LogEntry := LE
   { kind: LogEntryKind;
