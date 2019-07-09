@@ -54,7 +54,7 @@ let dedup_circuit (cs: (Sga.tFn Sga.circuit) list) =
   (deduped, ptr_to_object)
 
 let print_bits bs =
-  "0b" ^ (String.concat "" (List.map (fun b -> if b then "1" else "0") bs))
+  "b" ^ (String.concat "" (List.map (fun b -> if b then "1" else "0") bs))
 
 let rec int_of_nat = function
   | Sga.O -> 0
@@ -64,23 +64,52 @@ let print_external = function
   | Sga.Even -> "even"
   | Sga.ReadReg n -> Printf.sprintf "Reg %d" (int_of_nat n)
 
-let label_args c =
-  match c with
-  | CQuestionMark -> "?", []
-  | CNot c -> "Not", [c]
-  | CAnd (c1, c2) -> "And", [c1; c2]
-  | COr (c1, c2) -> "Or", [c1; c2]
-  | CMux (s, c1, c2) -> "Mux", [s; c1; c2]
-  | CConst bs -> print_bits bs, []
-  | CExternal (fname, cargs) -> print_external fname, cargs
+let label_ptrs = function
+  | CNot c -> Some ("Not", [c])
+  | CAnd (c1, c2) -> Some ("And", [c1; c2])
+  | COr (c1, c2) -> Some ("Or", [c1; c2])
+  | CMux (s, c1, c2) -> Some ("Mux", [s; c1; c2])
+  | CExternal (fname, cargs) -> Some (print_external fname, cargs)
+  | _ -> None
 
-let print_deduped (_roots, ptr_to_object) =
+type ptr_or_label =
+  | Ptr of int
+  | Label of string
+
+let dot_field_label i pl =
+  Printf.sprintf "<f%d> %s" i (match pl with
+                               | Label lbl -> lbl
+                               | Ptr _ -> "·")
+
+let field_ptr_or_label ptr_to_object ptr =
+  match PtrHashtbl.find ptr_to_object ptr with
+  | CQuestionMark -> Label "?"
+  | CConst bs -> Label (print_bits bs)
+  | _ -> Ptr ptr
+
+let dot_record_label head args =
+  let fields = List.mapi dot_field_label args in
+  String.concat "|" (Printf.sprintf "<hd> %s" head :: fields)
+
+let print_deduped (roots, ptr_to_object) =
   Printf.printf "digraph {\n";
   PtrHashtbl.iter (fun ptr v ->
-      let lbl, args = label_args v in
-      Printf.printf "N%d [label=\"%s\"]\n" ptr lbl;
-      List.iter (Printf.printf "N%d -> N%d\n" ptr) args)
+      match label_ptrs v with
+      | None -> ()
+      | Some (lbl, ptrs) ->
+         let args_or_ptrs = List.map (field_ptr_or_label ptr_to_object) ptrs in
+         let lbl = dot_record_label lbl args_or_ptrs in
+         Printf.printf "N%d [label=\"%s\", shape=\"record\"]\n" ptr lbl;
+         List.iteri (fun i pl ->
+             match pl with
+             | Ptr ptr' -> Printf.printf "N%d:f%d -> N%d:hd\n" ptr i ptr'
+             | _ -> ())
+           args_or_ptrs)
     ptr_to_object;
+  List.iteri (fun i rootptr ->
+      Printf.printf "R%d [label=\"Register %d\", shape=\"record\"]\n" i i;
+      Printf.printf "R%d -> N%d:hd\n" i rootptr)
+    roots;
   Printf.printf "}\n"
 
 let _  = print_deduped (dedup_circuit Sga.compiled_example_ls)
