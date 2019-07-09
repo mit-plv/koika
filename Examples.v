@@ -9,13 +9,13 @@ Section Functions.
     Import ListNotations.
 
     Definition divide arg := match arg with
-                             | [[a;b]] => vbits [false;a]
-                             | _ => vtt
+                             | [[a;b]] => [false;a]
+                             | _ => []
                              end.
     Definition even arg := match arg with
-                           | [[a;false]] => vbits [true]
-                           | [[a;true]] => vbits [false]
-                           | _ => vtt
+                           | [[a;false]] => [true]
+                           | [[a;true]] => [false]
+                           | _ => []
                            end.
 
     Definition eq2 arg := match arg with
@@ -25,9 +25,9 @@ Section Functions.
                            end.
 
     Definition odd arg := match arg with
-                           | [[a;false]] => vbits [false]
-                           | [[a;true]] => vbits [true]
-                           | _ => vtt
+                           | [[a;false]] => [false]
+                           | [[a;true]] => [true]
+                           | _ => []
                           end.
     Definition neg arg := match arg with
                            | [[false]] => vbits [true]
@@ -36,8 +36,8 @@ Section Functions.
                           end.
 
     Definition threeNPlusOne arg := match arg with (* Fake implementation *)
-                             | [[a;b]] => vbits [b;false]
-                             | _ => vtt
+                             | [[a;b]] => [b;false]
+                             | _ => []
                              end.
 
 
@@ -57,16 +57,16 @@ Section Example1.
   Axiom magic : forall {A},A .
   Definition sigma : (SigmaEnv.(env_t)).
     refine (putenv _ Divide {| sig := {| argSizes := cons 2 nil;
-                                         retType := bit_t 2 |};
+                                         retSize := 2 |};
                                impl := divide|}).
     refine (putenv _ ThreeNPlusOne {| sig := {| argSizes := cons 2 nil;
-                                                retType := bit_t 2 |};
+                                                retSize := 2 |};
                                       impl := threeNPlusOne |}).
     refine (putenv _ Even {| sig := {| argSizes := cons 2 nil;
-                                       retType := bit_t 1 |};
+                                       retSize := 1 |};
                              impl := even|}).
     refine (putenv _ Odd {| sig := {| argSizes := cons 2 nil;
-                                      retType := bit_t 1 |};
+                                      retSize := 1 |};
                             impl := odd|}).
 
     exact env_nil.
@@ -126,16 +126,16 @@ Section Example2.
     Variable odd: list bits -> value.
   Definition sigma_abst : (SigmaEnv.(env_t)).
     refine (putenv _ Divide {| sig := {| argSizes := cons 2 nil;
-                                         retType := bit_t 2 |};
+                                         retSize := 2 |};
                                impl := divide_abst|}).
     refine (putenv _ ThreeNPlusOne {| sig := {| argSizes := cons 2 nil;
-                                                retType := bit_t 2 |};
+                                                retSize := 2 |};
                                       impl := threeNPlusOne |}).
     refine (putenv _ Even {| sig := {| argSizes := cons 2 nil;
-                                       retType := bit_t 1 |};
+                                       retSize := 1 |};
                              impl := even|}).
     refine (putenv _ Odd {| sig := {| argSizes := cons 2 nil;
-                                      retType := bit_t 1 |};
+                                      retSize := 1 |};
                             impl := odd|}).
 
     exact env_nil.

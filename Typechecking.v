@@ -68,11 +68,11 @@ Section TC.
   | HasTypeCall:
       forall (Gamma: tenv TVar)
         (idx: TFn) (args: list rule)
-        (argSizes: list nat) (retType: type),
-        Sigma idx (FunSig argSizes retType) ->
+        (argSizes: list nat) (retSize: nat),
+        Sigma idx (FunSig argSizes retSize) ->
         List.length args = List.length argSizes ->
         forall2 (fun arg argSize => HasType Gamma arg (bit_t argSize)) args argSizes ->
-        HasType Gamma (Call idx args) retType.
+        HasType Gamma (Call idx args) (bit_t retSize).
 
   Hint Constructors HasType : types.
   Hint Extern 1 => unfold forall2 in * : types.
@@ -150,11 +150,11 @@ Section TC.
   | MaxTypeCall:
       forall (Gamma: tenv TVar)
         (idx: TFn) (args: list rule)
-        (argSizes: list nat) (retType: type),
-        Sigma idx (FunSig argSizes retType) ->
+        (argSizes: list nat) (retSize: nat),
+        Sigma idx (FunSig argSizes retSize) ->
         List.length args = List.length argSizes ->
         forall2 (fun arg argSize => HasType Gamma arg (bit_t argSize)) args argSizes ->
-        MaxType Gamma (Call idx args) retType.
+        MaxType Gamma (Call idx args) (bit_t retSize).
   (* FIXME use single HasType premise in last three rules? *)
 
   Hint Constructors MaxType : types.

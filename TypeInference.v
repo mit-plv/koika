@@ -54,7 +54,7 @@ Section TypeInference.
       if type_le_dec (bit_t sz) vtau then Some unit_t
       else None))
     | Call fn args =>
-      opt_bind (getenv Sigma fn) (fun '(FunSig argSizes retType) =>
+      opt_bind (getenv Sigma fn) (fun '(FunSig argSizes retSize) =>
       if (PeanoNat.Nat.eq_dec (List.length args) (List.length argSizes)) then
         if (fold_right2 (fun arg argSize acc =>
                           acc && match infer_maxtype Gamma arg with
@@ -62,7 +62,7 @@ Section TypeInference.
                                  | None => false
                                  end)
                        true args argSizes) then
-          Some retType
+          Some (bit_t retSize)
         else None
       else None)
     end.

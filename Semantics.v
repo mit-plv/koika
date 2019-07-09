@@ -46,10 +46,10 @@ Definition Log := list LogEntry.
 
 Record ExternalFunction :=
   ExtFun { sig: ExternalSignature;
-           impl:> list bits -> value;
+           impl:> list bits -> bits;
            type_ok: forall args: list bits,
                List.length args = List.length sig.(argSizes) ->
-               type_of_value (impl args) = sig.(retType) }.
+               List.length (impl args) = sig.(retSize) }.
 
 Require Import SGA.Environments SGA.Types.
 
@@ -184,7 +184,7 @@ Section Interp.
                 result_map (assert_bits argv size) (fun bs =>
                 (rule_log, bs :: argvs))))
              args fn.(sig).(argSizes) (rule_log, []))
-          (fun '(rule_log, argvs) => (rule_log, (fn argvs)))
+          (fun '(rule_log, argvs) => (rule_log, vbits (fn argvs)))
       else Stuck)
     end.
 

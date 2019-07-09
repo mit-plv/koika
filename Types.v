@@ -82,13 +82,13 @@ Qed.
 
 Record ExternalSignature :=
   FunSig { argSizes: list nat;
-           retType: type }.
+           retSize: nat }.
 
 Lemma ExternalSignature_inj2 :
-  forall (argSizes argSizes': list nat) (retType retType': type),
-    FunSig argSizes retType =
-    FunSig argSizes' retType' ->
-    retType = retType'.
+  forall (argSizes argSizes': list nat) (retSize retSize': nat),
+    FunSig argSizes retSize =
+    FunSig argSizes' retSize' ->
+    retSize = retSize'.
 Proof. now inversion 1. Qed.
 
 Hint Extern 10 => eapply @ExternalSignature_inj2 : types.

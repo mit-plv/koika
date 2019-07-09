@@ -206,12 +206,12 @@ Section TypeSafety.
     forall v V sigma Sigma gamma Gamma,
       env_related (@length bool) v V ->
       env_related sig sigma Sigma ->
-      forall sched_log retType args sizes impl,
+      forall sched_log retSize args sizes (impl: list bits -> bits),
         length args = length sizes ->
         env_related type_of_value gamma Gamma ->
         (forall args : list bits,
             length args = length sizes ->
-            type_of_value (impl args) = retType) ->
+            length (impl args) = retSize) ->
         (fold_right2
            (fun arg argSize acc =>
               acc /\
@@ -237,7 +237,7 @@ Section TypeSafety.
               res = Success (rule_log', argvs ++ argvs0) /\
               length argvs = length sizes /\
               log_write_consistent rule_log' v /\
-              type_of_value (impl argvs) = retType.
+              length (impl argvs) = retSize.
   Proof.
     induction args; destruct sizes; inversion 1.
     - cbn. intros **; destruct res; try discriminate.
