@@ -149,9 +149,11 @@ Section Interp.
       Success (rule_log, vbits cst)
     | If cond tbranch fbranch =>
       result_bind (interp_rule V Sigma Gamma sched_log rule_log cond) (fun '(rule_log', condv) =>
-      if condv
-      then interp_rule V Sigma Gamma sched_log rule_log' tbranch
-      else interp_rule V Sigma Gamma sched_log rule_log' fbranch)
+      match condv with
+      | vbits [true] => interp_rule V Sigma Gamma sched_log rule_log' tbranch
+      | vbits [false] => interp_rule V Sigma Gamma sched_log rule_log' fbranch
+      | _ => Stuck
+      end)
     | Fail =>
       CannotRun
     | Read P0 idx =>

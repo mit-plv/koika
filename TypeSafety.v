@@ -183,6 +183,8 @@ Section TypeSafety.
       destruct r eqn:?
     | [  |- correct_type _ ((if ?v then _ else _)) _ ] =>
       destruct v eqn:?
+    | [  |- correct_type _ ((match ?v with _ => _ end)) _ ] =>
+      destruct v eqn:?
     | [ H: correct_type _ (interp_rule _ ?Gamma _ _ ?log ?s) _,
            H': interp_rule _ ?Gamma _ _ ?log ?s = Stuck |- _ ] =>
       red in H; rewrite H' in H
