@@ -82,4 +82,4 @@ End Collatz.
 
 Extract Inductive list => "list" [ "[]" "(::)" ].
 Extraction Inline Environments.StringEnv Environments.NatEnv.
-Extraction "ocaml/sga.ml" circuit compiled_collatz_ls.
+Extraction "sga.ml" circuit compiled_collatz_ls.
