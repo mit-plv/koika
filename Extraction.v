@@ -18,7 +18,7 @@ Section Collatz.
   Import Vector.VectorNotations.
 
   Definition compiled_collatz : option (circuits 1) :=
-    compile_scheduler collatz [CExternal (Register 0) nil].
+    compile_scheduler [CExternal (Register 0) nil] collatz.
 
   Definition compiled_collatz_ls : list circuit :=
     match compiled_collatz with

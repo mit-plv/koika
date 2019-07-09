@@ -74,6 +74,7 @@ Section CircuitCompilation.
   Context {nRegs: nat}.
 
   Notation circuit := (circuit TFn).
+  Context (V: Vector.t circuit nRegs).
 
   Record rwdata :=
     { read0: circuit;
@@ -81,8 +82,7 @@ Section CircuitCompilation.
       write0: circuit;
       write1: circuit;
       data0: circuit;
-      data1: circuit;
-      original_data: circuit }.
+      data1: circuit }.
   (* Arguments rwdata: clear implicits. *)
   (* Arguments rule_circuit: clear implicits. *)
 
@@ -143,8 +143,7 @@ Section CircuitCompilation.
                                        write0 := CMux cCond.(retVal) tReg.(write0) fReg.(write0);
                                        write1 := CMux cCond.(retVal) tReg.(write1) fReg.(write1);
                                        data0 := CMux cCond.(retVal) tReg.(data0) fReg.(data0);
-                                       data1 := CMux cCond.(retVal) tReg.(data1) fReg.(data1);
-                                       original_data := tReg.(original_data) |})
+                                       data1 := CMux cCond.(retVal) tReg.(data1) fReg.(data1) |})
                                  cTbr.(regs) cFbr.(regs) |})))
     | Fail =>
       Some {| canFire := $[false];
@@ -155,28 +154,26 @@ Section CircuitCompilation.
       opt_bind (idx_of_nat idx) (fun idx =>
       let reg := Vector.nth input.(regs) idx in
       Some {| canFire := input.(canFire) && ~ reg.(read1) && ~ reg.(write1);
-              retVal := (Vector.nth input.(regs) idx).(original_data);
+              retVal := Vector.nth V idx;
               regs := Vector.replace input.(regs) idx {| read0 := $[true];
                                                         (* Unchanged *)
                                                         read1 := reg.(read1);
                                                         write0 := reg.(write0);
                                                         write1 := reg.(write1);
                                                         data0 := reg.(data0);
-                                                        data1 := reg.(data1);
-                                                        original_data := reg.(original_data) |} |})
+                                                        data1 := reg.(data1) |} |})
     | Read P1 idx =>
       opt_bind (idx_of_nat idx) (fun idx =>
       let reg := Vector.nth input.(regs) idx in
       Some {| canFire := input.(canFire);
-              retVal := CMux reg.(write0) reg.(data0) reg.(original_data);
+              retVal := CMux reg.(write0) reg.(data0) (Vector.nth V idx);
               regs := Vector.replace input.(regs) idx {| read1 := $[true];
                                                         (* Unchanged *)
                                                         read0 := reg.(read0);
                                                         write0 := reg.(write0);
                                                         write1 := reg.(write1);
                                                         data0 := reg.(data0);
-                                                        data1 := reg.(data1);
-                                                        original_data := reg.(original_data) |} |})
+                                                        data1 := reg.(data1) |} |})
     | Write P0 idx val =>
       opt_bind (compile_rule Gamma val input) (fun cVal =>
       opt_bind (idx_of_nat idx) (fun idx =>
@@ -189,8 +186,7 @@ Section CircuitCompilation.
                                                        read0 := reg.(read0);
                                                        read1 := reg.(read1);
                                                        write1 := reg.(write1);
-                                                       data1 := reg.(data1);
-                                                       original_data := reg.(original_data) |} |}))
+                                                       data1 := reg.(data1) |} |}))
     | Write P1 idx val =>
       opt_bind (compile_rule Gamma val input) (fun cVal =>
       opt_bind (idx_of_nat idx) (fun idx =>
@@ -203,8 +199,7 @@ Section CircuitCompilation.
                                                        read0 := reg.(read0);
                                                        read1 := reg.(read1);
                                                        write0 := reg.(write0);
-                                                       data0 := reg.(data0);
-                                                       original_data := reg.(original_data) |} |}))
+                                                       data0 := reg.(data0) |} |}))
     | Call fn args =>
       opt_bind (List.fold_left (fun acc arg =>
                                   opt_bind acc (fun '(input, cArgs) =>
@@ -215,7 +210,7 @@ Section CircuitCompilation.
               (* Unchanged *)
               canFire := lastArg.(canFire);
               regs := lastArg.(regs) |})
-    end.
+           end.
 
   Definition adapter (cs: scheduler_circuit) : rule_circuit :=
     {| retVal := CQuestionMark;
@@ -225,8 +220,7 @@ Section CircuitCompilation.
                                      read0 := $[false];
                                      read1 := $[false];
                                      write0 := $[false];
-                                     write1 := $[false];
-                                     original_data := reg.(original_data) |})
+                                     write1 := $[false] |})
                          cs.(sregs) |}.
 
   Fixpoint compile_scheduler'
@@ -244,8 +238,7 @@ Section CircuitCompilation.
                                              write0 := ruleReg.(write0) || inReg.(write0);
                                              write1 := ruleReg.(write1) || inReg.(write1);
                                              data0 := ruleReg.(data0);
-                                             data1 := ruleReg.(data1);
-                                             original_data := inReg.(original_data) |})
+                                             data1 := ruleReg.(data1) |})
                                        cRule.(regs) input.(sregs) |} in
       opt_bind (compile_scheduler' st acc) (fun cSt =>
       opt_bind (compile_scheduler' sf input) (fun cSf =>
@@ -262,27 +255,28 @@ Section CircuitCompilation.
                                          write0 := CMux will_fire tReg.(write0) fReg.(write0);
                                          write1 := CMux will_fire tReg.(write1) fReg.(write1);
                                          data0 := CMux will_fire tReg.(data0) fReg.(data0);
-                                         data1 := CMux will_fire tReg.(data1) fReg.(data1);
-                                         original_data := tReg.(original_data) |})
+                                         data1 := CMux will_fire tReg.(data1) fReg.(data1) |})
                                    cSt.(sregs) cSf.(sregs) |}))))
     end.
 
-  Definition init_rwdata (initial_data: circuit) :=
+  Definition init_rwdata :=
     {| data0 := CQuestionMark;
        data1 := CQuestionMark;
        read0 := $[false];
        read1 := $[false];
        write0 := $[false];
-       write1 := $[false];
-       original_data := initial_data |}.
+       write1 := $[false] |}.
 
-  Definition commit_rwdata (reg: rwdata) : circuit :=
-    CMux reg.(write1) reg.(data1) (CMux reg.(write0) reg.(data0) reg.(original_data)).
+  Definition commit_rwdata (reg: rwdata) initial_value : circuit :=
+    CMux reg.(write1) reg.(data1) (CMux reg.(write0) reg.(data0) initial_value).
 
+  Print Module Vector.
   Definition compile_scheduler
              (s: scheduler TVar TFn)
-             (registers: circuits nRegs)
     : option (circuits nRegs) :=
-    opt_bind (compile_scheduler' s {| sregs := Vector.map init_rwdata registers |}) (fun cs =>
-    Some (Vector.map commit_rwdata cs.(sregs))).
+    opt_bind (compile_scheduler' s {| sregs := Vector.const init_rwdata nRegs |}) (fun cs =>
+    Some (Vector.map2 commit_rwdata cs.(sregs) V)).
 End CircuitCompilation.
+
+Arguments rwdata: clear implicits.
+Arguments rule_circuit: clear implicits.
