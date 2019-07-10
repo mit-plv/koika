@@ -79,7 +79,7 @@ Section Interp.
                                  end)) &&
     (log_forallb (rule_log ++ sched_log) idx
                  (fun kind lvl _ => match kind, lvl with
-                                 | _, P1 => false
+                                 | LogWrite, P1 => false
                                  | _, _ => true
                                  end)).
 
