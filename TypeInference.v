@@ -96,10 +96,10 @@ End TypeInference.
 
 Notation tc R Sigma prog :=
   ltac:(let tcopt := match type of prog with
-                     | urule _ _ _ => constr:(type_rule R Sigma List.nil prog)
-                     | uscheduler _ _ _ => constr:(type_scheduler R Sigma prog)
-                     end in
-        let tcopt := (eval cbn in tcopt) in
+                    | urule _ _ _ => constr:(type_rule R Sigma List.nil prog)
+                    | uscheduler _ _ _ => constr:(type_scheduler R Sigma prog)
+                    end in
+        let tcopt := (eval hnf in tcopt) in
         let tcterm := (eval cbn in (must tcopt)) in
         exact tcterm) (only parsing).
 
