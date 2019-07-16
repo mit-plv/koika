@@ -1,4 +1,4 @@
-Require Import SGA.Common SGA.Environments SGA.Syntax SGA.Semantics SGA.Types SGA.OneRuleAtATime.
+Require Import SGA.Common SGA.Syntax SGA.Semantics SGA.Types SGA.OneRuleAtATime.
 
 Open Scope bool_scope.
 Require Import Coq.Strings.String.
@@ -57,16 +57,16 @@ Section Example1.
   Axiom magic : forall {A},A .
   Definition sigma : (SigmaEnv.(env_t)).
     refine (putenv _ Divide {| sig := {| argSizes := cons 2 nil;
-                                         retSize := 2 |};
+                                         retType := 2 |};
                                impl := divide|}).
     refine (putenv _ ThreeNPlusOne {| sig := {| argSizes := cons 2 nil;
-                                                retSize := 2 |};
+                                                retType := 2 |};
                                       impl := threeNPlusOne |}).
     refine (putenv _ Even {| sig := {| argSizes := cons 2 nil;
-                                       retSize := 1 |};
+                                       retType := 1 |};
                              impl := even|}).
     refine (putenv _ Odd {| sig := {| argSizes := cons 2 nil;
-                                      retSize := 1 |};
+                                      retType := 1 |};
                             impl := odd|}).
 
     exact env_nil.
@@ -126,16 +126,16 @@ Section Example2.
     Variable odd: list bits -> value.
   Definition sigma_abst : (SigmaEnv.(env_t)).
     refine (putenv _ Divide {| sig := {| argSizes := cons 2 nil;
-                                         retSize := 2 |};
+                                         retType := 2 |};
                                impl := divide_abst|}).
     refine (putenv _ ThreeNPlusOne {| sig := {| argSizes := cons 2 nil;
-                                                retSize := 2 |};
+                                                retType := 2 |};
                                       impl := threeNPlusOne |}).
     refine (putenv _ Even {| sig := {| argSizes := cons 2 nil;
-                                       retSize := 1 |};
+                                       retType := 1 |};
                              impl := even|}).
     refine (putenv _ Odd {| sig := {| argSizes := cons 2 nil;
-                                      retSize := 1 |};
+                                      retType := 1 |};
                             impl := odd|}).
 
     exact env_nil.
@@ -229,20 +229,20 @@ Section Example_Pipeline.
   Variable stream_abst: list bits -> value.
   Definition sigma2_abst : (SigmaEnv.(env_t)).
     refine (putenv _ Fabst {| sig := {| argSizes := cons 2 nil;
-                                        retType := bit_t 2 |};
+                                        retType := word 2 |};
                               impl := f_abst|}).
     refine (putenv _ Streamabst {| sig := {| argSizes := cons 2 nil;
-                                             retType := bit_t 2 |};
+                                             retType := word 2 |};
                                    impl := stream_abst |}).
     refine (putenv _ Neg {| sig := {| argSizes := cons 1 nil;
-                                             retType := bit_t 1 |};
+                                             retType := word 1 |};
                             impl := neg |}).
     refine (putenv _ Eq {| sig := {| argSizes := cons 2 (cons 2 nil);
-                                             retType := bit_t 1 |};
+                                             retType := word 1 |};
                                    impl := eq2 |}).
 
     refine (putenv _ Gabst {| sig := {| argSizes := cons 2 nil;
-                                        retType := bit_t 2 |};
+                                        retType := word 2 |};
                               impl := g_abst |}).
 
     exact env_nil.

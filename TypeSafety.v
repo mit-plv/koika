@@ -1,4 +1,4 @@
-Require Import SGA.Common SGA.Environments SGA.Syntax SGA.Semantics SGA.Types SGA.Typechecking.
+Require Import SGA.Common SGA.Syntax SGA.Semantics SGA.Types SGA.Typechecking.
 
 Require Import Coq.Lists.List.
 Import ListNotations.
@@ -56,7 +56,7 @@ Qed.
 Definition log_write_consistent (log: Log) (v: fenv nat nat) :=
   forall reg lvl val n,
     v reg n ->
-    List.In {| kind := LogWrite; level := lvl; reg := reg; val := val |} log ->
+    List.In {| kind := LogWrite; port := lvl; reg := reg; val := val |} log ->
     n = List.length val.
 
 Lemma log_write_consistent_nil:
@@ -76,9 +76,9 @@ Proof.
 Qed.
 
 Lemma log_read_consistent_add:
-  forall l v level reg val,
+  forall l v port reg val,
     log_write_consistent l v ->
-    log_write_consistent ({| kind := LogRead; level := level; reg := reg; val := val |} :: l) v.
+    log_write_consistent ({| kind := LogRead; port := port; reg := reg; val := val |} :: l) v.
 Proof.
   unfold log_write_consistent; cbn; intros * Hconsistent * Hget' [Heq | ?].
   - inversion Heq.
@@ -88,11 +88,11 @@ Qed.
 Hint Resolve log_read_consistent_add: types.
 
 Lemma log_write_consistent_add_write:
-  forall l (v: fenv nat nat) level reg val sz,
+  forall l (v: fenv nat nat) port reg val sz,
     v reg sz ->
     sz = length val ->
     log_write_consistent l v ->
-    log_write_consistent ({| kind := LogWrite; level := level; reg := reg; val := val |} :: l) v.
+    log_write_consistent ({| kind := LogWrite; port := port; reg := reg; val := val |} :: l) v.
 Proof.
   unfold log_write_consistent; cbn; intros * Hget ? * Hconsistent * Hget' [Heq | ?].
   - inversion Heq; subst; eauto with types.
@@ -100,9 +100,9 @@ Proof.
 Qed.
 
 Lemma log_write_consistent_add_read:
-  forall l (v: fenv nat nat) level reg val,
+  forall l (v: fenv nat nat) port reg val,
     log_write_consistent l v ->
-    log_write_consistent ({| kind := LogRead; level := level; reg := reg; val := val |} :: l) v.
+    log_write_consistent ({| kind := LogRead; port := port; reg := reg; val := val |} :: l) v.
 Proof.
   unfold log_write_consistent; cbn; intros * Hget ? * Hconsistent * [Heq | ?].
   - inversion Heq; subst; eauto with types.
@@ -113,11 +113,11 @@ Hint Resolve log_write_consistent_add_write: types.
 Hint Resolve log_write_consistent_add_read: types.
 
 Section TypeSafety.
-  Context {TVar: Type}.
-  Context {TFn: Type}.
+  Context {var_t: Type}.
+  Context {fn_t: Type}.
 
-  Context (GammaEnv: Env TVar value).
-  Context (SigmaEnv: Env TFn ExternalFunction).
+  Context (GammaEnv: Env var_t value).
+  Context (SigmaEnv: Env fn_t ExternalFunction).
   Context (RegEnv: Env nat bits).
 
   Hint Resolve (@env_related_putenv _ _ _ GammaEnv): types.
@@ -137,7 +137,7 @@ Section TypeSafety.
     | [ H: _ /\ _ |- _ ] => destruct H
     | [ H: Success _ = Success _ |- _ ] =>
       inversion H; clear H
-    | [ H: bit_t _ = bit_t _ |- _ ] =>
+    | [ H: bits_t _ = bits_t _ |- _ ] =>
       inversion H; clear H
     | [ H: ExternalFunction |- _ ] => destruct H
     | [ H: ?a, H': ?a |- _ ] =>
@@ -150,12 +150,12 @@ Section TypeSafety.
     | [ H: forall _, env_related _ ?Gamma _ -> _,
           H': env_related _ ?Gamma _ |- _ ] =>
       specialize (H _ H')
-    | [ H: @fn ?K ?V ?ev ?k ?v, H': fn ?ev ?k ?v' |- _ ] =>
-      pose_once (@uniq K V ev k v v') H H'
+    | [ H: @fn ?K ?R ?ev ?k ?v, H': fn ?ev ?k ?v' |- _ ] =>
+      pose_once (@uniq K R ev k v v') H H'
     | [ H: _ |- _ ] => apply forall2_fold_right2 in H
     | [ H: @log_write_consistent ?log ?v,
            H': fn ?v ?reg ?val,
-               H'': In {| kind := LogWrite; reg := ?reg; level := ?lvl; val := ?val' |} ?log |- _ ] =>
+               H'': In {| kind := LogWrite; reg := ?reg; port := ?lvl; val := ?val' |} ?log |- _ ] =>
       pose_once (H reg lvl val' val) H' H''
     | [ H: forall log, log_write_consistent log _ -> correct_type _ (interp_rule _ _ _ _ log _) _,
         H': log_write_consistent ?log _ |- _ ] =>
@@ -203,15 +203,15 @@ Section TypeSafety.
            end.
 
   Lemma type_safe_call:
-    forall v V sigma Sigma gamma Gamma,
-      env_related (@length bool) v V ->
+    forall v R sigma Sigma gamma Gamma,
+      env_related (@length bool) v R ->
       env_related sig sigma Sigma ->
-      forall sched_log retSize args sizes (impl: list bits -> bits),
+      forall sched_log retType args sizes (impl: list bits -> bits),
         length args = length sizes ->
         env_related type_of_value gamma Gamma ->
         (forall args : list bits,
             length args = length sizes ->
-            length (impl args) = retSize) ->
+            length (impl args) = retType) ->
         (fold_right2
            (fun arg argSize acc =>
               acc /\
@@ -219,16 +219,16 @@ Section TypeSafety.
                   env_related type_of_value gamma Gamma ->
                   forall rule_log : Log,
                     log_write_consistent rule_log v ->
-                    correct_type v (interp_rule V Sigma Gamma sched_log rule_log arg) (bit_t argSize))) True args sizes) ->
+                    correct_type v (interp_rule R Sigma Gamma sched_log rule_log arg) (bits_t argSize))) True args sizes) ->
         (fold_right2
            (fun arg argSize acc =>
-              acc /\ HasType v sigma gamma arg (bit_t argSize)) True args sizes) ->
+              acc /\ HasType v sigma gamma arg (bits_t argSize)) True args sizes) ->
         forall (rule_log: Log),
           log_write_consistent rule_log v ->
           forall argvs0 res,
             fold_left2_result
               (fun '(rule_log, argvs) arg size =>
-                 result_bind (interp_rule V Sigma Gamma sched_log rule_log arg) (fun '(rule_log, argv) =>
+                 result_bind (interp_rule R Sigma Gamma sched_log rule_log arg) (fun '(rule_log, argv) =>
                  result_map (assert_bits argv size) (fun bs =>
                  (rule_log, bs :: argvs))))
               args sizes (rule_log, argvs0) = res ->
@@ -237,7 +237,7 @@ Section TypeSafety.
               res = Success (rule_log', argvs ++ argvs0) /\
               length argvs = length sizes /\
               log_write_consistent rule_log' v /\
-              length (impl argvs) = retSize.
+              length (impl argvs) = retType.
   Proof.
     induction args; destruct sizes; inversion 1.
     - cbn. intros **; destruct res; try discriminate.
@@ -269,25 +269,25 @@ Section TypeSafety.
   Qed.
 
   Lemma rule_safety'':
-    forall sigma Sigma gamma v V sched_log,
-      env_related (@length bool) v V ->
+    forall sigma Sigma gamma v R sched_log,
+      env_related (@length bool) v R ->
       env_related sig sigma Sigma ->
       log_write_consistent sched_log v ->
-      forall (s: rule TVar TFn)
+      forall (s: rule var_t fn_t)
         (tau: Types.type),
         HasType v sigma gamma s tau ->
         forall Gamma,
           env_related type_of_value gamma Gamma ->
           forall rule_log: Log,
             log_write_consistent rule_log v ->
-            correct_type v (interp_rule V Sigma Gamma sched_log rule_log s) tau.
+            correct_type v (interp_rule R Sigma Gamma sched_log rule_log s) tau.
   Proof.
     induction 4; cbn; intros.
 
     all: try solve [t].
 
     - t;
-        destruct (interp_rule V Sigma Gamma0 sched_log rule_log s) as [ (? & ?) | | ]; cbn in *;
+        destruct (interp_rule R Sigma Gamma0 sched_log rule_log s) as [ (? & ?) | | ]; cbn in *;
           firstorder eauto using type_of_value_le_eq.
 
     - t.
@@ -301,37 +301,37 @@ Section TypeSafety.
   Qed.
 
   Lemma rule_safety':
-    forall sigma Sigma gamma Gamma v V sched_log rule_log,
+    forall sigma Sigma gamma Gamma v R sched_log rule_log,
       env_related sig sigma Sigma ->
-      env_related (@length bool) v V ->
+      env_related (@length bool) v R ->
       env_related type_of_value gamma Gamma ->
       log_write_consistent sched_log v ->
       log_write_consistent rule_log v ->
       forall s tau,
         HasType v sigma gamma s tau ->
-        interp_rule V Sigma Gamma sched_log rule_log s <> CannotRun ->
+        interp_rule R Sigma Gamma sched_log rule_log s <> CannotRun ->
         exists rule_log' val,
-          interp_rule V Sigma Gamma sched_log rule_log s = Success (rule_log', val) /\
+          interp_rule R Sigma Gamma sched_log rule_log s = Success (rule_log', val) /\
           log_write_consistent rule_log' v /\
           type_of_value val = tau.
   Proof.
     intros;
-      pose proof (rule_safety'' sigma Sigma gamma v V sched_log) as ts;
+      pose proof (rule_safety'' sigma Sigma gamma v R sched_log) as ts;
       repeat specialize (ts ltac:(eassumption));
       unfold correct_type in ts.
     destruct interp_rule as [(? & ?) | | ]; cbn in *; (congruence || tauto || eauto).
   Qed.
 
   Theorem rule_safety:
-    forall Sigma V sched_log,
+    forall Sigma R sched_log,
       let sigma := tenv_of_env sig Sigma in
-      let v := tenv_of_env ((@length bool)) V in
+      let v := tenv_of_env ((@length bool)) R in
       log_write_consistent sched_log v ->
       forall s tau,
         HasType v sigma fenv_nil s tau ->
-        interp_rule V Sigma env_nil sched_log [] s = CannotRun \/
+        interp_rule R Sigma env_nil sched_log [] s = CannotRun \/
         exists rule_log' val,
-          interp_rule V Sigma env_nil sched_log [] s = Success (rule_log', val) /\
+          interp_rule R Sigma env_nil sched_log [] s = Success (rule_log', val) /\
           log_write_consistent rule_log' v /\
           type_of_value val = tau.
   Proof.
@@ -345,20 +345,20 @@ Section TypeSafety.
   Qed.
 
   Lemma scheduler_safety':
-    forall Sigma V s sigma v,
+    forall Sigma R s sigma v,
       SchedulerHasTypes v sigma s ->
       forall sched_log,
         env_related sig sigma Sigma ->
-        env_related (@length bool) v V ->
+        env_related (@length bool) v R ->
         log_write_consistent sched_log v ->
         exists sched_log',
-          interp_scheduler V Sigma sched_log s = Some sched_log' /\
+          interp_scheduler R Sigma sched_log s = Some sched_log' /\
           log_write_consistent sched_log' v.
   Proof.
     induction 1; cbn.
     - eauto.
     - intros.
-      pose proof (rule_safety' sigma Sigma fenv_nil env_nil v V sched_log nil) as rs.
+      pose proof (rule_safety' sigma Sigma fenv_nil env_nil v R sched_log nil) as rs.
       repeat (specialize (rs ltac:(eapply tenv_of_env_nil || eauto using log_write_consistent_nil))).
       destruct interp_rule;
         try (specialize (rs ltac:(intro; discriminate));
@@ -367,13 +367,13 @@ Section TypeSafety.
   Qed.
 
   Lemma scheduler_safety:
-    forall s Sigma V sched_log,
+    forall s Sigma R sched_log,
       let sigma := tenv_of_env sig Sigma in
-      let v := tenv_of_env (@length bool) V in
+      let v := tenv_of_env (@length bool) R in
       log_write_consistent sched_log v ->
       SchedulerHasTypes v sigma s ->
       exists sched_log',
-        interp_scheduler V Sigma sched_log s = Some sched_log' /\
+        interp_scheduler R Sigma sched_log s = Some sched_log' /\
         log_write_consistent sched_log' v.
   Proof.
     cbv zeta; intros; eapply scheduler_safety';
