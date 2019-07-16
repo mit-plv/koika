@@ -1,206 +1,213 @@
 Require Import Coq.Lists.List.
-Require Import SGA.Common SGA.Syntax SGA.Environments SGA.Types.
+Require Export SGA.Common SGA.Environments SGA.Syntax SGA.Types.
 
 Import ListNotations.
 
-Inductive value :=
-| vtt
-| vbits (val: bits).
+Section Logs.
+  Context {reg_t: Type}.
+  Context {R: reg_t -> type}.
 
-Definition type_of_value (v: value) :=
-  match v with
-  | vtt => unit_t
-  | vbits bs => bit_t (length bs)
-  end.
+  Inductive LogEntryKind :=
+    LogRead | LogWrite.
 
-Inductive result {A} :=
-| Success (a: A)
-| CannotRun
-| Stuck.
-Arguments result : clear implicits.
+  Record LogEntry :=
+    LE { kind: LogEntryKind;
+         port: Port;
+         reg: reg_t;
+         val: match kind with
+              | LogRead => unit: Type
+              | LogWrite => Type_of_type (R reg)
+              end }.
 
-Definition result_bind {A B} (r: result A) (f: A -> result B) :=
-  match r with
-  | Success a => f a
-  | CannotRun => CannotRun
-  | Stuck => Stuck
-  end.
+  Definition Log := list LogEntry.
+End Logs.
 
-Definition result_map {A B} (r: result A) (f: A -> B) :=
-  result_bind r (fun a => Success (f a)).
+Arguments LogEntry: clear implicits.
+Arguments Log: clear implicits.
 
-Definition opt_result {A} (default: result A) (o: option A) :=
-  match o with
-  | Some a => Success a
-  | None => default
-  end.
-
-Inductive LogEntryKind := LogRead | LogWrite.
-Record LogEntry := LE
-  { kind: LogEntryKind;
-    level: Level;
-    reg: nat;
-    val: bits (* [] for reads *) }.
-
-Definition Log := list LogEntry.
-
-Record ExternalFunction :=
-  ExtFun { sig: ExternalSignature;
-           impl:> list bits -> bits;
-           type_ok: forall args: list bits,
-               List.length args = List.length sig.(argSizes) ->
-               List.length (impl args) = sig.(retSize) }.
-
-Require Import SGA.Environments SGA.Types.
+Require Import SGA.Types.
 
 Section Interp.
-  Context {TVar: Type}.
-  Context {TFn: Type}.
+  Context {var_t reg_t fn_t: Type}.
+  Context {reg_t_eq_dec: EqDec reg_t}.
 
-  Context {RegEnv: Env nat bits}.
-  Context {SigmaEnv: Env TFn ExternalFunction}.
-  Context {GammaEnv: Env TVar value}.
+  Context {R: reg_t -> type}.
+  Context {Sigma: fn_t -> ExternalSignature}.
+  Context {REnv: Env reg_t}.
+  Context (r: REnv.(env_t) R).
+  Context (sigma: forall f, Sigma f).
   Open Scope bool_scope.
 
-  Definition log_find log reg (f: LogEntryKind -> Level -> bits -> bool) :=
-    List.find (fun '(LE kind lvl r v) => if PeanoNat.Nat.eq_dec reg r then f kind lvl v else false) log.
+  Notation Log := (Log reg_t R).
 
-  Definition log_forallb log reg (f: LogEntryKind -> Level -> bits -> bool) :=
-    List.forallb (fun '(LE kind lvl r v) => if PeanoNat.Nat.eq_dec reg r then f kind lvl v else true) log.
+  Definition log_find (log: Log) reg (f: LogEntryKind -> Port -> bool) :=
+    List.find (fun '(LE kind lvl r _) => if eq_dec reg r then f kind lvl else false) log.
 
-  Definition bool_result (b: bool) : result unit :=
-    if b then Success tt else CannotRun.
+  Definition log_forallb (log: Log) reg (f: LogEntryKind -> Port -> bool) :=
+    List.forallb (fun '(LE kind lvl r _) => if eq_dec reg r then f kind lvl else true) log.
 
   Definition may_read0 sched_log rule_log idx :=
     (log_forallb sched_log idx
-                 (fun kind lvl _ => match kind, lvl with
-                                 | LogWrite, P0 => false
-                                 | _, _ => true
-                                 end)) &&
+                 (fun kind lvl => match kind, lvl with
+                               | LogWrite, P0 => false
+                               | _, _ => true
+                               end)) &&
     (log_forallb (rule_log ++ sched_log) idx
-                 (fun kind lvl _ => match kind, lvl with
-                                 | LogWrite, P1 => false
-                                 | _, _ => true
-                                 end)).
+                 (fun kind lvl => match kind, lvl with
+                               | LogWrite, P1 => false
+                               | _, _ => true
+                               end)).
 
   Definition may_read1 sched_log idx :=
     log_forallb sched_log idx
-                (fun kind lvl _ => match kind, lvl with
-                                | LogWrite, P1 => false
-                                | _, _ => true
-                                end).
+                (fun kind lvl => match kind, lvl with
+                              | LogWrite, P1 => false
+                              | _, _ => true
+                              end).
 
-  Definition latest_write0 log idx :=
+  Definition latest_write0' log idx :=
     log_find log idx
-             (fun kind lvl _ => match kind, lvl with
-                             | LogWrite, P0 => true
-                             | _, _ => false
-                             end).
+             (fun kind lvl => match kind, lvl with
+                           | LogWrite, P0 => true
+                           | _, _ => false
+                           end).
+
+  Definition log_find_value:
+    forall log port reg val,
+      log_find log idx f = Some {| kind := LogWrite;
+                                   port := port;
+                                   reg := reg;
+                                   val := val |} ->
+      
+   
+    
+  
+  Lemma find_some_transparent A (f: A -> bool) l x : List.find f l = Some x -> List.In x l /\ f x = true.
+  Proof.
+   induction l as [|a l IH]; simpl; [easy| ].
+   case_eq (f a); intros Ha Eq.
+   * injection Eq as ->; auto.
+   * destruct (IH Eq); auto.
+  Defined.
+
+  Definition latest_write0 (log: Log) idx : option (R idx).
+  Proof.
+    destruct (latest_write0' log idx) as [ [ kd pt reg val ] | ] eqn:Heq.
+    - unfold latest_write0', log_find in Heq.
+      apply find_some_transparent in Heq.
+      destruct Heq.
+      destruct (eq_dec idx reg) in *; try discriminate; subst.
+      destruct kd in *; try discriminate; subst.
+      exact (Some val).
+    - exact None.
+  Defined.
 
   Definition may_write sched_log rule_log lvl idx :=
     match lvl with
        | P0 => log_forallb (rule_log ++ sched_log) idx
-                          (fun kind lvl _ => match kind, lvl with
-                                          | LogRead, P1 | LogWrite, _ => false
-                                          | _, _ => true
-                                          end)
+                          (fun kind lvl => match kind, lvl with
+                                        | LogRead, P1 | LogWrite, _ => false
+                                        | _, _ => true
+                                        end)
        | P1 => log_forallb (rule_log ++ sched_log) idx
-                          (fun kind lvl _ => match kind, lvl with
-                                          | LogWrite, P1 => false
-                                          | _, _ => true
-                                          end)
+                          (fun kind lvl => match kind, lvl with
+                                        | LogWrite, P1 => false
+                                        | _, _ => true
+                                        end)
     end.
 
-  Definition assert_size (bs: bits) (size: nat) : result bits :=
-    if PeanoNat.Nat.eq_dec (List.length bs) size then Success bs
-    else Stuck.
+  Notation expr := (expr var_t R Sigma).
+  Notation rule := (rule var_t R Sigma).
+  Notation scheduler := (scheduler var_t R Sigma).
 
-  Definition assert_bits (v: value) (size: nat) : result bits :=
-    match v with
-    | vbits bs => assert_size bs size
-    | _ => Stuck
-    end.
+  Definition vcontext (sig: tsig var_t) :=
+    context (fun '(k, tau) => Type_of_type tau) sig.
 
+  Section Expr.
+    Context {sig: tsig var_t}.
+    Context (Gamma: vcontext sig).
+    Context (sched_log: Log).
 
-  Definition fold_left2_result
-             {A B B': Type} (f: A -> B -> B' -> result A)
-             (l: list B) (l': list B') (a0: A) : result A :=
-    fold_left2 (fun acc b b' =>
-                  result_bind acc (fun acc =>
-                  f acc b b')) l l' (Success a0).
+    (* FXME use a context for the log instead of a plain list with a complex cast? *)
+    Fixpoint interp_expr {tau}
+             (rule_log: Log)
+             (e: expr sig tau)
+      : option (Log * tau) :=
+      match e with
+      | Var m =>
+        Some (rule_log, cassoc m Gamma)
+      | Const cst => Some (rule_log, cst)
+      | Read P0 idx =>
+        if may_read0 sched_log rule_log idx then
+          Some ((LE LogRead P0 idx tt) :: rule_log, REnv.(getenv) r idx)
+        else None
+      | Read P1 idx =>
+        if may_read1 sched_log idx then
+          Some ((LE LogRead P1 idx tt) :: rule_log,
+                match latest_write0 (rule_log ++ sched_log) idx with
+                | Some v => v
+                | None => REnv.(getenv) r idx
+                end)
+        else None
+      | Call fn arg1 arg2 =>
+        let/opt2 rule_log, arg1 := interp_expr rule_log arg1 in
+        let/opt2 rule_log, arg2 := interp_expr rule_log arg2 in
+        Some (rule_log, (sigma fn) arg1 arg2)
+      end.
+  End Expr.
 
-  Fixpoint interp_rule
-           (V: RegEnv.(env_t))
-           (Sigma: SigmaEnv.(env_t))
-           (Gamma: GammaEnv.(env_t))
-           (sched_log: Log)
-           (rule_log: Log)
-           (s: rule TVar TFn)
-           {struct s} :=
-    match s with
-    | Bind var expr body =>
-      result_bind (interp_rule V Sigma Gamma sched_log rule_log expr) (fun '(rule_log', v) =>
-      interp_rule V Sigma (putenv Gamma var v) sched_log rule_log' body)
-    | Var var =>
-      result_map (opt_result Stuck (getenv Gamma var)) (fun val => (rule_log, val))
-    | Skip =>
-      Success (rule_log, vtt)
-    | Const cst =>
-      Success (rule_log, vbits cst)
-    | If cond tbranch fbranch =>
-      result_bind (interp_rule V Sigma Gamma sched_log rule_log cond) (fun '(rule_log', condv) =>
-      match condv with
-      | vbits [true] => interp_rule V Sigma Gamma sched_log rule_log' tbranch
-      | vbits [false] => interp_rule V Sigma Gamma sched_log rule_log' fbranch
-      | _ => Stuck
-      end)
-    | Fail =>
-      CannotRun
-    | Read P0 idx =>
-      result_bind (opt_result Stuck (getenv V idx)) (fun v =>
-      result_map (bool_result (may_read0 sched_log rule_log idx)) (fun _ =>
-      ((LE LogRead P0 idx []) :: rule_log, vbits v)))
-    | Read P1 idx =>
-      result_bind (opt_result Stuck (getenv V idx)) (fun bs0 =>
-      result_bind (bool_result (may_read1 sched_log idx)) (fun _ =>
-      result_map (match latest_write0 (rule_log ++ sched_log) idx with
-                  | Some {| val := v |} => assert_size v (length bs0)
-                  | None => Success bs0
-                  end) (fun bs =>
-      ((LE LogRead P1 idx []) :: rule_log, vbits bs))))
-    | Write lvl idx val =>
-      result_bind (opt_result Stuck (getenv V idx)) (fun bs0 =>
-      result_bind (interp_rule V Sigma Gamma sched_log rule_log val) (fun '(rule_log, v) =>
-      result_bind (bool_result (may_write sched_log rule_log lvl idx)) (fun _ =>
-      result_map (assert_bits v (List.length bs0)) (fun bs =>
-      ((LE LogWrite lvl idx bs) :: rule_log, vtt)))))
-    | Call fn args =>
-      result_bind (opt_result Stuck (getenv Sigma fn)) (fun fn =>
-      if PeanoNat.Nat.eq_dec (List.length args) (List.length fn.(sig).(argSizes)) then
-        result_map
-          (fold_left2_result
-             (fun '(rule_log, argvs) arg size =>
-                result_bind (interp_rule V Sigma Gamma sched_log rule_log arg) (fun '(rule_log, argv) =>
-                result_map (assert_bits argv size) (fun bs =>
-                (rule_log, bs :: argvs))))
-             args fn.(sig).(argSizes) (rule_log, []))
-          (fun '(rule_log, argvs) => (rule_log, vbits (fn argvs)))
-      else Stuck)
-    end.
+  Section Rule.
+    Axiom magic : forall {A}, A.
 
-  Fixpoint interp_scheduler
-           (V: RegEnv.(env_t))
-           (Sigma: SigmaEnv.(env_t))
-           (sched_log: Log)
-           (s: scheduler TVar TFn)
-           {struct s} :=
-    match s with
-    | Done => Some sched_log
-    | Try r s1 s2 =>
-      match interp_rule V Sigma env_nil sched_log [] r with
-      | Success (l, _) => interp_scheduler V Sigma (l ++ sched_log) s1
-      | CannotRun => interp_scheduler V Sigma sched_log s2
-      | Stuck => None
-      end
-    end.
+    Fixpoint interp_rule
+             {sig: tsig var_t}
+             (Gamma: vcontext sig)
+             (sched_log: Log)
+             (rule_log: Log)
+             (rl: rule sig)
+    : option Log :=
+      match rl in Types.rule _ _ _ t return (vcontext t -> option Log) with
+      | Skip => fun _ => Some rule_log
+      | Fail => fun _ => None
+      | Seq r1 r2 =>
+        fun Gamma =>
+          let/opt rule_log := interp_rule Gamma sched_log rule_log r1 in
+          interp_rule Gamma sched_log rule_log r2
+      | @Bind _ _ _ _ _ _ tau var ex body =>
+        fun Gamma =>
+          let/opt2 rule_log, v := interp_expr Gamma sched_log rule_log ex in
+          interp_rule (CtxCons (var, tau) v Gamma) sched_log rule_log body
+      | If cond tbranch fbranch =>
+        fun Gamma =>
+        let/opt2 rule_log, cond := interp_expr Gamma sched_log rule_log cond in
+        if bits_single cond then
+          interp_rule Gamma sched_log rule_log tbranch
+        else
+          interp_rule Gamma sched_log rule_log fbranch
+      | Write lvl idx val =>
+        fun Gamma =>
+          let/opt2 rule_log, val := interp_expr Gamma sched_log rule_log val in
+          if may_write sched_log rule_log lvl idx then
+            Some ((LE LogWrite lvl idx (REnv.(getenv) r idx)) :: rule_log)
+          else None
+      end Gamma.
+  End Rule.
+
+  Section Scheduler.
+    Fixpoint interp_scheduler'
+             (sched_log: Log)
+             (s: scheduler)
+             {struct s} :=
+      match s with
+      | Done => Some sched_log
+      | Try r s1 s2 =>
+        match interp_rule CtxEmpty sched_log [] r with
+        | Some l => interp_scheduler' (l ++ sched_log) s1
+        | CannotRun => interp_scheduler' sched_log s2
+        end
+      end.
+
+    Definition interp_scheduler (s: scheduler) :=
+      interp_scheduler' [] s.
+  End Scheduler.
 End Interp.
