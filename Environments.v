@@ -18,6 +18,47 @@ Definition mdestruct {K sig} {k: K} (m: member k sig)
   - right; eauto.
 Defined.
 
+Require Import Program.
+
+(* Definition mdestruct_same {K sig} {k: K} (m: member k (k :: sig)) : *)
+(*   { m': member k sig & m = MemberTl k k sig m' } + { m = MemberHd k sig }. *)
+
+Lemma member_In {K} (sig: list K):
+  forall k, member k sig -> List.In k sig.
+Proof.
+  induction 1; firstorder.
+Qed.
+
+Fixpoint member_id {K sig} {k: K} (m: member k sig) : nat :=
+  match m with
+  | MemberHd k sig => 0
+  | MemberTl k k' sig m' => S (member_id m')
+  end.
+
+Lemma member_id_nth {K sig} (k: K) (m: member k sig) :
+  List.nth_error sig (member_id m) = Some k.
+Proof.
+  induction m; firstorder.
+Qed.
+
+Lemma member_NoDup {K} {sig: list K} k:
+  EqDec K ->
+  NoDup sig ->
+  forall (m1 m2: member k sig),
+    m1 = m2.
+Proof.
+  induction 2.
+  - intros; destruct (mdestruct m1).
+  - intros; destruct (mdestruct m1) as [(-> & ->) | (mem & ->)]; cbn.
+    + intros; destruct (mdestruct m2) as [(? & ->) | (absurd & ->)]; cbn.
+      * rewrite <- Eqdep_dec.eq_rect_eq_dec by apply eq_dec.
+        reflexivity.
+      * exfalso; apply member_In in absurd; auto.
+    + intros; destruct (mdestruct m2) as [(-> & ->) | (? & ->)]; cbn.
+      * exfalso; apply member_In in mem. auto.
+      * f_equal; apply IHNoDup.
+Qed.
+
 Fixpoint mem {K} `{EqDec K} (k: K) sig {struct sig} : member k sig + (member k sig -> False).
   destruct sig.
   - right; inversion 1.
@@ -106,10 +147,12 @@ Section Contexts.
     ccreate sig (fun k m => cassoc m ctx) = ctx.
   Proof.
     induction sig; cbn; intros.
-    - apply context_
-    
+    - rewrite (cdestruct ctx).
+      reflexivity.
+    - destruct (cdestruct ctx) as ((h & t) & ->); cbn.
+      rewrite IHsig; reflexivity.
+  Qed.
 
-  
   Fixpoint creplace {sig} {k} (m: member k sig) (v: V k)
            (ctx: context sig) {struct m} : context sig.
     destruct m.
@@ -156,12 +199,12 @@ Record Env {K: Type}  :=
     putenv: forall {V: esig K}, env_t V -> forall k, V k -> env_t V;
     create: forall {V: esig K} (fn: forall (k: K), V k), env_t V;
     fold_right: forall {V: esig K} {T} (fn: forall k, V k -> T -> T) (ev: env_t V) (t0: T), T;
-    create_funext: forall {V: esig K} (fn1 fn2: forall k : K, V k),
-        (forall k, fn1 k = fn2 k) -> create fn1 = create fn2;
     (* This axiom could be relaxed by proving that interp_rule is a
        morphism wrt getenv-equivalence. *)
     create_getenv_id: forall {V: esig K} (ev: env_t V),
         create (getenv ev) = ev;
+    create_funext: forall {V: esig K} (fn1 fn2: forall k : K, V k),
+        (forall k, fn1 k = fn2 k) -> create fn1 = create fn2;
     getenv_create: forall {V: esig K} (fn: forall k : K, V k) k,
         getenv (create fn) k = fn k;
     get_put_eq: forall {V: esig K} (ev: env_t V) k v,
@@ -170,7 +213,23 @@ Record Env {K: Type}  :=
         k <> k' -> getenv (putenv ev k v) k' = getenv ev k' }.
 Arguments Env: clear implicits.
 
-Definition zip {K} {E: Env K} {V1 V2: esig K} (ev1: E.(env_t) V1) (ev2: E.(env_t) V2)
+Definition equiv {K} (E: Env K) {V: esig K} (ev1 ev2: E.(env_t) V) :=
+  forall k: K, E.(getenv) ev1 k = E.(getenv) ev2 k.
+
+Lemma equiv_refl {K} (E: Env K) {V: esig K} (ev: E.(env_t) V) :
+  E.(equiv) ev ev.
+Proof. firstorder. Qed.
+
+Lemma equiv_eq {K} (E: Env K) {V: esig K} (ev1 ev2: E.(env_t) V) :
+  E.(equiv) ev1 ev2 ->
+  ev1 = ev2.
+Proof.
+  intros.
+  rewrite <- (E.(create_getenv_id) ev1), <- (E.(create_getenv_id) ev2).
+  apply create_funext; assumption.
+Qed.
+
+Definition zip {K} (E: Env K) {V1 V2: esig K} (ev1: E.(env_t) V1) (ev2: E.(env_t) V2)
   : E.(env_t) (fun k => V1 k * V2 k)%type :=
   E.(create) (fun k => (E.(getenv) ev1 k, E.(getenv) ev2 k)).
 
@@ -185,6 +244,18 @@ Class FiniteType {T} :=
     finite_index: forall t: T, member t finite_elems }.
 Arguments FiniteType: clear implicits.
 
+Instance Finite_EqDec {T} `{FiniteType T} : EqDec T.
+  econstructor; intros.
+  destruct (PeanoNat.Nat.eq_dec (member_id (finite_index t1)) (member_id (finite_index t2))) as [ H' | H' ].
+  - left.
+    apply (f_equal (List.nth_error finite_elems)) in H'.
+    rewrite !member_id_nth in H'.
+    congruence.
+  - right.
+    intros ->.
+    congruence.
+Qed.
+
 Definition ContextEnv {K} `{FiniteType K}: Env K.
   unshelve refine {| env_t V := context V finite_elems;
                      getenv {V} ctx k := cassoc (finite_index k) ctx;
@@ -192,8 +263,9 @@ Definition ContextEnv {K} `{FiniteType K}: Env K.
                      create {V} fn := ccreate finite_elems (fun k _ => fn k);
                      fold_right {V T} (f: forall k: K, V k -> T -> T) ctx (t0: T) :=
                        List.fold_right (fun (k: K) (t: T) => f k (cassoc (finite_index k) ctx) t) t0 finite_elems |}.
+  - intros; rewrite <- ccreate_cassoc; apply ccreate_funext.
+    intros; f_equal; apply member_NoDup; try typeclasses eauto; apply finite_nodup.
   - intros; apply ccreate_funext; eauto.
-  - 
   - intros; apply cassoc_ccreate.
   - intros; apply cassoc_creplace_eq.
   - intros; apply cassoc_creplace_neq; eassumption.

@@ -283,7 +283,7 @@ Section CircuitCompilation.
     REnv.(fold_right)
            (fun k '(ruleReg, inReg) acc =>
               acc &&`"wF: fold res"` willFire_of_canFire' ruleReg inReg)
-           (zip cRule.(regs) cInput.(sregs)) cRule.(canFire).
+           (REnv.(zip) cRule.(regs) cInput.(sregs)) cRule.(canFire).
 
   Arguments willFire_of_canFire' : simpl never.
 

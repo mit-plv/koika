@@ -35,6 +35,15 @@ Section EnvUpdates.
     rewrite list_find_opt_app.
     destruct list_find_opt; reflexivity.
   Qed.
+
+  Lemma commit_update_empty:
+    forall (r : REnv.(env_t) R),
+      commit_update r log_empty = r.
+  Proof.
+    intros; apply equiv_eq; intro.
+    unfold commit_update, log_empty, map2; rewrite !getenv_create.
+    reflexivity.
+  Qed.
 End EnvUpdates.
 
 Section Proof.
@@ -126,6 +135,26 @@ Section Proof.
     apply create_funext; intros.
     rewrite !getenv_create.
     apply app_assoc.
+  Qed.
+
+  Lemma log_app_empty_l : forall (l: Log),
+      log_app l log_empty = l.
+  Proof.
+    intros.
+    apply equiv_eq.
+    unfold equiv, log_app, map2, log_empty; intros.
+    rewrite !getenv_create, app_nil_r.
+    reflexivity.
+  Qed.
+
+  Lemma log_app_empty_r : forall (l: Log),
+      log_app log_empty l = l.
+  Proof.
+    intros.
+    apply equiv_eq.
+    unfold equiv, log_app, map2, log_empty; intros.
+    rewrite !getenv_create.
+    reflexivity.
   Qed.
 
   Ltac set_forallb_fns :=
@@ -332,51 +361,30 @@ Section Proof.
     induction s; cbn.
     - inversion 1; subst; cbn in *; eauto.
     - unfold interp_scheduler_trace_and_update; cbn; intros; t.
-      erewrite interp_rule_commit.
-        by eauto.
-      destruct interp_rule as [(l & ?) | | ] eqn:?; try discriminate.
-
-      + destruct interp_scheduler_trace as [(? & ?) | ] eqn:?; try discriminate;
-          inversion Heq; subst; clear Heq; cbn.
-        unfold interp_scheduler_trace_and_update; cbn.
-        enough (interp_rule (commit_update R l0) Sigma env_nil [] [] r = Some (l, v0)) as H.
-        rewrite H.
+      + erewrite interp_rule_commit by (rewrite log_app_empty_r; eassumption);
+          cbn.
+        rewrite log_app_empty_l.
         rewrite commit_update_assoc.
-        rewrite app_nil_r.
         eapply IHs1.
-        eassumption.
-        apply log_write_consistent_app.
-        eassumption.
-        eauto using interp_rule_Some_consistent, log_write_consistent_nil.
-        rewrite Heqo.
-        reflexivity.
-        eapply interp_rule_commit.
-        eassumption.
-        eapply log_write_consistent_nil.
-        eassumption.
-        rewrite app_nil_l.
-        assumption.
+        unfold interp_scheduler_trace_and_update.
+        rewrite Heqo1; reflexivity.
       + eapply IHs2.
-        eassumption.
-        eassumption.
-        destruct interp_scheduler_trace as [(? & ?) | ] eqn:?; try discriminate.
-        inversion Heq; subst.
+        unfold interp_scheduler_trace_and_update; rewrite Heqo.
         reflexivity.
   Qed.
 
   Lemma interp_scheduler_trace_correct :
-    forall R Sigma s l0 log,
-      interp_scheduler R Sigma l0 s = Some log ->
-      exists rs, interp_scheduler_trace R Sigma l0 s = Some (rs, log).
+    forall s l0 log,
+      interp_scheduler' r sigma l0 s = Some log ->
+      exists rs, interp_scheduler'_trace l0 s = Some (rs, log).
   Proof.
     induction s; cbn.
     - inversion 1; subst; eauto.
-    - intros * Heq; destruct interp_rule as [(log' & ?) | | ] eqn:?.
+    - intros * Heq. destruct interp_rule as [log' | ] eqn:?.
       + destruct (IHs1 _ _ Heq) as (rs & Heq').
         rewrite Heq'; eauto.
       + destruct (IHs2 _ _ Heq) as (rs & Heq').
         rewrite Heq'; eauto.
-      + discriminate.
   Qed.
 
   Fixpoint scheduler_rules (s: scheduler) :=
@@ -386,9 +394,9 @@ Section Proof.
     end.
 
   Lemma scheduler_trace_in_scheduler :
-    forall R Sigma s log l0 rs,
-      interp_scheduler_trace R Sigma l0 s = Some (rs, log) ->
-      (forall r : rule var_t fn_t, In r rs -> In r (scheduler_rules s)).
+    forall s log l0 rs,
+      interp_scheduler'_trace l0 s = Some (rs, log) ->
+      (forall r : rule [], In r rs -> In r (scheduler_rules s)).
   Proof.
     induction s; cbn in *.
     - inversion 1; subst; inversion 1.
@@ -398,19 +406,18 @@ Section Proof.
   Qed.
 
   Theorem OneRuleAtATime:
-    forall R Sigma s log,
-      interp_scheduler R Sigma [] s = Some log ->
+    forall s log,
+      interp_scheduler r sigma s = Some log ->
       exists rs,
-        (forall r, List.In r rs -> List.In r (scheduler_rules s)) /\
-        List.fold_left (update_one Sigma) rs (Some R) = Some (commit_update R log).
+        (forall rl, List.In rl rs -> List.In rl (scheduler_rules s)) /\
+        List.fold_left update_one rs (Some r) = Some (commit_update r log).
   Proof.
     intros * H.
     apply interp_scheduler_trace_correct in H; destruct H as (rs & H).
     exists rs; split.
     - eauto using scheduler_trace_in_scheduler.
-    - eapply OneRuleAtATime' with (l0 := nil).
-      + eapply tenv_of_env_related.
-      + eapply log_write_consistent_nil.
-      + unfold interp_scheduler_trace_and_update; rewrite H; reflexivity.
+    - rewrite <- (commit_update_empty r) at 1.
+      eapply OneRuleAtATime'.
+      unfold interp_scheduler_trace_and_update; rewrite H; reflexivity.
   Qed.
-End OneRuleAtATime.
+End Proof.

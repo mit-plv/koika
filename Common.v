@@ -86,6 +86,14 @@ Definition opt_bind {A B} (o: option A) (f: A -> option B) :=
   | None => None
   end.
 
+Lemma opt_bind_f_equal {A B} o o' f f':
+  o = o' ->
+  (forall a, f a = f' a) ->
+  @opt_bind A B o f = opt_bind o' f'.
+Proof.
+  intros * -> **; destruct o'; eauto.
+Qed.
+
 Notation "'let/opt' var ':=' expr 'in' body" :=
   (opt_bind expr (fun var => body)) (at level 200).
 
