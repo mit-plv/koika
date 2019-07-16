@@ -1,4 +1,14 @@
+(library
+ (name sga)
+ (modules sga)
+ (flags (:standard -w -39)))
+
 (executable
  (name driver)
  (modes exe)
- (libraries))
+ (modules (:standard \ sga))
+ (libraries sga))
+
+(env
+ (dev
+  (flags (:standard -warn-error -A))))

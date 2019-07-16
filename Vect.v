@@ -112,19 +112,19 @@ Definition bits_lsb {n} (bs: bits (S n)) := vect_last bs.
 Definition bits_map {n} (f: bool -> bool) (bs: bits n) := vect_map f bs.
 Definition bits_map2 {n} (f: bool -> bool -> bool) (bs1 bs2: bits n) := vect_map2 f bs1 bs2.
 
-Fixpoint nat_of_bits' {sz: nat} (acc: nat) (bs: bits sz) : nat :=
+Fixpoint bits_to_nat' {sz: nat} (acc: nat) (bs: bits sz) : nat :=
   match sz return bits sz -> nat with
   | 0 => fun _ => acc
-  | S n => fun bs => nat_of_bits' (2 * acc + (if fst bs then 1 else 0)) (snd bs)
+  | S n => fun bs => bits_to_nat' (2 * acc + (if fst bs then 1 else 0)) (snd bs)
   end bs.
 
-Definition nat_of_bits {sz: nat} (bs: bits sz) : nat :=
-  nat_of_bits' 0 bs.
+Definition bits_to_nat {sz: nat} (bs: bits sz) : nat :=
+  bits_to_nat' 0 bs.
 
-(* Compute (nat_of_bits 1~0~0~1~1~0~w0). *)
+(* Compute (bits_to_nat 1~0~0~1~1~0~w0). *)
 
 Definition index_of_bits {sz} sz' (bs: bits sz) : option (index sz') :=
-  index_of_nat sz' (nat_of_bits bs).
+  index_of_nat sz' (bits_to_nat bs).
 
 Definition pow2 n :=
   Nat.pow 2 n.

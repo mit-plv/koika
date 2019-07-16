@@ -1,5 +1,5 @@
 Require Import Coq.extraction.Extraction.
-Require Import Coq.extraction.ExtrOcamlBasic Coq.extraction.ExtrOcamlString.
+Require Import Coq.extraction.ExtrOcamlBasic Coq.extraction.ExtrOcamlString Coq.extraction.ExtrOcamlNatInt.
 
 Require Import SGA.Common SGA.Environments SGA.TypedSyntax SGA.Demo.
 
@@ -14,4 +14,4 @@ Extraction Inline Circuits.retVal.
         (assert false (* Proj Args *)) ex0), gamma)) body ex0.erwc
  *)
 
-Extraction "sga.ml" to_list Collatz.package.
+Extraction "sga.ml" to_list vect_to_list bits_to_nat Collatz.package.
