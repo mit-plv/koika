@@ -2,7 +2,7 @@ type ptr_t = int
 
 module CircuitHash =
   struct
-    type t = Sga.extfuns Sga.circuit
+    type t = (Sga.__, Sga.Collatz.fn_t) Sga.circuit
     let equal o1 o2 = o1 == o2
     let hash o = Hashtbl.hash o
   end
@@ -17,16 +17,21 @@ module PtrHash =
 module CircuitHashtbl = Hashtbl.Make(CircuitHash)
 module PtrHashtbl = Hashtbl.Make(PtrHash)
 
-type 'tFn circuit =
-  | CQuestionMark
+type ('reg_t, 'fn_t) circuit =
+  | CQuestionMark of int
   | CNot of ptr_t
   | CAnd of ptr_t * ptr_t
   | COr of ptr_t * ptr_t
   | CMux of ptr_t * ptr_t * ptr_t
   | CConst of bool list (* TODO: keep constants shared? *)
-  | CExternal of 'tFn * ptr_t list
+  | CExternal of 'fn_t * ptr_t * ptr_t
+  | CReadRegister of 'reg_t
 
-let dedup_circuit (cs: ('a Sga.circuit) list) =
+let rec int_of_nat = function
+  | Sga.O -> 0
+  | Sga.S n -> succ (int_of_nat n)
+
+let dedup_circuit (cs: (('a, Sga.Collatz.fn_t) Sga.circuit) list) =
   let object_to_ptr = CircuitHashtbl.create 50 in
   let ptr_to_object = PtrHashtbl.create 50 in
   let nextptr = ref 0 in
@@ -38,13 +43,15 @@ let dedup_circuit (cs: ('a Sga.circuit) list) =
        incr nextptr;
        let deduplicated =
          match c with
-         | Sga.CQuestionMark -> CQuestionMark
+         | Sga.CQuestionMark n -> CQuestionMark (int_of_nat n)
          | Sga.CNot c -> CNot (aux c)
          | Sga.CAnd (c1, c2) -> CAnd (aux c1, aux c2)
          | Sga.COr (c1, c2) -> COr (aux c1, aux c2)
-         | Sga.CMux (s, c1, c2) -> CMux (aux s, aux c1, aux c2)
-         | Sga.CConst bs -> CConst bs
-         | Sga.CExternal (fname, cargs) -> CExternal (fname, List.map aux cargs) in
+         | Sga.CMux (_sz, s, c1, c2) -> CMux (aux s, aux c1, aux c2)
+         | Sga.CConst (sz, bs) -> CConst (Sga.vect_to_list sz bs)
+         | Sga.CExternal (fname, c1, c2) -> CExternal (fname, aux c1, aux c2)
+         | Sga.CReadRegister r -> CReadRegister r
+       in
        CircuitHashtbl.add object_to_ptr c ptr;
        PtrHashtbl.add ptr_to_object ptr deduplicated;
        ptr in
@@ -56,23 +63,22 @@ let dedup_circuit (cs: ('a Sga.circuit) list) =
 let print_bits bs =
   "b" ^ (String.concat "" (List.map (fun b -> if b then "1" else "0") bs))
 
-let rec int_of_nat = function
-  | Sga.O -> 0
-  | Sga.S n -> succ (int_of_nat n)
+let string_of_fn = function
+| Sga.Collatz.Even -> "even"
+| Sga.Collatz.Odd -> "odd"
+| Sga.Collatz.Divide -> "divide"
+| Sga.Collatz.ThreeNPlusOne -> "threenplusone"
 
-let print_external = function
-| Sga.Even -> "even"
-| Sga.Odd -> "odd"
-| Sga.Divide -> "divide"
-| Sga.ThreeNPlusOne -> "threenplusone"
-| Sga.Register n -> Printf.sprintf "Reg %d" (int_of_nat n)
+let string_of_register = function
+| _ -> "R0"
 
 let label_ptrs = function
   | CNot c -> Some ("Not", [c])
   | CAnd (c1, c2) -> Some ("And", [c1; c2])
   | COr (c1, c2) -> Some ("Or", [c1; c2])
   | CMux (s, c1, c2) -> Some ("Mux", [s; c1; c2])
-  | CExternal (fname, cargs) -> Some (print_external fname, cargs)
+  | CExternal (fname, c1, c2) -> Some (string_of_fn fname, [c1; c2])
+  | CReadRegister r -> Some (Printf.sprintf "Reg %s" (string_of_register r), [])
   | _ -> None
 
 type ptr_or_label =
@@ -86,7 +92,7 @@ let dot_field_label i pl =
 
 let field_ptr_or_label ptr_to_object ptr =
   match PtrHashtbl.find ptr_to_object ptr with
-  | CQuestionMark -> Label "?"
+  | CQuestionMark n -> Label (Printf.sprintf "?'%d" n)
   | CConst bs -> Label (print_bits bs)
   | _ -> Ptr ptr
 
@@ -116,4 +122,4 @@ let print_deduped (roots, ptr_to_object) =
     roots;
   Printf.printf "}\n"
 
-let _  = print_deduped (dedup_circuit Sga.compiled_collatz_ls)
+let _  = print_deduped (dedup_circuit [Sga.collatz_r0_circuit])
