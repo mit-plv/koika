@@ -1,5 +1,5 @@
 Require Import List.
-Require Import SGA.Common SGA.Environments SGA.Syntax.
+Require Import SGA.Common SGA.Environments SGA.Types SGA.Syntax.
 
 Inductive type :=
 | bits_t (n: nat).

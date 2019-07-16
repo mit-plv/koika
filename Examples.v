@@ -1,4 +1,4 @@
-Require Import SGA.Common SGA.Syntax SGA.Semantics SGA.Types SGA.OneRuleAtATime.
+Require Import SGA.Common SGA.Syntax SGA.Semantics SGA.TypedSyntax SGA.OneRuleAtATime.
 
 Open Scope bool_scope.
 Require Import Coq.Strings.String.

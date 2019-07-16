@@ -1,5 +1,5 @@
 Require Import Coq.Lists.List.
-Require Export SGA.Common SGA.Environments SGA.Syntax SGA.Types.
+Require Export SGA.Common SGA.Environments SGA.Syntax SGA.TypedSyntax.
 
 Import ListNotations.
 
@@ -79,8 +79,6 @@ Arguments LE {_}.
 Arguments LogEntry: clear implicits.
 Arguments RLog: clear implicits.
 Arguments Log {reg_t} R REnv.
-
-Require Import SGA.Types.
 
 Section Interp.
   Context {var_t reg_t fn_t: Type}.
@@ -185,7 +183,7 @@ Section Interp.
              (rule_log: Log)
              (rl: rule sig)
     : option Log :=
-      match rl in Types.rule _ _ _ t return (vcontext t -> option Log) with
+      match rl in TypedSyntax.rule _ _ _ t return (vcontext t -> option Log) with
       | Skip => fun _ => Some rule_log
       | Fail => fun _ => None
       | Seq r1 r2 =>

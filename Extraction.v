@@ -1,7 +1,7 @@
 Require Import Coq.extraction.Extraction.
 Require Import Coq.extraction.ExtrOcamlBasic Coq.extraction.ExtrOcamlString.
 
-Require Import SGA.Common SGA.Environments SGA.Types SGA.Demo.
+Require Import SGA.Common SGA.Environments SGA.TypedSyntax SGA.Demo.
 
 Definition collatz_r0_circuit :=
   ContextEnv.(getenv) Collatz.collatz_circuit Collatz.R0.

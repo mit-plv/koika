@@ -1,4 +1,4 @@
-Require Export SGA.Common SGA.Syntax SGA.Types.
+Require Export SGA.Common SGA.Syntax SGA.TypedSyntax.
 
 Tactic Notation "teauto" := eauto with types.
 Tactic Notation "teauto" integer(n) := eauto n with types.

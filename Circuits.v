@@ -1,4 +1,4 @@
-Require Import SGA.Common SGA.Environments SGA.Syntax SGA.Types.
+Require Import SGA.Common SGA.Environments SGA.Syntax SGA.TypedSyntax.
 Require Import Coq.Strings.String.
 Open Scope string_scope.
 
@@ -206,7 +206,7 @@ Section CircuitCompilation.
              (rl: rule var_t R Sigma sig)
              (clog: rwcircuit):
       rule_circuit :=
-      match rl in Types.rule _ _ _ t return (ccontext t -> rule_circuit) with
+      match rl in TypedSyntax.rule _ _ _ t return (ccontext t -> rule_circuit) with
       | Skip =>
         fun _ => clog
       | Fail =>

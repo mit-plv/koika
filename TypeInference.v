@@ -1,4 +1,4 @@
-Require Import SGA.Common SGA.Environments SGA.Syntax SGA.Types.
+Require Import SGA.Common SGA.Environments SGA.Syntax SGA.TypedSyntax.
 Require Import Coq.Lists.List.
 Import ListNotations.
 

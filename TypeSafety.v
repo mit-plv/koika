@@ -1,4 +1,4 @@
-Require Import SGA.Common SGA.Syntax SGA.Semantics SGA.Types SGA.Typechecking.
+Require Import SGA.Common SGA.Syntax SGA.Semantics SGA.TypedSyntax SGA.Typechecking.
 
 Require Import Coq.Lists.List.
 Import ListNotations.
