@@ -16,4 +16,4 @@ Extraction Inline Circuits.retVal.
       (Obj.magic retVal (assert false (* Proj Args *)) (assert false (* Proj Args *)) (assert false (* Proj Args *))
         (assert false (* Proj Args *)) ex0), gamma)) body ex0.erwc
 *)
-Extraction "sga.ml" vect_to_list collatz_r0_circuit.
+Extraction "sga.ml" vect_to_list Collatz.R Collatz.Sigma collatz_r0_circuit.

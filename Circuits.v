@@ -1,6 +1,6 @@
 Require Import SGA.Common SGA.Environments SGA.Syntax SGA.Types.
-Require Coq.Vectors.Vector.
-Import Vector.VectorNotations.
+Require Import Coq.Strings.String.
+Open Scope string_scope.
 
 Section Circuit.
   Context {reg_t fn_t: Type}.
@@ -18,25 +18,38 @@ Section Circuit.
   | CExternal (idx: fn_t)
               (a1: circuit (Sigma idx).(arg1Type))
               (a2: circuit (Sigma idx).(arg2Type))
-    : circuit(Sigma idx).(retType).
+    : circuit (Sigma idx).(retType)
+  | CAnnot {sz} (annot: string) (c: circuit sz) : circuit sz.
 End Circuit.
 
 Arguments circuit {reg_t fn_t} R Sigma sz.
 
 Module CircuitNotations.
-  Notation "f [ arg ]" :=
-    (CExternal f arg (CConst w0))
-      (at level 99, arg at level 99, format "f [ arg ]") : circuit.
-  Notation "f [ arg1 ',' arg2 ]" :=
-    (CExternal f arg1 arg2)
+  Notation "f [ arg ]` an `" :=
+    (CAnnot an (CExternal f arg (CConst w0)))
+      (at level 99, arg at level 99, format "f [ arg ]` an `") : circuit.
+  Notation "f [ arg1 ',' arg2 ]` an `" :=
+    (CAnnot an (CExternal f arg1 arg2))
       (at level 99, arg1 at level 99, arg2 at level 99,
-       format "f [ arg1 ','  arg2 ]") : circuit.
-  Notation "# reg" := (CReadRegister reg) (at level 75, format "# reg") : circuit.
-  Notation "$ c" := (CConst c) (at level 75, format "$ c") : circuit.
-  Notation "! c" := (CNot c) (at level 30, right associativity, format "! c") : circuit.
-  Notation "c1 && c2" := (CAnd c1 c2) (at level 40, left associativity) : circuit.
-  Notation "c1 || c2" := (COr c1 c2) (at level 50, left associativity) : circuit.
-  Notation "c1 ==> c2" := (COr (CNot c1) c2) (at level 70, no associativity) : circuit.
+       format "f [ arg1 ','  arg2 ]` an `") : circuit.
+  Notation "#` an ` reg" :=
+    (CAnnot an (CReadRegister reg))
+      (at level 75, format "#` an ` reg") : circuit.
+  Notation "$` an ` c" :=
+    (CAnnot an (CConst c))
+      (at level 75, format "$` an ` c") : circuit.
+  Notation "!` an ` c" :=
+    (CAnnot an (CNot c))
+      (at level 30, right associativity, format "!` an ` c") : circuit.
+  Notation "c1 &&` an `  c2" :=
+    (CAnnot an (CAnd c1 c2))
+      (at level 40, left associativity) : circuit.
+  Notation "c1 ||` an `  c2" :=
+    (CAnnot an (COr c1 c2))
+      (at level 50, left associativity) : circuit.
+  Notation "c1 ==>` an ` c2" :=
+    (CAnnot an (COr (CAnnot "impl" (CNot c1)) c2))
+      (at level 70, no associativity) : circuit.
   (* Notation "s ?? c1 // c2" := (CMux s c1 c2) (at level 80, no associativity) : circuit. *)
 End CircuitNotations.
 
@@ -77,6 +90,8 @@ Section Interpretation.
       let/opt bs1 := interp_circuit arg1 in
       let/opt bs2 := interp_circuit arg2 in
       Some (sigma idx bs1 bs2)
+    | CAnnot _ c =>
+      interp_circuit c
     end.
 End Interpretation.
 
@@ -120,20 +135,13 @@ Section CircuitCompilation.
     context (fun '(k, tau) => circuit (Nat_of_type tau)) sig.
 
   Definition mux_rwdata {sz} (cond: circuit 1) (tReg fReg: @rwdata sz) :=
-    {| read0 := CMux cond tReg.(read0) fReg.(read0);
-       read1 := CMux cond tReg.(read1) fReg.(read1);
-       write0 := CMux cond tReg.(write0) fReg.(write0);
-       write1 := CMux cond tReg.(write1) fReg.(write1);
-       data0 := CMux cond tReg.(data0) fReg.(data0);
-       data1 := CMux cond tReg.(data1) fReg.(data1) |}.
-
-  (* FIXME generalize to proper envs? *)
-  (* Definition REnv.(putenv) {K} `{EqDec K} {Fn: K -> Type} (fn: forall k, Fn k) (k: K) (v: Fn k): (forall k, Fn k). *)
-  (*   intros k'. *)
-  (*   destruct (eq_dec k k'); subst. *)
-  (*   - exact v. *)
-  (*   - exact (fn k'). *)
-  (* Defined. *)
+    let an := "If test" in
+    {| read0 := CAnnot an (CMux cond (tReg.(read0)) (fReg.(read0)));
+       read1 := CAnnot an (CMux cond (tReg.(read1)) (fReg.(read1)));
+       write0 := CAnnot an (CMux cond (tReg.(write0)) (fReg.(write0)));
+       write1 := CAnnot an (CMux cond (tReg.(write1)) (fReg.(write1)));
+       data0 := CAnnot an (CMux cond (tReg.(data0)) (fReg.(data0)));
+       data1 := CAnnot an (CMux cond (data1 tReg) (data1 fReg)) |}.
 
   Section Expr.
     Context (cLog: scheduler_circuit).
@@ -146,16 +154,18 @@ Section CircuitCompilation.
       @expr_circuit tau :=
       match ex in expr _ _ _ _ t return expr_circuit with
       | Var m =>
-        {| retVal := cassoc m Gamma;
+        {| retVal := CAnnot "Var reference" (cassoc m Gamma);
            erwc := clog |}
       | Const cst =>
-        {| retVal := $cst;
+        {| retVal := $`"Constant value from source"`cst;
            erwc := clog |}
       | Read P0 idx =>
         let reg := REnv.(getenv) clog.(regs) idx in
-        {| retVal := REnv.(getenv) r idx;
-           erwc := {| canFire := clog.(canFire) && ! reg.(read1) && ! reg.(write1);
-                     regs := REnv.(putenv) clog.(regs) idx {| read0 := $(w1 true);
+        {| retVal := CAnnot "read0" (REnv.(getenv) r idx);
+           erwc := {| canFire := (clog.(canFire) &&`"read0_cF"`
+                                !`"no read1"` reg.(read1) &&`"read0_cF"`
+                                !`"no write1"` reg.(write1));
+                     regs := REnv.(putenv) clog.(regs) idx {| read0 := $`"read0"` (w1 true);
                                                              (* Unchanged *)
                                                              read1 := reg.(read1);
                                                              write0 := reg.(write0);
@@ -165,31 +175,27 @@ Section CircuitCompilation.
       | Read P1 idx =>
         let reg := REnv.(getenv) clog.(regs) idx in
         let Reg := REnv.(getenv) cLog.(sregs) idx in
-        {| retVal := CMux Reg.(write0) Reg.(data0) (CMux reg.(write0) reg.(data0) (REnv.(getenv) r idx));
+        {| retVal := CAnnot "read1 retVal from L?"
+                            (CMux (Reg.(write0)) (Reg.(data0))
+                                  (CAnnot "read1 retVal from l?"
+                                           (CMux (reg.(write0)) (reg.(data0))
+                                                 (CAnnot "read1 retVal from reg"
+                                                          (REnv.(getenv) r idx)))));
            erwc := {| canFire := clog.(canFire);
-                     regs := REnv.(putenv) clog.(regs) idx {| read1 := $(w1 true);
-                                                                  (* Unchanged *)
-                                                                  read0 := reg.(read0);
-                                                                  write0 := reg.(write0);
-                                                                  write1 := reg.(write1);
-                                                                  data0 := reg.(data0);
-                                                                  data1 := reg.(data1) |} |} |}
+                     regs := REnv.(putenv) clog.(regs) idx {| read1 := $`"read1"` (w1 true);
+                                                             (* Unchanged *)
+                                                             read0 := reg.(read0);
+                                                             write0 := reg.(write0);
+                                                             write1 := reg.(write1);
+                                                             data0 := reg.(data0);
+                                                             data1 := reg.(data1) |} |} |}
       | Call fn a1 a2 =>
         let a1 := compile_expr a1 clog in
         let a2 := compile_expr a2 a1.(erwc) in
-        {| retVal := CExternal fn a1.(retVal) a2.(retVal);
+        {| retVal := fn [a1.(retVal), a2.(retVal)]`"Call from source"`;
            erwc := a1.(erwc) |}
       end.
   End Expr.
-
-  Definition zip {K} {E: Env K} {V1 V2: esig K} (ev1: E.(env_t) V1) (ev2: E.(env_t) V2)
-    : E.(env_t) (fun k => V1 k * V2 k)%type :=
-    E.(create) (fun k => (E.(getenv) ev1 k, E.(getenv) ev2 k)).
-
-  Definition map2 {K} (E: Env K) {V1 V2 V3: esig K} (fn: forall k, V1 k -> V2 k -> V3 k)
-             (ev1: E.(env_t) V1) (ev2: E.(env_t) V2)
-    : E.(env_t) V3 :=
-    E.(create) (fun k => fn k (E.(getenv) ev1 k) (E.(getenv) ev2 k)).
 
   Section Rule.
     Context (cLog: scheduler_circuit).
@@ -204,7 +210,7 @@ Section CircuitCompilation.
       | Skip =>
         fun _ => clog
       | Fail =>
-        fun _ => {| canFire := $(w1 false);
+        fun _ => {| canFire := $`"fail_cF"` (w1 false);
                  regs := clog.(regs) |}
       | Seq r1 r2 =>
         fun Gamma =>
@@ -218,7 +224,7 @@ Section CircuitCompilation.
         let cond := compile_expr cLog Gamma cond clog in
         let tbranch := compile_rule Gamma tbranch cond.(erwc) in
         let fbranch := compile_rule Gamma fbranch cond.(erwc) in
-        {| canFire := CMux cond.(retVal) tbranch.(canFire) fbranch.(canFire);
+        {| canFire := CAnnot "if_cF" (CMux cond.(retVal) tbranch.(canFire) fbranch.(canFire));
            regs := REnv.(map2)
                               (fun k treg freg => mux_rwdata cond.(retVal) treg freg )
                               tbranch.(regs) fbranch.(regs) |}
@@ -226,20 +232,23 @@ Section CircuitCompilation.
         fun Gamma =>
         let val := compile_expr cLog Gamma val clog in
         let reg := REnv.(getenv) val.(erwc).(regs) idx in
-        {| canFire := val.(erwc).(canFire) && ! reg.(read1) &&  ! reg.(write0) &&  ! reg.(write1);
-           regs := REnv.(putenv) val.(erwc).(regs) idx {| write0 := $(w1 true);
-                                                  data0 := val.(retVal);
-                                                  (* Unchanged *)
-                                                  read0 := reg.(read0);
-                                                  read1 := reg.(read1);
-                                                  write1 := reg.(write1);
-                                                  data1 := reg.(data1) |} |}
+        {| canFire := (val.(erwc).(canFire) &&`"write0_cF"`
+                      !`"no read1"` reg.(read1) &&`"write0_cF"`
+                      !`"no write0"` reg.(write0) &&`"write0_cF"`
+                      !`"no write1"` reg.(write1));
+           regs := REnv.(putenv) val.(erwc).(regs) idx {| write0 := $`"write0"` (w1 true);
+                                                         data0 := val.(retVal);
+                                                         (* Unchanged *)
+                                                         read0 := reg.(read0);
+                                                         read1 := reg.(read1);
+                                                         write1 := reg.(write1);
+                                                         data1 := reg.(data1) |} |}
       | Write P1 idx val =>
         fun Gamma =>
         let val := compile_expr cLog Gamma val clog in
         let reg := REnv.(getenv) val.(erwc).(regs) idx in
-        {| canFire := val.(erwc).(canFire) && ! reg.(write1);
-           regs := REnv.(putenv) val.(erwc).(regs) idx {| write1 := $(w1 true);
+        {| canFire := val.(erwc).(canFire) &&`"write1_cF"` !`"no write1"` reg.(write1);
+           regs := REnv.(putenv) val.(erwc).(regs) idx {| write1 := $`"write1"` (w1 true);
                                                   data1 := val.(retVal);
                                                   (* Unchanged *)
                                                   read0 := reg.(read0);
@@ -261,29 +270,33 @@ Section CircuitCompilation.
   (*                        cs.(sregs) |}. *)
 
   Definition willFire_of_canFire' {sz} (ruleReg inReg: @rwdata sz) :=
-    ((ruleReg.(read0) || ruleReg.(write0))  ==>
-     (! (inReg.(write0) || inReg.(write1) || inReg.(read1)))) &&
-    ((ruleReg.(read1) || ruleReg.(write1))  ==>
-     (! inReg.(write1))).
+    ((ruleReg.(read0)) ==>`"read0 wF of cF"`
+     (!`"read0_wF: no writes"`
+        ((inReg.(write0)) ||`""` (inReg.(write1))))) &&`""`
+    ((ruleReg.(write0)) ==>`"write0 wF of cF"`
+     (!`"write0_wF: no writes, no read1"`
+        ((inReg.(write0)) ||`""` (inReg.(write1)) ||`""` (inReg.(read1))))) &&`""`
+    (((ruleReg.(read1)) ||`""` (ruleReg.(write1))) ==>`"read,write1 wF of cF"`
+     (!`"read,write1_wF: no write1"` (inReg.(write1)))).
 
   Definition willFire_of_canFire cRule cInput : circuit 1 :=
     REnv.(fold_right)
-                (fun k '(ruleReg, inReg) acc =>
-                   acc && willFire_of_canFire' ruleReg inReg)
-                (zip cRule.(regs) cInput.(sregs)) cRule.(canFire).
+           (fun k '(ruleReg, inReg) acc =>
+              acc &&`"wF: fold res"` willFire_of_canFire' ruleReg inReg)
+           (zip cRule.(regs) cInput.(sregs)) cRule.(canFire).
 
   Arguments willFire_of_canFire' : simpl never.
 
   Definition init_rwdata sz :=
-    {| data0 := CQuestionMark sz;
-       data1 := CQuestionMark sz;
-       read0 := $(w1 false);
-       read1 := $(w1 false);
-       write0 := $(w1 false);
-       write1 := $(w1 false) |}.
+    {| data0 := CAnnot "init: no data0" (CQuestionMark sz);
+       data1 := CAnnot "init: no data1" (CQuestionMark sz);
+       read0 := $`"init: no read0"` (w1 false);
+       read1 := $`"init: no read1"` (w1 false);
+       write0 := $`"init: no write0"` (w1 false);
+       write1 := $`"init: no write1"` (w1 false) |}.
 
   Definition init_rwcircuit (_: unit) :=
-    {| canFire := $(w1 true);
+    {| canFire := $`"init: canFire"` (w1 true);
        regs := REnv.(create) (fun k => init_rwdata (R k)) |}.
 
   Definition init_rule_circuit (_: unit) :=
@@ -298,29 +311,35 @@ Section CircuitCompilation.
       input
     | Try rl st sf =>
       let rl := compile_rule input CtxEmpty rl (init_rule_circuit tt) in
+      let an := "merge results" in
       let acc := {| sregs := REnv.(map2) (fun _ ruleReg inReg =>
-                                               {| read0 := ruleReg.(read0) || inReg.(read0);
-                                                  read1 := ruleReg.(read1) || inReg.(read1);
-                                                  write0 := ruleReg.(write0) || inReg.(write0);
-                                                  write1 := ruleReg.(write1) || inReg.(write1);
-                                                  data0 := ruleReg.(data0);
-                                                  data1 := ruleReg.(data1) |})
+                                               {| read0 := (ruleReg.(read0)) ||`an` (inReg.(read0));
+                                                  read1 := (ruleReg.(read1)) ||`an` (inReg.(read1));
+                                                  write0 := (ruleReg.(write0)) ||`an` (inReg.(write0));
+                                                  write1 := (ruleReg.(write1)) ||`an` (inReg.(write1));
+                                                  data0 := (ruleReg.(data0));
+                                                  data1 := (data1 ruleReg) |})
                                             rl.(regs) input.(sregs) |} in
       let st := compile_scheduler' st acc in
       let sf := compile_scheduler' sf input in
       let will_fire := willFire_of_canFire rl input in
+      let an := "merge logs" in
       {| sregs := REnv.(map2) (fun _ tReg fReg =>
-                                    {| read0 := CMux will_fire tReg.(read0) fReg.(read0);
-                                       read1 := CMux will_fire tReg.(read1) fReg.(read1);
-                                       write0 := CMux will_fire tReg.(write0) fReg.(write0);
-                                       write1 := CMux will_fire tReg.(write1) fReg.(write1);
-                                       data0 := CMux will_fire tReg.(data0) fReg.(data0);
-                                       data1 := CMux will_fire tReg.(data1) fReg.(data1) |})
-                                 st.(sregs) sf.(sregs) |}
+                                {| read0 := CAnnot an (CMux will_fire (tReg.(read0)) (fReg.(read0)));
+                                   read1 := CAnnot an (CMux will_fire (tReg.(read1)) (fReg.(read1)));
+                                   write0 := CAnnot an (CMux will_fire (tReg.(write0)) (fReg.(write0)));
+                                   write1 := CAnnot an (CMux will_fire (tReg.(write1)) (fReg.(write1)));
+                                   data0 := CAnnot an (CMux will_fire (tReg.(data0)) (fReg.(data0)));
+                                   data1 := CAnnot an (CMux will_fire (data1 tReg) (data1 fReg)) |})
+                             st.(sregs) sf.(sregs) |}
     end.
 
   Definition commit_rwdata {sz} (reg: @rwdata sz) initial_value : circuit sz :=
-    CMux reg.(write1) reg.(data1) (CMux reg.(write0) reg.(data0) initial_value).
+    CAnnot "commit write1"
+            (CMux (reg.(write1)) (reg.(data1))
+                  (CAnnot "commit write0"
+                           (CMux (reg.(write0)) (reg.(data0))
+                                 (CAnnot "commit unchanged" initial_value)))).
 
   Definition compile_scheduler
              (s: scheduler var_t R Sigma)
