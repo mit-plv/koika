@@ -1,4 +1,4 @@
-Require Export SGA.Common SGA.Syntax SGA.TypeInference SGA.Semantics SGA.Circuits.
+Require Export SGA.Common SGA.Syntax SGA.TypeInference SGA.Semantics SGA.Circuits SGA.Primitives.
 
 Delimit Scope sga_scope with sga.
 Delimit Scope sga_expr_scope with sga_expr.
@@ -25,12 +25,19 @@ Notation "reg '#read1'" :=
   (URead P1 reg)
     (at level 99, format "reg '#read1'") : sga_expr_scope.
 Notation "f [ arg ]" :=
-  (UCall f arg (UConst w0))
+  (UCall (CustomFn f) arg (UConst w0))
     (at level 99, arg at level 99, format "f [ arg ]") : sga_expr_scope.
 Notation "f [ arg1 ',' arg2 ]" :=
-  (UCall f arg1 arg2)
+  (UCall (CustomFn f) arg1 arg2)
     (at level 99, arg1 at level 99, arg2 at level 99,
     format "f [ arg1 ','  arg2 ]") : sga_expr_scope.
+Notation "f [[ arg ]]" :=
+  (UCall (PrimFn f) arg (UConst w0))
+    (at level 99, arg at level 99, format "f [[ arg ]]") : sga_expr_scope.
+Notation "f [[ arg1 ',' arg2 ]]" :=
+  (UCall (PrimFn f) arg1 arg2)
+    (at level 99, arg1 at level 99, arg2 at level 99,
+    format "f [[ arg1 ','  arg2 ]]") : sga_expr_scope.
 
 Notation "'skip'" :=
   USkip (at level 99) : sga_scope.
@@ -58,10 +65,6 @@ Notation "'done'" :=
   UDone (at level 99) : sga_scope.
 
 Arguments Var {_ _ _ _ _ _} k {tau} {_}.
-
-Notation "{{ a1 ~> a2 ~> ret }}" :=
-  {| arg1Type := a1; arg2Type := a2; retType := ret |}
-    (at level 200, no associativity).
 
 Notation "'[[read0]]'" := (LE LogRead P0 tt) (only printing).
 Notation "'[[read1]]'" := (LE LogRead P1 tt) (only printing).

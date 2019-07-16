@@ -1,4 +1,5 @@
 Require Import SGA.Notations.
+Require SGA.Primitives.
 
 Require Import Coq.Strings.String.
 Open Scope string_scope.
@@ -20,8 +21,8 @@ Module Ex1.
 
   Definition Sigma fn : ExternalSignature :=
     match fn with
-    | Even => {{bits_t 3 ~> bits_t 0 ~> bits_t 1}}
-    | Odd => {{bits_t 3 ~> bits_t 0 ~> bits_t 1}}
+    | Even => {{ 3 ~> 0 ~> 1}}
+    | Odd => {{ 3 ~> 0 ~> 1}}
     end.
 
   Definition r idx : R idx :=
@@ -65,8 +66,8 @@ Module Ex2.
 
   Definition Sigma fn :=
     match fn with
-    | Or n => {{ bits_t n ~> bits_t n ~> bits_t n }}
-    | Not n => {{ bits_t n ~> bits_t 0 ~> bits_t n }}
+    | Or n => {{ n ~> n ~> n }}
+    | Not n => {{ n ~> 0 ~> n }}
     end.
 
   Example negate : urule var_t reg_t fn_t  :=
@@ -122,7 +123,8 @@ End Ex2.
 Module Collatz.
   Definition var_t := string.
   Inductive reg_t := R0.
-  Inductive fn_t := Divide | ThreeNPlusOne | Even | Odd.
+  Inductive custom_t := Divide | ThreeNPlusOne | Even | Odd.
+  Definition fn_t := prim_fn_t custom_t.
 
   Definition R r :=
     match r with
@@ -131,10 +133,11 @@ Module Collatz.
 
   Definition Sigma fn :=
     match fn with
-    | Divide => {{ bits_t 2 ~> bits_t 0 ~> bits_t 2 }}
-    | ThreeNPlusOne => {{ bits_t 2 ~> bits_t 0 ~> bits_t 2 }}
-    | Even => {{ bits_t 2 ~> bits_t 0 ~> bits_t 1 }}
-    | Odd => {{ bits_t 2 ~> bits_t 0 ~> bits_t 1 }}
+    | PrimFn fn => Primitives.Sigma fn
+    | CustomFn Divide => {{ 2 ~> 0 ~> 2 }}
+    | CustomFn ThreeNPlusOne => {{ 2 ~> 0 ~> 2 }}
+    | CustomFn Even => {{ 2 ~> 0 ~> 1 }}
+    | CustomFn Odd => {{ 2 ~> 0 ~> 1 }}
     end.
 
   Definition r idx : R idx :=
@@ -150,15 +153,16 @@ Module Collatz.
 
   Definition sigma idx : Sigma idx :=
     match idx with
-    | Divide => fun '(b1, (b2, tt)) _ => 1~(w1 b1)
-    | ThreeNPlusOne => fun bs _ => match bs with
+    | (PrimFn fn) => Primitives.sigma fn
+    | (CustomFn Divide) => fun '(b1, (b2, tt)) _ => 1~(w1 b1)
+    | (CustomFn ThreeNPlusOne) => fun bs _ => match bs with
                                | `` 0~0~w0 => 0~1~w0
                                | `` 0~1~w0 => 0~0~w0
                                | `` 1~0~w0 => 1~1~w0
                                | `` 1~1~w0 => 1~0~w0
                                end
-    | Even => fun '(_, (b2, tt)) _ => w1 (negb b2)
-    | Odd => fun '(_, (b2, tt)) _ => w1 b2
+    | (CustomFn Even) => fun '(_, (b2, tt)) _ => w1 (negb b2)
+    | (CustomFn Odd) => fun '(_, (b2, tt)) _ => w1 b2
     end.
 
   Open Scope sga.

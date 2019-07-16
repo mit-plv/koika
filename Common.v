@@ -80,6 +80,8 @@ Instance EqDec_string : EqDec string := _.
 Instance EqDec_unit : EqDec unit := _.
 Instance EqDec_pair A B `{EqDec A} `{EqDec B} : EqDec (A * B) := _.
 Instance EqDec_option A `{EqDec A} : EqDec (option A) := _.
+Instance EqDec_vect T n `{EqDec T} : EqDec (vect T n).
+Proof. induction n; cbn; eauto using EqDec_unit, EqDec_pair; eassumption. Defined.
 
 Definition opt_bind {A B} (o: option A) (f: A -> option B) :=
   match o with

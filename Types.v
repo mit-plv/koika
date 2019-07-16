@@ -14,6 +14,10 @@ Record ExternalSignature :=
            arg2Type: type;
            retType: type }.
 
+Notation "{{ a1 ~> a2 ~> ret }}" :=
+  {| arg1Type := bits_t a1; arg2Type := bits_t a2; retType := bits_t ret |}
+    (at level 200, no associativity).
+
 Coercion Type_of_signature fn :=
   fn.(arg1Type) -> fn.(arg2Type) -> fn.(retType).
 

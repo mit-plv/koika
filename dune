@@ -1,6 +1,6 @@
 (coq.theory
  (name SGA)
- (modules Vect Common Environments Syntax
+ (modules Vect Common Primitives Environments Syntax
           Types TypedSyntax Circuits Typechecking TypeInference
           Semantics TypeSafety Notations
           OneRuleAtATime

@@ -1,10 +1,35 @@
 Require Import Coq.Lists.List.
 
+Inductive index' {A} := thisone | anotherone (a: A).
+Arguments index': clear implicits.
+
 Fixpoint index n : Type :=
   match n with
   | 0 => False
-  | S n => unit + index n
+  | S n => index' (index n)
   end.
+
+Fixpoint index_of_nat (sz n: nat) : option (index sz) :=
+  match sz with
+  | 0 => None
+  | S sz =>
+    match n with
+    | 0 => Some thisone
+    | S n => match (index_of_nat sz n) with
+            | Some idx => Some (anotherone idx)
+            | None => None
+            end
+    end
+  end.
+
+Fixpoint nat_of_index {sz} (idx: index sz) {struct sz} : nat :=
+  match sz return index sz -> nat with
+  | 0 => fun idx => False_rect _ idx
+  | S sz => fun idx => match idx with
+                   | thisone => 0
+                   | anotherone idx => S (nat_of_index idx)
+                   end
+  end idx.
 
 Fixpoint vect T n : Type :=
   match n with
@@ -15,8 +40,35 @@ Fixpoint vect T n : Type :=
 Definition vect_hd {T n} (v: vect T (S n)) : T :=
   fst v.
 
+Definition vect_tl {T n} (v: vect T (S n)) : vect T n :=
+  snd v.
+
+Definition vect_nil {T} : vect T 0 := tt.
+
 Definition vect_cons {T n} (t: T) (v: vect T n) : vect T (S n) :=
   (t, v).
+
+Fixpoint vect_const {T} sz (t: T) : vect T sz :=
+  match sz with
+  | 0 => vect_nil
+  | S sz => (t, vect_const sz t)
+  end.
+
+Fixpoint vect_app {T} {sz1 sz2} (bs1: vect T sz1) (bs2: vect T sz2) {struct sz1} : vect T (sz1 + sz2) :=
+  match sz1 as n return (vect T n -> vect T (n + sz2)) with
+  | 0 => fun _ => bs2
+  | S sz1 => fun bs1 => vect_cons (vect_hd bs1) (vect_app (vect_tl bs1) bs2)
+  end bs1.
+
+Fixpoint vect_nth {T n} (v: vect T n) (idx: index n) {struct n} : T :=
+  match n return (vect T n -> index n -> T) with
+  | 0 => fun _ idx => False_rect _ idx
+  | S n => fun v idx =>
+            match idx with
+            | thisone => vect_hd v
+            | anotherone idx => vect_nth (vect_tl v) idx
+            end
+  end v idx.
 
 Fixpoint vect_last {T n} (v: vect T (S n)) : T :=
   match n return vect T (S n) -> T with
@@ -49,13 +101,33 @@ Definition vect_to_list {T n} (v: vect T n) : list T :=
   vect_fold_left (fun acc t => List.cons t acc) List.nil v.
 
 Notation bits n := (vect bool n).
-Definition bits_nil : bits 0 := tt.
-Definition bits_hd {n} (bs: bits (S n)) := vect_hd bs.
+Definition bits_nil : bits 0 := vect_nil.
 Definition bits_cons {n} (b: bool) (bs: bits n) := vect_cons b bs.
+Definition bits_const sz (b: bool) : bits sz := vect_const sz b.
+Definition bits_app {sz1 sz2} (bs1: bits sz1) (bs2: bits sz2) := vect_app bs1 bs2.
+Definition bits_nth {n} (bs: bits n) (idx: index n) := vect_nth bs idx.
+Definition bits_hd {n} (bs: bits (S n)) := vect_hd bs.
 Definition bits_single (bs: bits 1) := vect_hd bs.
 Definition bits_lsb {n} (bs: bits (S n)) := vect_last bs.
 Definition bits_map {n} (f: bool -> bool) (bs: bits n) := vect_map f bs.
 Definition bits_map2 {n} (f: bool -> bool -> bool) (bs1 bs2: bits n) := vect_map2 f bs1 bs2.
+
+Fixpoint nat_of_bits' {sz: nat} (acc: nat) (bs: bits sz) : nat :=
+  match sz return bits sz -> nat with
+  | 0 => fun _ => acc
+  | S n => fun bs => nat_of_bits' (2 * acc + (if fst bs then 1 else 0)) (snd bs)
+  end bs.
+
+Definition nat_of_bits {sz: nat} (bs: bits sz) : nat :=
+  nat_of_bits' 0 bs.
+
+(* Compute (nat_of_bits 1~0~0~1~1~0~w0). *)
+
+Definition index_of_bits {sz} sz' (bs: bits sz) : option (index sz') :=
+  index_of_nat sz' (nat_of_bits bs).
+
+Definition pow2 n :=
+  Nat.pow 2 n.
 
 Notation "'w0'" := bits_nil (at level 5) : bits.
 Notation "'w1' b" := (bits_cons b bits_nil) (at level 5) : bits.
