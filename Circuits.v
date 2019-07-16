@@ -1,114 +1,125 @@
-Require Import SGA.Common SGA.Syntax SGA.Environments.
-Require Import Coq.Strings.String.
-Require Import Coq.Vectors.Vector Coq.Lists.List.
-Import ListNotations.
+Require Import SGA.Common SGA.Environments SGA.Syntax SGA.Types.
+Require Coq.Vectors.Vector.
+Import Vector.VectorNotations.
 
 Section Circuit.
-  Context {TFn: Type}.
+  Context {reg_t fn_t: Type}.
+  Context {R: reg_t -> type}.
+  Context {Sigma: fn_t -> ExternalSignature}.
 
-  Inductive circuit : Type :=
-  | CQuestionMark
-  | CNot (c: circuit)
-  | CAnd (c1 c2: circuit)
-  | COr (c1 c2: circuit)
-  | CMux (select c1 c2: circuit)
-  | CConst (cst: bits)
-  | CExternal (e: TFn) (args: list circuit).
-
-  Definition circuits nRegs :=
-    Vector.t circuit nRegs.
+  Inductive circuit : nat -> Type :=
+  | CQuestionMark sz: circuit sz
+  | CNot (c: circuit 1): circuit 1
+  | CAnd (c1 c2: circuit 1): circuit 1
+  | COr (c1 c2: circuit 1): circuit 1
+  | CMux {sz} (select: circuit 1) (c1 c2: circuit sz): circuit sz
+  | CConst {sz} (cst: bits sz): circuit sz
+  | CReadRegister (reg: reg_t): circuit (R reg)
+  | CExternal (idx: fn_t)
+              (a1: circuit (Sigma idx).(arg1Type))
+              (a2: circuit (Sigma idx).(arg2Type))
+    : circuit(Sigma idx).(retType).
 End Circuit.
 
-Arguments circuit: clear implicits.
+Arguments circuit {reg_t fn_t} R Sigma sz.
 
-Notation "$ c" := (CConst c) (at level 75) : circuit.
-Notation "! c" := (CNot c) (at level 30, right associativity) : circuit.
-Notation "c1 && c2" := (CAnd c1 c2) (at level 40, left associativity) : circuit.
-Notation "c1 || c2" := (COr c1 c2) (at level 50, left associativity) : circuit.
-Notation "c1 ==> c2" := (COr (CNot c1) c2) (at level 70, no associativity) : circuit.
-(* Notation "s ?? c1 // c2" := (CMux s c1 c2) (at level 80, no associativity) : circuit. *)
-Open Scope circuit.
+Module CircuitNotations.
+  Notation "f [ arg ]" :=
+    (CExternal f arg (CConst w0))
+      (at level 99, arg at level 99, format "f [ arg ]") : circuit.
+  Notation "f [ arg1 ',' arg2 ]" :=
+    (CExternal f arg1 arg2)
+      (at level 99, arg1 at level 99, arg2 at level 99,
+       format "f [ arg1 ','  arg2 ]") : circuit.
+  Notation "# reg" := (CReadRegister reg) (at level 75, format "# reg") : circuit.
+  Notation "$ c" := (CConst c) (at level 75, format "$ c") : circuit.
+  Notation "! c" := (CNot c) (at level 30, right associativity, format "! c") : circuit.
+  Notation "c1 && c2" := (CAnd c1 c2) (at level 40, left associativity) : circuit.
+  Notation "c1 || c2" := (COr c1 c2) (at level 50, left associativity) : circuit.
+  Notation "c1 ==> c2" := (COr (CNot c1) c2) (at level 70, no associativity) : circuit.
+  (* Notation "s ?? c1 // c2" := (CMux s c1 c2) (at level 80, no associativity) : circuit. *)
+End CircuitNotations.
+
+Import CircuitNotations.
+Local Open Scope circuit.
 
 Section Interpretation.
-  Context {TFn: Type}.
-  Context (interp_external: TFn -> list bits -> bits).
+  Context {reg_t fn_t: Type}.
+  Context {R: reg_t -> type}.
+  Context {Sigma: fn_t -> ExternalSignature}.
+  Context (r: forall reg, R reg).
+  Context (sigma: forall f, Sigma f).
 
-  Definition cnot bs :=
-      match bs with
-      | [b] => [negb b]
-      | _ => []
-      end.
-
-  Definition cand bs1 bs2 :=
-    match bs1, bs2 with
-    | [b1], [b2] => [andb b1 b2]
-    | _, _ => []
-    end.
-
-  Definition cor bs1 bs2 :=
-    match bs1, bs2 with
-    | [b1], [b2] => [orb b1 b2]
-    | _, _ => []
-    end.
-
-  Definition cmux (s bs1 bs2: bits) :=
-    match s with
-    | [true] => bs1
-    | [false] => bs2
-    | _ => []
-    end.
-
-  Fixpoint interp_circuit c :=
+  Fixpoint interp_circuit {n} (c: circuit R Sigma n) : option (bits n) :=
     match c with
-    | CQuestionMark => []
-    | CNot c => cnot (interp_circuit c)
-    | CAnd c1 c2 => cand (interp_circuit c1) (interp_circuit c2)
-    | COr c1 c2 => cor (interp_circuit c1) (interp_circuit c2)
-    | CMux select c1 c2 => cmux (interp_circuit select) (interp_circuit c1) (interp_circuit c2)
-    | CConst cst => cst
-    | CExternal e args => interp_external e (List.map interp_circuit args)
+    | CQuestionMark sz =>
+      None
+    | CNot c =>
+      let/opt bs := interp_circuit c in
+      Some (w1 (negb (bits_single bs)))
+    | CAnd c1 c2 =>
+      let/opt bs1 := interp_circuit c1 in
+      let/opt bs2 := interp_circuit c2 in
+      Some (w1 (andb (bits_single bs1) (bits_single bs2)))
+    | COr c1 c2 =>
+      let/opt bs1 := interp_circuit c1 in
+      let/opt bs2 := interp_circuit c2 in
+      Some (w1 (orb (bits_single bs1) (bits_single bs2)))
+    | CMux select c1 c2 =>
+      let/opt bs := interp_circuit select in
+      if bits_single bs then interp_circuit c1
+      else interp_circuit c2
+    | CConst cst =>
+      Some cst
+    | CReadRegister idx =>
+      Some (r idx)
+    | CExternal idx arg1 arg2 =>
+      let/opt bs1 := interp_circuit arg1 in
+      let/opt bs2 := interp_circuit arg2 in
+      Some (sigma idx bs1 bs2)
     end.
-
-  Definition interp_circuits (nRegs: nat) (cs: circuits nRegs) :=
-    Vector.map interp_circuit cs.
 End Interpretation.
 
 Section CircuitCompilation.
-  Context {TVar TFn: Type}.
-  Context {nRegs: nat}.
+  Context {var_t reg_t fn_t: Type}.
+  Context {reg_t_eq_dec: EqDec reg_t}.
+  Context {R: reg_t -> type}.
+  Context {Sigma: fn_t -> ExternalSignature}.
+  Context {REnv: Env reg_t}.
+  Context (r: REnv.(env_t) (fun reg => circuit R Sigma (R reg))).
+  Context (sigma: forall f, Sigma f).
 
-  Notation circuit := (circuit TFn).
+  Notation circuit := (circuit R Sigma).
 
-  Record rwdata :=
-    { read0: circuit;
-      read1: circuit;
-      write0: circuit;
-      write1: circuit;
-      data0: circuit;
-      data1: circuit }.
-  (* Arguments rwdata: clear implicits. *)
-  (* Arguments rule_circuit: clear implicits. *)
+  Record rwdata {sz} :=
+    { read0: circuit 1;
+      read1: circuit 1;
+      write0: circuit 1;
+      write1: circuit 1;
+      data0: circuit sz;
+      data1: circuit sz }.
 
-  Definition rwset := Vector.t rwdata nRegs.
+  Definition rwset :=
+    REnv.(env_t) (fun reg => @rwdata (R reg)).
 
-  Record rule_circuit :=
-    { canFire: circuit;
-      regs: rwset;
-      retVal: circuit }.
+  Record rwcircuit :=
+    { canFire: circuit 1;
+      regs: rwset }.
+
+  Record expr_circuit {sz} :=
+    { erwc: rwcircuit;
+      retVal: circuit sz }.
+
+  Definition rule_circuit :=
+    rwcircuit.
 
   Record scheduler_circuit :=
     { sregs: rwset }.
 
-  Context {GammaEnv: Env TVar circuit}. (* Tracks only retvals *)
-  Context (V: Vector.t circuit nRegs).
+  Definition ccontext (sig: tsig var_t) :=
+    context (fun '(k, tau) => circuit (Nat_of_type tau)) sig.
 
-  Definition idx_of_nat n :=
-    match Fin.of_nat n nRegs with
-    | inleft idx => Some idx
-    | _ => None
-    end.
-
-  Definition mux_rwdata cond tReg fReg :=
+  Definition mux_rwdata {sz} (cond: circuit 1) (tReg fReg: @rwdata sz) :=
     {| read0 := CMux cond tReg.(read0) fReg.(read0);
        read1 := CMux cond tReg.(read1) fReg.(read1);
        write0 := CMux cond tReg.(write0) fReg.(write0);
@@ -116,188 +127,206 @@ Section CircuitCompilation.
        data0 := CMux cond tReg.(data0) fReg.(data0);
        data1 := CMux cond tReg.(data1) fReg.(data1) |}.
 
-  Section RuleCompilation.
-    (* Only used for read1 *)
+  (* FIXME generalize to proper envs? *)
+  (* Definition REnv.(putenv) {K} `{EqDec K} {Fn: K -> Type} (fn: forall k, Fn k) (k: K) (v: Fn k): (forall k, Fn k). *)
+  (*   intros k'. *)
+  (*   destruct (eq_dec k k'); subst. *)
+  (*   - exact v. *)
+  (*   - exact (fn k'). *)
+  (* Defined. *)
+
+  Section Expr.
+    Context (cLog: scheduler_circuit).
+    Context {sig: tsig var_t}.
+    Context (Gamma: ccontext sig).
+
+    Fixpoint compile_expr
+             {tau} (ex: expr var_t R Sigma sig tau)
+             (clog: rwcircuit):
+      @expr_circuit tau :=
+      match ex in expr _ _ _ _ t return expr_circuit with
+      | Var m =>
+        {| retVal := cassoc m Gamma;
+           erwc := clog |}
+      | Const cst =>
+        {| retVal := $cst;
+           erwc := clog |}
+      | Read P0 idx =>
+        let reg := REnv.(getenv) clog.(regs) idx in
+        {| retVal := REnv.(getenv) r idx;
+           erwc := {| canFire := clog.(canFire) && ! reg.(read1) && ! reg.(write1);
+                     regs := REnv.(putenv) clog.(regs) idx {| read0 := $(w1 true);
+                                                             (* Unchanged *)
+                                                             read1 := reg.(read1);
+                                                             write0 := reg.(write0);
+                                                             write1 := reg.(write1);
+                                                             data0 := reg.(data0);
+                                                             data1 := reg.(data1) |} |} |}
+      | Read P1 idx =>
+        let reg := REnv.(getenv) clog.(regs) idx in
+        let Reg := REnv.(getenv) cLog.(sregs) idx in
+        {| retVal := CMux Reg.(write0) Reg.(data0) (CMux reg.(write0) reg.(data0) (REnv.(getenv) r idx));
+           erwc := {| canFire := clog.(canFire);
+                     regs := REnv.(putenv) clog.(regs) idx {| read1 := $(w1 true);
+                                                                  (* Unchanged *)
+                                                                  read0 := reg.(read0);
+                                                                  write0 := reg.(write0);
+                                                                  write1 := reg.(write1);
+                                                                  data0 := reg.(data0);
+                                                                  data1 := reg.(data1) |} |} |}
+      | Call fn a1 a2 =>
+        let a1 := compile_expr a1 clog in
+        let a2 := compile_expr a2 a1.(erwc) in
+        {| retVal := CExternal fn a1.(retVal) a2.(retVal);
+           erwc := a1.(erwc) |}
+      end.
+  End Expr.
+
+  Definition zip {K} {E: Env K} {V1 V2: esig K} (ev1: E.(env_t) V1) (ev2: E.(env_t) V2)
+    : E.(env_t) (fun k => V1 k * V2 k)%type :=
+    E.(create) (fun k => (E.(getenv) ev1 k, E.(getenv) ev2 k)).
+
+  Definition map2 {K} (E: Env K) {V1 V2 V3: esig K} (fn: forall k, V1 k -> V2 k -> V3 k)
+             (ev1: E.(env_t) V1) (ev2: E.(env_t) V2)
+    : E.(env_t) V3 :=
+    E.(create) (fun k => fn k (E.(getenv) ev1 k) (E.(getenv) ev2 k)).
+
+  Section Rule.
     Context (cLog: scheduler_circuit).
 
     Fixpoint compile_rule
-             (Gamma: GammaEnv.(env_t))
-             (r: rule TVar TFn)
-             (clog: rule_circuit):
-      option rule_circuit :=
-      match r with
-      | Bind var expr body =>
-        opt_bind (compile_rule Gamma expr clog) (fun cExpr =>
-        opt_bind (compile_rule (putenv Gamma var cExpr.(retVal)) body cExpr) (fun cBody =>
-        Some cBody)) (* FIXME merge and apply L *)
-      | Var var =>
-        opt_bind (getenv Gamma var) (fun cVal =>
-        Some {| retVal := cVal;
-                (* Unchanged *)
-                canFire := clog.(canFire);
-                regs := clog.(regs) |})
+             {sig: tsig var_t}
+             (Gamma: ccontext sig)
+             (rl: rule var_t R Sigma sig)
+             (clog: rwcircuit):
+      rule_circuit :=
+      match rl in Types.rule _ _ _ t return (ccontext t -> rule_circuit) with
       | Skip =>
-        Some {| retVal := $nil;
-                (* Unchanged *)
-                canFire := clog.(canFire);
-                regs := clog.(regs) |}
-      | Const cst =>
-        Some {| retVal := $cst;
-                (* Unchanged *)
-                canFire := clog.(canFire);
-                regs := clog.(regs) |}
-      | If cond tbranch fbranch =>
-        opt_bind (compile_rule Gamma cond clog) (fun cCond =>
-        opt_bind (compile_rule Gamma tbranch cCond) (fun cTbr =>
-        opt_bind (compile_rule Gamma fbranch cCond) (fun cFbr =>
-        Some {| canFire := cCond.(canFire) && CMux cCond.(retVal) cTbr.(canFire) cFbr.(canFire);
-                retVal := CMux cCond.(retVal) cTbr.(retVal) cFbr.(retVal);
-                regs := Vector.map2 (mux_rwdata cCond.(retVal)) cTbr.(regs) cFbr.(regs) |})))
+        fun _ => clog
       | Fail =>
-        Some {| canFire := $[false];
-                (* Unchanged *)
-                regs := clog.(regs);
-                retVal := clog.(retVal) |}
-      | Read P0 idx =>
-        opt_bind (idx_of_nat idx) (fun idx =>
-        let reg := Vector.nth clog.(regs) idx in
-        Some {| canFire := clog.(canFire) && ! reg.(read1) && ! reg.(write1);
-                retVal := Vector.nth V idx;
-                regs := Vector.replace clog.(regs) idx {| read0 := $[true];
-                                                          (* Unchanged *)
-                                                          read1 := reg.(read1);
-                                                          write0 := reg.(write0);
-                                                          write1 := reg.(write1);
-                                                          data0 := reg.(data0);
-                                                          data1 := reg.(data1) |} |})
-      | Read P1 idx =>
-        opt_bind (idx_of_nat idx) (fun idx =>
-        let reg := Vector.nth clog.(regs) idx in
-        let Reg := Vector.nth cLog.(sregs) idx in
-        Some {| canFire := clog.(canFire);
-                retVal := CMux Reg.(write0) Reg.(data0)
-                              (CMux reg.(write0) reg.(data0) (Vector.nth V idx));
-                regs := Vector.replace clog.(regs) idx {| read1 := $[true];
-                                                          (* Unchanged *)
-                                                          read0 := reg.(read0);
-                                                          write0 := reg.(write0);
-                                                          write1 := reg.(write1);
-                                                          data0 := reg.(data0);
-                                                          data1 := reg.(data1) |} |})
+        fun _ => {| canFire := $(w1 false);
+                 regs := clog.(regs) |}
+      | Seq r1 r2 =>
+        fun Gamma =>
+        compile_rule Gamma r2 (compile_rule Gamma r1 clog)
+      | @Bind _ _ _ _ _ _ tau var ex body =>
+        fun Gamma =>
+        let ex := compile_expr cLog Gamma ex clog in
+        compile_rule (CtxCons (var, tau) ex.(retVal) Gamma) body ex.(erwc)
+      | If cond tbranch fbranch =>
+        fun Gamma =>
+        let cond := compile_expr cLog Gamma cond clog in
+        let tbranch := compile_rule Gamma tbranch cond.(erwc) in
+        let fbranch := compile_rule Gamma fbranch cond.(erwc) in
+        {| canFire := CMux cond.(retVal) tbranch.(canFire) fbranch.(canFire);
+           regs := REnv.(map2)
+                              (fun k treg freg => mux_rwdata cond.(retVal) treg freg )
+                              tbranch.(regs) fbranch.(regs) |}
       | Write P0 idx val =>
-        opt_bind (compile_rule Gamma val clog) (fun cVal =>
-        opt_bind (idx_of_nat idx) (fun idx =>
-        let reg := Vector.nth cVal.(regs) idx in
-        Some {| canFire := cVal.(canFire) && ! reg.(read1) &&  ! reg.(write0) &&  ! reg.(write1);
-                retVal := $[];
-                regs := Vector.replace cVal.(regs) idx {| write0 := $[true];
-                                                         data0 := cVal.(retVal);
-                                                         (* Unchanged *)
-                                                         read0 := reg.(read0);
-                                                         read1 := reg.(read1);
-                                                         write1 := reg.(write1);
-                                                         data1 := reg.(data1) |} |}))
+        fun Gamma =>
+        let val := compile_expr cLog Gamma val clog in
+        let reg := REnv.(getenv) val.(erwc).(regs) idx in
+        {| canFire := val.(erwc).(canFire) && ! reg.(read1) &&  ! reg.(write0) &&  ! reg.(write1);
+           regs := REnv.(putenv) val.(erwc).(regs) idx {| write0 := $(w1 true);
+                                                  data0 := val.(retVal);
+                                                  (* Unchanged *)
+                                                  read0 := reg.(read0);
+                                                  read1 := reg.(read1);
+                                                  write1 := reg.(write1);
+                                                  data1 := reg.(data1) |} |}
       | Write P1 idx val =>
-        opt_bind (compile_rule Gamma val clog) (fun cVal =>
-        opt_bind (idx_of_nat idx) (fun idx =>
-        let reg := Vector.nth cVal.(regs) idx in
-        Some {| canFire := cVal.(canFire) && ! reg.(write1);
-                retVal := $[];
-                regs := Vector.replace cVal.(regs) idx {| write1 := $[true];
-                                                         data1 := cVal.(retVal);
-                                                         (* Unchanged *)
-                                                         read0 := reg.(read0);
-                                                         read1 := reg.(read1);
-                                                         write0 := reg.(write0);
-                                                         data0 := reg.(data0) |} |}))
-      | Call fn args =>
-        opt_bind (List.fold_left (fun acc arg =>
-                                    opt_bind acc (fun '(clog, cArgs) =>
-                                    opt_bind (compile_rule Gamma arg clog) (fun cArg =>
-                                    Some (cArg, cArg.(retVal) :: cArgs))))
-                                 args (Some (clog, []))) (fun '(lastArg, cArgs) =>
-        Some {| retVal := CExternal fn cArgs;
-                (* Unchanged *)
-                canFire := lastArg.(canFire);
-                regs := lastArg.(regs) |})
-      end.
-  End RuleCompilation.
+        fun Gamma =>
+        let val := compile_expr cLog Gamma val clog in
+        let reg := REnv.(getenv) val.(erwc).(regs) idx in
+        {| canFire := val.(erwc).(canFire) && ! reg.(write1);
+           regs := REnv.(putenv) val.(erwc).(regs) idx {| write1 := $(w1 true);
+                                                  data1 := val.(retVal);
+                                                  (* Unchanged *)
+                                                  read0 := reg.(read0);
+                                                  read1 := reg.(read1);
+                                                  write0 := reg.(write0);
+                                                  data0 := reg.(data0) |} |}
+      end Gamma.
+  End Rule.
 
   (* Definition adapter (cs: scheduler_circuit) : rule_circuit := *)
   (*   {| retVal := CQuestionMark; *)
-  (*      canFire := $[true]; *)
-  (*      regs := Vector.map (fun reg => {| read0 := $[false]; *)
+  (*      canFire := $(w1 true); *)
+  (*      regs := Vector.map (fun reg => {| read0 := $(w1 false); *)
   (*                                    write0 := reg.(write0); *)
   (*                                    data0 := reg.(data0); *)
-  (*                                    read1 := $[false]; *)
-  (*                                    write1 := $[false]; *)
+  (*                                    read1 := $(w1 false); *)
+  (*                                    write1 := $(w1 false); *)
   (*                                    data1 := CQuestionMark |}) *)
   (*                        cs.(sregs) |}. *)
 
-  Definition willFire_of_canFire' ruleReg inReg :=
+  Definition willFire_of_canFire' {sz} (ruleReg inReg: @rwdata sz) :=
     ((ruleReg.(read0) || ruleReg.(write0))  ==>
      (! (inReg.(write0) || inReg.(write1) || inReg.(read1)))) &&
     ((ruleReg.(read1) || ruleReg.(write1))  ==>
      (! inReg.(write1))).
 
-  Definition willFire_of_canFire cRule cInput : circuit :=
-    Vector.fold_right2 (fun ruleReg inReg acc =>
-                          acc && willFire_of_canFire' ruleReg inReg)
-                       cRule.(canFire) _ cRule.(regs) cInput.(sregs).
+  Definition willFire_of_canFire cRule cInput : circuit 1 :=
+    REnv.(fold_right)
+                (fun k '(ruleReg, inReg) acc =>
+                   acc && willFire_of_canFire' ruleReg inReg)
+                (zip cRule.(regs) cInput.(sregs)) cRule.(canFire).
 
   Arguments willFire_of_canFire' : simpl never.
 
-  Definition init_rwdata :=
-    {| data0 := CQuestionMark;
-       data1 := CQuestionMark;
-       read0 := $[false];
-       read1 := $[false];
-       write0 := $[false];
-       write1 := $[false] |}.
+  Definition init_rwdata sz :=
+    {| data0 := CQuestionMark sz;
+       data1 := CQuestionMark sz;
+       read0 := $(w1 false);
+       read1 := $(w1 false);
+       write0 := $(w1 false);
+       write1 := $(w1 false) |}.
 
-  Definition init_rule_circuit :=
-    {| retVal := CQuestionMark;
-       canFire := $[true];
-       regs := Vector.const init_rwdata nRegs |}.
+  Definition init_rwcircuit (_: unit) :=
+    {| canFire := $(w1 true);
+       regs := REnv.(create) (fun k => init_rwdata (R k)) |}.
+
+  Definition init_rule_circuit (_: unit) :=
+    init_rwcircuit tt.
 
   Fixpoint compile_scheduler'
-           (s: scheduler TVar TFn)
+           (s: scheduler var_t R Sigma)
            (input: scheduler_circuit):
-    option scheduler_circuit :=
+    scheduler_circuit :=
     match s with
     | Done =>
-      Some input
-    | Try r st sf =>
-      opt_bind (compile_rule input env_nil r init_rule_circuit) (fun cRule =>
-      let acc := {| sregs := Vector.map2 (fun ruleReg inReg =>
-                                          {| read0 := ruleReg.(read0) || inReg.(read0);
-                                             read1 := ruleReg.(read1) || inReg.(read1);
-                                             write0 := ruleReg.(write0) || inReg.(write0);
-                                             write1 := ruleReg.(write1) || inReg.(write1);
-                                             data0 := ruleReg.(data0);
-                                             data1 := ruleReg.(data1) |})
-                                       cRule.(regs) input.(sregs) |} in
-      opt_bind (compile_scheduler' st acc) (fun cSt =>
-      opt_bind (compile_scheduler' sf input) (fun cSf =>
-      let will_fire := willFire_of_canFire cRule input in
-      Some ({| sregs := Vector.map2 (fun tReg fReg =>
-                                      {| read0 := CMux will_fire tReg.(read0) fReg.(read0);
-                                         read1 := CMux will_fire tReg.(read1) fReg.(read1);
-                                         write0 := CMux will_fire tReg.(write0) fReg.(write0);
-                                         write1 := CMux will_fire tReg.(write1) fReg.(write1);
-                                         data0 := CMux will_fire tReg.(data0) fReg.(data0);
-                                         data1 := CMux will_fire tReg.(data1) fReg.(data1) |})
-                                   cSt.(sregs) cSf.(sregs) |}))))
+      input
+    | Try rl st sf =>
+      let rl := compile_rule input CtxEmpty rl (init_rule_circuit tt) in
+      let acc := {| sregs := REnv.(map2) (fun _ ruleReg inReg =>
+                                               {| read0 := ruleReg.(read0) || inReg.(read0);
+                                                  read1 := ruleReg.(read1) || inReg.(read1);
+                                                  write0 := ruleReg.(write0) || inReg.(write0);
+                                                  write1 := ruleReg.(write1) || inReg.(write1);
+                                                  data0 := ruleReg.(data0);
+                                                  data1 := ruleReg.(data1) |})
+                                            rl.(regs) input.(sregs) |} in
+      let st := compile_scheduler' st acc in
+      let sf := compile_scheduler' sf input in
+      let will_fire := willFire_of_canFire rl input in
+      {| sregs := REnv.(map2) (fun _ tReg fReg =>
+                                    {| read0 := CMux will_fire tReg.(read0) fReg.(read0);
+                                       read1 := CMux will_fire tReg.(read1) fReg.(read1);
+                                       write0 := CMux will_fire tReg.(write0) fReg.(write0);
+                                       write1 := CMux will_fire tReg.(write1) fReg.(write1);
+                                       data0 := CMux will_fire tReg.(data0) fReg.(data0);
+                                       data1 := CMux will_fire tReg.(data1) fReg.(data1) |})
+                                 st.(sregs) sf.(sregs) |}
     end.
 
-  Definition commit_rwdata (reg: rwdata) initial_value : circuit :=
+  Definition commit_rwdata {sz} (reg: @rwdata sz) initial_value : circuit sz :=
     CMux reg.(write1) reg.(data1) (CMux reg.(write0) reg.(data0) initial_value).
 
   Definition compile_scheduler
-             (s: scheduler TVar TFn)
-    : option (circuits nRegs) :=
-    opt_bind (compile_scheduler' s {| sregs := Vector.const init_rwdata nRegs |}) (fun cs =>
-    Some (Vector.map2 commit_rwdata cs.(sregs) V)).
+             (s: scheduler var_t R Sigma)
+    : REnv.(env_t) (fun reg => circuit (R reg)) :=
+    let s := compile_scheduler' s {| sregs := REnv.(create) (fun k => init_rwdata (R k)) |} in
+    REnv.(map2) (fun k r1 r2 => commit_rwdata r1 r2) s.(sregs) r.
 End CircuitCompilation.
 
 Arguments rwdata: clear implicits.
