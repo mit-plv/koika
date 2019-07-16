@@ -60,7 +60,8 @@ Section Interpretation.
   Context {reg_t fn_t: Type}.
   Context {R: reg_t -> type}.
   Context {Sigma: fn_t -> ExternalSignature}.
-  Context (r: forall reg, R reg).
+  Context {REnv: Env reg_t}.
+  Context (r: REnv.(env_t) R).
   Context (sigma: forall f, Sigma f).
 
   Fixpoint interp_circuit {n} (c: circuit R Sigma n) : option (bits n) :=
@@ -85,7 +86,7 @@ Section Interpretation.
     | CConst cst =>
       Some cst
     | CReadRegister idx =>
-      Some (r idx)
+      Some (REnv.(getenv) r idx)
     | CExternal idx arg1 arg2 =>
       let/opt bs1 := interp_circuit arg1 in
       let/opt bs2 := interp_circuit arg2 in
@@ -341,13 +342,15 @@ Section CircuitCompilation.
                            (CMux (reg.(write0)) (reg.(data0))
                                  (CAnnot "commit unchanged" initial_value)))).
 
-  Definition compile_scheduler
-             (s: scheduler var_t R Sigma)
-    : REnv.(env_t) (fun reg => circuit (R reg)) :=
+  Definition state_transition_circuit :=
+    REnv.(env_t) (fun reg => circuit (R reg)).
+
+  Definition compile_scheduler (s: scheduler var_t R Sigma) : state_transition_circuit :=
     let s := compile_scheduler' s {| sregs := REnv.(create) (fun k => init_rwdata (R k)) |} in
     REnv.(map2) (fun k r1 r2 => commit_rwdata r1 r2) s.(sregs) r.
 End CircuitCompilation.
 
-Arguments rwdata: clear implicits.
-Arguments rule_circuit: clear implicits.
-Arguments scheduler_circuit: clear implicits.
+Arguments rwdata {_ _}.
+Arguments rule_circuit {_ _}.
+Arguments scheduler_circuit {_ _}.
+Arguments state_transition_circuit {_ _}.

@@ -124,7 +124,7 @@ Module Collatz.
   Definition var_t := string.
   Inductive reg_t := R0.
   Inductive custom_t := Divide | ThreeNPlusOne | Even | Odd.
-  Definition fn_t := prim_fn_t custom_t.
+  Definition fn_t := interop_fn_t custom_t.
 
   Definition R r :=
     match r with
@@ -133,11 +133,10 @@ Module Collatz.
 
   Definition Sigma fn :=
     match fn with
-    | PrimFn fn => Primitives.Sigma fn
-    | CustomFn Divide => {{ 2 ~> 0 ~> 2 }}
-    | CustomFn ThreeNPlusOne => {{ 2 ~> 0 ~> 2 }}
-    | CustomFn Even => {{ 2 ~> 0 ~> 1 }}
-    | CustomFn Odd => {{ 2 ~> 0 ~> 1 }}
+    | Divide => {{ 2 ~> 0 ~> 2 }}
+    | ThreeNPlusOne => {{ 2 ~> 0 ~> 2 }}
+    | Even => {{ 2 ~> 0 ~> 1 }}
+    | Odd => {{ 2 ~> 0 ~> 1 }}
     end.
 
   Definition r idx : R idx :=
@@ -153,16 +152,15 @@ Module Collatz.
 
   Definition sigma idx : Sigma idx :=
     match idx with
-    | (PrimFn fn) => Primitives.sigma fn
-    | (CustomFn Divide) => fun '(b1, (b2, tt)) _ => 1~(w1 b1)
-    | (CustomFn ThreeNPlusOne) => fun bs _ => match bs with
+    | Divide => fun '(b1, (b2, tt)) _ => 1~(w1 b1)
+    | ThreeNPlusOne => fun bs _ => match bs with
                                | `` 0~0~w0 => 0~1~w0
                                | `` 0~1~w0 => 0~0~w0
                                | `` 1~0~w0 => 1~1~w0
                                | `` 1~1~w0 => 1~0~w0
                                end
-    | (CustomFn Even) => fun '(_, (b2, tt)) _ => w1 (negb b2)
-    | (CustomFn Odd) => fun '(_, (b2, tt)) _ => w1 b2
+    | Even => fun '(_, (b2, tt)) _ => w1 (negb b2)
+    | Odd => fun '(_, (b2, tt)) _ => w1 b2
     end.
 
   Open Scope sga.
@@ -177,14 +175,34 @@ Module Collatz.
 
   Definition multiply_collatz : urule var_t reg_t fn_t :=
     Let "v" <- R0#read1 in
+    Let "y" <- (Or 2)[[UConst 1~1~w0, UConst 1~1~w0]] in
     If Odd[$"v"] Then
         R0#write1(Divide[$"v"])
     Else
        fail
     EndIf.
 
+(* But report *)
+(* Require Import Coq.extraction.Extraction. *)
+(* (* Extraction Language JSON. *) *)
+(* Set Extraction KeepSingleton. *)
+(* Extraction Collatz.reg_t. *)
+
+  (* Definition rl : rule var_t R Sigma List.nil := *)
+  (*   tc R Sigma (Let "v" <- R0#read1 in *)
+  (*           Let "y" <- (Or _)[[UConst 1~1~w0, UConst 1~1~w0]] in *)
+  (*           If Odd[$"v"] Then *)
+  (*               R0#write1(Divide[$"v"]) *)
+  (*           Else *)
+  (*              fail *)
+  (*           EndIf). *)
+
+  Definition iSigma := interop_Sigma Sigma.
+  Definition isigma := interop_sigma sigma.
+  Definition cr := ContextEnv.(create) r.
+
   Definition collatz :=
-    tc R Sigma (divide_collatz |> multiply_collatz |> done).
+    tc R iSigma (divide_collatz |> multiply_collatz |> done).
 
   Notation compute t :=
     ltac:(let tt := type of t in
@@ -192,13 +210,37 @@ Module Collatz.
           exact (t: tt)) (only parsing).
 
   Open Scope bits_printing.
-  Definition collatz_result :=
-    compute (interp_scheduler ((ContextEnv).(create) r) sigma collatz).
-  Definition divide_collatz_result :=
-    compute (interp_rule ((ContextEnv).(create) r) sigma CtxEmpty log_empty log_empty (tc R Sigma divide_collatz)).
-  Definition multiply_collatz_result :=
-    compute (interp_rule ((ContextEnv).(create) r) sigma CtxEmpty log_empty log_empty (tc R Sigma multiply_collatz)).
+  Definition result :=
+    compute (interp_scheduler cr isigma collatz).
+  Definition divide_result :=
+    compute (interp_rule cr isigma CtxEmpty log_empty log_empty
+                         (tc R iSigma divide_collatz)).
+  Definition multiply_result :=
+    compute (interp_rule cr isigma CtxEmpty log_empty log_empty
+                         (tc R iSigma multiply_collatz)).
 
-  Definition collatz_circuit :=
-    compile_scheduler (ContextEnv.(create) (readRegisters R Sigma)) collatz.
+  Definition circuit :=
+    compile_scheduler (ContextEnv.(create) (readRegisters R iSigma)) collatz.
+
+  Definition package :=
+    {| vp_reg_t := reg_t;
+       vp_reg_types := R;
+       vp_reg_finite := _;
+       vp_reg_Env := ContextEnv;
+
+       vp_custom_fn_t := custom_t;
+       vp_custom_fn_types := Sigma;
+
+       vp_reg_names r := match r with
+                        | R0 => "R0"
+                        end;
+       vp_custom_fn_names fn := match fn with
+                               | Divide => "Divide"
+                               | ThreeNPlusOne => "ThreeNPlusOne"
+                               | Even => "Even"
+                               | Odd => "Odd"
+                               end;
+
+       vp_circuit := circuit;
+    |}.
 End Collatz.

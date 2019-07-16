@@ -108,3 +108,5 @@ Definition must {A} (o: option A) : if o then A else unit :=
   | Some a => a
   | None => tt
   end.
+
+Axiom __magic__ : forall {A}, A.

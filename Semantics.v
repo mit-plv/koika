@@ -145,7 +145,6 @@ Section Interp.
     Context (Gamma: vcontext sig).
     Context (sched_log: Log).
 
-    (* FXME use a context for the log instead of a plain list with a complex cast? *)
     Fixpoint interp_expr {tau}
              (rule_log: Log)
              (e: expr sig tau)
@@ -174,8 +173,6 @@ Section Interp.
   End Expr.
 
   Section Rule.
-    Axiom magic : forall {A}, A.
-
     Fixpoint interp_rule
              {sig: tsig var_t}
              (Gamma: vcontext sig)

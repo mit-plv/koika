@@ -1,4 +1,11 @@
-Require Export SGA.Common SGA.Syntax SGA.TypeInference SGA.Semantics SGA.Circuits SGA.Primitives.
+Require Export
+        SGA.Common
+        SGA.Syntax
+        SGA.TypeInference
+        SGA.Semantics
+        SGA.Circuits
+        SGA.Primitives
+        SGA.Interop.
 
 Delimit Scope sga_scope with sga.
 Delimit Scope sga_expr_scope with sga_expr.

@@ -188,8 +188,25 @@ Section Contexts.
       + cbn. rewrite IHm; eauto.
   Qed.
 End Contexts.
-
 Arguments context {_}.
+
+Class FiniteType {T} :=
+  { finite_elems: list T;
+    finite_nodup: List.NoDup finite_elems;
+    finite_index: forall t: T, member t finite_elems }.
+Arguments FiniteType: clear implicits.
+
+Instance Finite_EqDec {T} `{FiniteType T} : EqDec T.
+  econstructor; intros.
+  destruct (PeanoNat.Nat.eq_dec (member_id (finite_index t1)) (member_id (finite_index t2))) as [ H' | H' ].
+  - left.
+    apply (f_equal (List.nth_error finite_elems)) in H'.
+    rewrite !member_id_nth in H'.
+    congruence.
+  - right.
+    intros ->.
+    congruence.
+Qed.
 
 Notation esig K := (forall k: K, Type).
 
@@ -198,11 +215,10 @@ Record Env {K: Type}  :=
     getenv: forall {V: esig K}, env_t V -> forall k, V k;
     putenv: forall {V: esig K}, env_t V -> forall k, V k -> env_t V;
     create: forall {V: esig K} (fn: forall (k: K), V k), env_t V;
-    fold_right: forall {V: esig K} {T} (fn: forall k, V k -> T -> T) (ev: env_t V) (t0: T), T;
-    (* This axiom could be relaxed by proving that interp_rule is a
-       morphism wrt getenv-equivalence. *)
+
+    finite_keys: FiniteType K;
     create_getenv_id: forall {V: esig K} (ev: env_t V),
-        create (getenv ev) = ev;
+        create (getenv ev) = ev; (* Not strictly needed *)
     create_funext: forall {V: esig K} (fn1 fn2: forall k : K, V k),
         (forall k, fn1 k = fn2 k) -> create fn1 = create fn2;
     getenv_create: forall {V: esig K} (fn: forall k : K, V k) k,
@@ -229,6 +245,10 @@ Proof.
   apply create_funext; assumption.
 Qed.
 
+Definition map {K} (E: Env K) {V1 V2: esig K} (fn: forall k, V1 k -> V2 k)
+           (ev1: E.(env_t) V1) : E.(env_t) V2 :=
+  E.(create) (fun k => fn k (E.(getenv) ev1 k)).
+
 Definition zip {K} (E: Env K) {V1 V2: esig K} (ev1: E.(env_t) V1) (ev2: E.(env_t) V2)
   : E.(env_t) (fun k => V1 k * V2 k)%type :=
   E.(create) (fun k => (E.(getenv) ev1 k, E.(getenv) ev2 k)).
@@ -238,31 +258,18 @@ Definition map2 {K} (E: Env K) {V1 V2 V3: esig K} (fn: forall k, V1 k -> V2 k ->
   : E.(env_t) V3 :=
   E.(create) (fun k => fn k (E.(getenv) ev1 k) (E.(getenv) ev2 k)).
 
-Class FiniteType {T} :=
-  { finite_elems: list T;
-    finite_nodup: List.NoDup finite_elems;
-    finite_index: forall t: T, member t finite_elems }.
-Arguments FiniteType: clear implicits.
+Definition fold_right {K} (E: Env K) {V T} (f: forall k: K, V k -> T -> T) (ev: E.(env_t) V) (t0: T) :=
+  List.fold_right (fun (k: K) (t: T) => f k (E.(getenv) ev k) t) t0 (@finite_elems K E.(finite_keys)).
 
-Instance Finite_EqDec {T} `{FiniteType T} : EqDec T.
-  econstructor; intros.
-  destruct (PeanoNat.Nat.eq_dec (member_id (finite_index t1)) (member_id (finite_index t2))) as [ H' | H' ].
-  - left.
-    apply (f_equal (List.nth_error finite_elems)) in H'.
-    rewrite !member_id_nth in H'.
-    congruence.
-  - right.
-    intros ->.
-    congruence.
-Qed.
+Definition to_list {K} (E: Env K) {V} (ev: E.(env_t) V) :=
+  E.(fold_right) (fun (k: K) (v: V k) (t: list { k: K & V k }) =>
+                    (existT _ k v) :: t) ev List.nil.
 
 Definition ContextEnv {K} `{FiniteType K}: Env K.
   unshelve refine {| env_t V := context V finite_elems;
                      getenv {V} ctx k := cassoc (finite_index k) ctx;
                      putenv {V} ctx k v := creplace (finite_index k) v ctx;
-                     create {V} fn := ccreate finite_elems (fun k _ => fn k);
-                     fold_right {V T} (f: forall k: K, V k -> T -> T) ctx (t0: T) :=
-                       List.fold_right (fun (k: K) (t: T) => f k (cassoc (finite_index k) ctx) t) t0 finite_elems |}.
+                     create {V} fn := ccreate finite_elems (fun k _ => fn k) |}.
   - intros; rewrite <- ccreate_cassoc; apply ccreate_funext.
     intros; f_equal; apply member_NoDup; try typeclasses eauto; apply finite_nodup.
   - intros; apply ccreate_funext; eauto.
