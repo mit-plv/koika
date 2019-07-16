@@ -4,26 +4,81 @@ Require Export SGA.Common SGA.Environments SGA.Syntax SGA.Types.
 Import ListNotations.
 
 Section Logs.
-  Context {reg_t: Type}.
-  Context {R: reg_t -> type}.
-
   Inductive LogEntryKind :=
     LogRead | LogWrite.
 
-  Record LogEntry :=
+  Record LogEntry {T} :=
     LE { kind: LogEntryKind;
          port: Port;
-         reg: reg_t;
          val: match kind with
               | LogRead => unit: Type
-              | LogWrite => Type_of_type (R reg)
+              | LogWrite => T
               end }.
 
-  Definition Log := list LogEntry.
+  Definition RLog T :=
+    list (@LogEntry T).
+
+  Context {reg_t: Type}.
+  Context {R: reg_t -> type}.
+  Context {REnv: Env reg_t}.
+  Definition Log := REnv.(env_t) (fun idx => RLog (R idx)).
+
+  Definition log_empty : Log :=
+    REnv.(create) (fun _ => []).
+
+  Definition log_app (l1 l2: Log) :=
+    REnv.(map2) (fun _ ll1 ll2 => ll1 ++ ll2) l1 l2.
+
+  Fixpoint list_find_opt {A B} (f: A -> option B) (l: list A) : option B :=
+    match l with
+    | [] => None
+    | x :: l =>
+      let fx := f x in
+      match fx with
+      | Some y => Some y
+      | None => list_find_opt f l
+      end
+    end.
+
+  Lemma list_find_opt_app {A B} (f: A -> option B) (l l': list A) :
+    list_find_opt f (l ++ l') =
+    match list_find_opt f l with
+    | Some x => Some x
+    | None => list_find_opt f l'
+    end.
+  Proof.
+    induction l; cbn; intros.
+    - reflexivity.
+    - rewrite IHl. destruct (f a); reflexivity.
+  Qed.
+
+  Definition log_find {T} (log: Log) reg (f: @LogEntry (R reg) -> option T) : option T :=
+    list_find_opt f (REnv.(getenv) log reg).
+
+  Lemma log_find_app {T} (l l': Log) reg (f: @LogEntry (R reg) -> option T) :
+    log_find (log_app l l') reg f =
+    match log_find l reg f with
+    | Some x => Some x
+    | None => log_find l' reg f
+    end.
+  Proof.
+    unfold log_find, log_app, map2.
+    rewrite getenv_create.
+    rewrite list_find_opt_app.
+    reflexivity.
+  Qed.
+
+  Definition log_forallb (log: Log) reg (f: LogEntryKind -> Port -> bool) :=
+    List.forallb (fun '(LE _ kind prt _) => f kind prt) (REnv.(getenv) log reg).
+
+  Definition log_cons (reg: reg_t) le (l: Log) :=
+    REnv.(putenv) l reg (le :: REnv.(getenv) l reg).
 End Logs.
 
+Arguments LE {_}.
 Arguments LogEntry: clear implicits.
-Arguments Log: clear implicits.
+Arguments RLog: clear implicits.
+Arguments Log {reg_t} R REnv.
 
 Require Import SGA.Types.
 
@@ -38,82 +93,46 @@ Section Interp.
   Context (sigma: forall f, Sigma f).
   Open Scope bool_scope.
 
-  Notation Log := (Log reg_t R).
+  Notation Log := (Log R REnv).
 
-  Definition log_find (log: Log) reg (f: LogEntryKind -> Port -> bool) :=
-    List.find (fun '(LE kind lvl r _) => if eq_dec reg r then f kind lvl else false) log.
-
-  Definition log_forallb (log: Log) reg (f: LogEntryKind -> Port -> bool) :=
-    List.forallb (fun '(LE kind lvl r _) => if eq_dec reg r then f kind lvl else true) log.
-
-  Definition may_read0 sched_log rule_log idx :=
+  Definition may_read0 (sched_log rule_log: Log) idx :=
     (log_forallb sched_log idx
-                 (fun kind lvl => match kind, lvl with
+                 (fun kind prt => match kind, prt with
                                | LogWrite, P0 => false
                                | _, _ => true
                                end)) &&
-    (log_forallb (rule_log ++ sched_log) idx
-                 (fun kind lvl => match kind, lvl with
+    (log_forallb (log_app rule_log sched_log) idx
+                 (fun kind prt => match kind, prt with
                                | LogWrite, P1 => false
                                | _, _ => true
                                end)).
 
-  Definition may_read1 sched_log idx :=
+  Definition may_read1 (sched_log: Log) idx :=
     log_forallb sched_log idx
-                (fun kind lvl => match kind, lvl with
+                (fun kind prt => match kind, prt with
                               | LogWrite, P1 => false
                               | _, _ => true
                               end).
 
-  Definition latest_write0' log idx :=
+  Definition latest_write0 (log: Log) idx :=
     log_find log idx
-             (fun kind lvl => match kind, lvl with
-                           | LogWrite, P0 => true
-                           | _, _ => false
-                           end).
+             (fun le => match le with
+                     | (LE LogWrite P0 v) => Some v
+                     | _ => None
+                     end).
 
-  Definition log_find_value:
-    forall log port reg val,
-      log_find log idx f = Some {| kind := LogWrite;
-                                   port := port;
-                                   reg := reg;
-                                   val := val |} ->
-      
-   
-    
-  
-  Lemma find_some_transparent A (f: A -> bool) l x : List.find f l = Some x -> List.In x l /\ f x = true.
-  Proof.
-   induction l as [|a l IH]; simpl; [easy| ].
-   case_eq (f a); intros Ha Eq.
-   * injection Eq as ->; auto.
-   * destruct (IH Eq); auto.
-  Defined.
-
-  Definition latest_write0 (log: Log) idx : option (R idx).
-  Proof.
-    destruct (latest_write0' log idx) as [ [ kd pt reg val ] | ] eqn:Heq.
-    - unfold latest_write0', log_find in Heq.
-      apply find_some_transparent in Heq.
-      destruct Heq.
-      destruct (eq_dec idx reg) in *; try discriminate; subst.
-      destruct kd in *; try discriminate; subst.
-      exact (Some val).
-    - exact None.
-  Defined.
-
-  Definition may_write sched_log rule_log lvl idx :=
-    match lvl with
-       | P0 => log_forallb (rule_log ++ sched_log) idx
-                          (fun kind lvl => match kind, lvl with
-                                        | LogRead, P1 | LogWrite, _ => false
-                                        | _, _ => true
-                                        end)
-       | P1 => log_forallb (rule_log ++ sched_log) idx
-                          (fun kind lvl => match kind, lvl with
-                                        | LogWrite, P1 => false
-                                        | _, _ => true
-                                        end)
+  Definition may_write (sched_log rule_log: Log) prt idx :=
+    match prt with
+    | P0 => log_forallb (log_app rule_log sched_log) idx
+                       (fun kind prt => match kind, prt with
+                                     | LogRead, P1 | LogWrite, _ => false
+                                     | _, _ => true
+                                     end)
+    | P1 => log_forallb (log_app rule_log sched_log) idx
+                       (fun kind prt => match kind, prt with
+                                     | LogWrite, P1 => false
+                                     | _, _ => true
+                                     end)
     end.
 
   Notation expr := (expr var_t R Sigma).
@@ -139,12 +158,12 @@ Section Interp.
       | Const cst => Some (rule_log, cst)
       | Read P0 idx =>
         if may_read0 sched_log rule_log idx then
-          Some ((LE LogRead P0 idx tt) :: rule_log, REnv.(getenv) r idx)
+          Some (log_cons idx (LE LogRead P0 tt) rule_log, REnv.(getenv) r idx)
         else None
       | Read P1 idx =>
         if may_read1 sched_log idx then
-          Some ((LE LogRead P1 idx tt) :: rule_log,
-                match latest_write0 (rule_log ++ sched_log) idx with
+          Some (log_cons idx (LE LogRead P1 tt) rule_log,
+                match latest_write0 (log_app rule_log sched_log) idx with
                 | Some v => v
                 | None => REnv.(getenv) r idx
                 end)
@@ -184,11 +203,11 @@ Section Interp.
           interp_rule Gamma sched_log rule_log tbranch
         else
           interp_rule Gamma sched_log rule_log fbranch
-      | Write lvl idx val =>
+      | Write prt idx val =>
         fun Gamma =>
           let/opt2 rule_log, val := interp_expr Gamma sched_log rule_log val in
-          if may_write sched_log rule_log lvl idx then
-            Some ((LE LogWrite lvl idx (REnv.(getenv) r idx)) :: rule_log)
+          if may_write sched_log rule_log prt idx then
+            Some (log_cons idx (LE LogWrite prt val) rule_log)
           else None
       end Gamma.
   End Rule.
@@ -201,13 +220,13 @@ Section Interp.
       match s with
       | Done => Some sched_log
       | Try r s1 s2 =>
-        match interp_rule CtxEmpty sched_log [] r with
-        | Some l => interp_scheduler' (l ++ sched_log) s1
+        match interp_rule CtxEmpty sched_log log_empty r with
+        | Some l => interp_scheduler' (log_app l sched_log) s1
         | CannotRun => interp_scheduler' sched_log s2
         end
       end.
 
     Definition interp_scheduler (s: scheduler) :=
-      interp_scheduler' [] s.
+      interp_scheduler' log_empty s.
   End Scheduler.
 End Interp.

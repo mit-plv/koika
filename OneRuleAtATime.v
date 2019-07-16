@@ -9,18 +9,31 @@ Section EnvUpdates.
   Context {R: reg_t -> type}.
   Context {REnv: Env reg_t}.
 
-  Definition commit_update r0 (log: Log reg_t R) : REnv.(env_t) R :=
-    List.fold_right (fun entry r => match entry with
-                                 | LE LogWrite _ idx bs => REnv.(putenv) r idx bs
-                                 | _ => r
-                                 end)
-                    r0 log.
+  Definition rlog_latest_write_fn {k} :=
+    fun le: LogEntry (R k) => match le with
+                           | LE LogWrite _ v => Some v
+                           | _ => None
+                           end.
+
+  Definition rlog_latest_write k (ll: RLog (R k)) :=
+    list_find_opt rlog_latest_write_fn ll.
+
+  Definition commit_update (r0: REnv.(env_t) R) (log: Log R REnv) : REnv.(env_t) R :=
+    REnv.(map2) (fun k ll v0 => match rlog_latest_write k ll with
+                             | Some v => v
+                             | None => v0
+                             end) log r0.
 
   Lemma commit_update_assoc:
-    forall (r : REnv.(env_t) R) (l l' : Log reg_t R),
-      commit_update (commit_update r l) l' = commit_update r (l' ++ l).
+    forall (r : REnv.(env_t) R) (l l' : Log R REnv),
+      commit_update (commit_update r l) l' = commit_update r (log_app l' l).
   Proof.
-    unfold commit_update; intros; rewrite fold_right_app; reflexivity.
+    unfold commit_update, log_app, map2; intros.
+    apply create_funext; intros.
+    rewrite !getenv_create.
+    unfold rlog_latest_write.
+    rewrite list_find_opt_app.
+    destruct list_find_opt; reflexivity.
   Qed.
 End EnvUpdates.
 
@@ -35,7 +48,7 @@ Section Proof.
   Context (sigma: forall f, Sigma f).
   Open Scope bool_scope.
 
-  Notation Log := (Log reg_t R).
+  Notation Log := (Log R REnv).
   Notation expr := (expr var_t R Sigma).
   Notation rule := (rule var_t R Sigma).
   Notation scheduler := (scheduler var_t R Sigma).
@@ -47,8 +60,8 @@ Section Proof.
   match s with
   | Done => Some ([], sched_log)
   | Try rl s1 s2 =>
-    match interp_rule r sigma CtxEmpty sched_log [] rl with
-    | Some l => match interp_scheduler'_trace (l ++ sched_log) s1 with
+    match interp_rule r sigma CtxEmpty sched_log log_empty rl with
+    | Some l => match interp_scheduler'_trace (log_app l sched_log) s1 with
                | Some (rs, log) => Some (rl :: rs, log)
                | None => None
                end
@@ -64,65 +77,55 @@ Section Proof.
     | None => None
     end.
 
-  Definition update_one sigma r rl: option (REnv.(env_t) R) :=
-    let/opt rl := rl in
-    let/opt log := @interp_scheduler' var_t reg_t fn_t _ R Sigma REnv r sigma [] (Try rl Done Done) in
+  Definition update_one r rl: option (REnv.(env_t) R) :=
+    let/opt r := r in
+    let/opt log := @interp_scheduler' var_t reg_t fn_t R Sigma REnv r sigma log_empty (Try rl Done Done) in
     Some (commit_update r log).
 
-  Definition latest_write' (l: Log) idx :=
-    log_find l idx (fun kind _ => match kind with
-                               | LogWrite => true
-                               | _ => false
-                               end).
-
-  Definition latest_write (log: Log) idx : option (R idx).
-  Proof.
-    destruct (latest_write' log idx) as [ [ kd pt reg val ] | ] eqn:Heq.
-    - unfold latest_write', log_find in Heq.
-      apply find_some_transparent in Heq.
-      destruct Heq.
-      destruct (eq_dec idx reg) in *; try discriminate; subst.
-      destruct kd in *; try discriminate; subst.
-      exact (Some val).
-    - exact None.
-  Defined.
+  Definition latest_write (l: Log) idx: option (R idx) :=
+    log_find l idx rlog_latest_write_fn.
 
   Lemma getenv_commit_update :
-    forall sl R idx,
-      REnv.(getenv) (commit_update R sl) idx =
+    forall sl r idx,
+      REnv.(getenv) (commit_update r sl) idx =
       match latest_write sl idx with
       | Some v' => v'
-      | None => REnv.(getenv) R idx
+      | None => REnv.(getenv) r idx
       end.
   Proof.
-    unfold commit_update; induction sl; cbn; intros.
-    - reflexivity.
-    - destruct a, kind, PeanoNat.Nat.eq_dec; subst;
-        try (erewrite IHsl by eassumption;
-             reflexivity).
-      + rewrite get_put_eq; reflexivity.
-      + rewrite get_put_neq by eauto.
-        erewrite IHsl by eassumption.
-        reflexivity.
-  Qed.
-
-  Lemma bool_result_Success :
-    forall b u,
-      bool_result b = Success u ->
-      b = true.
-  Proof.
-    destruct b; cbn; congruence.
+    unfold commit_update, map2; intros; rewrite getenv_create.
+    reflexivity.
   Qed.
 
   Require Import Ring_theory Ring Coq.setoid_ring.Ring.
 
+  Lemma getenv_logapp:
+    forall (l l': Log) idx,
+      REnv.(getenv) (log_app l l') idx =
+      REnv.(getenv) l idx ++ REnv.(getenv) l' idx.
+  Proof.
+    unfold log_app, map2; intros; rewrite getenv_create; reflexivity.
+  Qed.
+
   Lemma log_forallb_app:
-    forall l l' reg (f: LogEntryKind -> Port -> bits -> bool),
-      log_forallb (l ++ l') reg f =
+    forall (l l': Log) reg (f: LogEntryKind -> Port -> bool),
+      log_forallb (log_app l l') reg f =
       log_forallb l reg f && log_forallb l' reg f.
   Proof.
     unfold log_forallb.
-    intros; rewrite !forallb_app; reflexivity.
+    intros; rewrite getenv_logapp.
+    rewrite !forallb_app; reflexivity.
+  Qed.
+
+  Lemma log_app_assoc:
+    forall (l l' l'': Log),
+      log_app l (log_app l' l'') =
+      log_app (log_app l l') l''.
+  Proof.
+    unfold log_app, map2; intros.
+    apply create_funext; intros.
+    rewrite !getenv_create.
+    apply app_assoc.
   Qed.
 
   Ltac set_forallb_fns :=
@@ -134,12 +137,13 @@ Section Proof.
            end.
 
   Lemma may_read0_app_sl :
-    forall sl sl' l idx,
-      may_read0 (sl ++ sl') l idx =
+    forall (sl sl' l: Log) idx,
+      may_read0 (log_app sl sl') l idx =
       may_read0 sl l idx && may_read0 sl' l idx.
   Proof.
     unfold may_read0; intros.
     rewrite !log_forallb_app.
+    set_forallb_fns.
     ring_simplify.
     f_equal.
     f_equal.
@@ -148,8 +152,8 @@ Section Proof.
   Qed.
 
   Lemma may_read1_app :
-    forall sl sl' idx,
-      may_read1 (sl ++ sl') idx =
+    forall (sl sl': Log) idx,
+      may_read1 (log_app sl sl') idx =
       may_read1 sl idx && may_read1 sl' idx.
   Proof.
     unfold may_read1; intros.
@@ -158,8 +162,8 @@ Section Proof.
   Qed.
 
   Lemma may_write_app_sl :
-    forall sl sl' l lvl idx,
-      may_write (sl ++ sl') l lvl idx =
+    forall (sl sl': Log) l lvl idx,
+      may_write (log_app sl sl') l lvl idx =
       may_write sl l lvl idx && may_write sl' l lvl idx.
   Proof.
     unfold may_write; intros.
@@ -169,21 +173,10 @@ Section Proof.
       reflexivity.
   Qed.
 
-  Lemma log_find_in:
-    forall l idx P e,
-      log_find l idx P = Some e ->
-      List.In e l /\ e.(reg) = idx /\ P e.(kind) e.(port) e.(val) = true.
-  Proof.
-    unfold log_find; intros * H; destruct e; apply find_some in H.
-    destruct (PeanoNat.Nat.eq_dec idx reg); subst; cbn in *.
-    - intuition eauto.
-    - intuition discriminate.
-  Qed.
-
-  Lemma find_none_notb {A}:
-    forall (P: A -> bool) l,
-      (forall a, List.In a l -> P a = false) ->
-      find P l = None.
+  Lemma find_none_notb {A B}:
+    forall (P: A -> option B) l,
+      (forall a, List.In a l -> P a = None) ->
+      list_find_opt P l = None.
   Proof.
     induction l; cbn; intros * Hnot.
     - reflexivity.
@@ -194,7 +187,7 @@ Section Proof.
   Ltac bool_step :=
     match goal with
     | _ => progress Common.bool_step
-    | [ H: log_forallb (_ ++ _) _ _ = _ |- _ ] =>
+    | [ H: log_forallb (log_app _ _) _ _ = _ |- _ ] =>
       rewrite log_forallb_app in H
     end.
 
@@ -211,39 +204,15 @@ Section Proof.
     apply find_none_notb.
     intros a HIn.
     repeat match goal with
-           | [ H: forall (_: LogEntry), _ |- _ ] => specialize (H a HIn)
+           | [ H: forall (_: LogEntry _), _ |- _ ] => specialize (H a HIn)
            end.
-    destruct a; cbn in *; destruct PeanoNat.Nat.eq_dec, kind; subst; try reflexivity.
+    destruct a; cbn in *; destruct kind; subst; try reflexivity.
     destruct port; discriminate.
   Qed.
 
-  Lemma find_app {A} :
-    forall sl sl' (P: A -> bool),
-      find P (sl ++ sl') =
-      match find P sl with
-      | Some e => Some e
-      | None => find P sl'
-      end.
-  Proof.
-    induction sl; cbn; intros.
-    - reflexivity.
-    - destruct (P a); try rewrite IHsl; reflexivity.
-  Qed.
-
-  Lemma log_find_app :
-    forall sl sl' idx P,
-      log_find (sl ++ sl') idx P =
-      match log_find sl idx P with
-      | Some e => Some e
-      | None => log_find sl' idx P
-      end.
-  Proof.
-    unfold log_find; eauto using find_app.
-  Qed.
-
   Lemma latest_write0_app :
-    forall sl sl' idx,
-      latest_write0 (sl ++ sl') idx =
+    forall (sl sl': Log) idx,
+      latest_write0 (log_app sl sl') idx =
       match latest_write0 sl idx with
       | Some e => Some e
       | None => latest_write0 sl' idx
@@ -252,303 +221,125 @@ Section Proof.
     unfold latest_write0; eauto using log_find_app.
   Qed.
 
-  Lemma assert_size_success :
-    forall v n v',
-      assert_size v n = Success v' ->
-      v = v' /\ length v' = n.
-  Proof.
-    unfold assert_size; intros; destruct PeanoNat.Nat.eq_dec;
-      firstorder (congruence || discriminate).
-  Qed.
-
-  Lemma assert_size_eq :
-    forall a n,
-      length a = n ->
-      assert_size a n = Success a.
-  Proof.
-    unfold assert_size; intros; destruct PeanoNat.Nat.eq_dec; firstorder.
-  Qed.
-
   Lemma may_read1_latest_write_is_0 :
-    forall l idx,
+    forall (l: Log) idx,
       may_read1 l idx = true ->
       latest_write l idx = latest_write0 l idx.
   Proof.
-    induction l.
+    unfold may_read1, latest_write, latest_write0, log_find, log_forallb.
+    intros * H.
+    set (getenv REnv l idx) as ls in *; cbn in *; clearbody ls.
+    set (R idx) as t in *; cbn in *.
+    revert H.
+    induction ls.
     - reflexivity.
-    - intros * H.
-      simpl in H.
+    - intros * H; cbn in H.
       repeat (bool_step || cleanup_step).
-      destruct a; cbn; destruct PeanoNat.Nat.eq_dec, kind; cbn;
-        try apply (IHl _ ltac:(eassumption)).
-      destruct port; cbn in *; try discriminate; reflexivity.
-  Qed.
-
-  Lemma fold_left2_result_failure {A B B': Type} (f: A -> B -> B' -> result A) :
-    forall (l: list B) (l': list B') (a0: result A),
-      a0 = CannotRun \/ a0 = Stuck ->
-      fold_left2 (fun acc b b' =>
-                    result_bind acc (fun acc =>
-                    f acc b b')) l l' a0 = a0.
-  Proof.
-    induction l; destruct 1; destruct l'; subst; cbn in *; eauto.
-  Qed.
-
-  Require Import TypeSafety.
-
-  Lemma log_write_consistent_latest_write :
-    forall l (v: fenv nat nat) idx e n,
-      log_write_consistent l v ->
-      fn v idx n ->
-      latest_write l idx = Some e ->
-      length (e.(val)) = n.
-  Proof.
-    intros * Hcst Hin Hwrt.
-    pose proof (log_find_in _ _ _ _ Hwrt); cbn in *.
-    repeat cleanup_step; destruct e, kind; cbn in *; try discriminate.
-    eauto using eq_sym.
+      rewrite (IHls ltac:(eassumption)).
+      unfold rlog_latest_write_fn; cbn.
+      destruct a, kind, port; try discriminate; reflexivity.
   Qed.
 
   Ltac t_step :=
     match goal with
     | _ => cleanup_step
-    | [ H: context[may_read0 (_ ++ _) _ _] |- _ ] =>
+    | [ H: context[may_read0 (log_app _ _) _ _] |- _ ] =>
       rewrite may_read0_app_sl in H
-    | [ H: context[may_read1 (_ ++ _) _] |- _ ] =>
+    | [ H: context[may_read1 (log_app _ _) _] |- _ ] =>
       rewrite may_read1_app in H
-    | [ H: context[may_write (_ ++ _) _ _ _] |- _ ] =>
+    | [ H: context[may_write (log_app _ _) _ _ _] |- _ ] =>
       rewrite may_write_app_sl in H
-    | [ H: Success _ = Success _ |- _ ] =>
+    | [ H: Some _ = Some _ |- _ ] =>
       inversion H; subst; clear H
-    | [ H: bool_result _ = Success _ |- _ ] =>
-      apply bool_result_Success in H
-    | [ H: opt_result Stuck ?x = Success _ |- _ ] =>
-      destruct x eqn:?; subst; cbn in H; try discriminate
-    | [ H: result_bind ?x _ = Success _ |- _ ] =>
+    | [ H: opt_bind ?x _ = Some _ |- _ ] =>
       destruct x eqn:?; cbn in H; try discriminate
-    | [ H: result_map ?x _ = Success _ |- _ ] =>
-      destruct x eqn:?; cbn in H; try discriminate
-    | [ H: match ?x with _ => _ end = Success _ |- _ ] =>
+    | [ H: match ?x with _ => _ end = Some _ |- _ ] =>
       destruct x eqn:?; subst; cbn in H; try discriminate
-    | [ H: assert_size _ _ = Success _ |- _ ] =>
-      apply assert_size_Success in H
-    | [ H: env_related (Env := ?Env) ?f ?tenv ?env,
-           H': getenv ?env ?k = Some ?v |- _ ] =>
-      pose_once (and_fst H k v) H'
-    | [ H: env_related ?f ?tenv ?env,
-           H': getenv ?env ?k = None |- _ ] =>
-      pose_once (and_snd H k) H'
     | _ =>
       bool_step
     | [ H: match ?x with _ => _ end = ?c |- _ ] =>
       let c_hd := constr_hd c in
       is_constructor c_hd; destruct x eqn:?
-    | _ => progress (unfold assert_bits in *)
+    | [ H: ?x = _ |- context[match ?x with _ => _ end] ] =>
+      rewrite H
     end.
 
   Ltac t :=
     repeat t_step.
 
-  Lemma interp_rule_Success_call_consistent:
-    forall (args : list (rule var_t fn_t)) (R : env_t REnv) (v : fenv nat nat)
-      (Sigma : env_t SigmaEnv) (Gamma : env_t GammaEnv) (sched_log rule_log l : Log) argvs,
-      env_related (length (A:=bool)) v R ->
-      log_write_consistent rule_log v ->
-      Forall
-        (fun r : rule var_t fn_t =>
-           forall (R : env_t REnv) (v : fenv nat nat) (Sigma : env_t SigmaEnv)
-             (Gamma : env_t GammaEnv) (sl rule_log l : Log) (val : value),
-             env_related (length (A:=bool)) v R ->
-             log_write_consistent rule_log v ->
-             interp_rule R Sigma Gamma sl rule_log r = Success (l, val) -> log_write_consistent l v) args ->
-      forall (l1 : list bits) (argSizes : list nat),
-        length args = length argSizes ->
-        fold_left2_result
-          (fun '(rule_log, argvs) arg size =>
-          result_bind (interp_rule R Sigma Gamma sched_log rule_log arg) (fun '(rule_log, argv) =>
-          result_map (assert_bits argv size) (fun bs =>
-          (rule_log, bs :: argvs)))) args argSizes (rule_log, argvs) =
-        Success (l, l1) -> log_write_consistent l v.
+  Lemma interp_expr_commit:
+    forall {sig tau} (ex: expr sig tau) (Gamma: vcontext sig) (sl sl': Log) rule_log lv,
+      interp_expr r sigma Gamma (log_app sl sl') rule_log ex = Some lv ->
+      interp_expr (commit_update r sl') sigma Gamma sl rule_log ex = Some lv.
   Proof.
-    induction args; destruct argSizes; cbn in *; inversion 1; intros.
-    - t; eassumption.
-    - destruct interp_rule as [(?&[ | ?]) | | ] eqn:?; cbn in *.
-      + rewrite fold_left2_result_failure in H3; eauto || discriminate.
-      + unfold assert_size in *.
-        destruct PeanoNat.Nat.eq_dec; cbn in *.
-        * inversion H1; subst.
-          eapply (IHargs R v Sigma Gamma sched_log l0); eauto.
-        * rewrite fold_left2_result_failure in H3; eauto || discriminate.
-      + rewrite fold_left2_result_failure in H3; eauto || discriminate.
-      + rewrite fold_left2_result_failure in H3; eauto || discriminate.
-  Qed.
+    induction ex; cbn; intros Gamma sl sl' rule_log lv HSome; try congruence.
 
-  Lemma interp_rule_Success_consistent:
-    forall r {R v Sigma Gamma} sl rule_log l val,
-      env_related (@length bool) v R ->
-      log_write_consistent rule_log v ->
-      interp_rule R Sigma Gamma sl rule_log r = Success (l, val) ->
-      log_write_consistent l v.
-    induction r using rule_ind'; cbn; intros; try solve [t; eauto with types].
-    - t.
-      destruct a, sig; cbn in *.
-      eapply interp_rule_Success_call_consistent; eauto.
-  Qed.
-
-  Lemma interp_rule_commit_call:
-    forall args : list (rule var_t fn_t),
-      Forall
-        (fun r : rule var_t fn_t =>
-           forall (R : env_t REnv) (v : fenv nat nat) (Sigma : env_t SigmaEnv)
-             (Gamma : env_t GammaEnv) (sl sl' rule_log l : Log) (val : value),
-             env_related (length (A:=bool)) v R ->
-             log_write_consistent sl v ->
-             log_write_consistent sl' v ->
-             interp_rule R Sigma Gamma (sl ++ sl') rule_log r = Success (l, val) ->
-             interp_rule (commit_update R sl') Sigma Gamma sl rule_log r = Success (l, val)) args ->
-      forall (R : env_t REnv) (Sigma : env_t SigmaEnv) (Gamma : env_t GammaEnv) (sl sl' rule_log l : Log)
-             (argSizes : list nat) v argvs,
-        length args = length argSizes ->
-        env_related (length (A:=bool)) v R ->
-        log_write_consistent sl v ->
-        log_write_consistent sl' v ->
-        forall l1 : list bits,
-          fold_left2_result
-            (fun '(rule_log, argvs) arg size =>
-                result_bind (interp_rule R Sigma Gamma (sl ++ sl') rule_log arg) (fun '(rule_log, argv) =>
-                result_map (assert_bits argv size) (fun bs =>
-                (rule_log, bs :: argvs)))) args argSizes (rule_log, argvs) =
-          Success (l, l1) ->
-          fold_left2_result
-            (fun '(rule_log, argvs) arg size =>
-                result_bind (interp_rule (commit_update R sl') Sigma Gamma sl rule_log arg) (fun '(rule_log, argv) =>
-                result_map (assert_bits argv size) (fun bs =>
-                (rule_log, bs :: argvs)))) args argSizes (rule_log, argvs) =
-          Success (l, l1).
-  Proof.
-    induction args; destruct argSizes; cbn in *; inversion 1; intros.
-    - t. reflexivity.
-    - destruct (interp_rule R Sigma Gamma (sl ++ sl') rule_log a) as [(? & ?) | | ] eqn:?; cbn in *.
-      + inversion H; subst.
-        eapply H8 in Heqr; eauto using log_write_consistent_nil.
-        rewrite Heqr; cbn.
-        destruct assert_bits; cbn in *.
-        * move IHargs at bottom.
-          unfold fold_left2_result in *.
-          eapply IHargs; eauto.
-        * rewrite fold_left2_result_failure in H5; eauto || discriminate.
-        * rewrite fold_left2_result_failure in H5; eauto || discriminate.
-      + rewrite fold_left2_result_failure in H5; eauto || discriminate.
-      + rewrite fold_left2_result_failure in H5; eauto || discriminate.
-  Qed.
-
-  Lemma interp_rule_commit:
-    forall r {R v Sigma Gamma} sl sl' rule_log l val,
-      env_related (@length bool) v R ->
-      log_write_consistent sl v ->
-      log_write_consistent sl' v ->
-      interp_rule R Sigma Gamma (sl ++ sl') rule_log r = Success (l, val) ->
-      interp_rule (commit_update R sl') Sigma Gamma sl rule_log r = Success (l, val).
-  Proof.
-    induction r using rule_ind'; cbn; intros R v Sigma Gamma * Heqiv Hcst Hcst'; intros; try congruence.
-    - (* Bind *)
-      t. erewrite IHr1; cbn; eauto.
-    - (* If *)
-      t;
-        erewrite IHr1; cbn; eauto;
-          [ erewrite IHr2; cbn; eauto |
-            erewrite IHr3; cbn; eauto ].
     - destruct port.
       + (* Read0 *)
         t.
-
         erewrite getenv_commit_update by eassumption.
-        destruct latest_write eqn:?; cbn.
-        * destruct l; cbn.
-          rewrite H1; cbn.
-          erewrite may_read0_no_writes in Heqo0; eauto.
-          discriminate.
-
-        * rewrite H1; cbn.
-          reflexivity.
+        erewrite may_read0_no_writes by eauto.
+        reflexivity.
 
       + (* Read1 *)
-        t;
-          rewrite app_assoc in Heqo0;
-          rewrite latest_write0_app in Heqo0;
-          t;
-          erewrite getenv_commit_update by eassumption.
-        destruct latest_write eqn:?; cbn.
-        * destruct l; cbn.
-          rewrite H2; cbn.
-
-          lazymatch goal with
-          | [ H: latest_write ?l ?idx = Some ?entry |- _ ] =>
-            let v0 := (eval cbn in entry.(Semantics.val)) in
-            change v0 with (entry.(Semantics.val));
-            erewrite log_write_consistent_latest_write
-          end; eauto.
-          rewrite assert_size_eq by auto; cbn.
-          reflexivity.
-        * rewrite H2; cbn.
-          rewrite assert_size_eq by auto; cbn.
-          reflexivity.
-        *
-
+        t.
+        rewrite log_app_assoc.
+        rewrite (latest_write0_app (log_app _ _)).
+        destruct latest_write0.
+        * reflexivity.
+        * erewrite getenv_commit_update by eassumption.
           rewrite may_read1_latest_write_is_0 by eassumption.
-
-          rewrite Heqo0; cbn.
-          rewrite H2; cbn.
           reflexivity.
 
-        * rewrite may_read1_latest_write_is_0 by eassumption.
-          rewrite Heqo0; cbn.
-          rewrite H1; cbn.
-          reflexivity.
+    - (* Call *)
+      t.
+      erewrite IHex1 by eauto; cbn.
+      erewrite IHex2 by eauto; cbn.
+      reflexivity.
+  Qed.
 
-    - t.
-      erewrite getenv_commit_update by eassumption.
-      destruct latest_write eqn:?; cbn.
-      + destruct l; cbn.
-        erewrite IHr by eassumption; cbn.
-        rewrite H1; cbn.
-
-          lazymatch goal with
-          | [ H: latest_write ?l ?idx = Some ?entry |- _ ] =>
-            let v0 := (eval cbn in entry.(Semantics.val)) in
-            change v0 with (entry.(Semantics.val));
-            erewrite log_write_consistent_latest_write
-          end; eauto.
-          rewrite assert_size_eq by auto; cbn.
-
-        reflexivity.
-      + erewrite IHr by eassumption; cbn.
-        rewrite H1; cbn.
-        rewrite assert_size_eq by auto; cbn.
-        reflexivity.
-
-    - t.
-      destruct a, sig; cbn in *.
-      erewrite interp_rule_commit_call; cbn; eauto.
+  Lemma interp_rule_commit:
+    forall {sig} (rl: rule sig) (Gamma: vcontext sig) (sl sl': Log) rule_log l,
+      interp_rule r sigma Gamma (log_app sl sl') rule_log rl = Some l ->
+      interp_rule (commit_update r sl') sigma Gamma sl rule_log rl = Some l.
+  Proof.
+    induction rl; cbn; intros Gamma sl sl' rule_log l HSome; try congruence.
+    - (* Seq *)
+      t.
+      erewrite IHrl1 by eauto; cbn.
+      erewrite IHrl2 by eauto; reflexivity.
+    - (* Bind *)
+      t.
+      erewrite interp_expr_commit by eauto; cbn.
+      erewrite IHrl by eauto; reflexivity.
+    - (* If *)
+      t;
+        erewrite interp_expr_commit by eauto; cbn;
+          [ erewrite IHrl1 by eauto; cbn |
+            erewrite IHrl2 by eauto; cbn ];
+          t; reflexivity.
+    - (* Write *)
+      t.
+      erewrite interp_expr_commit by eauto; cbn.
+      t; reflexivity.
   Qed.
 
   Lemma OneRuleAtATime':
-    forall R v Sigma s rs R' l0,
-      env_related (@length bool) v R ->
-      log_write_consistent l0 v ->
-      interp_scheduler_trace_and_update R Sigma l0 s = Some (rs, R') ->
-      List.fold_left (update_one Sigma) rs (Some (commit_update R l0)) = Some R'.
+    forall s rs r' l0,
+      interp_scheduler_trace_and_update l0 s = Some (rs, r') ->
+      List.fold_left (update_one) rs (Some (commit_update r l0)) = Some r'.
   Proof.
     induction s; cbn.
-    - inversion 3; subst; cbn in *; eauto.
-    - intros * Hequiv Hcst Heq.
-      unfold interp_scheduler_trace_and_update in *; cbn in *.
+    - inversion 1; subst; cbn in *; eauto.
+    - unfold interp_scheduler_trace_and_update; cbn; intros; t.
+      erewrite interp_rule_commit.
+        by eauto.
       destruct interp_rule as [(l & ?) | | ] eqn:?; try discriminate.
 
       + destruct interp_scheduler_trace as [(? & ?) | ] eqn:?; try discriminate;
           inversion Heq; subst; clear Heq; cbn.
         unfold interp_scheduler_trace_and_update; cbn.
-        enough (interp_rule (commit_update R l0) Sigma env_nil [] [] r = Success (l, v0)) as H.
+        enough (interp_rule (commit_update R l0) Sigma env_nil [] [] r = Some (l, v0)) as H.
         rewrite H.
         rewrite commit_update_assoc.
         rewrite app_nil_r.
@@ -556,7 +347,7 @@ Section Proof.
         eassumption.
         apply log_write_consistent_app.
         eassumption.
-        eauto using interp_rule_Success_consistent, log_write_consistent_nil.
+        eauto using interp_rule_Some_consistent, log_write_consistent_nil.
         rewrite Heqo.
         reflexivity.
         eapply interp_rule_commit.
