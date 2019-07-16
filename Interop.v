@@ -31,6 +31,8 @@ Section Interop.
           Typically an inductive [R0 | R1 | …] *)
       vp_reg_types: forall r: vp_reg_t, type;
       (** [vp_reg_types]: The type of data stored in each register. *)
+      vp_reg_init: forall r: vp_reg_t, vp_reg_types r;
+      (** [vp_reg_types]: The type of data stored in each register. *)
       vp_reg_finite: FiniteType vp_reg_t;
       (** [vp_reg_finite]: We need to be able to enumerate the set of registers
           that the program uses. *)

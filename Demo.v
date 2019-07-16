@@ -225,6 +225,7 @@ Module Collatz.
   Definition package :=
     {| vp_reg_t := reg_t;
        vp_reg_types := R;
+       vp_reg_init := r;
        vp_reg_finite := _;
        vp_reg_Env := ContextEnv;
 

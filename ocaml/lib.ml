@@ -19,6 +19,12 @@ module PtrHash =
 module CircuitHashtbl = Hashtbl.Make(CircuitHash)
 module PtrHashtbl = Hashtbl.Make(PtrHash)
 
+type bits_const = {
+    bs_size: size_t;
+    bs_bits: bool list;
+    bs_val: int;
+  }
+
 type ffi_signature = {
     ffi_name: string;
     ffi_arg1size: size_t;
@@ -29,17 +35,12 @@ type ffi_signature = {
 type reg_signature = {
     reg_name: string;
     reg_size: size_t;
+    reg_init_val: bits_const;
   }
 
 type circuit_root = {
     root_reg: reg_signature;
     root_ptr: ptr_t;
-  }
-
-type bits_const = {
-    bs_size: size_t;
-    bs_bits: bool list;
-    bs_val: int;
   }
 
 type circuit =
@@ -86,9 +87,16 @@ let ffi_sig_of_custom_fn (pkg: Sga.verilogPackage) fn =
     ffi_arg2size = fsig.arg2Type;
     ffi_retsize = fsig.retType }
 
+let bits_const_of_bits sz bs =
+  { bs_size = sz;
+    bs_bits = Sga.vect_to_list sz bs;
+    bs_val = Sga.bits_to_nat sz bs }
+
 let reg_sig_of_rname (pkg: Sga.verilogPackage) r =
+  let sz = pkg.vp_reg_types r in
   { reg_name = string_of_coq_string (pkg.vp_reg_names r);
-    reg_size = pkg.vp_reg_types r }
+    reg_size = sz;
+    reg_init_val = bits_const_of_bits sz (pkg.vp_reg_init r) }
 
 let dedup_circuit (pkg: Sga.verilogPackage) : dedup_result =
   let circuit_to_ptr = CircuitHashtbl.create 50 in
@@ -113,9 +121,7 @@ let dedup_circuit (pkg: Sga.verilogPackage) : dedup_result =
          | Sga.CMux (sz, s, c1, c2) ->
             CMux (sz, aux s, aux c1, aux c2)
          | Sga.CConst (sz, bs) ->
-            CConst { bs_size = sz;
-                     bs_bits = Sga.vect_to_list sz bs;
-                     bs_val = Sga.bits_to_nat sz bs}
+            CConst (bits_const_of_bits sz bs)
          | Sga.CExternal (Sga.PrimFn fn, c1, c2) ->
             CPrimitive (fn, aux c1, aux c2)
          | Sga.CExternal (Sga.CustomFn fn, c1, c2) ->
@@ -132,8 +138,7 @@ let dedup_circuit (pkg: Sga.verilogPackage) : dedup_result =
   (* PtrHashtbl.fold (fun k v acc -> (k, v) :: acc)  ptr_to_object []) *)
   { dedup_roots = List.map (fun reg ->
                       let c = Sga.getenv pkg.vp_reg_Env pkg.vp_circuit reg in
-                      { root_reg = { reg_name = string_of_coq_string (pkg.vp_reg_names reg);
-                                     reg_size = pkg.vp_reg_types reg };
+                      { root_reg = reg_sig_of_rname pkg reg;
                         root_ptr = aux c })
                     pkg.vp_reg_finite.finite_elems;
     dedup_ptrs = ptr_to_object }
