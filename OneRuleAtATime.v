@@ -1,91 +1,102 @@
-Require Import SGA.Common SGA.Environments SGA.Syntax SGA.Semantics.
+Require Import SGA.Common SGA.Syntax SGA.Types SGA.Semantics.
+Require Import Coq.Lists.List.
 
-Require Import List.
 Import ListNotations.
-
 Open Scope bool_scope.
 
 Section EnvUpdates.
-  Context {RegEnv: Env nat bits}.
+  Context {reg_t: Type}.
+  Context {R: reg_t -> type}.
+  Context {REnv: Env reg_t}.
 
-  Definition commit_update V0 log : RegEnv.(env_t) :=
-    List.fold_right (fun entry V => match entry with
-                                  | LE LogWrite _ r bs => putenv V r bs
-                                  | _ => V
-                                  end)
-                    V0 log.
+  Definition commit_update r0 (log: Log reg_t R) : REnv.(env_t) R :=
+    List.fold_right (fun entry r => match entry with
+                                 | LE LogWrite _ idx bs => REnv.(putenv) r idx bs
+                                 | _ => r
+                                 end)
+                    r0 log.
 
   Lemma commit_update_assoc:
-    forall (V : RegEnv.(env_t)) (l l' : Log),
-      commit_update (commit_update V l) l' = commit_update V (l' ++ l).
+    forall (r : REnv.(env_t) R) (l l' : Log reg_t R),
+      commit_update (commit_update r l) l' = commit_update r (l' ++ l).
   Proof.
     unfold commit_update; intros; rewrite fold_right_app; reflexivity.
   Qed.
 End EnvUpdates.
 
-Section OneRuleAtATime.
-  Context {TVar: Type}.
-  Context {TFn: Type}.
+Section Proof.
+  Context {var_t reg_t fn_t: Type}.
+  Context {reg_t_eq_dec: EqDec reg_t}.
 
-  Context {RegEnv: Env nat bits}.
-  Context {SigmaEnv: Env TFn ExternalFunction}.
-  Context {GammaEnv: Env TVar value}.
+  Context {R: reg_t -> type}.
+  Context {Sigma: fn_t -> ExternalSignature}.
+  Context {REnv: Env reg_t}.
+  Context (r: REnv.(env_t) R).
+  Context (sigma: forall f, Sigma f).
+  Open Scope bool_scope.
 
-  Fixpoint interp_scheduler_trace
-        (V: RegEnv.(env_t))
-        (Sigma: SigmaEnv.(env_t))
-        (sched_log: Log)
-        (s: scheduler TVar TFn)
-        {struct s} :=
+  Notation Log := (Log reg_t R).
+  Notation expr := (expr var_t R Sigma).
+  Notation rule := (rule var_t R Sigma).
+  Notation scheduler := (scheduler var_t R Sigma).
+
+  Fixpoint interp_scheduler'_trace
+         (sched_log: Log)
+         (s: scheduler)
+         {struct s} :=
   match s with
   | Done => Some ([], sched_log)
-  | Try r s1 s2 =>
-    match interp_rule V Sigma env_nil sched_log [] r with
-    | Success (l, _) => match interp_scheduler_trace V Sigma (l ++ sched_log) s1 with
-                       | Some (rs, log) => Some (r :: rs, log)
-                       | None => None
-                       end
-    | CannotRun => interp_scheduler_trace V Sigma sched_log s2
-    | Stuck => None
+  | Try rl s1 s2 =>
+    match interp_rule r sigma CtxEmpty sched_log [] rl with
+    | Some l => match interp_scheduler'_trace (l ++ sched_log) s1 with
+               | Some (rs, log) => Some (rl :: rs, log)
+               | None => None
+               end
+    | CannotRun => interp_scheduler'_trace sched_log s2
     end
   end.
 
   Definition interp_scheduler_trace_and_update
-        (V: RegEnv.(env_t))
-        (Sigma: SigmaEnv.(env_t))
         l
-        (s: scheduler TVar TFn) :=
-    match interp_scheduler_trace V Sigma l s with
-    | Some (rs, log) => Some (rs, commit_update V log)
+        (s: scheduler) :=
+    match interp_scheduler'_trace l s with
+    | Some (rs, log) => Some (rs, commit_update r log)
     | None => None
     end.
 
-  Definition update_one Sigma V r :=
-    match V with
-    | None => None
-    | Some V => match interp_scheduler V Sigma [] (Try r Done Done) with
-               | Some log => Some (commit_update V log)
-               | None => None
-               end
-    end.
+  Definition update_one sigma r rl: option (REnv.(env_t) R) :=
+    let/opt rl := rl in
+    let/opt log := @interp_scheduler' var_t reg_t fn_t _ R Sigma REnv r sigma [] (Try rl Done Done) in
+    Some (commit_update r log).
 
-  Definition latest_write l idx :=
-    log_find l idx (fun kind _ _ => match kind with
-                                 | LogWrite => true
-                                 | _ => false
-                                 end).
+  Definition latest_write' (l: Log) idx :=
+    log_find l idx (fun kind _ => match kind with
+                               | LogWrite => true
+                               | _ => false
+                               end).
+
+  Definition latest_write (log: Log) idx : option (R idx).
+  Proof.
+    destruct (latest_write' log idx) as [ [ kd pt reg val ] | ] eqn:Heq.
+    - unfold latest_write', log_find in Heq.
+      apply find_some_transparent in Heq.
+      destruct Heq.
+      destruct (eq_dec idx reg) in *; try discriminate; subst.
+      destruct kd in *; try discriminate; subst.
+      exact (Some val).
+    - exact None.
+  Defined.
 
   Lemma getenv_commit_update :
-    forall sl V idx val,
-      getenv V idx = Some val ->
-      getenv (commit_update V sl) idx =
+    forall sl R idx,
+      REnv.(getenv) (commit_update R sl) idx =
       match latest_write sl idx with
-      | Some {| val := val' |} => Some val'
-      | None => Some val
+      | Some v' => v'
+      | None => REnv.(getenv) R idx
       end.
   Proof.
     unfold commit_update; induction sl; cbn; intros.
-    - assumption.
+    - reflexivity.
     - destruct a, kind, PeanoNat.Nat.eq_dec; subst;
         try (erewrite IHsl by eassumption;
              reflexivity).
@@ -106,7 +117,7 @@ Section OneRuleAtATime.
   Require Import Ring_theory Ring Coq.setoid_ring.Ring.
 
   Lemma log_forallb_app:
-    forall l l' reg (f: LogEntryKind -> Level -> bits -> bool),
+    forall l l' reg (f: LogEntryKind -> Port -> bits -> bool),
       log_forallb (l ++ l') reg f =
       log_forallb l reg f && log_forallb l' reg f.
   Proof.
@@ -161,7 +172,7 @@ Section OneRuleAtATime.
   Lemma log_find_in:
     forall l idx P e,
       log_find l idx P = Some e ->
-      List.In e l /\ e.(reg) = idx /\ P e.(kind) e.(level) e.(val) = true.
+      List.In e l /\ e.(reg) = idx /\ P e.(kind) e.(port) e.(val) = true.
   Proof.
     unfold log_find; intros * H; destruct e; apply find_some in H.
     destruct (PeanoNat.Nat.eq_dec idx reg); subst; cbn in *.
@@ -203,7 +214,7 @@ Section OneRuleAtATime.
            | [ H: forall (_: LogEntry), _ |- _ ] => specialize (H a HIn)
            end.
     destruct a; cbn in *; destruct PeanoNat.Nat.eq_dec, kind; subst; try reflexivity.
-    destruct level; discriminate.
+    destruct port; discriminate.
   Qed.
 
   Lemma find_app {A} :
@@ -270,7 +281,7 @@ Section OneRuleAtATime.
       repeat (bool_step || cleanup_step).
       destruct a; cbn; destruct PeanoNat.Nat.eq_dec, kind; cbn;
         try apply (IHl _ ltac:(eassumption)).
-      destruct level; cbn in *; try discriminate; reflexivity.
+      destruct port; cbn in *; try discriminate; reflexivity.
   Qed.
 
   Lemma fold_left2_result_failure {A B B': Type} (f: A -> B -> B' -> result A) :
@@ -339,22 +350,22 @@ Section OneRuleAtATime.
     repeat t_step.
 
   Lemma interp_rule_Success_call_consistent:
-    forall (args : list (rule TVar TFn)) (V : env_t RegEnv) (v : fenv nat nat)
+    forall (args : list (rule var_t fn_t)) (R : env_t REnv) (v : fenv nat nat)
       (Sigma : env_t SigmaEnv) (Gamma : env_t GammaEnv) (sched_log rule_log l : Log) argvs,
-      env_related (length (A:=bool)) v V ->
+      env_related (length (A:=bool)) v R ->
       log_write_consistent rule_log v ->
       Forall
-        (fun r : rule TVar TFn =>
-           forall (V : env_t RegEnv) (v : fenv nat nat) (Sigma : env_t SigmaEnv)
+        (fun r : rule var_t fn_t =>
+           forall (R : env_t REnv) (v : fenv nat nat) (Sigma : env_t SigmaEnv)
              (Gamma : env_t GammaEnv) (sl rule_log l : Log) (val : value),
-             env_related (length (A:=bool)) v V ->
+             env_related (length (A:=bool)) v R ->
              log_write_consistent rule_log v ->
-             interp_rule V Sigma Gamma sl rule_log r = Success (l, val) -> log_write_consistent l v) args ->
+             interp_rule R Sigma Gamma sl rule_log r = Success (l, val) -> log_write_consistent l v) args ->
       forall (l1 : list bits) (argSizes : list nat),
         length args = length argSizes ->
         fold_left2_result
           (fun '(rule_log, argvs) arg size =>
-          result_bind (interp_rule V Sigma Gamma sched_log rule_log arg) (fun '(rule_log, argv) =>
+          result_bind (interp_rule R Sigma Gamma sched_log rule_log arg) (fun '(rule_log, argv) =>
           result_map (assert_bits argv size) (fun bs =>
           (rule_log, bs :: argvs)))) args argSizes (rule_log, argvs) =
         Success (l, l1) -> log_write_consistent l v.
@@ -366,17 +377,17 @@ Section OneRuleAtATime.
       + unfold assert_size in *.
         destruct PeanoNat.Nat.eq_dec; cbn in *.
         * inversion H1; subst.
-          eapply (IHargs V v Sigma Gamma sched_log l0); eauto.
+          eapply (IHargs R v Sigma Gamma sched_log l0); eauto.
         * rewrite fold_left2_result_failure in H3; eauto || discriminate.
       + rewrite fold_left2_result_failure in H3; eauto || discriminate.
       + rewrite fold_left2_result_failure in H3; eauto || discriminate.
   Qed.
 
   Lemma interp_rule_Success_consistent:
-    forall r {V v Sigma Gamma} sl rule_log l val,
-      env_related (@length bool) v V ->
+    forall r {R v Sigma Gamma} sl rule_log l val,
+      env_related (@length bool) v R ->
       log_write_consistent rule_log v ->
-      interp_rule V Sigma Gamma sl rule_log r = Success (l, val) ->
+      interp_rule R Sigma Gamma sl rule_log r = Success (l, val) ->
       log_write_consistent l v.
     induction r using rule_ind'; cbn; intros; try solve [t; eauto with types].
     - t.
@@ -385,39 +396,39 @@ Section OneRuleAtATime.
   Qed.
 
   Lemma interp_rule_commit_call:
-    forall args : list (rule TVar TFn),
+    forall args : list (rule var_t fn_t),
       Forall
-        (fun r : rule TVar TFn =>
-           forall (V : env_t RegEnv) (v : fenv nat nat) (Sigma : env_t SigmaEnv)
+        (fun r : rule var_t fn_t =>
+           forall (R : env_t REnv) (v : fenv nat nat) (Sigma : env_t SigmaEnv)
              (Gamma : env_t GammaEnv) (sl sl' rule_log l : Log) (val : value),
-             env_related (length (A:=bool)) v V ->
+             env_related (length (A:=bool)) v R ->
              log_write_consistent sl v ->
              log_write_consistent sl' v ->
-             interp_rule V Sigma Gamma (sl ++ sl') rule_log r = Success (l, val) ->
-             interp_rule (commit_update V sl') Sigma Gamma sl rule_log r = Success (l, val)) args ->
-      forall (V : env_t RegEnv) (Sigma : env_t SigmaEnv) (Gamma : env_t GammaEnv) (sl sl' rule_log l : Log)
+             interp_rule R Sigma Gamma (sl ++ sl') rule_log r = Success (l, val) ->
+             interp_rule (commit_update R sl') Sigma Gamma sl rule_log r = Success (l, val)) args ->
+      forall (R : env_t REnv) (Sigma : env_t SigmaEnv) (Gamma : env_t GammaEnv) (sl sl' rule_log l : Log)
              (argSizes : list nat) v argvs,
         length args = length argSizes ->
-        env_related (length (A:=bool)) v V ->
+        env_related (length (A:=bool)) v R ->
         log_write_consistent sl v ->
         log_write_consistent sl' v ->
         forall l1 : list bits,
           fold_left2_result
             (fun '(rule_log, argvs) arg size =>
-                result_bind (interp_rule V Sigma Gamma (sl ++ sl') rule_log arg) (fun '(rule_log, argv) =>
+                result_bind (interp_rule R Sigma Gamma (sl ++ sl') rule_log arg) (fun '(rule_log, argv) =>
                 result_map (assert_bits argv size) (fun bs =>
                 (rule_log, bs :: argvs)))) args argSizes (rule_log, argvs) =
           Success (l, l1) ->
           fold_left2_result
             (fun '(rule_log, argvs) arg size =>
-                result_bind (interp_rule (commit_update V sl') Sigma Gamma sl rule_log arg) (fun '(rule_log, argv) =>
+                result_bind (interp_rule (commit_update R sl') Sigma Gamma sl rule_log arg) (fun '(rule_log, argv) =>
                 result_map (assert_bits argv size) (fun bs =>
                 (rule_log, bs :: argvs)))) args argSizes (rule_log, argvs) =
           Success (l, l1).
   Proof.
     induction args; destruct argSizes; cbn in *; inversion 1; intros.
     - t. reflexivity.
-    - destruct (interp_rule V Sigma Gamma (sl ++ sl') rule_log a) as [(? & ?) | | ] eqn:?; cbn in *.
+    - destruct (interp_rule R Sigma Gamma (sl ++ sl') rule_log a) as [(? & ?) | | ] eqn:?; cbn in *.
       + inversion H; subst.
         eapply H8 in Heqr; eauto using log_write_consistent_nil.
         rewrite Heqr; cbn.
@@ -432,14 +443,14 @@ Section OneRuleAtATime.
   Qed.
 
   Lemma interp_rule_commit:
-    forall r {V v Sigma Gamma} sl sl' rule_log l val,
-      env_related (@length bool) v V ->
+    forall r {R v Sigma Gamma} sl sl' rule_log l val,
+      env_related (@length bool) v R ->
       log_write_consistent sl v ->
       log_write_consistent sl' v ->
-      interp_rule V Sigma Gamma (sl ++ sl') rule_log r = Success (l, val) ->
-      interp_rule (commit_update V sl') Sigma Gamma sl rule_log r = Success (l, val).
+      interp_rule R Sigma Gamma (sl ++ sl') rule_log r = Success (l, val) ->
+      interp_rule (commit_update R sl') Sigma Gamma sl rule_log r = Success (l, val).
   Proof.
-    induction r using rule_ind'; cbn; intros V v Sigma Gamma * Heqiv Hcst Hcst'; intros; try congruence.
+    induction r using rule_ind'; cbn; intros R v Sigma Gamma * Heqiv Hcst Hcst'; intros; try congruence.
     - (* Bind *)
       t. erewrite IHr1; cbn; eauto.
     - (* If *)
@@ -447,7 +458,7 @@ Section OneRuleAtATime.
         erewrite IHr1; cbn; eauto;
           [ erewrite IHr2; cbn; eauto |
             erewrite IHr3; cbn; eauto ].
-    - destruct level.
+    - destruct port.
       + (* Read0 *)
         t.
 
@@ -522,11 +533,11 @@ Section OneRuleAtATime.
   Qed.
 
   Lemma OneRuleAtATime':
-    forall V v Sigma s rs V' l0,
-      env_related (@length bool) v V ->
+    forall R v Sigma s rs R' l0,
+      env_related (@length bool) v R ->
       log_write_consistent l0 v ->
-      interp_scheduler_trace_and_update V Sigma l0 s = Some (rs, V') ->
-      List.fold_left (update_one Sigma) rs (Some (commit_update V l0)) = Some V'.
+      interp_scheduler_trace_and_update R Sigma l0 s = Some (rs, R') ->
+      List.fold_left (update_one Sigma) rs (Some (commit_update R l0)) = Some R'.
   Proof.
     induction s; cbn.
     - inversion 3; subst; cbn in *; eauto.
@@ -537,7 +548,7 @@ Section OneRuleAtATime.
       + destruct interp_scheduler_trace as [(? & ?) | ] eqn:?; try discriminate;
           inversion Heq; subst; clear Heq; cbn.
         unfold interp_scheduler_trace_and_update; cbn.
-        enough (interp_rule (commit_update V l0) Sigma env_nil [] [] r = Success (l, v0)) as H.
+        enough (interp_rule (commit_update R l0) Sigma env_nil [] [] r = Success (l, v0)) as H.
         rewrite H.
         rewrite commit_update_assoc.
         rewrite app_nil_r.
@@ -563,9 +574,9 @@ Section OneRuleAtATime.
   Qed.
 
   Lemma interp_scheduler_trace_correct :
-    forall V Sigma s l0 log,
-      interp_scheduler V Sigma l0 s = Some log ->
-      exists rs, interp_scheduler_trace V Sigma l0 s = Some (rs, log).
+    forall R Sigma s l0 log,
+      interp_scheduler R Sigma l0 s = Some log ->
+      exists rs, interp_scheduler_trace R Sigma l0 s = Some (rs, log).
   Proof.
     induction s; cbn.
     - inversion 1; subst; eauto.
@@ -577,16 +588,16 @@ Section OneRuleAtATime.
       + discriminate.
   Qed.
 
-  Fixpoint scheduler_rules (s: scheduler TVar TFn) :=
+  Fixpoint scheduler_rules (s: scheduler) :=
     match s with
     | Done => []
     | Try r s1 s2 => r :: scheduler_rules s1 ++ scheduler_rules s2
     end.
 
   Lemma scheduler_trace_in_scheduler :
-    forall V Sigma s log l0 rs,
-      interp_scheduler_trace V Sigma l0 s = Some (rs, log) ->
-      (forall r : rule TVar TFn, In r rs -> In r (scheduler_rules s)).
+    forall R Sigma s log l0 rs,
+      interp_scheduler_trace R Sigma l0 s = Some (rs, log) ->
+      (forall r : rule var_t fn_t, In r rs -> In r (scheduler_rules s)).
   Proof.
     induction s; cbn in *.
     - inversion 1; subst; inversion 1.
@@ -596,11 +607,11 @@ Section OneRuleAtATime.
   Qed.
 
   Theorem OneRuleAtATime:
-    forall V Sigma s log,
-      interp_scheduler V Sigma [] s = Some log ->
+    forall R Sigma s log,
+      interp_scheduler R Sigma [] s = Some log ->
       exists rs,
         (forall r, List.In r rs -> List.In r (scheduler_rules s)) /\
-        List.fold_left (update_one Sigma) rs (Some V) = Some (commit_update V log).
+        List.fold_left (update_one Sigma) rs (Some R) = Some (commit_update R log).
   Proof.
     intros * H.
     apply interp_scheduler_trace_correct in H; destruct H as (rs & H).
