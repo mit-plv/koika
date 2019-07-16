@@ -25,8 +25,12 @@ type bits_const = {
     bs_val: int;
   }
 
+type fun_id_t =
+  | CustomFn of string
+  | PrimFn of Sga.prim_fn_t
+
 type ffi_signature = {
-    ffi_name: string;
+    ffi_name: fun_id_t;
     ffi_arg1size: size_t;
     ffi_arg2size: size_t;
     ffi_retsize: size_t
@@ -50,8 +54,7 @@ type circuit =
   | COr of ptr_t * ptr_t
   | CMux of size_t * ptr_t * ptr_t * ptr_t
   | CConst of bits_const (* TODO: keep constants shared? *)
-  | CPrimitive of Sga.prim_fn_t * ptr_t * ptr_t
-  | CCustom of ffi_signature * ptr_t * ptr_t
+  | CExternal of ffi_signature * ptr_t * ptr_t
   | CReadRegister of reg_signature
   | CAnnot of size_t * string * ptr_t
 
@@ -80,9 +83,19 @@ let string_of_bits bs =
 let string_of_coq_string chars =
   String.concat "" (List.map (String.make 1) chars)
 
-let ffi_sig_of_custom_fn (pkg: Sga.verilogPackage) fn =
-  let fsig = pkg.vp_custom_fn_types fn in
-  { ffi_name = string_of_coq_string (pkg.vp_custom_fn_names fn);
+let fun_name = function
+  | CustomFn fn -> fn
+  | PrimFn fn -> primitive_name fn
+
+let ffi_sig_of_fn (pkg: Sga.verilogPackage) fn =
+  let ffi_name, fsig = match fn with
+    | Sga.PrimFn fn ->
+       PrimFn fn,
+       Sga.prim_Sigma fn
+    | Sga.CustomFn fn ->
+       CustomFn (string_of_coq_string (pkg.vp_custom_fn_names fn)),
+       pkg.vp_custom_fn_types fn in
+  { ffi_name;
     ffi_arg1size = fsig.arg1Type;
     ffi_arg2size = fsig.arg2Type;
     ffi_retsize = fsig.retType }
@@ -122,10 +135,8 @@ let dedup_circuit (pkg: Sga.verilogPackage) : dedup_result =
             CMux (sz, aux s, aux c1, aux c2)
          | Sga.CConst (sz, bs) ->
             CConst (bits_const_of_bits sz bs)
-         | Sga.CExternal (Sga.PrimFn fn, c1, c2) ->
-            CPrimitive (fn, aux c1, aux c2)
-         | Sga.CExternal (Sga.CustomFn fn, c1, c2) ->
-            CCustom (ffi_sig_of_custom_fn pkg fn, aux c1, aux c2)
+         | Sga.CExternal (fn, c1, c2) ->
+            CExternal (ffi_sig_of_fn pkg fn, aux c1, aux c2)
          | Sga.CReadRegister r ->
             CReadRegister (reg_sig_of_rname pkg r)
          | Sga.CAnnot (sz, annot, c) ->
@@ -148,8 +159,7 @@ let obj_children = function
   | CAnd (c1, c2) -> [c1; c2]
   | COr (c1, c2) -> [c1; c2]
   | CMux (_sz, s, c1, c2) -> [s; c1; c2]
-  | CPrimitive (_fn, c1, c2) -> [c1; c2]
-  | CCustom (_ffi, c1, c2) -> [c1; c2]
+  | CExternal (_fn, c1, c2) -> [c1; c2]
   | CReadRegister _r -> []
   | CAnnot (_sz, _annot, c) -> [c]
   | CQuestionMark _ -> []
@@ -177,8 +187,7 @@ module Dot = struct
     | CAnd (c1, c2) -> Some ("And", [c1; c2], [])
     | COr (c1, c2) -> Some ("Or", [c1; c2], [])
     | CMux (_sz, s, c1, c2) -> Some ("Mux", [s; c1; c2], [])
-    | CPrimitive (fn, c1, c2) -> Some (primitive_name fn, [c1; c2], [])
-    | CCustom (ffi, c1, c2) -> Some (ffi.ffi_name, [c1; c2], [])
+    | CExternal (ffi, c1, c2) -> Some (fun_name ffi.ffi_name, [c1; c2], [])
     | CReadRegister r -> Some (Printf.sprintf "Reg %s" r.reg_name, [], [])
     | CAnnot (_sz, annot, c) ->
        let nparents = List.length (PtrHashtbl.find p2p c) in
