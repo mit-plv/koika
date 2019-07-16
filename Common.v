@@ -65,137 +65,20 @@ Ltac constr_hd c :=
 Definition and_fst {A B} := fun '(conj a _: and A B) => a.
 Definition and_snd {A B} := fun '(conj _ b: and A B) => b.
 
-Section fold_left2.
-  Context {A B B': Type} (f: A -> B -> B' -> A).
+Class EqDec (T: Type) :=
+  { eq_dec: forall t1 t2: T, { t1 = t2 } + { t1 <> t2 } }.
 
-  Fixpoint fold_left2 (l: list B) (l': list B') (a0: A) {struct l} : A :=
-    match l, l' with
-    | _, nil | nil, _ => a0
-    | b :: t, b' :: t' => fold_left2 t t' (f a0 b b')
-    end.
-End fold_left2.
+Require Import String.
 
-Section fold_right2.
-  Context {A B B': Type} (f: B -> B' -> A -> A).
+Hint Extern 1 (EqDec _) => econstructor; decide equality : typeclass_instances.
+Hint Extern 1 ({ _ = _ } + { _ <> _ }) => apply eq_dec : typeclass_instances.
 
-  Fixpoint fold_right2 (a0: A) (l: list B) (l': list B') {struct l} : A :=
-    match l, l' with
-    | _, nil | nil, _ => a0
-    | b :: t, b' :: t' => f b b' (fold_right2 a0 t t')
-    end.
-End fold_right2.
-
-Lemma fold_right2_app {A B B'}:
-  forall (f: B -> B' -> A -> A) a0 l l0 l' l'0,
-    length l = length l' ->
-    fold_right2 f a0 (l ++ l0) (l' ++ l'0) =
-    fold_right2 f (fold_right2 f a0 l0 l'0) l l'.
-Proof.
-  induction l; destruct l'; inversion 1; cbn; eauto using f_equal.
-Qed.
-
-Lemma fold_left2_rev_right2 {A B B'}:
-  forall (f: A -> B -> B' -> A) l l' a0,
-    length l = length l' ->
-    fold_left2 f l l' a0 =
-    fold_right2 (fun b b' acc => f acc b b') a0 (rev l) (rev l').
-Proof.
-  induction l; destruct l'; inversion 1; cbn.
-  - reflexivity.
-  - rewrite fold_right2_app by (rewrite !rev_length; assumption).
-    rewrite IHl; eauto.
-Qed.
-
-Section forall2.
-   Context {A B: Type}.
-
-   (* This doesn't generate good induction principles *)
-   (* Inductive Forall2 (P : A -> B -> Prop) : list A -> list B -> Prop := *)
-   (* | Forall_nil_l : forall lb, Forall2 P nil lb *)
-   (* | Forall_nil_r : forall la, Forall2 P la nil *)
-   (* | Forall_cons : forall a b la lb, P a b -> Forall2 P la lb -> Forall2 P (a :: la) (b :: lb). *)
-
-   Definition forall2 (P: A -> B -> Prop) (lA: list A) (lB: list B) :=
-     forall (n: nat) (a: A) (b: B),
-       List.nth_error lA n = Some a ->
-       List.nth_error lB n = Some b ->
-       P a b.
-
-   Lemma forall2_nil_l P :
-     forall lb, forall2 P nil lb.
-   Proof.
-     unfold forall2; destruct n; cbn; inversion 1.
-   Qed.
-
-   Lemma forall2_nil_r P :
-     forall la, forall2 P la nil.
-   Proof.
-     unfold forall2; destruct n; cbn; inversion 2.
-   Qed.
-
-   Lemma forall2_cons (P: A -> B -> Prop) :
-     forall a b la lb,
-       P a b ->
-       forall2 P la lb ->
-       forall2 P (a :: la) (b :: lb).
-   Proof.
-     unfold forall2; destruct n; cbn.
-     - inversion 1; inversion 1; subst; eauto.
-     - eauto.
-   Qed.
-
-   Lemma forall2_fold_left2' args:
-     forall argSizes (P: _ -> _ -> Prop) Q,
-       forall2 P args argSizes /\ Q ->
-       fold_left2 (fun acc arg argSize => acc /\ P arg argSize) args argSizes Q.
-   Proof.
-     induction args; cbn; intros * (H & HP); destruct argSizes; try solve [intuition].
-     eapply IHargs.
-     repeat split; eauto.
-     - intros n' **.
-       apply (H (S n')); cbn; eauto.
-     - apply (H 0); cbn; eauto.
-   Qed.
-
-   Lemma forall2_fold_left2 args:
-     forall argSizes (P: _ -> _ -> Prop),
-       forall2 P args argSizes ->
-       fold_left2 (fun acc arg argSize => acc /\ P arg argSize) args argSizes True.
-   Proof.
-     eauto using forall2_fold_left2'.
-   Qed.
-
-   Lemma forall2_fold_right2' args:
-     forall argSizes (P: _ -> _ -> Prop) Q,
-       forall2 P args argSizes /\ Q ->
-       fold_right2 (fun arg argSize acc => acc /\ P arg argSize) Q args argSizes.
-   Proof.
-     induction args; cbn; intros * (H & HP); destruct argSizes; try solve [intuition].
-     split.
-     - eapply IHargs; split; eauto.
-       intros n' **; apply (H (S n')); cbn; eauto.
-     - apply (H 0); cbn; eauto.
-   Qed.
-
-   Lemma forall2_fold_right2 args:
-     forall argSizes (P: _ -> _ -> Prop),
-       forall2 P args argSizes ->
-       fold_right2 (fun arg argSize acc => acc /\ P arg argSize) True args argSizes.
-   Proof.
-     eauto using forall2_fold_right2'.
-   Qed.
-
-   Lemma fold_right2_forall2 (P: A -> B -> Prop):
-     forall args argSizes Q,
-       fold_right2 (fun arg argSize acc => acc /\ P arg argSize) Q args argSizes ->
-       forall2 P args argSizes /\ Q.
-   Proof.
-     induction args; cbn; intros * H; destruct argSizes;
-       try solve [intuition eauto using forall2_nil_l, forall2_nil_r].
-     destruct H; destruct (IHargs argSizes Q ltac:(eassumption)).
-     split; eauto using forall2_cons.
-   Qed.
-End forall2.
+Instance EqDec_bool : EqDec bool := _.
+Instance EqDec_ascii : EqDec Ascii.ascii := _.
+Instance EqDec_string : EqDec string := _.
+Instance EqDec_unit : EqDec unit := _.
+Instance EqDec_pair A B `{EqDec A} `{EqDec B} : EqDec (A * B) := _.
+Instance EqDec_option A `{EqDec A} : EqDec (option A) := _.
 
 Definition opt_bind {A B} (o: option A) (f: A -> option B) :=
   match o with
@@ -203,8 +86,80 @@ Definition opt_bind {A B} (o: option A) (f: A -> option B) :=
   | None => None
   end.
 
+Notation "'let/opt' var ':=' expr 'in' body" :=
+  (opt_bind expr (fun var => body)) (at level 200).
+
+Notation "'let/opt2' v1 ',' v2 ':=' expr 'in' body" :=
+  (opt_bind expr (fun '(v1, v2) => body)) (at level 200).
+
 Definition must {A} (o: option A) : if o then A else unit :=
   match o with
   | Some a => a
   | None => tt
   end.
+
+Section Vect.
+  Fixpoint index n : Type :=
+    match n with
+    | 0 => False
+    | S n => unit + index n
+    end.
+
+  Fixpoint vect T n : Type :=
+    match n with
+    | 0 => unit
+    | S n => (T * @vect T n)%type
+    end.
+
+  Definition vect_hd {T n} (v: vect T (S n)) : T :=
+    fst v.
+
+  Definition vect_cons {T n} (t: T) (v: vect T n) : vect T (S n) :=
+    (t, v).
+
+  Fixpoint vect_last {T n} (v: vect T (S n)) : T :=
+    match n return vect T (S n) -> T with
+    | O => fun v => (fst v)
+    | S _ => fun v => vect_last (snd v)
+    end v.
+
+  Fixpoint vect_map {T T' n} (f: T -> T') (v: vect T n) : vect T' n :=
+    match n return vect T n -> vect T' n with
+    | O => fun _ => tt
+    | S _ => fun '(hd, tl) => (f hd, vect_map f tl)
+    end v.
+
+  Fixpoint vect_zip {T1 T2 n} (v1: vect T1 n) (v2: vect T2 n) : vect (T1 * T2) n :=
+    match n return vect T1 n -> vect T2 n -> vect (T1 * T2) n with
+    | O => fun _ _ => tt
+    | S _ => fun '(hd1, tl1) '(hd2, tl2) => ((hd1,  hd2), vect_zip tl1 tl2)
+    end v1 v2.
+
+  Definition vect_map2 {T1 T2 T n} (f: T1 -> T2 -> T) (v1: vect T1 n) (v2: vect T2 n) : vect T n :=
+    vect_map (fun '(b1, b2) => f b1 b2) (vect_zip v1 v2).
+
+  Fixpoint vect_fold_left {A T n} (f: A -> T -> A) (a0: A) (v: vect T n) : A :=
+    match n return vect T n -> A with
+    | O => fun _ => a0
+    | S _ => fun '(hd, tl) => f (vect_fold_left f a0 tl) hd
+    end v.
+
+  Definition vect_to_list {T n} (v: vect T n) : list T :=
+    vect_fold_left (fun acc t => List.cons t acc) List.nil v.
+End Vect.
+
+Notation bits n := (vect bool n).
+Definition bits_nil : bits 0 := tt.
+Definition bits_hd {n} (bs: bits (S n)) := vect_hd bs.
+Definition bits_cons {n} (b: bool) (bs: bits n) := vect_cons b bs.
+Definition bits_single (bs: bits 1) := vect_hd bs.
+Definition bits_lsb {n} (bs: bits (S n)) := vect_last bs.
+Definition bits_map {n} (f: bool -> bool) (bs: bits n) := vect_map f bs.
+Definition bits_map2 {n} (f: bool -> bool -> bool) (bs1 bs2: bits n) := vect_map2 f bs1 bs2.
+
+Notation "'w0'" := bits_nil (at level 5) : bits.
+Notation "'w1' b" := (bits_cons b bits_nil) (at level 5) : bits.
+Notation "b '~' bs" := (bits_cons b bs) (at level 5, right associativity, format "b '~' bs") : bits.
+Notation "0 '~' bs" := (bits_cons false bs) (at level 5, right associativity, format "0 '~' bs") : bits.
+Notation "1 '~' bs" := (bits_cons true bs) (at level 5, right associativity, format "1 '~' bs") : bits.
+Global Open Scope bits.

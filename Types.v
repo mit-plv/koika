@@ -1,95 +1,71 @@
 Require Import List.
-Require Import SGA.Common SGA.Syntax.
+Require Import SGA.Common SGA.Environments SGA.Syntax.
 
 Inductive type :=
-| unit_t
-| bit_t (n: nat)
-| any_t.
+| bits_t (n: nat).
 
-Scheme Equality for type.
+Coercion Nat_of_type '(bits_t n) :=
+  n.
 
-Inductive type_le : type -> type -> Prop :=
-| TypeLeRefl : forall tau tau', tau' = tau -> type_le tau tau'
-| TypeLeAny : forall tau tau', tau' = any_t -> type_le tau tau'.
+Coercion Type_of_type (tau: type) :=
+  bits tau.
 
-Hint Constructors type_le : types.
-
-Ltac teauto := eauto with types.
-
-Lemma type_le_trans:
-  forall tau1 tau2 tau3,
-    type_le tau1 tau2 ->
-    type_le tau2 tau3 ->
-    type_le tau1 tau3.
-Proof.
-  intros * le12 le23. destruct le12, le23; subst; teauto.
-Qed.
-
-Hint Resolve type_le_trans : types.
-
-Lemma type_le_antisym:
-  forall tau1 tau2,
-    type_le tau1 tau2 ->
-    type_le tau2 tau1 ->
-    tau1 = tau2.
-Proof.
-  intros * le12 le23. destruct le12, le23; subst; teauto.
-Qed.
-
-Hint Resolve type_le_antisym : types.
-
-Lemma type_ge_any_t_eq_any_t :
-  forall tau,
-    type_le any_t tau ->
-    tau = any_t.
-Proof.
-  inversion 1; teauto.
-Qed.
-
-Hint Resolve type_ge_any_t_eq_any_t : types.
-
-Lemma type_le_inv_not_any_t :
-  forall tau tau',
-    type_le tau' tau ->
-    tau <> any_t ->
-    tau' = tau.
-Proof.
-  inversion 1; congruence.
-Qed.
-
-Lemma type_le_inv :
-  forall tau tau',
-    type_le tau tau' ->
-    tau' = any_t \/ tau' = tau.
-Proof.
-  inversion 1; simpl; teauto.
-Qed.
-
-Hint Resolve type_le_inv_not_any_t : types.
-
-Lemma type_le_upper_bounds_comparable :
-  forall tau1 tau2 tau1' tau2',
-    type_le tau1 tau2 ->
-    type_le tau1 tau1' ->
-    type_le tau2 tau2' ->
-    (type_le tau1' tau2' \/ type_le tau2' tau1').
-Proof.
-  intros * le12 le11' le22';
-    inversion le12; inversion le11'; inversion le22'; subst;
-      discriminate || teauto.
-Qed.
-
+Instance EqDec_type : EqDec type := _.
 
 Record ExternalSignature :=
-  FunSig { argSizes: list nat;
-           retSize: nat }.
+  FunSig { arg1Type: type;
+           arg2Type: type;
+           retType: type }.
 
-Lemma ExternalSignature_inj2 :
-  forall (argSizes argSizes': list nat) (retSize retSize': nat),
-    FunSig argSizes retSize =
-    FunSig argSizes' retSize' ->
-    retSize = retSize'.
+Coercion Type_of_signature fn :=
+  fn.(arg1Type) -> fn.(arg2Type) -> fn.(retType).
+
+Section TypedSyntax.
+  Context {var_t reg_t fn_t: Type}.
+  Context {R: reg_t -> type}
+          {Sigma: fn_t -> ExternalSignature}.
+
+  Definition tsig := list (var_t * type).
+
+  Inductive expr {sig: tsig} : type -> Type :=
+  | Var {k: var_t} {tau: type} (m: member (k, tau) sig): expr tau
+  | Const {n: nat} (cst: bits n): expr (bits_t n)
+  | Read (port: Port) (idx: reg_t): expr (R idx)
+  | Call (fn: fn_t)
+         (arg1: expr (Sigma fn).(arg1Type))
+         (arg2: expr (Sigma fn).(arg2Type))
+    : expr (Sigma fn).(retType).
+
+  Inductive rule : tsig -> Type :=
+  | Skip {sig} : rule sig
+  | Fail {sig} : rule sig
+  | Seq {sig} (r1 r2: rule sig) : rule sig
+  | Bind {sig} {tau}
+         (var: var_t)
+         (ex: @expr sig tau)
+         (body: rule (cons (var, tau) sig)) : rule sig
+  | If {sig}
+       (cond: @expr sig (bits_t 1))
+       (tbranch: rule sig) (fbranch: rule sig) : rule sig
+  | Write {sig}
+          (port: Port) (idx: reg_t)
+          (value: @expr sig (R idx)) : rule sig.
+
+  Inductive scheduler :=
+  | Done
+  | Try (r: @rule nil) (s1 s2: scheduler).
+End TypedSyntax.
+
+Arguments tsig : clear implicits.
+Arguments expr var_t {reg_t fn_t} R Sigma.
+Arguments rule var_t {reg_t fn_t} R Sigma.
+Arguments scheduler var_t {reg_t fn_t} R Sigma.
+
+Lemma ExternalSignature_injRet :
+  forall (s1 s2 s1' s2': type) (retType retType': type),
+    FunSig s1 s2 retType =
+    FunSig s1' s2' retType' ->
+    retType = retType'.
 Proof. now inversion 1. Qed.
 
-Hint Extern 10 => eapply @ExternalSignature_inj2 : types.
-
+Hint Extern 10 => eapply @ExternalSignature_injRet : types.
