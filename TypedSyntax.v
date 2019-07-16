@@ -1,24 +1,5 @@
-Require Import List.
-Require Import SGA.Common SGA.Environments SGA.Types SGA.Syntax.
-
-Inductive type :=
-| bits_t (n: nat).
-
-Coercion Nat_of_type '(bits_t n) :=
-  n.
-
-Coercion Type_of_type (tau: type) :=
-  bits tau.
-
-Instance EqDec_type : EqDec type := _.
-
-Record ExternalSignature :=
-  FunSig { arg1Type: type;
-           arg2Type: type;
-           retType: type }.
-
-Coercion Type_of_signature fn :=
-  fn.(arg1Type) -> fn.(arg2Type) -> fn.(retType).
+Require Import Coq.Lists.List.
+Require Export SGA.Common SGA.Environments SGA.Types SGA.Syntax.
 
 Section TypedSyntax.
   Context {var_t reg_t fn_t: Type}.
@@ -60,12 +41,5 @@ Arguments tsig : clear implicits.
 Arguments expr var_t {reg_t fn_t} R Sigma.
 Arguments rule var_t {reg_t fn_t} R Sigma.
 Arguments scheduler var_t {reg_t fn_t} R Sigma.
-
-Lemma ExternalSignature_injRet :
-  forall (s1 s2 s1' s2': type) (retType retType': type),
-    FunSig s1 s2 retType =
-    FunSig s1' s2' retType' ->
-    retType = retType'.
-Proof. now inversion 1. Qed.
 
 Hint Extern 10 => eapply @ExternalSignature_injRet : types.
