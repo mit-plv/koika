@@ -22,12 +22,12 @@ Fixpoint index_of_nat (sz n: nat) : option (index sz) :=
     end
   end.
 
-Fixpoint nat_of_index {sz} (idx: index sz) {struct sz} : nat :=
+Fixpoint index_to_nat {sz} (idx: index sz) {struct sz} : nat :=
   match sz return index sz -> nat with
   | 0 => fun idx => False_rect _ idx
   | S sz => fun idx => match idx with
                    | thisone => 0
-                   | anotherone idx => S (nat_of_index idx)
+                   | anotherone idx => S (index_to_nat idx)
                    end
   end idx.
 

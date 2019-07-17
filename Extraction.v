@@ -14,4 +14,4 @@ Extraction Inline Circuits.retVal.
         (assert false (* Proj Args *)) ex0), gamma)) body ex0.erwc
  *)
 
-Extraction "sga.ml" to_list vect_to_list bits_to_nat Collatz.package.
+Extraction "sga.ml" to_list vect_to_list bits_to_nat index_to_nat Collatz.package.
