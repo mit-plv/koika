@@ -213,7 +213,7 @@ Section Interp.
              (s: scheduler)
              {struct s} :=
       match s with
-      | Done => Some sched_log
+      | Done => sched_log
       | Try r s1 s2 =>
         match interp_rule CtxEmpty sched_log log_empty r with
         | Some l => interp_scheduler' (log_app l sched_log) s1
