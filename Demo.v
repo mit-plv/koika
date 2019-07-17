@@ -167,8 +167,8 @@ Module Collatz.
 
   Definition divide_collatz : urule var_t reg_t fn_t :=
     Let "v" <- R0#read0 in
-    Let "odd" <- (Sel 2)[[$"v", UConst Ob~0~0]] in
-    If (Not 2)[[$"odd"]] Then
+    Let "odd" <- (Sel 1)[[$"v", UConst Ob~0]] in
+    If (Not 1)[[$"odd"]] Then
        R0#write0(Divide[$"v"])
     Else
       fail
@@ -176,14 +176,14 @@ Module Collatz.
 
   Definition multiply_collatz : urule var_t reg_t fn_t :=
     Let "v" <- R0#read1 in
-    Let "odd" <- (Sel 2)[[$"v", UConst Ob~0~0]] in
-    If Odd[$"v"] Then
+    Let "odd" <- (Sel 1)[[$"v", UConst Ob~0]] in
+    If $"odd" Then
         R0#write1(ThreeNPlusOne[$"v"])
     Else
        fail
     EndIf.
 
-(* But report *)
+(* Bug report *)
 (* Require Import Coq.extraction.Extraction. *)
 (* (* Extraction Language JSON. *) *)
 (* Set Extraction KeepSingleton. *)
@@ -202,7 +202,7 @@ Module Collatz.
   Definition isigma := interop_sigma sigma.
   Definition cr := ContextEnv.(create) r.
 
-  Definition collatz :=
+  Definition collatz : scheduler _ _ _ :=
     tc R iSigma (divide_collatz |> multiply_collatz |> done).
 
   Notation compute t :=
