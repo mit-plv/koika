@@ -167,7 +167,8 @@ Module Collatz.
 
   Definition divide_collatz : urule var_t reg_t fn_t :=
     Let "v" <- R0#read0 in
-    If Even[$"v"] Then
+    Let "odd" <- (Sel 2)[[$"v", UConst 0~0~w0]] in
+    If (Not 2)[[$"odd"]] Then
        R0#write0(Divide[$"v"])
     Else
       fail
@@ -175,9 +176,9 @@ Module Collatz.
 
   Definition multiply_collatz : urule var_t reg_t fn_t :=
     Let "v" <- R0#read1 in
-    Let "y" <- (Or 2)[[UConst 1~1~w0, UConst 1~1~w0]] in
+    Let "odd" <- (Sel 2)[[$"v", UConst 0~0~w0]] in
     If Odd[$"v"] Then
-        R0#write1(Divide[$"v"])
+        R0#write1(ThreeNPlusOne[$"v"])
     Else
        fail
     EndIf.
