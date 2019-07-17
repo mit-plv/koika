@@ -77,7 +77,7 @@ let primitive_name = function
   | Sga.ZExtR (sz, nzeroes) -> "ZExtR"
 
 let string_of_bits bs =
-  let bitstring = String.concat "" (List.map (fun b -> if b then "1" else "0") bs.bs_bits) in
+  let bitstring = String.concat "" (List.rev_map (fun b -> if b then "1" else "0") bs.bs_bits) in
   Printf.sprintf "%d'b%s" bs.bs_size bitstring
 
 let string_of_coq_string chars =
@@ -103,7 +103,7 @@ let ffi_sig_of_fn (pkg: Sga.verilogPackage) fn =
 let bits_const_of_bits sz bs =
   { bs_size = sz;
     bs_bits = Sga.vect_to_list sz bs;
-    bs_val = Sga.bits_to_nat sz bs }
+    bs_val = Sga.Bits.to_nat sz bs }
 
 let reg_sig_of_rname (pkg: Sga.verilogPackage) r =
   let sz = pkg.vp_reg_types r in

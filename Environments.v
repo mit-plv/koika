@@ -253,6 +253,12 @@ Definition zip {K} (E: Env K) {V1 V2: esig K} (ev1: E.(env_t) V1) (ev2: E.(env_t
   : E.(env_t) (fun k => V1 k * V2 k)%type :=
   E.(create) (fun k => (E.(getenv) ev1 k, E.(getenv) ev2 k)).
 
+Lemma getenv_zip {K} (E: Env K) {V1 V2: esig K} (ev1: E.(env_t) V1) (ev2: E.(env_t) V2) k :
+  E.(getenv) (E.(zip) ev1 ev2) k = (E.(getenv) ev1 k, E.(getenv) ev2 k).
+Proof.
+  unfold zip; rewrite getenv_create; reflexivity.
+Qed.
+
 Definition map2 {K} (E: Env K) {V1 V2 V3: esig K} (fn: forall k, V1 k -> V2 k -> V3 k)
            (ev1: E.(env_t) V1) (ev2: E.(env_t) V2)
   : E.(env_t) V3 :=

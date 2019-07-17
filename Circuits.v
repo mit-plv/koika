@@ -26,7 +26,7 @@ Arguments circuit {reg_t fn_t} R Sigma sz.
 
 Module CircuitNotations.
   Notation "f [ arg ]` an `" :=
-    (CAnnot an (CExternal f arg (CConst w0)))
+    (CAnnot an (CExternal f arg (CConst Ob)))
       (at level 99, arg at level 99, format "f [ arg ]` an `") : circuit.
   Notation "f [ arg1 ',' arg2 ]` an `" :=
     (CAnnot an (CExternal f arg1 arg2))
@@ -70,18 +70,18 @@ Section Interpretation.
       None
     | CNot c =>
       let/opt bs := interp_circuit c in
-      Some (w1 (negb (bits_single bs)))
+      Some (w1 (negb (Bits.single bs)))
     | CAnd c1 c2 =>
       let/opt bs1 := interp_circuit c1 in
       let/opt bs2 := interp_circuit c2 in
-      Some (w1 (andb (bits_single bs1) (bits_single bs2)))
+      Some (w1 (andb (Bits.single bs1) (Bits.single bs2)))
     | COr c1 c2 =>
       let/opt bs1 := interp_circuit c1 in
       let/opt bs2 := interp_circuit c2 in
-      Some (w1 (orb (bits_single bs1) (bits_single bs2)))
+      Some (w1 (orb (Bits.single bs1) (Bits.single bs2)))
     | CMux select c1 c2 =>
       let/opt bs := interp_circuit select in
-      if bits_single bs then interp_circuit c1
+      if Bits.single bs then interp_circuit c1
       else interp_circuit c2
     | CConst cst =>
       Some cst
