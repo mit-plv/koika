@@ -257,7 +257,7 @@ Section CircuitCompilation.
   End Rule.
 
   Definition adapter (cs: scheduler_circuit) : rule_circuit :=
-    {| canFire := $`"cF init"` (w1 true);
+    {| canFire := $`"cF_init"` (w1 true);
        regs := REnv.(map) (fun k reg => {| read0 := $`"init_no_read0"` (w1 false);
                                        read1 := $`"init_no_read1"` (w1 false);
                                        write0 := $`"init_no_write0"` (w1 false);
