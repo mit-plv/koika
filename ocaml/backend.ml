@@ -37,8 +37,8 @@ let io_from_reg (root: circuit_root) : io_decls =
   let reg_name = root.root_reg.reg_name in
   let reg_size = root.root_reg.reg_size in
   [
-    Input (reg_name ^ "__overwrite_data", 1);
-    Input (reg_name ^ "__overwrite", reg_size);
+    Input (reg_name ^ "__overwrite_data", reg_size);
+    Input (reg_name ^ "__overwrite", 1);
     Output (reg_name ^ "__data", reg_size)
   ]
 let clock_and_reset : io_decls =
@@ -127,6 +127,8 @@ let internal_declarations (environment: string PtrHashtbl.t) (circuit: dedup_res
    corresponds to one verilog assign statement that is declaring how
    the left hand side wire gets computed from registers and wires.
 
+   We also assign the output wires to peek in the registers
+
    For custom functions we create an instance of the module in verilog
    for each such CustomFn encountered.
 
@@ -148,7 +150,7 @@ let assignment_to_string (gensym: int ref) (assignment: assignment) =
   let (lhs,expr) = assignment in
   let default_left = "\tassign " ^ lhs ^ " = " in
   (match expr with
-   | EQuestionMark _ -> default_left ^ "0" (* TODO check other ways to do ? *)
+   | EQuestionMark _ -> default_left ^ "x" (* TODO check other ways to do  *)
    | ENot n -> default_left ^ "~" ^ n
    | EAnd (arg1, arg2) -> default_left ^ arg1 ^ " & " ^ arg2
    | EOr (arg1, arg2) -> default_left ^ arg1 ^ " | " ^ arg2
@@ -211,7 +213,9 @@ let continous_assignments
       (circuit: dedup_result)
     : continous_assignments
   =
-    List.map
+  (List.map (fun root -> (root.root_reg.reg_name ^ "__data", EReadRegister root.root_reg.reg_name))
+     (circuit.dedup_roots)) (* Add output peek into registers *)
+    @ List.map
       (assignment_node
          environment
          (circuit.dedup_ptrs))
@@ -263,7 +267,7 @@ let compil (circuit: dedup_result) =
   let continous_assignments = continous_assignments environment circuit in
   let string_io_decls = List.map io_decl_to_string io_decls in
   let statements = statements environment circuit in
-  let string_prologue = "module CompilerTest(" ^ (String.concat ", " string_io_decls) ^ "i);" in (* TODO pass a name here *)
+  let string_prologue = "module CompilerTest(" ^ (String.concat ", " string_io_decls) ^ ");" in (* TODO pass a name here *)
   let string_internal_decls = String.concat "\n" (List.map internal_decl_to_string internal_decls) in
   let string_continous_assignments = String.concat "\n" (List.map (assignment_to_string instance_external_gensym)  continous_assignments) in
   let string_statements = String.concat "\n" (List.map statement_to_string statements) in
