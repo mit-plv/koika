@@ -1,5 +1,8 @@
 open Lib
 
+(* TODO: What to do with bit 0?
+ *)
+
 (* Phase I: IO declarations
 
    In our circuit we don't have inputs and outputs specified from the
@@ -64,10 +67,10 @@ type internal_decl =
 
 let internal_decl_to_string (internal_decl: internal_decl) =
   match internal_decl with
-  | Reg (r, sz) ->  if sz = 1
+  | Reg (r, sz) ->  if sz <= 1
                      then "\treg " ^ r ^ ";"
                      else "\treg " ^ "[" ^ string_of_int (sz-1) ^ ":0] " ^ r ^ ";"
-  | Wire (w, sz) ->  if sz = 1
+  | Wire (w, sz) ->  if sz <= 1
                      then "\twire " ^ w ^ ";"
                      else "\twire " ^ "[" ^ string_of_int (sz-1) ^ ":0] " ^ w ^ ";"
 
@@ -97,7 +100,9 @@ let internal_decl_for_net
                     | COr (_, _) ->   Wire(name_net, 1)
                   | CQuestionMark n
                     | CMux (n, _, _, _) -> Wire(name_net, n)
-                  | CAnnot (n, name , _) ->  Wire(name ^ name_net, n) (* Prefix with the name given by the user *)
+                  | CAnnot (n, name , _) ->
+                     PtrHashtbl.add environment ptr (name ^ name_net);
+                     Wire(name ^ name_net, n) (* Prefix with the name given by the user *)
                   | CConst l -> Wire(name_net, l.bs_size)
                   | CExternal (ffi_sig, _, _) -> Wire(name_net, ffi_sig.ffi_retsize)
                   | CReadRegister r_sig -> Wire(name_net, r_sig.reg_size)
@@ -141,9 +146,9 @@ type assignment = string * expression (* LHS, RHS *)
 
 let assignment_to_string (gensym: int ref) (assignment: assignment) =
   let (lhs,expr) = assignment in
-  let default_left = "assign " ^ lhs ^ " = " in
+  let default_left = "\tassign " ^ lhs ^ " = " in
   (match expr with
-   | EQuestionMark _ -> default_left
+   | EQuestionMark _ -> default_left ^ "0" (* TODO check other ways to do ? *)
    | ENot n -> default_left ^ "~" ^ n
    | EAnd (arg1, arg2) -> default_left ^ arg1 ^ " & " ^ arg2
    | EOr (arg1, arg2) -> default_left ^ arg1 ^ " | " ^ arg2
@@ -154,12 +159,12 @@ let assignment_to_string (gensym: int ref) (assignment: assignment) =
       (match fct_name with
        | CustomFn s -> let number_s = !gensym in
                        gensym := !gensym + 1 ;
-                       s ^ (s ^ "__instance__" ^ string_of_int number_s) ^
+                       "\t"^ s ^ " " ^ (s ^ "__instance__" ^ string_of_int number_s) ^
                          "(" ^ arg1 ^ ", " ^ arg2 ^ "," ^ lhs ^ ")"
        | PrimFn typePrim ->
           (match typePrim with
            | Sga.Sel _ -> default_left ^ arg1 ^ "[" ^ arg2 ^ "]"
-           | Sga.Part (_, _) -> (??)
+           | Sga.Part (_, _) -> "TODO"
            | Sga.And _ ->  default_left ^ arg1 ^ " & " ^ arg2
            | Sga.Or _ -> default_left ^ arg1 ^ " | " ^ arg2
            | Sga.Not _ -> default_left ^ "~" ^ arg1
@@ -167,8 +172,8 @@ let assignment_to_string (gensym: int ref) (assignment: assignment) =
            | Sga.Lsr (_, _) -> default_left ^ arg1 ^ " >> " ^ arg2
            | Sga.Eq _ -> default_left ^ arg1 ^ " == " ^ arg2
            | Sga.Concat (_, _) -> default_left ^ "{" ^ arg1 ^ ", " ^ arg2 ^ "}"
-           | Sga.ZExtL (_, _) -> (??) (* TODO: convince clement that those are not needed as primitive *)
-           | Sga.ZExtR (_, _) -> (??) (* TODO: convince clement that those are not needed as primitive *)
+           | Sga.ZExtL (_, _) -> "TODO UNIMPLEMENTED ZEXTL" (* TODO: convince clement that those are not needed as primitive *)
+           | Sga.ZExtR (_, _) -> "TODO UNIMPLEMENTED ZEXTR" (* TODO: convince clement that those are not needed as primitive *)
           )
       )
    | EReadRegister r -> default_left ^ r
@@ -194,7 +199,7 @@ let assignment_node
     | CAnd (ptr_1, ptr_2) -> EAnd (PtrHashtbl.find environment ptr_1, PtrHashtbl.find environment ptr_2)
     | COr (ptr_1, ptr_2) -> EOr (PtrHashtbl.find environment ptr_1, PtrHashtbl.find environment ptr_2)
     | CMux (sz, ptr_sel, ptr_t, ptr_f) -> EMux (sz, PtrHashtbl.find environment ptr_sel, PtrHashtbl.find environment ptr_t, PtrHashtbl.find environment ptr_f)
-    | CConst l -> EConst (string_of_bits l)
+    | CConst l -> EConst (string_of_bits l) (* TODO *)
     | CExternal (ffi_sig, ptr_1, ptr_2) -> EExternal (ffi_sig, PtrHashtbl.find environment ptr_1, PtrHashtbl.find environment ptr_2)
     | CReadRegister r_sig -> EReadRegister (r_sig.reg_name)
     | CAnnot (sz, name_rhs, ptr) -> EAnnot (sz, name_rhs, PtrHashtbl.find environment ptr)
@@ -231,7 +236,7 @@ let statement_to_string (statement: statement) =
   let Update (reg, initvalue, net_update) = statement in (* Really we can do that? That's cool *)
   (* So we should compensate with something less cool: *)
   "\talways @(posedge clock) begin\n\t\tif (reset) begin\n\t\t\t" ^ reg ^ " <= " ^ initvalue ^ ";\n" ^
-    "\t\tend else begin\n" ^ "\t\t\tif (" ^ reg ^ "__overwrite" ^ ") begin " ^
+    "\t\tend else begin\n" ^ "\t\t\tif (" ^ reg ^ "__overwrite" ^ ") begin\n" ^
       "\t\t\t\t" ^ reg ^ " <= " ^ reg ^ "__overwrite_data" ^ ";\n\t\t\tend else begin\n" ^
         "\t\t\t\t" ^ reg ^ " <= " ^ net_update ^ ";\n\t\t\tend\n\t\tend\n\tend"
 
@@ -249,8 +254,6 @@ let statements
       let reg_wire_update = PtrHashtbl.find environment root.root_ptr in
       Update (reg_name, reg_init, reg_wire_update))
     (circuit.dedup_roots)
-
-let intersperse a b = assert(false)
 
 let compil (circuit: dedup_result) =
   let environment = PtrHashtbl.create 50 in
