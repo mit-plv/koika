@@ -194,7 +194,7 @@ Section CircuitCompilation.
         let a1 := compile_expr a1 clog in
         let a2 := compile_expr a2 a1.(erwc) in
         {| retVal := fn [a1.(retVal), a2.(retVal)]`"Call from source"`;
-           erwc := a1.(erwc) |}
+           erwc := a2.(erwc) |}
       end.
   End Expr.
 
