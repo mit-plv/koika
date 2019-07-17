@@ -10,6 +10,7 @@ Inductive prim_fn_t :=
 | Lsr (sz: nat) (places: index sz)
 | Eq (sz: nat)
 | Concat (sz1 sz2 : nat)
+| UIntPlus (sz : nat)
 | ZExtL (sz: nat) (nzeroes: nat)
 | ZExtR (sz: nat) (nzeroes: nat).
 
@@ -18,6 +19,9 @@ Definition prim_sel {logsz} (bs: bits (pow2 logsz)) (idx: bits logsz) :=
   | Some idx => Bits.nth bs idx
   | _ => false (* TODO: x *)
   end.
+
+Definition prim_uint_plus {sz} (bs1 bs2: bits sz) :=
+  Bits.of_N sz (Bits.to_N bs1 + Bits.to_N bs2)%N.
 
 Definition prim_Sigma (fn: prim_fn_t) : ExternalSignature :=
   match fn with
@@ -30,6 +34,7 @@ Definition prim_Sigma (fn: prim_fn_t) : ExternalSignature :=
   | Lsr sz places => {{ sz ~> 0 ~> sz }}
   | Eq sz => {{ sz ~> sz ~> 1 }}
   | Concat sz1 sz2 => {{ sz1 ~> sz2 ~> sz1 + sz2 }}
+  | UIntPlus sz => {{ sz ~> sz ~> sz }}
   | ZExtL sz nzeroes => {{ sz ~> 0 ~> nzeroes + sz }}
   | ZExtR sz nzeroes => {{ sz ~> 0 ~> sz + nzeroes }}
   end.
@@ -44,6 +49,7 @@ Definition prim_sigma (fn: prim_fn_t) : prim_Sigma fn :=
   | Lsl sz places => fun bs _ => __magic__
   | Lsr sz places => fun bs _ => __magic__
   | Eq sz => fun bs1 bs2 => if eq_dec bs1 bs2 then w1 true else w1 false
+  | UIntPlus sz => fun bs1 bs2 => prim_uint_plus bs1 bs2
   | Concat sz1 sz2 => fun bs1 bs2 => Bits.app bs1 bs2
   | ZExtL sz nzeroes => fun bs _ => Bits.app (Bits.const nzeroes false) bs
   | ZExtR sz nzeroes => fun bs _ => Bits.app bs (Bits.const nzeroes false)
