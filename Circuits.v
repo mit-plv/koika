@@ -193,8 +193,8 @@ Section CircuitCompilation.
       | Call fn a1 a2 =>
         let a1 := compile_expr a1 clog in
         let a2 := compile_expr a2 a1.(erwc) in
-        {| retVal := fn [a1.(retVal), a2.(retVal)]`"call_from_source"`;
-           erwc := a1.(erwc) |}
+        {| retVal := fn [a1.(retVal), a2.(retVal)]`"Call_from_source"`;
+           erwc := a2.(erwc) |}
       end.
   End Expr.
 
