@@ -165,6 +165,7 @@ let assignment_to_string (gensym: int ref) (assignment: assignment) =
                          "(" ^ arg1 ^ ", " ^ arg2 ^ "," ^ lhs ^ ")"
        | PrimFn typePrim ->
           (match typePrim with
+           | Sga.UIntPlus _ -> default_left ^ arg1 ^ " + " ^ arg2
            | Sga.Sel _ -> default_left ^ arg1 ^ "[" ^ arg2 ^ "]"
            | Sga.Part (sz, slice_sz) -> default_left ^ arg1 ^ "[" ^ arg2 ^ " +: " ^ string_of_int (Sga.index_to_nat sz slice_sz) ^ "]"
            | Sga.And _ ->  default_left ^ arg1 ^ " & " ^ arg2
