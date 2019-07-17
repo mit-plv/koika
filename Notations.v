@@ -11,15 +11,17 @@ Delimit Scope sga_scope with sga.
 Delimit Scope sga_expr_scope with sga_expr.
 
 (* These are just for pattern-matching, since '~' doesn't work in matches *)
-Notation "'w0'" := (tt) (at level 5, right associativity, only parsing) : bitparsing.
-Notation "0 '~' bs" := (false, bs) (at level 5, right associativity, only parsing) : bitparsing.
-Notation "1 '~' bs" := (true, bs) (at level 5, right associativity, only parsing) : bitparsing.
+Notation "'Ob'" := (tt) (at level 7, left associativity, only parsing) : bitparsing.
+Notation "bs '~' 0" := (false, bs) (at level 7, left associativity, only parsing) : bitparsing.
+Notation "bs '~' 1" := (true, bs) (at level 7, left associativity, only parsing) : bitparsing.
+Notation "bs '~' b" := (b, bs) (at level 7, left associativity, only parsing) : bitparsing.
 Delimit Scope bitparsing with bitparsing.
 Notation "`` bs" := (bs%bitparsing) (only parsing, at level 6).
 
-Notation "'w0'" := (tt) (at level 5, right associativity, only printing) : bits_printing.
-Notation "0 '~' bs" := (false, bs) (at level 5, right associativity, only printing) : bits_printing.
-Notation "1 '~' bs" := (true, bs) (at level 5, right associativity, only printing) : bits_printing.
+Notation "'Ob'" := (tt) (at level 7, left associativity, only printing) : bits_printing.
+Notation "bs '~' b" := (b, bs) (at level 7, left associativity, only printing) : bits_printing. (* FIXME *)
+Notation "bs '~' 0" := (false, bs) (at level 7, left associativity, only printing) : bits_printing.
+Notation "bs '~' 1" := (true, bs) (at level 7, left associativity, only printing) : bits_printing.
 Global Open Scope bits_printing.
 
 Notation "$ var" :=
@@ -32,14 +34,14 @@ Notation "reg '#read1'" :=
   (URead P1 reg)
     (at level 99, format "reg '#read1'") : sga_expr_scope.
 Notation "f [ arg ]" :=
-  (UCall (CustomFn f) arg (UConst w0))
+  (UCall (CustomFn f) arg (UConst Ob))
     (at level 99, arg at level 99, format "f [ arg ]") : sga_expr_scope.
 Notation "f [ arg1 ',' arg2 ]" :=
   (UCall (CustomFn f) arg1 arg2)
     (at level 99, arg1 at level 99, arg2 at level 99,
     format "f [ arg1 ','  arg2 ]") : sga_expr_scope.
 Notation "f [[ arg ]]" :=
-  (UCall (PrimFn f) arg (UConst w0))
+  (UCall (PrimFn f) arg (UConst Ob))
     (at level 99, arg at level 99, format "f [[ arg ]]") : sga_expr_scope.
 Notation "f [[ arg1 ',' arg2 ]]" :=
   (UCall (PrimFn f) arg1 arg2)

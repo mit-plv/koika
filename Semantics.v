@@ -194,7 +194,7 @@ Section Interp.
       | If cond tbranch fbranch =>
         fun Gamma =>
         let/opt2 rule_log, cond := interp_expr Gamma sched_log rule_log cond in
-        if bits_single cond then
+        if Bits.single cond then
           interp_rule Gamma sched_log rule_log tbranch
         else
           interp_rule Gamma sched_log rule_log fbranch

@@ -27,21 +27,21 @@ Module Ex1.
 
   Definition r idx : R idx :=
     match idx with
-    | R0 => 1~0~1~w0
-    | R1 => 0~w0
+    | R0 => Ob~1~0~1
+    | R1 => Ob~0
     end.
 
   Definition sigma idx : Sigma idx :=
     match idx with
-    | Even => fun (bs: bits 3) _ => w1 (negb (bits_lsb bs))
-    | Odd => fun (bs: bits 3) _ => w1 (bits_lsb bs)
+    | Even => fun (bs: bits 3) _ => w1 (negb (Bits.lsb bs))
+    | Odd => fun (bs: bits 3) _ => w1 (Bits.lsb bs)
     end.
 
   Example r1 : urule var_t reg_t fn_t :=
     (UBind "x" (URead P0 R0)
-           (UIf (UCall Even (UVar "x") (UConst w0))
-                (UWrite P0 R1 (UConst 1~w0))
-                (UWrite P0 R1 (UConst 1~w0)))).
+           (UIf (UCall Even (UVar "x") (UConst Ob))
+                (UWrite P0 R1 (UConst Ob~1))
+                (UWrite P0 R1 (UConst Ob~1)))).
 
   Example s1 : uscheduler var_t reg_t fn_t :=
     UTry r1 UDone UDone.
@@ -103,15 +103,15 @@ Module Ex2.
 
   Definition r idx : R idx :=
     match idx with
-    | R0 => 0~1~1~0~0~1~0~w0
-    | R1 => 1~1~0~0~1~1~0~w0
-    | R2 => 1~w0
+    | R0 => Ob~0~1~1~0~0~1~0
+    | R1 => Ob~1~1~0~0~1~1~0
+    | R2 => Ob~1
     end.
 
   Definition sigma idx : Sigma idx :=
     match idx with
-    | Or n => fun bs1 bs2 => bits_map2 orb bs1 bs2
-    | Not n => fun bs _ => bits_map negb bs
+    | Or n => fun bs1 bs2 => Bits.map2 orb bs1 bs2
+    | Not n => fun bs _ => Bits.map negb bs
     end.
 
   Definition tsched_result :=
@@ -141,7 +141,7 @@ Module Collatz.
 
   Definition r idx : R idx :=
     match idx with
-    | R0 => 1~0~w0
+    | R0 => Ob~1~0
     end.
 
   (* TODO bug report *)
@@ -152,15 +152,15 @@ Module Collatz.
 
   Definition sigma idx : Sigma idx :=
     match idx with
-    | Divide => fun '(b1, (b2, tt)) _ => 1~(w1 b1)
+    | Divide => fun '(`` Ob~b1~b2) _ => Ob~0~b1
     | ThreeNPlusOne => fun bs _ => match bs with
-                               | `` 0~0~w0 => 0~1~w0
-                               | `` 0~1~w0 => 0~0~w0
-                               | `` 1~0~w0 => 1~1~w0
-                               | `` 1~1~w0 => 1~0~w0
+                               | `` Ob~0~0 => Ob~0~1
+                               | `` Ob~0~1 => Ob~0~0
+                               | `` Ob~1~0 => Ob~1~1
+                               | `` Ob~1~1 => Ob~1~0
                                end
-    | Even => fun '(_, (b2, tt)) _ => w1 (negb b2)
-    | Odd => fun '(_, (b2, tt)) _ => w1 b2
+    | Even => fun '(`` Ob~_~b2) _ => Ob~(negb b2)
+    | Odd => fun '(`` Ob~_~b2) _ => Ob~b2
     end.
 
   Open Scope sga.
@@ -175,7 +175,7 @@ Module Collatz.
 
   Definition multiply_collatz : urule var_t reg_t fn_t :=
     Let "v" <- R0#read1 in
-    Let "y" <- (Or 2)[[UConst 1~1~w0, UConst 1~1~w0]] in
+    Let "y" <- (Or 2)[[UConst Ob~1~1, UConst Ob~1~1]] in
     If Odd[$"v"] Then
         R0#write1(Divide[$"v"])
     Else
@@ -190,7 +190,7 @@ Module Collatz.
 
   (* Definition rl : rule var_t R Sigma List.nil := *)
   (*   tc R Sigma (Let "v" <- R0#read1 in *)
-  (*           Let "y" <- (Or _)[[UConst 1~1~w0, UConst 1~1~w0]] in *)
+  (*           Let "y" <- (Or _)[[UConst Ob~1~1, UConst Ob~1~1]] in *)
   (*           If Odd[$"v"] Then *)
   (*               R0#write1(Divide[$"v"]) *)
   (*           Else *)

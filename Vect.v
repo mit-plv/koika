@@ -1,4 +1,5 @@
 Require Import Coq.Lists.List.
+Require Export NArith.          (* Coq bug: If this isn't exported, other files can't import Vect.vo *)
 
 Inductive index' {A} := thisone | anotherone (a: A).
 Arguments index': clear implicits.
@@ -100,38 +101,60 @@ Fixpoint vect_fold_left {A T n} (f: A -> T -> A) (a0: A) (v: vect T n) : A :=
 Definition vect_to_list {T n} (v: vect T n) : list T :=
   vect_fold_left (fun acc t => List.cons t acc) List.nil v.
 
-Notation bits n := (vect bool n).
-Definition bits_nil : bits 0 := vect_nil.
-Definition bits_cons {n} (b: bool) (bs: bits n) := vect_cons b bs.
-Definition bits_const sz (b: bool) : bits sz := vect_const sz b.
-Definition bits_app {sz1 sz2} (bs1: bits sz1) (bs2: bits sz2) := vect_app bs1 bs2.
-Definition bits_nth {n} (bs: bits n) (idx: index n) := vect_nth bs idx.
-Definition bits_hd {n} (bs: bits (S n)) := vect_hd bs.
-Definition bits_single (bs: bits 1) := vect_hd bs.
-Definition bits_lsb {n} (bs: bits (S n)) := vect_last bs.
-Definition bits_map {n} (f: bool -> bool) (bs: bits n) := vect_map f bs.
-Definition bits_map2 {n} (f: bool -> bool -> bool) (bs1 bs2: bits n) := vect_map2 f bs1 bs2.
+Module Bits.
+  Notation bits n := (vect bool n).
+  Definition nil : bits 0 := vect_nil.
+  Definition cons {n} (b: bool) (bs: bits n) := vect_cons b bs.
+  Definition const sz (b: bool) : bits sz := vect_const sz b.
+  Definition app {sz1 sz2} (bs1: bits sz1) (bs2: bits sz2) := vect_app bs1 bs2.
+  Definition nth {n} (bs: bits n) (idx: index n) := vect_nth bs idx.
+  Definition hd {n} (bs: bits (S n)) := vect_hd bs.
+  Definition tl {n} (bs: bits (S n)) := vect_tl bs.
+  Definition single (bs: bits 1) := vect_hd bs.
+  Definition lsb {n} (bs: bits (S n)) := vect_last bs.
+  Definition map {n} (f: bool -> bool) (bs: bits n) := vect_map f bs.
+  Definition map2 {n} (f: bool -> bool -> bool) (bs1 bs2: bits n) := vect_map2 f bs1 bs2.
 
-Fixpoint bits_to_nat' {sz: nat} (acc: nat) (bs: bits sz) : nat :=
-  match sz return bits sz -> nat with
-  | 0 => fun _ => acc
-  | S n => fun bs => bits_to_nat' (2 * acc + (if fst bs then 1 else 0)) (snd bs)
-  end bs.
+  Fixpoint to_nat {sz: nat} (bs: bits sz) : nat :=
+    match sz return bits sz -> nat with
+    | 0 => fun _ => 0
+    | S n => fun bs => (if Bits.hd bs then 1 else 0) + 2 * to_nat (Bits.tl bs)
+    end bs.
 
-Definition bits_to_nat {sz: nat} (bs: bits sz) : nat :=
-  bits_to_nat' 0 bs.
+  Fixpoint to_N {sz: nat} (bs: bits sz) {struct sz} : N :=
+    match sz return bits sz -> N with
+    | O => fun _ => 0%N
+    | S n => fun bs => ((if hd bs then 1 else 0) + 2 * to_N (tl bs))%N
+    end bs.
 
-(* Compute (bits_to_nat 1~0~0~1~1~0~w0). *)
+  Fixpoint of_positive (sz: nat) (p: positive) {struct sz} : bits sz :=
+    match sz with
+    | 0 => nil
+    | S sz =>
+      match p with
+      | xI p => cons true (of_positive sz p)
+      | xO p => cons false (of_positive sz p)
+      | xH => cons true (const sz false)
+      end
+    end.
 
-Definition index_of_bits {sz} sz' (bs: bits sz) : option (index sz') :=
-  index_of_nat sz' (bits_to_nat bs).
+  Definition of_N sz (n: N): bits sz :=
+    match n with
+    | N0 => const sz false
+    | Npos p => of_positive sz p
+    end.
+
+  Definition to_index {sz} sz' (bs: bits sz) : option (index sz') :=
+    index_of_nat sz' (to_nat bs).
+End Bits.
+
+Notation bits n := (Bits.bits n).
+Notation "'Ob'" := Bits.nil (at level 7) : bits.
+Notation "'w1' b" := (Bits.cons b Bits.nil) (at level 7, left associativity) : bits.
+Notation "bs '~' b" := (Bits.cons b bs) (at level 7, left associativity, format "bs '~' b") : bits.
+Notation "bs '~' 0" := (Bits.cons false bs) (at level 7, left associativity, format "bs '~' 0") : bits.
+Notation "bs '~' 1" := (Bits.cons true bs) (at level 7, left associativity, format "bs '~' 1") : bits.
+Global Open Scope bits.
 
 Definition pow2 n :=
   Nat.pow 2 n.
-
-Notation "'w0'" := bits_nil (at level 5) : bits.
-Notation "'w1' b" := (bits_cons b bits_nil) (at level 5) : bits.
-Notation "b '~' bs" := (bits_cons b bs) (at level 5, right associativity, format "b '~' bs") : bits.
-Notation "0 '~' bs" := (bits_cons false bs) (at level 5, right associativity, format "0 '~' bs") : bits.
-Notation "1 '~' bs" := (bits_cons true bs) (at level 5, right associativity, format "1 '~' bs") : bits.
-Global Open Scope bits.
