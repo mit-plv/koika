@@ -145,7 +145,6 @@ Section CircuitCompilation.
        data1 := CAnnot an (CMux cond (data1 tReg) (data1 fReg)) |}.
 
   Section Expr.
-    Context (cLog: scheduler_circuit).
     Context {sig: tsig var_t}.
     Context (Gamma: ccontext sig).
 
@@ -175,13 +174,13 @@ Section CircuitCompilation.
                                                              data1 := reg.(data1) |} |} |}
       | Read P1 idx =>
         let reg := REnv.(getenv) clog.(regs) idx in
-        let Reg := REnv.(getenv) cLog.(sregs) idx in
-        {| retVal := CAnnot "read1_retVal_from_L_pred"
-                            (CMux (Reg.(write0)) (Reg.(data0))
-                                  (CAnnot "read1_retVal_from_l_pred"
-                                           (CMux (reg.(write0)) (reg.(data0))
-                                                 (CAnnot "read1_retVal_from_reg"
-                                                          (REnv.(getenv) r idx)))));
+        {| retVal := reg.(data0);
+           (* retVal := CAnnot "read1_retVal_from_L_pred" *)
+           (*                  (CMux (Reg.(write0)) (Reg.(data0)) *)
+           (*                        (CAnnot "read1_retVal_from_l_pred" *)
+           (*                                 (CMux (reg.(write0)) (reg.(data0)) *)
+           (*                                       (CAnnot "read1_retVal_from_reg" *)
+           (*                                                (REnv.(getenv) r idx))))); *)
            erwc := {| canFire := clog.(canFire);
                      regs := REnv.(putenv) clog.(regs) idx {| read1 := $`"read1"` (w1 true);
                                                              (* Unchanged *)
@@ -199,8 +198,6 @@ Section CircuitCompilation.
   End Expr.
 
   Section Rule.
-    Context (cLog: scheduler_circuit).
-
     Fixpoint compile_rule
              {sig: tsig var_t}
              (Gamma: ccontext sig)
@@ -218,11 +215,11 @@ Section CircuitCompilation.
         compile_rule Gamma r2 (compile_rule Gamma r1 clog)
       | @Bind _ _ _ _ _ _ tau var ex body =>
         fun Gamma =>
-        let ex := compile_expr cLog Gamma ex clog in
+        let ex := compile_expr Gamma ex clog in
         compile_rule (CtxCons (var, tau) ex.(retVal) Gamma) body ex.(erwc)
       | If cond tbranch fbranch =>
         fun Gamma =>
-        let cond := compile_expr cLog Gamma cond clog in
+        let cond := compile_expr Gamma cond clog in
         let tbranch := compile_rule Gamma tbranch cond.(erwc) in
         let fbranch := compile_rule Gamma fbranch cond.(erwc) in
         {| canFire := CAnnot "if_cF" (CMux cond.(retVal) tbranch.(canFire) fbranch.(canFire));
@@ -231,7 +228,7 @@ Section CircuitCompilation.
                               tbranch.(regs) fbranch.(regs) |}
       | Write P0 idx val =>
         fun Gamma =>
-        let val := compile_expr cLog Gamma val clog in
+        let val := compile_expr Gamma val clog in
         let reg := REnv.(getenv) val.(erwc).(regs) idx in
         {| canFire := (val.(erwc).(canFire) &&`"write0_cF"`
                       !`"no_read1"` reg.(read1) &&`"write0_cF"`
@@ -246,7 +243,7 @@ Section CircuitCompilation.
                                                          data1 := reg.(data1) |} |}
       | Write P1 idx val =>
         fun Gamma =>
-        let val := compile_expr cLog Gamma val clog in
+        let val := compile_expr Gamma val clog in
         let reg := REnv.(getenv) val.(erwc).(regs) idx in
         {| canFire := val.(erwc).(canFire) &&`"write1_cF"` !`"no_write1"` reg.(write1);
            regs := REnv.(putenv) val.(erwc).(regs) idx {| write1 := $`"write1"` (w1 true);
@@ -259,16 +256,15 @@ Section CircuitCompilation.
       end Gamma.
   End Rule.
 
-  (* Definition adapter (cs: scheduler_circuit) : rule_circuit := *)
-  (*   {| retVal := CQuestionMark; *)
-  (*      canFire := $(w1 true); *)
-  (*      regs := Vector.map (fun reg => {| read0 := $(w1 false); *)
-  (*                                    write0 := reg.(write0); *)
-  (*                                    data0 := reg.(data0); *)
-  (*                                    read1 := $(w1 false); *)
-  (*                                    write1 := $(w1 false); *)
-  (*                                    data1 := CQuestionMark |}) *)
-  (*                        cs.(sregs) |}. *)
+  Definition adapter (cs: scheduler_circuit) : rule_circuit :=
+    {| canFire := $`"cF init"` (w1 true);
+       regs := REnv.(map) (fun k reg => {| read0 := $`"init_no_read0"` (w1 false);
+                                       read1 := $`"init_no_read1"` (w1 false);
+                                       write0 := $`"init_no_write0"` (w1 false);
+                                       write1 := $`"init_no_write1"` (w1 false);
+                                       data0 := reg.(data0);
+                                       data1 := CQuestionMark _ |})
+                         cs.(sregs) |}.
 
   Definition willFire_of_canFire' {sz} (ruleReg inReg: @rwdata sz) :=
     ((ruleReg.(read0)) ==>`"read0_wF_of_cF"`
@@ -288,21 +284,6 @@ Section CircuitCompilation.
 
   Arguments willFire_of_canFire' : simpl never.
 
-  Definition init_rwdata sz :=
-    {| data0 := CAnnot "init_no_data0" (CQuestionMark sz);
-       data1 := CAnnot "init_no_data1" (CQuestionMark sz);
-       read0 := $`"init_no_read0"` (w1 false);
-       read1 := $`"init_no_read1"` (w1 false);
-       write0 := $`"init_no_write0"` (w1 false);
-       write1 := $`"init_no_write1"` (w1 false) |}.
-
-  Definition init_rwcircuit (_: unit) :=
-    {| canFire := $`"init_canFire"` (w1 true);
-       regs := REnv.(create) (fun k => init_rwdata (R k)) |}.
-
-  Definition init_rule_circuit (_: unit) :=
-    init_rwcircuit tt.
-
   Fixpoint compile_scheduler'
            (s: scheduler var_t R Sigma)
            (input: scheduler_circuit):
@@ -311,7 +292,7 @@ Section CircuitCompilation.
     | Done =>
       input
     | Try rl st sf =>
-      let rl := compile_rule input CtxEmpty rl (init_rule_circuit tt) in
+      let rl := compile_rule CtxEmpty rl (adapter input) in
       let an := "merge_results" in
       let acc := {| sregs := REnv.(map2) (fun _ ruleReg inReg =>
                                                {| read0 := (ruleReg.(read0)) ||`an` (inReg.(read0));
@@ -337,16 +318,29 @@ Section CircuitCompilation.
 
   Definition commit_rwdata {sz} (reg: @rwdata sz) initial_value : circuit sz :=
     CAnnot "commit_write1"
-            (CMux (reg.(write1)) (reg.(data1))
-                  (CAnnot "commit_write0"
-                           (CMux (reg.(write0)) (reg.(data0))
-                                 (CAnnot "commit_unchanged" initial_value)))).
+           (CMux (reg.(write1))
+                 (reg.(data1))
+                 (CAnnot "commit_write0"
+                         (CMux (reg.(write0))
+                               (reg.(data0))
+                               (CAnnot "commit_unchanged" initial_value)))).
 
   Definition state_transition_circuit :=
     REnv.(env_t) (fun reg => circuit (R reg)).
 
+  Definition init_scheduler_rwdata idx : rwdata :=
+    {| read0 := $`"sched_init_no_read0"` (w1 false);
+       read1 := $`"sched_init_no_read1"` (w1 false);
+       write0 := $`"sched_init_no_write0"` (w1 false);
+       write1 := $`"sched_init_no_write1"` (w1 false);
+       data0 := CAnnot "sched_init_data0_is_reg" (REnv.(getenv) r idx);
+       data1 := CAnnot "sched_init_no_data1" (CQuestionMark _) |}.
+
+  Definition init_scheduler_circuit : scheduler_circuit :=
+    {| sregs := REnv.(create) init_scheduler_rwdata |}.
+
   Definition compile_scheduler (s: scheduler var_t R Sigma) : state_transition_circuit :=
-    let s := compile_scheduler' s {| sregs := REnv.(create) (fun k => init_rwdata (R k)) |} in
+    let s := compile_scheduler' s init_scheduler_circuit in
     REnv.(map2) (fun k r1 r2 => commit_rwdata r1 r2) s.(sregs) r.
 End CircuitCompilation.
 
