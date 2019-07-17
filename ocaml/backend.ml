@@ -51,11 +51,11 @@ let io_declarations (circuit: dedup_result) : io_decls =
 (* Phase II: Internal declarations
 
 
-   We declare the internal registers, and one wire per subcircuit
-   a.k.a nodes of (circuit_nets: circuit PtrHashtbl.t).  The signal
-   are all named __inter_n except for the one where a named have been
-   given by the user where we name them givenname__inter_n. The sizes
-   of registers and wires are also declared in that phase.
+   We declare the internal registers, and one wire per subcircuit i.e
+   one per nodes of (circuit_nets: circuit PtrHashtbl.t).  The signal
+   are all named __inter_n except for the one where a name has been
+   given by the user; then we name them givenname__inter_n. The sizes
+   of registers and internal wires are also declared in that phase.
 
  *)
 type internal_decl =
@@ -65,11 +65,11 @@ type internal_decl =
 let internal_decl_to_string (internal_decl: internal_decl) =
   match internal_decl with
   | Reg (r, sz) ->  if sz = 1
-                     then "reg " ^ r
-                     else "reg " ^ "[" ^ string_of_int (sz-1) ^ ":0] " ^ r
+                     then "\treg " ^ r ^ ";"
+                     else "\treg " ^ "[" ^ string_of_int (sz-1) ^ ":0] " ^ r ^ ";"
   | Wire (w, sz) ->  if sz = 1
-                     then "wire " ^ w
-                     else "wire " ^ "[" ^ string_of_int (sz-1) ^ ":0] " ^ w
+                     then "\twire " ^ w ^ ";"
+                     else "\twire " ^ "[" ^ string_of_int (sz-1) ^ ":0] " ^ w ^ ";"
 
 type internal_decls = internal_decl list
 
@@ -213,10 +213,27 @@ let continous_assignments
       (List.of_seq (PtrHashtbl.to_seq_keys circuit.dedup_ptrs))
 
 
-(* Phase IV: Update of register *)
+(* Phase IV: Update of register
 
-type statement = Update of string  * bool list  * string
+
+   The update of the registers are done in parallel for all the
+   registers: on every rising edge of clock, if reset is high then we
+   write the initial value of the register, otherwise if overwrite is
+   high, we write the value coming from the environment, otherwise we
+   write the value computed by the root wire of that register.
+
+ *)
+
+type statement = Update of string  * string  * string
 (* name register, init value, net obtained by looking up the root of the register *)
+
+let statement_to_string (statement: statement) =
+  let Update (reg, initvalue, net_update) = statement in (* Really we can do that? That's cool *)
+  (* So we should compensate with something less cool: *)
+  "\talways @(posedge clock) begin\n\t\tif (reset) begin\n\t\t\t" ^ reg ^ " <= " ^ initvalue ^ ";\n" ^
+    "\t\tend else begin\n" ^ "\t\t\tif (" ^ reg ^ "__overwrite" ^ ") begin " ^
+      "\t\t\t\t" ^ reg ^ " <= " ^ reg ^ "__overwrite_data" ^ ";\n\t\t\tend else begin\n" ^
+        "\t\t\t\t" ^ reg ^ " <= " ^ net_update ^ ";\n\t\t\tend\n\t\tend\n\tend"
 
 type statements = statement list
 
@@ -226,97 +243,26 @@ let statements
       (circuit: dedup_result)
     : statements
   =
-  assert false
-(* Overview of the verilog generation:
+  List.map (fun root ->
+      let reg_name = root.root_reg.reg_name in
+      let reg_init = string_of_bits (root.root_reg.reg_init_val) in
+      let reg_wire_update = PtrHashtbl.find environment root.root_ptr in
+      Update (reg_name, reg_init, reg_wire_update))
+    (circuit.dedup_roots)
 
- The circuit generation is composed of four sections.
- We describe how to generate the data for each of them, and then we pretty print the data generated.
+let intersperse a b = assert(false)
 
-I Structure
-  1- The declaration of inputs and outputs
-  2- The declaration of registers and wires
-  3- The continuous assignment, defining intermediate nodes
-  4- The always block describing what to do with registers on rising edges
-
-II Pretty Printing
-  1- io
-  2- internals
-  3- continous assignments
-  4- always blocks
-  5- whole module
-
-I Structure
-===========
-
-1- io declaration
------------------
-
-type io =
- | Input of string * nat
- | Output of string * nat
-
-type decl_io = io list
-
-2- Registers and Wires declaration
-----------------------------------
-
- There are two kind of internal objects: wires and registers. The registers are directly created by iteration on the input registers. We assume that the name of the registers are all distincts.
-
-To declare the wires we iterate over the net PtrHash: for each entry in the hashtable we create one wire with the following name and size:
-- If the name is given by the value in the hashtable: for a CAnnot or a CExternal, write that name and the size is directly accessible.
-
-- Otherwise there is no name available so we create a freshname: (TODO check if _Wnumber or w_number is better).
-All names created that way are added in an environment: ptr -> string
-
-type internal =
- | Reg of string * nat
- | Wire of string * nat
-
-type decl_internal = internal list
-
-3- continous assignment
------------------------
-The net describing the computation of the circuit is representend in the Hashtable.
-
-type expression =
- | Ref string                  (* the String is the name of the node  *)
- | Const string                 (* this string is the string representing the bits to prints for the constants: 3'b000  for example *)
- | Mux string * string * string
- | And string * string
- | Or string  * string
- | Not string * string
- | Select string * string
- | Slice string * string * string
- | ExternalInstance string * string * string * string (* Name instance, arg1, arg2, output *)
-
-For the name of the instance we concatenate the name of the function and the name of the output wire, which
-should not collide with any other instance in any reasonable case.
-
-type assignment = (string * expression) (* LHS, RHS *)
-
-type continous_assignments = assignment list
-
-We iterate through the hashtable, for all pointer we generate (name(pointer), compile(pointed))
-
-
-4- always block
----------------
-
-The update of the register is done in parallel for all the registers: on every rising edge of clock,
-if reset then we write the initial value in the register,
-
-type statement =
- | Update string  * (* string register *)
-          list bool  * (* init value *)
-          string (* net obtained by looking up the root of the register *)
-
-type update = statement list
-
-
-II Pretty printing
-==================
-
-Note: ExternalInstances are instantiated in order.
-
-
-*)
+let compil (circuit: dedup_result) =
+  let environment = PtrHashtbl.create 50 in
+  let instance_external_gensym = ref 0 in
+  let io_decls = io_declarations circuit in
+  let internal_decls = internal_declarations environment circuit in
+  let continous_assignments = continous_assignments environment circuit in
+  let string_io_decls = List.map io_decl_to_string io_decls in
+  let statements = statements environment circuit in
+  let string_prologue = "module CompilerTest(" ^ (String.concat ", " string_io_decls) ^ "i);" in (* TODO pass a name here *)
+  let string_internal_decls = String.concat "\n" (List.map internal_decl_to_string internal_decls) in
+  let string_continous_assignments = String.concat "\n" (List.map (assignment_to_string instance_external_gensym)  continous_assignments) in
+  let string_statements = String.concat "\n" (List.map statement_to_string statements) in
+  let string_epilogue = "endmodule" in
+  print_string (String.concat "\n" [string_prologue; string_internal_decls; string_continous_assignments; string_statements; string_epilogue])
