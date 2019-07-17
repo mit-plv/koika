@@ -22,7 +22,7 @@ Definition prim_sel {logsz} (bs: bits (pow2 logsz)) (idx: bits logsz) :=
 Definition prim_Sigma (fn: prim_fn_t) : ExternalSignature :=
   match fn with
   | Sel logsz => {{ pow2 logsz ~> logsz ~> 1 }}
-  | Part logsz width => {{ pow2 logsz ~> logsz ~> (nat_of_index width) }}
+  | Part logsz width => {{ pow2 logsz ~> logsz ~> (index_to_nat width) }}
   | And sz => {{ sz ~> sz ~> sz }}
   | Or sz => {{ sz ~> sz ~> sz }}
   | Not sz => {{ sz ~> 0 ~> sz }}
