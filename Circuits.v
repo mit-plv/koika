@@ -94,6 +94,29 @@ Section Interpretation.
     | CAnnot _ c =>
       interp_circuit c
     end.
+
+  Fixpoint interp_circuit' {n} (c: circuit R Sigma n) : bits n :=
+    match c with
+    | CQuestionMark sz =>
+      Bits.const sz false       (* FIXME prove that this doesn't influence result *)
+    | CNot c =>
+      w1 (negb (Bits.single (interp_circuit' c)))
+    | CAnd c1 c2 =>
+      w1 (andb (Bits.single (interp_circuit' c1)) (Bits.single (interp_circuit' c2)))
+    | COr c1 c2 =>
+      w1 (orb (Bits.single (interp_circuit' c1)) (Bits.single (interp_circuit' c2)))
+    | CMux select c1 c2 =>
+      if Bits.single (interp_circuit' select) then interp_circuit' c1
+      else interp_circuit' c2
+    | CConst cst =>
+      cst
+    | CReadRegister idx =>
+      REnv.(getenv) r idx
+    | CExternal idx arg1 arg2 =>
+      sigma idx (interp_circuit' arg1) (interp_circuit' arg2)
+    | CAnnot _ c =>
+      interp_circuit' c
+    end.
 End Interpretation.
 
 Section CircuitCompilation.
@@ -163,8 +186,8 @@ Section CircuitCompilation.
         let reg := REnv.(getenv) clog.(regs) idx in
         {| retVal := CAnnot "read0" (REnv.(getenv) r idx);
            erwc := {| canFire := (clog.(canFire) &&`"read0_cF"`
-                                !`"no_read1"` reg.(read1) &&`"read0_cF"`
-                                !`"no_write1"` reg.(write1));
+                                (!`"no_read1"` reg.(read1) &&`"read0_cF"`
+                                 !`"no_write1"` reg.(write1)));
                      regs := REnv.(putenv) clog.(regs) idx {| read0 := $`"read0"` (w1 true);
                                                              (* Unchanged *)
                                                              read1 := reg.(read1);
@@ -231,9 +254,9 @@ Section CircuitCompilation.
         let val := compile_expr Gamma val clog in
         let reg := REnv.(getenv) val.(erwc).(regs) idx in
         {| canFire := (val.(erwc).(canFire) &&`"write0_cF"`
-                      !`"no_read1"` reg.(read1) &&`"write0_cF"`
-                      !`"no_write0"` reg.(write0) &&`"write0_cF"`
-                      !`"no_write1"` reg.(write1));
+                      (!`"no_read1"` reg.(read1) &&`"write0_cF"`
+                       !`"no_write0"` reg.(write0) &&`"write0_cF"`
+                       !`"no_write1"` reg.(write1)));
            regs := REnv.(putenv) val.(erwc).(regs) idx {| write0 := $`"write0"` (w1 true);
                                                          data0 := val.(retVal);
                                                          (* Unchanged *)
