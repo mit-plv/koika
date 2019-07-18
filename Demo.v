@@ -128,7 +128,6 @@ Module Collatz.
 
   Definition logsz := 5.
   Notation sz := (pow2 logsz).
-  Parameter r0_init: bits sz.
 
   Definition R r :=
     match r with
@@ -141,7 +140,7 @@ Module Collatz.
 
   Definition r idx : R idx :=
     match idx with
-    | R0 => r0_init
+    | R0 => Ob~0~1~0~1~0~1~1~1~1~0~0~0~1~1~0~0~0~0~1~0~1~0~1~1~1~1~0~0~0~1~1~0
     end.
 
   (* TODO bug report *)
@@ -202,18 +201,17 @@ Module Collatz.
 
   Notation compute t :=
     ltac:(let tt := type of t in
-          let t := (eval vm_compute in t) in
+          let t := (eval lazy in t) in
           exact (t: tt)) (only parsing).
 
-  Open Scope bits_printing.
-  (* Definition result := *)
-  (*   compute (interp_scheduler cr isigma collatz). *)
-  (* Definition divide_result := *)
-  (*   compute (interp_rule cr isigma CtxEmpty log_empty log_empty *)
-  (*                        (tc R iSigma divide_collatz)). *)
-  (* Definition multiply_result := *)
-  (*   compute (interp_rule cr isigma CtxEmpty log_empty log_empty *)
-  (*                        (tc R iSigma multiply_collatz)). *)
+  Definition result :=
+    compute (interp_scheduler cr isigma collatz).
+  Definition divide_result :=
+    compute (interp_rule cr isigma CtxEmpty log_empty log_empty
+                         (tc R iSigma divide_collatz)).
+  Definition multiply_result :=
+    compute (interp_rule cr isigma CtxEmpty log_empty log_empty
+                         (tc R iSigma multiply_collatz)).
 
   Definition circuit :=
     compile_scheduler (ContextEnv.(create) (readRegisters R iSigma)) collatz.

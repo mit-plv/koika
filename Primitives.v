@@ -15,7 +15,7 @@ Inductive prim_fn_t :=
 | ZExtR (sz: nat) (nzeroes: nat).
 
 Definition prim_sel {logsz} (bs: bits (pow2 logsz)) (idx: bits logsz) :=
-  match Bits.to_index (pow2 logsz) bs with
+  match Bits.to_index (pow2 logsz) idx with
   | Some idx => Bits.nth bs idx
   | _ => false (* TODO: x *)
   end.
