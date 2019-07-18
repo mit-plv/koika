@@ -88,7 +88,7 @@ Section Proof.
 
   Definition update_one r rl: option (REnv.(env_t) R) :=
     let/opt r := r in
-    let/opt log := @interp_scheduler' var_t reg_t fn_t R Sigma REnv r sigma log_empty (Try rl Done Done) in
+    let log := @interp_scheduler' var_t reg_t fn_t R Sigma REnv r sigma log_empty (Try rl Done Done) in
     Some (commit_update r log).
 
   Definition latest_write (l: Log) idx: option (R idx) :=
@@ -375,7 +375,7 @@ Section Proof.
 
   Lemma interp_scheduler_trace_correct :
     forall s l0 log,
-      interp_scheduler' r sigma l0 s = Some log ->
+      interp_scheduler' r sigma l0 s = log ->
       exists rs, interp_scheduler'_trace l0 s = Some (rs, log).
   Proof.
     induction s; cbn.
@@ -407,7 +407,7 @@ Section Proof.
 
   Theorem OneRuleAtATime:
     forall s log,
-      interp_scheduler r sigma s = Some log ->
+      interp_scheduler r sigma s = log ->
       exists rs,
         (forall rl, List.In rl rs -> List.In rl (scheduler_rules s)) /\
         List.fold_left update_one rs (Some r) = Some (commit_update r log).
