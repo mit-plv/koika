@@ -101,6 +101,57 @@ Fixpoint vect_fold_left {A T n} (f: A -> T -> A) (a0: A) (v: vect T n) : A :=
 Definition vect_to_list {T n} (v: vect T n) : list T :=
   vect_fold_left (fun acc t => List.cons t acc) List.nil v.
 
+Fixpoint vect_of_list {T} (l: list T) : vect T (length l) :=
+  match l with
+  | nil => vect_nil
+  | cons h t => vect_cons h (vect_of_list t)
+  end.
+
+Fixpoint vect_truncate_left {T sz} n (v: vect T (n + sz)) : vect T sz :=
+  match n return vect T (n + sz) -> vect T sz with
+  | 0 => fun v => v
+  | S n => fun '(h, t) => vect_truncate_left n t
+  end v.
+
+Fixpoint vect_snoc {T sz} (t: T) (v: vect T sz) : vect T (S sz) :=
+  match sz return vect T sz -> vect T (S sz) with
+  | O => fun v => vect_cons t vect_nil
+  | S sz => fun v => vect_cons (vect_hd v) (vect_snoc t (vect_tl v))
+  end v.
+
+Fixpoint vect_unsnoc {T sz} (v: vect T (S sz)) : T * vect T sz :=
+  match sz return vect T (S sz) -> T * vect T sz with
+  | O => fun v => (vect_hd v, vect_tl v)
+  | S sz => fun v => let '(t, v') := vect_unsnoc (vect_tl v) in
+                 (t, vect_cons (vect_hd v) v')
+  end v.
+
+Definition vect_cycle_l1 {T sz} (v: vect T sz) :=
+  match sz return vect T sz -> vect T sz with
+  | O => fun v => v
+  | S sz => fun v => vect_snoc (vect_hd v) (vect_tl v)
+  end v.
+
+Definition vect_cycle_r1 {T sz} (v: vect T sz) :=
+  match sz return vect T sz -> vect T sz with
+  | O => fun v => v
+  | S sz => fun v => let '(t, v') := vect_unsnoc v in
+                 vect_cons t v'
+  end v.
+
+Fixpoint vect_repeat {A} (f: A -> A) n (v: A)
+  : A :=
+  match n with
+  | O => v
+  | S n => vect_repeat f n (f v)
+  end.
+
+Definition vect_cycle_l {T sz} n (v: vect T sz) :=
+  vect_repeat vect_cycle_l1 n v.
+
+Definition vect_cycle_r {T sz} n (v: vect T sz) :=
+  vect_repeat vect_cycle_r1 n v.
+
 Module Bits.
   Notation bits n := (vect bool n).
   Definition nil : bits 0 := vect_nil.
@@ -114,6 +165,21 @@ Module Bits.
   Definition lsb {n} (bs: bits (S n)) := vect_last bs.
   Definition map {n} (f: bool -> bool) (bs: bits n) := vect_map f bs.
   Definition map2 {n} (f: bool -> bool -> bool) (bs1 bs2: bits n) := vect_map2 f bs1 bs2.
+
+  Definition lsr1 {sz} (b: bits sz) :=
+    match sz return bits sz -> bits sz with
+    | 0 => fun b => b
+    | S _ => fun b => vect_snoc false (vect_tl b)
+    end b.
+  Definition lsl1 {sz} (b: bits sz) :=
+    match sz return bits sz -> bits sz with
+    | 0 => fun b => b
+    | S _ => fun b => vect_cons false (snd (vect_unsnoc b))
+    end b.
+  Definition lsr {sz} nplaces (b: bits sz) :=
+    vect_repeat lsr1 nplaces b.
+  Definition lsl {sz} nplaces (b: bits sz) :=
+    vect_repeat lsl1 nplaces b.
 
   Fixpoint to_nat {sz: nat} (bs: bits sz) : nat :=
     match sz return bits sz -> nat with
@@ -143,6 +209,9 @@ Module Bits.
     | N0 => const sz false
     | Npos p => of_positive sz p
     end.
+
+  Definition zero sz : bits sz := of_N sz N.zero.
+  Definition one sz : bits sz := of_N sz N.one.
 
   Definition to_index {sz} sz' (bs: bits sz) : option (index sz') :=
     index_of_nat sz' (to_nat bs).

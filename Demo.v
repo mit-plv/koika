@@ -123,25 +123,24 @@ End Ex2.
 Module Collatz.
   Definition var_t := string.
   Inductive reg_t := R0.
-  Inductive custom_t := Divide | ThreeNPlusOne | Even | Odd.
+  Inductive custom_t := .
   Definition fn_t := interop_fn_t custom_t.
+
+  Definition logsz := 5.
+  Notation sz := (pow2 logsz).
 
   Definition R r :=
     match r with
-    | R0 => bits_t 2
+    | R0 => bits_t sz
     end.
 
-  Definition Sigma fn :=
+  Definition Sigma (fn: custom_t) : ExternalSignature :=
     match fn with
-    | Divide => {{ 2 ~> 0 ~> 2 }}
-    | ThreeNPlusOne => {{ 2 ~> 0 ~> 2 }}
-    | Even => {{ 2 ~> 0 ~> 1 }}
-    | Odd => {{ 2 ~> 0 ~> 1 }}
     end.
 
   Definition r idx : R idx :=
     match idx with
-    | R0 => Ob~1~0
+    | R0 => Ob~0~1~0~1~0~1~1~1~1~0~0~0~1~1~0~0~0~0~1~0~1~0~1~1~1~1~0~0~0~1~1~0
     end.
 
   (* TODO bug report *)
@@ -152,33 +151,28 @@ Module Collatz.
 
   Definition sigma idx : Sigma idx :=
     match idx with
-    | Divide => fun '(`` Ob~b1~b2) _ => Ob~0~b1
-    | ThreeNPlusOne => fun bs _ => match bs with
-                               | `` Ob~0~0 => Ob~0~1
-                               | `` Ob~0~1 => Ob~0~0
-                               | `` Ob~1~0 => Ob~1~1
-                               | `` Ob~1~1 => Ob~1~0
-                               end
-    | Even => fun '(`` Ob~_~b2) _ => Ob~(negb b2)
-    | Odd => fun '(`` Ob~_~b2) _ => Ob~b2
     end.
 
   Open Scope sga.
 
   Definition divide_collatz : urule var_t reg_t fn_t :=
     Let "v" <- R0#read0 in
-    Let "odd" <- (Sel 1)[[$"v", UConst Ob~0]] in
+    Let "odd" <- (Sel logsz)[[$"v", UConst (Bits.zero logsz)]] in
     If (Not 1)[[$"odd"]] Then
-       R0#write0(Divide[$"v"])
+       R0#write0((Lsr sz 1)[[$"v", UConst Ob~1]])
     Else
       fail
     EndIf.
 
+  Definition TimesThree sz (ex: uexpr var_t reg_t fn_t) :=
+    (UIntPlus sz)[[(Lsl sz 1)[[ex, UConst Ob~1]], ex]]%sga_expr.
+
   Definition multiply_collatz : urule var_t reg_t fn_t :=
     Let "v" <- R0#read1 in
-    Let "odd" <- (Sel 1)[[$"v", UConst Ob~0]] in
+    Let "odd" <- (Sel logsz)[[$"v", UConst (Bits.zero logsz)]] in
     If $"odd" Then
-        R0#write1(ThreeNPlusOne[$"v"])
+       R0#write1((UIntPlus sz)[[TimesThree sz ($"v"),
+                                UConst (Bits.one sz)]])
     Else
        fail
     EndIf.
@@ -207,10 +201,9 @@ Module Collatz.
 
   Notation compute t :=
     ltac:(let tt := type of t in
-          let t := (eval vm_compute in t) in
+          let t := (eval lazy in t) in
           exact (t: tt)) (only parsing).
 
-  Open Scope bits_printing.
   Definition result :=
     compute (interp_scheduler cr isigma collatz).
   Definition divide_result :=
@@ -237,10 +230,6 @@ Module Collatz.
                         | R0 => "R0"
                         end;
        vp_custom_fn_names fn := match fn with
-                               | Divide => "Divide"
-                               | ThreeNPlusOne => "ThreeNPlusOne"
-                               | Even => "Even"
-                               | Odd => "Odd"
                                end;
 
        vp_circuit := circuit;
