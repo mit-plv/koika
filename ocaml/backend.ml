@@ -150,7 +150,7 @@ let assignment_to_string (gensym: int ref) (assignment: assignment) =
   let (lhs,expr) = assignment in
   let default_left = "\tassign " ^ lhs ^ " = " in
   (match expr with
-   | EQuestionMark _ -> default_left ^ "x" (* TODO check other ways to do  *)
+   | EQuestionMark _ -> default_left ^ "0" (* TODO check other ways to do  *)
    | ENot n -> default_left ^ "~" ^ n
    | EAnd (arg1, arg2) -> default_left ^ arg1 ^ " & " ^ arg2
    | EOr (arg1, arg2) -> default_left ^ arg1 ^ " | " ^ arg2
