@@ -186,8 +186,7 @@ Section CircuitCompilation.
         let reg := REnv.(getenv) clog.(regs) idx in
         {| retVal := CAnnot "read0" (REnv.(getenv) r idx);
            erwc := {| canFire := (clog.(canFire) &&`"read0_cF"`
-                                (!`"no_read1"` reg.(read1) &&`"read0_cF"`
-                                 !`"no_write1"` reg.(write1)));
+                                (!`"no_write1"` reg.(write1)));
                      regs := REnv.(putenv) clog.(regs) idx {| read0 := $`"read0"` (w1 true);
                                                              (* Unchanged *)
                                                              read1 := reg.(read1);
@@ -289,15 +288,23 @@ Section CircuitCompilation.
                                        data1 := CQuestionMark _ |})
                          cs.(sregs) |}.
 
+  Definition willFire_of_canFire'_read0 {sz} (ruleReg inReg: @rwdata sz) :=
+    (ruleReg.(read0)) ==>`"read0_wF_of_cF"`
+    (!`"read0_wF_no_writes"` ((inReg.(write0)) ||`""` (inReg.(write1)))).
+
+  Definition willFire_of_canFire'_write0 {sz} (ruleReg inReg: @rwdata sz) :=
+    (ruleReg.(write0)) ==>`"write0_wF_of_cF"`
+    (!`"write0_wF_no_writes_no_read1"`
+       ((inReg.(write0)) ||`""` (inReg.(write1)) ||`""` (inReg.(read1)))).
+
+  Definition willFire_of_canFire'_rw1 {sz} (ruleReg inReg: @rwdata sz) :=
+    ((ruleReg.(read1)) ||`""` (ruleReg.(write1))) ==>`"read_write1_wF_of_cF"`
+    (!`"read_write1_wF_no_write1"` (inReg.(write1))).
+
   Definition willFire_of_canFire' {sz} (ruleReg inReg: @rwdata sz) :=
-    ((ruleReg.(read0)) ==>`"read0_wF_of_cF"`
-     (!`"read0_wF_no_writes"`
-        ((inReg.(write0)) ||`""` (inReg.(write1))))) &&`""`
-    ((ruleReg.(write0)) ==>`"write0_wF_of_cF"`
-     (!`"write0_wF_no_writes_no_read1"`
-        ((inReg.(write0)) ||`""` (inReg.(write1)) ||`""` (inReg.(read1))))) &&`""`
-    (((ruleReg.(read1)) ||`""` (ruleReg.(write1))) ==>`"read_write1_wF_of_cF"`
-     (!`"read_write1_wF_no_write1"` (inReg.(write1)))).
+    (willFire_of_canFire'_read0 ruleReg inReg) &&`""`
+    (willFire_of_canFire'_write0 ruleReg inReg) &&`""`
+    (willFire_of_canFire'_rw1 ruleReg inReg).
 
   Definition willFire_of_canFire cRule cInput : circuit 1 :=
     REnv.(fold_right)
