@@ -314,6 +314,46 @@ Section Interp.
     rewrite log_find_cons_neq by assumption; reflexivity.
   Qed.
 
+  Definition latest_write1 (log: Log) idx :=
+    log_find log idx
+             (fun le => match le with
+                     | (LE LogWrite P1 v) => Some v
+                     | _ => None
+                     end).
+
+  Lemma latest_write1_app :
+    forall (sl sl': Log) idx,
+      latest_write1 (log_app sl sl') idx =
+      match latest_write1 sl idx with
+      | Some e => Some e
+      | None => latest_write1 sl' idx
+      end.
+  Proof.
+    unfold latest_write1; eauto using log_find_app.
+  Qed.
+
+  Lemma latest_write1_cons_eq :
+    forall (log: Log) idx le,
+      latest_write1 (log_cons idx le log) idx =
+      match le with
+      | LE LogWrite P1 v => Some v
+      | _ => latest_write1 log idx
+      end.
+  Proof.
+    unfold latest_write1; intros.
+    rewrite log_find_cons_eq; destruct le, kind0, port0; reflexivity.
+  Qed.
+
+  Lemma latest_write1_cons_neq :
+    forall (log: Log) idx idx' le,
+      idx <> idx' ->
+      latest_write1 (log_cons idx' le log) idx =
+      latest_write1 log idx.
+  Proof.
+    unfold latest_write1; intros.
+    rewrite log_find_cons_neq by assumption; reflexivity.
+  Qed.
+
   Definition may_write (sched_log rule_log: Log) prt idx :=
     match prt with
     | P0 => negb (log_existsb (log_app rule_log sched_log) idx is_read1) &&

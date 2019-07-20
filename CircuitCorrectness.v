@@ -31,31 +31,7 @@ Section CompilerCorrectness.
   Notation interp_circuit := (interp_circuit r sigma).
   Notation interp_circuit' := (interp_circuit' r sigma). (* FIXME *)
 
-  (* Record rwdata_result sz := *)
-  (*   { rread0: option (bits 1); *)
-  (*     rread1: option (bits 1); *)
-  (*     rwrite0: option (bits 1); *)
-  (*     rwrite1: option (bits 1); *)
-  (*     rdata0: option (bits sz); *)
-  (*     rdata1: option (bits sz) }. *)
-
-  (* Record rwdata_result sz := *)
-  (*   { rread0: bits 1; *)
-  (*     rread1: bits 1; *)
-  (*     rwrite0: bits 1; *)
-  (*     rwrite1: bits 1; *)
-  (*     rdata0: bits sz; *)
-  (*     rdata1: bits sz }. *)
-
-  (* Definition interp_rwdata {sz} (reg: @rwdata reg_t fn_t R Sigma sz) := *)
-  (*   {| rread0 := interp_circuit' reg.(read0); *)
-  (*      rread1 := interp_circuit' reg.(read1); *)
-  (*      rwrite0 := interp_circuit' reg.(write0); *)
-  (*      rwrite1 := interp_circuit' reg.(write1); *)
-  (*      rdata0 := interp_circuit' reg.(data0); *)
-  (*      rdata1 := interp_circuit' reg.(data1) |}. *)
-
-  Definition log_retval_consistent' (l: Log) (regs: rwset) :=
+  Definition log_data0_consistent' (l: Log) (regs: rwset) :=
     forall idx,
       let cidx := REnv.(getenv) regs idx in
       interp_circuit' (cidx.(data0)) = match latest_write0 l idx with
@@ -63,77 +39,273 @@ Section CompilerCorrectness.
                                        | None => getenv REnv r idx
                                        end.
 
-  Definition log_retval_consistent (l L: Log) (regs: rwset) :=
-    log_retval_consistent' (log_app l L) regs.
+  Definition log_data0_consistent (l L: Log) (regs: rwset) :=
+    log_data0_consistent' (log_app l L) regs.
 
-  Lemma log_retval_consistent_putenv_read_write1 :
+  Definition log_data1_consistent' (l: Log) (regs: rwset) :=
+    forall idx,
+      let cidx := REnv.(getenv) regs idx in
+      log_existsb l idx is_write1 = true ->
+      match latest_write1 l idx with
+      | Some v => interp_circuit' (cidx.(data1)) = v
+      | None => False
+      end.
+
+  Definition log_data1_consistent (l L: Log) (regs: rwset) :=
+    log_data1_consistent' (log_app l L) regs.
+
+  Ltac data_consistent_putenv_t :=
+    unfold log_data0_consistent, log_data0_consistent', log_data1_consistent, log_data1_consistent';
+    repeat match goal with
+           | _ => progress intros
+           | [ H: _ = _ |- _ ] => rewrite H
+           | [ H: forall idx, _, idx: reg_t |- _ ] => pose_once H idx
+           | [  |- context[REnv.(getenv) (REnv.(putenv) _ ?idx _) ?idx'] ] =>
+             destruct (eq_dec idx idx'); subst;
+             [ rewrite !get_put_eq | rewrite !get_put_neq by eassumption ]
+           | _ => progress rewrite ?latest_write0_app, ?latest_write1_app in *
+           | _ => progress rewrite ?latest_write0_cons_eq, ?latest_write0_cons_neq
+           | _ => progress rewrite ?latest_write1_cons_eq, ?latest_write1_cons_neq
+           end; eauto.
+
+  Lemma log_data0_consistent_putenv_read_write1 :
     forall idx k p log Log rws rwd v,
       k = LogRead \/ (k = LogWrite /\ p = P1) ->
       data0 rwd = data0 (REnv.(getenv) rws idx) ->
-      log_retval_consistent log Log rws ->
-      log_retval_consistent (log_cons idx {| kind := k; port := p; val := v |} log) Log
+      log_data0_consistent log Log rws ->
+      log_data0_consistent (log_cons idx {| kind := k; port := p; val := v |} log) Log
+                            (REnv.(putenv) rws idx rwd).
+  Proof.
+    destruct 1; repeat cleanup_step; subst.
+    all: data_consistent_putenv_t.
+  Qed.
+
+  Lemma log_data0_consistent_putenv_write0 :
+    forall idx log Log rws rwd v,
+      v = interp_circuit' (data0 rwd) ->
+      log_data0_consistent log Log rws ->
+      log_data0_consistent (log_cons idx {| kind := LogWrite; port := P0; val := v |} log) Log
+                            (REnv.(putenv) rws idx rwd).
+  Proof.
+    data_consistent_putenv_t.
+  Qed.
+
+  (* FIXME move to common *)
+  Require Import Bool.
+  (* https://coq-club.inria.narkive.com/HeWqgvKm/boolean-simplification *)
+  Hint Rewrite
+       orb_false_r (** b || false -> b *)
+       orb_false_l (** false || b -> b *)
+       orb_true_r (** b || true -> true *)
+       orb_true_l (** true || b -> true *)
+       andb_false_r (** b && false -> false *)
+       andb_false_l (** false && b -> false *)
+       andb_true_r (** b && true -> b *)
+       andb_true_l (** true && b -> b *)
+       negb_orb (** negb (b || c) -> negb b && negb c *)
+       negb_andb (** negb (b && c) -> negb b || negb c *)
+       negb_involutive (** negb( (negb b) -> b *)
+    : bool_simpl.
+  Ltac bool_simpl := autorewrite with bool_simpl in *.
+
+  Ltac bool_cleanup :=
+    match goal with
+    | _ => reflexivity
+    | _ => cleanup_step
+    | [ H: _ \/ _ |- _ ] => destruct H
+    | [ H: _ && _ = true |- _ ] => rewrite andb_true_iff in H
+    | [ H: _ && _ = false |- _ ] => rewrite andb_false_iff in H
+    | [ H: _ || _ = true |- _ ] => rewrite orb_true_iff in H
+    | [ H: _ || _ = false |- _ ] => rewrite orb_false_iff in H
+    | [ H: negb _ = true |- _ ] => rewrite negb_true_iff in H
+    | [ H: negb _ = false |- _ ] => rewrite negb_false_iff in H
+    | [ H: log_existsb (log_app _ _) _ _ = _ |- _ ] =>
+      rewrite log_existsb_app in H
+    | [ H: ?x = _ |- context[?x] ] =>
+      rewrite H
+    | _ => progress bool_simpl
+    end.
+
+  Lemma log_existsb_app_cons_write1_eq:
+    forall idx k p (log: Log) Log v,
+      k = LogRead \/ (k = LogWrite /\ p = P0) ->
+      log_existsb (log_app (log_cons idx {| kind := k; port := p; val := v |} log) Log) idx is_write1 = true ->
+      log_existsb (log_app log Log) idx is_write1 = true.
+  Proof.
+    destruct 1; repeat cleanup_step; subst.
+
+    all: rewrite !log_existsb_app; intros H; bool_cleanup; destruct H;
+      try rewrite log_existsb_log_cons_eq in H; eauto; bool_simpl; try rewrite H; bool_simpl; reflexivity.
+  Qed.
+
+  Lemma log_existsb_app_cons_write1_neq:
+    forall idx idx' k p (log: Log) Log v,
+      idx <> idx' ->
+      log_existsb (log_app (log_cons idx' {| kind := k; port := p; val := v |} log) Log) idx is_write1 = true ->
+      log_existsb (log_app log Log) idx is_write1 = true.
+  Proof.
+    intros *.
+    rewrite !log_existsb_app; intros Hneq H; bool_cleanup; destruct H;
+      try rewrite log_existsb_log_cons_neq in H; eauto; bool_simpl; try rewrite H; bool_simpl; reflexivity.
+  Qed.
+
+  Lemma log_data1_consistent_putenv_read_write1 :
+    forall idx k p log Log rws rwd v,
+      k = LogRead \/ (k = LogWrite /\ p = P0) ->
+      data1 rwd = data1 (REnv.(getenv) rws idx) ->
+      log_data1_consistent log Log rws ->
+      log_data1_consistent (log_cons idx {| kind := k; port := p; val := v |} log) Log
                             (REnv.(putenv) rws idx rwd).
   Proof.
     destruct 1; repeat cleanup_step; subst.
 
-    all: unfold log_retval_consistent, log_retval_consistent'; intros * Hdata0 Hcst idx';
-      (destruct (eq_dec idx idx'); specialize (Hcst idx'); subst;
-       [ rewrite !get_put_eq | rewrite !get_put_neq by eassumption ]);
-      try rewrite Hdata0; rewrite latest_write0_app in *;
-        rewrite ?latest_write0_cons_eq, ?latest_write0_cons_neq;
-        eauto.
+    all: data_consistent_putenv_t.
+
+    all: match goal with
+         | [ Hnew: _ <> _, H: log_existsb _ _ _ = _ -> _ |- _ ] =>
+           apply H;
+             eapply log_existsb_app_cons_write1_neq;
+             try eassumption; eauto
+         | [ H: log_existsb _ _ _ = _ -> _ |- _ ] =>
+           apply H;
+             eapply log_existsb_app_cons_write1_eq;
+             try eassumption; eauto
+         end.
   Qed.
 
-  Lemma log_retval_consistent_putenv_write0 :
+  Lemma log_data1_consistent_putenv_write1 :
     forall idx log Log rws rwd v,
-      v = interp_circuit' (data0 rwd) ->
-      log_retval_consistent log Log rws ->
-      log_retval_consistent (log_cons idx {| kind := LogWrite; port := P0; val := v |} log) Log
+      v = interp_circuit' (data1 rwd) ->
+      log_data1_consistent log Log rws ->
+      log_data1_consistent (log_cons idx {| kind := LogWrite; port := P1; val := v |} log) Log
                             (REnv.(putenv) rws idx rwd).
   Proof.
-    unfold log_retval_consistent, log_retval_consistent'; intros * Hdata0 Hcst idx';
-      destruct (eq_dec idx idx'); specialize (Hcst idx'); subst;
-        [ rewrite !get_put_eq | rewrite !get_put_neq by eassumption ];
-        try rewrite Hdata0; rewrite latest_write0_app in *.
-    rewrite latest_write0_cons_eq;
-      eauto.
-    rewrite latest_write0_cons_neq;
-      eauto.
+    data_consistent_putenv_t.
+    apply H2.
+    eapply log_existsb_app_cons_write1_neq; eauto.
   Qed.
 
-  Lemma log_retval_consistent_mux :
-    forall cond rws0 rws1 s l L,
-      (interp_circuit' cond = Ob~0 -> log_retval_consistent l L rws0) ->
-      (interp_circuit' cond = Ob~1 -> log_retval_consistent l L rws1) ->
-      log_retval_consistent l L (mux_rwsets s cond rws1 rws0).
-  Proof.
-    unfold mux_rwsets, log_retval_consistent; intros * H0 H1 idx.
-    unfold map2; rewrite !getenv_create.
-    unfold mux_rwdata; cbn.
+  Ltac log_consistent_mux_t :=
+    intros cond * H0 H1 idx;
+    unfold mux_rwsets, map2; rewrite !getenv_create;
+    unfold mux_rwdata; cbn;
     destruct (interp_circuit' cond) as [ [ | ] [] ]; cbn;
-      [ specialize (H1 eq_refl idx) | specialize (H0 eq_refl idx) ];
-      eauto.
+    [ specialize (H1 eq_refl idx) | specialize (H0 eq_refl idx) ];
+    eauto.
+
+  Lemma log_data0_consistent'_mux :
+    forall cond rws0 rws1 s l,
+      (interp_circuit' cond = Ob~0 -> log_data0_consistent' l rws0) ->
+      (interp_circuit' cond = Ob~1 -> log_data0_consistent' l rws1) ->
+      log_data0_consistent' l (mux_rwsets s cond rws1 rws0).
+  Proof.
+    log_consistent_mux_t.
   Qed.
 
-  Lemma log_retval_consistent_mux_l :
+  Tactic Notation "log_consistent_mux_t'" constr(thm) :=
+    intros; apply thm;
+    eauto;
+    let Heq := fresh in
+    intros Heq; rewrite Heq in *; discriminate.
+
+  Lemma log_data0_consistent'_mux_l :
+    forall cond rws0 rws1 s l,
+      interp_circuit' cond = Ob~1 ->
+      log_data0_consistent' l rws1 ->
+      log_data0_consistent' l (mux_rwsets s cond rws1 rws0).
+  Proof.
+    log_consistent_mux_t' log_data0_consistent'_mux.
+  Qed.
+
+  Lemma log_data0_consistent'_mux_r :
+    forall cond rws0 rws1 s l,
+      interp_circuit' cond = Ob~0 ->
+      log_data0_consistent' l rws0 ->
+      log_data0_consistent' l (mux_rwsets s cond rws1 rws0).
+  Proof.
+    log_consistent_mux_t' log_data0_consistent'_mux.
+  Qed.
+
+  Lemma log_data0_consistent_mux_l :
     forall cond rws0 rws1 s l L,
       interp_circuit' cond = Ob~1 ->
-      log_retval_consistent l L rws1 ->
-      log_retval_consistent l L (mux_rwsets s cond rws1 rws0).
+      log_data0_consistent l L rws1 ->
+      log_data0_consistent l L (mux_rwsets s cond rws1 rws0).
   Proof.
-    intros; apply log_retval_consistent_mux;
-      eauto || intros Heq; rewrite Heq in *; discriminate.
+    log_consistent_mux_t' log_data0_consistent'_mux.
   Qed.
 
-  Lemma log_retval_consistent_mux_r :
+  Lemma log_data0_consistent_mux_r :
     forall cond rws0 rws1 s l L,
       interp_circuit' cond = Ob~0 ->
-      log_retval_consistent l L rws0 ->
-      log_retval_consistent l L (mux_rwsets s cond rws1 rws0).
+      log_data0_consistent l L rws0 ->
+      log_data0_consistent l L (mux_rwsets s cond rws1 rws0).
   Proof.
-    intros; apply log_retval_consistent_mux;
-      eauto || intros Heq; rewrite Heq in *; discriminate.
+    log_consistent_mux_t' log_data0_consistent'_mux.
   Qed.
+
+  Lemma log_data1_consistent'_mux :
+    forall cond rws0 rws1 s l,
+      (interp_circuit' cond = Ob~0 -> log_data1_consistent' l rws0) ->
+      (interp_circuit' cond = Ob~1 -> log_data1_consistent' l rws1) ->
+      log_data1_consistent' l (mux_rwsets s cond rws1 rws0).
+  Proof.
+    log_consistent_mux_t.
+  Qed.
+
+  Lemma log_data1_consistent'_mux_l :
+    forall cond rws0 rws1 s l,
+      interp_circuit' cond = Ob~1 ->
+      log_data1_consistent' l rws1 ->
+      log_data1_consistent' l (mux_rwsets s cond rws1 rws0).
+  Proof.
+    log_consistent_mux_t' log_data1_consistent'_mux.
+  Qed.
+
+  Lemma log_data1_consistent'_mux_r :
+    forall cond rws0 rws1 s l,
+      interp_circuit' cond = Ob~0 ->
+      log_data1_consistent' l rws0 ->
+      log_data1_consistent' l (mux_rwsets s cond rws1 rws0).
+  Proof.
+    log_consistent_mux_t' log_data1_consistent'_mux.
+  Qed.
+
+  (* Lemma log_data1_consistent_putenv_read_write0 : *)
+  (*   forall idx k p log Log rws rwd v, *)
+  (*     k = LogRead \/ (k = LogWrite /\ p = P0) -> *)
+  (*     data1 rwd = data1 (REnv.(getenv) rws idx) -> *)
+  (*     log_data1_consistent log Log rws -> *)
+  (*     log_data1_consistent (log_cons idx {| kind := k; port := p; val := v |} log) Log *)
+  (*                          (REnv.(putenv) rws idx rwd). *)
+  (* Proof. *)
+  (*   destruct 1; repeat cleanup_step; subst. *)
+
+  (*   all: unfold log_data1_consistent, log_data1_consistent'; intros * Hdata1 Hcst idx' **. *)
+  (*     (destruct (eq_dec idx idx'); specialize (Hcst idx'); subst; *)
+  (*      [ rewrite !get_put_eq | rewrite !get_put_neq by eassumption ]). *)
+  (*     rewrite log_cons_eq in H. *)
+  (*     try rewrite Hdata1; rewrite latest_write1_app in *; *)
+  (*       rewrite ?latest_write0_cons_eq, ?latest_write0_cons_neq; *)
+  (*       eauto. *)
+  (* Qed. *)
+
+  (* Lemma log_data1_consistent_putenv_write0 : *)
+  (*   forall idx log Log rws rwd v, *)
+  (*     v = interp_circuit' (data0 rwd) -> *)
+  (*     log_data0_consistent log Log rws -> *)
+  (*     log_data0_consistent (log_cons idx {| kind := LogWrite; port := P0; val := v |} log) Log *)
+  (*                           (REnv.(putenv) rws idx rwd). *)
+  (* Proof. *)
+  (*   unfold log_data0_consistent, log_data0_consistent'; intros * Hdata0 Hcst idx'; *)
+  (*     destruct (eq_dec idx idx'); specialize (Hcst idx'); subst; *)
+  (*       [ rewrite !get_put_eq | rewrite !get_put_neq by eassumption ]; *)
+  (*       try rewrite Hdata0; rewrite latest_write0_app in *. *)
+  (*   rewrite latest_write0_cons_eq; *)
+  (*     eauto. *)
+  (*   rewrite latest_write0_cons_neq; *)
+  (*     eauto. *)
+  (* Qed. *)
 
   Definition log_rwdata_consistent (log: Log) (regs: rwset) :=
     forall idx,
@@ -180,12 +352,7 @@ Section CompilerCorrectness.
       (interp_circuit' cond = Ob~1 -> log_rwdata_consistent l rws1) ->
       log_rwdata_consistent l (mux_rwsets s cond rws1 rws0).
   Proof.
-    unfold mux_rwsets, log_rwdata_consistent; intros * H0 H1 idx.
-    unfold map2; rewrite !getenv_create.
-    unfold mux_rwdata; cbn.
-    destruct (interp_circuit' cond) as [ [ | ] [] ]; cbn;
-      [ specialize (H1 eq_refl idx) | specialize (H0 eq_refl idx) ];
-      eauto.
+    log_consistent_mux_t.
   Qed.
 
   Lemma log_rwdata_consistent_mux_l :
@@ -194,8 +361,7 @@ Section CompilerCorrectness.
       log_rwdata_consistent l rws1 ->
       log_rwdata_consistent l (mux_rwsets s cond rws1 rws0).
   Proof.
-    intros; apply log_rwdata_consistent_mux;
-      eauto || intros Heq; rewrite Heq in *; discriminate.
+    log_consistent_mux_t' log_rwdata_consistent_mux.
   Qed.
 
   Lemma log_rwdata_consistent_mux_r :
@@ -204,8 +370,7 @@ Section CompilerCorrectness.
       log_rwdata_consistent l rws0 ->
       log_rwdata_consistent l (mux_rwsets s cond rws1 rws0).
   Proof.
-    intros; apply log_rwdata_consistent_mux;
-      eauto || intros Heq; rewrite Heq in *; discriminate.
+    log_consistent_mux_t' log_rwdata_consistent_mux.
   Qed.
 
   Ltac ceauto :=
@@ -463,24 +628,6 @@ Section CompilerCorrectness.
     apply circuit_lt_willFire_of_canFire_canFire.
     eassumption.
   Qed.
-
-  (* FIXME move to common *)
-  Require Import Bool.
-  (* https://coq-club.inria.narkive.com/HeWqgvKm/boolean-simplification *)
-  Hint Rewrite
-       orb_false_r (** b || false -> b *)
-       orb_false_l (** false || b -> b *)
-       orb_true_r (** b || true -> true *)
-       orb_true_l (** true || b -> true *)
-       andb_false_r (** b && false -> false *)
-       andb_false_l (** false && b -> false *)
-       andb_true_r (** b && true -> b *)
-       andb_true_l (** true && b -> b *)
-       negb_orb (** negb (b || c) -> negb b && negb c *)
-       negb_andb (** negb (b && c) -> negb b || negb c *)
-       negb_involutive (** negb( (negb b) -> b *)
-    : bool_simpl.
-  Ltac bool_simpl := autorewrite with bool_simpl in *.
 
   Lemma bits_single_bits_cons :
     forall bs,
@@ -1092,7 +1239,7 @@ Section CompilerCorrectness.
     | [ IH: context[interp_expr _ _ _ _ _ ?ex] |-
         context[interp_expr _ _ ?Gamma ?Log ?log ?ex] ] =>
       specialize (IH _ Gamma _ log ltac:(ceauto) ltac:(ceauto) ltac:(ceauto)
-                     ltac:(ceauto) ltac:(ceauto) ltac:(ceauto));
+                     ltac:(ceauto) ltac:(ceauto) ltac:(ceauto) ltac:(ceauto));
       cbv zeta in IH;
       destruct (interp_expr _ _ Gamma Log log ex) as [(? & ?) | ] eqn:?; cbn
     | [ |- match (if ?x then _ else _) with _ => _ end ] =>
@@ -1100,7 +1247,7 @@ Section CompilerCorrectness.
     | [ IH: context[interp_rule _ _ _ _ _ ?rl] |-
         context[interp_rule _ _ ?Gamma ?Log ?log ?rl] ] =>
       specialize (IH _ Gamma _ log ltac:(ceauto) ltac:(ceauto) ltac:(ceauto)
-                     ltac:(ceauto) ltac:(ceauto) ltac:(ceauto));
+                     ltac:(ceauto) ltac:(ceauto) ltac:(ceauto) ltac:(ceauto));
       cbv zeta in IH;
       destruct (interp_rule _ _ Gamma Log log rl) as [? | ] eqn:?; cbn
     | [  |- context[REnv.(getenv) (REnv.(map2) _ _ _)] ] =>
@@ -1143,25 +1290,12 @@ Section CompilerCorrectness.
            | _ => progress rewrite ?negb_true_iff, ?negb_false_iff
            end; cbn.
 
-  Ltac bool_cleanup :=
+  Ltac bool_cleanup_consistent :=
     match goal with
-    | _ => reflexivity
-    | _ => cleanup_step
-    | [ H: _ \/ _ |- _ ] => destruct H
-    | [ H: _ && _ = true |- _ ] => rewrite andb_true_iff in H
-    | [ H: _ && _ = false |- _ ] => rewrite andb_false_iff in H
-    | [ H: _ || _ = true |- _ ] => rewrite orb_true_iff in H
-    | [ H: _ || _ = false |- _ ] => rewrite orb_false_iff in H
-    | [ H: negb _ = true |- _ ] => rewrite negb_true_iff in H
-    | [ H: negb _ = false |- _ ] => rewrite negb_false_iff in H
-    | [ H: log_existsb (log_app _ _) _ _ = _ |- _ ] =>
-      rewrite log_existsb_app in H
+    | _ => progress bool_cleanup
     | [ H: log_rwdata_consistent _ ?regs |-
         context [Bits.single (interp_circuit' (_ (REnv.(getenv) ?regs ?idx)))] ] =>
       specialize (H idx); cbv zeta in *; repeat cleanup_step
-    | [ H: ?x = _ |- context[?x] ] =>
-      rewrite H
-    | _ => progress bool_simpl
     end.
 
   Ltac may_read_write_t :=
@@ -1175,7 +1309,8 @@ Section CompilerCorrectness.
       (Gamma: vcontext sig) (gamma: ccontext sig) log,
       log_rwdata_consistent log clog.(regs) ->
       log_rwdata_consistent Log cLog ->
-      log_retval_consistent log Log clog.(regs) ->
+      log_data0_consistent log Log clog.(regs) ->
+      log_data1_consistent log Log clog.(regs) ->
       circuit_gamma_equiv Gamma gamma ->
       circuit_env_equiv ->
       interp_circuit' (willFire_of_canFire clog cLog) = Ob~1 ->
@@ -1184,7 +1319,8 @@ Section CompilerCorrectness.
       | Some (l', v) =>
         interp_circuit' cExpr.(retVal) = v /\
         log_rwdata_consistent l' cExpr.(erwc).(regs) /\
-        log_retval_consistent l' Log cExpr.(erwc).(regs) /\
+        log_data0_consistent l' Log cExpr.(erwc).(regs) /\
+        log_data1_consistent l' Log cExpr.(erwc).(regs) /\
         interp_circuit' (willFire_of_canFire cExpr.(erwc) cLog) = Ob~1
       | None =>
         interp_circuit' (willFire_of_canFire cExpr.(erwc) cLog) = Ob~0
@@ -1201,7 +1337,8 @@ Section CompilerCorrectness.
           -- eauto.
           -- apply log_rwdata_consistent_log_cons_putenv;
                [ eauto | red ]; cbn; rewrite ?bits_single_bits_cons; eauto.
-          -- apply log_retval_consistent_putenv_read_write1; eauto.
+          -- apply log_data0_consistent_putenv_read_write1; eauto.
+          -- admit.
           -- interp_willFire_cleanup;
                may_read_write_t.
         * interp_willFire_cleanup.
@@ -1219,9 +1356,12 @@ Section CompilerCorrectness.
           -- apply H1.
           -- apply log_rwdata_consistent_log_cons_putenv;
                [ eauto | red ]; cbn; rewrite ?bits_single_bits_cons; eauto.
-          -- apply log_retval_consistent_putenv_read_write1; eauto.
+          -- apply log_data0_consistent_putenv_read_write1; eauto.
           -- interp_willFire_cleanup.
              may_read_write_t.
+             admit.
+          -- interp_willFire_cleanup;
+               may_read_write_t.
         * interp_willFire_cleanup.
           right.
           eexists.
@@ -1231,7 +1371,7 @@ Section CompilerCorrectness.
       t;
         eapply interp_circuit_circuit_lt_helper_false;
         eauto using expr_compile_willFire_of_canFire_decreasing.
-  Qed.
+  Admitted.
 
   Lemma interp_circuit_willFire_of_canFire'_mux_rwdata:
     forall (idx : reg_t) s (rwd1 rwd2 : rwdata R Sigma (R idx)) (cCond : circuit 1) (rwdL : rwdata R Sigma (R idx)),
@@ -1252,7 +1392,8 @@ Section CompilerCorrectness.
       (Gamma: vcontext sig) (gamma: ccontext sig) log,
       log_rwdata_consistent log clog.(regs) ->
       log_rwdata_consistent Log cLog ->
-      log_retval_consistent log Log clog.(regs) ->
+      log_data0_consistent log Log clog.(regs) ->
+      log_data1_consistent log Log clog.(regs) ->
       circuit_gamma_equiv Gamma gamma ->
       circuit_env_equiv ->
       interp_circuit' (willFire_of_canFire clog cLog) = Ob~1 ->
@@ -1260,7 +1401,8 @@ Section CompilerCorrectness.
       match interp_rule r sigma Gamma Log log rl with
       | Some (l') =>
         log_rwdata_consistent l' cRule.(regs) /\
-        log_retval_consistent l' Log cRule.(regs) /\
+        log_data0_consistent l' Log cRule.(regs) /\
+        log_data1_consistent l' Log cRule.(regs) /\
         interp_circuit' (willFire_of_canFire cRule cLog) = Ob~1
       | None =>
         interp_circuit' (willFire_of_canFire cRule cLog) = Ob~0
@@ -1284,7 +1426,9 @@ Section CompilerCorrectness.
       + repeat apply conj.
         * apply log_rwdata_consistent_mux_l;
             eauto with circuits.
-        * apply log_retval_consistent_mux_l;
+        * apply log_data0_consistent_mux_l;
+            eauto with circuits.
+        * apply log_data1_consistent'_mux_l;
             eauto with circuits.
         * unfold mux_rwsets; interp_willFire_cleanup; t.
           rewrite interp_circuit_willFire_of_canFire'_mux_rwdata; t.
@@ -1294,7 +1438,9 @@ Section CompilerCorrectness.
       + repeat apply conj.
         * apply log_rwdata_consistent_mux_r;
             eauto with circuits.
-        * apply log_retval_consistent_mux_r;
+        * apply log_data0_consistent_mux_r;
+            eauto with circuits.
+        * apply log_data1_consistent'_mux_r;
             eauto with circuits.
         * unfold mux_rwsets; interp_willFire_cleanup; t.
           rewrite interp_circuit_willFire_of_canFire'_mux_rwdata; t.
@@ -1320,8 +1466,15 @@ Section CompilerCorrectness.
             (apply log_rwdata_consistent_log_cons_putenv;
              [ eauto | red ]; cbn; rewrite ?bits_single_bits_cons; eauto).
         * destruct port; cbn.
-          -- apply log_retval_consistent_putenv_write0; eauto.
-          -- apply log_retval_consistent_putenv_read_write1; eauto.
+          -- apply log_data0_consistent_putenv_write0; eauto.
+          -- apply log_data0_consistent_putenv_read_write1; eauto.
+        * destruct port.
+          -- interp_willFire_cleanup;
+               may_read_write_t.
+             admit.
+          -- interp_willFire_cleanup;
+               may_read_write_t.
+             admit.
         * destruct port.
           -- interp_willFire_cleanup;
                may_read_write_t.
@@ -1344,7 +1497,7 @@ Section CompilerCorrectness.
           eapply interp_circuit_circuit_lt_helper_false; eauto;
             intros; apply circuit_lt_willFire_of_canFire; cbn;
               eauto 8 with circuits.
-  Qed.
+  Admitted.
 
   Arguments update_accumulated_rwset : simpl never.
 
@@ -1361,15 +1514,73 @@ Section CompilerCorrectness.
       eauto.
   Qed.
 
-
-  Lemma log_retval_consistent'_update_accumulated:
+  Lemma log_data0_consistent'_update_accumulated:
     forall (Log : Log) (cLog : rwset) (l : CompilerCorrectness.Log) (rws : rwset),
-      log_retval_consistent l Log rws ->
-      log_retval_consistent' (log_app l Log) (update_accumulated_rwset rws cLog).
+      log_data0_consistent l Log rws ->
+      log_data0_consistent' (log_app l Log) (update_accumulated_rwset rws cLog).
   Proof.
-    unfold log_retval_consistent, log_retval_consistent', update_accumulated_rwset; intros * Hl ** ;
+    unfold log_data0_consistent, log_data0_consistent', update_accumulated_rwset; intros * Hl ** ;
       unfold map2; rewrite getenv_create; cbn;
         eauto.
+  Qed.
+
+  Ltac latest_write_t :=
+    unfold latest_write, latest_write0, latest_write1, log_find, log_existsb;
+    induction (getenv REnv _ _);
+    repeat match goal with
+           | _ => reflexivity || discriminate
+           | _ => progress (intros; cbn in * )
+           | [ H: LogEntry _ |- _ ] => destruct H as [ [ | ] [ | ] ]
+           | [ H: _ -> _ = _ |- _ ] => rewrite H by eauto
+           | _ => solve [eauto]
+           end.
+
+  Lemma latest_write_latest_write0 (l: Log) idx:
+    log_existsb l idx is_write1 = false ->
+    latest_write l idx = latest_write0 l idx.
+  Proof. latest_write_t. Qed.
+
+  Lemma latest_write_latest_write1 (l: Log) idx:
+    log_existsb l idx is_write0 = false ->
+    latest_write l idx = latest_write1 l idx.
+  Proof. latest_write_t. Qed.
+
+  Lemma latest_write_None (l: Log) idx:
+    log_existsb l idx is_write0 = false ->
+    log_existsb l idx is_write1 = false ->
+    latest_write l idx = None.
+  Proof. latest_write_t. Qed.
+
+  Lemma latest_write0_None (l: Log) idx:
+    log_existsb l idx is_write0 = false ->
+    latest_write0 l idx = None.
+  Proof. latest_write_t. Qed.
+
+  Lemma latest_write1_None (l: Log) idx:
+    log_existsb l idx is_write1 = false ->
+    latest_write1 l idx = None.
+  Proof. latest_write_t. Qed.
+
+  Lemma log_data1_consistent'_update_accumulated:
+    forall (cLog : rwset) (l L: Log) (rws : rwset),
+      log_data1_consistent l L rws ->
+      (* log_data1_consistent' L cLog -> *)
+      log_rwdata_consistent l rws ->
+      (* log_rwdata_consistent L cLog -> *)
+      log_data1_consistent' (log_app l L) (update_accumulated_rwset rws cLog).
+  Proof.
+    unfold log_data1_consistent', update_accumulated_rwset; intros * Hl (* HL Hcl HcL *) Hrw idx H;
+      unfold map2; rewrite getenv_create; cbn.
+    repeat match goal with
+           | _ => cleanup_step
+           | _ => progress cbv zeta in *
+           | [ H: ?x || ?y = true -> _ |- _ ] =>
+             destruct x eqn:?, y eqn:?; cbn in H; try discriminate; specialize (H eq_refl)
+           | [ H: log_data1_consistent _ _ _, idx: reg_t |- _ ] => specialize (H idx)
+           | [ H: log_rwdata_consistent _ _, idx: reg_t |- _ ] => specialize (H idx)
+           | [ H: context[log_existsb (log_app _ _) _ _] |- _ ] => rewrite log_existsb_app in H
+           | [ H: _ = _ |- _ ] => rewrite H
+           end; eauto.
   Qed.
 
   Lemma circuit_gamma_equiv_empty :
@@ -1386,14 +1597,26 @@ Section CompilerCorrectness.
     rewrite !log_existsb_empty; auto.
   Qed.
 
-  Lemma log_retval_consistent_empty_adapter Log cLog:
-    log_retval_consistent' Log cLog ->
-    log_retval_consistent log_empty Log (regs (adapter cLog)).
+  Lemma log_data0_consistent_empty_adapter Log cLog:
+    log_data0_consistent' Log cLog ->
+    log_data0_consistent log_empty Log (regs (adapter cLog)).
   Proof.
-    red; unfold log_retval_consistent'; intros; cbn.
+    red; unfold log_data0_consistent'; intros; cbn.
     unfold Environments.map; rewrite getenv_create; cbn.
     rewrite log_app_empty_r.
     eauto.
+  Qed.
+
+  Lemma log_data1_consistent_empty_adapter Log cLog:
+    log_data1_consistent' Log cLog ->
+    log_data1_consistent log_empty Log (regs (adapter cLog)).
+  Proof.
+    red; unfold log_data1_consistent'; intros * Hcst idx Hex; cbn.
+    unfold Environments.map; rewrite getenv_create; cbn.
+    specialize (Hcst idx).
+    rewrite log_app_empty_r.
+    rewrite log_app_empty_r in Hex.
+    intuition eauto.
   Qed.
 
   Lemma interp_circuit_willFire_of_canFire_adapter (cLog: REnv.(env_t) _):
@@ -1405,16 +1628,22 @@ Section CompilerCorrectness.
   Qed.
 
   Hint Resolve circuit_gamma_equiv_empty : circuits.
-  Hint Resolve log_retval_consistent_empty_adapter : circuits.
+  Hint Resolve log_data0_consistent_empty_adapter : circuits.
+  Hint Resolve log_data1_consistent_empty_adapter : circuits.
   Hint Resolve log_rwdata_consistent_empty_adapter : circuits.
   Hint Resolve interp_circuit_willFire_of_canFire_adapter : circuits.
+  Hint Resolve log_rwdata_consistent_update_accumulated_rwset : circuits.
+  Hint Resolve log_data0_consistent'_update_accumulated : circuits.
+  Hint Resolve log_data1_consistent'_update_accumulated : circuits.
 
   Lemma scheduler_compiler'_correct':
     forall (s: scheduler) Log cLog,
+      log_data1_consistent' Log cLog ->
+      log_data0_consistent' Log cLog ->
       log_rwdata_consistent Log cLog ->
-      log_retval_consistent' Log cLog ->
       circuit_env_equiv ->
-      log_retval_consistent' (interp_scheduler' r sigma Log s) (compile_scheduler' rc s cLog) /\
+      log_data1_consistent' (interp_scheduler' r sigma Log s) (compile_scheduler' rc s cLog) /\
+      log_data0_consistent' (interp_scheduler' r sigma Log s) (compile_scheduler' rc s cLog) /\
       log_rwdata_consistent (interp_scheduler' r sigma Log s) (compile_scheduler' rc s cLog).
   Proof.
     induction s; cbn; intros.
@@ -1423,15 +1652,27 @@ Section CompilerCorrectness.
       unshelve eassert (Hrc := Hrc (adapter cLog) CtxEmpty CtxEmpty log_empty
                                   ltac:(ceauto) ltac:(ceauto)
                                   ltac:(ceauto) ltac:(ceauto)
-                                  ltac:(ceauto) ltac:(ceauto)).
+                                  ltac:(ceauto) ltac:(ceauto)
+                                  ltac:(ceauto)).
       destruct (interp_rule r sigma CtxEmpty Log log_empty r0); cbn; t.
-      + split.
-        * admit.
+      + repeat apply conj.
+        * apply log_data1_consistent'_mux_l; eauto.
+          apply IHs1;
+            ceauto.
+        * apply log_data0_consistent'_mux_l; eauto.
+          apply IHs1;
+            eauto using log_rwdata_consistent_update_accumulated_rwset,
+            log_data0_consistent'_update_accumulated,
+            log_data1_consistent'_update_accumulated.
         * apply log_rwdata_consistent_mux_l; eauto.
           apply IHs1; eauto using log_rwdata_consistent_update_accumulated_rwset,
-                      log_retval_consistent'_update_accumulated.
-      + split.
-        * admit.
+            log_data0_consistent'_update_accumulated,
+            log_data1_consistent'_update_accumulated.
+      + repeat apply conj.
+        * apply log_data1_consistent'_mux_r; eauto.
+          apply IHs2; eauto.
+        * apply log_data0_consistent'_mux_r; eauto.
+          apply IHs2; eauto.
         * apply log_rwdata_consistent_mux_r; eauto.
           apply IHs2; eauto.
   Qed.
@@ -1444,17 +1685,127 @@ Section CompilerCorrectness.
         eauto.
   Qed.
 
-  Lemma log_retval_consistent'_empty_init_scheduler:
+  Lemma log_data0_consistent'_empty_init_scheduler:
     circuit_env_equiv ->
-    log_retval_consistent' log_empty (init_scheduler_circuit rc).
+    log_data0_consistent' log_empty (init_scheduler_circuit rc).
   Proof.
     red; unfold init_scheduler_circuit, init_scheduler_rwdata, circuit_env_equiv;
       intros; rewrite !getenv_create; cbn;
         rewrite latest_write0_empty; eauto.
   Qed.
 
+  Lemma latest_write1_empty idx:
+    latest_write1 (log_empty: Log) idx = None.
+  Proof.
+    apply log_find_empty.
+  Qed.                            (* FIXME move *)
+
+  Lemma log_data1_consistent'_empty_init_scheduler:
+    log_data1_consistent' log_empty (init_scheduler_circuit rc).
+  Proof.
+    red; intros * H.
+    rewrite log_existsb_empty in H; discriminate.
+  Qed.
+
   Hint Resolve log_rwdata_consistent_empty_init_scheduler : circuits.
-  Hint Resolve log_retval_consistent'_empty_init_scheduler : circuits.
+  Hint Resolve log_data0_consistent'_empty_init_scheduler : circuits.
+  Hint Resolve log_data1_consistent'_empty_init_scheduler : circuits.
+
+  Definition log_writes_ordered (l: Log) idx :=
+    latest_write l idx =
+    match latest_write1 l idx with
+    | Some v => Some v
+    | None => match latest_write0 l idx with
+             | Some v => Some v
+             | None => None
+             end
+    end.
+
+  Lemma expr_log_writes_ordered:
+    forall sig tau ex ctx Log log idx,
+      log_writes_ordered (log_app log Log) idx ->
+      match @interp_expr var_t reg_t fn_t R Sigma REnv r sigma sig ctx Log tau log ex with
+      | Some (l', _) => log_writes_ordered (log_app l' Log) idx
+      | None => True
+      end.
+  Proof.
+    induction ex; cbn; intros; eauto.
+    - destruct port;
+        [ destruct may_read0 | destruct may_read1 ]; cbn; eauto;
+        unfold log_writes_ordered, log_cons in *;
+        unfold latest_write, latest_write0, latest_write1, log_find in *;
+        unfold log_app, map2 in *; rewrite !getenv_create in *;
+          (destruct (eq_dec idx idx0); subst;
+           [ rewrite !get_put_eq | rewrite !get_put_neq by eassumption ];
+           [ |  ]); cbn;
+            eauto.
+    - repeat match goal with
+             | _ => progress cbn
+             | [ IH: context[interp_expr _ _ _ _ _ ?ex]
+                 |- context[interp_expr ?r ?sigma ?ctx ?Log ?log ?ex] ] =>
+               specialize (IH ctx Log log _ ltac:(ceauto));
+                 destruct (interp_expr r sigma ctx Log log ex) as [(? & ?) | ] eqn:?
+             | _ => solve [eauto]
+             end.
+  Qed.
+
+  Lemma rule_log_writes_ordered:
+    forall sig rl ctx Log log idx,
+      log_writes_ordered (log_app log Log) idx ->
+      match @interp_rule var_t reg_t fn_t R Sigma REnv r sigma sig ctx Log log rl with
+      | Some l' => log_writes_ordered (log_app l' Log) idx
+      | None => True
+      end.
+  Proof.
+    induction rl; cbn; intros; eauto;
+    repeat match goal with
+           | _ => progress cbn
+           | [ |- context[interp_expr ?r ?sigma ?ctx ?Log ?log ?ex] ] =>
+             pose proof (expr_log_writes_ordered _ _ ex ctx Log log _ ltac:(ceauto));
+               destruct (interp_expr r sigma ctx Log log ex) as [(? & ?) | ] eqn:?
+           | [ IH: context[interp_rule _ _ _ _ _ ?rl]
+               |- context[interp_rule ?r ?sigma ?ctx ?Log ?log ?rl] ] =>
+             specialize (IH ctx Log log _ ltac:(ceauto));
+               destruct (interp_rule r sigma ctx Log log rl) eqn:?
+           | [  |- match (if ?x then _ else _) with _ => _ end ] => destruct x eqn:?
+           | _ => solve [eauto]
+           end.
+    destruct port;
+        unfold log_writes_ordered, log_cons in *;
+        unfold latest_write, latest_write0, latest_write1, log_find in *;
+        unfold log_app, map2 in *; rewrite !getenv_create in *;
+          (destruct (eq_dec idx idx0); subst;
+           [ rewrite !get_put_eq | rewrite !get_put_neq by eassumption ];
+           [ |  ]); cbn;
+            eauto.
+    may_read_write_t.
+    rewrite list_find_opt_app.
+    repeat setoid_rewrite latest_write1_None; eauto.
+  Qed.
+
+  Lemma log_writes_ordered_empty idx:
+    log_writes_ordered (log_empty: Log) idx.
+  Proof.
+    unfold log_writes_ordered, log_cons;
+      unfold latest_write, latest_write0, latest_write1, log_find, log_empty;
+      rewrite !getenv_create; reflexivity.
+  Qed.
+
+  Hint Resolve log_writes_ordered_empty : circuits.
+
+  Lemma scheduler_log_writes_ordered:
+    forall s log idx,
+      log_writes_ordered log idx ->
+      log_writes_ordered (@interp_scheduler' var_t reg_t fn_t R Sigma REnv r sigma log s) idx.
+  Proof.
+    induction s; cbn; intros.
+    - eauto.
+    - lazymatch goal with
+      | [ |- context[interp_rule ?r ?sigma ?ctx ?Log ?log ?rl] ] =>
+        pose proof (rule_log_writes_ordered _ rl ctx Log log _ ltac:(rewrite log_app_empty_r; ceauto));
+          destruct (interp_rule r sigma ctx Log log rl) eqn:?
+      end; eauto.
+  Qed.
 
   Lemma scheduler_compiler_correct':
     forall (s: scheduler),
@@ -1466,16 +1817,28 @@ Section CompilerCorrectness.
     intros; unfold compile_scheduler, commit_update, commit_rwdata, interp_scheduler, map2.
     rewrite !getenv_create; cbn.
     pose proof (scheduler_compiler'_correct' s log_empty (init_scheduler_circuit rc)
-                                             ltac:(ceauto) ltac:(ceauto) ltac:(ceauto) idx) as Hsc.
-    cbv zeta in Hsc; repeat cleanup_step.
+                                             ltac:(ceauto) ltac:(ceauto)
+                                             ltac:(ceauto) ltac:(ceauto)) as (Hrv & Hcst0 & Hcst1).
+    specialize (Hrv idx); specialize (Hcst0 idx); specialize (Hcst1 idx); cbv zeta in *.
+    repeat cleanup_step.
     repeat bool_cleanup.
 
-       log_retval_consistent' log_empty (init_scheduler_circuit rc) ->
-       
-    
-        .
+    rewrite scheduler_log_writes_ordered by ceauto.
 
-  
+    destruct (log_existsb _ _ is_write1) eqn:?; cbn.
+    lazymatch goal with
+    | [ H: _ -> match ?x with _ => _ end |- _ ] =>
+      let Heq := fresh in
+      specialize (H eq_refl); destruct x eqn:Heq; try (exfalso; eassumption);
+        []; rewrite H
+    end.
+
+    reflexivity.
+    rewrite latest_write1_None by eauto.
+    destruct (log_existsb _ _ is_write0) eqn:?; cbn.
+    destruct latest_write0; reflexivity.
+    rewrite latest_write0_None; eauto.
+  Qed.
 
   Ltac tstep :=
       match goal with
