@@ -1,17 +1,34 @@
-Require Import Coq.Lists.List.
+Require Import Coq.Lists.List Coq.Bool.Bool.
 Import ListNotations.
 Require Export SGA.Vect.
 
-Inductive DP {A: Type} (a: A) : Prop :=.
+(* https://coq-club.inria.narkive.com/HeWqgvKm/boolean-simplification *)
+Hint Rewrite
+     orb_false_r (** b || false -> b *)
+     orb_false_l (** false || b -> b *)
+     orb_true_r (** b || true -> true *)
+     orb_true_l (** true || b -> true *)
+     andb_false_r (** b && false -> false *)
+     andb_false_l (** false && b -> false *)
+     andb_true_r (** b && true -> b *)
+     andb_true_l (** true && b -> b *)
+     negb_orb (** negb (b || c) -> negb b && negb c *)
+     negb_andb (** negb (b && c) -> negb b || negb c *)
+     negb_involutive (** negb( (negb b) -> b *)
+  : bool_simpl.
+Ltac bool_simpl :=
+  autorewrite with bool_simpl in *.
 
 Ltac bool_step :=
   match goal with
-  | [ H: andb _ _ = true |- _ ] =>
-    apply andb_prop in H
-  | [ H: forallb _ (_ ++ _) = _ |- _ ] =>
-    rewrite forallb_app in H
-  | [ H: Some _ = Some _ |- _ ] =>
-    inversion H; subst; clear H
+  | [ H: _ && _ = true |- _ ] => rewrite andb_true_iff in H
+  | [ H: _ && _ = false |- _ ] => rewrite andb_false_iff in H
+  | [ H: _ || _ = true |- _ ] => rewrite orb_true_iff in H
+  | [ H: _ || _ = false |- _ ] => rewrite orb_false_iff in H
+  | [ H: negb _ = true |- _ ] => rewrite negb_true_iff in H
+  | [ H: negb _ = false |- _ ] => rewrite negb_false_iff in H
+  | [ H: forallb _ (_ ++ _) = _ |- _ ] => rewrite forallb_app in H
+  | [ H: Some _ = Some _ |- _ ] => inversion H; subst; clear H
   end.
 
 Ltac cleanup_step :=
@@ -25,6 +42,8 @@ Ltac cleanup_step :=
   | [ H: _ /\ _ |- _ ] =>
     destruct H
   end.
+
+Inductive DP {A: Type} (a: A) : Prop :=.
 
 Inductive Posed : list Prop -> Prop :=
 | AlreadyPosed1 : forall {A} a, Posed [@DP A a]
@@ -107,6 +126,17 @@ Definition must {A} (o: option A) : if o then A else unit :=
   match o with
   | Some a => a
   | None => tt
+  end.
+
+Fixpoint list_find_opt {A B} (f: A -> option B) (l: list A) : option B :=
+  match l with
+  | [] => None
+  | x :: l =>
+    let fx := f x in
+    match fx with
+    | Some y => Some y
+    | None => list_find_opt f l
+    end
   end.
 
 Axiom __magic__ : forall {A}, A.

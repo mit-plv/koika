@@ -1,50 +1,8 @@
-Require Import SGA.Common SGA.Syntax SGA.TypedSyntax SGA.Semantics.
+Require Import SGA.Common SGA.Syntax SGA.TypedSyntax SGA.SemanticProperties.
 Require Import Coq.Lists.List.
 
 Import ListNotations.
 Open Scope bool_scope.
-
-Section EnvUpdates.
-  Context {reg_t: Type}.
-  Context {R: reg_t -> type}.
-  Context {REnv: Env reg_t}.
-
-  Definition rlog_latest_write_fn {k} :=
-    fun le: LogEntry (R k) => match le with
-                           | LE LogWrite _ v => Some v
-                           | _ => None
-                           end.
-
-  Definition rlog_latest_write k (ll: RLog (R k)) :=
-    list_find_opt rlog_latest_write_fn ll.
-
-  Definition commit_update (r0: REnv.(env_t) R) (log: Log R REnv) : REnv.(env_t) R :=
-    REnv.(map2) (fun k ll v0 => match rlog_latest_write k ll with
-                             | Some v => v
-                             | None => v0
-                             end) log r0.
-
-  Lemma commit_update_assoc:
-    forall (r : REnv.(env_t) R) (l l' : Log R REnv),
-      commit_update (commit_update r l) l' = commit_update r (log_app l' l).
-  Proof.
-    unfold commit_update, log_app, map2; intros.
-    apply create_funext; intros.
-    rewrite !getenv_create.
-    unfold rlog_latest_write.
-    rewrite list_find_opt_app.
-    destruct list_find_opt; reflexivity.
-  Qed.
-
-  Lemma commit_update_empty:
-    forall (r : REnv.(env_t) R),
-      commit_update r log_empty = r.
-  Proof.
-    intros; apply equiv_eq; intro.
-    unfold commit_update, log_empty, map2; rewrite !getenv_create.
-    reflexivity.
-  Qed.
-End EnvUpdates.
 
 Section Proof.
   Context {var_t reg_t fn_t: Type}.
@@ -88,74 +46,12 @@ Section Proof.
 
   Definition update_one r rl: option (REnv.(env_t) R) :=
     let/opt r := r in
-    let/opt log := @interp_scheduler' var_t reg_t fn_t R Sigma REnv r sigma log_empty (Try rl Done Done) in
+    let log := @interp_scheduler' var_t reg_t fn_t R Sigma REnv r sigma log_empty (Try rl Done Done) in
     Some (commit_update r log).
 
-  Definition latest_write (l: Log) idx: option (R idx) :=
-    log_find l idx rlog_latest_write_fn.
-
-  Lemma getenv_commit_update :
-    forall sl r idx,
-      REnv.(getenv) (commit_update r sl) idx =
-      match latest_write sl idx with
-      | Some v' => v'
-      | None => REnv.(getenv) r idx
-      end.
-  Proof.
-    unfold commit_update, map2; intros; rewrite getenv_create.
-    reflexivity.
-  Qed.
+  Notation latest_write l idx := (latest_write (R := R) (REnv := REnv) l idx).
 
   Require Import Ring_theory Ring Coq.setoid_ring.Ring.
-
-  Lemma getenv_logapp:
-    forall (l l': Log) idx,
-      REnv.(getenv) (log_app l l') idx =
-      REnv.(getenv) l idx ++ REnv.(getenv) l' idx.
-  Proof.
-    unfold log_app, map2; intros; rewrite getenv_create; reflexivity.
-  Qed.
-
-  Lemma log_forallb_app:
-    forall (l l': Log) reg (f: LogEntryKind -> Port -> bool),
-      log_forallb (log_app l l') reg f =
-      log_forallb l reg f && log_forallb l' reg f.
-  Proof.
-    unfold log_forallb.
-    intros; rewrite getenv_logapp.
-    rewrite !forallb_app; reflexivity.
-  Qed.
-
-  Lemma log_app_assoc:
-    forall (l l' l'': Log),
-      log_app l (log_app l' l'') =
-      log_app (log_app l l') l''.
-  Proof.
-    unfold log_app, map2; intros.
-    apply create_funext; intros.
-    rewrite !getenv_create.
-    apply app_assoc.
-  Qed.
-
-  Lemma log_app_empty_l : forall (l: Log),
-      log_app l log_empty = l.
-  Proof.
-    intros.
-    apply equiv_eq.
-    unfold equiv, log_app, map2, log_empty; intros.
-    rewrite !getenv_create, app_nil_r.
-    reflexivity.
-  Qed.
-
-  Lemma log_app_empty_r : forall (l: Log),
-      log_app log_empty l = l.
-  Proof.
-    intros.
-    apply equiv_eq.
-    unfold equiv, log_app, map2, log_empty; intros.
-    rewrite !getenv_create.
-    reflexivity.
-  Qed.
 
   Ltac set_forallb_fns :=
     repeat match goal with
@@ -171,7 +67,7 @@ Section Proof.
       may_read0 sl l idx && may_read0 sl' l idx.
   Proof.
     unfold may_read0; intros.
-    rewrite !log_forallb_app.
+    rewrite !log_forallb_not_existsb, !log_forallb_app.
     set_forallb_fns.
     ring_simplify.
     f_equal.
@@ -186,7 +82,7 @@ Section Proof.
       may_read1 sl idx && may_read1 sl' idx.
   Proof.
     unfold may_read1; intros.
-    rewrite !log_forallb_app.
+    rewrite !log_forallb_not_existsb, !log_forallb_app.
     reflexivity.
   Qed.
 
@@ -196,21 +92,9 @@ Section Proof.
       may_write sl l lvl idx && may_write sl' l lvl idx.
   Proof.
     unfold may_write; intros.
-    destruct lvl; rewrite !log_forallb_app;
+    destruct lvl; rewrite !log_forallb_not_existsb, !log_forallb_app;
       ring_simplify;
-      rewrite Bool.andb_diag;
-      reflexivity.
-  Qed.
-
-  Lemma find_none_notb {A B}:
-    forall (P: A -> option B) l,
-      (forall a, List.In a l -> P a = None) ->
-      list_find_opt P l = None.
-  Proof.
-    induction l; cbn; intros * Hnot.
-    - reflexivity.
-    - pose proof (Hnot a).
-      destruct (P a); firstorder discriminate.
+      repeat (destruct (log_forallb _ _ _); cbn; try reflexivity).
   Qed.
 
   Ltac bool_step :=
@@ -226,28 +110,19 @@ Section Proof.
       latest_write sl idx = None.
   Proof.
     unfold may_read0; intros.
+    rewrite !log_forallb_not_existsb in H.
+    rewrite log_forallb_app in H.
     repeat (cleanup_step || bool_step).
     unfold log_forallb in *.
     rewrite forallb_forall in *.
-    unfold latest_write, log_find.
+    unfold is_write0, is_write1, latest_write, log_find in *.
     apply find_none_notb.
     intros a HIn.
     repeat match goal with
            | [ H: forall (_: LogEntry _), _ |- _ ] => specialize (H a HIn)
            end.
     destruct a; cbn in *; destruct kind; subst; try reflexivity.
-    destruct port; discriminate.
-  Qed.
-
-  Lemma latest_write0_app :
-    forall (sl sl': Log) idx,
-      latest_write0 (log_app sl sl') idx =
-      match latest_write0 sl idx with
-      | Some e => Some e
-      | None => latest_write0 sl' idx
-      end.
-  Proof.
-    unfold latest_write0; eauto using log_find_app.
+    destruct port; cbn in *; try discriminate.
   Qed.
 
   Lemma may_read1_latest_write_is_0 :
@@ -257,6 +132,7 @@ Section Proof.
   Proof.
     unfold may_read1, latest_write, latest_write0, log_find, log_forallb.
     intros * H.
+    rewrite log_forallb_not_existsb in H; unfold log_forallb in H.
     set (getenv REnv l idx) as ls in *; cbn in *; clearbody ls.
     set (R idx) as t in *; cbn in *.
     revert H.
@@ -375,7 +251,7 @@ Section Proof.
 
   Lemma interp_scheduler_trace_correct :
     forall s l0 log,
-      interp_scheduler' r sigma l0 s = Some log ->
+      interp_scheduler' r sigma l0 s = log ->
       exists rs, interp_scheduler'_trace l0 s = Some (rs, log).
   Proof.
     induction s; cbn.
@@ -407,7 +283,7 @@ Section Proof.
 
   Theorem OneRuleAtATime:
     forall s log,
-      interp_scheduler r sigma s = Some log ->
+      interp_scheduler r sigma s = log ->
       exists rs,
         (forall rl, List.In rl rs -> List.In rl (scheduler_rules s)) /\
         List.fold_left update_one rs (Some r) = Some (commit_update r log).
