@@ -286,7 +286,7 @@ Section CircuitCompilation.
                                        write0 := $`"init_no_write0"` (w1 false);
                                        write1 := $`"init_no_write1"` (w1 false);
                                        data0 := reg.(data0);
-                                       data1 := CQuestionMark _ |})
+                                       data1 := reg.(data1) |})
                          cs |}.
 
   Definition willFire_of_canFire'_read0 {sz} (ruleReg inReg: @rwdata sz) :=
