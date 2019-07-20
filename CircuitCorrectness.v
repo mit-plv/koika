@@ -7,7 +7,6 @@ Import ListNotations.
 
 Section CompilerCorrectness.
   Context {var_t reg_t fn_t: Type}.
-  Context {reg_t_eq_dec: EqDec reg_t}.
 
   Context {R: reg_t -> type}.
   Context {Sigma: fn_t -> ExternalSignature}.
@@ -15,6 +14,8 @@ Section CompilerCorrectness.
 
   Context (r: REnv.(env_t) R).
   Context (rc: REnv.(env_t) (fun reg => circuit R Sigma (R reg))).
+
+  Instance reg_t_eq_dec : EqDec reg_t := @Finite_EqDec _ (REnv.(finite_keys)).
 
   Context (sigma: forall f, Sigma f).
   Open Scope bool_scope.
@@ -149,7 +150,7 @@ Section CompilerCorrectness.
       try rewrite log_existsb_log_cons_neq in H; eauto; bool_simpl; try rewrite H; bool_simpl; reflexivity.
   Qed.
 
-  Lemma log_data1_consistent_putenv_read_write1 :
+  Lemma log_data1_consistent_putenv_read_write0 :
     forall idx k p log Log rws rwd v,
       k = LogRead \/ (k = LogWrite /\ p = P0) ->
       data1 rwd = data1 (REnv.(getenv) rws idx) ->
@@ -270,42 +271,6 @@ Section CompilerCorrectness.
   Proof.
     log_consistent_mux_t' log_data1_consistent'_mux.
   Qed.
-
-  (* Lemma log_data1_consistent_putenv_read_write0 : *)
-  (*   forall idx k p log Log rws rwd v, *)
-  (*     k = LogRead \/ (k = LogWrite /\ p = P0) -> *)
-  (*     data1 rwd = data1 (REnv.(getenv) rws idx) -> *)
-  (*     log_data1_consistent log Log rws -> *)
-  (*     log_data1_consistent (log_cons idx {| kind := k; port := p; val := v |} log) Log *)
-  (*                          (REnv.(putenv) rws idx rwd). *)
-  (* Proof. *)
-  (*   destruct 1; repeat cleanup_step; subst. *)
-
-  (*   all: unfold log_data1_consistent, log_data1_consistent'; intros * Hdata1 Hcst idx' **. *)
-  (*     (destruct (eq_dec idx idx'); specialize (Hcst idx'); subst; *)
-  (*      [ rewrite !get_put_eq | rewrite !get_put_neq by eassumption ]). *)
-  (*     rewrite log_cons_eq in H. *)
-  (*     try rewrite Hdata1; rewrite latest_write1_app in *; *)
-  (*       rewrite ?latest_write0_cons_eq, ?latest_write0_cons_neq; *)
-  (*       eauto. *)
-  (* Qed. *)
-
-  (* Lemma log_data1_consistent_putenv_write0 : *)
-  (*   forall idx log Log rws rwd v, *)
-  (*     v = interp_circuit' (data0 rwd) -> *)
-  (*     log_data0_consistent log Log rws -> *)
-  (*     log_data0_consistent (log_cons idx {| kind := LogWrite; port := P0; val := v |} log) Log *)
-  (*                           (REnv.(putenv) rws idx rwd). *)
-  (* Proof. *)
-  (*   unfold log_data0_consistent, log_data0_consistent'; intros * Hdata0 Hcst idx'; *)
-  (*     destruct (eq_dec idx idx'); specialize (Hcst idx'); subst; *)
-  (*       [ rewrite !get_put_eq | rewrite !get_put_neq by eassumption ]; *)
-  (*       try rewrite Hdata0; rewrite latest_write0_app in *. *)
-  (*   rewrite latest_write0_cons_eq; *)
-  (*     eauto. *)
-  (*   rewrite latest_write0_cons_neq; *)
-  (*     eauto. *)
-  (* Qed. *)
 
   Definition log_rwdata_consistent (log: Log) (regs: rwset) :=
     forall idx,
@@ -1300,7 +1265,7 @@ Section CompilerCorrectness.
 
   Ltac may_read_write_t :=
     unfold may_read0, may_read1, may_write in *;
-    repeat bool_cleanup.
+    repeat bool_cleanup_consistent.
 
   Arguments willFire_of_canFire' : simpl never.
 
@@ -1338,7 +1303,7 @@ Section CompilerCorrectness.
           -- apply log_rwdata_consistent_log_cons_putenv;
                [ eauto | red ]; cbn; rewrite ?bits_single_bits_cons; eauto.
           -- apply log_data0_consistent_putenv_read_write1; eauto.
-          -- admit.
+          -- apply log_data1_consistent_putenv_read_write0; eauto.
           -- interp_willFire_cleanup;
                may_read_write_t.
         * interp_willFire_cleanup.
@@ -1357,9 +1322,7 @@ Section CompilerCorrectness.
           -- apply log_rwdata_consistent_log_cons_putenv;
                [ eauto | red ]; cbn; rewrite ?bits_single_bits_cons; eauto.
           -- apply log_data0_consistent_putenv_read_write1; eauto.
-          -- interp_willFire_cleanup.
-             may_read_write_t.
-             admit.
+          -- apply log_data1_consistent_putenv_read_write0; eauto.
           -- interp_willFire_cleanup;
                may_read_write_t.
         * interp_willFire_cleanup.
@@ -1371,7 +1334,7 @@ Section CompilerCorrectness.
       t;
         eapply interp_circuit_circuit_lt_helper_false;
         eauto using expr_compile_willFire_of_canFire_decreasing.
-  Admitted.
+  Qed.
 
   Lemma interp_circuit_willFire_of_canFire'_mux_rwdata:
     forall (idx : reg_t) s (rwd1 rwd2 : rwdata R Sigma (R idx)) (cCond : circuit 1) (rwdL : rwdata R Sigma (R idx)),
@@ -1469,12 +1432,8 @@ Section CompilerCorrectness.
           -- apply log_data0_consistent_putenv_write0; eauto.
           -- apply log_data0_consistent_putenv_read_write1; eauto.
         * destruct port.
-          -- interp_willFire_cleanup;
-               may_read_write_t.
-             admit.
-          -- interp_willFire_cleanup;
-               may_read_write_t.
-             admit.
+          -- apply log_data1_consistent_putenv_read_write0; eauto.
+          -- apply log_data1_consistent_putenv_write1; eauto.
         * destruct port.
           -- interp_willFire_cleanup;
                may_read_write_t.
@@ -1497,7 +1456,7 @@ Section CompilerCorrectness.
           eapply interp_circuit_circuit_lt_helper_false; eauto;
             intros; apply circuit_lt_willFire_of_canFire; cbn;
               eauto 8 with circuits.
-  Admitted.
+  Qed.
 
   Arguments update_accumulated_rwset : simpl never.
 
@@ -1839,324 +1798,20 @@ Section CompilerCorrectness.
     destruct latest_write0; reflexivity.
     rewrite latest_write0_None; eauto.
   Qed.
+End CompilerCorrectness.
 
-  Ltac tstep :=
-      match goal with
-      | _ => cleanup_step
-      | _ => progress intros
+Section Thm.
+  Context {var_t reg_t fn_t: Type}.
 
-      | [ IH: (forall gamma rc, match compile_rule ?sigma ?L gamma ?r rc with _ => _ end)
-          |- match opt_bind (compile_rule ?sigma ?L ?gamma ?r ?rc) _ with _ => _ end] =>
-        specialize (IH gamma rc);
-        destruct (compile_rule sigma L gamma r) eqn:?; cbn; ceauto; []
+  Context {R: reg_t -> type}.
+  Context {Sigma: fn_t -> ExternalSignature}.
+  Context {REnv: Env reg_t}.
 
-      | [ IH: (forall Gamma l,
-                  gamma_consistent _ Gamma ->
-                  log_rwdata_consistent l (regs ?rc) ->
-                  interp_circuit (willFire_of_canFire ?rc _) = w1 true ->
-                  match interp_rule ?R ?Sigma Gamma ?L l ?r with _ => _ end)
-          |- context [interp_rule ?R ?Sigma ?Gamma ?L ?l ?r] ] =>
-        specialize (IH Gamma l ltac:(ceauto) ltac:(ceauto) ltac:(ceauto));
-        destruct (interp_rule R Sigma Gamma L l r) as [(? & ?) | | ] eqn:?; cbn
-
-      | [ |- match opt_bind ?x _ with _ => _ end] =>
-        destruct x eqn:?; cbn; ceauto; []
-
-      | [ |- match result_bind (opt_result Stuck ?x) _ with _ => _ end] =>
-        destruct x eqn:?; cbn; ceauto; []
-
-      | [ |- match result_bind (bool_result ?x) _ with _ => _ end] =>
-        destruct x eqn:?; cbn; ceauto; []
-
-      | [ H: getenv ?gamma ?k = Some ?c, H': gamma_consistent ?gamma ?Gamma
-          |- context[getenv ?Gamma ?k] ] =>
-        pose_once (and_fst H') k c H
-
-      | [ |- match (match ?v with _ => _ end) with _ => _ end] =>
-        destruct v eqn:?; cbn; ceauto
-
-      | [ H: retVal_consistent ?v ?bs |- context[?bs] ] =>
-        rewrite H
-
-      | [ H: ?x = ?y |- context[?x] ] =>
-        let y_hd := constr_hd y in
-        is_constructor y_hd; rewrite H
-
-      | [ H: exists _, getenv _ _ = Some _ |- _ ] =>
-        destruct H; try (rewrite H; cbn)
-
-      | [  |- _ /\ _ ] => split
-
-      | _ => progress unfold result_map
-      end.
-
-    Ltac t := repeat tstep; ceauto.
-
-    induction rule; cbn; intros; try solve[t; ceauto].
-
-    Opaque willFire_of_canFire.
-
-    - t.
-
-      + unfold log_rwdata_consistent.
-        intros. erewrite Vector.nth_map2; try reflexivity.
-        unfold interp_rwdata.
-        cbn.
-        t.
-      +
-
-        (* FIXME simplify these cases: in each case the rule is either true or false. *)
-        admit.
-      + unfold log_rwdata_consistent.
-        intros. erewrite Vector.nth_map2; try reflexivity.
-        unfold interp_rwdata.
-        cbn.
-        t.
-      + admit.
-      + unfold log_rwdata_consistent.
-        intros. erewrite Vector.nth_map2; try reflexivity.
-        unfold interp_rwdata.
-        cbn.
-        t.
-      + admit.
-      + admit.
-      + unfold log_rwdata_consistent.
-        intros. erewrite Vector.nth_map2; try reflexivity.
-        unfold interp_rwdata.
-        cbn.
-        t.
-      + admit.
-      + admit.
-      + unfold log_rwdata_consistent.
-        intros. erewrite Vector.nth_map2; try reflexivity.
-        unfold interp_rwdata.
-        cbn.
-        t.
-      + admit.
-      + admit.
-      + admit.
-      + admit.
-      + unfold log_rwdata_consistent.
-        intros. erewrite Vector.nth_map2; try reflexivity.
-        unfold interp_rwdata.
-        cbn.
-        t.
-      + admit.
-      + admit.
-      +
-        Transparent willFire_of_canFire.
-
-Lemma cand_true: forall bs1 bs2,
-          cand bs1 bs2 = w1 true ->
-          bs1 = w1 true /\ bs2 = w1 true.
-        Proof. destruct bs1 as [ | [ | ] [ | ? ] ]; cbn;
-             destruct bs2 as [ | [ | ] [ | ? ] ]; cbn.
-           all: intros; try discriminate; eauto.
-        Qed.
-
-Arguments willFire_of_canFire' : simpl never.
-  Lemma interp_willFire_of_canFire {nRegs}:
-    forall cRule cInput,
-      (interp_circuit (cRule.(canFire)) = w1 true /\
-       Vector.Forall2 (fun ruleReg inReg =>
-                         interp_circuit (willFire_of_canFire' ruleReg inReg) = w1 true)
-                      cRule.(regs) cInput) <->
-      interp_circuit (willFire_of_canFire (nRegs := nRegs) cRule cInput) = w1 true.
-  Proof.
-    destruct cRule, cInput; unfold rwset in *; clear R.
-    revert canFire.
-    cbn.
-    pattern regs, sregs.
-    revert regs sregs; revert nRegs.
-    eapply VectorDef.rect2; cbn.
-    - split; [intros (Heq & HForall) | split].
-      + eauto.
-      + eauto.
-      + econstructor.
-    - split; [intros (Heq & HForall) | ].
-      + inversion HForall; subst.
-        rewrite (and_fst (H canFire)), H4.
-        * reflexivity.
-        * Require Import Program.
-          repeat simpl_existT; subst.         (* FIXME use decidable eq instead *)
-          eauto.
-      + intros H0.
-        apply cand_true in H0; destruct H0.
-        rewrite <- H in H0; destruct H0.
-        split.
-        * eauto.
-        * econstructor; eauto.
-  Qed.
-
-  Lemma interp_willFire_of_canFire_false {nRegs}:
-    forall cRule cInput,
-      (interp_circuit (cRule.(canFire)) = w1 false \/
-       Vector.Exists2 (fun ruleReg inReg =>
-                         interp_circuit (willFire_of_canFire' ruleReg inReg) = w1 false)
-                      cRule.(regs) cInput) <->
-      interp_circuit (willFire_of_canFire (nRegs := nRegs) cRule cInput) = w1 false.
-  Proof.
-    destruct cRule, cInput; unfold rwset in *; clear R.
-    revert canFire.
-    cbn.
-    pattern regs, sregs.
-    revert regs sregs; revert nRegs.
-    eapply VectorDef.rect2.
-    - split; [intros [ Heq | HExists ] | intros ].
-      + eauto.
-      + inversion HExists.
-      + eauto.
-    - cbn; split; [intros  [ Heq | HExists ] | intros ].
-      + rewrite (and_fst (H canFire)).
-      (* Needs well-formedness to apply theorem *)
-      + inversion HForall; subst.
-        rewrite (and_fst (H canFire)), H4.
-        * reflexivity.
-        * Require Import Program.
-          repeat simpl_existT; subst.         (* FIXME use decidable eq instead *)
-          eauto.
-      + intros H0.
-        apply cand_true in H0; destruct H0.
-        rewrite <- H in H0; destruct H0.
-        split.
-        * eauto.
-        * econstructor; eauto.
-  Qed.
-
-
-
-
-                                        destruct bs
-
-    revert dependent nRegs.
-
-
-
-        unfold willFire_of_canFire.
-        cbn.
-
-        admit.
-
-    (* FIMXE handle above admits with setoid rewriting? *)
-    (* Better: prove that interp of fold_left2 is the same as forall_interp /\ init cond *)
-
-    -
-
-
-
-      admit.
-
-    - t.
-
-      + lazymatch goal with
-        | [ |- match result_bind (bool_result ?x) _ with _ => _ end] =>
-          destruct x eqn:?; cbn; ceauto
-        end.
-
-        t.
-
-        * admit. (* getEnv and v *)
-        * admit. (* pure calculation *)
-        * admit. (* may_read0 true case *)
-        * admit. (* may_read0 false case *)
-
-      + lazymatch goal with
-        | [ |- match result_bind (bool_result ?x) _ with _ => _ end] =>
-          destruct x eqn:?; cbn; ceauto
-        end.
-
-        destruct (latest_write0 (log ++ Log)) as [ [? ? ? ?] |] eqn:?; cbn.
-        replace (assert_size val (length l)) with (Success val) by admit. (* Log is consistent *)
-        cbn.
-        * t. (* latest_write0 *)
-          -- (* Lemma: constistent ⇒ latest_write0 ⇒ data0 is set *)
-            admit. (* FIXME: but this looks only at clog, not at CLog; why? *)
-          -- (* add_consistent *)
-            admit.
-          -- (* may_read1 ⇒ guard ok *)
-            admit.
-
-        * t. (* no latest write0 *)
-          -- consistent ⇒ latest_write0 none ⇒
-    - tstep.
-      tstep.
-      tstep.
-      tstep.
-      tstep.
-      tstep.
-      tstep.
-      tstep.
-      tstep.
-      tstep.
-      tstep.
-      tstep.
-      tstep.
-      tstep.
-      tstep.
-      tstep.
-      tstep.
-      tstep.
-      tstep.
-
-      match goal with
-      | [ H: retVal_consistent ?v ?bs |- context[?bs] ] =>
-        rewrite H
-      end.
-      tstep.
-      eauto.
-      tstep.
-      rewrite H2.
-      tstep.
-      tstep.
-      tstep.
-      tstep.
-      tstep.
-
-      lazymatch goal with
-      end.
-      eapply H; eassumption.
-      eapply (and_snd (and_snd H)).
-      intuition ceauto.
-
-    - tstep; ceauto.
-      tstep; ceauto.
-      tstep; ceauto.
-      tstep; ceauto.
-      tstep; ceauto.
-      2: admit.                 (* cond cannot run *)
-      tstep; ceauto.
-      tstep; ceauto.
-      tstep; ceauto.
-      tstep; ceauto.
-      tstep; ceauto.
-      tstep; ceauto.
-      2: admit.                (* Second branch of if *)
-      tstep; ceauto.
-      tstep; ceauto.
-      tstep; ceauto.
-      tstep; ceauto.
-      tstep; ceauto.
-      tstep; ceauto.
-      tstep; ceauto.
-
-    -
-
-    repeat match goal with
-           | _ => progress t
-           end.
-
-    repeat match goal with
-           end.
-    ceauto.
-
-    erewrite H1.
-    - cbn; intros.
-      destruct getenv eqn:?; cbn; ceauto; [].
-      intros.
-      destruct (getenv Gamma var); cbn; [ | admit (* would be inconsistent with gamma *) ].
-      ceauto. (* Just neet to have Some -> Some in the gammas here *)
-    - cbn; intros.
-      ceauto.
-    - cbn; intros.
-      ceauto.
-    - cbn; intros.
+  Lemma scheduler_compiler_correct `{EqDec var_t}:
+    forall (s: scheduler var_t R Sigma) r sigma rc,
+      circuit_env_equiv r rc sigma ->
+      forall idx,
+        interp_circuit' r sigma (REnv.(getenv) (compile_scheduler rc s) idx) =
+        REnv.(getenv) (commit_update r (interp_scheduler r sigma s)) idx.
+  Proof. eauto using scheduler_compiler_correct'. Qed.
+End Thm.

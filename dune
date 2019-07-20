@@ -2,7 +2,7 @@
  (name SGA)
  (modules Vect Common Environments Syntax
           Types TypedSyntax Circuits Typechecking TypeInference
-          Semantics TypeSafety OneRuleAtATime
+          Semantics TypeSafety OneRuleAtATime CircuitCorrectness
           Primitives Interop Notations
           Demo Extraction
           Examples))
