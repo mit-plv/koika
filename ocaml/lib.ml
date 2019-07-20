@@ -48,7 +48,7 @@ type circuit_root = {
   }
 
 type circuit =
-  | CQuestionMark of size_t
+  (* | CQuestionMark of size_t *)
   | CNot of ptr_t
   | CAnd of ptr_t * ptr_t
   | COr of ptr_t * ptr_t
@@ -123,8 +123,8 @@ let dedup_circuit (pkg: Sga.verilogPackage) : dedup_result =
        incr nextptr;
        let deduplicated =
          match c with
-         | Sga.CQuestionMark n ->
-            CQuestionMark n
+         (* | Sga.CQuestionMark n ->
+          *    CQuestionMark n *)
          | Sga.CNot c ->
             CNot (aux c)
          | Sga.CAnd (c1, c2) ->
@@ -162,7 +162,7 @@ let obj_children = function
   | CExternal (_fn, c1, c2) -> [c1; c2]
   | CReadRegister _r -> []
   | CAnnot (_sz, _annot, c) -> [c]
-  | CQuestionMark _ -> []
+  (* | CQuestionMark _ -> [] *)
   | CConst _ -> []
 
 let ptrhashtbl_update tbl k v_dflt v_fn =
@@ -203,7 +203,7 @@ module Dot = struct
           | Some (sublabel, subcircuits, removed) ->
              Some (sublabel ^ "[" ^ annot ^ "]", subcircuits, c :: removed)
           | None -> Some (annot, [c], []))
-    | CQuestionMark _ -> None
+    (* | CQuestionMark _ -> None *)
     | CConst _ -> None
 
   type ptr_or_label =
@@ -217,7 +217,7 @@ module Dot = struct
 
   let field_ptr_or_label ptr_to_object ptr =
     match PtrHashtbl.find ptr_to_object ptr with
-    | CQuestionMark n -> Label (Printf.sprintf "?'%d" n)
+    (* | CQuestionMark n -> Label (Printf.sprintf "?'%d" n) *)
     | CConst bs -> Label (string_of_bits bs)
     | _ -> Ptr ptr
 

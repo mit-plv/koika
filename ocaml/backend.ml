@@ -98,8 +98,8 @@ let internal_decl_for_net
                   | CNot _
                     | CAnd (_, _)
                     | COr (_, _) ->   Wire(name_net, 1)
-                  | CQuestionMark n
-                    | CMux (n, _, _, _) -> Wire(name_net, n)
+                  (* | CQuestionMark n
+                   *   | CMux (n, _, _, _) -> Wire(name_net, n) *)
                   | CAnnot (n, name , _) ->
                      PtrHashtbl.add environment ptr (name ^ name_net);
                      Wire(name ^ name_net, n) (* Prefix with the name given by the user *)
@@ -134,7 +134,7 @@ let internal_declarations (environment: string PtrHashtbl.t) (circuit: dedup_res
 
  *)
 type expression =
-  | EQuestionMark of size_t
+  (* | EQuestionMark of size_t *)
   | ENot of string
   | EAnd of string * string
   | EOr of string * string
@@ -150,7 +150,7 @@ let assignment_to_string (gensym: int ref) (assignment: assignment) =
   let (lhs,expr) = assignment in
   let default_left = "\tassign " ^ lhs ^ " = " in
   (match expr with
-   | EQuestionMark _ -> default_left ^ "0" (* TODO check other ways to do  *)
+   (* | EQuestionMark _ -> default_left ^ "0" (\* TODO check other ways to do  *\) *)
    | ENot n -> default_left ^ "~" ^ n
    | EAnd (arg1, arg2) -> default_left ^ arg1 ^ " & " ^ arg2
    | EOr (arg1, arg2) -> default_left ^ arg1 ^ " | " ^ arg2
@@ -197,7 +197,7 @@ let assignment_node
   let rhs_name = PtrHashtbl.find environment ptr in (* And by then the ptr has been given a name. *)
   let expr = match node with
     (* Assumes no dangling pointers  *)
-    | CQuestionMark sz -> EQuestionMark sz
+    (* | CQuestionMark sz -> EQuestionMark sz *)
     | CNot ptr -> ENot (PtrHashtbl.find environment ptr)
     | CAnd (ptr_1, ptr_2) -> EAnd (PtrHashtbl.find environment ptr_1, PtrHashtbl.find environment ptr_2)
     | COr (ptr_1, ptr_2) -> EOr (PtrHashtbl.find environment ptr_1, PtrHashtbl.find environment ptr_2)
