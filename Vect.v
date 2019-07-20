@@ -114,6 +114,8 @@ Module Bits.
   Definition lsb {n} (bs: bits (S n)) := vect_last bs.
   Definition map {n} (f: bool -> bool) (bs: bits n) := vect_map f bs.
   Definition map2 {n} (f: bool -> bool -> bool) (bs1 bs2: bits n) := vect_map2 f bs1 bs2.
+  Definition zeroes sz := const sz false.
+  Definition ones sz := const sz true.
 
   Fixpoint to_nat {sz: nat} (bs: bits sz) : nat :=
     match sz return bits sz -> nat with
@@ -146,6 +148,26 @@ Module Bits.
 
   Definition to_index {sz} sz' (bs: bits sz) : option (index sz') :=
     index_of_nat sz' (to_nat bs).
+
+  Lemma single_cons :
+    forall bs, cons (single bs) nil = bs.
+  Proof. destruct bs as [ ? [ ] ]; reflexivity. Qed.
+
+  Lemma cons_inj :
+    forall {sz} b1 b2 (t1 t2: bits sz),
+      cons b1 t1 = cons b2 t2 ->
+      b1 = b2 /\ t1 = t2.
+  Proof.
+    inversion 1; subst; eauto.
+  Qed.
+
+  Lemma single_inj:
+    forall bs1 bs2,
+      single bs1 = single bs2 ->
+      bs1 = bs2.
+  Proof.
+    intros * Heq; rewrite <- (single_cons bs1), <- (single_cons bs2), Heq; reflexivity.
+  Qed.
 End Bits.
 
 Notation bits n := (Bits.bits n).

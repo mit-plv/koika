@@ -1,4 +1,4 @@
-Require Import SGA.Common SGA.Syntax SGA.TypedSyntax SGA.Semantics.
+Require Import SGA.Common SGA.Syntax SGA.TypedSyntax SGA.SemanticProperties.
 Require Import Coq.Lists.List.
 
 Import ListNotations.
@@ -51,18 +51,6 @@ Section Proof.
 
   Notation latest_write l idx := (latest_write (R := R) (REnv := REnv) l idx).
 
-  Lemma getenv_commit_update :
-    forall sl r idx,
-      REnv.(getenv) (commit_update r sl) idx =
-      match latest_write sl idx with
-      | Some v' => v'
-      | None => REnv.(getenv) r idx
-      end.
-  Proof.
-    unfold commit_update; intros; rewrite getenv_create.
-    reflexivity.
-  Qed.
-
   Require Import Ring_theory Ring Coq.setoid_ring.Ring.
 
   Ltac set_forallb_fns :=
@@ -79,7 +67,7 @@ Section Proof.
       may_read0 sl l idx && may_read0 sl' l idx.
   Proof.
     unfold may_read0; intros.
-    rewrite !log_forallb_not_existb, !log_forallb_app.
+    rewrite !log_forallb_not_existsb, !log_forallb_app.
     set_forallb_fns.
     ring_simplify.
     f_equal.
@@ -94,7 +82,7 @@ Section Proof.
       may_read1 sl idx && may_read1 sl' idx.
   Proof.
     unfold may_read1; intros.
-    rewrite !log_forallb_not_existb, !log_forallb_app.
+    rewrite !log_forallb_not_existsb, !log_forallb_app.
     reflexivity.
   Qed.
 
@@ -104,20 +92,9 @@ Section Proof.
       may_write sl l lvl idx && may_write sl' l lvl idx.
   Proof.
     unfold may_write; intros.
-    destruct lvl; rewrite !log_forallb_not_existb, !log_forallb_app;
+    destruct lvl; rewrite !log_forallb_not_existsb, !log_forallb_app;
       ring_simplify;
       repeat (destruct (log_forallb _ _ _); cbn; try reflexivity).
-  Qed.
-
-  Lemma find_none_notb {A B}:
-    forall (P: A -> option B) l,
-      (forall a, List.In a l -> P a = None) ->
-      list_find_opt P l = None.
-  Proof.
-    induction l; cbn; intros * Hnot.
-    - reflexivity.
-    - pose proof (Hnot a).
-      destruct (P a); firstorder discriminate.
   Qed.
 
   Ltac bool_step :=
@@ -133,7 +110,7 @@ Section Proof.
       latest_write sl idx = None.
   Proof.
     unfold may_read0; intros.
-    rewrite !log_forallb_not_existb in H.
+    rewrite !log_forallb_not_existsb in H.
     rewrite log_forallb_app in H.
     repeat (cleanup_step || bool_step).
     unfold log_forallb in *.
@@ -155,7 +132,7 @@ Section Proof.
   Proof.
     unfold may_read1, latest_write, latest_write0, log_find, log_forallb.
     intros * H.
-    rewrite log_forallb_not_existb in H; unfold log_forallb in H.
+    rewrite log_forallb_not_existsb in H; unfold log_forallb in H.
     set (getenv REnv l idx) as ls in *; cbn in *; clearbody ls.
     set (R idx) as t in *; cbn in *.
     revert H.

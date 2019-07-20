@@ -1,6 +1,6 @@
 Require Import
         SGA.Common SGA.Syntax
-        SGA.Semantics SGA.Circuits.
+        SGA.SemanticProperties SGA.CircuitProperties.
 
 Require Import Coq.Lists.List.
 Import ListNotations.
@@ -21,7 +21,7 @@ Section CompilerCorrectness.
   Open Scope bool_scope.
 
   Definition circuit_env_equiv :=
-    forall idx, interp_circuit' r sigma (REnv.(getenv) rc idx) = (REnv.(getenv) r idx).
+    forall idx, interp_circuit r sigma (REnv.(getenv) rc idx) = (REnv.(getenv) r idx).
 
   Notation Log := (Log R REnv).
   Notation circuit := (circuit R Sigma).
@@ -30,12 +30,12 @@ Section CompilerCorrectness.
   Notation scheduler := (scheduler var_t R Sigma).
   Notation rule_circuit := (rule_circuit R Sigma REnv).
   Notation interp_circuit := (interp_circuit r sigma).
-  Notation interp_circuit' := (interp_circuit' r sigma). (* FIXME *)
+  Notation circuit_lt := (circuit_lt r sigma).
 
   Definition log_data0_consistent' (l: Log) (regs: rwset) :=
     forall idx,
       let cidx := REnv.(getenv) regs idx in
-      interp_circuit' (cidx.(data0)) = match latest_write0 l idx with
+      interp_circuit (cidx.(data0)) = match latest_write0 l idx with
                                        | Some v => v
                                        | None => getenv REnv r idx
                                        end.
@@ -48,7 +48,7 @@ Section CompilerCorrectness.
       let cidx := REnv.(getenv) regs idx in
       log_existsb l idx is_write1 = true ->
       match latest_write1 l idx with
-      | Some v => interp_circuit' (cidx.(data1)) = v
+      | Some v => interp_circuit (cidx.(data1)) = v
       | None => False
       end.
 
@@ -83,7 +83,7 @@ Section CompilerCorrectness.
 
   Lemma log_data0_consistent_putenv_write0 :
     forall idx log Log rws rwd v,
-      v = interp_circuit' (data0 rwd) ->
+      v = interp_circuit (data0 rwd) ->
       log_data0_consistent log Log rws ->
       log_data0_consistent (log_cons idx {| kind := LogWrite; port := P0; val := v |} log) Log
                             (REnv.(putenv) rws idx rwd).
@@ -91,35 +91,12 @@ Section CompilerCorrectness.
     data_consistent_putenv_t.
   Qed.
 
-  (* FIXME move to common *)
-  Require Import Bool.
-  (* https://coq-club.inria.narkive.com/HeWqgvKm/boolean-simplification *)
-  Hint Rewrite
-       orb_false_r (** b || false -> b *)
-       orb_false_l (** false || b -> b *)
-       orb_true_r (** b || true -> true *)
-       orb_true_l (** true || b -> true *)
-       andb_false_r (** b && false -> false *)
-       andb_false_l (** false && b -> false *)
-       andb_true_r (** b && true -> b *)
-       andb_true_l (** true && b -> b *)
-       negb_orb (** negb (b || c) -> negb b && negb c *)
-       negb_andb (** negb (b && c) -> negb b || negb c *)
-       negb_involutive (** negb( (negb b) -> b *)
-    : bool_simpl.
-  Ltac bool_simpl := autorewrite with bool_simpl in *.
-
   Ltac bool_cleanup :=
     match goal with
     | _ => reflexivity
     | _ => cleanup_step
     | [ H: _ \/ _ |- _ ] => destruct H
-    | [ H: _ && _ = true |- _ ] => rewrite andb_true_iff in H
-    | [ H: _ && _ = false |- _ ] => rewrite andb_false_iff in H
-    | [ H: _ || _ = true |- _ ] => rewrite orb_true_iff in H
-    | [ H: _ || _ = false |- _ ] => rewrite orb_false_iff in H
-    | [ H: negb _ = true |- _ ] => rewrite negb_true_iff in H
-    | [ H: negb _ = false |- _ ] => rewrite negb_false_iff in H
+    | _ => bool_step
     | [ H: log_existsb (log_app _ _) _ _ = _ |- _ ] =>
       rewrite log_existsb_app in H
     | [ H: ?x = _ |- context[?x] ] =>
@@ -176,7 +153,7 @@ Section CompilerCorrectness.
 
   Lemma log_data1_consistent_putenv_write1 :
     forall idx log Log rws rwd v,
-      v = interp_circuit' (data1 rwd) ->
+      v = interp_circuit (data1 rwd) ->
       log_data1_consistent log Log rws ->
       log_data1_consistent (log_cons idx {| kind := LogWrite; port := P1; val := v |} log) Log
                             (REnv.(putenv) rws idx rwd).
@@ -190,14 +167,14 @@ Section CompilerCorrectness.
     intros cond * H0 H1 idx;
     unfold mux_rwsets, map2; rewrite !getenv_create;
     unfold mux_rwdata; cbn;
-    destruct (interp_circuit' cond) as [ [ | ] [] ]; cbn;
+    destruct (interp_circuit cond) as [ [ | ] [] ]; cbn;
     [ specialize (H1 eq_refl idx) | specialize (H0 eq_refl idx) ];
     eauto.
 
   Lemma log_data0_consistent'_mux :
     forall cond rws0 rws1 s l,
-      (interp_circuit' cond = Ob~0 -> log_data0_consistent' l rws0) ->
-      (interp_circuit' cond = Ob~1 -> log_data0_consistent' l rws1) ->
+      (interp_circuit cond = Ob~0 -> log_data0_consistent' l rws0) ->
+      (interp_circuit cond = Ob~1 -> log_data0_consistent' l rws1) ->
       log_data0_consistent' l (mux_rwsets s cond rws1 rws0).
   Proof.
     log_consistent_mux_t.
@@ -211,7 +188,7 @@ Section CompilerCorrectness.
 
   Lemma log_data0_consistent'_mux_l :
     forall cond rws0 rws1 s l,
-      interp_circuit' cond = Ob~1 ->
+      interp_circuit cond = Ob~1 ->
       log_data0_consistent' l rws1 ->
       log_data0_consistent' l (mux_rwsets s cond rws1 rws0).
   Proof.
@@ -220,7 +197,7 @@ Section CompilerCorrectness.
 
   Lemma log_data0_consistent'_mux_r :
     forall cond rws0 rws1 s l,
-      interp_circuit' cond = Ob~0 ->
+      interp_circuit cond = Ob~0 ->
       log_data0_consistent' l rws0 ->
       log_data0_consistent' l (mux_rwsets s cond rws1 rws0).
   Proof.
@@ -229,7 +206,7 @@ Section CompilerCorrectness.
 
   Lemma log_data0_consistent_mux_l :
     forall cond rws0 rws1 s l L,
-      interp_circuit' cond = Ob~1 ->
+      interp_circuit cond = Ob~1 ->
       log_data0_consistent l L rws1 ->
       log_data0_consistent l L (mux_rwsets s cond rws1 rws0).
   Proof.
@@ -238,7 +215,7 @@ Section CompilerCorrectness.
 
   Lemma log_data0_consistent_mux_r :
     forall cond rws0 rws1 s l L,
-      interp_circuit' cond = Ob~0 ->
+      interp_circuit cond = Ob~0 ->
       log_data0_consistent l L rws0 ->
       log_data0_consistent l L (mux_rwsets s cond rws1 rws0).
   Proof.
@@ -247,8 +224,8 @@ Section CompilerCorrectness.
 
   Lemma log_data1_consistent'_mux :
     forall cond rws0 rws1 s l,
-      (interp_circuit' cond = Ob~0 -> log_data1_consistent' l rws0) ->
-      (interp_circuit' cond = Ob~1 -> log_data1_consistent' l rws1) ->
+      (interp_circuit cond = Ob~0 -> log_data1_consistent' l rws0) ->
+      (interp_circuit cond = Ob~1 -> log_data1_consistent' l rws1) ->
       log_data1_consistent' l (mux_rwsets s cond rws1 rws0).
   Proof.
     log_consistent_mux_t.
@@ -256,7 +233,7 @@ Section CompilerCorrectness.
 
   Lemma log_data1_consistent'_mux_l :
     forall cond rws0 rws1 s l,
-      interp_circuit' cond = Ob~1 ->
+      interp_circuit cond = Ob~1 ->
       log_data1_consistent' l rws1 ->
       log_data1_consistent' l (mux_rwsets s cond rws1 rws0).
   Proof.
@@ -265,7 +242,7 @@ Section CompilerCorrectness.
 
   Lemma log_data1_consistent'_mux_r :
     forall cond rws0 rws1 s l,
-      interp_circuit' cond = Ob~0 ->
+      interp_circuit cond = Ob~0 ->
       log_data1_consistent' l rws0 ->
       log_data1_consistent' l (mux_rwsets s cond rws1 rws0).
   Proof.
@@ -275,20 +252,20 @@ Section CompilerCorrectness.
   Definition log_rwdata_consistent (log: Log) (regs: rwset) :=
     forall idx,
       let cidx := REnv.(getenv) regs idx in
-      (interp_circuit' (cidx.(read0)) = Ob~(log_existsb log idx is_read0)) /\
-      (interp_circuit' (cidx.(read1)) = Ob~(log_existsb log idx is_read1)) /\
-      (interp_circuit' (cidx.(write0)) = Ob~(log_existsb log idx is_write0)) /\
-      (interp_circuit' (cidx.(write1)) = Ob~(log_existsb log idx is_write1)).
+      (interp_circuit (cidx.(read0)) = Ob~(log_existsb log idx is_read0)) /\
+      (interp_circuit (cidx.(read1)) = Ob~(log_existsb log idx is_read1)) /\
+      (interp_circuit (cidx.(write0)) = Ob~(log_existsb log idx is_write0)) /\
+      (interp_circuit (cidx.(write1)) = Ob~(log_existsb log idx is_write1)).
 
   Definition log_rwdata_consistent_update {sz} kind port (rwd rwd': rwdata R Sigma sz) :=
-    interp_circuit' (read0 rwd) =
-    Ob~(is_read0 kind port || Bits.single (interp_circuit' (read0 rwd'))) /\
-    interp_circuit' (read1 rwd) =
-    Ob~(is_read1 kind port || Bits.single (interp_circuit' (read1 rwd'))) /\
-    interp_circuit' (write0 rwd) =
-    Ob~(is_write0 kind port || Bits.single (interp_circuit' (write0 rwd'))) /\
-    interp_circuit' (write1 rwd) =
-    Ob~(is_write1 kind port || Bits.single (interp_circuit' (write1 rwd'))).
+    interp_circuit (read0 rwd) =
+    Ob~(is_read0 kind port || Bits.single (interp_circuit (read0 rwd'))) /\
+    interp_circuit (read1 rwd) =
+    Ob~(is_read1 kind port || Bits.single (interp_circuit (read1 rwd'))) /\
+    interp_circuit (write0 rwd) =
+    Ob~(is_write0 kind port || Bits.single (interp_circuit (write0 rwd'))) /\
+    interp_circuit (write1 rwd) =
+    Ob~(is_write1 kind port || Bits.single (interp_circuit (write1 rwd'))).
 
   Lemma log_rwdata_consistent_log_cons_putenv :
     forall (log: Log) idx (regs: rwset) rwd le,
@@ -313,8 +290,8 @@ Section CompilerCorrectness.
 
   Lemma log_rwdata_consistent_mux :
     forall cond rws0 rws1 s l,
-      (interp_circuit' cond = Ob~0 -> log_rwdata_consistent l rws0) ->
-      (interp_circuit' cond = Ob~1 -> log_rwdata_consistent l rws1) ->
+      (interp_circuit cond = Ob~0 -> log_rwdata_consistent l rws0) ->
+      (interp_circuit cond = Ob~1 -> log_rwdata_consistent l rws1) ->
       log_rwdata_consistent l (mux_rwsets s cond rws1 rws0).
   Proof.
     log_consistent_mux_t.
@@ -322,7 +299,7 @@ Section CompilerCorrectness.
 
   Lemma log_rwdata_consistent_mux_l :
     forall cond rws0 rws1 s l,
-      interp_circuit' cond = Ob~1 ->
+      interp_circuit cond = Ob~1 ->
       log_rwdata_consistent l rws1 ->
       log_rwdata_consistent l (mux_rwsets s cond rws1 rws0).
   Proof.
@@ -331,7 +308,7 @@ Section CompilerCorrectness.
 
   Lemma log_rwdata_consistent_mux_r :
     forall cond rws0 rws1 s l,
-      interp_circuit' cond = Ob~0 ->
+      interp_circuit cond = Ob~0 ->
       log_rwdata_consistent l rws0 ->
       log_rwdata_consistent l (mux_rwsets s cond rws1 rws0).
   Proof.
@@ -341,252 +318,10 @@ Section CompilerCorrectness.
   Ltac ceauto :=
     eauto with circuits.
 
-  Definition bool_lt b1 b2 :=
-    b2 = false ->
-    b1 = false.
-
-  Lemma bool_lt_impl b1 b2 :
-    bool_lt b1 b2 <-> (orb (negb b1) b2) = true.
-  Proof.
-    destruct b1, b2; unfold bool_lt; cbn; intuition.
-  Qed.
-
-  Definition circuit_lt (c1 c2: circuit 1) :=
-    bool_lt (Bits.single (interp_circuit' c1)) (Bits.single (interp_circuit' c2)).
-
-  Lemma interp_circuit_circuit_lt_helper_false :
-    forall c1 c2,
-      circuit_lt c1 c2 ->
-      interp_circuit' c2 = Ob~0 ->
-      interp_circuit' c1 = Ob~0.
-  Proof.
-    unfold circuit_lt; intros * Hlt Heq;
-      destruct (interp_circuit' c1) as (? & [ ]), (interp_circuit' c2) as (? & []).
-    inversion Heq; cbv; f_equal; apply Hlt; cbn; congruence.
-  Qed.
-
-  Lemma interp_circuit_circuit_lt_helper_true :
-    forall c1 c2,
-      circuit_lt c1 c2 ->
-      interp_circuit' c1 = Ob~1 ->
-      interp_circuit' c2 = Ob~1.
-  Proof.
-    unfold circuit_lt; intros * Hlt Heq;
-      destruct (interp_circuit' c1) as (? & [ ]), (interp_circuit' c2) as ([ | ] & []);
-      inversion Heq; subst; intuition.
-  Qed.
-
-  Lemma circuit_lt_CAnnot :
-    forall s c1 c2,
-      circuit_lt c1 c2 ->
-      circuit_lt (CAnnot s c1) (CAnnot s c2).
-  Proof. firstorder. Qed.
-
-  Lemma circuit_lt_CAnnot_l :
-    forall s c1 c2,
-      circuit_lt c1 c2 ->
-      circuit_lt (CAnnot s c1) c2.
-  Proof. firstorder. Qed.
-
-  Lemma circuit_lt_CAnnot_r :
-    forall s c1 c2,
-      circuit_lt c1 c2 ->
-      circuit_lt c1 (CAnnot s c2).
-  Proof. firstorder. Qed.
-
-  Lemma bool_lt_and :
-    forall b1 b1' b2 b2',
-      bool_lt b1 b1' ->
-      bool_lt b2 b2' ->
-      bool_lt (andb b1 b2) (andb b1' b2').
-  Proof.
-    unfold bool_lt; intros.
-    destruct b1, b2, b1', b2'; cbn;
-      intuition discriminate.
-  Qed.
-
-  Lemma bool_lt_and_l :
-    forall b1 b1' b2,
-      bool_lt b1 b1' ->
-      bool_lt (andb b1 b2) b1'.
-  Proof.
-    unfold bool_lt; intros.
-    destruct b1, b2, b1'; cbn;
-      intuition discriminate.
-  Qed.
-
-  Lemma bool_lt_or :
-    forall b1 b1' b2 b2',
-      bool_lt b1 b1' ->
-      bool_lt b2 b2' ->
-      bool_lt (orb b1 b2) (orb b1' b2').
-  Proof.
-    unfold bool_lt; intros.
-    destruct b1, b2, b1', b2'; cbn;
-      intuition discriminate.
-  Qed.
-
-  Lemma bool_lt_mux :
-    forall (s: bool) b1 b1' b2 b2',
-      bool_lt b1 b1' ->
-      bool_lt b2 b2' ->
-      bool_lt (if s then b1 else b2) (if s then b1' else b2').
-  Proof.
-    unfold bool_lt; intros.
-    destruct s; cbn;
-      intuition discriminate.
-  Qed.
-
-  Lemma bool_lt_not :
-    forall b1 b2,
-      bool_lt b1 b2 ->
-      bool_lt (negb b2) (negb b1).
-  Proof.
-    unfold bool_lt; intros.
-    destruct b1, b2; cbn;
-      intuition discriminate.
-  Qed.
-
-  Lemma bool_lt_true :
-    forall b, bool_lt b true.
-  Proof.
-    unfold bool_lt; intros;
-      destruct b; intuition discriminate.
-  Qed.
-
-  Lemma bool_lt_false :
-    forall b, bool_lt false b.
-  Proof.
-    unfold bool_lt; intros;
-      destruct b; intuition discriminate.
-  Qed.
-
-  Lemma circuit_lt_CAnd :
-    forall c1 c1' c2 c2',
-      circuit_lt c1 c1' ->
-      circuit_lt c2 c2' ->
-      circuit_lt (CAnd c1 c2) (CAnd c1' c2').
-  Proof. unfold circuit_lt; cbn; eauto using bool_lt_and. Qed.
-
-  Lemma circuit_lt_CAnd_l :
-    forall c1 c1' c2,
-      circuit_lt c1 c1' ->
-      circuit_lt (CAnd c1 c2) c1'.
-  Proof. unfold circuit_lt; cbn; eauto using bool_lt_and_l. Qed.
-
-  Lemma circuit_lt_CAnd_r :
-    forall c1 c1' c2',
-      circuit_lt c1 c1' ->
-      interp_circuit' c2' = Ob~1 ->
-      circuit_lt c1 (CAnd c1' c2').
-  Proof. unfold circuit_lt; cbn. intros * ? ->.
-     cbn; rewrite Bool.andb_true_r; eauto. Qed.
-
-  Lemma circuit_lt_COr :
-    forall c1 c1' c2 c2',
-      circuit_lt c1 c1' ->
-      circuit_lt c2 c2' ->
-      circuit_lt (COr c1 c2) (COr c1' c2').
-  Proof. unfold circuit_lt; cbn; eauto using bool_lt_or. Qed.
-
-  Lemma circuit_lt_CMux :
-    forall s c1 c1' c2 c2',
-      circuit_lt c1 c1' ->
-      circuit_lt c2 c2' ->
-      circuit_lt (CMux s c1 c2) (CMux s c1' c2').
-  Proof.
-    unfold circuit_lt; cbn;
-      intros; destruct (Bits.single (interp_circuit' s)); eauto.
-  Qed.
-
-  Lemma circuit_lt_CMux_l :
-    forall s c1 c2 c3,
-      (interp_circuit' s = Ob~1 -> circuit_lt c1 c3) ->
-      (interp_circuit' s = Ob~0 -> circuit_lt c2 c3) ->
-      circuit_lt (CMux s c1 c2) c3.
-  Proof.
-    unfold circuit_lt; cbn;
-      intros * Heq1 Heq2; destruct (interp_circuit' s) as [ b [] ]; cbn.
-    destruct b; eauto.
-  Qed.
-
-  Lemma circuit_lt_CMux_r :
-    forall s c1 c2 c3,
-      (interp_circuit' s = Ob~1 -> circuit_lt c1 c2) ->
-      (interp_circuit' s = Ob~0 -> circuit_lt c1 c3) ->
-      circuit_lt c1 (CMux s c2 c3).
-  Proof.
-    unfold circuit_lt; cbn;
-      intros * Heq1 Heq2; destruct (interp_circuit' s) as [ b [] ]; cbn.
-    destruct b; eauto.
-  Qed.
-
-  Lemma circuit_lt_CNot :
-    forall c1 c2,
-      circuit_lt c1 c2 ->
-      circuit_lt (CNot c2) (CNot c1).
-  Proof. unfold circuit_lt; cbn; eauto using bool_lt_not. Qed.
-
-  Lemma circuit_lt_true :
-    forall c, circuit_lt c (CConst Ob~1).
-  Proof. unfold circuit_lt; cbn; eauto using bool_lt_true. Qed.
-
-  Lemma circuit_lt_false :
-    forall c, circuit_lt (CConst Ob~0) c.
-  Proof. unfold circuit_lt; cbn; eauto using bool_lt_false. Qed.
-
-  Lemma circuit_lt_fold_right {X} :
-    forall (xs: list X) f0 f1 c0 c1,
-      circuit_lt c1 c0 ->
-      (forall x acc1 acc0, circuit_lt acc1 acc0 -> circuit_lt (f1 x acc1) (f0 x acc0)) ->
-      circuit_lt (List.fold_right f1 c1 xs) (List.fold_right f0 c0 xs).
-  Proof.
-    induction xs; cbn; intros * Hlt Hxlt; eauto.
-  Qed.
-
-  Lemma circuit_lt_refl :
-    forall c, circuit_lt c c.
-  Proof. firstorder. Qed.
-
-  Lemma circuit_lt_trans :
-    forall c1 c2 c3,
-      circuit_lt c1 c2 ->
-      circuit_lt c2 c3 ->
-      circuit_lt c1 c3.
-  Proof. firstorder. Qed.
-
-  Ltac circuit_lt_f_equal :=
-    repeat (apply circuit_lt_CAnnot_l ||
-            apply circuit_lt_CAnnot_r ||
-            apply circuit_lt_CAnd ||
-            apply circuit_lt_COr ||
-            apply circuit_lt_CNot ||
-            apply circuit_lt_true ||
-            apply circuit_lt_false ||
-            apply circuit_lt_refl).
-
-  Lemma circuit_lt_willFire_of_canFire_canFire :
-    forall c1 (cLog: scheduler_circuit R Sigma REnv) rws,
-      circuit_lt (willFire_of_canFire {| canFire := c1; regs := rws |} cLog) c1.
-  Proof.
-    unfold willFire_of_canFire; intros.
-    eapply circuit_lt_trans.
-    - eapply circuit_lt_fold_right.
-      + apply circuit_lt_refl.
-      + intros; rewrite !getenv_zip.
-        eapply circuit_lt_CAnd.
-        * eassumption.
-        * apply circuit_lt_true.
-    - cbn.
-      induction finite_elems; cbn.
-      + apply circuit_lt_refl.
-      + apply circuit_lt_CAnd_l; eassumption.
-  Qed.
-
   Lemma interp_willFire_of_canFire_canFire_false :
     forall (c: circuit 1) (rwd: rwset) (cLog: scheduler_circuit R Sigma REnv),
-      interp_circuit' c = Ob~0 ->
-      interp_circuit' (willFire_of_canFire {| canFire := c; regs := rwd |} cLog) = Ob~0.
+      interp_circuit c = Ob~0 ->
+      interp_circuit (willFire_of_canFire {| canFire := c; regs := rwd |} cLog) = Ob~0.
   Proof.
     intros.
     eapply interp_circuit_circuit_lt_helper_false.
@@ -594,36 +329,16 @@ Section CompilerCorrectness.
     eassumption.
   Qed.
 
-  Lemma bits_single_bits_cons :
-    forall bs,
-      Bits.cons (Bits.single bs) Bits.nil = bs.
-  Proof. destruct bs as [ ? [ ] ]; reflexivity. Qed.
-
-  Lemma bits_cons_inj :
-    forall {sz} b1 b2 (t1 t2: bits sz),
-      Bits.cons b1 t1 = Bits.cons b2 t2 ->
-      b1 = b2 /\ t1 = t2.
-  Proof.
-    inversion 1; subst; eauto.
-  Qed.
-
-  Lemma bits_single_inj:
-    forall bs1 bs2,
-      Bits.single bs1 = Bits.single bs2 ->
-      bs1 = bs2.
-  Proof.
-    intros * Heq; rewrite <- (bits_single_bits_cons bs1), <- (bits_single_bits_cons bs2), Heq; reflexivity.
-  Qed.
 
   Require Import Ring_theory Ring Coq.setoid_ring.Ring.
 
   Lemma interp_willFire_of_canFire_eqn :
     forall clog (cLog: scheduler_circuit R Sigma REnv),
-      interp_circuit' (willFire_of_canFire clog cLog) =
-      Ob~(andb (Bits.single (interp_circuit' (canFire clog)))
+      interp_circuit (willFire_of_canFire clog cLog) =
+      Ob~(andb (Bits.single (interp_circuit (canFire clog)))
                (List.forallb (fun idx =>
                                 (Bits.single
-                                   (interp_circuit'
+                                   (interp_circuit
                                       (willFire_of_canFire'
                                          (REnv.(getenv) clog.(regs) idx)
                                          (REnv.(getenv) cLog idx)))))
@@ -631,7 +346,7 @@ Section CompilerCorrectness.
   Proof.
     unfold willFire_of_canFire, Environments.fold_right; cbn.
     induction finite_elems; cbn; intros.
-    - bool_simpl; rewrite bits_single_bits_cons; reflexivity.
+    - bool_simpl; rewrite Bits.single_cons; reflexivity.
     - rewrite getenv_zip; cbn.
       rewrite IHl; cbn.
       f_equal.
@@ -640,25 +355,25 @@ Section CompilerCorrectness.
 
   Lemma interp_willFire_of_canFire_true :
     forall clog (cLog: scheduler_circuit R Sigma REnv),
-      interp_circuit' (willFire_of_canFire clog cLog) = Ob~1 <->
-      interp_circuit' (canFire clog) = Ob~1 /\
-      forall idx, interp_circuit'
+      interp_circuit (willFire_of_canFire clog cLog) = Ob~1 <->
+      interp_circuit (canFire clog) = Ob~1 /\
+      forall idx, interp_circuit
                (willFire_of_canFire'
                   (REnv.(getenv) clog.(regs) idx)
                   (REnv.(getenv) cLog idx)) = Ob~1.
   Proof.
     split; intros * H.
     - rewrite interp_willFire_of_canFire_eqn in H.
-      apply bits_cons_inj in H; repeat cleanup_step || bool_step.
+      apply Bits.cons_inj in H; repeat cleanup_step || bool_step.
       split.
-      + eauto using bits_single_inj.
+      + eauto using Bits.single_inj.
       + intros idx.
         lazymatch goal with
         | [ H: forallb _ _ = _ |- _ ] =>
           rewrite forallb_forall in H;
             specialize (H idx ltac:(eauto using member_In, finite_index))
         end.
-        eauto using bits_single_inj.
+        eauto using Bits.single_inj.
     - repeat cleanup_step.
       rewrite interp_willFire_of_canFire_eqn.
       f_equal.
@@ -668,57 +383,24 @@ Section CompilerCorrectness.
       rewrite H0; reflexivity.
   Qed.
 
-  Ltac bool_step :=
-    match goal with
-    | [ H: andb _ _ = true |- _ ] =>
-      apply andb_prop in H
-    | [ H: andb _ _ = false |- _ ] =>
-      rewrite andb_false_iff in H
-    | [ H: orb _ _ = true |- _ ] =>
-      apply orb_prop in H       (* FIXME: Added this *)
-    | [ H: orb _ _ = false |- _ ] =>
-      rewrite orb_false_iff in H       (* FIXME: Added this *)
-    | [ H: forallb _ (_ ++ _) = _ |- _ ] =>
-      rewrite forallb_app in H
-    | [ H: Some _ = Some _ |- _ ] =>
-      inversion H; subst; clear H
-    end.
-
-  Lemma forallb_exists {A}:
-    forall f (l: list A),
-      forallb f l = false <->
-      exists x, List.In x l /\ f x = false.
-  Proof.
-    induction l; cbn; split.
-    - congruence.
-    - intros [x (? & ?)]; exfalso; assumption.
-    - intros H; repeat bool_step; destruct H.
-      + exists a; eauto.
-      + firstorder.
-    - intros [x [ [ ? | ? ] Hnx ] ]; subst; try rewrite Hnx.
-      + reflexivity.
-      + replace (forallb f l) with false by (symmetry; rewrite IHl; eauto);
-          bool_simpl; reflexivity.
-  Qed.
-
   Opaque willFire_of_canFire'.
 
   Lemma interp_willFire_of_canFire_false :
     forall clog (cLog: scheduler_circuit R Sigma REnv),
-      interp_circuit' (willFire_of_canFire clog cLog) = Ob~0 <->
-      interp_circuit' (canFire clog) = Ob~0 \/
-      exists idx, interp_circuit'
+      interp_circuit (willFire_of_canFire clog cLog) = Ob~0 <->
+      interp_circuit (canFire clog) = Ob~0 \/
+      exists idx, interp_circuit
                (willFire_of_canFire'
                   (REnv.(getenv) clog.(regs) idx)
                   (REnv.(getenv) cLog idx)) = Ob~0.
   Proof.
     split; intros * H.
     - rewrite interp_willFire_of_canFire_eqn in H.
-      apply bits_cons_inj in H; repeat cleanup_step || bool_step; destruct H.
-      + eauto using bits_single_inj.
+      apply Bits.cons_inj in H; repeat cleanup_step || bool_step; destruct H.
+      + eauto using Bits.single_inj.
       + right. rewrite forallb_exists in H.
         destruct H as (idx & _ & Heq).
-        eauto using bits_single_inj.
+        eauto using Bits.single_inj.
     - rewrite interp_willFire_of_canFire_eqn; f_equal.
       rewrite andb_false_iff; destruct H as [ -> | ( idx & Heq ) ]; [left | right].
       + reflexivity.
@@ -731,8 +413,8 @@ Section CompilerCorrectness.
 
   (* Lemma interp_willFire_of_canFire_willFire'_false : *)
   (*   forall clog (cLog: scheduler_circuit R Sigma REnv) idx, *)
-  (*     interp_circuit' (willFire_of_canFire' (REnv.(getenv) clog.(regs) idx) (REnv.(getenv) cLog idx)) = Ob~0 -> *)
-  (*     interp_circuit' (willFire_of_canFire clog cLog) = Ob~0. *)
+  (*     interp_circuit (willFire_of_canFire' (REnv.(getenv) clog.(regs) idx) (REnv.(getenv) cLog idx)) = Ob~0 -> *)
+  (*     interp_circuit (willFire_of_canFire clog cLog) = Ob~0. *)
   (* Proof. *)
   (*   intros. *)
   (*   unfold willFire_of_canFire, Environments.fold_right; cbn. *)
@@ -813,25 +495,25 @@ Section CompilerCorrectness.
 
   Lemma rwdata_circuit_lt_invariant_mux_rwdata_l :
     forall s c idx rwd1 rwd2 rwd3,
-      (interp_circuit' c = Ob~1 -> @rwdata_circuit_lt_invariant idx rwd1 rwd3) ->
-      (interp_circuit' c = Ob~0 -> @rwdata_circuit_lt_invariant idx rwd2 rwd3) ->
+      (interp_circuit c = Ob~1 -> @rwdata_circuit_lt_invariant idx rwd1 rwd3) ->
+      (interp_circuit c = Ob~0 -> @rwdata_circuit_lt_invariant idx rwd2 rwd3) ->
       @rwdata_circuit_lt_invariant idx (mux_rwdata s c rwd1 rwd2) rwd3.
   Proof.
     unfold rwdata_circuit_lt_invariant, mux_rwdata; cbn; intros.
-    repeat split; apply circuit_lt_CMux_l; intuition eauto.
+    repeat split; apply circuit_lt_CAnnot_l, circuit_lt_CMux_l; intuition eauto.
   Qed.
 
   Lemma rwdata_circuit_lt_invariant_mux_rwdata_r :
     forall s c idx rwd1 rwd2 rwd3,
-      (interp_circuit' c = Ob~1 -> @rwdata_circuit_lt_invariant idx rwd1 rwd2) ->
-      (interp_circuit' c = Ob~0 -> @rwdata_circuit_lt_invariant idx rwd1 rwd3) ->
+      (interp_circuit c = Ob~1 -> @rwdata_circuit_lt_invariant idx rwd1 rwd2) ->
+      (interp_circuit c = Ob~0 -> @rwdata_circuit_lt_invariant idx rwd1 rwd3) ->
       @rwdata_circuit_lt_invariant idx rwd1 (mux_rwdata s c rwd2 rwd3).
   Proof.
     unfold rwdata_circuit_lt_invariant, mux_rwdata; cbn; intros.
-    repeat split; apply circuit_lt_CMux_r; intuition eauto.
+    repeat split; apply circuit_lt_CAnnot_r; apply circuit_lt_CMux_r; intuition eauto.
   Qed.
 
-  Lemma rwset_circuit_lt_compile_expr_correct {sig tau} :
+  Theorem rwset_circuit_lt_compile_expr_correct {sig tau} :
     forall (gamma : ccontext sig) (ex : expr sig tau) (rwc : rwcircuit),
       circuit_lt (canFire (erwc (compile_expr rc gamma ex rwc))) (canFire rwc) /\
       forall idx, rwset_circuit_lt_invariant (rwc.(regs)) ((compile_expr rc gamma ex rwc).(erwc).(regs)) idx.
@@ -855,7 +537,7 @@ Section CompilerCorrectness.
       intuition eauto using circuit_lt_trans, rwset_circuit_lt_invariant_trans.
   Qed.
 
-  Lemma rwset_circuit_lt_compile_rule_correct {sig}:
+  Theorem rwset_circuit_lt_compile_rule_correct {sig}:
     forall (rl : rule sig) (gamma : ccontext sig) (rwc : rwcircuit),
       circuit_lt (canFire (compile_rule rc gamma rl rwc)) (canFire rwc) /\
       forall idx, rwset_circuit_lt_invariant (rwc.(regs)) ((compile_rule rc gamma rl rwc).(regs)) idx.
@@ -917,7 +599,7 @@ Section CompilerCorrectness.
     apply circuit_lt_fold_right.
     - eassumption.
     - intros; rewrite !getenv_zip; cbn.
-      apply circuit_lt_CAnd.
+      apply circuit_lt_CAnnot, circuit_lt_CAnd.
       assumption.
       apply circuit_lt_willFire_of_canFire'.
       apply Hfr.
@@ -941,7 +623,7 @@ Section CompilerCorrectness.
       pose proof (rwset_circuit_lt_compile_rule_correct rl gamma rwc) as (H & H'); red in H'; intuition.
   Qed.
 
-  Lemma expr_compile_willFire_of_canFire_decreasing {sig}:
+  Theorem expr_compile_willFire_of_canFire_decreasing {sig}:
     forall t (ex : expr sig t) (cLog : scheduler_circuit R Sigma REnv)
       (gamma : ccontext sig) (rwc : rwcircuit),
       circuit_lt (willFire_of_canFire (erwc (compile_expr rc gamma ex rwc)) cLog)
@@ -951,7 +633,7 @@ Section CompilerCorrectness.
       pose proof (rwset_circuit_lt_compile_expr_correct gamma ex rwc); intuition.
   Qed.
 
-  Lemma rule_compile_willFire_of_canFire_decreasing {sig}:
+  Theorem rule_compile_willFire_of_canFire_decreasing {sig}:
     forall (rl : rule sig) (cLog : scheduler_circuit R Sigma REnv)
       (gamma : ccontext sig) (rwc : rwcircuit),
       circuit_lt (willFire_of_canFire (compile_rule rc gamma rl rwc) cLog)
@@ -972,20 +654,20 @@ Section CompilerCorrectness.
     - eassumption.
     - intros; rewrite !getenv_zip.
       cbn.
-      eauto using circuit_lt_CAnnot_l, circuit_lt_CAnd, circuit_lt_refl.
+      eauto using circuit_lt_CAnnot, circuit_lt_CAnd, circuit_lt_refl.
   Qed.
 
   Context {var_t_eq_dec: EqDec var_t}.
 
   Definition circuit_gamma_equiv {sig} (Gamma : vcontext sig) (gamma : ccontext sig) :=
     (forall (k: var_t) tau (m : member (k, tau) sig),
-        interp_circuit' (cassoc m gamma) = cassoc m Gamma).
+        interp_circuit (cassoc m gamma) = cassoc m Gamma).
 
   Lemma circuit_gamma_equiv_CtxCons {sig}:
     forall Gamma gamma,
       circuit_gamma_equiv (Gamma: vcontext sig) (gamma: ccontext sig) ->
       forall (tau : type) (var : var_t) (c : circuit tau),
-        circuit_gamma_equiv (CtxCons (var, tau) (interp_circuit' c) Gamma) (CtxCons (var, tau) c gamma).
+        circuit_gamma_equiv (CtxCons (var, tau) (interp_circuit c) Gamma) (CtxCons (var, tau) c gamma).
   Proof.
     unfold circuit_gamma_equiv; intros.
     destruct (mdestruct m) as [(? & ->) | (m' & ->)]; cbn.
@@ -1019,8 +701,8 @@ Section CompilerCorrectness.
   Lemma interp_circuit_willFire_of_canFire_read0:
     forall {tau} (rwd : rwdata R Sigma tau) cLog
       cOne (cdata0 cdata1 : circuit tau),
-      interp_circuit' cOne = Ob~1 ->
-      interp_circuit'
+      interp_circuit cOne = Ob~1 ->
+      interp_circuit
         (willFire_of_canFire'
            {| read0 := cOne;
               read1 := read1 rwd;
@@ -1028,9 +710,9 @@ Section CompilerCorrectness.
               write1 := write1 rwd;
               data0 := cdata0;
               data1 := cdata1 |} cLog) =
-      Ob~(Bits.single (interp_circuit' (willFire_of_canFire' rwd cLog)) &&
-          negb (Bits.single (interp_circuit' cLog.(write0))) &&
-          negb (Bits.single (interp_circuit' cLog.(write1)))).
+      Ob~(Bits.single (interp_circuit (willFire_of_canFire' rwd cLog)) &&
+          negb (Bits.single (interp_circuit cLog.(write0))) &&
+          negb (Bits.single (interp_circuit cLog.(write1)))).
   Proof.
     t_interp_circuit_willFire_of_canFire.
   Qed.
@@ -1038,8 +720,8 @@ Section CompilerCorrectness.
   Lemma interp_circuit_willFire_of_canFire_read1:
     forall {tau} (rwd : rwdata R Sigma tau) cLog
       cOne (cdata0 cdata1 : circuit tau),
-      interp_circuit' cOne = Ob~1 ->
-      interp_circuit'
+      interp_circuit cOne = Ob~1 ->
+      interp_circuit
         (willFire_of_canFire'
            {| read0 := read0 rwd;
               read1 := cOne;
@@ -1047,8 +729,8 @@ Section CompilerCorrectness.
               write1 := write1 rwd;
               data0 := cdata0;
               data1 := cdata1 |} cLog) =
-      Ob~(Bits.single (interp_circuit' (willFire_of_canFire' rwd cLog)) &&
-          negb (Bits.single (interp_circuit' (write1 cLog)))).
+      Ob~(Bits.single (interp_circuit (willFire_of_canFire' rwd cLog)) &&
+          negb (Bits.single (interp_circuit (write1 cLog)))).
   Proof.
     t_interp_circuit_willFire_of_canFire.
   Qed.
@@ -1056,8 +738,8 @@ Section CompilerCorrectness.
   Lemma interp_circuit_willFire_of_canFire_write0:
     forall {tau} (rwd : rwdata R Sigma tau) cLog
       cOne (cdata0 cdata1 : circuit tau),
-      interp_circuit' cOne = Ob~1 ->
-      interp_circuit'
+      interp_circuit cOne = Ob~1 ->
+      interp_circuit
         (willFire_of_canFire'
            {| read0 := read0 rwd;
               read1 := read1 rwd;
@@ -1065,10 +747,10 @@ Section CompilerCorrectness.
               write1 := write1 rwd;
               data0 := cdata0;
               data1 := cdata1 |} cLog) =
-      Ob~(Bits.single (interp_circuit' (willFire_of_canFire' rwd cLog)) &&
-          negb (Bits.single (interp_circuit' cLog.(write0))) &&
-          negb (Bits.single (interp_circuit' cLog.(write1))) &&
-          negb (Bits.single (interp_circuit' cLog.(read1)))).
+      Ob~(Bits.single (interp_circuit (willFire_of_canFire' rwd cLog)) &&
+          negb (Bits.single (interp_circuit cLog.(write0))) &&
+          negb (Bits.single (interp_circuit cLog.(write1))) &&
+          negb (Bits.single (interp_circuit cLog.(read1)))).
   Proof.
     t_interp_circuit_willFire_of_canFire.
   Qed.
@@ -1076,8 +758,8 @@ Section CompilerCorrectness.
   Lemma interp_circuit_willFire_of_canFire_write1:
     forall {tau} (rwd : rwdata R Sigma tau) cLog
       cOne (cdata0 cdata1 : circuit tau),
-      interp_circuit' cOne = Ob~1 ->
-      interp_circuit'
+      interp_circuit cOne = Ob~1 ->
+      interp_circuit
         (willFire_of_canFire'
            {| read0 := read0 rwd;
               read1 := read1 rwd;
@@ -1085,8 +767,8 @@ Section CompilerCorrectness.
               write1 := cOne;
               data0 := cdata0;
               data1 := cdata1 |} cLog) =
-      Ob~(Bits.single (interp_circuit' (willFire_of_canFire' rwd cLog)) &&
-          negb (Bits.single (interp_circuit' (write1 cLog)))).
+      Ob~(Bits.single (interp_circuit (willFire_of_canFire' rwd cLog)) &&
+          negb (Bits.single (interp_circuit (write1 cLog)))).
   Proof.
     t_interp_circuit_willFire_of_canFire.
   Qed.
@@ -1094,11 +776,11 @@ Section CompilerCorrectness.
   Lemma interp_circuit_willFire_of_canFire_read0_impl:
     forall {tau} (rwd : rwdata R Sigma tau) cLog
       cOne (cdata0 cdata1 : circuit tau),
-      interp_circuit' cLog.(write0) = Ob~0 ->
-      interp_circuit' cLog.(write1) = Ob~0 ->
-      interp_circuit' cOne = Ob~1 ->
-      interp_circuit' (willFire_of_canFire' rwd cLog) = Ob~1 ->
-      interp_circuit'
+      interp_circuit cLog.(write0) = Ob~0 ->
+      interp_circuit cLog.(write1) = Ob~0 ->
+      interp_circuit cOne = Ob~1 ->
+      interp_circuit (willFire_of_canFire' rwd cLog) = Ob~1 ->
+      interp_circuit
         (willFire_of_canFire'
            {| read0 := cOne;
               read1 := read1 rwd;
@@ -1113,10 +795,10 @@ Section CompilerCorrectness.
   Lemma interp_circuit_willFire_of_canFire_read1_impl:
     forall {tau} (rwd : rwdata R Sigma tau) cLog
       cOne (cdata0 cdata1 : circuit tau),
-      interp_circuit' (write1 cLog) = Ob~0 ->
-      interp_circuit' cOne = Ob~1 ->
-      interp_circuit' (willFire_of_canFire' rwd cLog) = Ob~1 ->
-      interp_circuit'
+      interp_circuit (write1 cLog) = Ob~0 ->
+      interp_circuit cOne = Ob~1 ->
+      interp_circuit (willFire_of_canFire' rwd cLog) = Ob~1 ->
+      interp_circuit
         (willFire_of_canFire'
            {| read0 := read0 rwd;
               read1 := cOne;
@@ -1131,12 +813,12 @@ Section CompilerCorrectness.
   Lemma interp_circuit_willFire_of_canFire_write0_impl:
     forall {tau} (rwd : rwdata R Sigma tau) cLog
       cOne (cdata0 cdata1 : circuit tau),
-      interp_circuit' cLog.(write0) = Ob~0 ->
-      interp_circuit' cLog.(write1) = Ob~0 ->
-      interp_circuit' cLog.(read1) = Ob~0 ->
-      interp_circuit' cOne = Ob~1 ->
-      interp_circuit' (willFire_of_canFire' rwd cLog) = Ob~1 ->
-      interp_circuit'
+      interp_circuit cLog.(write0) = Ob~0 ->
+      interp_circuit cLog.(write1) = Ob~0 ->
+      interp_circuit cLog.(read1) = Ob~0 ->
+      interp_circuit cOne = Ob~1 ->
+      interp_circuit (willFire_of_canFire' rwd cLog) = Ob~1 ->
+      interp_circuit
         (willFire_of_canFire'
            {| read0 := read0 rwd;
               read1 := read1 rwd;
@@ -1151,10 +833,10 @@ Section CompilerCorrectness.
   Lemma interp_circuit_willFire_of_canFire_write1_impl:
     forall {tau} (rwd : rwdata R Sigma tau) cLog
       cOne (cdata0 cdata1 : circuit tau),
-      interp_circuit' (write1 cLog) = Ob~0 ->
-      interp_circuit' cOne = Ob~1 ->
-      interp_circuit' (willFire_of_canFire' rwd cLog) = Ob~1 ->
-      interp_circuit'
+      interp_circuit (write1 cLog) = Ob~0 ->
+      interp_circuit cOne = Ob~1 ->
+      interp_circuit (willFire_of_canFire' rwd cLog) = Ob~1 ->
+      interp_circuit
         (willFire_of_canFire'
            {| read0 := read0 rwd;
               read1 := read1 rwd;
@@ -1183,7 +865,7 @@ Section CompilerCorrectness.
        circuit_lt_false
        rwset_circuit_lt_invariant_putenv
        rwset_circuit_lt_invariant_refl : circuits.
-  Hint Resolve bits_single_inj : circuits.
+  Hint Resolve Bits.single_inj : circuits.
   Hint Extern 3 => cbn in * : circuits.
   Hint Extern 3 => red : circuits.
 
@@ -1197,7 +879,7 @@ Section CompilerCorrectness.
     | [  |- Ob~_ = Ob~_ ] => f_equal
     | [ H: ?x = true |- context[?x] ] => rewrite H
     | [ H: ?x = false |- context[?x] ] => rewrite H
-    | [ H: interp_circuit' ?c = Ob~_ |- context[interp_circuit' ?c] ] =>
+    | [ H: interp_circuit ?c = Ob~_ |- context[interp_circuit ?c] ] =>
       rewrite H
     | [ Heq: interp_circuit ?x = Some _ |- context[interp_circuit ?x] ] =>
       rewrite Heq
@@ -1225,13 +907,13 @@ Section CompilerCorrectness.
   Ltac interp_willFire_cleanup :=
     repeat match goal with
            | _ => reflexivity
-           | [ H: interp_circuit' (willFire_of_canFire _ _) = Ob~1 |- _ ] =>
+           | [ H: interp_circuit (willFire_of_canFire _ _) = Ob~1 |- _ ] =>
              rewrite interp_willFire_of_canFire_true in H
-           | [ H: interp_circuit' (willFire_of_canFire _ _) = Ob~0 |- _ ] =>
+           | [ H: interp_circuit (willFire_of_canFire _ _) = Ob~0 |- _ ] =>
              rewrite interp_willFire_of_canFire_false in H
-           | [ |- interp_circuit' (willFire_of_canFire _ _) = Ob~1 ] =>
+           | [ |- interp_circuit (willFire_of_canFire _ _) = Ob~1 ] =>
              rewrite interp_willFire_of_canFire_true
-           | [ |- interp_circuit' (willFire_of_canFire _ _) = Ob~0 ] =>
+           | [ |- interp_circuit (willFire_of_canFire _ _) = Ob~0 ] =>
              rewrite interp_willFire_of_canFire_false
            | _ => progress cbn
            | _ => progress intros
@@ -1243,33 +925,30 @@ Section CompilerCorrectness.
              destruct (eq_dec idx idx'); subst;
              [ rewrite !get_put_eq | rewrite !get_put_neq by eassumption ];
              [ | solve [intuition eauto] ]
-           | [  |- interp_circuit' (willFire_of_canFire' _ _) = Ob~_ ] =>
+           | [  |- interp_circuit (willFire_of_canFire' _ _) = Ob~_ ] =>
              (rewrite interp_circuit_willFire_of_canFire_read0 ||
               rewrite interp_circuit_willFire_of_canFire_read1 ||
               rewrite interp_circuit_willFire_of_canFire_write0 ||
               rewrite interp_circuit_willFire_of_canFire_write1);
              [ .. | solve[intuition eauto] ]
-           | [ H: context[interp_circuit' _ = _] |-
-               context[interp_circuit' _] ] =>
+           | [ H: context[interp_circuit _ = _] |-
+               context[interp_circuit _] ] =>
              rewrite H
            | _ => progress rewrite ?negb_true_iff, ?negb_false_iff
            end; cbn.
 
-  Ltac bool_cleanup_consistent :=
-    match goal with
-    | _ => progress bool_cleanup
-    | [ H: log_rwdata_consistent _ ?regs |-
-        context [Bits.single (interp_circuit' (_ (REnv.(getenv) ?regs ?idx)))] ] =>
-      specialize (H idx); cbv zeta in *; repeat cleanup_step
-    end.
-
   Ltac may_read_write_t :=
     unfold may_read0, may_read1, may_write in *;
-    repeat bool_cleanup_consistent.
+    repeat match goal with
+           | _ => progress bool_cleanup
+           | [ H: log_rwdata_consistent _ ?regs |-
+               context [Bits.single (interp_circuit (_ (REnv.(getenv) ?regs ?idx)))] ] =>
+             specialize (H idx); cbv zeta in *; repeat cleanup_step
+           end.
 
   Arguments willFire_of_canFire' : simpl never.
 
-  Lemma expr_compiler_correct {sig tau} Log cLog:
+  Theorem expr_compiler_correct {sig tau} Log cLog:
     forall (ex: expr sig tau) (clog: rule_circuit)
       (Gamma: vcontext sig) (gamma: ccontext sig) log,
       log_rwdata_consistent log clog.(regs) ->
@@ -1278,17 +957,17 @@ Section CompilerCorrectness.
       log_data1_consistent log Log clog.(regs) ->
       circuit_gamma_equiv Gamma gamma ->
       circuit_env_equiv ->
-      interp_circuit' (willFire_of_canFire clog cLog) = Ob~1 ->
+      interp_circuit (willFire_of_canFire clog cLog) = Ob~1 ->
       let cExpr := compile_expr rc gamma ex clog in
       match interp_expr r sigma Gamma Log log ex with
       | Some (l', v) =>
-        interp_circuit' cExpr.(retVal) = v /\
+        interp_circuit cExpr.(retVal) = v /\
         log_rwdata_consistent l' cExpr.(erwc).(regs) /\
         log_data0_consistent l' Log cExpr.(erwc).(regs) /\
         log_data1_consistent l' Log cExpr.(erwc).(regs) /\
-        interp_circuit' (willFire_of_canFire cExpr.(erwc) cLog) = Ob~1
+        interp_circuit (willFire_of_canFire cExpr.(erwc) cLog) = Ob~1
       | None =>
-        interp_circuit' (willFire_of_canFire cExpr.(erwc) cLog) = Ob~0
+        interp_circuit (willFire_of_canFire cExpr.(erwc) cLog) = Ob~0
       end.
   Proof.
     induction ex; intros.
@@ -1301,7 +980,7 @@ Section CompilerCorrectness.
         * repeat eapply conj.
           -- eauto.
           -- apply log_rwdata_consistent_log_cons_putenv;
-               [ eauto | red ]; cbn; rewrite ?bits_single_bits_cons; eauto.
+               [ eauto | red ]; cbn; rewrite ?Bits.single_cons; eauto.
           -- apply log_data0_consistent_putenv_read_write1; eauto.
           -- apply log_data1_consistent_putenv_read_write0; eauto.
           -- interp_willFire_cleanup;
@@ -1320,7 +999,7 @@ Section CompilerCorrectness.
         * repeat eapply conj.
           -- apply H1.
           -- apply log_rwdata_consistent_log_cons_putenv;
-               [ eauto | red ]; cbn; rewrite ?bits_single_bits_cons; eauto.
+               [ eauto | red ]; cbn; rewrite ?Bits.single_cons; eauto.
           -- apply log_data0_consistent_putenv_read_write1; eauto.
           -- apply log_data1_consistent_putenv_read_write0; eauto.
           -- interp_willFire_cleanup;
@@ -1338,19 +1017,19 @@ Section CompilerCorrectness.
 
   Lemma interp_circuit_willFire_of_canFire'_mux_rwdata:
     forall (idx : reg_t) s (rwd1 rwd2 : rwdata R Sigma (R idx)) (cCond : circuit 1) (rwdL : rwdata R Sigma (R idx)),
-      interp_circuit' (willFire_of_canFire' (mux_rwdata s cCond rwd1 rwd2) rwdL) =
-      if Bits.single (interp_circuit' cCond) then
-        interp_circuit' (willFire_of_canFire' rwd1 rwdL)
+      interp_circuit (willFire_of_canFire' (mux_rwdata s cCond rwd1 rwd2) rwdL) =
+      if Bits.single (interp_circuit cCond) then
+        interp_circuit (willFire_of_canFire' rwd1 rwdL)
       else
-        interp_circuit' (willFire_of_canFire' rwd2 rwdL).
+        interp_circuit (willFire_of_canFire' rwd2 rwdL).
   Proof.
     intros *;
       unfold willFire_of_canFire'; cbn;
-        destruct (interp_circuit' cCond) as [ [ | ] [ ] ];
+        destruct (interp_circuit cCond) as [ [ | ] [ ] ];
         cbn; eauto.
   Qed.
 
-  Lemma rule_compiler_correct {sig} Log cLog:
+  Theorem rule_compiler_correct {sig} Log cLog:
     forall (rl: rule sig) (clog: rule_circuit)
       (Gamma: vcontext sig) (gamma: ccontext sig) log,
       log_rwdata_consistent log clog.(regs) ->
@@ -1359,16 +1038,16 @@ Section CompilerCorrectness.
       log_data1_consistent log Log clog.(regs) ->
       circuit_gamma_equiv Gamma gamma ->
       circuit_env_equiv ->
-      interp_circuit' (willFire_of_canFire clog cLog) = Ob~1 ->
+      interp_circuit (willFire_of_canFire clog cLog) = Ob~1 ->
       let cRule := compile_rule rc gamma rl clog in
       match interp_rule r sigma Gamma Log log rl with
       | Some (l') =>
         log_rwdata_consistent l' cRule.(regs) /\
         log_data0_consistent l' Log cRule.(regs) /\
         log_data1_consistent l' Log cRule.(regs) /\
-        interp_circuit' (willFire_of_canFire cRule cLog) = Ob~1
+        interp_circuit (willFire_of_canFire cRule cLog) = Ob~1
       | None =>
-        interp_circuit' (willFire_of_canFire cRule cLog) = Ob~0
+        interp_circuit (willFire_of_canFire cRule cLog) = Ob~0
       end.
   Proof.
     induction rl; intros; try solve [cbn; eauto].
@@ -1427,7 +1106,7 @@ Section CompilerCorrectness.
       + repeat apply conj.
         * destruct port;
             (apply log_rwdata_consistent_log_cons_putenv;
-             [ eauto | red ]; cbn; rewrite ?bits_single_bits_cons; eauto).
+             [ eauto | red ]; cbn; rewrite ?Bits.single_cons; eauto).
         * destruct port; cbn.
           -- apply log_data0_consistent_putenv_write0; eauto.
           -- apply log_data0_consistent_putenv_read_write1; eauto.
@@ -1482,43 +1161,6 @@ Section CompilerCorrectness.
       unfold map2; rewrite getenv_create; cbn;
         eauto.
   Qed.
-
-  Ltac latest_write_t :=
-    unfold latest_write, latest_write0, latest_write1, log_find, log_existsb;
-    induction (getenv REnv _ _);
-    repeat match goal with
-           | _ => reflexivity || discriminate
-           | _ => progress (intros; cbn in * )
-           | [ H: LogEntry _ |- _ ] => destruct H as [ [ | ] [ | ] ]
-           | [ H: _ -> _ = _ |- _ ] => rewrite H by eauto
-           | _ => solve [eauto]
-           end.
-
-  Lemma latest_write_latest_write0 (l: Log) idx:
-    log_existsb l idx is_write1 = false ->
-    latest_write l idx = latest_write0 l idx.
-  Proof. latest_write_t. Qed.
-
-  Lemma latest_write_latest_write1 (l: Log) idx:
-    log_existsb l idx is_write0 = false ->
-    latest_write l idx = latest_write1 l idx.
-  Proof. latest_write_t. Qed.
-
-  Lemma latest_write_None (l: Log) idx:
-    log_existsb l idx is_write0 = false ->
-    log_existsb l idx is_write1 = false ->
-    latest_write l idx = None.
-  Proof. latest_write_t. Qed.
-
-  Lemma latest_write0_None (l: Log) idx:
-    log_existsb l idx is_write0 = false ->
-    latest_write0 l idx = None.
-  Proof. latest_write_t. Qed.
-
-  Lemma latest_write1_None (l: Log) idx:
-    log_existsb l idx is_write1 = false ->
-    latest_write1 l idx = None.
-  Proof. latest_write_t. Qed.
 
   Lemma log_data1_consistent'_update_accumulated:
     forall (cLog : rwset) (l L: Log) (rws : rwset),
@@ -1579,7 +1221,7 @@ Section CompilerCorrectness.
   Qed.
 
   Lemma interp_circuit_willFire_of_canFire_adapter (cLog: REnv.(env_t) _):
-    interp_circuit' (willFire_of_canFire (adapter cLog) cLog) = Ob~1.
+    interp_circuit (willFire_of_canFire (adapter cLog) cLog) = Ob~1.
   Proof.
     interp_willFire_cleanup.
     unfold Environments.map; rewrite getenv_create.
@@ -1595,7 +1237,7 @@ Section CompilerCorrectness.
   Hint Resolve log_data0_consistent'_update_accumulated : circuits.
   Hint Resolve log_data1_consistent'_update_accumulated : circuits.
 
-  Lemma scheduler_compiler'_correct':
+  Theorem scheduler_compiler'_correct':
     forall (s: scheduler) Log cLog,
       log_data1_consistent' Log cLog ->
       log_data0_consistent' Log cLog ->
@@ -1653,12 +1295,6 @@ Section CompilerCorrectness.
         rewrite latest_write0_empty; eauto.
   Qed.
 
-  Lemma latest_write1_empty idx:
-    latest_write1 (log_empty: Log) idx = None.
-  Proof.
-    apply log_find_empty.
-  Qed.                            (* FIXME move *)
-
   Lemma log_data1_consistent'_empty_init_scheduler:
     log_data1_consistent' log_empty (init_scheduler_circuit rc).
   Proof.
@@ -1680,7 +1316,7 @@ Section CompilerCorrectness.
              end
     end.
 
-  Lemma expr_log_writes_ordered:
+  Theorem expr_log_writes_ordered:
     forall sig tau ex ctx Log log idx,
       log_writes_ordered (log_app log Log) idx ->
       match @interp_expr var_t reg_t fn_t R Sigma REnv r sigma sig ctx Log tau log ex with
@@ -1708,7 +1344,7 @@ Section CompilerCorrectness.
              end.
   Qed.
 
-  Lemma rule_log_writes_ordered:
+  Theorem rule_log_writes_ordered:
     forall sig rl ctx Log log idx,
       log_writes_ordered (log_app log Log) idx ->
       match @interp_rule var_t reg_t fn_t R Sigma REnv r sigma sig ctx Log log rl with
@@ -1752,7 +1388,7 @@ Section CompilerCorrectness.
 
   Hint Resolve log_writes_ordered_empty : circuits.
 
-  Lemma scheduler_log_writes_ordered:
+  Theorem scheduler_log_writes_ordered:
     forall s log idx,
       log_writes_ordered log idx ->
       log_writes_ordered (@interp_scheduler' var_t reg_t fn_t R Sigma REnv r sigma log s) idx.
@@ -1766,11 +1402,11 @@ Section CompilerCorrectness.
       end; eauto.
   Qed.
 
-  Lemma scheduler_compiler_correct':
+  Theorem scheduler_compiler_correct':
     forall (s: scheduler),
       circuit_env_equiv ->
       forall idx,
-        interp_circuit' (REnv.(getenv) (compile_scheduler rc s) idx) =
+        interp_circuit (REnv.(getenv) (compile_scheduler rc s) idx) =
         REnv.(getenv) (commit_update r (interp_scheduler r sigma s)) idx.
   Proof.
     intros; unfold compile_scheduler, commit_update, commit_rwdata, interp_scheduler, map2.
@@ -1807,11 +1443,11 @@ Section Thm.
   Context {Sigma: fn_t -> ExternalSignature}.
   Context {REnv: Env reg_t}.
 
-  Lemma scheduler_compiler_correct `{EqDec var_t}:
+  Theorem scheduler_compiler_correct `{EqDec var_t}:
     forall (s: scheduler var_t R Sigma) r sigma rc,
       circuit_env_equiv r rc sigma ->
       forall idx,
-        interp_circuit' r sigma (REnv.(getenv) (compile_scheduler rc s) idx) =
+        interp_circuit r sigma (REnv.(getenv) (compile_scheduler rc s) idx) =
         REnv.(getenv) (commit_update r (interp_scheduler r sigma s)) idx.
   Proof. eauto using scheduler_compiler_correct'. Qed.
 End Thm.

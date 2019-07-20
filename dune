@@ -1,8 +1,8 @@
 (coq.theory
  (name SGA)
  (modules Vect Common Environments Syntax
-          Types TypedSyntax Circuits Typechecking TypeInference
-          Semantics TypeSafety OneRuleAtATime CircuitCorrectness
+          Types TypedSyntax Circuits CircuitProperties Typechecking TypeInference
+          Semantics SemanticProperties TypeSafety OneRuleAtATime CircuitCorrectness
           Primitives Interop Notations
           Demo Extraction
           Examples))

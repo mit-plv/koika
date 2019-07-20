@@ -8,7 +8,6 @@ Section Circuit.
   Context {Sigma: fn_t -> ExternalSignature}.
 
   Inductive circuit : nat -> Type :=
-  | CQuestionMark sz: circuit sz
   | CNot (c: circuit 1): circuit 1
   | CAnd (c1 c2: circuit 1): circuit 1
   | COr (c1 c2: circuit 1): circuit 1
@@ -64,58 +63,25 @@ Section Interpretation.
   Context (r: REnv.(env_t) R).
   Context (sigma: forall f, Sigma f).
 
-  Fixpoint interp_circuit {n} (c: circuit R Sigma n) : option (bits n) :=
+  Fixpoint interp_circuit {n} (c: circuit R Sigma n) : bits n :=
     match c with
-    | CQuestionMark sz =>
-      None
     | CNot c =>
-      let/opt bs := interp_circuit c in
-      Some (w1 (negb (Bits.single bs)))
+      w1 (negb (Bits.single (interp_circuit c)))
     | CAnd c1 c2 =>
-      let/opt bs1 := interp_circuit c1 in
-      let/opt bs2 := interp_circuit c2 in
-      Some (w1 (andb (Bits.single bs1) (Bits.single bs2)))
+      w1 (andb (Bits.single (interp_circuit c1)) (Bits.single (interp_circuit c2)))
     | COr c1 c2 =>
-      let/opt bs1 := interp_circuit c1 in
-      let/opt bs2 := interp_circuit c2 in
-      Some (w1 (orb (Bits.single bs1) (Bits.single bs2)))
+      w1 (orb (Bits.single (interp_circuit c1)) (Bits.single (interp_circuit c2)))
     | CMux select c1 c2 =>
-      let/opt bs := interp_circuit select in
-      if Bits.single bs then interp_circuit c1
+      if Bits.single (interp_circuit select) then interp_circuit c1
       else interp_circuit c2
-    | CConst cst =>
-      Some cst
-    | CReadRegister idx =>
-      Some (REnv.(getenv) r idx)
-    | CExternal idx arg1 arg2 =>
-      let/opt bs1 := interp_circuit arg1 in
-      let/opt bs2 := interp_circuit arg2 in
-      Some (sigma idx bs1 bs2)
-    | CAnnot _ c =>
-      interp_circuit c
-    end.
-
-  Fixpoint interp_circuit' {n} (c: circuit R Sigma n) : bits n :=
-    match c with
-    | CQuestionMark sz =>
-      Bits.const sz false       (* FIXME prove that this doesn't influence result *)
-    | CNot c =>
-      w1 (negb (Bits.single (interp_circuit' c)))
-    | CAnd c1 c2 =>
-      w1 (andb (Bits.single (interp_circuit' c1)) (Bits.single (interp_circuit' c2)))
-    | COr c1 c2 =>
-      w1 (orb (Bits.single (interp_circuit' c1)) (Bits.single (interp_circuit' c2)))
-    | CMux select c1 c2 =>
-      if Bits.single (interp_circuit' select) then interp_circuit' c1
-      else interp_circuit' c2
     | CConst cst =>
       cst
     | CReadRegister idx =>
       REnv.(getenv) r idx
     | CExternal idx arg1 arg2 =>
-      sigma idx (interp_circuit' arg1) (interp_circuit' arg2)
+      sigma idx (interp_circuit arg1) (interp_circuit arg2)
     | CAnnot _ c =>
-      interp_circuit' c
+      interp_circuit c
     end.
 End Interpretation.
 
@@ -360,7 +326,7 @@ Section CircuitCompilation.
        write0 := $`"sched_init_no_write0"` (w1 false);
        write1 := $`"sched_init_no_write1"` (w1 false);
        data0 := CAnnot "sched_init_data0_is_reg" (REnv.(getenv) r idx);
-       data1 := CAnnot "sched_init_no_data1" (CQuestionMark _) |}.
+       data1 := CAnnot "sched_init_no_data1" (CConst (Bits.zeroes _)) |}.
 
   Definition init_scheduler_circuit : scheduler_circuit :=
     REnv.(create) init_scheduler_rwdata.
