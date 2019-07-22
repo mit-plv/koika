@@ -2,6 +2,7 @@ Require Import
         SGA.Common SGA.Syntax
         SGA.SemanticProperties SGA.CircuitProperties.
 
+Require Import Coq.setoid_ring.Ring_theory Coq.setoid_ring.Ring Coq.setoid_ring.Ring.
 Require Import Coq.Lists.List.
 Import ListNotations.
 
@@ -328,9 +329,6 @@ Section CompilerCorrectness.
     apply circuit_lt_willFire_of_canFire_canFire.
     eassumption.
   Qed.
-
-
-  Require Import Ring_theory Ring Coq.setoid_ring.Ring.
 
   Lemma interp_willFire_of_canFire_eqn :
     forall clog (cLog: scheduler_circuit R Sigma REnv),

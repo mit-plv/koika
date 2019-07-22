@@ -1,4 +1,5 @@
 Require Import SGA.Common SGA.Syntax SGA.TypedSyntax SGA.SemanticProperties.
+Require Import Coq.setoid_ring.Ring_theory Coq.setoid_ring.Ring Coq.setoid_ring.Ring.
 Require Import Coq.Lists.List.
 
 Import ListNotations.
@@ -50,8 +51,6 @@ Section Proof.
     Some (commit_update r log).
 
   Notation latest_write l idx := (latest_write (R := R) (REnv := REnv) l idx).
-
-  Require Import Ring_theory Ring Coq.setoid_ring.Ring.
 
   Ltac set_forallb_fns :=
     repeat match goal with
