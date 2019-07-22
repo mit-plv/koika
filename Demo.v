@@ -37,13 +37,13 @@ Module Ex1.
     | Odd => fun (bs: bits 3) _ => w1 (Bits.lsb bs)
     end.
 
-  Example r1 : urule var_t reg_t fn_t :=
+  Example r1 : urule unit var_t reg_t fn_t :=
     (UBind "x" (URead P0 R0)
            (UIf (UCall Even (UVar "x") (UConst Ob))
                 (UWrite P0 R1 (UConst Ob~1))
                 (UWrite P0 R1 (UConst Ob~1)))).
 
-  Example s1 : uscheduler var_t reg_t fn_t :=
+  Example s1 : uscheduler unit var_t reg_t fn_t :=
     UTry r1 UDone UDone.
 
   Definition s1_result :=
@@ -70,11 +70,11 @@ Module Ex2.
     | Not n => {{ n ~> 0 ~> n }}
     end.
 
-  Example negate : urule var_t reg_t fn_t  :=
+  Example negate : urule unit var_t reg_t fn_t  :=
     UBind "x" (URead P1 R0)
           (UWrite P1 R0 (UVar "x")).
 
-  Example swap_or_replace : urule var_t reg_t fn_t  :=
+  Example swap_or_replace : urule unit var_t reg_t fn_t  :=
     UBind "should_swap" (URead P0 R2)
           (UIf (UVar "should_swap")
                (USeq (UWrite P0 R1 (URead P0 R0))
@@ -83,10 +83,10 @@ Module Ex2.
                                     (URead P0 R0)
                                     (URead P0 R1)))).
 
-  Example ill_typed_write : urule var_t reg_t fn_t  :=
+  Example ill_typed_write : urule unit var_t reg_t fn_t  :=
     UWrite P0 R2 (URead P0 R1).
 
-  Example unbound_variable : urule var_t reg_t fn_t  :=
+  Example unbound_variable : urule unit var_t reg_t fn_t  :=
     UWrite P0 R0 (UVar "y").
 
   Example sched :=
@@ -155,7 +155,7 @@ Module Collatz.
 
   Open Scope sga.
 
-  Definition divide_collatz : urule var_t reg_t fn_t :=
+  Definition divide_collatz : urule unit var_t reg_t fn_t :=
     Let "v" <- R0#read0 in
     Let "odd" <- (Sel logsz)[[$"v", UConst (Bits.zero logsz)]] in
     If (Not 1)[[$"odd"]] Then
@@ -167,7 +167,7 @@ Module Collatz.
   Definition TimesThree sz (ex: uexpr var_t reg_t fn_t) :=
     (UIntPlus sz)[[(Lsl sz 1)[[ex, UConst Ob~1]], ex]]%sga_expr.
 
-  Definition multiply_collatz : urule var_t reg_t fn_t :=
+  Definition multiply_collatz : urule unit var_t reg_t fn_t :=
     Let "v" <- R0#read1 in
     Let "odd" <- (Sel logsz)[[$"v", UConst (Bits.zero logsz)]] in
     If $"odd" Then
@@ -182,15 +182,6 @@ Module Collatz.
 (* (* Extraction Language JSON. *) *)
 (* Set Extraction KeepSingleton. *)
 (* Extraction Collatz.reg_t. *)
-
-  (* Definition rl : rule var_t R Sigma List.nil := *)
-  (*   tc R Sigma (Let "v" <- R0#read1 in *)
-  (*           Let "y" <- (Or _)[[UConst Ob~1~1, UConst Ob~1~1]] in *)
-  (*           If Odd[$"v"] Then *)
-  (*               R0#write1(Divide[$"v"]) *)
-  (*           Else *)
-  (*              fail *)
-  (*           EndIf). *)
 
   Definition iSigma := interop_Sigma Sigma.
   Definition isigma := interop_sigma sigma.
