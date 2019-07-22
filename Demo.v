@@ -164,7 +164,7 @@ Module Collatz.
       fail
     EndIf.
 
-  Definition TimesThree sz (ex: uexpr var_t reg_t fn_t) :=
+  Definition TimesThree sz (ex: uexpr unit var_t reg_t fn_t) :=
     (UIntPlus sz)[[(Lsl sz 1)[[ex, UConst Ob~1]], ex]]%sga_expr.
 
   Definition multiply_collatz : urule unit var_t reg_t fn_t :=
