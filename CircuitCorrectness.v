@@ -15,7 +15,7 @@ Section CompilerCorrectness.
   Context (r: REnv.(env_t) R).
   Context (rc: REnv.(env_t) (fun reg => circuit R Sigma (R reg))).
 
-  Instance reg_t_eq_dec : EqDec reg_t := @Finite_EqDec _ (REnv.(finite_keys)).
+  Instance reg_t_eq_dec : EqDec reg_t := @EqDec_FiniteType _ (REnv.(finite_keys)).
 
   Context (sigma: forall f, Sigma f).
   Open Scope bool_scope.

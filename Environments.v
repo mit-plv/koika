@@ -196,7 +196,7 @@ Class FiniteType {T} :=
     finite_index: forall t: T, member t finite_elems }.
 Arguments FiniteType: clear implicits.
 
-Instance Finite_EqDec {T} `{FiniteType T} : EqDec T.
+Instance EqDec_FiniteType {T} `{FiniteType T} : EqDec T.
   econstructor; intros.
   destruct (PeanoNat.Nat.eq_dec (member_id (finite_index t1)) (member_id (finite_index t2))) as [ H' | H' ].
   - left.
