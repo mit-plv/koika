@@ -1,4 +1,7 @@
-open Lib
+open Common
+open SGALib
+open SGALib.Util
+open SGALib.Graphs
 
 (* TODO: What to do with bit 0?
  *)
@@ -47,8 +50,8 @@ let clock_and_reset : io_decls =
     Input ("reset", 1);
   ]
 
-let io_declarations (circuit: dedup_result) : io_decls =
-  clock_and_reset @ List.flatten (List.map io_from_reg (circuit.dedup_roots))
+let io_declarations (circuit: _ circuit_graph) : io_decls =
+  clock_and_reset @ List.flatten (List.map io_from_reg (circuit.graph_roots))
 
 
 (* Phase II: Internal declarations
@@ -85,7 +88,7 @@ let internal_decl_for_reg (root: circuit_root) =
 let internal_decl_for_net
       (environment: string PtrHashtbl.t)
       (gensym : int ref)
-      (circuit_nets: circuit PtrHashtbl.t)
+      (circuit_nets: _ circuit PtrHashtbl.t)
       (ptr: ptr_t)
   =
   let name_ptr = !gensym in
@@ -98,8 +101,8 @@ let internal_decl_for_net
                   | CNot _
                     | CAnd (_, _)
                     | COr (_, _) ->   Wire(name_net, 1)
-                  (* | CQuestionMark n
-                   *   | CMux (n, _, _, _) -> Wire(name_net, n) *)
+                  (* | CQuestionMark n *)
+                  | CMux (n, _, _, _) -> Wire(name_net, n)
                   | CAnnot (n, name , _) ->
                      PtrHashtbl.add environment ptr (name ^ name_net);
                      Wire(name ^ name_net, n) (* Prefix with the name given by the user *)
@@ -108,15 +111,15 @@ let internal_decl_for_net
                   | CReadRegister r_sig -> Wire(name_net, r_sig.reg_size)
                   )
 
-let internal_declarations (environment: string PtrHashtbl.t) (circuit: dedup_result) =
+let internal_declarations (environment: string PtrHashtbl.t) (circuit: _ circuit_graph) =
   let gensym = ref 0 in
-  let reg_declarations = List.map internal_decl_for_reg (circuit.dedup_roots) in
+  let reg_declarations = List.map internal_decl_for_reg (circuit.graph_roots) in
   let internal_declarations = List.map
                                 (internal_decl_for_net
                                    environment
                                    gensym
-                                   (circuit.dedup_ptrs))
-                                (List.of_seq (PtrHashtbl.to_seq_keys circuit.dedup_ptrs))
+                                   (circuit.graph_ptrs))
+                                (List.of_seq (PtrHashtbl.to_seq_keys circuit.graph_ptrs))
   in
   reg_declarations @ internal_declarations
 
@@ -140,7 +143,7 @@ type expression =
   | EOr of string * string
   | EMux of size_t * string * string * string
   | EConst of string
-  | EExternal of ffi_signature * string * string
+  | EExternal of SGA.prim_fn_t ffi_signature * string * string
   | EReadRegister of string
   | EAnnot of size_t * string * string
 
@@ -165,18 +168,18 @@ let assignment_to_string (gensym: int ref) (assignment: assignment) =
                          "(" ^ arg1 ^ ", " ^ arg2 ^ "," ^ lhs ^ ")"
        | PrimFn typePrim ->
           (match typePrim with
-           | Sga.UIntPlus _ -> default_left ^ arg1 ^ " + " ^ arg2
-           | Sga.Sel _ -> default_left ^ arg1 ^ "[" ^ arg2 ^ "]"
-           | Sga.Part (sz, slice_sz) -> default_left ^ arg1 ^ "[" ^ arg2 ^ " +: " ^ string_of_int (Sga.index_to_nat sz slice_sz) ^ "]"
-           | Sga.And _ ->  default_left ^ arg1 ^ " & " ^ arg2
-           | Sga.Or _ -> default_left ^ arg1 ^ " | " ^ arg2
-           | Sga.Not _ -> default_left ^ "~" ^ arg1
-           | Sga.Lsl (_, _) -> default_left ^ arg1 ^ " << " ^ arg2
-           | Sga.Lsr (_, _) -> default_left ^ arg1 ^ " >> " ^ arg2
-           | Sga.Eq _ -> default_left ^ arg1 ^ " == " ^ arg2
-           | Sga.Concat (_, _) -> default_left ^ "{" ^ arg1 ^ ", " ^ arg2 ^ "}"
-           | Sga.ZExtL (_, _) -> "TODO UNIMPLEMENTED ZEXTL" (* TODO: convince clement that those are not needed as primitive *)
-           | Sga.ZExtR (_, _) -> "TODO UNIMPLEMENTED ZEXTR" (* TODO: convince clement that those are not needed as primitive *)
+           | SGA.UIntPlus _ -> default_left ^ arg1 ^ " + " ^ arg2
+           | SGA.Sel _ -> default_left ^ arg1 ^ "[" ^ arg2 ^ "]"
+           | SGA.Part (sz, slice_sz) -> default_left ^ arg1 ^ "[" ^ arg2 ^ " +: " ^ string_of_int (SGA.index_to_nat sz slice_sz) ^ "]"
+           | SGA.And _ ->  default_left ^ arg1 ^ " & " ^ arg2
+           | SGA.Or _ -> default_left ^ arg1 ^ " | " ^ arg2
+           | SGA.Not _ -> default_left ^ "~" ^ arg1
+           | SGA.Lsl (_, _) -> default_left ^ arg1 ^ " << " ^ arg2
+           | SGA.Lsr (_, _) -> default_left ^ arg1 ^ " >> " ^ arg2
+           | SGA.Eq _ -> default_left ^ arg1 ^ " == " ^ arg2
+           | SGA.Concat (_, _) -> default_left ^ "{" ^ arg1 ^ ", " ^ arg2 ^ "}"
+           | SGA.ZExtL (_, _) -> "TODO UNIMPLEMENTED ZEXTL" (* TODO: convince clement that those are not needed as primitive *)
+           | SGA.ZExtR (_, _) -> "TODO UNIMPLEMENTED ZEXTR" (* TODO: convince clement that those are not needed as primitive *)
           )
       )
    | EReadRegister r -> default_left ^ r
@@ -189,7 +192,7 @@ type continous_assignments = assignment list
 
 let assignment_node
       (environment: string PtrHashtbl.t)
-      (circuit_nets: circuit PtrHashtbl.t)
+      (circuit_nets: _ circuit PtrHashtbl.t)
       (ptr: ptr_t)
   : assignment
   =
@@ -211,16 +214,16 @@ let assignment_node
 
 let continous_assignments
       (environment: string PtrHashtbl.t)
-      (circuit: dedup_result)
+      (circuit: _ circuit_graph)
     : continous_assignments
   =
   (List.map (fun root -> (root.root_reg.reg_name ^ "__data", EReadRegister root.root_reg.reg_name))
-     (circuit.dedup_roots)) (* Add output peek into registers *)
+     (circuit.graph_roots)) (* Add output peek into registers *)
     @ List.map
       (assignment_node
          environment
-         (circuit.dedup_ptrs))
-      (List.of_seq (PtrHashtbl.to_seq_keys circuit.dedup_ptrs))
+         (circuit.graph_ptrs))
+      (List.of_seq (PtrHashtbl.to_seq_keys circuit.graph_ptrs))
 
 
 (* Phase IV: Update of register
@@ -250,7 +253,7 @@ type statements = statement list
 
 let statements
       (environment: string PtrHashtbl.t)
-      (circuit: dedup_result)
+      (circuit: _ circuit_graph)
     : statements
   =
   List.map (fun root ->
@@ -258,9 +261,9 @@ let statements
       let reg_init = string_of_bits (root.root_reg.reg_init_val) in
       let reg_wire_update = PtrHashtbl.find environment root.root_ptr in
       Update (reg_name, reg_init, reg_wire_update))
-    (circuit.dedup_roots)
+    (circuit.graph_roots)
 
-let compil (circuit: dedup_result) =
+let main out (circuit: _ circuit_graph) =
   let environment = PtrHashtbl.create 50 in
   let instance_external_gensym = ref 0 in
   let io_decls = io_declarations circuit in
@@ -273,4 +276,4 @@ let compil (circuit: dedup_result) =
   let string_continous_assignments = String.concat "\n" (List.map (assignment_to_string instance_external_gensym)  continous_assignments) in
   let string_statements = String.concat "\n" (List.map statement_to_string statements) in
   let string_epilogue = "endmodule" in
-  print_string (String.concat "\n" [string_prologue; string_internal_decls; string_continous_assignments; string_statements; string_epilogue])
+  output_string out (String.concat "\n" [string_prologue; string_internal_decls; string_continous_assignments; string_statements; string_epilogue])

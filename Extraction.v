@@ -1,9 +1,10 @@
 Require Import Coq.extraction.Extraction.
 Require Import Coq.extraction.ExtrOcamlBasic Coq.extraction.ExtrOcamlString Coq.extraction.ExtrOcamlNatInt.
 
-Require Import SGA.Common SGA.Environments SGA.TypedSyntax SGA.Demo.
+Require SGA.Common SGA.Environments SGA.TypedSyntax SGA.TypeInference SGA.Circuits SGA.Interop SGA.Demo.
 
 Extract Inductive list => "list" [ "[]" "(::)" ].
+
 (* This prevents an assertion error: *)
 Extraction Inline Circuits.retVal.
 (*
@@ -14,4 +15,15 @@ Extraction Inline Circuits.retVal.
         (assert false (* Proj Args *)) ex0), gamma)) body ex0.erwc
  *)
 
-Extraction "sga.ml" to_list vect_to_list Bits.to_nat index_to_nat Collatz.package.
+Extraction "SGA.ml"
+           Common.EqDec
+           Environments.FiniteType Environments.mem Environments.ContextEnv
+           Syntax.uscheduler Syntax.urule Syntax.uexpr
+           TypeInference.type_scheduler
+           Circuits.compile_scheduler
+           Primitives.prim_Sigma
+           Interop.interop_fn_t
+
+           Interop.VerilogPackage
+           Environments.to_list Vect.vect_to_list Vect.Bits.to_nat Vect.index_to_nat
+           Demo.Collatz.package.

@@ -1,13 +1,34 @@
 (library
- (name sga)
- (modules sga)
+ (name common)
+ (preprocess (pps ppx_jane))
+ (modules common))
+
+(library
+ (name SGALib)
+ (modules SGA SGALib)
+ (libraries common)
+ (preprocess (pps ppx_jane))
  (flags (:standard -w -39)))
 
+(library
+ (name backends)
+ (modules verilog dot)
+ (libraries common SGALib)
+ (preprocess (pps ppx_jane)))
+
 (executable
- (name driver)
+ (name collatz)
  (modes exe)
- (modules (:standard \ sga))
- (libraries sga))
+ (modules ("collatz"))
+ (preprocess (pps ppx_jane))
+ (libraries SGALib backends))
+
+(executable
+ (name cli)
+ (modes exe)
+ (modules ("cli"))
+ (preprocess (pps ppx_jane))
+ (libraries core base stdio SGALib common backends))
 
 (env
  (dev
