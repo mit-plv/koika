@@ -1,5 +1,5 @@
 type ast = Obj.t                (* From menhir *)
-type pos_t = Obj.t              (* From sedlex? *)
+type pos_t = Lexing.position
 type size_t = int
 type ptr_t = int
 
@@ -79,6 +79,6 @@ let compute_parents ptr_to_object =
     ptr_to_object;
   ptr_to_parents
 
-exception Error of { epos: Obj.t;
+exception Error of { epos: pos_t;
                      ekind: [`ParseError | `NameError | `TypeError];
                      emsg: string }

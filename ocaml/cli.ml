@@ -1,5 +1,4 @@
 open Common
-open SGALib
 
 let ast_of_tokens tokens =
   Obj.magic ()
@@ -15,12 +14,6 @@ let parse fname =
   |> stream_of_fname
   |> tokens_of_stream
   |> ast_of_tokens
-
-let read_opts () =
-  Obj.magic ()
-
-let write_stream fname stream =
-  Obj.magic ()
 
 type cli_opts = {
     cli_in_fname: string;
@@ -61,7 +54,7 @@ let run { cli_in_fname; cli_out_fname; cli_backend } : unit =
         | `Verilog -> Backends.Verilog.main out graph)
   with Error { epos; ekind; emsg } ->
     Printf.eprintf "%s:%d:%d: %s: %s"
-      (Obj.magic "fname") (Obj.magic "line") (Obj.magic "column")
+      epos.pos_fname epos.pos_lnum epos.pos_cnum
       (match ekind with
        | `ParseError -> "Parse error"
        | `NameError -> "Name error"

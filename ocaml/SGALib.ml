@@ -102,7 +102,7 @@ module Compilation = struct
     let ast = translate_scheduler_ast raw_ast in
     let rEnv = rEnv_of_tc_unit tc_unit in
     let r0: _ SGA.env_t = rEnv.create __ (fun r -> Obj.magic (CReadRegister r)) in
-    match SGA.type_scheduler Util.string_eq_dec r sigma (Obj.magic "pos spanning whole doc") ast with
+    match SGA.type_scheduler Util.string_eq_dec r sigma Lexing.dummy_pos ast with
     | WellTyped s ->
        let env = SGA.compile_scheduler r sigma rEnv r0 s in
        (fun r -> SGA.getenv rEnv env r)
