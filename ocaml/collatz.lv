@@ -1,0 +1,26 @@
+;; (defmacro module (name args &rest body)
+;;   (declare (indent defun)))
+
+;; (defmacro rule (name args &rest body)
+;;   (declare (indent defun)))
+
+;; (defmacro scheduler (&rest body)
+;;   (declare (indent defun)))
+
+(module Collatz ()
+  (register r0 32'0)
+
+  (rule divide
+    (let ((v (read#0 r0))
+          (odd (sel v 5'0)))
+      (when (not odd)
+        (write#0 r0 (lsr v 1'1)))))
+
+  (rule multiply
+    (let ((v (read#1 r0))
+          (odd (sel v 5'0)))
+      (when odd
+        (write#1 r0 (+ (+ (lsl v 1'1) v) 32'1)))))
+
+  (scheduler main
+    (sequence divide multiply)))

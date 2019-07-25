@@ -25,6 +25,8 @@ Module Ex1.
     | Odd => {{ 3 ~> 0 ~> 1}}
     end.
 
+  Definition uSigma (fn: fn_t) (_ _: type) : fn_t := fn.
+
   Definition r idx : R idx :=
     match idx with
     | R0 => Ob~1~0~1
@@ -47,14 +49,15 @@ Module Ex1.
     UTry r1 UDone UDone.
 
   Definition s1_result :=
-    Eval compute in interp_scheduler (ContextEnv.(create) r) sigma (tc R Sigma s1).
+    Eval compute in interp_scheduler (ContextEnv.(create) r) sigma (tc R Sigma uSigma s1).
   Definition s1_circuit :=
-    compile_scheduler (ContextEnv.(create) (readRegisters R Sigma)) (tc R Sigma s1).
+    compile_scheduler (ContextEnv.(create) (readRegisters R Sigma)) (tc R Sigma uSigma s1).
 End Ex1.
 
 Module Ex2.
   Definition var_t := string.
   Inductive reg_t := R0 | R1 | R2.
+  Inductive ufn_t := UOr | UNot.
   Inductive fn_t := Or (n: nat) | Not (n: nat).
 
   Definition R r :=
@@ -70,36 +73,42 @@ Module Ex2.
     | Not n => {{ n ~> 0 ~> n }}
     end.
 
-  Example negate : urule unit var_t reg_t fn_t  :=
+  Definition uSigma fn (tau1 _: type) :=
+    match fn, tau1 with
+    | UOr, (bits_t n) => Or n
+    | UNot, (bits_t n) => Not n
+    end.
+
+  Example negate : urule unit var_t reg_t ufn_t  :=
     UBind "x" (URead P1 R0)
           (UWrite P1 R0 (UVar "x")).
 
-  Example swap_or_replace : urule unit var_t reg_t fn_t  :=
+  Example swap_or_replace : urule unit var_t reg_t ufn_t  :=
     UBind "should_swap" (URead P0 R2)
           (UIf (UVar "should_swap")
                (USeq (UWrite P0 R1 (URead P0 R0))
                      (UWrite P0 R0 (URead P0 R1)))
-               (UWrite P0 R0 (UCall (Or 7)
+               (UWrite P0 R0 (UCall UOr
                                     (URead P0 R0)
                                     (URead P0 R1)))).
 
-  Example ill_typed_write : urule unit var_t reg_t fn_t  :=
+  Example ill_typed_write : urule unit var_t reg_t ufn_t  :=
     UWrite P0 R2 (URead P0 R1).
 
-  Example unbound_variable : urule unit var_t reg_t fn_t  :=
+  Example unbound_variable : urule unit var_t reg_t ufn_t  :=
     UWrite P0 R0 (UVar "y").
 
   Example sched :=
     UTry swap_or_replace (UTry negate UDone UDone) (UTry negate UDone UDone).
 
   Example tsched : scheduler var_t R Sigma :=
-    tc R Sigma sched.
+    tc R Sigma uSigma sched.
 
   Fail Example tsched : scheduler var_t R Sigma :=
-    must (type_scheduler R Sigma (UTry ill_typed_write UDone UDone)).
+    tc R Sigma uSigma (UTry ill_typed_write UDone UDone).
 
   Fail Example tsched : scheduler var_t R Sigma :=
-    must (type_scheduler R Sigma (UTry unbound_variable UDone UDone)).
+    tc R Sigma uSigma (UTry unbound_variable UDone UDone).
 
   Definition r idx : R idx :=
     match idx with
@@ -124,6 +133,7 @@ Module Collatz.
   Definition var_t := string.
   Inductive reg_t := R0.
   Inductive custom_t := .
+  Definition ufn_t := interop_ufn_t custom_t.
   Definition fn_t := interop_fn_t custom_t.
 
   Definition logsz := 5.
@@ -135,6 +145,10 @@ Module Collatz.
     end.
 
   Definition Sigma (fn: custom_t) : ExternalSignature :=
+    match fn with
+    end.
+
+  Definition uSigma (fn: custom_t) (_ _: type) : custom_t :=
     match fn with
     end.
 
@@ -155,24 +169,24 @@ Module Collatz.
 
   Open Scope sga.
 
-  Definition divide_collatz : urule unit var_t reg_t fn_t :=
+  Definition divide_collatz : urule unit var_t reg_t ufn_t :=
     Let "v" <- R0#read0 in
-    Let "odd" <- (Sel logsz)[[$"v", UConst (Bits.zero logsz)]] in
-    If (Not 1)[[$"odd"]] Then
-       R0#write0((Lsr sz 1)[[$"v", UConst Ob~1]])
+    Let "odd" <- USel[[$"v", UConst (Bits.zero logsz)]] in
+    If UNot[[$"odd"]] Then
+       R0#write0(ULsr[[$"v", UConst Ob~1]])
     Else
       fail
     EndIf.
 
-  Definition TimesThree sz (ex: uexpr unit var_t reg_t fn_t) :=
-    (UIntPlus sz)[[(Lsl sz 1)[[ex, UConst Ob~1]], ex]]%sga_expr.
+  Definition TimesThree (ex: uexpr unit var_t reg_t ufn_t) :=
+    UUIntPlus[[ULsl[[ex, UConst Ob~1]], ex]]%sga_expr.
 
-  Definition multiply_collatz : urule unit var_t reg_t fn_t :=
+  Definition multiply_collatz : urule unit var_t reg_t ufn_t :=
     Let "v" <- R0#read1 in
-    Let "odd" <- (Sel logsz)[[$"v", UConst (Bits.zero logsz)]] in
+    Let "odd" <- USel[[$"v", UConst (Bits.zero logsz)]] in
     If $"odd" Then
-       R0#write1((UIntPlus sz)[[TimesThree sz ($"v"),
-                                UConst (Bits.one sz)]])
+       R0#write1(UUIntPlus[[TimesThree ($"v"),
+                            UConst (Bits.one sz)]])
     Else
        fail
     EndIf.
@@ -184,11 +198,12 @@ Module Collatz.
 (* Extraction Collatz.reg_t. *)
 
   Definition iSigma := interop_Sigma Sigma.
+  Definition iuSigma := interop_uSigma uSigma.
   Definition isigma := interop_sigma sigma.
   Definition cr := ContextEnv.(create) r.
 
   Definition collatz : scheduler _ _ _ :=
-    tc R iSigma (divide_collatz |> multiply_collatz |> done).
+    tc R iSigma iuSigma (divide_collatz |> multiply_collatz |> done).
 
   Notation compute t :=
     ltac:(let tt := type of t in
@@ -199,10 +214,10 @@ Module Collatz.
     compute (interp_scheduler cr isigma collatz).
   Definition divide_result :=
     compute (interp_rule cr isigma CtxEmpty log_empty log_empty
-                         (tc R iSigma divide_collatz)).
+                         (tc R iSigma iuSigma divide_collatz)).
   Definition multiply_result :=
     compute (interp_rule cr isigma CtxEmpty log_empty log_empty
-                         (tc R iSigma multiply_collatz)).
+                         (tc R iSigma iuSigma multiply_collatz)).
 
   Definition circuit :=
     compile_scheduler (ContextEnv.(create) (readRegisters R iSigma)) collatz.

@@ -1,8 +1,22 @@
 Require Export SGA.Common SGA.Types.
 
+Inductive prim_ufn_t :=
+| USel
+| UPart (width: nat)
+| UAnd
+| UOr
+| UNot
+| ULsl
+| ULsr
+| UEq
+| UConcat
+| UUIntPlus
+| UZExtL (nzeroes: nat)
+| UZExtR (nzeroes: nat).
+
 Inductive prim_fn_t :=
 | Sel (logsz: nat)
-| Part (logsz: nat) (width: index (pow2 logsz))
+| Part (logsz: nat) (width: nat)
 | And (sz: nat)
 | Or (sz: nat)
 | Not (sz: nat)
@@ -23,10 +37,26 @@ Definition prim_sel {logsz} (bs: bits (pow2 logsz)) (idx: bits logsz) :=
 Definition prim_uint_plus {sz} (bs1 bs2: bits sz) :=
   Bits.of_N sz (Bits.to_N bs1 + Bits.to_N bs2)%N.
 
+Definition prim_uSigma (fn: prim_ufn_t) '(bits_t sz1) '(bits_t sz2): prim_fn_t :=
+  match fn with
+  | USel => Sel sz2
+  | UPart width => Part sz2 width
+  | UAnd => And sz1
+  | UOr => Or sz1
+  | UNot => Not sz1
+  | ULsl => Lsl sz1 sz2
+  | ULsr => Lsr sz1 sz2
+  | UEq => Eq sz1
+  | UConcat => Concat sz1 sz2
+  | UUIntPlus => UIntPlus sz1
+  | UZExtL nzeroes => ZExtL sz1 nzeroes
+  | UZExtR nzeroes => ZExtR sz1 nzeroes
+  end.
+
 Definition prim_Sigma (fn: prim_fn_t) : ExternalSignature :=
   match fn with
   | Sel logsz => {{ pow2 logsz ~> logsz ~> 1 }}
-  | Part logsz width => {{ pow2 logsz ~> logsz ~> (index_to_nat width) }}
+  | Part logsz width => {{ pow2 logsz ~> logsz ~> width }}
   | And sz => {{ sz ~> sz ~> sz }}
   | Or sz => {{ sz ~> sz ~> sz }}
   | Not sz => {{ sz ~> 0 ~> sz }}

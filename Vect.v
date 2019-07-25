@@ -165,6 +165,7 @@ Module Bits.
   Definition lsb {n} (bs: bits (S n)) := vect_last bs.
   Definition map {n} (f: bool -> bool) (bs: bits n) := vect_map f bs.
   Definition map2 {n} (f: bool -> bool -> bool) (bs1 bs2: bits n) := vect_map2 f bs1 bs2.
+  Definition of_list (l: list bool) : bits (length l) := vect_of_list l.
   Definition zeroes sz := const sz false.
   Definition ones sz := const sz true.
 

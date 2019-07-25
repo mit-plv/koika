@@ -34,17 +34,17 @@ Notation "reg '#read1'" :=
   (URead P1 reg)
     (at level 99, format "reg '#read1'") : sga_expr_scope.
 Notation "f [ arg ]" :=
-  (UCall (CustomFn f) arg (UConst Ob))
+  (UCall (UCustomFn f) arg (UConst Ob))
     (at level 99, arg at level 99, format "f [ arg ]") : sga_expr_scope.
 Notation "f [ arg1 ',' arg2 ]" :=
-  (UCall (CustomFn f) arg1 arg2)
+  (UCall (UCustomFn f) arg1 arg2)
     (at level 99, arg1 at level 99, arg2 at level 99,
     format "f [ arg1 ','  arg2 ]") : sga_expr_scope.
 Notation "f [[ arg ]]" :=
-  (UCall (PrimFn f) arg (UConst Ob))
+  (UCall (UPrimFn f) arg (UConst Ob))
     (at level 99, arg at level 99, format "f [[ arg ]]") : sga_expr_scope.
 Notation "f [[ arg1 ',' arg2 ]]" :=
-  (UCall (PrimFn f) arg1 arg2)
+  (UCall (UPrimFn f) arg1 arg2)
     (at level 99, arg1 at level 99, arg2 at level 99,
     format "f [[ arg1 ','  arg2 ]]") : sga_expr_scope.
 

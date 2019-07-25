@@ -21,9 +21,9 @@ Extraction "SGA.ml"
            Syntax.uscheduler Syntax.urule Syntax.uexpr
            TypeInference.type_scheduler
            Circuits.compile_scheduler
-           Primitives.prim_Sigma
-           Interop.interop_fn_t
+           Primitives.prim_uSigma Primitives.prim_Sigma
+           Interop.interop_fn_t Interop.interop_uSigma Interop.interop_Sigma
 
            Interop.VerilogPackage
-           Environments.to_list Vect.vect_to_list Vect.Bits.to_nat Vect.index_to_nat
+           Environments.to_list Vect.vect_to_list Vect.vect_of_list Vect.Bits.to_nat Vect.index_to_nat
            Demo.Collatz.package.

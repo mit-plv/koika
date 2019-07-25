@@ -20,17 +20,18 @@ Arguments error_message _ {_ _} _ _.
 Arguments error _ _ {_ _} _ _.
 
 Section TypeInference.
-  Context {pos_t var_t reg_t fn_t: Type}.
+  Context {pos_t var_t reg_t ufn_t fn_t: Type}.
   Context {var_t_eq_dec: EqDec var_t}.
 
   Context (R: reg_t -> type).
   Context (Sigma: fn_t -> ExternalSignature).
+  Context (uSigma: forall (fn: ufn_t) (tau1 tau2: type), fn_t).
+
+  Notation uexpr := (uexpr pos_t var_t reg_t ufn_t).
+  Notation urule := (urule pos_t var_t reg_t ufn_t).
+  Notation uscheduler := (uscheduler pos_t var_t reg_t ufn_t).
 
   Open Scope bool_scope.
-
-  Notation uexpr := (uexpr pos_t var_t reg_t fn_t).
-  Notation urule := (urule pos_t var_t reg_t fn_t).
-  Notation uscheduler := (uscheduler pos_t var_t reg_t fn_t).
 
   Notation expr := (expr var_t R Sigma).
   Notation rule := (rule var_t R Sigma).
@@ -81,6 +82,12 @@ Section TypeInference.
 
     Notation EX Px := (existT _ _ Px).
 
+    Fixpoint expos pos (e: uexpr) :=
+      match e with
+      | UEPos p _ => p
+      | _ => pos
+      end.
+
     Definition unbound_variable pos var : error :=
       {| epos := pos; emsg := UnboundVariable var |}.
 
@@ -92,11 +99,12 @@ Section TypeInference.
         WellTyped (EX (Var ``ktau_m))
       | UConst cst => WellTyped (EX (Const cst))
       | URead port idx => WellTyped (EX (Read port idx))
-      | UCall fn arg1 arg2 =>
+      | UCall ufn arg1 arg2 =>
         let/res arg1' := type_expr pos sig arg1 in
         let/res arg2' := type_expr pos sig arg2 in
-        let/res arg1' := cast_expr pos sig (Sigma fn).(arg1Type) (``arg1') in
-        let/res arg2' := cast_expr pos sig (Sigma fn).(arg2Type) (``arg2') in
+        let fn := uSigma ufn `arg1' `arg2' in
+        let/res arg1' := cast_expr (expos pos arg1) sig (Sigma fn).(arg1Type) (``arg1') in
+        let/res arg2' := cast_expr (expos pos arg2) sig (Sigma fn).(arg2Type) (``arg2') in
         WellTyped (EX (Call fn arg1' arg2'))
       | UEPos pos e => type_expr pos sig e
       end.
@@ -117,15 +125,15 @@ Section TypeInference.
         let/res body := type_rule pos ((v, `ex) :: sig) body in
         WellTyped (Bind v ``ex body)
       | UIf cond tbranch fbranch =>
-        let/res cond := type_expr pos sig cond in
+        let/res cond' := type_expr pos sig cond in
         let/res tbranch := type_rule pos sig tbranch in
         let/res fbranch := type_rule pos sig fbranch in
-        let/res cond := cast_expr pos sig (bits_t 1) (``cond) in
-        WellTyped (If cond tbranch fbranch)
+        let/res cond' := cast_expr (expos pos cond) sig (bits_t 1) (``cond') in
+        WellTyped (If cond' tbranch fbranch)
       | UWrite port idx value =>
-        let/res value := type_expr pos sig value in
-        let/res value := cast_expr pos sig (R idx) (``value) in
-        WellTyped (Write port idx value)
+        let/res value' := type_expr pos sig value in
+        let/res value' := cast_expr (expos pos value) sig (R idx) (``value') in
+        WellTyped (Write port idx value')
       | URPos pos r => type_rule pos sig r
       end.
   End Rule.
@@ -146,12 +154,14 @@ Section TypeInference.
 End TypeInference.
 
 Arguments error_message {_ _ _ _ _}.
+Arguments WellTyped {_ _ _ _ R Sigma A}.
+Arguments IllTyped {_ _ _ _ R Sigma A}.
 
 (* Coq bug: the name must_typecheck is not resolved at notation definition time *)
-Notation tc R Sigma prog :=
+Notation tc R Sigma Sigma_tc prog :=
   ltac:(let tcres := lazymatch type of prog with
-                    | urule _ _ _ _ => constr:(type_rule R Sigma tt List.nil prog)
-                    | uscheduler _ _ _ _ => constr:(type_scheduler R Sigma tt prog)
+                    | urule _ _ _ _ => constr:(type_rule R Sigma Sigma_tc tt List.nil prog)
+                    | uscheduler _ _ _ _ => constr:(type_scheduler R Sigma Sigma_tc tt prog)
                     end in
         let tcres := (eval hnf in tcres) in
         let tcterm := (eval cbn in (must_typecheck R Sigma tcres)) in

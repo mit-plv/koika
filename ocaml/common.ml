@@ -1,4 +1,3 @@
-type ast = Obj.t                (* From menhir *)
 type pos_t = Lexing.position
 type size_t = int
 type ptr_t = int
@@ -25,9 +24,53 @@ type reg_signature = {
     reg_init_val: bits_const;
   }
 
-type 'prim tc_unit =
-  { tc_registers: reg_signature list;
-    tc_externals: 'prim ffi_signature list }
+type var_t = string
+type port_t = int
+
+type 'a locd = {
+    lpos: Lexing.position;
+    lcnt: 'a
+  }
+
+type ('reg_t, 'fn_t) expr =
+  | Var of var_t
+  | Num of int
+  | Const of bool list
+  | Read of port_t
+            * 'reg_t locd
+  | Call of 'fn_t locd
+            * ('reg_t, 'fn_t) expr locd list
+
+type ('reg_t, 'fn_t) rule =
+  | Skip
+  | Fail
+  | Progn of ('reg_t, 'fn_t) rule locd list
+  | Let of (var_t locd * ('reg_t, 'fn_t) expr locd) list
+           * ('reg_t, 'fn_t) rule locd list
+  | If of ('reg_t, 'fn_t) expr locd
+          * ('reg_t, 'fn_t) rule locd
+          * ('reg_t, 'fn_t) rule locd list
+  | When of ('reg_t, 'fn_t) expr locd
+            * ('reg_t, 'fn_t) rule locd list
+  | Write of port_t
+             * 'reg_t locd
+             * ('reg_t, 'fn_t) expr locd
+
+type scheduler =
+  | Done
+  | Sequence of string locd list
+  | Try of string locd * scheduler locd * scheduler locd
+
+type 'fn_t ast =
+  | ADone
+  | ASequence of (reg_signature, 'fn_t) rule locd list
+  | ATry of (reg_signature, 'fn_t) rule locd
+            * 'fn_t ast locd
+            * 'fn_t ast locd
+
+(* FIXME use a hashmap, not a list *)
+type tc_unit =
+  { tc_registers: reg_signature list }
 
 type circuit_root = {
     root_reg: reg_signature;

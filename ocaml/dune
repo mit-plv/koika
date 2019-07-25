@@ -1,34 +1,33 @@
 (library
  (name common)
- (preprocess (pps ppx_jane))
+ (preprocess (pps ppx_jane ppx_deriving.show))
  (modules common))
 
 (library
  (name SGALib)
  (modules SGA SGALib)
  (libraries common)
- (preprocess (pps ppx_jane))
+ (preprocess (pps ppx_jane ppx_deriving.show))
  (flags (:standard -w -39)))
 
 (library
  (name backends)
  (modules verilog dot)
  (libraries common SGALib)
- (preprocess (pps ppx_jane)))
+ (preprocess (pps ppx_jane ppx_deriving.show))
+)
 
 (executable
  (name collatz)
- (modes exe)
  (modules ("collatz"))
- (preprocess (pps ppx_jane))
+ (preprocess (pps ppx_jane ppx_deriving.show))
  (libraries SGALib backends))
 
 (executable
  (name cli)
- (modes exe)
  (modules ("cli"))
- (preprocess (pps ppx_jane))
- (libraries core base stdio SGALib common backends))
+ (preprocess (pps ppx_jane ppx_deriving.show))
+ (libraries parsexp str zarith base core stdio SGALib common backends))
 
 (env
  (dev

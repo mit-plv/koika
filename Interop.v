@@ -2,6 +2,10 @@ Require Import Coq.Strings.String.
 Require Import SGA.Environments SGA.Types SGA.Circuits SGA.Primitives.
 
 Section Interop.
+  Inductive interop_ufn_t {custom_fn_t: Type} :=
+  | UPrimFn (fn: prim_ufn_t)
+  | UCustomFn (fn: custom_fn_t).
+
   Inductive interop_fn_t {custom_fn_t: Type} :=
   | PrimFn (fn: prim_fn_t)
   | CustomFn (fn: custom_fn_t).
@@ -14,6 +18,17 @@ Section Interop.
            | PrimFn fn => prim_Sigma fn
            | CustomFn fn => Sigma fn
            end.
+
+  Definition interop_uSigma
+             {ufn_t fn_t}
+             (uSigma: ufn_t -> type -> type -> fn_t)
+             (fn: @interop_ufn_t ufn_t)
+             (tau1 tau2: type)
+    : @interop_fn_t fn_t  :=
+    match fn with
+    | UPrimFn fn => PrimFn (prim_uSigma fn tau1 tau2)
+    | UCustomFn fn => CustomFn (uSigma fn tau1 tau2)
+    end.
 
   Definition interop_sigma
              {fn_t}
@@ -67,3 +82,4 @@ Section Interop.
 End Interop.
 
 Arguments interop_fn_t: clear implicits.
+Arguments interop_ufn_t: clear implicits.
