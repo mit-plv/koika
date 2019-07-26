@@ -23,38 +23,6 @@ End Circuit.
 
 Arguments circuit {reg_t fn_t} R Sigma sz.
 
-Module CircuitNotations.
-  Notation "f [ arg ]` an `" :=
-    (CAnnot an (CExternal f arg (CConst Ob)))
-      (at level 99, arg at level 99, format "f [ arg ]` an `") : circuit.
-  Notation "f [ arg1 ',' arg2 ]` an `" :=
-    (CAnnot an (CExternal f arg1 arg2))
-      (at level 99, arg1 at level 99, arg2 at level 99,
-       format "f [ arg1 ','  arg2 ]` an `") : circuit.
-  Notation "#` an ` reg" :=
-    (CAnnot an (CReadRegister reg))
-      (at level 75, format "#` an ` reg") : circuit.
-  Notation "$` an ` c" :=
-    (CAnnot an (CConst c))
-      (at level 75, format "$` an ` c") : circuit.
-  Notation "!` an ` c" :=
-    (CAnnot an (CNot c))
-      (at level 30, right associativity, format "!` an ` c") : circuit.
-  Notation "c1 &&` an `  c2" :=
-    (CAnnot an (CAnd c1 c2))
-      (at level 40, left associativity) : circuit.
-  Notation "c1 ||` an `  c2" :=
-    (CAnnot an (COr c1 c2))
-      (at level 50, left associativity) : circuit.
-  Notation "c1 ==>` an ` c2" :=
-    (CAnnot an (COr (CAnnot "impl" (CNot c1)) c2))
-      (at level 70, no associativity) : circuit.
-  (* Notation "s ?? c1 // c2" := (CMux s c1 c2) (at level 80, no associativity) : circuit. *)
-End CircuitNotations.
-
-Import CircuitNotations.
-Local Open Scope circuit.
-
 Section Interpretation.
   Context {reg_t fn_t: Type}.
   Context {R: reg_t -> type}.
@@ -84,6 +52,139 @@ Section Interpretation.
       interp_circuit c
     end.
 End Interpretation.
+
+Section CircuitOptimizer.
+  Context {reg_t fn_t: Type}.
+  Context {R: reg_t -> type}.
+  Context {Sigma: fn_t -> ExternalSignature}.
+
+  Notation Circuit := circuit.
+  Notation circuit := (circuit R Sigma).
+
+  Fixpoint unannot {sz} (c: circuit sz) : circuit sz :=
+    match c with
+    | CAnnot annot c => unannot c
+    | c => c
+    end.
+
+  Fixpoint asbool {sz} (c: circuit sz) : option bool :=
+    match c return option bool with
+    | CAnnot annot c =>
+      asbool c
+    | @CConst _ _ _ _ (S sz) cst =>
+      Some (Bits.hd cst)
+    | c => None
+    end.
+
+  Notation wfalse := (false, tt).
+  Notation wtrue := (true, tt).
+
+  Fixpoint opt1 {sz} (c: circuit sz) {struct c}: circuit sz :=
+    match c in Circuit _ _ sz return circuit sz with
+    | (CNot c) as c0 =>
+      match asbool c with
+      | Some true => CConst Ob~0
+      | Some false => CConst Ob~1
+      | None => c0
+      end
+    | (CAnd c1 c2) as c0 =>
+      match asbool c1, asbool c2 with
+      | Some false, _ | _, Some false => CConst Ob~0
+      | Some true, Some true => CConst Ob~1
+      | _, _ => c0
+      end
+    | (COr c1 c2) as c0 =>
+      match asbool c1, asbool c2 with
+      | Some true, _ | _, Some true => CConst Ob~1
+      | Some false, Some false => CConst Ob~0
+      | _, _ => c0
+      end
+    | (CMux select c1 c2) as c0 =>
+      match asbool select with
+      | Some true => c1
+      | Some false => c2
+      | None => c0
+      end
+    | c => c
+    end.
+
+  Context {REnv: Env reg_t}.
+  Context (r: REnv.(env_t) R).
+  Context (sigma: forall f, Sigma f).
+
+  Lemma asbool_Some :
+    forall {sz} (c: circuit sz) b,
+      asbool c = Some b ->
+      match sz return bits sz -> Prop with
+      | 0 => fun _ => False
+      | S _ => fun bs => Bits.hd bs = b
+      end (interp_circuit r sigma c).
+  Proof.
+    induction c; intros b Heq;
+      repeat match goal with
+             | _ => progress cbn in *
+             | _ => discriminate
+             | _ => reflexivity
+             | [ H: Some _ = Some _ |- _ ] => inversion H; subst; clear H
+             | [ sz: nat |- _ ] => destruct sz; try (tauto || discriminate); []
+             end.
+    apply IHc; eassumption.
+  Qed.
+
+  Arguments opt1 sz !c.
+
+  Lemma opt1_correct :
+    forall {sz} (c: circuit sz),
+      interp_circuit r sigma (opt1 c) = interp_circuit r sigma c.
+  Proof.
+    induction c; cbn;
+      repeat match goal with
+             | _ => reflexivity
+             | _ => progress bool_simpl
+             | _ => progress cbn in *
+             | [  |- context[match asbool ?c with _ => _ end] ] =>
+               destruct (asbool c) as [ [ | ] | ] eqn:?
+             | [ H: asbool _ = Some _ |- _ ] => apply asbool_Some in H
+             | [ H: Bits.hd ?x = _ |- _ ] => change (Bits.hd x) with (Bits.single x) in H
+             | [ H: ?x = _ |- context[?x] ] => rewrite H
+             end.
+  Qed.
+End CircuitOptimizer.
+
+Module CircuitNotations.
+  Notation CAnnotOpt an c := (CAnnot an (opt1 c)).
+  (* Notation CAnnotOpt an c := (CAnnot an c). *)
+
+  Notation "f [ arg ]` an `" :=
+    (CAnnotOpt an (CExternal f arg (CConst Ob)))
+      (at level 99, arg at level 99, format "f [ arg ]` an `") : circuit.
+  Notation "f [ arg1 ',' arg2 ]` an `" :=
+    (CAnnotOpt an (CExternal f arg1 arg2))
+      (at level 99, arg1 at level 99, arg2 at level 99,
+       format "f [ arg1 ','  arg2 ]` an `") : circuit.
+  Notation "#` an ` reg" :=
+    (CAnnotOpt an (CReadRegister reg))
+      (at level 75, format "#` an ` reg") : circuit.
+  Notation "$` an ` c" :=
+    (CAnnotOpt an (CConst c))
+      (at level 75, format "$` an ` c") : circuit.
+  Notation "!` an ` c" :=
+    (CAnnotOpt an (CNot c))
+      (at level 30, right associativity, format "!` an ` c") : circuit.
+  Notation "c1 &&` an `  c2" :=
+    (CAnnotOpt an (CAnd c1 c2))
+      (at level 40, left associativity) : circuit.
+  Notation "c1 ||` an `  c2" :=
+    (CAnnotOpt an (COr c1 c2))
+      (at level 50, left associativity) : circuit.
+  Notation "c1 ==>` an ` c2" :=
+    (CAnnotOpt an (COr (CAnnotOpt "impl" (CNot c1)) c2))
+      (at level 70, no associativity) : circuit.
+  (* Notation "s ?? c1 // c2" := (CMux s c1 c2) (at level 80, no associativity) : circuit. *)
+End CircuitNotations.
+
+Import CircuitNotations.
+Local Open Scope circuit.
 
 Section CircuitCompilation.
   Context {var_t reg_t fn_t: Type}.
@@ -125,12 +226,12 @@ Section CircuitCompilation.
     context (fun '(k, tau) => circuit (Nat_of_type tau)) sig.
 
   Definition mux_rwdata {sz} an (cond: circuit 1) (tReg fReg: @rwdata sz) :=
-    {| read0 := CAnnot an (CMux cond (tReg.(read0)) (fReg.(read0)));
-       read1 := CAnnot an (CMux cond (tReg.(read1)) (fReg.(read1)));
-       write0 := CAnnot an (CMux cond (tReg.(write0)) (fReg.(write0)));
-       write1 := CAnnot an (CMux cond (tReg.(write1)) (fReg.(write1)));
-       data0 := CAnnot an (CMux cond (tReg.(data0)) (fReg.(data0)));
-       data1 := CAnnot an (CMux cond (data1 tReg) (data1 fReg)) |}.
+    {| read0 := CAnnotOpt an (CMux cond (tReg.(read0)) (fReg.(read0)));
+       read1 := CAnnotOpt an (CMux cond (tReg.(read1)) (fReg.(read1)));
+       write0 := CAnnotOpt an (CMux cond (tReg.(write0)) (fReg.(write0)));
+       write1 := CAnnotOpt an (CMux cond (tReg.(write1)) (fReg.(write1)));
+       data0 := CAnnotOpt an (CMux cond (tReg.(data0)) (fReg.(data0)));
+       data1 := CAnnotOpt an (CMux cond (data1 tReg) (data1 fReg)) |}.
 
   Definition mux_rwsets an (cond: circuit 1) (tRegs fRegs: rwset) :=
     REnv.(map2) (fun k treg freg => mux_rwdata an cond treg freg)
@@ -146,14 +247,14 @@ Section CircuitCompilation.
       @expr_circuit tau :=
       match ex in expr _ _ _ _ t return expr_circuit with
       | Var m =>
-        {| retVal := CAnnot "var_reference" (cassoc m Gamma);
+        {| retVal := CAnnotOpt "var_reference" (cassoc m Gamma);
            erwc := clog |}
       | Const cst =>
         {| retVal := $`"constant_value_from_source"`cst;
            erwc := clog |}
       | Read P0 idx =>
         let reg := REnv.(getenv) clog.(regs) idx in
-        {| retVal := CAnnot "read0" (REnv.(getenv) r idx);
+        {| retVal := CAnnotOpt "read0" (REnv.(getenv) r idx);
            erwc := {| canFire := (clog.(canFire) &&`"read0_cF"`
                                 (!`"no_write1"` reg.(write1)));
                      regs := REnv.(putenv) clog.(regs) idx {| read0 := $`"read0"` (w1 true);
@@ -166,11 +267,11 @@ Section CircuitCompilation.
       | Read P1 idx =>
         let reg := REnv.(getenv) clog.(regs) idx in
         {| retVal := reg.(data0);
-           (* retVal := CAnnot "read1_retVal_from_L_pred" *)
+           (* retVal := CAnnotOpt "read1_retVal_from_L_pred" *)
            (*                  (CMux (Reg.(write0)) (Reg.(data0)) *)
-           (*                        (CAnnot "read1_retVal_from_l_pred" *)
+           (*                        (CAnnotOpt "read1_retVal_from_l_pred" *)
            (*                                 (CMux (reg.(write0)) (reg.(data0)) *)
-           (*                                       (CAnnot "read1_retVal_from_reg" *)
+           (*                                       (CAnnotOpt "read1_retVal_from_reg" *)
            (*                                                (REnv.(getenv) r idx))))); *)
            erwc := {| canFire := clog.(canFire);
                      regs := REnv.(putenv) clog.(regs) idx {| read1 := $`"read1"` (w1 true);
@@ -213,7 +314,7 @@ Section CircuitCompilation.
         let cond := compile_expr Gamma cond clog in
         let tbranch := compile_rule Gamma tbranch cond.(erwc) in
         let fbranch := compile_rule Gamma fbranch cond.(erwc) in
-        {| canFire := CAnnot "if_cF" (CMux cond.(retVal) tbranch.(canFire) fbranch.(canFire));
+        {| canFire := CAnnotOpt "if_cF" (CMux cond.(retVal) tbranch.(canFire) fbranch.(canFire));
            regs := mux_rwsets "if_mux" cond.(retVal) tbranch.(regs) fbranch.(regs) |}
       | Write P0 idx val =>
         fun Gamma =>
@@ -309,13 +410,13 @@ Section CircuitCompilation.
     end.
 
   Definition commit_rwdata {sz} (reg: @rwdata sz) initial_value : circuit sz :=
-    CAnnot "commit_write1"
+    CAnnotOpt "commit_write1"
            (CMux (reg.(write1))
                  (reg.(data1))
-                 (CAnnot "commit_write0"
+                 (CAnnotOpt "commit_write0"
                          (CMux (reg.(write0))
                                (reg.(data0))
-                               (CAnnot "commit_unchanged" initial_value)))).
+                               (CAnnotOpt "commit_unchanged" initial_value)))).
 
   Definition state_transition_circuit :=
     REnv.(env_t) (fun reg => circuit (R reg)).
@@ -325,8 +426,8 @@ Section CircuitCompilation.
        read1 := $`"sched_init_no_read1"` (w1 false);
        write0 := $`"sched_init_no_write0"` (w1 false);
        write1 := $`"sched_init_no_write1"` (w1 false);
-       data0 := CAnnot "sched_init_data0_is_reg" (REnv.(getenv) r idx);
-       data1 := CAnnot "sched_init_no_data1" (CConst (Bits.zeroes _)) |}.
+       data0 := CAnnotOpt "sched_init_data0_is_reg" (REnv.(getenv) r idx);
+       data1 := CAnnotOpt "sched_init_no_data1" (CConst (Bits.zeroes _)) |}.
 
   Definition init_scheduler_circuit : scheduler_circuit :=
     REnv.(create) init_scheduler_rwdata.
