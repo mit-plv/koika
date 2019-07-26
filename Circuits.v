@@ -67,43 +67,52 @@ Section CircuitOptimizer.
     | c => c
     end.
 
-  Fixpoint asbool {sz} (c: circuit sz) : option bool :=
-    match c return option bool with
+  Fixpoint asconst {sz} (c: circuit sz) : option (list bool) :=
+    match c return option (list bool) with
     | CAnnot annot c =>
-      asbool c
-    | @CConst _ _ _ _ (S sz) cst =>
-      Some (Bits.hd cst)
+      asconst c
+    | @CConst _ _ _ _ sz cst =>
+      Some (vect_to_list cst)
     | c => None
     end.
 
-  Notation wfalse := (false, tt).
-  Notation wtrue := (true, tt).
+  Notation ltrue := (cons true nil).
+  Notation lfalse := (cons false nil).
+
+  Instance EqDec_ListBool : EqDec (list bool) := _.
 
   Fixpoint opt1 {sz} (c: circuit sz) {struct c}: circuit sz :=
     match c in Circuit _ _ sz return circuit sz with
     | (CNot c) as c0 =>
-      match asbool c with
-      | Some true => CConst Ob~0
-      | Some false => CConst Ob~1
-      | None => c0
+      match asconst c with
+      | Some ltrue => CConst Ob~0
+      | Some lfalse => CConst Ob~1
+      | _ => c0
       end
     | (CAnd c1 c2) as c0 =>
-      match asbool c1, asbool c2 with
-      | Some false, _ | _, Some false => CConst Ob~0
-      | Some true, Some true => CConst Ob~1
+      match asconst c1, asconst c2 with
+      | Some lfalse, _ | _, Some lfalse => CConst Ob~0
+      | _, Some ltrue => c1
+      | Some ltrue, _ => c2
       | _, _ => c0
       end
     | (COr c1 c2) as c0 =>
-      match asbool c1, asbool c2 with
-      | Some true, _ | _, Some true => CConst Ob~1
-      | Some false, Some false => CConst Ob~0
+      match asconst c1, asconst c2 with
+      | Some ltrue, _ | _, Some ltrue => CConst Ob~1
+      | _, Some lfalse => c1
+      | Some lfalse, _ => c2
       | _, _ => c0
       end
     | (CMux select c1 c2) as c0 =>
-      match asbool select with
-      | Some true => c1
-      | Some false => c2
-      | None => c0
+      match asconst select with
+      | Some ltrue => c1
+      | Some lfalse => c2
+      | _ => match asconst c1, asconst c2 with
+            | Some bs1, Some bs2 =>
+              if eq_dec bs1 bs2 then c1
+              else c0
+            | _, _ => c0
+            end
       end
     | c => c
     end.
@@ -112,13 +121,10 @@ Section CircuitOptimizer.
   Context (r: REnv.(env_t) R).
   Context (sigma: forall f, Sigma f).
 
-  Lemma asbool_Some :
-    forall {sz} (c: circuit sz) b,
-      asbool c = Some b ->
-      match sz return bits sz -> Prop with
-      | 0 => fun _ => False
-      | S _ => fun bs => Bits.hd bs = b
-      end (interp_circuit r sigma c).
+  Lemma asconst_Some :
+    forall {sz} (c: circuit sz) bs,
+      asconst c = Some bs ->
+      vect_to_list (interp_circuit r sigma c) = bs.
   Proof.
     induction c; intros b Heq;
       repeat match goal with
@@ -133,21 +139,40 @@ Section CircuitOptimizer.
 
   Arguments opt1 sz !c.
 
+  Lemma vect_to_list_inj T :
+    forall sz (v1 v2: vect T sz),
+      vect_to_list v1 = vect_to_list v2 ->
+      v1 = v2.
+  Proof.
+    induction sz; destruct v1, v2; cbn.
+    - reflexivity.
+    - inversion 1; subst; f_equal; apply IHsz; eassumption.
+  Qed.
+
+  Arguments EqDec_ListBool: simpl never.
   Lemma opt1_correct :
     forall {sz} (c: circuit sz),
       interp_circuit r sigma (opt1 c) = interp_circuit r sigma c.
   Proof.
-    induction c; cbn;
-      repeat match goal with
+    induction c; cbn.
+    Ltac t := match goal with
              | _ => reflexivity
              | _ => progress bool_simpl
              | _ => progress cbn in *
-             | [  |- context[match asbool ?c with _ => _ end] ] =>
-               destruct (asbool c) as [ [ | ] | ] eqn:?
-             | [ H: asbool _ = Some _ |- _ ] => apply asbool_Some in H
-             | [ H: Bits.hd ?x = _ |- _ ] => change (Bits.hd x) with (Bits.single x) in H
+             | [  |- context[match asconst ?c with _ => _ end] ] =>
+               destruct (asconst c) as [ | ] eqn:?
+             | [ H: asconst _ = Some _ |- _ ] => apply asconst_Some in H
+             | [  |- _ = ?y ] =>
+               match y with
+               | context[Bits.single (interp_circuit r sigma ?c)] =>
+                 destruct (interp_circuit r sigma c) as [ ? [] ] eqn:? ;
+                 cbn in *; subst
+               end
              | [ H: ?x = _ |- context[?x] ] => rewrite H
+             | [  |- context[if ?b then _ else _] ] => destruct b eqn:?
+             | _ => eauto using vect_to_list_inj
              end.
+    all: repeat t.
   Qed.
 End CircuitOptimizer.
 
