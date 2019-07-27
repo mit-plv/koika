@@ -231,6 +231,22 @@ Section Circuits.
       circuit_lt c1 c3.
   Proof. firstorder. Qed.
 
+  Lemma circuit_lt_opt_l :
+    forall c1 c2,
+      circuit_lt c1 c2 ->
+      circuit_lt (opt1 c1) c2.
+  Proof.
+    unfold circuit_lt; intros; rewrite opt1_correct; assumption.
+  Qed.
+
+  Lemma circuit_lt_opt_r :
+    forall c1 c2,
+      circuit_lt c1 c2 ->
+      circuit_lt c1 (opt1 c2).
+  Proof.
+    unfold circuit_lt; intros; rewrite opt1_correct; assumption.
+  Qed.
+
   Lemma circuit_lt_willFire_of_canFire_canFire :
     forall c1 (cLog: scheduler_circuit R Sigma REnv) rws,
       circuit_lt (willFire_of_canFire {| canFire := c1; regs := rws |} cLog) c1.
@@ -240,7 +256,7 @@ Section Circuits.
     - eapply circuit_lt_fold_right.
       + apply circuit_lt_refl.
       + intros; rewrite !getenv_zip.
-        eapply circuit_lt_CAnd.
+        eapply circuit_lt_opt_l, circuit_lt_CAnd.
         * eassumption.
         * apply circuit_lt_true.
     - cbn.
@@ -253,6 +269,8 @@ End Circuits.
 Ltac circuit_lt_f_equal :=
   repeat (apply circuit_lt_CAnnot_l ||
           apply circuit_lt_CAnnot_r ||
+          apply circuit_lt_opt_l ||
+          apply circuit_lt_opt_r ||
           apply circuit_lt_CAnd ||
           apply circuit_lt_COr ||
           apply circuit_lt_CNot ||

@@ -168,9 +168,13 @@ Section CompilerCorrectness.
     intros cond * H0 H1 idx;
     unfold mux_rwsets, map2; rewrite !getenv_create;
     unfold mux_rwdata; cbn;
+    rewrite !opt1_correct; cbn;
     destruct (interp_circuit cond) as [ [ | ] [] ]; cbn;
     [ specialize (H1 eq_refl idx) | specialize (H0 eq_refl idx) ];
     eauto.
+
+  Arguments EqDec_ListBool : simpl never.
+  Arguments opt1 : simpl never.
 
   Lemma log_data0_consistent'_mux :
     forall cond rws0 rws1 s l,
@@ -330,6 +334,7 @@ Section CompilerCorrectness.
     eassumption.
   Qed.
 
+  Require Import Coq.Strings.String.
   Lemma interp_willFire_of_canFire_eqn :
     forall clog (cLog: scheduler_circuit R Sigma REnv),
       interp_circuit (willFire_of_canFire clog cLog) =
@@ -346,10 +351,15 @@ Section CompilerCorrectness.
     induction finite_elems; cbn; intros.
     - bool_simpl; rewrite Bits.single_cons; reflexivity.
     - rewrite getenv_zip; cbn.
+      rewrite opt1_correct; cbn.
       rewrite IHl; cbn.
       f_equal.
-      ring.
+      rewrite <- !andb_assoc.
+      f_equal.
+      apply andb_comm.
   Qed.
+
+  Opaque willFire_of_canFire'.
 
   Lemma interp_willFire_of_canFire_true :
     forall clog (cLog: scheduler_circuit R Sigma REnv),
@@ -380,8 +390,6 @@ Section CompilerCorrectness.
       apply forallb_forall; intros idx **.
       rewrite H0; reflexivity.
   Qed.
-
-  Opaque willFire_of_canFire'.
 
   Lemma interp_willFire_of_canFire_false :
     forall clog (cLog: scheduler_circuit R Sigma REnv),
@@ -498,7 +506,7 @@ Section CompilerCorrectness.
       @rwdata_circuit_lt_invariant idx (mux_rwdata s c rwd1 rwd2) rwd3.
   Proof.
     unfold rwdata_circuit_lt_invariant, mux_rwdata; cbn; intros.
-    repeat split; apply circuit_lt_CAnnot_l, circuit_lt_CMux_l; intuition eauto.
+    repeat split; apply circuit_lt_CAnnot_l, circuit_lt_opt_l, circuit_lt_CMux_l; intuition eauto.
   Qed.
 
   Lemma rwdata_circuit_lt_invariant_mux_rwdata_r :
@@ -508,7 +516,7 @@ Section CompilerCorrectness.
       @rwdata_circuit_lt_invariant idx rwd1 (mux_rwdata s c rwd2 rwd3).
   Proof.
     unfold rwdata_circuit_lt_invariant, mux_rwdata; cbn; intros.
-    repeat split; apply circuit_lt_CAnnot_r; apply circuit_lt_CMux_r; intuition eauto.
+    repeat split; apply circuit_lt_CAnnot_r, circuit_lt_opt_r, circuit_lt_CMux_r; intuition eauto.
   Qed.
 
   Theorem rwset_circuit_lt_compile_expr_correct {sig tau} :
@@ -520,7 +528,7 @@ Section CompilerCorrectness.
     - destruct port; cbn.
       (* Read0 *)
       + split.
-        * apply circuit_lt_CAnnot_l, circuit_lt_CAnd_l, circuit_lt_refl.
+        * apply circuit_lt_CAnnot_l, circuit_lt_opt_l, circuit_lt_CAnd_l, circuit_lt_refl.
         * intros. eapply rwset_circuit_lt_invariant_putenv.
           -- eauto using rwset_circuit_lt_invariant_refl.
           -- red; cbn; eauto using circuit_lt_true, circuit_lt_refl.
@@ -597,7 +605,7 @@ Section CompilerCorrectness.
     apply circuit_lt_fold_right.
     - eassumption.
     - intros; rewrite !getenv_zip; cbn.
-      apply circuit_lt_CAnnot, circuit_lt_CAnd.
+      apply circuit_lt_CAnnot, circuit_lt_opt_l, circuit_lt_opt_r, circuit_lt_CAnd.
       assumption.
       apply circuit_lt_willFire_of_canFire'.
       apply Hfr.
@@ -652,7 +660,7 @@ Section CompilerCorrectness.
     - eassumption.
     - intros; rewrite !getenv_zip.
       cbn.
-      eauto using circuit_lt_CAnnot, circuit_lt_CAnd, circuit_lt_refl.
+      eauto using circuit_lt_CAnnot, circuit_lt_opt_l, circuit_lt_opt_r, circuit_lt_CAnd, circuit_lt_refl.
   Qed.
 
   Context {var_t_eq_dec: EqDec var_t}.
@@ -676,9 +684,11 @@ Section CompilerCorrectness.
   Qed.
 
   Ltac t_interp_circuit_willFire_of_canFire :=
-        repeat match goal with
+    repeat match goal with
            | _ => progress intros
            | _ => reflexivity
+           | [ H: context[opt1] |- _ ] => rewrite opt1_correct in H
+           | [  |- context[opt1] ] => rewrite opt1_correct
            | _ => progress cbn
            | [ H: _ = _ |- _ ] => rewrite H
            | _ => destruct (Bits.single _)
@@ -687,13 +697,16 @@ Section CompilerCorrectness.
   Ltac t_interp_circuit_willFire_of_canFire_impl :=
     repeat match goal with
            | _ => reflexivity
+           | [ H: context[opt1] |- _ ] => rewrite opt1_correct in H
+           | [  |- context[opt1] ] => rewrite opt1_correct
            | _ => cleanup_step
            | _ => progress (unfold willFire_of_canFire'; cbn; intros)
            | [ H: Ob~_ = Ob~_ |- _ ] => apply (f_equal Bits.single) in H; cbn in H
            | [  |- Ob~_ = Ob~_ ] => f_equal
            | [ H: _ && _ = true |- _ ] => rewrite andb_true_iff in H
-           | [ H: _ = _ |- _ ] => rewrite H
+           | [ H: _ = _ |- _ ] => rewrite H in *
            | _ => rewrite !orb_true_r
+           | _ => progress cbn in *
            end.
 
   Lemma interp_circuit_willFire_of_canFire_read0:
@@ -854,6 +867,8 @@ Section CompilerCorrectness.
        circuit_lt_CAnd
        circuit_lt_CAnd_l
        circuit_lt_CAnd_r
+       circuit_lt_opt_l
+       circuit_lt_opt_r
        circuit_lt_COr
        circuit_lt_CNot
        circuit_lt_true
@@ -872,6 +887,8 @@ Section CompilerCorrectness.
     | _ => cleanup_step
     | _ => progress intros
     | _ => progress cbn in *
+    | [ H: context[opt1] |- _ ] => rewrite opt1_correct in H
+    | [  |- context[opt1] ] => rewrite opt1_correct
     | [ H: _ \/ _ |- _ ] => destruct H
     | [ H: exists _, _ |- _ ] => destruct H
     | [  |- Ob~_ = Ob~_ ] => f_equal
@@ -938,6 +955,7 @@ Section CompilerCorrectness.
   Ltac may_read_write_t :=
     unfold may_read0, may_read1, may_write in *;
     repeat match goal with
+           | _ => rewrite opt1_correct in *
            | _ => progress bool_cleanup
            | [ H: log_rwdata_consistent _ ?regs |-
                context [Bits.single (interp_circuit (_ (REnv.(getenv) ?regs ?idx)))] ] =>
@@ -969,14 +987,14 @@ Section CompilerCorrectness.
       end.
   Proof.
     induction ex; intros.
-    - (* Var *) cbn; eauto.
-    - (* Const *) cbn; eauto.
+    - (* Var *) cbn; rewrite opt1_correct; eauto.
+    - (* Const *) cbn; rewrite opt1_correct; eauto.
     - (* Read *)
       destruct port.
       + cbn.
         destruct (may_read0 Log log idx) eqn:?; cbn.
         * repeat eapply conj.
-          -- eauto.
+          -- rewrite opt1_correct; eauto.
           -- apply log_rwdata_consistent_log_cons_putenv;
                [ eauto | red ]; cbn; rewrite ?Bits.single_cons; eauto.
           -- apply log_data0_consistent_putenv_read_write1; eauto.
@@ -1022,9 +1040,10 @@ Section CompilerCorrectness.
         interp_circuit (willFire_of_canFire' rwd2 rwdL).
   Proof.
     intros *;
-      unfold willFire_of_canFire'; cbn;
-        destruct (interp_circuit cCond) as [ [ | ] [ ] ];
-        cbn; eauto.
+      unfold willFire_of_canFire'; cbn.
+    repeat (rewrite !opt1_correct; cbn).
+    destruct (interp_circuit cCond) as [ [ | ] [ ] ];
+      cbn; eauto.
   Qed.
 
   Theorem rule_compiler_correct {sig} Log cLog:
@@ -1133,6 +1152,9 @@ Section CompilerCorrectness.
           eapply interp_circuit_circuit_lt_helper_false; eauto;
             intros; apply circuit_lt_willFire_of_canFire; cbn;
               eauto 8 with circuits.
+        all: intros;
+          apply rwset_circuit_lt_invariant_putenv;
+          eauto 8 with circuits.
   Qed.
 
   Arguments update_accumulated_rwset : simpl never.
@@ -1146,7 +1168,7 @@ Section CompilerCorrectness.
     unfold log_rwdata_consistent, update_accumulated_rwset; intros * HL Hl ** ;
       unfold map2; rewrite getenv_create; cbn.
     specialize (HL idx); specialize (Hl idx);
-      repeat (bool_cleanup || rewrite log_existsb_app);
+      repeat (rewrite !opt1_correct || bool_cleanup || rewrite log_existsb_app);
       eauto.
   Qed.
 
@@ -1290,7 +1312,7 @@ Section CompilerCorrectness.
   Proof.
     red; unfold init_scheduler_circuit, init_scheduler_rwdata, circuit_env_equiv;
       intros; rewrite !getenv_create; cbn;
-        rewrite latest_write0_empty; eauto.
+        rewrite opt1_correct, latest_write0_empty; eauto.
   Qed.
 
   Lemma log_data1_consistent'_empty_init_scheduler:
@@ -1409,6 +1431,7 @@ Section CompilerCorrectness.
   Proof.
     intros; unfold compile_scheduler, commit_update, commit_rwdata, interp_scheduler, map2.
     rewrite !getenv_create; cbn.
+    repeat (rewrite !opt1_correct; cbn).
     pose proof (scheduler_compiler'_correct' s log_empty (init_scheduler_circuit rc)
                                              ltac:(ceauto) ltac:(ceauto)
                                              ltac:(ceauto) ltac:(ceauto)) as (Hrv & Hcst0 & Hcst1).
