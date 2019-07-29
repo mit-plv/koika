@@ -1,4 +1,3 @@
-type pos_t = Lexing.position
 type size_t = int
 type ptr_t = int
 
@@ -27,50 +26,52 @@ type reg_signature = {
 type var_t = string
 type port_t = int
 
-type 'a locd = {
-    lpos: Lexing.position;
-    lcnt: 'a
+type ('loc_t, 'content_t) locd = {
+    lpos: 'loc_t;
+    lcnt: 'content_t
   }
 
-type ('reg_t, 'fn_t) expr =
+type ('f, 'reg_t, 'fn_t) expr =
   | Var of var_t
   | Num of int
   | Const of bool list
   | Read of port_t
-            * 'reg_t locd
-  | Call of 'fn_t locd
-            * ('reg_t, 'fn_t) expr locd list
+            * ('f, 'reg_t) locd
+  | Call of ('f, 'fn_t) locd
+            * ('f, ('f, 'reg_t, 'fn_t) expr) locd list
 
-type ('reg_t, 'fn_t) rule =
+type ('f, 'reg_t, 'fn_t) rule =
   | Skip
   | Fail
-  | Progn of ('reg_t, 'fn_t) rule locd list
-  | Let of (var_t locd * ('reg_t, 'fn_t) expr locd) list
-           * ('reg_t, 'fn_t) rule locd list
-  | If of ('reg_t, 'fn_t) expr locd
-          * ('reg_t, 'fn_t) rule locd
-          * ('reg_t, 'fn_t) rule locd list
-  | When of ('reg_t, 'fn_t) expr locd
-            * ('reg_t, 'fn_t) rule locd list
+  | Progn of ('f, ('f, 'reg_t, 'fn_t) rule) locd list
+  | Let of (('f, var_t) locd * ('f, ('f, 'reg_t, 'fn_t) expr) locd) list
+           * ('f, ('f, 'reg_t, 'fn_t) rule) locd list
+  | If of ('f, ('f, 'reg_t, 'fn_t) expr) locd
+          * ('f, ('f, 'reg_t, 'fn_t) rule) locd
+          * ('f, ('f, 'reg_t, 'fn_t) rule) locd list
+  | When of ('f, ('f, 'reg_t, 'fn_t) expr) locd
+            * ('f, ('f, 'reg_t, 'fn_t) rule) locd list
   | Write of port_t
-             * 'reg_t locd
-             * ('reg_t, 'fn_t) expr locd
+             * ('f, 'reg_t) locd
+             * ('f, ('f, 'reg_t, 'fn_t) expr) locd
 
-type scheduler =
+type 'f scheduler =
   | Done
-  | Sequence of string locd list
-  | Try of string locd * scheduler locd * scheduler locd
+  | Sequence of ('f, string) locd list
+  | Try of ('f, string) locd * ('f, 'f scheduler) locd * ('f, 'f scheduler) locd
 
-type 'fn_t ast =
+type ('f, 'fn_t) ast =
   | ADone
-  | ASequence of (reg_signature, 'fn_t) rule locd list
-  | ATry of (reg_signature, 'fn_t) rule locd
-            * 'fn_t ast locd
-            * 'fn_t ast locd
+  | ASequence of ('f, ('f, reg_signature, 'fn_t) rule) locd list
+  | ATry of ('f, ('f, reg_signature, 'fn_t) rule) locd
+            * ('f, ('f, 'fn_t) ast) locd
+            * ('f, ('f, 'fn_t) ast) locd
 
 (* FIXME use a hashmap, not a list *)
-type tc_unit =
-  { tc_registers: reg_signature list }
+type ('f, 'fn_t) tc_unit =
+  { tc_fname: string;
+    tc_registers: reg_signature list;
+    tc_ast: ('f, ('f, 'fn_t) ast) locd }
 
 type circuit_root = {
     root_reg: reg_signature;
@@ -122,6 +123,7 @@ let compute_parents ptr_to_object =
     ptr_to_object;
   ptr_to_parents
 
-exception Error of { epos: pos_t;
-                     ekind: [`ParseError | `NameError | `TypeError];
-                     emsg: string }
+type 'f err_contents =
+  { epos: 'f;
+    ekind: [`ParseError | `NameError | `TypeError];
+    emsg: string }

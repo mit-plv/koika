@@ -26,14 +26,14 @@ module Util = struct
   let string_of_coq_string chars =
     String.concat "" (List.map (String.make 1) chars)
 
-  let type_error_to_error (epos: pos_t) (err: _ SGA.error_message) =
+  let type_error_to_error (epos: 'f) (err: _ SGA.error_message) =
     let ekind, emsg = match err with
       | SGA.UnboundVariable var ->
          (`NameError, Printf.sprintf "Unbound variable `%s'" var)
       | SGA.TypeMismatch (_tsig, actual, _expr, expected) ->
          (`TypeError, Printf.sprintf "This term has type `%s', but `%s' was expected"
                         (type_to_string actual) (type_to_string expected))
-    in Error { epos = epos; ekind = ekind; emsg = emsg }
+    in { epos; ekind; emsg }
 
   let bits_const_of_bits sz bs =
     { bs_size = sz;
@@ -48,7 +48,7 @@ module Util = struct
       ffi_arg2size = fsig.arg2Type;
       ffi_retsize = fsig.retType }
 
-  let dedup_input_of_tc_unit { tc_registers } circuits =
+  let dedup_input_of_tc_unit { tc_registers; _ } circuits =
     { di_regs = tc_registers;
       di_reg_sigs = (fun r -> r);
       di_fn_sigs = (fun fn ->
@@ -184,19 +184,18 @@ module Compilation = struct
                                                   | Inl m -> m
                                                   | Inr _ -> failwith "Unexpected register name" }
 
-  let compile
-        (tcu: tc_unit)
-        (ast: string SGA.interop_ufn_t ast locd)
-      : (reg_signature -> (reg_signature, string SGA.interop_fn_t) SGA.circuit) =
-    let ast = translate_scheduler ast in
+  let compile (tcu: ('f, string SGA.interop_ufn_t) tc_unit)
+      : ((reg_signature -> (reg_signature, string SGA.interop_fn_t) SGA.circuit),
+         'f err_contents) Result.result =
+    let ast = translate_scheduler tcu.tc_ast in
     let rEnv = rEnv_of_register_list tcu.tc_registers in
     let r0: _ SGA.env_t = SGA.create rEnv (fun r -> SGA.CReadRegister r) in
-    match SGA.type_scheduler Util.string_eq_dec r sigma uSigma Lexing.dummy_pos ast with
+    match SGA.type_scheduler Util.string_eq_dec r sigma uSigma tcu.tc_ast.lpos ast with
     | WellTyped s ->
        let env = SGA.compile_scheduler r sigma rEnv r0 s in
-       (fun r -> SGA.getenv rEnv env r)
+       Result.Ok (fun r -> SGA.getenv rEnv env r)
     | IllTyped { epos; emsg } ->
-       raise (Util.type_error_to_error epos emsg)
+       Result.Error (Util.type_error_to_error epos emsg)
 end
 
 module Graphs = struct

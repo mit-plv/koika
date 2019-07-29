@@ -1,27 +1,47 @@
 open Common
 
-type smod = {
-    m_name: string locd;
-    m_args: string locd list;
-    m_registers: (string locd * bool list locd) list;
-    m_rules: (string locd * (string, string) rule locd) list;
-    m_scheduler: string locd * scheduler locd
+type 'f smod = {
+    m_name: ('f, string) locd;
+    m_args: ('f, string) locd list;
+    m_registers: (('f, string) locd * ('f, bool list) locd) list;
+    m_rules: (('f, string) locd * ('f, ('f, string, string) rule) locd) list;
+    m_scheduler: ('f, string) locd * ('f, 'f scheduler) locd
   }
 
 let sprintf = Printf.sprintf
 
-let parse_error (epos: Lexing.position) emsg =
+module Pos = struct
+  type t =
+    | StrPos of string
+    | Filename of string
+    | SexpPos of string * Parsexp.Positions.pos
+    | SexpRange of string * Parsexp.Positions.range
+
+  let to_string = function
+    | StrPos s -> s
+    | Filename f ->
+       sprintf "%s:?:?" f
+    | SexpPos (fname, { line; col; _ }) ->
+       sprintf "%s:%d:%d" fname line col
+    | SexpRange (fname, { start_pos; end_pos }) ->
+       sprintf "%s:%d-%d:%d-%d" fname
+         start_pos.line end_pos.line start_pos.col end_pos.col
+end
+
+exception Error of Pos.t err_contents
+
+let parse_error (epos: Pos.t) emsg =
   raise (Error { epos; ekind = `ParseError; emsg })
 
-let name_error (epos: Lexing.position) kind name =
+let name_error (epos: Pos.t) kind name =
   raise (Error { epos; ekind = `NameError;
                  emsg = sprintf "Unbound %s: `%s'" kind name })
 
-let type_error (epos: Lexing.position) emsg =
+let type_error (epos: Pos.t) emsg =
   raise (Error { epos; ekind = `TypeError; emsg })
 
-let untyped_number_error (epos: Lexing.position) n =
-  type_error epos (sprintf "Missing size annotation on number `%d'" n)
+let untyped_number_error (pos: Pos.t) n =
+  type_error pos (sprintf "Missing size annotation on number `%d'" n)
 
 let expect_cons loc msg = function
   | [] ->
@@ -31,22 +51,51 @@ let expect_cons loc msg = function
 let rec list_const n x =
   if n = 0 then [] else x :: list_const (n - 1) x
 
-let parse fname =
+type 'f sexp =
+  | Atom of { loc: 'f; atom: string }
+  | List of { loc: 'f; elements: 'f sexp list }
+
+let read_cst_sexps fname =
+  let wrap_loc loc =
+    Pos.SexpRange (fname, loc) in
+  let rec drop_comments (s: Parsexp.Cst.t_or_comment) =
+    match s with
+    | Parsexp.Cst.Sexp (Parsexp.Cst.Atom { loc; atom; _ }) ->
+       Some (Atom  { loc = wrap_loc loc; atom })
+    | Parsexp.Cst.Sexp (Parsexp.Cst.List { loc; elements }) ->
+       Some (List { loc = wrap_loc loc;
+                    elements = Base.List.filter_map ~f:drop_comments elements })
+    | Parsexp.Cst.Comment _ -> None in
+  match Parsexp.Many_cst.parse_string (Stdio.In_channel.read_all fname) with
+  | Ok sexps ->
+     Base.List.filter_map ~f:drop_comments sexps
+  | Error err ->
+     let pos = Parsexp.Parse_error.position err in
+     let msg = Parsexp.Parse_error.message err in
+     parse_error (Pos.SexpPos (fname, pos)) msg
+
+let read_annotated_sexps fname =
+  let rec commit_annots loc (s: Base.Sexp.t) =
+    match s with
+    | Atom atom ->
+       Atom { loc; atom }
+    | List [Atom "<>"; Atom annot; body] ->
+       commit_annots (Pos.StrPos annot) body
+    | List (Atom "<>" :: _) ->
+       let msg = sprintf "Bad use of <>: %s" (Base.Sexp.to_string s) in
+       parse_error (Pos.Filename fname) msg
+    | List elements ->
+       List { loc; elements = List.map (commit_annots loc) elements } in
+  match Parsexp.Many.parse_string (Stdio.In_channel.read_all fname) with
+  | Ok sexps ->
+     List.map (commit_annots (Pos.Filename fname)) sexps
+  | Error err ->
+     let pos = Parsexp.Parse_error.position err in
+     let msg = Parsexp.Parse_error.message err in
+     parse_error (Pos.SexpPos (fname, pos)) msg
+
+let parse fname sexps =
   Printf.printf "Parsing %s\n%!" fname;
-  let open Parsexp in
-  let open Positions in
-  let open Parsexp.Cst in
-  let drop_comments =
-    Base.List.filter_map ~f:(function Sexp s -> Some s | _ -> None) in
-  let epos_of_pos (pos: Positions.pos) =
-    Lexing.{ pos_fname = fname; pos_bol = pos.offset - pos.col;
-             pos_lnum = pos.line; pos_cnum = pos.offset } in
-  let epos_of_range loc =
-    epos_of_pos loc.start_pos in
-  let parse_error (loc: range) msg =
-    parse_error (epos_of_range loc) msg in
-  let expect_cons loc msg =
-    expect_cons (epos_of_range loc) msg in
   let expect_single loc kind where = function
     | [] ->
        parse_error loc
@@ -55,36 +104,28 @@ let parse fname =
        parse_error loc
          (sprintf "More than one %s found in %s" kind where)
     | [x] -> x in
-  let locd_make (rng: range) x =
-    { lpos = epos_of_pos rng.start_pos; lcnt = x } in
+  let locd_make lpos lcnt =
+    { lpos; lcnt } in
   let locd_of_pair (pos, x) =
     locd_make pos x in
-  let read_sexps fname =
-    match Parsexp.Many_cst.parse_string (Stdio.In_channel.read_all fname) with
-    | Ok sexps ->
-       drop_comments sexps
-    | Error err ->
-       let pos = Parsexp.Parse_error.position err in
-       let msg = Parsexp.Parse_error.message err in
-       parse_error { start_pos = pos; end_pos = pos } msg in
   let num_fmt =
     "(number format: size'number)" in
   let expect_atom msg = function
-    | Cst.List { loc; _ } ->
+    | List { loc; _ } ->
        parse_error loc
          (sprintf "Expecting %s, but got a list" msg)
-    | Cst.Atom { loc; atom; _ } ->
+    | Atom { loc; atom } ->
        (loc, atom) in
   let expect_list msg = function
-    | Cst.Atom { loc; atom; _ } ->
+    | Atom { loc; atom } ->
        parse_error loc
          (sprintf "Expecting %s, but got `%s'" msg atom)
-    | Cst.List { loc; elements } ->
-       (loc, drop_comments elements) in
+    | List { loc; elements } ->
+       (loc, elements) in
   let expect_nil = function
     | [] -> ()
-    | Cst.List { loc; _ } :: _ -> parse_error loc "Unexpected list"
-    | Cst.Atom { loc; _ } :: _ -> parse_error loc "Unexpected atom" in
+    | List { loc; _ } :: _ -> parse_error loc "Unexpected list"
+    | Atom { loc; _ } :: _ -> parse_error loc "Unexpected atom" in
   let expect_constant csts c =
     let quote x = "`" ^ x ^ "'" in
     let optstrs = List.map (fun x -> quote (fst x)) csts in
@@ -134,10 +175,10 @@ let parse fname =
     let loc_hd, hd = expect_atom (sprintf "a %s name" kind) hd in
     loc_hd, hd, args in
   let rec expect_expr = function
-    | Cst.Atom { loc; atom; _ } ->
+    | Atom { loc; atom } ->
        locd_make loc (expect_number_or_var loc atom)
-    | Cst.List { loc; elements } ->
-       let loc_hd, hd, args = expect_funapp loc "constructor or function" (drop_comments elements) in
+    | List { loc; elements } ->
+       let loc_hd, hd, args = expect_funapp loc "constructor or function" (elements) in
        locd_make loc
          (match hd with
           | "read#0" | "read#1" ->
@@ -173,13 +214,13 @@ let parse fname =
     let loc, init_val = expect_atom "an initial value" init_val in
     match try_number loc init_val with
     | Some (Const c) -> locd_make loc c
-    | Some (Num n) -> untyped_number_error (epos_of_range loc) n
+    | Some (Num n) -> untyped_number_error loc n
     | _ -> parse_error loc (sprintf "Expecting a number, got `%s' %s" init_val num_fmt) in
   let rec expect_rule = function
-    | (Cst.Atom _) as a ->
+    | (Atom _) as a ->
        locd_of_pair (expect_constant [("skip", Skip); ("fail", Fail)] a)
-    | Cst.List { loc; elements } ->
-       let loc_hd, hd, args = expect_funapp loc "constructor" (drop_comments elements) in
+    | List { loc; elements } ->
+       let loc_hd, hd, args = expect_funapp loc "constructor" (elements) in
        locd_make loc
          (match hd with
           | "progn" ->
@@ -202,11 +243,11 @@ let parse fname =
                     expect_expr (expect_single loc "value" "write expression" body))
           | _ ->
              parse_error loc_hd (sprintf "Unexpected in rule: `%s'" hd)) in
-  let rec expect_scheduler : Cst.t -> scheduler locd = function
-    | (Cst.Atom _) as a ->
+  let rec expect_scheduler : 'f sexp -> ('f, 'f scheduler) locd = function
+    | (Atom _) as a ->
        locd_of_pair (expect_constant [("done", Done)] a)
-    | Cst.List { loc; elements } ->
-       let loc_hd, hd, args = expect_funapp loc "constructor" (drop_comments elements) in
+    | List { loc; elements } ->
+       let loc_hd, hd, args = expect_funapp loc "constructor" (elements) in
        locd_make loc
          (match hd with
           | "sequence" ->
@@ -255,21 +296,17 @@ let parse fname =
     let m_scheduler = expect_single m_loc "scheduler"
                         (sprintf "module `%s'" m_name.lcnt) schedulers in
     { m_name; m_args; m_registers; m_rules; m_scheduler } in
-  let compute_tc_unit { m_registers; m_rules; m_scheduler; _ } =
-    let tc_unit =
-      { tc_registers = List.map (fun (nm, init) ->
-                           let bs_size = List.length init.lcnt in
-                           { reg_name = nm.lcnt;
-                             reg_size = bs_size;
-                             reg_init_val = { bs_size; bs_bits = init.lcnt } })
-                         m_registers } in
-    (* FIXME: handle functions in generic way *)
-    (tc_unit, m_rules, m_scheduler) in
-  let sexps =
-    read_sexps fname in
   List.map (fun sexp ->
       match expect_decl sexp with
-      | _, `Module m -> compute_tc_unit m
+      | _, `Module { m_registers; m_rules; m_scheduler; _ } ->
+         let registers = List.map (fun (nm, init) ->
+                             let bs_size = List.length init.lcnt in
+                             { reg_name = nm.lcnt;
+                               reg_size = bs_size;
+                               reg_init_val = { bs_size; bs_bits = init.lcnt } })
+                           m_registers in
+         (* FIXME: handle functions in generic way *)
+         (registers, m_rules, m_scheduler)
       | loc, kind ->
          parse_error loc (sprintf "Unexpected %s at top level"
                             (match kind with
@@ -279,12 +316,12 @@ let parse fname =
                              | `Scheduler _ -> "scheduler")))
     sexps
 
-let resolve tcu rules scheduler =
+let resolve fname registers rules scheduler =
   let find_register { lpos; lcnt = name } =
-    match List.find_opt (fun rsig -> rsig.reg_name = name) tcu.tc_registers with
+    match List.find_opt (fun rsig -> rsig.reg_name = name) registers with
     | Some rsig -> { lpos; lcnt = rsig }
     | None -> name_error lpos "register" name in
-  let w0 = { lpos = Lexing.dummy_pos; lcnt = Const [] } in
+  let w0 = { lpos = Pos.Filename fname; lcnt = Const [] } in
   let find_function { lpos; lcnt = name } args =
     (* FIXME generalize to custom function definitions *)
     let (fn, nargs, args): SGALib.SGA.prim_ufn_t * int * _ =
@@ -314,7 +351,7 @@ let resolve tcu rules scheduler =
     else
       let padding = list_const (2 - nargs) w0 in
       { lpos; lcnt = SGALib.SGA.UPrimFn fn }, List.append args padding in
-  let rec resolve_expr ({ lpos; lcnt }: (string, string) expr locd) =
+  let rec resolve_expr ({ lpos; lcnt }: ('f, ('f, string, string) expr) locd) =
     { lpos;
       lcnt = match lcnt with
              | Var v -> Var v
@@ -325,7 +362,7 @@ let resolve tcu rules scheduler =
              | Call (fn, args) ->
                 let fn, args = find_function fn args in
                 Call (fn, List.map resolve_expr args) } in
-  let rec resolve_rule ({ lpos; lcnt }: (string, string) rule locd) =
+  let rec resolve_rule ({ lpos; lcnt }: ('f, ('f, string, string) rule) locd) =
     { lpos;
       lcnt = match lcnt with
              | Skip -> Skip
@@ -347,7 +384,7 @@ let resolve tcu rules scheduler =
     match List.find_opt (fun (nm, _) -> nm.lcnt = name) rules with
     | Some (_, { lcnt; _ }) -> { lpos; lcnt }
     | None -> name_error lpos "rule" name in
-  let rec resolve_scheduler ({ lpos; lcnt }: scheduler locd) =
+  let rec resolve_scheduler ({ lpos; lcnt }: ('f, 'f scheduler) locd) =
     { lpos; (* FIXME add support for calling other schedulers by name *)
       lcnt = match lcnt with
              | Done -> ADone
@@ -360,27 +397,38 @@ let resolve tcu rules scheduler =
 type cli_opts = {
     cli_in_fname: string;
     cli_out_fname: string;
+    cli_frontend: [`Sexps | `Annotated];
     cli_backend: [`Dot | `Verilog]
   }
 
-let run { cli_in_fname; cli_out_fname; cli_backend } : unit =
+let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
   try
-    (match parse cli_in_fname with
-     | (tc_unit, rules, scheduler) :: _ ->
+    let sexps =
+      match cli_frontend with
+      | `Annotated -> read_annotated_sexps cli_in_fname
+      | `Sexps -> read_cst_sexps cli_in_fname in
+    (match parse cli_in_fname sexps with
+     | (registers, rules, scheduler) :: _ ->
         let ast =
-          resolve tc_unit rules (snd scheduler) in
+          resolve cli_in_fname registers rules (snd scheduler) in
+        let tc_unit =
+          { tc_ast = ast;
+            tc_fname = cli_in_fname;
+            tc_registers = registers } in
         let circuits =
-          SGALib.Compilation.compile tc_unit ast in
+          match SGALib.Compilation.compile tc_unit with
+          | Ok cs -> cs
+          | Error err -> raise (Error err) in
         let graph =
           SGALib.Graphs.dedup_circuit (SGALib.Util.dedup_input_of_tc_unit tc_unit circuits) in
         Stdio.Out_channel.with_file cli_out_fname ~f:(fun out ->
             match cli_backend with
             | `Dot -> Backends.Dot.main out graph
             | `Verilog -> Backends.Verilog.main out graph)
-     | [] -> parse_error Lexing.dummy_pos "No modules declared")
+     | [] -> parse_error (Pos.Filename cli_in_fname) "No modules declared")
   with Error { epos; ekind; emsg } ->
-    Printf.eprintf "%s:%d:%d: %s: %s\n"
-      epos.pos_fname epos.pos_lnum (epos.pos_cnum - epos.pos_bol)
+    Printf.eprintf "%s: %s: %s\n"
+      (Pos.to_string epos)
       (match ekind with
        | `ParseError -> "Parse error"
        | `NameError -> "Name error"
@@ -402,14 +450,16 @@ let cli =
     let%map_open
         cli_in_fname = anon ("input" %: string)
     and cli_out_fname = anon ("output" %: string)
+    and annotated = flag "--annotated" no_arg ~doc:"Recognize <> annotations"
     in fun () ->
        run { cli_in_fname; cli_out_fname;
+             cli_frontend = if annotated then `Annotated else `Sexps;
              cli_backend = backend_of_fname cli_out_fname })
 
 let _ =
-  run { cli_in_fname = "collatz.lv"; cli_out_fname = "collatz.v";
-        cli_backend = `Verilog }
-  (* Core.Command.run cli *)
+  (* run { cli_in_fname = "collatz.lv"; cli_out_fname = "collatz.v";
+   *       cli_frontend = `Sexps; cli_backend = `Verilog } *)
+  Core.Command.run cli
 
 (* let command =
  *   let open Core in
