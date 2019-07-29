@@ -15,8 +15,8 @@ Inductive prim_ufn_t :=
 | UZExtR (nzeroes: nat).
 
 Inductive prim_fn_t :=
-| Sel (logsz: nat)
-| Part (logsz: nat) (width: nat)
+| Sel (sz: nat)
+| Part (sz: nat) (width: nat)
 | And (sz: nat)
 | Or (sz: nat)
 | Not (sz: nat)
@@ -28,8 +28,22 @@ Inductive prim_fn_t :=
 | ZExtL (sz: nat) (nzeroes: nat)
 | ZExtR (sz: nat) (nzeroes: nat).
 
-Definition prim_sel {logsz} (bs: bits (pow2 logsz)) (idx: bits logsz) :=
-  match Bits.to_index (pow2 logsz) idx with
+(* Like Nat.log2_iter, but switches to next power of two one number earlier
+   (computes ceil(log2(n)) instead of floor(log2(n))). *)
+Fixpoint log2_iter k_fuel p_logn q_n r_buffer :=
+  match k_fuel with
+    | O => p_logn
+    | S k_fuel =>
+      match r_buffer with
+      | O => log2_iter k_fuel (S p_logn) (S q_n) (pred q_n)
+      | S r_buffer => log2_iter k_fuel p_logn (S q_n) r_buffer
+      end
+  end.
+
+Definition log2 n := log2_iter (pred n) 0 1 0.
+
+Definition prim_sel {sz} (bs: bits sz) (idx: bits (log2 sz)) :=
+  match Bits.to_index sz idx with
   | Some idx => Bits.nth bs idx
   | _ => false (* TODO: x *)
   end.
@@ -39,8 +53,8 @@ Definition prim_uint_plus {sz} (bs1 bs2: bits sz) :=
 
 Definition prim_uSigma (fn: prim_ufn_t) '(bits_t sz1) '(bits_t sz2): prim_fn_t :=
   match fn with
-  | USel => Sel sz2
-  | UPart width => Part sz2 width
+  | USel => Sel sz1
+  | UPart width => Part sz1 width
   | UAnd => And sz1
   | UOr => Or sz1
   | UNot => Not sz1
@@ -53,10 +67,14 @@ Definition prim_uSigma (fn: prim_ufn_t) '(bits_t sz1) '(bits_t sz2): prim_fn_t :
   | UZExtR nzeroes => ZExtR sz1 nzeroes
   end.
 
+(* Require Import Coq.Lists.List. *)
+(* Import ListNotations. *)
+(* Compute (List.map (fun x => (x, Nat.log2 x, log2 x)) [0;1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16;17;18;19;20;21;22;23;24;25;26;27;28;29;30;31;32;33;34]). *)
+
 Definition prim_Sigma (fn: prim_fn_t) : ExternalSignature :=
   match fn with
-  | Sel logsz => {{ pow2 logsz ~> logsz ~> 1 }}
-  | Part logsz width => {{ pow2 logsz ~> logsz ~> width }}
+  | Sel sz => {{ sz ~> log2 sz ~> 1 }}
+  | Part sz width => {{ sz ~> log2 sz ~> width }}
   | And sz => {{ sz ~> sz ~> sz }}
   | Or sz => {{ sz ~> sz ~> sz }}
   | Not sz => {{ sz ~> 0 ~> sz }}
