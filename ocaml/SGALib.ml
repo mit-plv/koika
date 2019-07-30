@@ -112,6 +112,7 @@ module Compilation = struct
 
     let rec pp_scheduler = function
       | UDone -> "Done"
+      | UCons (r, s) -> sprintf "Cons (%s) (%s)" (pp_rule r) (pp_scheduler s)
       | UTry (r, s1, s2) -> sprintf "Try (%s) (%s) (%s)" (pp_rule r) (pp_scheduler s1) (pp_scheduler s2)
       | USPos (_, x) -> pp_scheduler x
   end
@@ -162,7 +163,7 @@ module Compilation = struct
        | ASequence [] -> SGA.UDone
        | ASequence (r :: rs) ->
           let s' = translate_scheduler { lpos; lcnt = ASequence rs } in
-          SGA.UTry (translate_rule r, s', s')
+          SGA.UCons (translate_rule r, s')
        | ATry (r, s1, s2) ->
           SGA.UTry (translate_rule r,
                     translate_scheduler s1,
