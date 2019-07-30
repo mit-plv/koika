@@ -25,6 +25,7 @@ Section Syntax.
   Inductive uscheduler :=
   | UDone
   | UTry (r: urule) (s1 s2: uscheduler)
+  | UCons (r: urule) (s: uscheduler)
   | USPos (p: pos_t) (s: uscheduler).
 End Syntax.
 

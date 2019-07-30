@@ -425,6 +425,12 @@ Section CircuitCompilation.
     match s with
     | Done =>
       input
+    | Cons rl s =>
+      let rl := compile_rule CtxEmpty rl (adapter input) in
+      let acc := update_accumulated_rwset rl.(regs) input in
+      let will_fire := willFire_of_canFire rl input in
+      let input := mux_rwsets "mux_input" will_fire acc input in
+      compile_scheduler' s input
     | Try rl st sf =>
       let rl := compile_rule CtxEmpty rl (adapter input) in
       let acc := update_accumulated_rwset rl.(regs) input in

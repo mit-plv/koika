@@ -34,6 +34,7 @@ Section TypedSyntax.
 
   Inductive scheduler :=
   | Done
+  | Cons (r: @rule nil) (s: scheduler)
   | Try (r: @rule nil) (s1 s2: scheduler).
 End TypedSyntax.
 

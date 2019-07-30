@@ -22,20 +22,22 @@ Section Proof.
   Notation scheduler := (scheduler var_t R Sigma).
 
   Fixpoint interp_scheduler'_trace
-         (sched_log: Log)
-         (s: scheduler)
-         {struct s} :=
-  match s with
-  | Done => Some ([], sched_log)
-  | Try rl s1 s2 =>
-    match interp_rule r sigma CtxEmpty sched_log log_empty rl with
-    | Some l => match interp_scheduler'_trace (log_app l sched_log) s1 with
-               | Some (rs, log) => Some (rl :: rs, log)
-               | None => None
-               end
-    | CannotRun => interp_scheduler'_trace sched_log s2
-    end
-  end.
+           (sched_log: Log)
+           (s: scheduler)
+           {struct s} :=
+    let interp_try rl s1 s2 :=
+        match interp_rule r sigma CtxEmpty sched_log log_empty rl with
+        | Some l => match interp_scheduler'_trace (log_app l sched_log) s1 with
+                   | Some (rs, log) => Some (rl :: rs, log)
+                   | None => None
+                   end
+        | CannotRun => interp_scheduler'_trace sched_log s2
+        end in
+    match s with
+    | Done => Some ([], sched_log)
+    | Cons rl s => interp_try rl s s
+    | Try rl s1 s2 => interp_try rl s1 s2
+    end.
 
   Definition interp_scheduler_trace_and_update
         l
@@ -240,6 +242,17 @@ Section Proof.
           cbn.
         rewrite log_app_empty_l.
         rewrite commit_update_assoc.
+        eapply IHs.
+        unfold interp_scheduler_trace_and_update.
+        rewrite Heqo1; reflexivity.
+      + eapply IHs.
+        unfold interp_scheduler_trace_and_update; rewrite Heqo.
+        reflexivity.
+    - unfold interp_scheduler_trace_and_update; cbn; intros; t.
+      + erewrite interp_rule_commit by (rewrite log_app_empty_r; eassumption);
+          cbn.
+        rewrite log_app_empty_l.
+        rewrite commit_update_assoc.
         eapply IHs1.
         unfold interp_scheduler_trace_and_update.
         rewrite Heqo1; reflexivity.
@@ -256,6 +269,11 @@ Section Proof.
     induction s; cbn.
     - inversion 1; subst; eauto.
     - intros * Heq. destruct interp_rule as [log' | ] eqn:?.
+      + destruct (IHs _ _ Heq) as (rs & Heq').
+        rewrite Heq'; eauto.
+      + destruct (IHs _ _ Heq) as (rs & Heq').
+        rewrite Heq'; eauto.
+    - intros * Heq. destruct interp_rule as [log' | ] eqn:?.
       + destruct (IHs1 _ _ Heq) as (rs & Heq').
         rewrite Heq'; eauto.
       + destruct (IHs2 _ _ Heq) as (rs & Heq').
@@ -265,6 +283,7 @@ Section Proof.
   Fixpoint scheduler_rules (s: scheduler) :=
     match s with
     | Done => []
+    | Cons r s => r :: scheduler_rules s
     | Try r s1 s2 => r :: scheduler_rules s1 ++ scheduler_rules s2
     end.
 
@@ -275,6 +294,9 @@ Section Proof.
   Proof.
     induction s; cbn in *.
     - inversion 1; subst; inversion 1.
+    - intros * H * H'; t.
+      + inversion H'; subst; eauto.
+      + eauto.
     - intros * H * H'; rewrite in_app_iff; t.
       + inversion H'; subst; eauto.
       + eauto.

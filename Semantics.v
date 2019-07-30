@@ -192,13 +192,15 @@ Section Interp.
              (sched_log: Log)
              (s: scheduler)
              {struct s} :=
+      let interp_try r s1 s2 :=
+          match interp_rule CtxEmpty sched_log log_empty r with
+          | Some l => interp_scheduler' (log_app l sched_log) s1
+          | CannotRun => interp_scheduler' sched_log s2
+          end in
       match s with
       | Done => sched_log
-      | Try r s1 s2 =>
-        match interp_rule CtxEmpty sched_log log_empty r with
-        | Some l => interp_scheduler' (log_app l sched_log) s1
-        | CannotRun => interp_scheduler' sched_log s2
-        end
+      | Cons r s => interp_try r s s
+      | Try r s1 s2 => interp_try r s1 s2
       end.
 
     Definition interp_scheduler (s: scheduler) :=

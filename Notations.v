@@ -68,7 +68,7 @@ Notation "reg '#write1' value" :=
     (at level 99, format "reg '#write1'  value") : sga_scope.
 
 Notation "r '|>' s" :=
-  (UTry r s s)
+  (UCons r s)
     (at level 99, s at level 99, right associativity) : sga_scope.
 Notation "'done'" :=
   UDone (at level 99) : sga_scope.

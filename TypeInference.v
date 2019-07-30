@@ -148,6 +148,10 @@ Section TypeInference.
         let/res s1 := type_scheduler pos s1 in
         let/res s2 := type_scheduler pos s2 in
         WellTyped (Try r s1 s2)
+      | UCons r s =>
+        let/res r := type_rule pos [] r in
+        let/res s := type_scheduler pos s in
+        WellTyped (Cons r s)
       | USPos pos s => type_scheduler pos s
       end.
   End Scheduler.

@@ -1257,6 +1257,13 @@ Section CompilerCorrectness.
   Hint Resolve log_data0_consistent'_update_accumulated : circuits.
   Hint Resolve log_data1_consistent'_update_accumulated : circuits.
 
+  Hint Resolve log_data0_consistent'_mux_l : circuits.
+  Hint Resolve log_data1_consistent'_mux_l : circuits.
+  Hint Resolve log_rwdata_consistent_mux_l : circuits.
+  Hint Resolve log_data0_consistent'_mux_r : circuits.
+  Hint Resolve log_data1_consistent'_mux_r : circuits.
+  Hint Resolve log_rwdata_consistent_mux_r : circuits.
+
   Theorem scheduler_compiler'_correct':
     forall (s: scheduler) Log cLog,
       log_data1_consistent' Log cLog ->
@@ -1269,6 +1276,15 @@ Section CompilerCorrectness.
   Proof.
     induction s; cbn; intros.
     - eauto.
+    - pose proof (@rule_compiler_correct nil Log cLog r0) as Hrc.
+      unshelve eassert (Hrc := Hrc (adapter cLog) CtxEmpty CtxEmpty log_empty
+                                  ltac:(ceauto) ltac:(ceauto)
+                                  ltac:(ceauto) ltac:(ceauto)
+                                  ltac:(ceauto) ltac:(ceauto)
+                                  ltac:(ceauto)).
+      destruct (interp_rule r sigma CtxEmpty Log log_empty r0); cbn; t;
+        apply IHs;
+        eauto with circuits.
     - pose proof (@rule_compiler_correct nil Log cLog r0) as Hrc.
       unshelve eassert (Hrc := Hrc (adapter cLog) CtxEmpty CtxEmpty log_empty
                                   ltac:(ceauto) ltac:(ceauto)
@@ -1413,13 +1429,12 @@ Section CompilerCorrectness.
       log_writes_ordered log idx ->
       log_writes_ordered (@interp_scheduler' var_t reg_t fn_t R Sigma REnv r sigma log s) idx.
   Proof.
-    induction s; cbn; intros.
-    - eauto.
-    - lazymatch goal with
-      | [ |- context[interp_rule ?r ?sigma ?ctx ?Log ?log ?rl] ] =>
-        pose proof (rule_log_writes_ordered _ rl ctx Log log _ ltac:(rewrite log_app_empty_r; ceauto));
-          destruct (interp_rule r sigma ctx Log log rl) eqn:?
-      end; eauto.
+    induction s; cbn; intros; eauto.
+    all: lazymatch goal with
+         | [ |- context[interp_rule ?r ?sigma ?ctx ?Log ?log ?rl] ] =>
+           pose proof (rule_log_writes_ordered _ rl ctx Log log _ ltac:(rewrite log_app_empty_r; ceauto));
+             destruct (interp_rule r sigma ctx Log log rl) eqn:?
+         end; eauto.
   Qed.
 
   Theorem scheduler_compiler_correct':
