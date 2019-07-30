@@ -138,9 +138,12 @@ let parse fname sexps =
     Str.regexp "^\\([0-9]+\\)'\\(0b[01]*\\|0x[0-9A-F]*\\|[0-9]+\\)$" in
   let ident_re =
     Str.regexp "^[a-z][a-zA-Z0-9_]*$" in
+  let underscore_re =
+    Str.regexp "_" in
   let try_variable var =
     if Str.string_match ident_re var 0 then Some var else None in
   let try_number loc a =
+    let a = Str.global_replace underscore_re "" a in
     if Str.string_match bits_const_re a 0 then
       let sizestr = Str.matched_group 1 a in
       let size = try int_of_string sizestr
