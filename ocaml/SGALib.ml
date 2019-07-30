@@ -200,32 +200,60 @@ module Compilation = struct
 end
 
 module Graphs = struct
-  (* module CircuitHash =
-   *   struct
-   *     type t = Obj.t
-   *     let equal o1 o2 = o1 == o2
-   *     let hash o = Hashtbl.hash o
-   *   end *)
-
-  module CircuitHashtbl = Hashtbl
-
   type 'prim circuit_graph = {
-      graph_roots: circuit_root list;
-      graph_ptrs: 'prim circuit PtrHashtbl.t
+      graph_roots: 'prim circuit_root list;
+      graph_nodes: 'prim circuit list
     }
 
-  let dedup_circuit (pkg: ('prim, 'reg_t, 'fn_t) dedup_input_t) : 'prim circuit_graph =
-    let circuit_to_ptr = CircuitHashtbl.create 50 in
-    let ptr_to_object = PtrHashtbl.create 50 in
-    let nextptr = ref 0 in
+  let dedup_circuit (type prim reg_t fn_t)
+        (pkg: (prim, reg_t, fn_t) dedup_input_t) : prim circuit_graph =
+    let module CircuitHash = struct
+        type t = prim circuit'
+        let equal (c: prim circuit') (c': prim circuit') =
+          match c, c' with
+          | CNot c1, CNot c1' ->
+             c1 == c1'
+          | CAnd (c1, c2), CAnd (c1', c2') ->
+             c1 == c1' && c2 == c2'
+          | COr (c1, c2), COr (c1', c2') ->
+             c1 == c1' && c2 == c2'
+          | CMux (_, c1, c2, c3), CMux (_, c1', c2', c3') ->
+             c1 == c1' && c2 == c2' && c3 == c3'
+          | CConst b, CConst b' ->
+             b = b' (* Not hashconsed *)
+          | CExternal (f, a1, a2), CExternal (f', a1', a2') ->
+             f = f' (* Not hashconsed *) && a1 == a1' && a2 == a2'
+          | CReadRegister r, CReadRegister r' ->
+             r = r' (* Not hashconsed *)
+          | CAnnot (_, s, c), CAnnot (_, s', c') ->
+             s = s' (* Not hashconsed *) && c == c'
+          | _, _ -> false
+        let hash c =
+          Hashtbl.hash c
+      end in
+    let module SGACircuitHash = struct
+        type t = (reg_t, fn_t) SGA.circuit
+        let equal o1 o2 = o1 == o2
+        let hash o = Hashtbl.hash o
+      end in
+    let module HasconsedOrder = struct
+        type t = prim circuit
+        let compare x y = compare x.Hashcons.tag y.Hashcons.tag
+      end in
+    let module CircuitBag = Set.Make(HasconsedOrder) in
+    let module CircuitHashcons = Hashcons.Make(CircuitHash) in
+    let module SGACircuitHashtbl = Hashtbl.Make(SGACircuitHash) in
+
+    let circuit_to_tagged = SGACircuitHashtbl.create 50 in
+    let unique_tagged = CircuitHashcons.create 50 in
+    let tagged_circuits = ref CircuitBag.empty in
+
     let rec aux (c: _ SGA.circuit) =
-      match CircuitHashtbl.find_opt circuit_to_ptr c with
-      | Some ptr ->
-         ptr
+      match SGACircuitHashtbl.find_opt circuit_to_tagged c with
+      | Some c' ->
+         c'
       | None ->
-         let ptr = !nextptr in
-         incr nextptr;
-         let deduplicated =
+         let circuit' =
            match c with
            | SGA.CNot c ->
               CNot (aux c)
@@ -242,17 +270,16 @@ module Graphs = struct
            | SGA.CReadRegister r ->
               CReadRegister (pkg.di_reg_sigs r)
            | SGA.CAnnot (sz, annot, c) ->
-              CAnnot (sz, Util.string_of_coq_string annot, aux c)
-         in
-         CircuitHashtbl.add circuit_to_ptr c ptr;
-         PtrHashtbl.add ptr_to_object ptr deduplicated;
-         ptr in
-    (* CircuitHashtbl.fold (fun k v acc -> (k, v) :: acc)  object_to_ptr [], *)
-    (* PtrHashtbl.fold (fun k v acc -> (k, v) :: acc)  ptr_to_object []) *)
-    { graph_roots = List.map (fun reg ->
-                        let c = pkg.di_circuits reg in
-                        { root_reg = pkg.di_reg_sigs reg;
-                          root_ptr = aux c })
-                      pkg.di_regs;
-      graph_ptrs = ptr_to_object }
+              CAnnot (sz, Util.string_of_coq_string annot, aux c) in
+         let circuit = CircuitHashcons.hashcons unique_tagged circuit' in
+         tagged_circuits := CircuitBag.add circuit !tagged_circuits;
+         SGACircuitHashtbl.add circuit_to_tagged c circuit;
+         circuit in
+    let graph_roots = List.map (fun reg ->
+                          let c = pkg.di_circuits reg in
+                          { root_reg = pkg.di_reg_sigs reg;
+                            root_circuit = aux c })
+                        pkg.di_regs in
+    let graph_nodes = List.of_seq (CircuitBag.to_seq !tagged_circuits) in
+    { graph_roots; graph_nodes }
 end

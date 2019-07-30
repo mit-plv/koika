@@ -1,5 +1,6 @@
 (library
  (name common)
+ (libraries hashcons)
  (preprocess (pps ppx_jane ppx_deriving.show))
  (modules common))
 
@@ -14,8 +15,7 @@
  (name backends)
  (modules verilog dot)
  (libraries common SGALib)
- (preprocess (pps ppx_jane ppx_deriving.show))
-)
+ (preprocess (pps ppx_jane ppx_deriving.show)))
 
 (executable
  (name collatz)

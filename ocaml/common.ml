@@ -73,20 +73,21 @@ type ('f, 'fn_t) tc_unit =
     tc_registers: reg_signature list;
     tc_ast: ('f, ('f, 'fn_t) ast) locd }
 
-type circuit_root = {
-    root_reg: reg_signature;
-    root_ptr: ptr_t;
-  }
-
-type 'prim circuit =
-  | CNot of ptr_t
-  | CAnd of ptr_t * ptr_t
-  | COr of ptr_t * ptr_t
-  | CMux of size_t * ptr_t * ptr_t * ptr_t
-  | CConst of bits_const (* TODO: keep constants shared? *)
-  | CExternal of 'prim ffi_signature * ptr_t * ptr_t
+type 'p circuit = 'p circuit' Hashcons.hash_consed
+and 'p circuit' =
+  | CNot of 'p circuit
+  | CAnd of 'p circuit * 'p circuit
+  | COr of 'p circuit * 'p circuit
+  | CMux of size_t * 'p circuit * 'p circuit * 'p circuit
+  | CConst of bits_const
+  | CExternal of 'p ffi_signature * 'p circuit * 'p circuit
   | CReadRegister of reg_signature
-  | CAnnot of size_t * string * ptr_t
+  | CAnnot of size_t * string * 'p circuit
+
+type 'p circuit_root = {
+    root_reg: reg_signature;
+    root_circuit: 'p circuit;
+  }
 
 let subcircuits = function
   | CNot c -> [c]
@@ -98,30 +99,21 @@ let subcircuits = function
   | CAnnot (_sz, _annot, c) -> [c]
   | CConst _ -> []
 
-module PtrHash =
-  struct
-    type t = ptr_t
-    let equal p1 p2 = p1 = p2
-    let hash p = Hashtbl.hash p
-  end
-
-module PtrHashtbl = Hashtbl.Make(PtrHash)
-
-let ptrhashtbl_update tbl k v_dflt v_fn =
-  PtrHashtbl.replace tbl k
-    (v_fn (match PtrHashtbl.find_opt tbl k with
+let hashtbl_update tbl k v_dflt v_fn =
+  Hashtbl.replace tbl k
+    (v_fn (match Hashtbl.find_opt tbl k with
            | Some v -> v
            | None -> v_dflt))
 
-let compute_parents ptr_to_object =
-  let ptr_to_parents = PtrHashtbl.create 50 in
-  PtrHashtbl.iter (fun _ptr obj ->
-      List.iter (fun child ->
-          ptrhashtbl_update ptr_to_parents child []
+let compute_parents (circuits: 'p circuit list) =
+  let tag_to_parents = Hashtbl.create 50 in
+  List.iter (fun c ->
+      List.iter (fun (child: _ circuit) ->
+          hashtbl_update tag_to_parents child.tag []
             (fun children -> child :: children))
-        (subcircuits obj))
-    ptr_to_object;
-  ptr_to_parents
+        (subcircuits c.Hashcons.node))
+    circuits;
+  tag_to_parents
 
 type 'f err_contents =
   { epos: 'f;
