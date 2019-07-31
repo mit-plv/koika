@@ -247,6 +247,8 @@ let parse fname sexps =
                     expect_expr (expect_single loc "value" "write expression" body))
           | _ ->
              parse_error loc_hd (sprintf "Unexpected in rule: `%s'" hd)) in
+  let expect_rules loc body =
+    locd_make loc (Progn (List.map expect_rule body)) in
   let rec expect_scheduler : 'f sexp -> ('f, 'f scheduler) locd = function
     | (Atom _) as a ->
        locd_of_pair (expect_constant [("done", Done)] a)
@@ -282,7 +284,7 @@ let parse fname sexps =
      | `Module ->
         `Module (expect_module name d_loc body)
      | `Rule ->
-        `Rule (name, expect_rule (expect_single d_loc "body" "rule declaration" body))
+        `Rule (name, expect_rules d_loc body)
      | `Scheduler ->
         `Scheduler (name, expect_scheduler (expect_single d_loc "body" "scheduler declaration" body)))
   and expect_module m_name m_loc body =
