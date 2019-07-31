@@ -10,6 +10,11 @@
 (module Collatz
   (register r0 32'0)
 
+  (rule test
+    (write#0 r0 32'0)
+    (write#0 r0 32'b01010111100011)
+    (write#0 r0 32'hDEAD_beef))
+
   (rule divide
     (let ((v (read#0 r0))
           (odd (sel v 5'0)))

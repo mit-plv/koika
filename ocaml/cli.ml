@@ -134,11 +134,13 @@ let parse fname sexps =
     | None -> parse_error loc (sprintf "Expecting %s, got `%s'" msg s)
     | Some x -> loc, x in
   let bits_const_re =
-    Str.regexp "^\\([0-9]+\\)'\\(0b[01]*\\|0x[0-9A-F]*\\|[0-9]+\\)$" in
+    Str.regexp "^\\([0-9]+\\)'\\(b[01]*\\|h[0-9a-fA-F]*\\|[0-9]+\\)$" in
   let ident_re =
     Str.regexp "^[a-z][a-zA-Z0-9_]*$" in
   let underscore_re =
     Str.regexp "_" in
+  let leading_h_re =
+    Str.regexp "^h" in
   let try_variable var =
     if Str.string_match ident_re var 0 then Some var else None in
   let try_number loc a =
@@ -149,7 +151,7 @@ let parse fname sexps =
                  with Failure _ ->
                    parse_error loc (sprintf "Unparsable size annotation: `%s'" sizestr) in
       let numstr = Str.matched_group 2 a in
-      let num = Z.of_string numstr in
+      let num = Z.of_string ("0" ^ (Str.replace_first leading_h_re "x" numstr)) in
       let bits = if size = 0 && num = Z.zero then []
                  else List.of_seq (String.to_seq (Z.format "%b" num)) in
       let nbits = List.length bits in
