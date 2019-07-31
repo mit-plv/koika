@@ -2,7 +2,6 @@ open Common
 
 type 'f smod = {
     m_name: ('f, string) locd;
-    m_args: ('f, string) locd list;
     m_registers: (('f, string) locd * ('f, bool list) locd) list;
     m_rules: (('f, string) locd * ('f, ('f, string, string) rule) locd) list;
     m_scheduler: ('f, string) locd * ('f, 'f scheduler) locd
@@ -265,9 +264,9 @@ let parse fname sexps =
                   expect_scheduler s2)
           | _ ->
              parse_error loc_hd (sprintf "Unexpected in scheduler: `%s'" hd)) in
-  let rec expect_decl d =
-    let d_loc, d = expect_list "a rule or scheduler declaration" d in
-    let kind, name_body = expect_cons d_loc "rule or scheduler declaration" d in
+  let rec expect_decl d skind =
+    let d_loc, d = expect_list ("a " ^ skind) d in
+    let kind, name_body = expect_cons d_loc skind d in
     let csts = [("rule", `Rule); ("scheduler", `Scheduler);
                 ("register", `Register); ("module", `Module)] in
     let _, kind = expect_constant csts kind in
@@ -277,20 +276,17 @@ let parse fname sexps =
     (d_loc,
      match kind with
      | `Register ->
-        `Register (name, expect_register (expect_single d_loc "type" "register declaration" body))
+        `Register (name, expect_register (expect_single d_loc "value" "register initialization" body))
      | `Module ->
         `Module (expect_module name d_loc body)
      | `Rule ->
         `Rule (name, expect_rule (expect_single d_loc "body" "rule declaration" body))
      | `Scheduler ->
         `Scheduler (name, expect_scheduler (expect_single d_loc "body" "scheduler declaration" body)))
-  and expect_module m_name m_loc args_body =
-    let args, body = expect_cons m_loc "module arguments" args_body in
-    let _, args = expect_list "module arguments" args in
-    let m_args = List.map (fun a -> locd_of_pair (expect_atom "an argument name" a)) args in
+  and expect_module m_name m_loc body =
     let m_registers, m_rules,  schedulers =
       List.fold_left (fun (registers, rules, schedulers) decl ->
-          match expect_decl decl with
+          match expect_decl decl "register, rule, or scheduler declaration" with
           | _, `Register r -> (r :: registers, rules, schedulers)
           | _, `Rule r -> (registers, r :: rules, schedulers)
           | _, `Scheduler s -> (registers, rules, s :: schedulers)
@@ -298,9 +294,9 @@ let parse fname sexps =
         ([], [], []) body in
     let m_scheduler = expect_single m_loc "scheduler"
                         (sprintf "module `%s'" m_name.lcnt) schedulers in
-    { m_name; m_args; m_registers; m_rules; m_scheduler } in
+    { m_name; m_registers; m_rules; m_scheduler } in
   List.map (fun sexp ->
-      match expect_decl sexp with
+      match expect_decl sexp "module declaration" with
       | _, `Module { m_registers; m_rules; m_scheduler; _ } ->
          let registers = List.map (fun (nm, init) ->
                              let bs_size = List.length init.lcnt in

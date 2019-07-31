@@ -1,4 +1,4 @@
-;; (defmacro module (name args &rest body)
+;; (defmacro module (name &rest body)
 ;;   (declare (indent defun)))
 
 ;; (defmacro rule (name args &rest body)
@@ -7,7 +7,7 @@
 ;; (defmacro scheduler (&rest body)
 ;;   (declare (indent defun)))
 
-(module Collatz ()
+(module Collatz
   (register r0 32'0)
 
   (rule divide
