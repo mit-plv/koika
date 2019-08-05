@@ -401,7 +401,7 @@ type cli_opts = {
     cli_in_fname: string;
     cli_out_fname: string;
     cli_frontend: [`Sexps | `Annotated];
-    cli_backend: [`Dot | `Verilog]
+    cli_backend: [`Dot | `Verilog | `Cpp]
   }
 
 let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
@@ -428,7 +428,8 @@ let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
         Stdio.Out_channel.with_file cli_out_fname ~f:(fun out ->
             match cli_backend with
             | `Dot -> Backends.Dot.main out (make_graph ())
-            | `Verilog -> Backends.Verilog.main out (make_graph ()))
+            | `Verilog -> Backends.Verilog.main out (make_graph ())
+            | `Cpp -> Backends.Cpp.main out c_unit)
      | [] -> parse_error (Pos.Filename cli_in_fname) "No modules declared")
   with Error { epos; ekind; emsg } ->
     Printf.eprintf "%s: %s: %s\n"
@@ -444,7 +445,8 @@ let backend_of_fname fname =
   match Core.Filename.split_extension fname with
   | _, Some "v" -> `Verilog
   | _, Some "dot" -> `Dot
-  | _, _ -> failwith "Output file must have extension .v or .dot"
+  | _, Some "cpp" -> `Cpp
+  | _, _ -> failwith "Output file must have extension .v, .dot, or .cpp"
 
 let cli =
   let open Core in

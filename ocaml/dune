@@ -13,7 +13,7 @@
 
 (library
  (name backends)
- (modules verilog dot)
+ (modules verilog dot cpp)
  (libraries common SGALib)
  (preprocess (pps ppx_jane ppx_deriving.show)))
 
