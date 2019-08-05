@@ -412,22 +412,23 @@ let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
       | `Sexps -> read_cst_sexps cli_in_fname in
     (match parse cli_in_fname sexps with
      | (registers, rules, scheduler) :: _ ->
-        let ast =
+        let raw_ast =
           resolve cli_in_fname registers rules (snd scheduler) in
-        let tc_unit =
-          { tc_ast = ast;
-            tc_fname = cli_in_fname;
-            tc_registers = registers } in
-        let circuits =
-          match SGALib.Compilation.compile tc_unit with
+        let ast =
+          match SGALib.Compilation.typecheck raw_ast with
           | Ok cs -> cs
           | Error err -> raise (Error err) in
-        let graph =
-          SGALib.Graphs.dedup_circuit (SGALib.Util.dedup_input_of_tc_unit tc_unit circuits) in
+        let c_unit : SGALib.Compilation.compile_unit =
+          { c_ast = ast;
+            c_registers = registers } in
+        let make_graph () =
+          let circuits = SGALib.Compilation.compile c_unit in
+          let di = SGALib.Util.make_dedup_input registers circuits in
+          SGALib.Graphs.dedup_circuit di in
         Stdio.Out_channel.with_file cli_out_fname ~f:(fun out ->
             match cli_backend with
-            | `Dot -> Backends.Dot.main out graph
-            | `Verilog -> Backends.Verilog.main out graph)
+            | `Dot -> Backends.Dot.main out (make_graph ())
+            | `Verilog -> Backends.Verilog.main out (make_graph ()))
      | [] -> parse_error (Pos.Filename cli_in_fname) "No modules declared")
   with Error { epos; ekind; emsg } ->
     Printf.eprintf "%s: %s: %s\n"

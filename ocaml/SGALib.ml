@@ -48,8 +48,8 @@ module Util = struct
       ffi_arg2size = fsig.arg2Type;
       ffi_retsize = fsig.retType }
 
-  let dedup_input_of_tc_unit { tc_registers; _ } circuits =
-    { di_regs = tc_registers;
+  let make_dedup_input registers circuits =
+    { di_regs = registers;
       di_reg_sigs = (fun r -> r);
       di_fn_sigs = (fun fn ->
         let ffi_name, fsig = match fn with
@@ -185,18 +185,34 @@ module Compilation = struct
                                                   | Inl m -> m
                                                   | Inr _ -> failwith "Unexpected register name" }
 
-  let compile (tcu: ('f, string SGA.interop_ufn_t) tc_unit)
-      : ((reg_signature -> (reg_signature, string SGA.interop_fn_t) SGA.circuit),
-         'f err_contents) Result.result =
-    let ast = translate_scheduler tcu.tc_ast in
-    let rEnv = rEnv_of_register_list tcu.tc_registers in
-    let r0: _ SGA.env_t = SGA.create rEnv (fun r -> SGA.CReadRegister r) in
-    match SGA.type_scheduler Util.string_eq_dec r sigma uSigma tcu.tc_ast.lpos ast with
+  type 'f raw_ast =
+    ('f, ('f, string SGA.interop_ufn_t) ast) locd
+
+  type typechecked_ast =
+    (var_t, reg_signature, string SGA.interop_fn_t) SGA.scheduler
+
+  (* FIXME use a hashmap, not a list *)
+  type compile_unit =
+    { c_registers: reg_signature list;
+      c_ast: typechecked_ast }
+
+  type compiled_circuit =
+    (reg_signature, string SGA.interop_fn_t) SGA.circuit
+
+  let typecheck (raw_ast: 'f raw_ast) :
+        (typechecked_ast, 'f err_contents) Result.result =
+    let ast = translate_scheduler raw_ast in
+    match SGA.type_scheduler Util.string_eq_dec r sigma uSigma raw_ast.lpos ast with
     | WellTyped s ->
-       let env = SGA.compile_scheduler r sigma rEnv r0 s in
-       Result.Ok (fun r -> SGA.getenv rEnv env r)
+       Result.Ok s
     | IllTyped { epos; emsg } ->
        Result.Error (Util.type_error_to_error epos emsg)
+
+  let compile (cu: compile_unit) : (reg_signature -> compiled_circuit) =
+    let rEnv = rEnv_of_register_list cu.c_registers in
+    let r0: _ SGA.env_t = SGA.create rEnv (fun r -> SGA.CReadRegister r) in
+    let env = SGA.compile_scheduler r sigma rEnv r0 cu.c_ast in
+    (fun r -> SGA.getenv rEnv env r)
 end
 
 module Graphs = struct

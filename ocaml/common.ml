@@ -67,12 +67,6 @@ type ('f, 'fn_t) ast =
             * ('f, ('f, 'fn_t) ast) locd
             * ('f, ('f, 'fn_t) ast) locd
 
-(* FIXME use a hashmap, not a list *)
-type ('f, 'fn_t) tc_unit =
-  { tc_fname: string;
-    tc_registers: reg_signature list;
-    tc_ast: ('f, ('f, 'fn_t) ast) locd }
-
 type 'p circuit = 'p circuit' Hashcons.hash_consed
 and 'p circuit' =
   | CNot of 'p circuit
