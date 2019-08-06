@@ -403,8 +403,12 @@ type cli_opts = {
     cli_in_fname: string;
     cli_out_fname: string;
     cli_frontend: [`Sexps | `Annotated];
-    cli_backend: [`Dot | `Verilog | `Cpp]
+    cli_backend: [`Dot | `Verilog | `Hpp]
   }
+
+let check_result = function
+  | Ok cs -> cs
+  | Error err -> raise (Error err)
 
 let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
   try
@@ -414,15 +418,16 @@ let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
       | `Sexps -> read_cst_sexps cli_in_fname in
     (match parse cli_in_fname sexps with
      | (registers, rules, scheduler) :: _ ->
-        let raw_ast =
-          resolve cli_in_fname registers rules (snd scheduler) in
-        let ast =
-          match SGALib.Compilation.typecheck raw_ast with
-          | Ok cs -> cs
-          | Error err -> raise (Error err) in
+        let c_rules =
+          List.map (fun (nm, r) ->
+              let r = resolve_rule cli_in_fname registers r in
+              (nm.lcnt, check_result (SGALib.Compilation.typecheck_rule r)))
+            rules in
+        let c_scheduler =
+          let s = resolve_scheduler c_rules (snd scheduler) in
+          SGALib.Compilation.typecheck_scheduler s in
         let c_unit : SGALib.Compilation.compile_unit =
-          { c_ast = ast;
-            c_registers = registers } in
+          { c_scheduler; c_rules; c_registers = registers } in
         let make_graph () =
           let circuits = SGALib.Compilation.compile c_unit in
           let di = SGALib.Util.make_dedup_input registers circuits in
@@ -431,7 +436,10 @@ let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
             match cli_backend with
             | `Dot -> Backends.Dot.main out (make_graph ())
             | `Verilog -> Backends.Verilog.main out (make_graph ())
-            | `Cpp -> Backends.Cpp.main out c_unit)
+            | `Hpp ->
+               let cls, _ =
+                 Core.Filename.split_extension (Core.Filename.basename cli_in_fname) in
+               Backends.Cpp.main out (Backends.Cpp.input_of_compile_unit cls c_unit))
      | [] -> parse_error (Pos.Filename cli_in_fname) "No modules declared")
   with Error { epos; ekind; emsg } ->
     Printf.eprintf "%s: %s: %s\n"
@@ -447,8 +455,8 @@ let backend_of_fname fname =
   match Core.Filename.split_extension fname with
   | _, Some "v" -> `Verilog
   | _, Some "dot" -> `Dot
-  | _, Some "cpp" -> `Cpp
-  | _, _ -> failwith "Output file must have extension .v, .dot, or .cpp"
+  | _, Some "hpp" -> `Hpp
+  | _, _ -> failwith "Output file must have extension .v, .dot, or .hpp"
 
 let cli =
   let open Core in
