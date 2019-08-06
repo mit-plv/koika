@@ -299,8 +299,9 @@ let writeout out hpp =
 
 let input_of_compile_unit classname ({ c_registers; c_scheduler; c_rules }: SGALib.Compilation.compile_unit) =
   let module SGA = SGALib.SGA in
-  let tr_rule (rl_name, rl_body) =
-    { rl_name; rl_body; rl_footprint = c_registers } in (* FIXME footprint *)
+  let tr_rule (name, rl_body) =
+    { rl_name = "rule_" ^ name ;
+      rl_body; rl_footprint = c_registers } in (* FIXME footprint *)
   { cpp_classname = classname;
     cpp_rules = List.map tr_rule c_rules;
     cpp_scheduler = c_scheduler;
