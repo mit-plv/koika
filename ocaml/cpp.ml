@@ -162,43 +162,54 @@ let writeout out hpp =
       prbody ();
       p ")" in
 
-    let p_expr sz var expr =
-      let p_assign sz target prexpr =
-        pr "%s %s = " (cpp_type_of_size sz) target;
-        prexpr ();
-        pr ";";
-        nl () in
+    let module SGA = SGALib.SGA in
+    let rec p_impure_expr expr =
+      match expr with
+      | SGA.Var (v, sz', m) -> SGA.Var (v, sz', m)
+      | SGA.Const (sz', cst) -> SGA.Const (sz', cst)
+      | SGA.Read (port, reg) ->
+         let { reg_name; reg_size; _ } = hpp.cpp_registers reg in
+         let var = gensym "rd" in
+         p "%s %s;" (cpp_type_of_size reg_size) var;
+         p_checked (fun () ->
+             match port with
+             | P0 -> pr "log.%s.read0(&%s, state.%s, Log.%s)" reg_name var reg_name reg_name
+             | P1 -> pr "log.%s.read1(&%s, Log.%s)" reg_name var reg_name);
+         SGA.Read (port, var)
+      | SGA.Call (fn, arg1, arg2) ->
+         let arg1 = p_impure_expr arg1 in
+         let arg2 = p_impure_expr arg2 in
+         SGA.Call (fn, arg1, arg2) in
 
-      let pr_const sz bits =
+    let sp_pure_expr =
+      let out = Buffer.create 80 in
+      let sp fmt = Printf.bprintf out fmt in
+
+      let sp_const sz bits =
         let bs = SGALib.Util.bits_const_of_bits sz bits in
         let s = SGALib.Util.string_of_bits ~mode:`Cpp bs in
-        pr "%s" (cpp_const_init sz s) in
+        sp "%s" (cpp_const_init sz s) in
 
-      let module SGA = SGALib.SGA in
-      let rec p_expr sz var = function
-        | SGA.Var (v, sz', _) ->
-           assert (sz = sz');
-           p_assign sz var (fun () -> pr "%s" v)
-        | SGA.Const (sz', cst) ->
-           assert (sz = sz');
-           p_assign sz var (fun () -> pr_const sz cst)
-        | SGA.Read (port, reg) ->
-           let { reg_name; reg_size; _ } = hpp.cpp_registers reg in
-           assert (sz = reg_size);
-           p "%s %s;" (cpp_type_of_size sz) var;
-           p_checked (fun () ->
-               match port with
-               | P0 -> pr "log.%s.read0(&%s, state.%s, Log.%s)" reg_name var reg_name reg_name
-               | P1 -> pr "log.%s.read1(&%s, Log.%s)" reg_name var reg_name)
+      let rec sp_expr = function
+        | SGA.Var (v, _, _)
+          | SGA.Read (_, v) ->
+           (* We've already run pr_expr_reads, so reads are really just
+              references to variables now. *)
+           sp "%s" v
+        | SGA.Const (sz, cst) ->
+           sp_const sz cst
         | SGA.Call (fn, arg1, arg2) ->
-           let v1 = gensym "arg1_" in
-           let v2 = gensym "arg2_" in
            let f = hpp.cpp_functions fn in
-           p_expr f.ffi_arg1size v1 arg1;
-           p_expr f.ffi_arg2size v2 arg2;
-           p_assign sz var (fun () ->
-               pr "%s(%s, %s)" (cpp_fn_name f) v1 v2)
-      in p_expr sz var expr in
+           sp "%s(" (cpp_fn_name f);
+           sp_expr arg1;
+           sp ", ";
+           sp_expr arg2;
+           sp ")" in
+
+      fun expr ->
+      Buffer.clear out;
+      sp_expr expr;
+      Buffer.contents out in
 
     let p_rule rule =
       gensym_reset ();
@@ -214,6 +225,12 @@ let writeout out hpp =
             p "return true;")
           rule.rl_footprint in
 
+      let p_assign sz target prexpr =
+        pr "%s %s = " (cpp_type_of_size sz) target;
+        prexpr ();
+        pr ";";
+        nl () in
+
       let module SGA = SGALib.SGA in
       let rec p_rule_body = function
         | SGA.Skip _ ->
@@ -225,25 +242,23 @@ let writeout out hpp =
            p_rule_body r2
         | SGA.Bind (_, sz, v, ex, rl) ->
            (* FIXME make sure name doesn't start with our prefix *)
+           let pure = p_impure_expr ex in
            p_scoped "/* bind */" (fun () ->
-               p_expr sz v ex;
+               p_assign sz v (fun () -> pr "%s" (sp_pure_expr pure));
                p_rule_body rl)
         | SGA.If (_, e, r1, r2) ->
-           p_scoped "/* if */" (fun () ->
-               let c = gensym "cond" in
-               p_expr 1 c e;
-               p_scoped (sprintf "if (%s)" c) (fun () -> p_rule_body r1);
-               p_scoped "else" (fun () -> p_rule_body r2))
+           let pure = p_impure_expr e in
+           p_scoped (sprintf "if (%s)" (sp_pure_expr pure)) (fun () -> p_rule_body r1);
+           p_scoped "else" (fun () -> p_rule_body r2)
         | SGA.Write (_, port, reg, expr) ->
-           let e = gensym "write_expr" in
            let r = hpp.cpp_registers reg in
-           p_expr r.reg_size e expr;
+           let pure = p_impure_expr expr in
            let fn_name = match port with
              | P0 -> "write0"
              | P1 -> "write1" in
            p_checked (fun () ->
                pr "log.%s.%s(%s, Log.%s)"
-                 r.reg_name fn_name e r.reg_name) in
+                 r.reg_name fn_name (sp_pure_expr pure) r.reg_name) in
       p_fn "bool" rule.rl_name (fun () ->
           p_reset ();
           nl ();
