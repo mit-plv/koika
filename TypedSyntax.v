@@ -2,7 +2,7 @@ Require Import Coq.Lists.List.
 Require Export SGA.Common SGA.Environments SGA.Types SGA.Syntax.
 
 Section TypedSyntax.
-  Context {var_t reg_t fn_t: Type}.
+  Context {name_t var_t reg_t fn_t: Type}.
   Context {R: reg_t -> type}
           {Sigma: fn_t -> ExternalSignature}.
 
@@ -34,13 +34,18 @@ Section TypedSyntax.
 
   Inductive scheduler :=
   | Done
-  | Cons (r: @rule nil) (s: scheduler)
-  | Try (r: @rule nil) (s1 s2: scheduler).
+  | Cons (r: name_t) (s: scheduler)
+  | Try (r: name_t) (s1 s2: scheduler).
+
+  Record schedule :=
+    { s_sched : scheduler;
+      s_rules : name_t -> @rule nil }.
 End TypedSyntax.
 
 Arguments tsig : clear implicits.
 Arguments expr var_t {reg_t fn_t} R Sigma.
 Arguments rule var_t {reg_t fn_t} R Sigma.
-Arguments scheduler var_t {reg_t fn_t} R Sigma.
+Arguments scheduler : clear implicits.
+Arguments schedule name_t var_t {reg_t fn_t} R Sigma.
 
 Hint Extern 10 => eapply @ExternalSignature_injRet : types.

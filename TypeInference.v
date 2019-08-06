@@ -20,7 +20,7 @@ Arguments error_message _ {_ _} _ _.
 Arguments error _ _ {_ _} _ _.
 
 Section TypeInference.
-  Context {pos_t var_t reg_t ufn_t fn_t: Type}.
+  Context {pos_t name_t var_t reg_t ufn_t fn_t: Type}.
   Context {var_t_eq_dec: EqDec var_t}.
 
   Context (R: reg_t -> type).
@@ -29,13 +29,14 @@ Section TypeInference.
 
   Notation uexpr := (uexpr pos_t var_t reg_t ufn_t).
   Notation urule := (urule pos_t var_t reg_t ufn_t).
-  Notation uscheduler := (uscheduler pos_t var_t reg_t ufn_t).
+  Notation uscheduler := (uscheduler pos_t name_t).
 
   Open Scope bool_scope.
 
   Notation expr := (expr var_t R Sigma).
   Notation rule := (rule var_t R Sigma).
-  Notation scheduler := (scheduler var_t R Sigma).
+  Notation scheduler := (scheduler name_t).
+  Notation schedule := (schedule name_t var_t R Sigma).
   Notation error := (error pos_t var_t R Sigma).
   Notation error_message := (error_message var_t R Sigma).
 
@@ -139,20 +140,21 @@ Section TypeInference.
   End Rule.
 
   Section Scheduler.
-    Fixpoint type_scheduler (pos: pos_t) (s: uscheduler) : result scheduler :=
+    Fixpoint type_scheduler
+             (pos: pos_t)
+             (s: uscheduler): scheduler :=
       match s with
       | UDone =>
-        WellTyped Done
+        Done
       | UTry r s1 s2 =>
-        let/res r := type_rule pos [] r in
-        let/res s1 := type_scheduler pos s1 in
-        let/res s2 := type_scheduler pos s2 in
-        WellTyped (Try r s1 s2)
+        let s1 := type_scheduler pos s1 in
+        let s2 := type_scheduler pos s2 in
+        Try r s1 s2
       | UCons r s =>
-        let/res r := type_rule pos [] r in
-        let/res s := type_scheduler pos s in
-        WellTyped (Cons r s)
-      | USPos pos s => type_scheduler pos s
+        let s := type_scheduler pos s in
+        Cons r s
+      | USPos pos s =>
+        type_scheduler pos s
       end.
   End Scheduler.
 End TypeInference.
@@ -162,14 +164,34 @@ Arguments WellTyped {_ _ _ _ R Sigma A}.
 Arguments IllTyped {_ _ _ _ R Sigma A}.
 
 (* Coq bug: the name must_typecheck is not resolved at notation definition time *)
-Notation tc R Sigma Sigma_tc prog :=
-  ltac:(let tcres := lazymatch type of prog with
-                    | urule _ _ _ _ => constr:(type_rule R Sigma Sigma_tc tt List.nil prog)
-                    | uscheduler _ _ _ _ => constr:(type_scheduler R Sigma Sigma_tc tt prog)
-                    end in
-        let tcres := (eval hnf in tcres) in
+
+Notation _must_typecheck R Sigma tcres :=
+  ltac:(let tcres := (eval hnf in tcres) in
         let tcterm := (eval cbn in (must_typecheck R Sigma tcres)) in
         exact tcterm) (only parsing).
+
+Notation tc_rule R Sigma uSigma rule :=
+  (ltac:(let typed := constr:(type_rule R Sigma uSigma tt List.nil rule) in
+         exact (_must_typecheck R%function Sigma%function typed)))
+    (only parsing).
+
+Notation tc_rules R Sigma uSigma rules :=
+  (ltac:(match type of rules with
+         | (?name_t -> _) =>
+           let res := constr:(fun r: name_t =>
+                               ltac:(destruct r eqn:? ;
+                                       lazymatch goal with
+                                       | [ H: _ = ?rr |- _ ] =>
+                                         exact (tc_rule R Sigma uSigma (rules rr))
+                                       end)) in
+           let res := (eval cbn in res) in
+           exact res
+         end))
+    (only parsing).
+
+Notation tc_scheduler uscheduler :=
+  (type_scheduler tt uscheduler)
+    (only parsing).
 
 (*   Hint Resolve (@env_related_putenv _ _ _ GammaEnv): types. *)
 (*   Hint Resolve fenv_related_putenv: types. *)

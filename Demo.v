@@ -12,6 +12,7 @@ Module Ex1.
   Notation var_t := string.
   Inductive reg_t := R0 | R1.
   Inductive fn_t := Even | Odd.
+  Inductive name_t := r1.
 
   Definition R reg : type :=
     match reg with
@@ -39,19 +40,28 @@ Module Ex1.
     | Odd => fun (bs: bits 3) _ => w1 (Bits.lsb bs)
     end.
 
-  Example r1 : urule unit var_t reg_t fn_t :=
-    (UBind "x" (URead P0 R0)
-           (UIf (UCall Even (UVar "x") (UConst Ob))
-                (UWrite P0 R1 (UConst Ob~1))
-                (UWrite P0 R1 (UConst Ob~1)))).
+  Example urules r : urule unit var_t reg_t fn_t :=
+    match r with
+    | r1 =>
+      UBind "x" (URead P0 R0)
+            (UIf (UCall Even (UVar "x") (UConst Ob))
+                 (UWrite P0 R1 (UConst Ob~1))
+                 (UWrite P0 R1 (UConst Ob~1)))
+    end.
 
-  Example s1 : uscheduler unit var_t reg_t fn_t :=
+  Definition rules :=
+    tc_rules R Sigma uSigma urules.
+
+  Example us1 : uscheduler unit name_t :=
     UTry r1 UDone UDone.
 
+  Definition s1 :=
+    tc_scheduler us1.
+
   Definition s1_result :=
-    Eval compute in interp_scheduler (ContextEnv.(create) r) sigma (tc R Sigma uSigma s1).
+    Eval compute in interp_scheduler (ContextEnv.(create) r) sigma rules s1.
   Definition s1_circuit :=
-    compile_scheduler (ContextEnv.(create) (readRegisters R Sigma)) (tc R Sigma uSigma s1).
+    compile_scheduler (ContextEnv.(create) (readRegisters R Sigma)) rules s1.
 End Ex1.
 
 Module Ex2.
@@ -59,6 +69,7 @@ Module Ex2.
   Inductive reg_t := R0 | R1 | R2.
   Inductive ufn_t := UOr | UNot.
   Inductive fn_t := Or (n: nat) | Not (n: nat).
+  Inductive name_t := negate | swap_or_replace.
 
   Definition R r :=
     match r with
@@ -79,11 +90,11 @@ Module Ex2.
     | UNot, (bits_t n) => Not n
     end.
 
-  Example negate : urule unit var_t reg_t ufn_t  :=
+  Example _negate : urule unit var_t reg_t ufn_t  :=
     UBind "x" (URead P1 R0)
           (UWrite P1 R0 (UVar "x")).
 
-  Example swap_or_replace : urule unit var_t reg_t ufn_t  :=
+  Example _swap_or_replace : urule unit var_t reg_t ufn_t  :=
     UBind "should_swap" (URead P0 R2)
           (UIf (UVar "should_swap")
                (USeq (UWrite P0 R1 (URead P0 R0))
@@ -92,23 +103,20 @@ Module Ex2.
                                     (URead P0 R0)
                                     (URead P0 R1)))).
 
-  Example ill_typed_write : urule unit var_t reg_t ufn_t  :=
+  Example _ill_typed_write : urule unit var_t reg_t ufn_t  :=
     UWrite P0 R2 (URead P0 R1).
 
-  Example unbound_variable : urule unit var_t reg_t ufn_t  :=
+  Example _unbound_variable : urule unit var_t reg_t ufn_t  :=
     UWrite P0 R0 (UVar "y").
 
-  Example sched :=
-    UTry swap_or_replace (UTry negate UDone UDone) (UTry negate UDone UDone).
+  Example tsched : scheduler name_t :=
+    tc_scheduler (UTry swap_or_replace (UTry negate UDone UDone) (UTry negate UDone UDone)).
 
-  Example tsched : scheduler var_t R Sigma :=
-    tc R Sigma uSigma sched.
+  Fail Example trule : rule var_t R Sigma nil :=
+    tc_rule R Sigma uSigma _ill_typed_write.
 
-  Fail Example tsched : scheduler var_t R Sigma :=
-    tc R Sigma uSigma (UTry ill_typed_write UDone UDone).
-
-  Fail Example tsched : scheduler var_t R Sigma :=
-    tc R Sigma uSigma (UTry unbound_variable UDone UDone).
+  Fail Example trule : rule var_t R Sigma nil :=
+    tc_rule R Sigma uSigma _unbound_variable.
 
   Definition r idx : R idx :=
     match idx with
@@ -123,10 +131,17 @@ Module Ex2.
     | Not n => fun bs _ => Bits.map negb bs
     end.
 
+  Definition rules :=
+    tc_rules R Sigma uSigma
+             (fun r => match r with
+                    | negate => _negate
+                    | swap_or_replace => _swap_or_replace
+                    end).
+
   Definition tsched_result :=
-    Eval compute in interp_scheduler (ContextEnv.(create) r) sigma tsched.
+    Eval compute in interp_scheduler (ContextEnv.(create) r) sigma rules tsched.
   Definition tsched_circuit :=
-    compile_scheduler (ContextEnv.(create) (readRegisters R Sigma)) tsched.
+    compile_scheduler (ContextEnv.(create) (readRegisters R Sigma)) rules tsched.
 End Ex2.
 
 Module Collatz.
@@ -135,6 +150,7 @@ Module Collatz.
   Inductive custom_t := .
   Definition ufn_t := interop_ufn_t custom_t.
   Definition fn_t := interop_fn_t custom_t.
+  Inductive name_t := divide | multiply.
 
   Definition logsz := 5.
   Notation sz := (pow2 logsz).
@@ -169,7 +185,7 @@ Module Collatz.
 
   Open Scope sga.
 
-  Definition divide_collatz : urule unit var_t reg_t ufn_t :=
+  Definition _divide : urule unit var_t reg_t ufn_t :=
     Let "v" <- R0#read0 in
     Let "odd" <- USel[[$"v", UConst (Bits.zero logsz)]] in
     If UNot[[$"odd"]] Then
@@ -181,7 +197,7 @@ Module Collatz.
   Definition TimesThree (ex: uexpr unit var_t reg_t ufn_t) :=
     UUIntPlus[[ULsl[[ex, UConst Ob~1]], ex]]%sga_expr.
 
-  Definition multiply_collatz : urule unit var_t reg_t ufn_t :=
+  Definition _multiply : urule unit var_t reg_t ufn_t :=
     Let "v" <- R0#read1 in
     Let "odd" <- USel[[$"v", UConst (Bits.zero logsz)]] in
     If $"odd" Then
@@ -202,8 +218,15 @@ Module Collatz.
   Definition isigma := interop_sigma sigma.
   Definition cr := ContextEnv.(create) r.
 
-  Definition collatz : scheduler _ _ _ :=
-    tc R iSigma iuSigma (divide_collatz |> multiply_collatz |> done).
+  Definition collatz : scheduler _ :=
+    tc_scheduler (divide |> multiply |> done).
+
+  Definition rules :=
+    tc_rules R iSigma iuSigma
+             (fun r => match r with
+                    | divide => _divide
+                    | multiply => _multiply
+                    end).
 
   Notation compute t :=
     ltac:(let tt := type of t in
@@ -211,16 +234,16 @@ Module Collatz.
           exact (t: tt)) (only parsing).
 
   Definition result :=
-    compute (interp_scheduler cr isigma collatz).
+    compute (interp_scheduler cr isigma rules collatz).
   Definition divide_result :=
     compute (interp_rule cr isigma CtxEmpty log_empty log_empty
-                         (tc R iSigma iuSigma divide_collatz)).
+                         (tc_rule R iSigma iuSigma _divide)).
   Definition multiply_result :=
     compute (interp_rule cr isigma CtxEmpty log_empty log_empty
-                         (tc R iSigma iuSigma multiply_collatz)).
+                         (tc_rule R iSigma iuSigma _multiply)).
 
   Definition circuit :=
-    compile_scheduler (ContextEnv.(create) (readRegisters R iSigma)) collatz.
+    compile_scheduler (ContextEnv.(create) (readRegisters R iSigma)) rules collatz.
 
   Definition package :=
     {| vp_reg_t := reg_t;

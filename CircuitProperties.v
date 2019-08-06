@@ -82,7 +82,7 @@ Section Bools.
 End Bools.
 
 Section Circuits.
-  Context {var_t reg_t fn_t: Type}.
+  Context {name_t var_t reg_t fn_t: Type}.
   Context {R: reg_t -> type}.
   Context {Sigma: fn_t -> ExternalSignature}.
   Context {REnv: Env reg_t}.

@@ -4,7 +4,7 @@ Inductive Port :=
   P0 | P1.
 
 Section Syntax.
-  Context {pos_t var_t reg_t fn_t: Type}.
+  Context {pos_t name_t var_t reg_t fn_t: Type}.
 
   Inductive uexpr :=
   | UVar (var: var_t)
@@ -24,8 +24,8 @@ Section Syntax.
 
   Inductive uscheduler :=
   | UDone
-  | UTry (r: urule) (s1 s2: uscheduler)
-  | UCons (r: urule) (s: uscheduler)
+  | UTry (r: name_t) (s1 s2: uscheduler)
+  | UCons (r: name_t) (s: uscheduler)
   | USPos (p: pos_t) (s: uscheduler).
 End Syntax.
 

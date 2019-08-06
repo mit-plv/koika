@@ -6,7 +6,7 @@ Import ListNotations.
 Open Scope bool_scope.
 
 Section Proof.
-  Context {var_t reg_t fn_t: Type}.
+  Context {name_t var_t reg_t fn_t: Type}.
   Context {reg_t_eq_dec: EqDec reg_t}.
 
   Context {R: reg_t -> type}.
@@ -19,14 +19,16 @@ Section Proof.
   Notation Log := (Log R REnv).
   Notation expr := (expr var_t R Sigma).
   Notation rule := (rule var_t R Sigma).
-  Notation scheduler := (scheduler var_t R Sigma).
+  Notation scheduler := (scheduler name_t).
+
+  Context (rules: name_t -> rule nil).
 
   Fixpoint interp_scheduler'_trace
            (sched_log: Log)
            (s: scheduler)
            {struct s} :=
     let interp_try rl s1 s2 :=
-        match interp_rule r sigma CtxEmpty sched_log log_empty rl with
+        match interp_rule r sigma CtxEmpty sched_log log_empty (rules rl) with
         | Some l => match interp_scheduler'_trace (log_app l sched_log) s1 with
                    | Some (rs, log) => Some (rl :: rs, log)
                    | None => None
@@ -49,7 +51,10 @@ Section Proof.
 
   Definition update_one r rl: option (REnv.(env_t) R) :=
     let/opt r := r in
-    let log := @interp_scheduler' var_t reg_t fn_t R Sigma REnv r sigma log_empty (Try rl Done Done) in
+    let log := @interp_scheduler'
+                name_t var_t reg_t fn_t
+                R Sigma REnv r sigma rules
+                log_empty (Try rl Done Done) in
     Some (commit_update r log).
 
   Notation latest_write l idx := (latest_write (R := R) (REnv := REnv) l idx).
@@ -263,7 +268,7 @@ Section Proof.
 
   Lemma interp_scheduler_trace_correct :
     forall s l0 log,
-      interp_scheduler' r sigma l0 s = log ->
+      interp_scheduler' r sigma rules l0 s = log ->
       exists rs, interp_scheduler'_trace l0 s = Some (rs, log).
   Proof.
     induction s; cbn.
@@ -290,7 +295,7 @@ Section Proof.
   Lemma scheduler_trace_in_scheduler :
     forall s log l0 rs,
       interp_scheduler'_trace l0 s = Some (rs, log) ->
-      (forall r : rule [], In r rs -> In r (scheduler_rules s)).
+      (forall r : name_t, In r rs -> In r (scheduler_rules s)).
   Proof.
     induction s; cbn in *.
     - inversion 1; subst; inversion 1.
@@ -304,7 +309,7 @@ Section Proof.
 
   Theorem OneRuleAtATime:
     forall s log,
-      interp_scheduler r sigma s = log ->
+      interp_scheduler r sigma rules s = log ->
       exists rs,
         (forall rl, List.In rl rs -> List.In rl (scheduler_rules s)) /\
         List.fold_left update_one rs (Some r) = Some (commit_update r log).

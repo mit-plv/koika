@@ -48,7 +48,7 @@ Arguments RLog: clear implicits.
 Arguments Log {reg_t} R REnv.
 
 Section Interp.
-  Context {var_t reg_t fn_t: Type}.
+  Context {name_t var_t reg_t fn_t: Type}.
   Context {reg_t_eq_dec: EqDec reg_t}.
 
   Context {R: reg_t -> type}.
@@ -115,7 +115,7 @@ Section Interp.
 
   Notation expr := (expr var_t R Sigma).
   Notation rule := (rule var_t R Sigma).
-  Notation scheduler := (scheduler var_t R Sigma).
+  Notation scheduler := (scheduler name_t).
 
   Definition vcontext (sig: tsig var_t) :=
     context (fun '(k, tau) => Type_of_type tau) sig.
@@ -188,12 +188,14 @@ Section Interp.
   End Rule.
 
   Section Scheduler.
+    Context (rules: name_t -> rule nil).
+
     Fixpoint interp_scheduler'
              (sched_log: Log)
              (s: scheduler)
              {struct s} :=
       let interp_try r s1 s2 :=
-          match interp_rule CtxEmpty sched_log log_empty r with
+          match interp_rule CtxEmpty sched_log log_empty (rules r) with
           | Some l => interp_scheduler' (log_app l sched_log) s1
           | CannotRun => interp_scheduler' sched_log s2
           end in

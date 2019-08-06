@@ -212,7 +212,7 @@ Import CircuitNotations.
 Local Open Scope circuit.
 
 Section CircuitCompilation.
-  Context {var_t reg_t fn_t: Type}.
+  Context {name_t var_t reg_t fn_t: Type}.
   Context {reg_t_eq_dec: EqDec reg_t}.
   Context {R: reg_t -> type}.
   Context {Sigma: fn_t -> ExternalSignature}.
@@ -418,21 +418,23 @@ Section CircuitCompilation.
                       data1 := (ruleReg.(data1)) |})
                 rl_rwset acc.
 
+  Context (rules: name_t -> rule var_t R Sigma nil).
+
   Fixpoint compile_scheduler'
-           (s: scheduler var_t R Sigma)
+           (s: scheduler name_t)
            (input: scheduler_circuit):
     scheduler_circuit :=
     match s with
     | Done =>
       input
     | Cons rl s =>
-      let rl := compile_rule CtxEmpty rl (adapter input) in
+      let rl := compile_rule CtxEmpty (rules rl) (adapter input) in
       let acc := update_accumulated_rwset rl.(regs) input in
       let will_fire := willFire_of_canFire rl input in
       let input := mux_rwsets "mux_input" will_fire acc input in
       compile_scheduler' s input
     | Try rl st sf =>
-      let rl := compile_rule CtxEmpty rl (adapter input) in
+      let rl := compile_rule CtxEmpty (rules rl) (adapter input) in
       let acc := update_accumulated_rwset rl.(regs) input in
       let st := compile_scheduler' st acc in
       let sf := compile_scheduler' sf input in
@@ -463,7 +465,7 @@ Section CircuitCompilation.
   Definition init_scheduler_circuit : scheduler_circuit :=
     REnv.(create) init_scheduler_rwdata.
 
-  Definition compile_scheduler (s: scheduler var_t R Sigma) : state_transition_circuit :=
+  Definition compile_scheduler (s: scheduler name_t) : state_transition_circuit :=
     let s := compile_scheduler' s init_scheduler_circuit in
     REnv.(map2) (fun k r1 r2 => commit_rwdata r1 r2) s r.
 End CircuitCompilation.

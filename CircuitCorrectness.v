@@ -7,7 +7,7 @@ Require Import Coq.Lists.List.
 Import ListNotations.
 
 Section CompilerCorrectness.
-  Context {var_t reg_t fn_t: Type}.
+  Context {name_t var_t reg_t fn_t: Type}.
 
   Context {R: reg_t -> type}.
   Context {Sigma: fn_t -> ExternalSignature}.
@@ -28,7 +28,6 @@ Section CompilerCorrectness.
   Notation circuit := (circuit R Sigma).
   Notation expr := (expr var_t R Sigma).
   Notation rule := (rule var_t R Sigma).
-  Notation scheduler := (scheduler var_t R Sigma).
   Notation rule_circuit := (rule_circuit R Sigma REnv).
   Notation interp_circuit := (interp_circuit r sigma).
   Notation circuit_lt := (circuit_lt r sigma).
@@ -1264,34 +1263,37 @@ Section CompilerCorrectness.
   Hint Resolve log_data1_consistent'_mux_r : circuits.
   Hint Resolve log_rwdata_consistent_mux_r : circuits.
 
+  Notation scheduler := (scheduler name_t).
+  Context (rules: name_t -> rule nil).
+
   Theorem scheduler_compiler'_correct':
     forall (s: scheduler) Log cLog,
       log_data1_consistent' Log cLog ->
       log_data0_consistent' Log cLog ->
       log_rwdata_consistent Log cLog ->
       circuit_env_equiv ->
-      log_data1_consistent' (interp_scheduler' r sigma Log s) (compile_scheduler' rc s cLog) /\
-      log_data0_consistent' (interp_scheduler' r sigma Log s) (compile_scheduler' rc s cLog) /\
-      log_rwdata_consistent (interp_scheduler' r sigma Log s) (compile_scheduler' rc s cLog).
+      log_data1_consistent' (interp_scheduler' r sigma rules Log s) (compile_scheduler' rc rules s cLog) /\
+      log_data0_consistent' (interp_scheduler' r sigma rules Log s) (compile_scheduler' rc rules s cLog) /\
+      log_rwdata_consistent (interp_scheduler' r sigma rules Log s) (compile_scheduler' rc rules s cLog).
   Proof.
     induction s; cbn; intros.
     - eauto.
-    - pose proof (@rule_compiler_correct nil Log cLog r0) as Hrc.
+    - pose proof (@rule_compiler_correct nil Log cLog (rules r0)) as Hrc.
       unshelve eassert (Hrc := Hrc (adapter cLog) CtxEmpty CtxEmpty log_empty
                                   ltac:(ceauto) ltac:(ceauto)
                                   ltac:(ceauto) ltac:(ceauto)
                                   ltac:(ceauto) ltac:(ceauto)
                                   ltac:(ceauto)).
-      destruct (interp_rule r sigma CtxEmpty Log log_empty r0); cbn; t;
+      destruct (interp_rule r sigma CtxEmpty Log log_empty (rules r0)); cbn; t;
         apply IHs;
         eauto with circuits.
-    - pose proof (@rule_compiler_correct nil Log cLog r0) as Hrc.
+    - pose proof (@rule_compiler_correct nil Log cLog (rules r0)) as Hrc.
       unshelve eassert (Hrc := Hrc (adapter cLog) CtxEmpty CtxEmpty log_empty
                                   ltac:(ceauto) ltac:(ceauto)
                                   ltac:(ceauto) ltac:(ceauto)
                                   ltac:(ceauto) ltac:(ceauto)
                                   ltac:(ceauto)).
-      destruct (interp_rule r sigma CtxEmpty Log log_empty r0); cbn; t.
+      destruct (interp_rule r sigma CtxEmpty Log log_empty (rules r0)); cbn; t.
       + repeat apply conj.
         * apply log_data1_consistent'_mux_l; eauto.
           apply IHs1;
@@ -1427,7 +1429,7 @@ Section CompilerCorrectness.
   Theorem scheduler_log_writes_ordered:
     forall s log idx,
       log_writes_ordered log idx ->
-      log_writes_ordered (@interp_scheduler' var_t reg_t fn_t R Sigma REnv r sigma log s) idx.
+      log_writes_ordered (@interp_scheduler' name_t var_t reg_t fn_t R Sigma REnv r sigma rules log s) idx.
   Proof.
     induction s; cbn; intros; eauto.
     all: lazymatch goal with
@@ -1441,8 +1443,8 @@ Section CompilerCorrectness.
     forall (s: scheduler),
       circuit_env_equiv ->
       forall idx,
-        interp_circuit (REnv.(getenv) (compile_scheduler rc s) idx) =
-        REnv.(getenv) (commit_update r (interp_scheduler r sigma s)) idx.
+        interp_circuit (REnv.(getenv) (compile_scheduler rc rules s) idx) =
+        REnv.(getenv) (commit_update r (interp_scheduler r sigma rules s)) idx.
   Proof.
     intros; unfold compile_scheduler, commit_update, commit_rwdata, interp_scheduler, map2.
     rewrite !getenv_create; cbn.
@@ -1473,17 +1475,17 @@ Section CompilerCorrectness.
 End CompilerCorrectness.
 
 Section Thm.
-  Context {var_t reg_t fn_t: Type}.
+  Context {name_t var_t reg_t fn_t: Type}.
 
   Context {R: reg_t -> type}.
   Context {Sigma: fn_t -> ExternalSignature}.
   Context {REnv: Env reg_t}.
 
   Theorem scheduler_compiler_correct `{EqDec var_t}:
-    forall (s: scheduler var_t R Sigma) r sigma rc,
+    forall (rules: name_t -> rule var_t R Sigma nil) (s: scheduler name_t) r sigma rc,
       circuit_env_equiv r rc sigma ->
       forall idx,
-        interp_circuit r sigma (REnv.(getenv) (compile_scheduler rc s) idx) =
-        REnv.(getenv) (commit_update r (interp_scheduler r sigma s)) idx.
+        interp_circuit r sigma (REnv.(getenv) (compile_scheduler rc rules s) idx) =
+        REnv.(getenv) (commit_update r (interp_scheduler r sigma rules s)) idx.
   Proof. eauto using scheduler_compiler_correct'. Qed.
 End Thm.
