@@ -478,7 +478,7 @@ let cli =
     let%map_open
         cli_in_fname = anon ("input" %: string)
     and cli_out_fname = anon ("output" %: string)
-    and annotated = flag "--annotated" no_arg ~doc:"Recognize <> annotations"
+    and annotated = flag "--annotated" no_arg ~doc:"Recognize '<>' annotations"
     in fun () ->
        run { cli_in_fname; cli_out_fname;
              cli_frontend = if annotated then `Annotated else `Sexps;
