@@ -410,6 +410,13 @@ let check_result = function
   | Ok cs -> cs
   | Error err -> raise (Error err)
 
+let clang_format fname =
+  (* FIXME use Unix.open_process_args instead of Filename.quote (OCaml 4.08) *)
+  let cmd = sprintf "clang-format -i %s" (Filename.quote fname) in
+  let proc_in = Unix.open_process_in cmd in
+  let _ = really_input_string proc_in in
+  close_in proc_in
+
 let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
   try
     let sexps =
@@ -428,18 +435,23 @@ let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
           SGALib.Compilation.typecheck_scheduler s in
         let c_unit : SGALib.Compilation.compile_unit =
           { c_scheduler; c_rules; c_registers = registers } in
-        let make_graph () =
-          let circuits = SGALib.Compilation.compile c_unit in
-          let di = SGALib.Util.make_dedup_input registers circuits in
-          SGALib.Graphs.dedup_circuit di in
-        Stdio.Out_channel.with_file cli_out_fname ~f:(fun out ->
-            match cli_backend with
-            | `Dot -> Backends.Dot.main out (make_graph ())
-            | `Verilog -> Backends.Verilog.main out (make_graph ())
-            | `Hpp ->
-               let cls, _ =
-                 Core.Filename.split_extension (Core.Filename.basename cli_in_fname) in
-               Backends.Cpp.main out (Backends.Cpp.input_of_compile_unit cls c_unit))
+        (match cli_backend with
+         | `Hpp ->
+            Stdio.Out_channel.with_file cli_out_fname ~f:(fun out ->
+                let basename = Core.Filename.basename cli_in_fname in
+                let cls, _ = Core.Filename.split_extension basename in
+                Backends.Cpp.main out (Backends.Cpp.input_of_compile_unit cls c_unit);
+                clang_format cli_out_fname)
+         | `Verilog | `Dot ->
+            let graph =
+              let circuits = SGALib.Compilation.compile c_unit in
+              let di = SGALib.Util.make_dedup_input registers circuits in
+              SGALib.Graphs.dedup_circuit di in
+            Stdio.Out_channel.with_file cli_out_fname ~f:(fun out ->
+                (match cli_backend with
+                 | `Hpp -> assert false
+                 | `Dot -> Backends.Dot.main
+                 | `Verilog -> Backends.Verilog.main) out graph))
      | [] -> parse_error (Pos.Filename cli_in_fname) "No modules declared")
   with Error { epos; ekind; emsg } ->
     Printf.eprintf "%s: %s: %s\n"

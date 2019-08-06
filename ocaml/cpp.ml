@@ -278,7 +278,7 @@ let writeout out hpp =
     let p_run () =
       p_fn "void" "run" ~args:"std::uint64_t ncycles" (fun () ->
           p_scoped "for (std::uint64_t cycle_id = 0; cycle_id < ncycles; cycle_id++)"
-            (fun () -> p "  cycle();")) in
+            (fun () -> p "cycle();")) in
 
     let p_observe () =
       p_fn "state_t" "observe" (fun () -> p "return state;") in
