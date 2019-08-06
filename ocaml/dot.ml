@@ -13,7 +13,7 @@ let primitive_name = function
   | SGA.Concat (_sz1, _sz2) -> "Concat"
   | SGA.ZExtL (_sz, _nzeroes) -> "ZExtL"
   | SGA.ZExtR (_sz, _nzeroes) -> "ZExtR"
-  | SGA.UIntPlus _sz -> "Concat"
+  | SGA.UIntPlus _sz -> "Plus"
 
 let fun_name = function
   | CustomFn fn -> fn

@@ -23,6 +23,7 @@ type reg_signature = {
     reg_init_val: bits_const;
   }
 
+type name_t = string
 type var_t = string
 type port_t = int
 
@@ -59,13 +60,6 @@ type 'f scheduler =
   | Done
   | Sequence of ('f, string) locd list
   | Try of ('f, string) locd * ('f, 'f scheduler) locd * ('f, 'f scheduler) locd
-
-type ('f, 'fn_t) ast =
-  | ADone
-  | ASequence of ('f, ('f, reg_signature, 'fn_t) rule) locd list
-  | ATry of ('f, ('f, reg_signature, 'fn_t) rule) locd
-            * ('f, ('f, 'fn_t) ast) locd
-            * ('f, ('f, 'fn_t) ast) locd
 
 type 'p circuit = 'p circuit' Hashcons.hash_consed
 and 'p circuit' =
