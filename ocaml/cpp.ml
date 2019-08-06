@@ -85,16 +85,19 @@ let cpp_preamble =
   close_in inc;
   preamble
 
-let gensym =
+let gensym, gensym_reset =
   let state = Hashtbl.create 8 in
-  fun prefix ->
-  let counter =
-    match Hashtbl.find_opt state prefix with
-    | None -> 0
-    | Some n -> n in
-  if counter = max_int then failwith "gensym";
-  Hashtbl.replace state prefix (succ counter);
-  sprintf "%s%d" prefix counter
+  let reset () =
+    Hashtbl.clear state in
+  let next prefix =
+    let counter =
+      match Hashtbl.find_opt state prefix with
+      | None -> 0
+      | Some n -> n in
+    if counter = max_int then failwith "gensym";
+    Hashtbl.replace state prefix (succ counter);
+    sprintf "_%s%d" prefix counter in
+  (next, reset)
 
 let writeout out hpp =
   let nl _ = output_string out "\n" in
@@ -198,6 +201,8 @@ let writeout out hpp =
       in p_expr sz var expr in
 
     let p_rule rule =
+      gensym_reset ();
+
       let p_reset () =
         List.iter (fun { reg_name; _ } ->
             p "log.%s.reset(Log.%s);" reg_name reg_name)
