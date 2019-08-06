@@ -159,15 +159,12 @@ module Compilation = struct
     SGA.USPos
       (lpos,
        match lcnt with
-       | ADone -> SGA.UDone
-       | ASequence [] -> SGA.UDone
-       | ASequence (r :: rs) ->
-          let s' = translate_scheduler { lpos; lcnt = ASequence rs } in
-          SGA.UCons (translate_rule r, s')
-       | ATry (r, s1, s2) ->
-          SGA.UTry (translate_rule r,
-                    translate_scheduler s1,
-                    translate_scheduler s2))
+       | Done -> SGA.UDone
+       | Sequence [] -> SGA.UDone
+       | Sequence (r :: rs) ->
+          SGA.UCons (r.lcnt, translate_scheduler { lpos; lcnt = Sequence rs })
+       | Try (r, s1, s2) ->
+          SGA.UTry (r.lcnt, translate_scheduler s1, translate_scheduler s2))
 
   let r = fun rs ->
     rs.reg_size
@@ -185,33 +182,43 @@ module Compilation = struct
                                                   | Inl m -> m
                                                   | Inr _ -> failwith "Unexpected register name" }
 
-  type 'f raw_ast =
-    ('f, ('f, string SGA.interop_ufn_t) ast) locd
+  type 'f raw_rule =
+    ('f, ('f, reg_signature, string SGA.interop_ufn_t) rule) locd
 
-  type typechecked_ast =
-    (var_t, reg_signature, string SGA.interop_fn_t) SGA.scheduler
+  type typechecked_rule =
+    (var_t, reg_signature, string SGA.interop_fn_t) SGA.rule
 
-  (* FIXME use a hashmap, not a list *)
+  type 'f raw_scheduler = ('f, 'f scheduler) locd
+
+  type typechecked_scheduler = var_t SGA.scheduler
+
+  (* FIXME hashmaps, not lists *)
   type compile_unit =
     { c_registers: reg_signature list;
-      c_ast: typechecked_ast }
+      c_scheduler: string SGA.scheduler;
+      c_rules: (name_t * typechecked_rule) list }
 
   type compiled_circuit =
     (reg_signature, string SGA.interop_fn_t) SGA.circuit
 
-  let typecheck (raw_ast: 'f raw_ast) :
-        (typechecked_ast, 'f err_contents) Result.result =
+  let typecheck_scheduler (raw_ast: 'f raw_scheduler) : var_t SGA.scheduler =
     let ast = translate_scheduler raw_ast in
-    match SGA.type_scheduler Util.string_eq_dec r sigma uSigma raw_ast.lpos ast with
-    | WellTyped s ->
-       Result.Ok s
-    | IllTyped { epos; emsg } ->
+    SGA.type_scheduler raw_ast.lpos ast
+
+  let result_of_type_result = function
+    | SGA.WellTyped s -> Ok s
+    | SGA.IllTyped { epos; emsg } ->
        Result.Error (Util.type_error_to_error epos emsg)
+
+  let typecheck_rule (raw_ast: 'f raw_rule) : (typechecked_rule, 'f err_contents) result =
+    let ast = translate_rule raw_ast in
+    result_of_type_result (SGA.type_rule Util.string_eq_dec r sigma uSigma raw_ast.lpos [] ast)
 
   let compile (cu: compile_unit) : (reg_signature -> compiled_circuit) =
     let rEnv = rEnv_of_register_list cu.c_registers in
     let r0: _ SGA.env_t = SGA.create rEnv (fun r -> SGA.CReadRegister r) in
-    let env = SGA.compile_scheduler r sigma rEnv r0 cu.c_ast in
+    let rules r = List.assoc r cu.c_rules in
+    let env = SGA.compile_scheduler r sigma rEnv r0 rules cu.c_scheduler in
     (fun r -> SGA.getenv rEnv env r)
 end
 

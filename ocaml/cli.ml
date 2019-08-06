@@ -319,7 +319,7 @@ let parse fname sexps =
                              | `Scheduler _ -> "scheduler")))
     sexps
 
-let resolve fname registers rules scheduler =
+let resolve_rule fname registers rule =
   let find_register { lpos; lcnt = name } =
     match List.find_opt (fun rsig -> rsig.reg_name = name) registers with
     | Some rsig -> { lpos; lcnt = rsig }
@@ -382,20 +382,22 @@ let resolve fname registers rules scheduler =
                 When (resolve_expr c, List.map resolve_rule rs)
              | Write (port, r, v) ->
                 Write (port, find_register r, resolve_expr v) } in
-  let rules = List.map (fun (nm, r) -> (nm, resolve_rule r)) rules in
-  let find_rule { lpos; lcnt = name } =
-    match List.find_opt (fun (nm, _) -> nm.lcnt = name) rules with
-    | Some (_, { lcnt; _ }) -> { lpos; lcnt }
-    | None -> name_error lpos "rule" name in
-  let rec resolve_scheduler ({ lpos; lcnt }: ('f, 'f scheduler) locd) =
-    { lpos; (* FIXME add support for calling other schedulers by name *)
-      lcnt = match lcnt with
-             | Done -> ADone
-             | Sequence rs ->
-                ASequence (List.map find_rule rs)
-             | Try (r, s1, s2) ->
-                ATry (find_rule r, resolve_scheduler s1, resolve_scheduler s2) } in
-  resolve_scheduler scheduler
+  resolve_rule rule
+
+let resolve_scheduler rules (s: ('f, 'f scheduler) locd) =
+  let check_rule { lpos; lcnt = name } =
+    if not (List.mem_assoc name rules) then
+      name_error lpos "rule" name in
+  let rec check_scheduler ({ lcnt; _ }: ('f, 'f scheduler) locd) =
+    match lcnt with
+    | Done -> ()
+    | Sequence rs ->
+       List.iter check_rule rs
+    | Try (r, s1, s2) ->
+       check_rule r;
+       check_scheduler s1;
+       check_scheduler s2 in
+  check_scheduler s; s
 
 type cli_opts = {
     cli_in_fname: string;
