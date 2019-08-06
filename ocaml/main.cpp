@@ -1,4 +1,5 @@
-#include "collatz.hpp"
+// #include "collatz.generated.hpp"
+#include "collatz.handwritten.hpp"
 #include <string>
 
 int main(int argc, char** argv) {
