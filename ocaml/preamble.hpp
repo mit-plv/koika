@@ -28,6 +28,26 @@ namespace prims {
     return !data;
   }
 
+  template<typename T, size_t size>
+  T land(const T data1, const T data2) {
+    return data1 & data2;
+  }
+
+  template<>
+  bool land<bool, 1>(const bool data1, const bool data2) {
+    return data1 && data2;
+  }
+
+  template<typename T, size_t size>
+  T lor(const T data1, const T data2) {
+    return data1 | data2;
+  }
+
+  template<>
+  bool lor<bool, 1>(const bool data1, const bool data2) {
+    return data1 || data2;
+  }
+
   template<typename T1, typename T2>
   T1 lsr(const T1 data, const T2 shift) {
     return data >> shift;
