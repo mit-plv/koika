@@ -2,7 +2,7 @@ open Common
 
 type ('reg_t, 'fn_t) cpp_rule_t = {
     rl_name: string;
-    rl_footprint: 'reg_t list;
+    rl_footprint: reg_signature list;
     rl_body: (string, 'reg_t, 'fn_t) SGALib.SGA.rule;
   }
 
@@ -99,7 +99,7 @@ let gensym, gensym_reset =
     sprintf "_%s%d" prefix counter in
   (next, reset)
 
-let writeout out hpp =
+let writeout out (hpp: _ cpp_input_t) =
   let nl _ = output_string out "\n" in
   let p fmt = Printf.kfprintf nl out fmt in
   let pr fmt = Printf.fprintf out fmt in
@@ -135,27 +135,28 @@ let writeout out hpp =
     let p_class pbody =
       p_scoped (sprintf "class %s" hpp.cpp_classname) ~terminator:";" pbody in
 
-    let p_state_register rn =
-      let r = hpp.cpp_registers rn in
+    let iter_registers =
+      let sigs = List.map hpp.cpp_registers hpp.cpp_register_names in
+      fun f -> List.iter f sigs in
+
+    let p_state_register r =
       p "%s %s;" (cpp_type_of_size r.reg_size) r.reg_name in
 
     let p_state_t () =
-      let p_printf_register rn =
-        let name = (hpp.cpp_registers rn).reg_name in
-        p "std::cout << \"%s = \" << %s << std::endl;" name name in
+      let p_printf_register { reg_name; _ } =
+        p "std::cout << \"%s = \" << %s << std::endl;" reg_name reg_name in
       p_scoped "struct state_t" ~terminator:";" (fun () ->
-          List.iter p_state_register hpp.cpp_register_names;
+          iter_registers p_state_register;
           nl ();
           p_fn "void" "dump" (fun () ->
-              List.iter p_printf_register hpp.cpp_register_names)) in
+              iter_registers p_printf_register)) in
 
-    let p_log_register rn =
-      let r = hpp.cpp_registers rn in
+    let p_log_register r =
       p "reg_log_t<%s, %d> %s;" (cpp_type_of_size r.reg_size) r.reg_size r.reg_name in
 
     let p_log_t () =
       p_scoped "struct log_t" ~terminator:";" (fun () ->
-          List.iter p_log_register hpp.cpp_register_names) in
+          iter_registers p_log_register) in
 
     let p_checked prbody =
       pr "CHECK_RETURN(";
@@ -211,7 +212,7 @@ let writeout out hpp =
       sp_expr expr;
       Buffer.contents out in
 
-    let p_rule rule =
+    let p_rule (rule: _ cpp_rule_t) =
       gensym_reset ();
 
       let p_reset () =
@@ -265,15 +266,20 @@ let writeout out hpp =
           p_rule_body rule.rl_body;
           nl ();
           p_commit ()) in
+
     let p_constructor () =
+      let p_init_data0 { reg_name = nm; _ } =
+        p "Log.%s.data0 = log.%s.data0 = state.%s;" nm nm nm in
       p_fn "explicit" hpp.cpp_classname
         ~args:"state_t init" ~annot:" : Log(), log(), state(init)"
-        (fun () -> p "Log.r0.data0 = log.r0.data0 = state.r0;") in
+        (fun () -> iter_registers p_init_data0) in
 
     let p_cycle () =
+      let p_commit_register r =
+        p "state.%s = Log.%s.commit();" r.reg_name r.reg_name in
       p_fn "void" "cycle" (fun () -> (* FIXME: use the scheduler *)
           List.iter (fun { rl_name; _ } -> p "%s();" rl_name) hpp.cpp_rules;
-          p "state.r0 = Log.r0.commit();") in
+          iter_registers p_commit_register) in
 
     let p_run () =
       p_fn "void" "run" ~args:"std::uint64_t ncycles" (fun () ->
