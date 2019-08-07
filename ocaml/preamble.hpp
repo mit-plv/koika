@@ -87,9 +87,9 @@ namespace prims {
 }
 
 struct rwset_t {
-  bool r1;
-  bool w0;
-  bool w1;
+  bool r1 : 1; // FIXME does adding :1 always help?
+  bool w0 : 1;
+  bool w1 : 1;
 
   bool may_read0(rwset_t rL) {
     return !(w1 || rL.w1 || rL.w0);
