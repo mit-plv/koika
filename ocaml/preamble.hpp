@@ -32,8 +32,8 @@ namespace prims {
 
   template<typename T, size_t size>
   T mask(T arg) {
-    // GCC and Clang are smart enough to elide this when size == ::digits
-    return arg & (~(T(0)) >> (std::numeric_limits<T>::digits - size));
+    // GCC and Clang are smart enough to elide this when sz == ::digits
+    return arg & (std::numeric_limits<T>::max() >> (std::numeric_limits<T>::digits - sz));
   }
 
   template<typename T1, typename T2>
