@@ -2,15 +2,38 @@
 #include <iostream>
 #include <limits>
 
+#define SIM_DEBUG
+
+void _SIM_ASSERT(const char* repr,
+                 bool expr,
+                 const char* file,
+                 const int line,
+                 const char* err_msg) {
+  if (!expr) {
+    std::cerr << file << ":" << line << ": "
+              << err_msg << std::endl
+              << "Failed assertion: " << repr;
+    abort();
+  }
+}
+
+#ifdef SIM_DEBUG
+#define SIM_ASSERT(expr, msg) \
+  _SIM_ASSERT(#expr, expr, __FILE__, __LINE__, msg)
+#else
+#define SIM_ASSERT(expr, msg) ;
+#endif
+
 #define CHECK_RETURN(can_fire) { if (!can_fire) { return false; } }
 
 namespace prims {
   struct unit_t {};
-  unit_t tt = {};
+  const unit_t tt = {};
 
-  template<typename T>
-  T mask(const size_t size) {
-    return ~(T(0)) >> (std::numeric_limits<T>::digits - size);
+  template<typename T, size_t size>
+  T mask(T arg) {
+    // GCC and Clang are smart enough to elide this when size == ::digits
+    return arg & (~(T(0)) >> (std::numeric_limits<T>::digits - size));
   }
 
   template<typename T1, typename T2>
@@ -19,13 +42,8 @@ namespace prims {
   }
 
   template<typename T, size_t size>
-  T lnot(const T data, const unit_t _unused) {
-    return (~data) & mask<T>(size);
-  }
-
-  template<>
-  bool lnot<bool, 1>(const bool data, const unit_t _unused) {
-    return !data;
+  T lnot(const T data, const unit_t) {
+    return mask<T, size>(~data);
   }
 
   template<typename T, size_t size>
@@ -33,34 +51,45 @@ namespace prims {
     return data1 & data2;
   }
 
-  template<>
-  bool land<bool, 1>(const bool data1, const bool data2) {
-    return data1 && data2;
-  }
-
   template<typename T, size_t size>
   T lor(const T data1, const T data2) {
     return data1 | data2;
   }
 
-  template<>
-  bool lor<bool, 1>(const bool data1, const bool data2) {
-    return data1 || data2;
-  }
-
   template<typename T1, typename T2>
   T1 lsr(const T1 data, const T2 shift) {
+    SIM_ASSERT(shift <= std::numeric_limits<T1>::digits, "lsr: shift > size");
     return data >> shift;
   }
 
   template<typename T1, typename T2, size_t size>
   T1 lsl(const T1 data, const T2 shift) {
-    return (data << shift) & mask<T1>(size);
+    SIM_ASSERT(shift <= std::numeric_limits<T1>::digits, "lsl: shift > size");
+    return mask<T1, size>(data << shift);
   }
 
   template<typename T, size_t size>
   T plus(const T x, const T y) {
-    return (x + y) & mask<T>(size);
+    return mask<T, size>(x + y);
+  }
+
+  /// unit specializations
+
+  /// bool specializations
+
+  template<>
+  bool lnot<bool, 1>(const bool data, const unit_t) {
+    return !data;
+  }
+
+  template<>
+  bool land<bool, 1>(const bool data1, const bool data2) {
+    return data1 && data2;
+  }
+
+  template<>
+  bool lor<bool, 1>(const bool data1, const bool data2) {
+    return data1 || data2;
   }
 }
 
