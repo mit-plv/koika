@@ -114,9 +114,10 @@ struct rwset_t {
   rwset_t() : r1(false), w0(false), w1(false) {}
 };
 
-template<typename T, size_t size>
+template<size_t size>
 struct reg_log_t {
   rwset_t rwset;
+  typedef typename uint_t<size>::t T;
 
   // Reset alignment to prevent Clang from packing the fields together
   // This yielded a ~25x speedup when rwset was inline

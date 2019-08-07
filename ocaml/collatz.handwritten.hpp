@@ -23,7 +23,7 @@ public:
 
 private:
   struct log_t {
-    reg_log_t<uint_t<32>::t, 32> r0;
+    reg_log_t<32> r0;
   };
 
   log_t Log;

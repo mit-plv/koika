@@ -134,7 +134,7 @@ let writeout out (hpp: _ cpp_input_t) =
               iter_registers p_printf_register)) in
 
     let p_log_register r =
-      p "reg_log_t<%s, %d> %s;" (cpp_type_of_size r.reg_size) r.reg_size r.reg_name in
+      p "reg_log_t<%d> %s;" r.reg_size r.reg_name in
 
     let p_log_t () =
       p_scoped "struct log_t" ~terminator:";" (fun () ->
