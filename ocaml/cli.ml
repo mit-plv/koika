@@ -288,7 +288,7 @@ let parse fname sexps =
      | `Scheduler ->
         `Scheduler (name, expect_scheduler (expect_single d_loc "body" "scheduler declaration" body)))
   and expect_module m_name m_loc body =
-    let m_registers, m_rules,  schedulers =
+    let registers, rules,  schedulers =
       List.fold_left (fun (registers, rules, schedulers) decl ->
           match expect_decl decl "register, rule, or scheduler declaration" with
           | _, `Register r -> (r :: registers, rules, schedulers)
@@ -298,7 +298,10 @@ let parse fname sexps =
         ([], [], []) body in
     let m_scheduler = expect_single m_loc "scheduler"
                         (sprintf "module `%s'" m_name.lcnt) schedulers in
-    { m_name; m_registers; m_rules; m_scheduler } in
+    { m_name;
+      m_registers = List.rev registers;
+      m_rules = List.rev rules;
+      m_scheduler } in
   List.map (fun sexp ->
       match expect_decl sexp "module declaration" with
       | _, `Module { m_registers; m_rules; m_scheduler; _ } ->

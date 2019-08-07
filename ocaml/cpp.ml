@@ -131,6 +131,7 @@ let writeout out (hpp: _ cpp_input_t) =
     p "////////////////////";
     p "// IMPLEMENTATION //";
     p "////////////////////";
+    nl ();
 
     let p_class pbody =
       p_scoped (sprintf "class %s" hpp.cpp_classname) ~terminator:";" pbody in
@@ -148,7 +149,7 @@ let writeout out (hpp: _ cpp_input_t) =
       p_scoped "struct state_t" ~terminator:";" (fun () ->
           iter_registers p_state_register;
           nl ();
-          p_fn "void" "dump" (fun () ->
+          p_fn "void" "dump" ~annot:" const" (fun () ->
               iter_registers p_printf_register)) in
 
     let p_log_register r =
@@ -161,7 +162,7 @@ let writeout out (hpp: _ cpp_input_t) =
     let p_checked prbody =
       pr "CHECK_RETURN(";
       prbody ();
-      p ")" in
+      p ");" in
 
     let module SGA = SGALib.SGA in
     let rec p_impure_expr expr =
@@ -265,7 +266,8 @@ let writeout out (hpp: _ cpp_input_t) =
           nl ();
           p_rule_body rule.rl_body;
           nl ();
-          p_commit ()) in
+          p_commit ());
+      nl () in
 
     let p_constructor () =
       let p_init_data0 { reg_name = nm; _ } =

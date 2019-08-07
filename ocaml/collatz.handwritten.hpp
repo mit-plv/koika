@@ -1,5 +1,5 @@
-#ifndef __COLLATZ_HPP__
-#define __COLLATZ_HPP__
+#ifndef collatz_HPP
+#define collatz_HPP
 
 //////////////
 // PREAMBLE //
@@ -8,13 +8,13 @@
 #include "preamble.hpp"
 
 ////////////////////
-// AUTO-GENERATED //
+// IMPLEMENTATION //
 ////////////////////
 
 class collatz {
 public:
   struct state_t {
-    uint32_t r0 : 32; // FIXME: does this hurt?
+    std::uint32_t r0 : 32; // FIXME: does this hurt?
 
     void dump() const {
       std::cout << "r0 = " << r0 << std::endl;
@@ -23,7 +23,7 @@ public:
 
 private:
   struct log_t {
-    reg_log_t<uint32_t, 32> r0;
+    reg_log_t<std::uint32_t, 32> r0;
   };
 
   log_t Log;
@@ -33,10 +33,10 @@ private:
   bool rule_divide() {
     log.r0.reset();
 
-    { uint32_t v; CHECK_RETURN(log.r0.read0(&v, state.r0, Log.r0.rwset));
-      { auto odd = prims::sel<uint32_t, uint8_t>(v, 0);
+    { std::uint32_t v; CHECK_RETURN(log.r0.read0(&v, state.r0, Log.r0.rwset));
+      { bool odd = prims::sel<std::uint32_t, std::uint8_t>(v, UINT8_C(0b00000));
         if (prims::lnot<bool, 1>(odd, prims::tt)) {
-          CHECK_RETURN(log.r0.write0(prims::lsr<uint32_t, int>(v, 1), Log.r0.rwset));
+          CHECK_RETURN(log.r0.write0(prims::lsr<std::uint32_t, bool>(v, bool(0b1)), Log.r0.rwset));
         } else {
           return false;
         }
@@ -50,10 +50,10 @@ private:
   bool rule_multiply() {
     log.r0.reset();
 
-    { uint32_t v; CHECK_RETURN(log.r0.read1(&v, Log.r0.rwset));
-      { auto odd = prims::sel<uint32_t, uint8_t>(v, 0);
+    { std::uint32_t v; CHECK_RETURN(log.r0.read1(&v, Log.r0.rwset));
+      { bool odd = prims::sel<std::uint32_t, std::uint8_t>(v, UINT8_C(0b00000));
         if (odd) {
-          CHECK_RETURN(log.r0.write1(prims::plus<uint32_t, 32>(prims::plus<uint32_t, 32>(prims::lsl<uint32_t, uint8_t, 32>(v, 1), v), 1), Log.r0.rwset));
+          CHECK_RETURN(log.r0.write1(prims::plus<std::uint32_t, 32>(prims::plus<std::uint32_t, 32>(prims::lsl<std::uint32_t, bool, 32>(v, bool(0b1)), v), UINT32_C(0b00000000000000000000000000000001)), Log.r0.rwset));
         } else {
           return false;
         }
@@ -66,7 +66,8 @@ private:
 
 public:
   explicit collatz(state_t init) : Log(), log(), state(init) {
-    Log.r0.data0 = log.r0.data0 = state.r0; // FIXME is this second assignment necessary?
+    // FIXME is this second assignment necessary?
+    Log.r0.data0 = log.r0.data0 = state.r0;
   }
 
   void cycle() {
