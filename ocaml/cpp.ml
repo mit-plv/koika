@@ -276,11 +276,20 @@ let writeout out (hpp: _ cpp_input_t) =
         ~args:"state_t init" ~annot:" : Log(), log(), state(init)"
         (fun () -> iter_registers p_init_data0) in
 
+    let rec p_scheduler = function
+      | SGA.Done -> ()
+      | SGA.Cons (rl_name, s) ->
+         p "rule_%s();" rl_name;
+         p_scheduler s
+      | SGA.Try (rl_name, s1, s2) ->
+         p_scoped (sprintf "if (rule_%s())" rl_name) (fun () -> p_scheduler s1);
+         p_scoped "else" (fun () -> p_scheduler s2) in
+
     let p_cycle () =
       let p_commit_register r =
         p "state.%s = Log.%s.commit();" r.reg_name r.reg_name in
-      p_fn "void" "cycle" (fun () -> (* FIXME: use the scheduler *)
-          List.iter (fun { rl_name; _ } -> p "%s();" rl_name) hpp.cpp_rules;
+      p_fn "void" "cycle" (fun () ->
+          p_scheduler hpp.cpp_scheduler;
           iter_registers p_commit_register) in
 
     let p_run () =
