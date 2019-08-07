@@ -20,32 +20,15 @@ let fprintf = Printf.fprintf
 
 let cpp_type_of_size sz =
   assert (sz >= 0);
-  if sz = 0 then
-    "prims::unit_t"             (* FIXME *)
-  (* else if sz = 1 then
-   *   "bool" (* unnecessarily complicated *) *)
-  else if sz <= 8 then
-    "std::uint8_t"
-  else if sz <= 16 then
-    "std::uint16_t"
-  else if sz <= 32 then
-    "std::uint32_t"
-  else if sz <= 64 then
-    "std::uint64_t"
+  if sz <= 64 then
+    sprintf "uint_t<%d>::t" sz
   else
-    (* The following two are not universally supported *)
-    (* else if sz <= 128 then
-     *   "std::uint128_t"
-     * else if sz <= 256 then
-     *   "std::uint256_t" *)
-    failwith (Printf.sprintf "Unsupported size: %d" sz)
+    failwith (sprintf "Unsupported size: %d" sz)
 
 let cpp_const_init sz cst =
   assert (sz >= 0);
   if sz = 0 then
     "prims::tt"
-  (* else if sz = 1 then
-   *   sprintf "bool(%s)" cst (* unnecessarily complicated *) *)
   else if sz <= 8 then
     sprintf "UINT8_C(%s)" cst
   else if sz <= 16 then
@@ -55,29 +38,27 @@ let cpp_const_init sz cst =
   else if sz <= 64 then
     sprintf "UINT64_C(%s)" cst
   else
-    failwith (Printf.sprintf "Unsupported size: %d" sz)
+    failwith (sprintf "Unsupported size: %d" sz)
 
 let cpp_fn_name = function
   | { ffi_name = CustomFn _; _ } ->
      failwith "FIXME: Custom functions not supported"
   | { ffi_name = PrimFn f; ffi_arg1size = sz1; ffi_arg2size = sz2; _ } ->
      let module SGA = SGALib.SGA in
-     let t1 = cpp_type_of_size sz1 in
-     let t2 = cpp_type_of_size sz2 in
      sprintf "prims::%s"
        (match f with
-        | SGA.Sel _logsz -> sprintf "sel<%s, %s>" t1 t2
+        | SGA.Sel _logsz -> sprintf "sel<%d, %d>" sz1 sz2
         | SGA.Part (_logsz, _width) -> failwith "FIXME: part"
-        | SGA.And _sz -> sprintf "land<%s, %s>" t1 t2
-        | SGA.Or _sz -> sprintf "lor<%s, %s>" t1 t2
-        | SGA.Not _sz -> sprintf "lnot<%s, %d>" t1 sz1
-        | SGA.Lsl (_sz, _places) -> sprintf "lsl<%s, %s, %d>" t1 t2 sz1
-        | SGA.Lsr (_sz, _places) -> sprintf "lsr<%s, %s>" t1 t2
-        | SGA.Eq _sz -> sprintf "eq<%s>" t1
-        | SGA.Concat (_sz1, _sz2) -> sprintf "concat<%s, %s, %d, %s>" t1 t2 sz2 (cpp_type_of_size (sz1 + sz2))
+        | SGA.And _sz -> sprintf "land<%d>" sz1
+        | SGA.Or _sz -> sprintf "lor<%d>" sz1
+        | SGA.Not _sz -> sprintf "lnot<%d>" sz1
+        | SGA.Lsl (_sz, _places) -> sprintf "lsl<%d, %d>" sz1 sz2
+        | SGA.Lsr (_sz, _places) -> sprintf "lsr<%d, %d>" sz1 sz2
+        | SGA.Eq _sz -> sprintf "eq<%d>" sz1
+        | SGA.Concat (_sz1, _sz2) -> sprintf "concat<%d, %d>" sz1 sz2
         | SGA.ZExtL (_sz, _nzeroes) -> failwith "FIXME: zextl"
         | SGA.ZExtR (_sz, _nzeroes) -> failwith "FIXME: zextr"
-        | SGA.UIntPlus _sz -> sprintf "plus<%s, %d>" t1 sz1)
+        | SGA.UIntPlus _sz -> sprintf "plus<%d>" sz1)
 
 let cpp_preamble =
   let inc = open_in "preamble.hpp" in
