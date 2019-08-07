@@ -199,7 +199,7 @@ let writeout out (hpp: _ cpp_input_t) =
 
       let p_reset () =
         List.iter (fun { reg_name; _ } ->
-            p "log.%s.reset();" reg_name)
+            p "log.%s.reset(Log.%s);" reg_name reg_name)
           rule.rl_footprint in
 
       let p_commit () =
@@ -252,7 +252,7 @@ let writeout out (hpp: _ cpp_input_t) =
 
     let p_constructor () =
       let p_init_data0 { reg_name = nm; _ } =
-        p "Log.%s.data0 = log.%s.data0 = state.%s;" nm nm nm in
+        p "Log.%s.data0 = state.%s;" nm nm in
       p_fn "explicit" hpp.cpp_classname
         ~args:"state_t init" ~annot:" : Log(), log(), state(init)"
         (fun () -> iter_registers p_init_data0) in

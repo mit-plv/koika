@@ -31,7 +31,7 @@ private:
   state_t state;
 
   bool rule_divide() {
-    log.r0.reset();
+    log.r0.reset(Log.r0);
 
     { uint_t<32>::t v; CHECK_RETURN(log.r0.read0(&v, state.r0, Log.r0.rwset));
       { uint_t<1>::t odd = prims::sel<32, 5>(v, UINT8_C(0b00000));
@@ -48,7 +48,7 @@ private:
   }
 
   bool rule_multiply() {
-    log.r0.reset();
+    log.r0.reset(Log.r0);
 
     { uint_t<32>::t v; CHECK_RETURN(log.r0.read1(&v, Log.r0.rwset));
       { uint_t<1>::t odd = prims::sel<32, 5>(v, UINT8_C(0b00000));
@@ -67,7 +67,7 @@ private:
 public:
   explicit collatz(state_t init) : Log(), log(), state(init) {
     // FIXME is this second assignment necessary?
-    Log.r0.data0 = log.r0.data0 = state.r0;
+    Log.r0.data0 = state.r0;
   }
 
   void cycle() {

@@ -152,15 +152,17 @@ struct reg_log_t {
     return ok;
   }
 
-  void reset() {
+  void reset(reg_log_t other) {
     rwset.reset();
+    data0 = other.data0;
+    data1 = other.data1;
   }
 
   T commit() {
     if (rwset.w1) {
       data0 = data1;
     }
-    reset();
+    rwset.reset();
     return data0;
   }
 
