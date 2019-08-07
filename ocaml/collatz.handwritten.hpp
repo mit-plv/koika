@@ -31,12 +31,12 @@ private:
   state_t state;
 
   bool rule_divide() {
-    log.r0.reset(Log.r0);
+    log.r0.reset();
 
-    { uint32_t v; CHECK_RETURN(log.r0.read0(&v, state.r0, Log.r0));
+    { uint32_t v; CHECK_RETURN(log.r0.read0(&v, state.r0, Log.r0.rwset));
       { auto odd = prims::sel<uint32_t, uint8_t>(v, 0);
         if (prims::lnot<bool, 1>(odd, prims::tt)) {
-          CHECK_RETURN(log.r0.write0(prims::lsr<uint32_t, int>(v, 1), Log.r0));
+          CHECK_RETURN(log.r0.write0(prims::lsr<uint32_t, int>(v, 1), Log.r0.rwset));
         } else {
           return false;
         }
@@ -48,12 +48,12 @@ private:
   }
 
   bool rule_multiply() {
-    log.r0.reset(Log.r0);
+    log.r0.reset();
 
-    { uint32_t v; CHECK_RETURN(log.r0.read1(&v, Log.r0));
+    { uint32_t v; CHECK_RETURN(log.r0.read1(&v, Log.r0.rwset));
       { auto odd = prims::sel<uint32_t, uint8_t>(v, 0);
         if (odd) {
-          CHECK_RETURN(log.r0.write1(prims::plus<uint32_t, 32>(prims::plus<uint32_t, 32>(prims::lsl<uint32_t, uint8_t, 32>(v, 1), v), 1), Log.r0));
+          CHECK_RETURN(log.r0.write1(prims::plus<uint32_t, 32>(prims::plus<uint32_t, 32>(prims::lsl<uint32_t, uint8_t, 32>(v, 1), v), 1), Log.r0.rwset));
         } else {
           return false;
         }
@@ -66,7 +66,7 @@ private:
 
 public:
   explicit collatz(state_t init) : Log(), log(), state(init) {
-    Log.r0.data0 = state.r0;
+    Log.r0.data0 = log.r0.data0 = state.r0; // FIXME is this second assignment necessary?
   }
 
   void cycle() {

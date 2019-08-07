@@ -173,8 +173,8 @@ let writeout out hpp =
          p "%s %s;" (cpp_type_of_size reg_size) var;
          p_checked (fun () ->
              match port with
-             | P0 -> pr "log.%s.read0(&%s, state.%s, Log.%s)" reg_name var reg_name reg_name
-             | P1 -> pr "log.%s.read1(&%s, Log.%s)" reg_name var reg_name);
+             | P0 -> pr "log.%s.read0(&%s, state.%s, Log.%s.rwset)" reg_name var reg_name reg_name
+             | P1 -> pr "log.%s.read1(&%s, Log.%s.rwset)" reg_name var reg_name);
          SGA.Read (port, var)
       | SGA.Call (fn, arg1, arg2) ->
          let arg1 = p_impure_expr arg1 in
@@ -216,7 +216,7 @@ let writeout out hpp =
 
       let p_reset () =
         List.iter (fun { reg_name; _ } ->
-            p "log.%s.reset(Log.%s);" reg_name reg_name)
+            p "log.%s.reset();" reg_name)
           rule.rl_footprint in
 
       let p_commit () =
@@ -257,7 +257,7 @@ let writeout out hpp =
              | P0 -> "write0"
              | P1 -> "write1" in
            p_checked (fun () ->
-               pr "log.%s.%s(%s, Log.%s)"
+               pr "log.%s.%s(%s, Log.%s.rwset)"
                  r.reg_name fn_name (sp_pure_expr pure) r.reg_name) in
       p_fn "bool" rule.rl_name (fun () ->
           p_reset ();
@@ -268,7 +268,7 @@ let writeout out hpp =
     let p_constructor () =
       p_fn "explicit" hpp.cpp_classname
         ~args:"state_t init" ~annot:" : Log(), log(), state(init)"
-        (fun () -> p "Log.r0.data0 = state.r0;") in
+        (fun () -> p "Log.r0.data0 = log.r0.data0 = state.r0;") in
 
     let p_cycle () =
       p_fn "void" "cycle" (fun () -> (* FIXME: use the scheduler *)

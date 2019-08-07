@@ -64,11 +64,37 @@ namespace prims {
   }
 }
 
-template<typename T, size_t size>
-struct reg_log_t {
+struct rwset_t {
   bool r1;
   bool w0;
   bool w1;
+
+  bool may_read0(rwset_t rL) {
+    return !(w1 || rL.w1 || rL.w0);
+  }
+
+  bool may_read1(rwset_t rL) {
+    return !(rL.w1);
+  }
+
+  bool may_write0(rwset_t rL) {
+    return !(r1 || w0 || w1 || rL.r1 || rL.w0 || rL.w1);
+  }
+
+  bool may_write1(rwset_t rL) {
+    return !(w1 || rL.w1);
+  }
+
+  void reset() {
+    r1 = w0 = w1 = false;
+  }
+
+  rwset_t() : r1(false), w0(false), w1(false) {}
+};
+
+template<typename T, size_t size>
+struct reg_log_t {
+  rwset_t rwset;
 
   // Reset alignment to prevent Clang from packing the fields together
   // This yields a ~25x speedup
@@ -77,47 +103,44 @@ struct reg_log_t {
   unsigned : 0;
   T data1 : size;
 
-  bool read0(T* target, T data, const reg_log_t<T, size>& rL) {
-    bool failed = w1 || rL.w1 || rL.w0;
+  bool read0(T* const target, const T data, const rwset_t rLset) {
+    bool ok = rwset.may_read0(rLset);
     *target = data;
-    return !failed;
+    return ok;
   }
 
-  bool read1(T* target, const reg_log_t<T, size>& rL) {
-    bool failed = rL.w1;
-    r1 = true;
+  bool read1(T* const target, const rwset_t rLset) {
+    bool ok = rwset.may_read1(rLset);
     *target = data0;
-    return !failed;
+    rwset.r1 = true;
+    return ok;
   }
 
-  bool write0(T val, const reg_log_t<T, size>& rL) {
-    bool failed = r1 || w0 || w1 || rL.r1 || rL.w0 || rL.w1;
-    w0 = true;
+  bool write0(const T val, const rwset_t rLset) {
+    bool ok = rwset.may_write0(rLset);
     data0 = val;
-    return !failed;
+    rwset.w0 = true;
+    return ok;
   }
 
-  bool write1(T val, const reg_log_t<T, size>& rL) {
-    bool failed = w1 || rL.w1;
-    w1 = true;
+  bool write1(const T val, const rwset_t rLset) {
+    bool ok = rwset.may_write1(rLset);
     data1 = val;
-    return !failed;
+    rwset.w1 = true;
+    return ok;
   }
 
-  void reset(reg_log_t rLog) {
-    r1 = w0 = w1 = false;
-    data0 = rLog.data0;
-    data1 = rLog.data1;
+  void reset() {
+    rwset.reset();
   }
 
   T commit() {
-    if (w1) {
+    if (rwset.w1) {
       data0 = data1;
     }
-    r1 = w0 = w1 = false;
+    rwset.reset();
     return data0;
   }
 
-  reg_log_t() : r1(false), w0(false), w1(false),
-                data0(0), data1(0) {}
+  reg_log_t() : rwset(), data0(0), data1(0) {}
 };
