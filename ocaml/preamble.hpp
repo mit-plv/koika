@@ -119,7 +119,7 @@ struct reg_log_t {
   rwset_t rwset;
 
   // Reset alignment to prevent Clang from packing the fields together
-  // This yields a ~25x speedup
+  // This yielded a ~25x speedup when rwset was inline
   unsigned : 0;
   T data0 : size;
   unsigned : 0;
@@ -160,7 +160,7 @@ struct reg_log_t {
     if (rwset.w1) {
       data0 = data1;
     }
-    rwset.reset();
+    reset();
     return data0;
   }
 
