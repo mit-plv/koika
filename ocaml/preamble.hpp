@@ -37,7 +37,7 @@ namespace prims {
   }
 
   template<typename T1, typename T2>
-  bool sel(const T1 data, const T2 idx) {
+  uint8_t sel(const T1 data, const T2 idx) {
     return (data >> idx) & 1;
   }
 
@@ -74,23 +74,6 @@ namespace prims {
   }
 
   /// unit specializations
-
-  /// bool specializations
-
-  template<>
-  bool lnot<bool, 1>(const bool data, const unit_t) {
-    return !data;
-  }
-
-  template<>
-  bool land<bool, 1>(const bool data1, const bool data2) {
-    return data1 && data2;
-  }
-
-  template<>
-  bool lor<bool, 1>(const bool data1, const bool data2) {
-    return data1 || data2;
-  }
 }
 
 struct rwset_t {

@@ -34,9 +34,9 @@ private:
     log.r0.reset();
 
     { std::uint32_t v; CHECK_RETURN(log.r0.read0(&v, state.r0, Log.r0.rwset));
-      { bool odd = prims::sel<std::uint32_t, std::uint8_t>(v, UINT8_C(0b00000));
-        if (prims::lnot<bool, 1>(odd, prims::tt)) {
-          CHECK_RETURN(log.r0.write0(prims::lsr<std::uint32_t, bool>(v, bool(0b1)), Log.r0.rwset));
+      { std::uint8_t odd = prims::sel<std::uint32_t, std::uint8_t>(v, UINT8_C(0b00000));
+        if (prims::lnot<std::uint8_t, 1>(odd, prims::tt)) {
+          CHECK_RETURN(log.r0.write0(prims::lsr<std::uint32_t, std::uint8_t>(v, UINT8_C(0b1)), Log.r0.rwset));
         } else {
           return false;
         }
@@ -51,9 +51,9 @@ private:
     log.r0.reset();
 
     { std::uint32_t v; CHECK_RETURN(log.r0.read1(&v, Log.r0.rwset));
-      { bool odd = prims::sel<std::uint32_t, std::uint8_t>(v, UINT8_C(0b00000));
+      { std::uint8_t odd = prims::sel<std::uint32_t, std::uint8_t>(v, UINT8_C(0b00000));
         if (odd) {
-          CHECK_RETURN(log.r0.write1(prims::plus<std::uint32_t, 32>(prims::plus<std::uint32_t, 32>(prims::lsl<std::uint32_t, bool, 32>(v, bool(0b1)), v), UINT32_C(0b00000000000000000000000000000001)), Log.r0.rwset));
+          CHECK_RETURN(log.r0.write1(prims::plus<std::uint32_t, 32>(prims::plus<std::uint32_t, 32>(prims::lsl<std::uint32_t, std::uint8_t, 32>(v, UINT8_C(0b1)), v), UINT32_C(0b00000000000000000000000000000001)), Log.r0.rwset));
         } else {
           return false;
         }

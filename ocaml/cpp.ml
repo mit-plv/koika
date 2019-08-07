@@ -22,8 +22,8 @@ let cpp_type_of_size sz =
   assert (sz >= 0);
   if sz = 0 then
     "prims::unit_t"             (* FIXME *)
-  else if sz = 1 then
-    "bool"
+  (* else if sz = 1 then
+   *   "bool" (* unnecessarily complicated *) *)
   else if sz <= 8 then
     "std::uint8_t"
   else if sz <= 16 then
@@ -44,8 +44,8 @@ let cpp_const_init sz cst =
   assert (sz >= 0);
   if sz = 0 then
     "prims::tt"
-  else if sz = 1 then
-    sprintf "bool(%s)" cst
+  (* else if sz = 1 then
+   *   sprintf "bool(%s)" cst (* unnecessarily complicated *) *)
   else if sz <= 8 then
     sprintf "UINT8_C(%s)" cst
   else if sz <= 16 then
