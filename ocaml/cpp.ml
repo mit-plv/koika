@@ -113,7 +113,7 @@ let writeout out hpp =
     p_scoped (sprintf "%s %s(%s)%s" typ name args annot) pbody in
 
   let p_ifdef pbody =
-    let cpp_define = sprintf "__%s_HPP__" hpp.cpp_classname in
+    let cpp_define = sprintf "%s_HPP" hpp.cpp_classname in
     p "#ifndef %s" cpp_define;
     p "#define %s" cpp_define;
     nl ();
