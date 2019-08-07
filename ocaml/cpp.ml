@@ -1,14 +1,15 @@
 open Common
+module SGA = SGALib.SGA
 
 type ('reg_t, 'fn_t) cpp_rule_t = {
     rl_name: string;
     rl_footprint: reg_signature list;
-    rl_body: (string, 'reg_t, 'fn_t) SGALib.SGA.rule;
+    rl_body: (string, 'reg_t, 'fn_t) SGA.rule;
   }
 
 type ('prim, 'reg_t, 'fn_t) cpp_input_t = {
     cpp_classname: string;
-    cpp_scheduler: string SGALib.SGA.scheduler;
+    cpp_scheduler: string SGA.scheduler;
     cpp_rules: ('reg_t, 'fn_t) cpp_rule_t list;
     cpp_register_names: 'reg_t list;
     cpp_registers: 'reg_t -> reg_signature;
@@ -44,7 +45,6 @@ let cpp_fn_name = function
   | { ffi_name = CustomFn _; _ } ->
      failwith "FIXME: Custom functions not supported"
   | { ffi_name = PrimFn f; ffi_arg1size = sz1; ffi_arg2size = sz2; _ } ->
-     let module SGA = SGALib.SGA in
      sprintf "prims::%s"
        (match f with
         | SGA.Sel _logsz -> sprintf "sel<%d, %d>" sz1 sz2
@@ -145,7 +145,6 @@ let writeout out (hpp: _ cpp_input_t) =
       prbody ();
       p ");" in
 
-    let module SGA = SGALib.SGA in
     let rec p_impure_expr expr =
       match expr with
       | SGA.Var (v, sz', m) -> SGA.Var (v, sz', m)
@@ -214,7 +213,6 @@ let writeout out (hpp: _ cpp_input_t) =
         pr ";";
         nl () in
 
-      let module SGA = SGALib.SGA in
       let rec p_rule_body = function
         | SGA.Skip _ ->
            p ""
@@ -310,11 +308,36 @@ let writeout out (hpp: _ cpp_input_t) =
       p_impl ();
       nl ())
 
+let rule_footprint rl =
+  let m = Hashtbl.create 25 in
+
+  let rec expr_footprint = function
+    | SGA.Var _ | SGA.Const _ -> ()
+    | SGA.Read (_, r) -> Hashtbl.replace m r ()
+    | SGA.Call (_, ex1, ex2) ->
+       expr_footprint ex1;
+       expr_footprint ex2 in
+
+  let rec rule_footprint = function
+    | SGA.Skip _ | SGA.Fail _ -> ()
+    | SGA.If (_, _, r1, r2)
+      | SGA.Seq (_, r1, r2) ->
+       rule_footprint r1;
+       rule_footprint r2
+    | SGA.Bind (_, _, _, ex, rl) ->
+       expr_footprint ex;
+       rule_footprint rl
+    | SGA.Write (_, _, r, ex) ->
+       Hashtbl.replace m r ();
+       expr_footprint ex in
+
+  rule_footprint rl;
+  List.of_seq (Hashtbl.to_seq_keys m)
+
 let input_of_compile_unit classname ({ c_registers; c_scheduler; c_rules }: SGALib.Compilation.compile_unit) =
-  let module SGA = SGALib.SGA in
   let tr_rule (name, rl_body) =
     { rl_name = "rule_" ^ name ;
-      rl_body; rl_footprint = c_registers } in (* FIXME footprint *)
+      rl_body; rl_footprint = rule_footprint rl_body } in
   { cpp_classname = classname;
     cpp_rules = List.map tr_rule c_rules;
     cpp_scheduler = c_scheduler;
