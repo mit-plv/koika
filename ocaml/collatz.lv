@@ -19,7 +19,7 @@
        (if (let ((r (read#0 r0)))
              (eq r 32'0))
            32'fail 32'hDEAD_beef)))
-    (if false
+    (if (not (eq (read#0 r0) 32'0))
         (write#0 r0 32'fail)))
 
   (rule divide
@@ -35,4 +35,4 @@
         (write#1 r0 (+ (+ (lsl v 1'1) v) 32'1)))))
 
   (scheduler main
-    (sequence divide multiply)))
+    (try test done (sequence divide multiply))))
