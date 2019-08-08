@@ -37,6 +37,9 @@ struct uint_t {
             std::conditional_t<size <= 64, std::uint64_t, void>>>>>;
 };
 
+#define UINT_T(sz) typename uint_t<sz>::t
+#define CONST_UINT_T(sz) const typename uint_t<sz>::t
+
 namespace prims {
   const unit_t tt = {};
 
@@ -47,40 +50,45 @@ namespace prims {
   }
 
   template<size_t sz1, size_t sz2>
-  uint8_t sel(const typename uint_t<sz1>::t data, const typename uint_t<sz2>::t idx) {
+  uint8_t sel(CONST_UINT_T(sz1) data, CONST_UINT_T(sz2) idx) {
     return (data >> idx) & 1;
   }
 
   template<size_t sz>
-  typename uint_t<sz>::t lnot(const typename uint_t<sz>::t data, const unit_t) {
-    return mask<typename uint_t<sz>::t, sz>(~data);
+  UINT_T(sz) lnot(CONST_UINT_T(sz) data, const unit_t) {
+    return mask<UINT_T(sz), sz>(~data);
   }
 
   template<size_t sz>
-  typename uint_t<sz>::t land(const typename uint_t<sz>::t data1, const typename uint_t<sz>::t data2) {
+  UINT_T(sz) land(CONST_UINT_T(sz) data1, CONST_UINT_T(sz) data2) {
     return data1 & data2;
   }
 
   template<size_t sz>
-  typename uint_t<sz>::t lor(const typename uint_t<sz>::t data1, const typename uint_t<sz>::t data2) {
+  UINT_T(sz) lor(CONST_UINT_T(sz) data1, CONST_UINT_T(sz) data2) {
     return data1 | data2;
   }
 
   template<size_t sz1, size_t sz2>
-  typename uint_t<sz1>::t lsr(const typename uint_t<sz1>::t data, const typename uint_t<sz2>::t shift) {
-    SIM_ASSERT(shift <= std::numeric_limits<typename uint_t<sz1>::t>::digits, "lsr: shift > size");
+  UINT_T(sz1) lsr(CONST_UINT_T(sz1) data, CONST_UINT_T(sz2) shift) {
+    SIM_ASSERT(shift <= std::numeric_limits<UINT_T(sz1)>::digits, "lsr: shift > size");
     return data >> shift;
   }
 
   template<size_t sz1, size_t sz2>
-  typename uint_t<sz1>::t lsl(const typename uint_t<sz1>::t data, const typename uint_t<sz2>::t shift) {
-    SIM_ASSERT(shift <= std::numeric_limits<typename uint_t<sz1>::t>::digits, "lsl: shift > size");
-    return mask<typename uint_t<sz1>::t, sz1>(data << shift);
+  UINT_T(sz1) lsl(CONST_UINT_T(sz1) data, CONST_UINT_T(sz2) shift) {
+    SIM_ASSERT(shift <= std::numeric_limits<UINT_T(sz1)>::digits, "lsl: shift > size");
+    return mask<UINT_T(sz1), sz1>(data << shift);
   }
 
   template<size_t sz>
-  typename uint_t<sz>::t plus(const typename uint_t<sz>::t x, const typename uint_t<sz>::t y) {
-    return mask<typename uint_t<sz>::t, sz>(x + y);
+  UINT_T(sz) eq(CONST_UINT_T(sz) x, CONST_UINT_T(sz) y) {
+    return x == y;
+  }
+
+  template<size_t sz>
+  UINT_T(sz) plus(CONST_UINT_T(sz) x, CONST_UINT_T(sz) y) {
+    return mask<UINT_T(sz), sz>(x + y);
   }
 
   /// unit specializations
