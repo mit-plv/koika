@@ -81,7 +81,7 @@ Section CircuitOptimizer.
 
   Instance EqDec_ListBool : EqDec (list bool) := _.
 
-  Fixpoint opt1 {sz} (c: circuit sz) {struct c}: circuit sz :=
+  Definition opt1' {sz} (c: circuit sz): circuit sz :=
     match c in Circuit _ _ sz return circuit sz with
     | (CNot c) as c0 =>
       match asconst c with
@@ -117,6 +117,12 @@ Section CircuitOptimizer.
     | c => c
     end.
 
+  Definition opt1 {sz} (c: circuit sz): circuit sz :=
+    match sz as n return (circuit n -> circuit n) with
+    | 0 => fun c => CConst Bits.nil
+    | _ => fun c => opt1' c
+    end c.
+
   Context {REnv: Env reg_t}.
   Context (r: REnv.(env_t) R).
   Context (sigma: forall f, Sigma f).
@@ -150,9 +156,9 @@ Section CircuitOptimizer.
   Qed.
 
   Arguments EqDec_ListBool: simpl never.
-  Lemma opt1_correct :
+  Lemma opt1'_correct :
     forall {sz} (c: circuit sz),
-      interp_circuit r sigma (opt1 c) = interp_circuit r sigma c.
+      interp_circuit r sigma (opt1' c) = interp_circuit r sigma c.
   Proof.
     induction c; cbn.
     Ltac t := match goal with
@@ -173,6 +179,16 @@ Section CircuitOptimizer.
              | _ => eauto using vect_to_list_inj
              end.
     all: repeat t.
+  Qed.
+
+  Lemma opt1_correct :
+    forall {sz} (c: circuit sz),
+      interp_circuit r sigma (opt1 c) = interp_circuit r sigma c.
+  Proof.
+    unfold opt1; destruct sz.
+    - cbn; intros.
+      destruct interp_circuit; reflexivity.
+    - eauto using opt1'_correct.
   Qed.
 End CircuitOptimizer.
 
@@ -237,12 +253,9 @@ Section CircuitCompilation.
     { canFire: circuit 1;
       regs: rwset }.
 
-  Record expr_circuit {sz} :=
+  Record action_circuit {sz} :=
     { erwc: rwcircuit;
       retVal: circuit sz }.
-
-  Definition rule_circuit :=
-    rwcircuit.
 
   Definition scheduler_circuit :=
     rwset.
@@ -262,22 +275,38 @@ Section CircuitCompilation.
     REnv.(map2) (fun k treg freg => mux_rwdata an cond treg freg)
                 tRegs fRegs.
 
-  Section Expr.
-    Context {sig: tsig var_t}.
-    Context (Gamma: ccontext sig).
-
-    Fixpoint compile_expr
-             {tau} (ex: expr var_t R Sigma sig tau)
+  Section Action.
+    Fixpoint compile_action
+             {sig: tsig var_t}
+             {tau}
+             (Gamma: ccontext sig)
+             (a: action var_t R Sigma sig tau)
              (clog: rwcircuit):
-      @expr_circuit tau :=
-      match ex in expr _ _ _ _ t return expr_circuit with
-      | Var m =>
+      @action_circuit tau :=
+      match a in action _ _ _ ts tau return ccontext ts -> @action_circuit tau with
+      | Fail tau => fun _ =>
+        {| retVal := $`"fail"`Bits.zero tau; (* LATER: Question mark here *)
+           erwc := {| canFire := $`"fail_cF"` (w1 false);
+                     regs := clog.(regs) |} |}
+      | Var m => fun Gamma =>
         {| retVal := CAnnotOpt "var_reference" (cassoc m Gamma);
            erwc := clog |}
-      | Const cst =>
+      | Const cst => fun _ =>
         {| retVal := $`"constant_value_from_source"`cst;
            erwc := clog |}
-      | Read P0 idx =>
+      | Seq r1 r2 => fun Gamma =>
+        compile_action Gamma r2 (compile_action Gamma r1 clog).(erwc)
+      | @Bind _ _ _ _ _ _ tau tau' var ex body => fun Gamma =>
+        let ex := compile_action Gamma ex clog in
+        compile_action (CtxCons (var, tau) ex.(retVal) Gamma) body ex.(erwc)
+      | If cond tbranch fbranch => fun Gamma =>
+        let cond := compile_action Gamma cond clog in
+        let tbranch := compile_action Gamma tbranch cond.(erwc) in
+        let fbranch := compile_action Gamma fbranch cond.(erwc) in
+        {| retVal := CAnnotOpt "if_retVal" (CMux cond.(retVal) tbranch.(retVal) fbranch.(retVal));
+           erwc := {| canFire := CAnnotOpt "if_cF" (CMux cond.(retVal) tbranch.(erwc).(canFire) fbranch.(erwc).(canFire));
+                     regs := mux_rwsets "if_mux" cond.(retVal) tbranch.(erwc).(regs) fbranch.(erwc).(regs) |} |}
+      | Read P0 idx => fun _ =>
         let reg := REnv.(getenv) clog.(regs) idx in
         {| retVal := CAnnotOpt "read0" (REnv.(getenv) r idx);
            erwc := {| canFire := (clog.(canFire) &&`"read0_cF"`
@@ -289,15 +318,9 @@ Section CircuitCompilation.
                                                              write1 := reg.(write1);
                                                              data0 := reg.(data0);
                                                              data1 := reg.(data1) |} |} |}
-      | Read P1 idx =>
+      | Read P1 idx => fun _ =>
         let reg := REnv.(getenv) clog.(regs) idx in
         {| retVal := reg.(data0);
-           (* retVal := CAnnotOpt "read1_retVal_from_L_pred" *)
-           (*                  (CMux (Reg.(write0)) (Reg.(data0)) *)
-           (*                        (CAnnotOpt "read1_retVal_from_l_pred" *)
-           (*                                 (CMux (reg.(write0)) (reg.(data0)) *)
-           (*                                       (CAnnotOpt "read1_retVal_from_reg" *)
-           (*                                                (REnv.(getenv) r idx))))); *)
            erwc := {| canFire := clog.(canFire);
                      regs := REnv.(putenv) clog.(regs) idx {| read1 := $`"read1"` (w1 true);
                                                              (* Unchanged *)
@@ -306,72 +329,42 @@ Section CircuitCompilation.
                                                              write1 := reg.(write1);
                                                              data0 := reg.(data0);
                                                              data1 := reg.(data1) |} |} |}
-      | Call fn a1 a2 =>
-        let a1 := compile_expr a1 clog in
-        let a2 := compile_expr a2 a1.(erwc) in
+      | Write P0 idx val => fun Gamma =>
+        let val := compile_action Gamma val clog in
+        let reg := REnv.(getenv) val.(erwc).(regs) idx in
+        {| retVal := $`"write_retVal"`Bits.nil;
+           erwc := {| canFire := (val.(erwc).(canFire) &&`"write0_cF"`
+                                (!`"no_read1"` reg.(read1) &&`"write0_cF"`
+                                 !`"no_write0"` reg.(write0) &&`"write0_cF"`
+                                 !`"no_write1"` reg.(write1)));
+                     regs := REnv.(putenv) val.(erwc).(regs) idx {| write0 := $`"write0"` (w1 true);
+                                                                   data0 := val.(retVal);
+                                                                   (* Unchanged *)
+                                                                   read0 := reg.(read0);
+                                                                   read1 := reg.(read1);
+                                                                   write1 := reg.(write1);
+                                                                   data1 := reg.(data1) |} |} |}
+      | Write P1 idx val => fun Gamma =>
+        let val := compile_action Gamma val clog in
+        let reg := REnv.(getenv) val.(erwc).(regs) idx in
+        {| retVal := $`"write_retVal"`Bits.nil;
+           erwc := {| canFire := val.(erwc).(canFire) &&`"write1_cF"` !`"no_write1"` reg.(write1);
+                     regs := REnv.(putenv) val.(erwc).(regs) idx {| write1 := $`"write1"` (w1 true);
+                                                            data1 := val.(retVal);
+                                                            (* Unchanged *)
+                                                            read0 := reg.(read0);
+                                                            read1 := reg.(read1);
+                                                            write0 := reg.(write0);
+                                                            data0 := reg.(data0) |} |} |}
+      | Call fn a1 a2 => fun Gamma =>
+        let a1 := compile_action Gamma a1 clog in
+        let a2 := compile_action Gamma a2 a1.(erwc) in
         {| retVal := fn [a1.(retVal), a2.(retVal)]`"Call_from_source"`;
            erwc := a2.(erwc) |}
-      end.
-  End Expr.
-
-  Section Rule.
-    Fixpoint compile_rule
-             {sig: tsig var_t}
-             (Gamma: ccontext sig)
-             (rl: rule var_t R Sigma sig)
-             (clog: rwcircuit):
-      rule_circuit :=
-      match rl in TypedSyntax.rule _ _ _ t return (ccontext t -> rule_circuit) with
-      | Skip =>
-        fun _ => clog
-      | Fail =>
-        fun _ => {| canFire := $`"fail_cF"` (w1 false);
-                 regs := clog.(regs) |}
-      | Seq r1 r2 =>
-        fun Gamma =>
-        compile_rule Gamma r2 (compile_rule Gamma r1 clog)
-      | @Bind _ _ _ _ _ _ tau var ex body =>
-        fun Gamma =>
-        let ex := compile_expr Gamma ex clog in
-        compile_rule (CtxCons (var, tau) ex.(retVal) Gamma) body ex.(erwc)
-      | If cond tbranch fbranch =>
-        fun Gamma =>
-        let cond := compile_expr Gamma cond clog in
-        let tbranch := compile_rule Gamma tbranch cond.(erwc) in
-        let fbranch := compile_rule Gamma fbranch cond.(erwc) in
-        {| canFire := CAnnotOpt "if_cF" (CMux cond.(retVal) tbranch.(canFire) fbranch.(canFire));
-           regs := mux_rwsets "if_mux" cond.(retVal) tbranch.(regs) fbranch.(regs) |}
-      | Write P0 idx val =>
-        fun Gamma =>
-        let val := compile_expr Gamma val clog in
-        let reg := REnv.(getenv) val.(erwc).(regs) idx in
-        {| canFire := (val.(erwc).(canFire) &&`"write0_cF"`
-                      (!`"no_read1"` reg.(read1) &&`"write0_cF"`
-                       !`"no_write0"` reg.(write0) &&`"write0_cF"`
-                       !`"no_write1"` reg.(write1)));
-           regs := REnv.(putenv) val.(erwc).(regs) idx {| write0 := $`"write0"` (w1 true);
-                                                         data0 := val.(retVal);
-                                                         (* Unchanged *)
-                                                         read0 := reg.(read0);
-                                                         read1 := reg.(read1);
-                                                         write1 := reg.(write1);
-                                                         data1 := reg.(data1) |} |}
-      | Write P1 idx val =>
-        fun Gamma =>
-        let val := compile_expr Gamma val clog in
-        let reg := REnv.(getenv) val.(erwc).(regs) idx in
-        {| canFire := val.(erwc).(canFire) &&`"write1_cF"` !`"no_write1"` reg.(write1);
-           regs := REnv.(putenv) val.(erwc).(regs) idx {| write1 := $`"write1"` (w1 true);
-                                                  data1 := val.(retVal);
-                                                  (* Unchanged *)
-                                                  read0 := reg.(read0);
-                                                  read1 := reg.(read1);
-                                                  write0 := reg.(write0);
-                                                  data0 := reg.(data0) |} |}
       end Gamma.
-  End Rule.
+  End Action.
 
-  Definition adapter (cs: scheduler_circuit) : rule_circuit :=
+  Definition adapter (cs: scheduler_circuit) : rwcircuit :=
     {| canFire := $`"cF_init"` (w1 true);
        regs := REnv.(map) (fun k reg => {| read0 := $`"init_no_read0"` (w1 false);
                                        read1 := $`"init_no_read1"` (w1 false);
@@ -418,7 +411,7 @@ Section CircuitCompilation.
                       data1 := (ruleReg.(data1)) |})
                 rl_rwset acc.
 
-  Context (rules: name_t -> rule var_t R Sigma nil).
+  Context (rules: name_t -> rule var_t R Sigma).
 
   Fixpoint compile_scheduler'
            (s: scheduler name_t)
@@ -428,17 +421,17 @@ Section CircuitCompilation.
     | Done =>
       input
     | Cons rl s =>
-      let rl := compile_rule CtxEmpty (rules rl) (adapter input) in
-      let acc := update_accumulated_rwset rl.(regs) input in
-      let will_fire := willFire_of_canFire rl input in
+      let rl := compile_action CtxEmpty (rules rl) (adapter input) in
+      let acc := update_accumulated_rwset rl.(erwc).(regs) input in
+      let will_fire := willFire_of_canFire rl.(erwc) input in
       let input := mux_rwsets "mux_input" will_fire acc input in
       compile_scheduler' s input
     | Try rl st sf =>
-      let rl := compile_rule CtxEmpty (rules rl) (adapter input) in
-      let acc := update_accumulated_rwset rl.(regs) input in
+      let rl := compile_action CtxEmpty (rules rl) (adapter input) in
+      let acc := update_accumulated_rwset rl.(erwc).(regs) input in
       let st := compile_scheduler' st acc in
       let sf := compile_scheduler' sf input in
-      let will_fire := willFire_of_canFire rl input in
+      let will_fire := willFire_of_canFire rl.(erwc) input in
       mux_rwsets "mux_subschedulers" will_fire st sf
     end.
 
@@ -471,6 +464,6 @@ Section CircuitCompilation.
 End CircuitCompilation.
 
 Arguments rwdata {_ _}.
-Arguments rule_circuit {_ _}.
+Arguments action_circuit {_ _}.
 Arguments scheduler_circuit {_ _}.
 Arguments state_transition_circuit {_ _}.
