@@ -94,28 +94,24 @@ module Compilation = struct
       | P0 -> "P0"
       | P1 -> "P1"
 
-    let rec pp_expr = function
+    let rec pp_action = function
+      | UFail sz -> (sprintf "Fail#%d" sz)
       | UVar v -> sprintf "var %s" v
       | UConst (n, bs) ->
          sprintf "%d'%s" n
            (String.concat "" (List.rev_map (fun x -> if x then "1" else "0") (SGA.vect_to_list n bs)))
+      | USeq (r1, r2) -> sprintf "Seq (%s) (%s)" (pp_action r1) (pp_action r2)
+      | UBind (v, e, r) -> sprintf "Bind (%s <- %s) (%s)" v (pp_action e) (pp_action r)
+      | UIf (c, r1, r2) -> sprintf "If %s Then %s Else %s EndIf" (pp_action c) (pp_action r1) (pp_action r2)
       | URead (p, r) -> sprintf "%s.read#%s" r.reg_name (pp_port p)
-      | UCall (_, e1, e2) -> (sprintf "UCall (__, %s, %s)" (pp_expr e1) (pp_expr e2))
-      | UEPos (_, x) -> pp_expr x
-
-    let rec pp_rule = function
-      | USkip -> "Skip"
-      | UFail -> "Fail"
-      | USeq (r1, r2) -> sprintf "Seq (%s) (%s)" (pp_rule r1) (pp_rule r2)
-      | UBind (v, e, r) -> sprintf "Bind (%s <- %s) (%s)" v (pp_expr e) (pp_rule r)
-      | UIf (c, r1, r2) -> sprintf "If %s Then %s Else %s EndIf" (pp_expr c) (pp_rule r1) (pp_rule r2)
-      | UWrite (p, r, v) -> sprintf "%s.write#%s(%s)" r.reg_name (pp_port p) (pp_expr v)
-      | URPos (_, x) -> pp_rule x
+      | UWrite (p, r, v) -> sprintf "%s.write#%s(%s)" r.reg_name (pp_port p) (pp_action v)
+      | UCall (_, e1, e2) -> (sprintf "UCall (__, %s, %s)" (pp_action e1) (pp_action e2))
+      | UAPos (_, x) -> pp_action x
 
     let rec pp_scheduler = function
       | UDone -> "Done"
-      | UCons (r, s) -> sprintf "Cons (%s) (%s)" (pp_rule r) (pp_scheduler s)
-      | UTry (r, s1, s2) -> sprintf "Try (%s) (%s) (%s)" (pp_rule r) (pp_scheduler s1) (pp_scheduler s2)
+      | UCons (r, s) -> sprintf "Cons (%s) (%s)" (pp_action r) (pp_scheduler s)
+      | UTry (r, s1, s2) -> sprintf "Try (%s) (%s) (%s)" (pp_action r) (pp_scheduler s1) (pp_scheduler s2)
       | USPos (_, x) -> pp_scheduler x
   end
 
@@ -124,38 +120,35 @@ module Compilation = struct
     | 1 -> SGA.P1
     | _ -> assert false
 
-  let rec translate_expr { lpos; lcnt } =
-    SGA.UEPos
+  let uskip =
+    SGA.UConst (0, Obj.magic SGA.Bits.nil)
+
+  let rec translate_action { lpos; lcnt } =
+    SGA.UAPos
       (lpos,
        match lcnt with
+       | Skip -> uskip
+       | Fail -> SGA.UFail 0 (* FIXME add syntax for fail in expression *)
        | Var v -> SGA.UVar v
        | Num _ -> assert false
        | Const bs -> SGA.UConst (List.length bs, SGA.vect_of_list bs)
-       | Read (port, reg) -> SGA.URead (translate_port port, reg.lcnt)
-       | Call (fn, a1 :: a2 :: []) -> SGA.UCall (fn.lcnt, translate_expr a1, translate_expr a2)
-       | Call (_, _) -> assert false)
-
-  let rec translate_rule { lpos; lcnt } =
-    SGA.URPos
-      (lpos,
-       match lcnt with
-       | Skip -> SGA.USkip
-       | Fail -> SGA.UFail
        | Progn rs -> translate_seq rs
        | Let (bs, body) -> translate_bindings bs body
-       | If (e, r, rs) -> SGA.UIf (translate_expr e, translate_rule r, translate_seq rs)
-       | When (e, rs) -> SGA.UIf (translate_expr e, translate_seq rs, SGA.UFail)
-       | Write (port, reg, v) ->
-          SGA.UWrite (translate_port port, reg.lcnt, translate_expr v))
+       | If (e, r, rs) -> SGA.UIf (translate_action e, translate_action r, translate_seq rs)
+       | When (e, rs) -> SGA.UIf (translate_action e, translate_seq rs, SGA.UFail 0) (* FIXME syntax for when in typechecker? *)
+       | Read (port, reg) -> SGA.URead (translate_port port, reg.lcnt)
+       | Write (port, reg, v) -> SGA.UWrite (translate_port port, reg.lcnt, translate_action v)
+       | Call (fn, a1 :: a2 :: []) -> SGA.UCall (fn.lcnt, translate_action a1, translate_action a2)
+       | Call (_, _) -> assert false)
   and translate_bindings bs body =
     match bs with
     | [] -> translate_seq body
-    | (v, e) :: bs -> SGA.UBind (v.lcnt, translate_expr e, translate_bindings bs body)
+    | (v, e) :: bs -> SGA.UBind (v.lcnt, translate_action e, translate_bindings bs body)
   and translate_seq rs =
     match rs with
-    | [] -> SGA.USkip
-    | [r] -> translate_rule r
-    | r :: rs -> SGA.USeq (translate_rule r, translate_seq rs)
+    | [] -> uskip
+    | [r] -> translate_action r
+    | r :: rs -> SGA.USeq (translate_action r, translate_seq rs)
 
   let rec translate_scheduler { lpos; lcnt } =
     SGA.USPos
@@ -184,11 +177,11 @@ module Compilation = struct
                                                   | Inl m -> m
                                                   | Inr _ -> failwith "Unexpected register name" }
 
-  type 'f raw_rule =
-    ('f, ('f, reg_signature, string SGA.interop_ufn_t) rule) locd
+  type 'f raw_action =
+    ('f, ('f, reg_signature, string SGA.interop_ufn_t) action) locd
 
-  type typechecked_rule =
-    (var_t, reg_signature, string SGA.interop_fn_t) SGA.rule
+  type typechecked_action =
+    (var_t, reg_signature, string SGA.interop_fn_t) SGA.action
 
   type 'f raw_scheduler = ('f, 'f scheduler) locd
 
@@ -198,7 +191,7 @@ module Compilation = struct
   type compile_unit =
     { c_registers: reg_signature list;
       c_scheduler: string SGA.scheduler;
-      c_rules: (name_t * typechecked_rule) list }
+      c_rules: (name_t * typechecked_action) list }
 
   type compiled_circuit =
     (reg_signature, string SGA.interop_fn_t) SGA.circuit
@@ -212,9 +205,18 @@ module Compilation = struct
     | SGA.IllTyped { epos; emsg } ->
        Result.Error (Util.type_error_to_error epos emsg)
 
-  let typecheck_rule (raw_ast: 'f raw_rule) : (typechecked_rule, 'f err_contents) result =
-    let ast = translate_rule raw_ast in
-    result_of_type_result (SGA.type_rule Util.string_eq_dec r sigma uSigma raw_ast.lpos [] ast)
+  let typecheck_rule (raw_ast: 'f raw_action) : (typechecked_action, 'f err_contents) result =
+    let ast = translate_action raw_ast in
+    match SGA.type_action Util.string_eq_dec r sigma uSigma raw_ast.lpos [] ast with
+    | WellTyped (SGA.ExistT (tau, r)) ->
+       if tau = 0 then Ok r
+       else
+         let msg =
+           Printf.sprintf "This expression has type %s, but rules are expected to have type %s."
+             (Util.type_to_string tau) (Util.type_to_string 0) in
+         Error { epos = raw_ast.lpos; ekind = `TypeError; emsg = msg }
+    | IllTyped { epos; emsg } ->
+       Error (Util.type_error_to_error epos emsg)
 
   let compile (cu: compile_unit) : (reg_signature -> compiled_circuit) =
     let rEnv = rEnv_of_register_list cu.c_registers in

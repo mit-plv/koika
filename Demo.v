@@ -40,7 +40,7 @@ Module Ex1.
     | Odd => fun (bs: bits 3) _ => w1 (Bits.lsb bs)
     end.
 
-  Example urules r : urule unit var_t reg_t fn_t :=
+  Example uactions r : uaction unit var_t reg_t fn_t :=
     match r with
     | r1 =>
       UBind "x" (URead P0 R0)
@@ -50,7 +50,7 @@ Module Ex1.
     end.
 
   Definition rules :=
-    tc_rules R Sigma uSigma urules.
+    tc_rules R Sigma uSigma uactions.
 
   Example us1 : uscheduler unit name_t :=
     UTry r1 UDone UDone.
@@ -90,11 +90,11 @@ Module Ex2.
     | UNot, (bits_t n) => Not n
     end.
 
-  Example _negate : urule unit var_t reg_t ufn_t  :=
+  Example _negate : uaction unit var_t reg_t ufn_t  :=
     UBind "x" (URead P1 R0)
           (UWrite P1 R0 (UVar "x")).
 
-  Example _swap_or_replace : urule unit var_t reg_t ufn_t  :=
+  Example _swap_or_replace : uaction unit var_t reg_t ufn_t  :=
     UBind "should_swap" (URead P0 R2)
           (UIf (UVar "should_swap")
                (USeq (UWrite P0 R1 (URead P0 R0))
@@ -103,19 +103,19 @@ Module Ex2.
                                     (URead P0 R0)
                                     (URead P0 R1)))).
 
-  Example _ill_typed_write : urule unit var_t reg_t ufn_t  :=
+  Example _ill_typed_write : uaction unit var_t reg_t ufn_t  :=
     UWrite P0 R2 (URead P0 R1).
 
-  Example _unbound_variable : urule unit var_t reg_t ufn_t  :=
+  Example _unbound_variable : uaction unit var_t reg_t ufn_t  :=
     UWrite P0 R0 (UVar "y").
 
   Example tsched : scheduler name_t :=
     tc_scheduler (UTry swap_or_replace (UTry negate UDone UDone) (UTry negate UDone UDone)).
 
-  Fail Example trule : rule var_t R Sigma nil :=
+  Fail Example trule : rule var_t R Sigma :=
     tc_rule R Sigma uSigma _ill_typed_write.
 
-  Fail Example trule : rule var_t R Sigma nil :=
+  Fail Example trule : rule var_t R Sigma :=
     tc_rule R Sigma uSigma _unbound_variable.
 
   Definition r idx : R idx :=
@@ -131,7 +131,7 @@ Module Ex2.
     | Not n => fun bs _ => Bits.map negb bs
     end.
 
-  Definition rules :=
+  Definition rules : name_t -> rule var_t R Sigma :=
     tc_rules R Sigma uSigma
              (fun r => match r with
                     | negate => _negate
@@ -185,7 +185,7 @@ Module Collatz.
 
   Open Scope sga.
 
-  Definition _divide : urule unit var_t reg_t ufn_t :=
+  Definition _divide : uaction unit var_t reg_t ufn_t :=
     Let "v" <- R0#read0 in
     Let "odd" <- USel[[$"v", UConst (Bits.zero logsz)]] in
     If UNot[[$"odd"]] Then
@@ -194,10 +194,10 @@ Module Collatz.
       fail
     EndIf.
 
-  Definition TimesThree (ex: uexpr unit var_t reg_t ufn_t) :=
+  Definition TimesThree (ex: uaction unit var_t reg_t ufn_t) :=
     UUIntPlus[[ULsl[[ex, UConst Ob~1]], ex]]%sga_expr.
 
-  Definition _multiply : urule unit var_t reg_t ufn_t :=
+  Definition _multiply : uaction unit var_t reg_t ufn_t :=
     Let "v" <- R0#read1 in
     Let "odd" <- USel[[$"v", UConst (Bits.zero logsz)]] in
     If $"odd" Then
@@ -236,11 +236,11 @@ Module Collatz.
   Definition result :=
     compute (interp_scheduler cr isigma rules collatz).
   Definition divide_result :=
-    compute (interp_rule cr isigma CtxEmpty log_empty log_empty
-                         (tc_rule R iSigma iuSigma _divide)).
+    compute (interp_action cr isigma CtxEmpty log_empty log_empty
+                           (rules divide)).
   Definition multiply_result :=
-    compute (interp_rule cr isigma CtxEmpty log_empty log_empty
-                         (tc_rule R iSigma iuSigma _multiply)).
+    compute (interp_action cr isigma CtxEmpty log_empty log_empty
+                           (rules multiply)).
 
   Definition circuit :=
     compile_scheduler (ContextEnv.(create) (readRegisters R iSigma)) rules collatz.

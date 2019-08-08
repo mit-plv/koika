@@ -113,90 +113,76 @@ Section Interp.
     | P1 => negb (log_existsb (log_app rule_log sched_log) idx is_write1)
     end.
 
-  Notation expr := (expr var_t R Sigma).
   Notation rule := (rule var_t R Sigma).
+  Notation action := (action var_t R Sigma).
   Notation scheduler := (scheduler name_t).
 
   Definition vcontext (sig: tsig var_t) :=
     context (fun '(k, tau) => Type_of_type tau) sig.
 
-  Section Expr.
-    Context {sig: tsig var_t}.
-    Context (Gamma: vcontext sig).
-    Context (sched_log: Log).
+  Section Action.
 
-    Fixpoint interp_expr {tau}
-             (rule_log: Log)
-             (e: expr sig tau)
+    Fixpoint interp_action
+             {sig: tsig var_t}
+             {tau}
+             (Gamma: vcontext sig)
+             (sched_log: Log)
+             (action_log: Log)
+             (a: action sig tau)
       : option (Log * tau) :=
-      match e with
-      | Var m =>
-        Some (rule_log, cassoc m Gamma)
-      | Const cst => Some (rule_log, cst)
-      | Read P0 idx =>
-        if may_read0 sched_log rule_log idx then
-          Some (log_cons idx (LE LogRead P0 tt) rule_log, REnv.(getenv) r idx)
+      match a in TypedSyntax.action _ _ _ ts tau return (vcontext ts -> option (Log * tau))  with
+      | Fail tau => fun _ =>
+        None
+      | Var m => fun Gamma =>
+        Some (action_log, cassoc m Gamma)
+      | Const cst => fun _ =>
+        Some (action_log, cst)
+      | Seq r1 r2 => fun Gamma =>
+        let/opt2 action_log, _ := interp_action Gamma sched_log action_log r1 in
+        interp_action Gamma sched_log action_log r2
+      | @Bind _ _ _ _ _ _ tau tau' var ex body => fun Gamma =>
+        let/opt2 action_log, v := interp_action Gamma sched_log action_log ex in
+        interp_action (CtxCons (var, tau) v Gamma) sched_log action_log body
+      | If cond tbranch fbranch => fun Gamma =>
+        let/opt2 action_log, cond := interp_action Gamma sched_log action_log cond in
+        if Bits.single cond then
+          interp_action Gamma sched_log action_log tbranch
+        else
+          interp_action Gamma sched_log action_log fbranch
+      | Read P0 idx => fun _ =>
+        if may_read0 sched_log action_log idx then
+          Some (log_cons idx (LE LogRead P0 tt) action_log, REnv.(getenv) r idx)
         else None
-      | Read P1 idx =>
+      | Read P1 idx => fun _ =>
         if may_read1 sched_log idx then
-          Some (log_cons idx (LE LogRead P1 tt) rule_log,
-                match latest_write0 (log_app rule_log sched_log) idx with
+          Some (log_cons idx (LE LogRead P1 tt) action_log,
+                match latest_write0 (log_app action_log sched_log) idx with
                 | Some v => v
                 | None => REnv.(getenv) r idx
                 end)
         else None
-      | Call fn arg1 arg2 =>
-        let/opt2 rule_log, arg1 := interp_expr rule_log arg1 in
-        let/opt2 rule_log, arg2 := interp_expr rule_log arg2 in
-        Some (rule_log, (sigma fn) arg1 arg2)
-      end.
-  End Expr.
-
-  Section Rule.
-    Fixpoint interp_rule
-             {sig: tsig var_t}
-             (Gamma: vcontext sig)
-             (sched_log: Log)
-             (rule_log: Log)
-             (rl: rule sig)
-    : option Log :=
-      match rl in TypedSyntax.rule _ _ _ t return (vcontext t -> option Log) with
-      | Skip => fun _ => Some rule_log
-      | Fail => fun _ => None
-      | Seq r1 r2 =>
-        fun Gamma =>
-          let/opt rule_log := interp_rule Gamma sched_log rule_log r1 in
-          interp_rule Gamma sched_log rule_log r2
-      | @Bind _ _ _ _ _ _ tau var ex body =>
-        fun Gamma =>
-          let/opt2 rule_log, v := interp_expr Gamma sched_log rule_log ex in
-          interp_rule (CtxCons (var, tau) v Gamma) sched_log rule_log body
-      | If cond tbranch fbranch =>
-        fun Gamma =>
-        let/opt2 rule_log, cond := interp_expr Gamma sched_log rule_log cond in
-        if Bits.single cond then
-          interp_rule Gamma sched_log rule_log tbranch
-        else
-          interp_rule Gamma sched_log rule_log fbranch
-      | Write prt idx val =>
-        fun Gamma =>
-          let/opt2 rule_log, val := interp_expr Gamma sched_log rule_log val in
-          if may_write sched_log rule_log prt idx then
-            Some (log_cons idx (LE LogWrite prt val) rule_log)
-          else None
+      | Write prt idx val => fun Gamma =>
+        let/opt2 action_log, val := interp_action Gamma sched_log action_log val in
+        if may_write sched_log action_log prt idx then
+          Some (log_cons idx (LE LogWrite prt val) action_log, Bits.nil)
+        else None
+      | Call fn arg1 arg2 => fun Gamma =>
+        let/opt2 action_log, arg1 := interp_action Gamma sched_log action_log arg1 in
+        let/opt2 action_log, arg2 := interp_action Gamma sched_log action_log arg2 in
+        Some (action_log, (sigma fn) arg1 arg2)
       end Gamma.
-  End Rule.
+  End Action.
 
   Section Scheduler.
-    Context (rules: name_t -> rule nil).
+    Context (rules: name_t -> rule).
 
     Fixpoint interp_scheduler'
              (sched_log: Log)
              (s: scheduler)
              {struct s} :=
       let interp_try r s1 s2 :=
-          match interp_rule CtxEmpty sched_log log_empty (rules r) with
-          | Some l => interp_scheduler' (log_app l sched_log) s1
+          match interp_action CtxEmpty sched_log log_empty (rules r) with
+          | Some (l, _) => interp_scheduler' (log_app l sched_log) s1
           | CannotRun => interp_scheduler' sched_log s2
           end in
       match s with

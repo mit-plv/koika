@@ -6,21 +6,17 @@ Inductive Port :=
 Section Syntax.
   Context {pos_t name_t var_t reg_t fn_t: Type}.
 
-  Inductive uexpr :=
+  Inductive uaction :=
+  | UFail (n: nat)
   | UVar (var: var_t)
   | UConst {n} (cst: bits n)
+  | USeq (r1 r2: uaction)
+  | UBind (v: var_t) (ex: uaction) (body: uaction)
+  | UIf (cond: uaction) (tbranch: uaction) (fbranch: uaction)
   | URead (port: Port) (idx: reg_t)
-  | UCall (fn: fn_t) (arg1: uexpr) (arg2: uexpr)
-  | UEPos (p: pos_t) (e: uexpr).
-
-  Inductive urule  :=
-  | USkip
-  | UFail
-  | USeq (r1 r2: urule)
-  | UBind (v: var_t) (ex: uexpr) (body: urule)
-  | UIf (cond: uexpr) (tbranch: urule) (fbranch: urule)
-  | UWrite (port: Port) (idx: reg_t) (value: uexpr)
-  | URPos (p: pos_t) (r: urule).
+  | UWrite (port: Port) (idx: reg_t) (value: uaction)
+  | UCall (fn: fn_t) (arg1: uaction) (arg2: uaction)
+  | UAPos (p: pos_t) (e: uaction).
 
   Inductive uscheduler :=
   | UDone
@@ -29,6 +25,5 @@ Section Syntax.
   | USPos (p: pos_t) (s: uscheduler).
 End Syntax.
 
-Arguments uexpr : clear implicits.
-Arguments urule : clear implicits.
+Arguments uaction : clear implicits.
 Arguments uscheduler : clear implicits.

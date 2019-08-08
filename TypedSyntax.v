@@ -8,43 +8,48 @@ Section TypedSyntax.
 
   Definition tsig := list (var_t * type).
 
-  Inductive expr {sig: tsig} : type -> Type :=
-  | Var {k: var_t} {tau: type} (m: member (k, tau) sig): expr tau
-  | Const {n: nat} (cst: bits n): expr (bits_t n)
-  | Read (port: Port) (idx: reg_t): expr (R idx)
-  | Call (fn: fn_t)
-         (arg1: expr (Sigma fn).(arg1Type))
-         (arg2: expr (Sigma fn).(arg2Type))
-    : expr (Sigma fn).(retType).
-
-  Inductive rule : tsig -> Type :=
-  | Skip {sig} : rule sig
-  | Fail {sig} : rule sig
-  | Seq {sig} (r1 r2: rule sig) : rule sig
-  | Bind {sig} {tau}
+  Inductive action : tsig -> type -> Type :=
+  | Fail {sig} tau : action sig tau
+  | Var {sig} {k: var_t} {tau: type}
+        (m: member (k, tau) sig) : action sig tau
+  | Const {sig} {n: nat}
+          (cst: bits n) : action sig (bits_t n)
+  | Seq {sig tau}
+        (r1: action sig (bits_t 0))
+        (r2: action sig tau) : action sig tau
+  | Bind {sig} {tau tau'}
          (var: var_t)
-         (ex: @expr sig tau)
-         (body: rule (cons (var, tau) sig)) : rule sig
-  | If {sig}
-       (cond: @expr sig (bits_t 1))
-       (tbranch: rule sig) (fbranch: rule sig) : rule sig
+         (ex: action sig tau)
+         (body: action (cons (var, tau) sig) tau') : action sig tau'
+  | If {sig tau}
+       (cond: action sig (bits_t 1))
+       (tbranch fbranch: action sig tau) : action sig tau
+  | Read {sig}
+         (port: Port)
+         (idx: reg_t): action sig (R idx)
   | Write {sig}
           (port: Port) (idx: reg_t)
-          (value: @expr sig (R idx)) : rule sig.
+          (value: action sig (R idx)) : action sig (bits_t 0)
+  | Call {sig}
+         (fn: fn_t)
+         (arg1: action sig (Sigma fn).(arg1Type))
+         (arg2: action sig (Sigma fn).(arg2Type)) : action sig (Sigma fn).(retType).
 
   Inductive scheduler :=
   | Done
   | Cons (r: name_t) (s: scheduler)
   | Try (r: name_t) (s1 s2: scheduler).
 
+  Definition rule := action nil (bits_t 0).
+
   Record schedule :=
     { s_sched : scheduler;
-      s_rules : name_t -> @rule nil }.
+      s_actions : name_t -> rule }.
 End TypedSyntax.
 
 Arguments tsig : clear implicits.
-Arguments expr var_t {reg_t fn_t} R Sigma.
 Arguments rule var_t {reg_t fn_t} R Sigma.
+Arguments action var_t {reg_t fn_t} R Sigma.
 Arguments scheduler : clear implicits.
 Arguments schedule name_t var_t {reg_t fn_t} R Sigma.
 

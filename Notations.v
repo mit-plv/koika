@@ -49,9 +49,9 @@ Notation "f [[ arg1 ',' arg2 ]]" :=
     format "f [[ arg1 ','  arg2 ]]") : sga_expr_scope.
 
 Notation "'skip'" :=
-  USkip (at level 99) : sga_scope.
+  (UConst Bits.nil) (at level 99) : sga_scope.
 Notation "'fail'" :=
-  UFail (at level 99) : sga_scope.
+  (UFail 0) (at level 99) : sga_scope.
 Notation "r1 ';;' r2" :=
   (USeq r1 r2) (at level 99) : sga_scope.
 Notation "'Let' var '<-' expr 'in' body" :=
