@@ -80,6 +80,10 @@ let gensym, gensym_reset =
     sprintf "_%s%d" prefix counter in
   (next, reset)
 
+type assignment_target =
+  | NoTarget
+  | VarTarget of size_t * bool (* declared *) * var_t (* name *)
+
 let writeout out (hpp: _ cpp_input_t) =
   let nl _ = output_string out "\n" in
   let p fmt = Printf.kfprintf nl out fmt in
@@ -161,9 +165,12 @@ let writeout out (hpp: _ cpp_input_t) =
 
       let p_assign target exprval =
         match target with
-        | None -> ()
-        | Some target ->
+        | NoTarget -> ()
+        | VarTarget (_, true, target) ->
            pr "%s = %s;" target exprval;
+           nl ()
+        | VarTarget (sz, false, target) ->
+           pr "%s %s = %s;" (cpp_type_of_size sz) target exprval;
            nl () in
 
       let sp_const sz bits =
@@ -174,16 +181,26 @@ let writeout out (hpp: _ cpp_input_t) =
       let p_decl sz name =
         p "%s %s;" (cpp_type_of_size sz) name in
 
-      let p_gensym sz prefix =
-        let v = gensym prefix in
-        p_decl sz v;
-        v in
+      let p_declare_target = function
+        | VarTarget (sz, false, name) ->
+           p_decl sz name;
+           VarTarget (sz, true, name)
+        | t -> t in
 
-      let ensure_target sz = function
-        | Some t -> t
-        | None -> p_gensym sz "ignored" in
+      let gensym_target sz prefix =
+        let name = gensym prefix in
+        name, (VarTarget (sz, false, name)) in
 
-      let rec p_action (target: var_t option) = function
+      let p_ensure_target sz t =
+        let declared, var =
+          match t with
+          | NoTarget -> false, gensym "ignored"
+          | VarTarget (_, b, nm) -> b, nm in
+        if not declared then
+          p_decl sz var;
+        var in
+
+      let rec p_action (target: assignment_target) = function
         | SGA.Fail (_, _) ->
            p "return false;";
         | SGA.Var (_, v, _, _) ->
@@ -191,48 +208,49 @@ let writeout out (hpp: _ cpp_input_t) =
         | SGA.Const (_, sz, cst) ->
            p_assign target (sp_const sz cst)
         | SGA.Seq (_, _, a1, a2) ->
-           p_action None a1;
+           p_action NoTarget a1;
            p_action target a2
         | SGA.Bind (_, sz, _, v, ex, rl) ->
+           let target = p_declare_target target in
            p_scoped "/* bind */" (fun () ->
-               p_decl sz v;
-               p_action (Some v) ex;
+               p_action (VarTarget (sz, false, v)) ex;
                p_action target rl)
         | SGA.If (_, _, cond, tbr, fbr) ->
-           let cvar = p_gensym 1 "c" in
-           p_action (Some cvar) cond;
+           let cvar, ctarget = gensym_target 1 "c" in
+           p_action ctarget cond;
+           let target = p_declare_target target in
            p_scoped (sprintf "if (%s)" cvar) (fun () -> p_action target tbr);
            p_scoped "else" (fun () -> p_action target fbr)
         | SGA.Read (_, port, reg) ->
            let { reg_name; reg_size; _ } = hpp.cpp_registers reg in
-           let var = ensure_target reg_size target in
+           let var = p_ensure_target reg_size target in
            p_checked (fun () ->
                match port with
                | P0 -> pr "log.%s.read0(&%s, state.%s, Log.%s.rwset)" reg_name var reg_name reg_name
                | P1 -> pr "log.%s.read1(&%s, Log.%s.rwset)" reg_name var reg_name)
         | SGA.Write (_, port, reg, expr) ->
            let r = hpp.cpp_registers reg in
-           let valvar = p_gensym r.reg_size "v" in
-           p_action (Some valvar) expr;
+           let v, vt = gensym_target reg.reg_size "v" in
+           p_action vt expr;
            let fn_name = match port with
              | P0 -> "write0"
              | P1 -> "write1" in
            p_checked (fun () ->
                pr "log.%s.%s(%s, Log.%s.rwset)"
-                 r.reg_name fn_name valvar r.reg_name);
+                 r.reg_name fn_name v r.reg_name);
            p_assign target "prims::tt"
         | SGA.Call (_, fn, arg1, arg2) ->
            let f = hpp.cpp_functions fn in
-           let a1 = p_gensym f.ffi_arg1size "x" in
-           let a2 = p_gensym f.ffi_arg2size "y" in
-           p_action (Some a1) arg1;
-           p_action (Some a2) arg2;
+           let a1, t1 = gensym_target f.ffi_arg1size "x" in
+           let a2, t2 = gensym_target f.ffi_arg2size "y" in
+           p_action t1 arg1;
+           p_action t2 arg2;
            p_assign target (sprintf "%s(%s, %s)" (cpp_fn_name f) a1 a2) in
 
       p_fn "bool" rule.rl_name (fun () ->
           p_reset ();
           nl ();
-          p_action None rule.rl_body;
+          p_action NoTarget rule.rl_body;
           nl ();
           p_commit ());
       nl () in
