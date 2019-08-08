@@ -143,7 +143,7 @@ let parse fname sexps =
     Str.regexp "^h" in
   let try_variable var =
     if Str.string_match ident_re var 0 then Some var else None in
-  let try_number loc a =
+  let try_number' loc a =
     let a = Str.global_replace underscore_re "" a in
     if Str.string_match bits_const_re a 0 then
       let sizestr = Str.matched_group 1 a in
@@ -165,6 +165,10 @@ let parse fname sexps =
     else match int_of_string_opt a with
          | Some n -> Some (Num n)
          | None -> None in
+  let try_number loc = function
+    | "true" -> Some (Const [true])
+    | "false" -> Some (Const [false])
+    | a -> try_number' loc a in
   let expect_number_or_var loc a =
     match try_number loc a with
     | Some c -> c
