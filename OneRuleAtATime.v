@@ -17,22 +17,22 @@ Section Proof.
   Open Scope bool_scope.
 
   Notation Log := (Log R REnv).
-  Notation expr := (expr var_t R Sigma).
+  Notation action := (action var_t R Sigma).
   Notation rule := (rule var_t R Sigma).
   Notation scheduler := (scheduler name_t).
 
-  Context (rules: name_t -> rule nil).
+  Context (rules: name_t -> rule).
 
   Fixpoint interp_scheduler'_trace
            (sched_log: Log)
            (s: scheduler)
            {struct s} :=
     let interp_try rl s1 s2 :=
-        match interp_rule r sigma CtxEmpty sched_log log_empty (rules rl) with
-        | Some l => match interp_scheduler'_trace (log_app l sched_log) s1 with
-                   | Some (rs, log) => Some (rl :: rs, log)
-                   | None => None
-                   end
+        match interp_action r sigma CtxEmpty sched_log log_empty (rules rl) with
+        | Some (l, _) => match interp_scheduler'_trace (log_app l sched_log) s1 with
+                        | Some (rs, log) => Some (rl :: rs, log)
+                        | None => None
+                        end
         | CannotRun => interp_scheduler'_trace sched_log s2
         end in
     match s with
@@ -178,13 +178,27 @@ Section Proof.
   Ltac t :=
     repeat t_step.
 
-  Lemma interp_expr_commit:
-    forall {sig tau} (ex: expr sig tau) (Gamma: vcontext sig) (sl sl': Log) rule_log lv,
-      interp_expr r sigma Gamma (log_app sl sl') rule_log ex = Some lv ->
-      interp_expr (commit_update r sl') sigma Gamma sl rule_log ex = Some lv.
+  Lemma interp_action_commit:
+    forall {sig tau} (a: action sig tau) (Gamma: vcontext sig) (sl sl': Log) action_log lv,
+      interp_action r sigma Gamma (log_app sl sl') action_log a = Some lv ->
+      interp_action (commit_update r sl') sigma Gamma sl action_log a = Some lv.
   Proof.
-    induction ex; cbn; intros Gamma sl sl' rule_log lv HSome; try congruence.
+    induction a; cbn; intros Gamma sl sl' action_log lv HSome; try congruence.
 
+    - (* Seq *)
+      t.
+      erewrite IHa1 by eauto; cbn.
+      erewrite IHa2 by eauto; reflexivity.
+    - (* Bind *)
+      t.
+      erewrite IHa1 by eauto; cbn.
+      erewrite IHa2 by eauto; reflexivity.
+    - (* If *)
+      t;
+        erewrite IHa1 by eauto; cbn;
+          [ erewrite IHa2 by eauto; cbn |
+            erewrite IHa3 by eauto; cbn ];
+          t; reflexivity.
     - destruct port.
       + (* Read0 *)
         t.
@@ -201,38 +215,15 @@ Section Proof.
         * erewrite getenv_commit_update by eassumption.
           rewrite may_read1_latest_write_is_0 by eassumption.
           reflexivity.
-
-    - (* Call *)
-      t.
-      erewrite IHex1 by eauto; cbn.
-      erewrite IHex2 by eauto; cbn.
-      reflexivity.
-  Qed.
-
-  Lemma interp_rule_commit:
-    forall {sig} (rl: rule sig) (Gamma: vcontext sig) (sl sl': Log) rule_log l,
-      interp_rule r sigma Gamma (log_app sl sl') rule_log rl = Some l ->
-      interp_rule (commit_update r sl') sigma Gamma sl rule_log rl = Some l.
-  Proof.
-    induction rl; cbn; intros Gamma sl sl' rule_log l HSome; try congruence.
-    - (* Seq *)
-      t.
-      erewrite IHrl1 by eauto; cbn.
-      erewrite IHrl2 by eauto; reflexivity.
-    - (* Bind *)
-      t.
-      erewrite interp_expr_commit by eauto; cbn.
-      erewrite IHrl by eauto; reflexivity.
-    - (* If *)
-      t;
-        erewrite interp_expr_commit by eauto; cbn;
-          [ erewrite IHrl1 by eauto; cbn |
-            erewrite IHrl2 by eauto; cbn ];
-          t; reflexivity.
     - (* Write *)
       t.
-      erewrite interp_expr_commit by eauto; cbn.
+      erewrite IHa by eauto; cbn.
       t; reflexivity.
+    - (* Call *)
+      t.
+      erewrite IHa1 by eauto; cbn.
+      erewrite IHa2 by eauto; cbn.
+      reflexivity.
   Qed.
 
   Lemma OneRuleAtATime':
@@ -243,7 +234,7 @@ Section Proof.
     induction s; cbn.
     - inversion 1; subst; cbn in *; eauto.
     - unfold interp_scheduler_trace_and_update; cbn; intros; t.
-      + erewrite interp_rule_commit by (rewrite log_app_empty_r; eassumption);
+      + erewrite interp_action_commit by (rewrite log_app_empty_r; eassumption);
           cbn.
         rewrite log_app_empty_l.
         rewrite commit_update_assoc.
@@ -254,7 +245,7 @@ Section Proof.
         unfold interp_scheduler_trace_and_update; rewrite Heqo.
         reflexivity.
     - unfold interp_scheduler_trace_and_update; cbn; intros; t.
-      + erewrite interp_rule_commit by (rewrite log_app_empty_r; eassumption);
+      + erewrite interp_action_commit by (rewrite log_app_empty_r; eassumption);
           cbn.
         rewrite log_app_empty_l.
         rewrite commit_update_assoc.
@@ -273,12 +264,12 @@ Section Proof.
   Proof.
     induction s; cbn.
     - inversion 1; subst; eauto.
-    - intros * Heq. destruct interp_rule as [log' | ] eqn:?.
+    - intros * Heq. destruct interp_action as [(log' & ?) | ] eqn:?.
       + destruct (IHs _ _ Heq) as (rs & Heq').
         rewrite Heq'; eauto.
       + destruct (IHs _ _ Heq) as (rs & Heq').
         rewrite Heq'; eauto.
-    - intros * Heq. destruct interp_rule as [log' | ] eqn:?.
+    - intros * Heq. destruct interp_action as [(log' & ?) | ] eqn:?.
       + destruct (IHs1 _ _ Heq) as (rs & Heq').
         rewrite Heq'; eauto.
       + destruct (IHs2 _ _ Heq) as (rs & Heq').
