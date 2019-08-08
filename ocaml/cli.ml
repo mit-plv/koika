@@ -185,17 +185,19 @@ let parse fname sexps =
   let fail_num_re =
     Str.regexp "\\([^ \t]+\\)'fail" in
   let rec expect_action = function
-    | Atom { loc; atom = "skip" } ->
-       locd_make loc Skip
-    | Atom { loc; atom = "fail" } ->
-       locd_make loc (Fail 0)
-    | Atom { loc; atom } when Str.string_match fail_num_re atom 0 ->
-       let numstr = Str.matched_group 1 atom in
-       (match int_of_string_opt numstr with
-        | Some sz -> locd_make loc (Fail sz)
-        | None -> parse_error loc (sprintf "Cannot parse %s as a number" numstr))
     | Atom { loc; atom } ->
-       locd_make loc (expect_number_or_var loc atom)
+       locd_make loc
+         (match atom with
+          | "skip" -> Skip
+          | "fail" -> Fail 0
+          | atom ->
+             if Str.string_match fail_num_re atom 0 then
+               let numstr = Str.matched_group 1 atom in
+               (match int_of_string_opt numstr with
+                | Some sz -> Fail sz
+                | None -> parse_error loc (sprintf "Cannot parse %s as a number" numstr))
+             else
+               expect_number_or_var loc atom)
     | List { loc; elements } ->
        let loc_hd, hd, args = expect_funapp loc "constructor or function" (elements) in
        locd_make loc

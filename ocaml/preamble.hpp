@@ -43,6 +43,11 @@ struct uint_t {
 namespace prims {
   const unit_t tt = {};
 
+  template<size_t sz>
+  UINT_T(sz) __attribute__((noreturn)) unreachable() {
+    __builtin_unreachable();
+  }
+
   template<typename T, size_t sz>
   T mask(T arg) {
     // GCC and Clang are smart enough to elide this when sz == ::digits

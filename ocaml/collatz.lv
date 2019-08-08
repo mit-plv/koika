@@ -18,7 +18,9 @@
                        32'0 32'b01010111100011))
        (if (let ((r (read#0 r0)))
              (eq r 32'0))
-           32'fail 32'hDEAD_beef))))
+           32'fail 32'hDEAD_beef)))
+    (if false
+        (write#0 r0 32'fail)))
 
   (rule divide
     (let ((v (read#0 r0))

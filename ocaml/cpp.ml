@@ -214,7 +214,10 @@ let writeout out (hpp: _ cpp_input_t) =
       let rec p_action (target: assignment_target) = function
         | SGA.Fail (_, _) ->
            p "return false;";
-           PureExpr "prims::unreachable()"
+           (match target with
+            | NoTarget -> NotAssigned
+            | VarTarget { declared = true; name; _ } -> Assigned name
+            | VarTarget { sz; _ } -> PureExpr (sprintf "prims::unreachable<%d>()" sz))
         | SGA.Var (_, v, _, _) ->
            PureExpr v
         | SGA.Const (_, sz, cst) ->
