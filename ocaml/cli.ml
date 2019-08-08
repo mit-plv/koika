@@ -178,22 +178,44 @@ let parse fname sexps =
     let hd, args = expect_cons loc kind elements in
     let loc_hd, hd = expect_atom (sprintf "a %s name" kind) hd in
     loc_hd, hd, args in
-  let rec expect_expr = function
+  let rec expect_action = function
+    | Atom { loc; atom = "skip" } ->
+       locd_make loc Skip
+    | Atom { loc; atom = "fail" } ->
+       locd_make loc Fail
     | Atom { loc; atom } ->
        locd_make loc (expect_number_or_var loc atom)
     | List { loc; elements } ->
        let loc_hd, hd, args = expect_funapp loc "constructor or function" (elements) in
        locd_make loc
          (match hd with
+          | "progn" ->
+             Progn (List.map expect_action args)
+          | "let" ->
+             let bindings, body = expect_cons loc "let bindings" args in
+             Let (expect_let_bindings bindings, List.map expect_action body)
+          | "if" ->
+             let cond, body = expect_cons loc "if condition" args in
+             let tbranch, fbranches = expect_cons loc "if branch" body in
+             If (expect_action cond, expect_action tbranch,
+                 List.map expect_action fbranches)
+          | "when" ->
+             let cond, body = expect_cons loc "when condition" args in
+             When (expect_action cond, List.map expect_action body)
+          | "write#0" | "write#1" ->
+             let reg, body = expect_cons loc "register name" args in
+             let port = int_of_string (String.sub hd (String.length hd - 1) 1) in
+             Write (port, locd_of_pair (expect_atom "a register name" reg),
+                    expect_action (expect_single loc "value" "write expression" body))
           | "read#0" | "read#1" ->
              let reg, body = expect_cons loc "register name" args in
              let port = int_of_string (String.sub hd (String.length hd - 1) 1) in
              let () = expect_nil body in
              Read (port, locd_of_pair (expect_atom "a register name" reg))
           | _ ->
-             let args = List.map expect_expr args in
-             Call (locd_make loc_hd hd, args)) in
-  let expect_let_binding b =
+             let args = List.map expect_action args in
+             Call (locd_make loc_hd hd, args))
+  and expect_let_binding b =
     let loc, b = expect_list "a let binding" b in
     let var, values = expect_cons loc "identifier" b in
     let loc_v, var = expect_atom "an identifier" var in
@@ -201,9 +223,9 @@ let parse fname sexps =
     | None -> parse_error loc_v (sprintf "Cannot parse `%s' as an identifier" var)
     | Some var ->
        let value = expect_single loc "value" "let binding" values in
-       let value = expect_expr value in
-       (locd_make loc_v var, value) in
-  let expect_let_bindings bs =
+       let value = expect_action value in
+       (locd_make loc_v var, value)
+  and expect_let_bindings bs =
     let _, bs = expect_list "let bindings" bs in
     List.map expect_let_binding bs in
   let expect_register init_val =
@@ -220,35 +242,8 @@ let parse fname sexps =
     | Some (Const c) -> locd_make loc c
     | Some (Num n) -> untyped_number_error loc n
     | _ -> parse_error loc (sprintf "Expecting a number, got `%s' %s" init_val num_fmt) in
-  let rec expect_rule = function
-    | (Atom _) as a ->
-       locd_of_pair (expect_constant [("skip", Skip); ("fail", Fail)] a)
-    | List { loc; elements } ->
-       let loc_hd, hd, args = expect_funapp loc "constructor" (elements) in
-       locd_make loc
-         (match hd with
-          | "progn" ->
-             Progn (List.map expect_rule args)
-          | "let" ->
-             let bindings, body = expect_cons loc "let bindings" args in
-             Let (expect_let_bindings bindings, List.map expect_rule body)
-          | "if" ->
-             let cond, body = expect_cons loc "if condition" args in
-             let tbranch, fbranches = expect_cons loc "if branch" body in
-             If (expect_expr cond, expect_rule tbranch,
-                 List.map expect_rule fbranches)
-          | "when" ->
-             let cond, body = expect_cons loc "when condition" args in
-             When (expect_expr cond, List.map expect_rule body)
-          | "write#0" | "write#1" ->
-             let reg, body = expect_cons loc "register name" args in
-             let port = int_of_string (String.sub hd (String.length hd - 1) 1) in
-             Write (port, locd_of_pair (expect_atom "a register name" reg),
-                    expect_expr (expect_single loc "value" "write expression" body))
-          | _ ->
-             parse_error loc_hd (sprintf "Unexpected in rule: `%s'" hd)) in
-  let expect_rules loc body =
-    locd_make loc (Progn (List.map expect_rule body)) in
+  let expect_actions loc body =
+    locd_make loc (Progn (List.map expect_action body)) in
   let rec expect_scheduler : 'f sexp -> ('f, 'f scheduler) locd = function
     | (Atom _) as a ->
        locd_of_pair (expect_constant [("done", Done)] a)
@@ -284,7 +279,7 @@ let parse fname sexps =
      | `Module ->
         `Module (expect_module name d_loc body)
      | `Rule ->
-        `Rule (name, expect_rules d_loc body)
+        `Rule (name, expect_actions d_loc body)
      | `Scheduler ->
         `Scheduler (name, expect_scheduler (expect_single d_loc "body" "scheduler declaration" body)))
   and expect_module m_name m_loc body =

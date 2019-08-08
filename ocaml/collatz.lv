@@ -1,19 +1,24 @@
-;; (defmacro module (name &rest body)
-;;   (declare (indent defun)))
-
-;; (defmacro rule (name args &rest body)
-;;   (declare (indent defun)))
-
-;; (defmacro scheduler (&rest body)
-;;   (declare (indent defun)))
+;; (progn
+;;   (defmacro module (name &rest body)
+;;     (declare (indent defun)))
+;;   (defmacro rule (name args &rest body)
+;;     (declare (indent defun)))
+;;   (defmacro scheduler (&rest body)
+;;     (declare (indent defun))))
 
 (module Collatz
   (register r0 32'0)
 
   (rule test
-    (write#0 r0 32'0)
-    (write#0 r0 32'b01010111100011)
-    (write#0 r0 32'hDEAD_beef))
+    (write#1
+     r0
+     (progn
+       (write#0 r0 (if (let ((r (read#0 r0)))
+                         (eq (+ r 32'1) 32'1))
+                       32'0 32'b01010111100011))
+       (if (let ((r (read#0 r0)))
+             (eq r 32'0))
+           32'0 32'hDEAD_beef))))
 
   (rule divide
     (let ((v (read#0 r0))
