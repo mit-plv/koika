@@ -178,11 +178,18 @@ let parse fname sexps =
     let hd, args = expect_cons loc kind elements in
     let loc_hd, hd = expect_atom (sprintf "a %s name" kind) hd in
     loc_hd, hd, args in
+  let fail_num_re =
+    Str.regexp "\\([^ \t]+\\)'fail" in
   let rec expect_action = function
     | Atom { loc; atom = "skip" } ->
        locd_make loc Skip
     | Atom { loc; atom = "fail" } ->
-       locd_make loc Fail
+       locd_make loc (Fail 0)
+    | Atom { loc; atom } when Str.string_match fail_num_re atom 0 ->
+       let numstr = Str.matched_group 1 atom in
+       (match int_of_string_opt numstr with
+        | Some sz -> locd_make loc (Fail sz)
+        | None -> parse_error loc (sprintf "Cannot parse %s as a number" numstr))
     | Atom { loc; atom } ->
        locd_make loc (expect_number_or_var loc atom)
     | List { loc; elements } ->
@@ -356,7 +363,7 @@ let resolve_rule fname registers rule =
     { lpos;
       lcnt = match lcnt with
              | Skip -> Skip
-             | Fail -> Fail
+             | Fail sz -> Fail sz
              | Var v -> Var v
              | Num n -> untyped_number_error lpos n
              | Const bs -> Const bs

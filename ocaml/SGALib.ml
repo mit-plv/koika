@@ -128,7 +128,7 @@ module Compilation = struct
       (lpos,
        match lcnt with
        | Skip -> uskip
-       | Fail -> SGA.UFail 0 (* FIXME add syntax for fail in expression *)
+       | Fail sz -> SGA.UFail sz
        | Var v -> SGA.UVar v
        | Num _ -> assert false
        | Const bs -> SGA.UConst (List.length bs, SGA.vect_of_list bs)

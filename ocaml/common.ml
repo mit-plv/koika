@@ -34,7 +34,7 @@ type ('loc_t, 'content_t) locd = {
 
 type ('f, 'reg_t, 'fn_t) action =
   | Skip
-  | Fail
+  | Fail of size_t
   | Var of var_t
   | Num of int
   | Const of bool list
