@@ -1,5 +1,5 @@
-#ifndef collatz_HPP
-#define collatz_HPP
+#ifndef SIM_collatz_HPP
+#define SIM_collatz_HPP
 
 //////////////
 // PREAMBLE //
@@ -34,9 +34,9 @@ private:
     log.r0.reset(Log.r0);
 
     { uint_t<32>::t v; CHECK_RETURN(log.r0.read0(&v, state.r0, Log.r0.rwset));
-      { uint_t<1>::t odd = prims::sel<32, 5>(v, UINT8_C(0b00000));
-        if (prims::lnot<1>(odd, prims::tt)) {
-          CHECK_RETURN(log.r0.write0(prims::lsr<32, 1>(v, UINT8_C(0b1)), Log.r0.rwset));
+      { uint_t<1>::t odd = prims::sel<32, 5>(v, UINT8(0b00000));
+        if (bool(prims::lnot<1>(odd, prims::tt))) {
+          CHECK_RETURN(log.r0.write0(prims::lsr<32, 1>(v, UINT8(0b1)), Log.r0.rwset));
         } else {
           return false;
         }
@@ -51,9 +51,9 @@ private:
     log.r0.reset(Log.r0);
 
     { uint_t<32>::t v; CHECK_RETURN(log.r0.read1(&v, Log.r0.rwset));
-      { uint_t<1>::t odd = prims::sel<32, 5>(v, UINT8_C(0b00000));
-        if (odd) {
-          CHECK_RETURN(log.r0.write1(prims::plus<32>(prims::plus<32>(prims::lsl<32, 1>(v, UINT8_C(0b1)), v), UINT32_C(0b00000000000000000000000000000001)), Log.r0.rwset));
+      { uint_t<1>::t odd = prims::sel<32, 5>(v, UINT8(0b00000));
+        if (bool(odd)) {
+          CHECK_RETURN(log.r0.write1(prims::plus<32>(prims::plus<32>(prims::lsl<32, 1>(v, UINT8(0b1)), v), UINT32(0b00000000000000000000000000000001)), Log.r0.rwset));
         } else {
           return false;
         }
@@ -65,8 +65,7 @@ private:
   }
 
 public:
-  explicit collatz(state_t init) : Log(), log(), state(init) {
-    // FIXME is this second assignment necessary?
+  explicit collatz(state_t init) : state(init) {
     Log.r0.data0 = state.r0;
   }
 
@@ -76,8 +75,9 @@ public:
     state.r0 = Log.r0.commit();
   }
 
-  void run(std::uint64_t ncycles) {
-    for (std::uint64_t cycle_id = 0; cycle_id < ncycles; cycle_id++) {
+  template<typename T>
+  void run(T ncycles) {
+    for (T cycle_id = 0; cycle_id < ncycles; cycle_id++) {
       cycle();
     }
   }

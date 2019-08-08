@@ -31,13 +31,13 @@ let cpp_const_init sz cst =
   if sz = 0 then
     "prims::tt"
   else if sz <= 8 then
-    sprintf "UINT8_C(%s)" cst
+    sprintf "UINT8(%s)" cst
   else if sz <= 16 then
-    sprintf "UINT16_C(%s)" cst
+    sprintf "UINT16(%s)" cst
   else if sz <= 32 then
-    sprintf "UINT32_C(%s)" cst
+    sprintf "UINT32(%s)" cst
   else if sz <= 64 then
-    sprintf "UINT64_C(%s)" cst
+    sprintf "UINT64(%s)" cst
   else
     failwith (sprintf "Unsupported size: %d" sz)
 
@@ -103,8 +103,8 @@ let writeout out (hpp: _ cpp_input_t) =
   let p_fn typ name ?args:(args="") ?annot:(annot="") pbody =
     p_scoped (sprintf "%s %s(%s)%s" typ name args annot) pbody in
 
-  let p_ifdef pbody =
-    let cpp_define = sprintf "%s_HPP" hpp.cpp_classname in
+  let p_includeguard pbody =
+    let cpp_define = sprintf "SIM_%s_HPP" (String.capitalize_ascii hpp.cpp_classname) in
     p "#ifndef %s" cpp_define;
     p "#define %s" cpp_define;
     nl ();
@@ -218,8 +218,8 @@ let writeout out (hpp: _ cpp_input_t) =
             | NoTarget -> NotAssigned
             | VarTarget { declared = true; name; _ } -> Assigned name
             | VarTarget { sz; _ } -> PureExpr (sprintf "prims::unreachable<%d>()" sz))
-        | SGA.Var (_, v, _, _) ->
-           PureExpr v
+        | SGA.Var (_, v, _, m) ->
+           PureExpr v (* FIXME fail if reference isn't to latest binding of v *)
         | SGA.Const (_, sz, cst) ->
            PureExpr (sp_const sz cst)
         | SGA.Seq (_, _, a1, a2) ->
@@ -235,7 +235,7 @@ let writeout out (hpp: _ cpp_input_t) =
            let ctarget = gensym_target 1 "c" in
            let cexpr = p_action ctarget cond in
            let target = p_declare_target target in
-           ignore (p_scoped (sprintf "if (%s)" (must_expr cexpr))
+           ignore (p_scoped (sprintf "if (bool(%s))" (must_expr cexpr))
                      (fun () -> p_assign_pure target (p_action target tbr)));
            p_scoped "else"
              (fun () -> p_assign_pure target (p_action target fbr))
@@ -276,7 +276,7 @@ let writeout out (hpp: _ cpp_input_t) =
       let p_init_data0 { reg_name = nm; _ } =
         p "Log.%s.data0 = state.%s;" nm nm in
       p_fn "explicit" hpp.cpp_classname
-        ~args:"state_t init" ~annot:" : Log(), log(), state(init)"
+        ~args:"state_t init" ~annot:" : state(init)"
         (fun () -> iter_registers p_init_data0) in
 
     let rec p_scheduler = function
@@ -296,8 +296,8 @@ let writeout out (hpp: _ cpp_input_t) =
           iter_registers p_commit_register) in
 
     let p_run () =
-      p_fn "void" "run" ~args:"std::uint64_t ncycles" (fun () ->
-          p_scoped "for (std::uint64_t cycle_id = 0; cycle_id < ncycles; cycle_id++)"
+      p_fn "template<typename T> void" "run" ~args:"T ncycles" (fun () ->
+          p_scoped "for (T cycle_id = 0; cycle_id < ncycles; cycle_id++)"
             (fun () -> p "cycle();")) in
 
     let p_observe () =
@@ -326,7 +326,7 @@ let writeout out (hpp: _ cpp_input_t) =
         nl ();
         p_observe ();
         nl ()) in
-  p_ifdef (fun () ->
+  p_includeguard (fun () ->
       p_preamble ();
       nl ();
       p_impl ();

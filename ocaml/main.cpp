@@ -1,5 +1,5 @@
-// #include "collatz.generated.hpp"
-#include "collatz.handwritten.hpp"
+#include "collatz.generated.hpp"
+// #include "collatz.handwritten.hpp"
 #include <string>
 
 int main(int argc, char** argv) {
@@ -7,8 +7,8 @@ int main(int argc, char** argv) {
     std::exit(1);
   }
 
-  auto r0 = (uint32_t)std::stoi(argv[1]);
-  auto ncycles = std::stoull(argv[2]);
+  auto r0 = static_cast<uint32_t>(std::strtoul(argv[1], nullptr, 10));
+  uint64_t ncycles = std::strtoull(argv[2], nullptr, 10);
 
   collatz::state_t init = { .r0 = r0 };
   auto sim = collatz(init);
