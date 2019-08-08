@@ -82,7 +82,12 @@ let gensym, gensym_reset =
 
 type assignment_target =
   | NoTarget
-  | VarTarget of size_t * bool (* declared *) * var_t (* name *)
+  | VarTarget of { sz: size_t; declared: bool; name: var_t }
+
+type assignment_result =
+  | NotAssigned
+  | Assigned of var_t
+  | PureExpr of string
 
 let writeout out (hpp: _ cpp_input_t) =
   let nl _ = output_string out "\n" in
@@ -91,8 +96,9 @@ let writeout out (hpp: _ cpp_input_t) =
 
   let p_scoped header ?terminator:(terminator="") pbody =
     p "%s {" header;
-    pbody ();
-    p "}%s" terminator in
+    let r = pbody () in
+    p "}%s" terminator;
+    r in
 
   let p_fn typ name ?args:(args="") ?annot:(annot="") pbody =
     p_scoped (sprintf "%s %s(%s)%s" typ name args annot) pbody in
@@ -163,16 +169,6 @@ let writeout out (hpp: _ cpp_input_t) =
             p "return true;")
           rule.rl_footprint in
 
-      let p_assign target exprval =
-        match target with
-        | NoTarget -> ()
-        | VarTarget (_, true, target) ->
-           pr "%s = %s;" target exprval;
-           nl ()
-        | VarTarget (sz, false, target) ->
-           pr "%s %s = %s;" (cpp_type_of_size sz) target exprval;
-           nl () in
-
       let sp_const sz bits =
         let bs = SGALib.Util.bits_const_of_bits sz bits in
         let s = SGALib.Util.string_of_bits ~mode:`Cpp bs in
@@ -182,75 +178,93 @@ let writeout out (hpp: _ cpp_input_t) =
         p "%s %s;" (cpp_type_of_size sz) name in
 
       let p_declare_target = function
-        | VarTarget (sz, false, name) ->
+        | VarTarget { sz; declared = false; name } ->
            p_decl sz name;
-           VarTarget (sz, true, name)
+           VarTarget { sz; declared = true; name }
         | t -> t in
 
       let gensym_target sz prefix =
-        let name = gensym prefix in
-        name, (VarTarget (sz, false, name)) in
+        VarTarget { sz; declared = false; name = gensym prefix } in
 
       let p_ensure_target sz t =
         let declared, var =
           match t with
           | NoTarget -> false, gensym "ignored"
-          | VarTarget (_, b, nm) -> b, nm in
+          | VarTarget { declared; name; _ } -> declared, name in
         if not declared then
           p_decl sz var;
         var in
 
+      let p_assign_pure target result =
+        (match target, result with
+         | VarTarget { declared = true; name; _ }, PureExpr e ->
+            pr "%s = %s;" name e; nl ();
+            Assigned name
+         | VarTarget { sz; name; _ }, PureExpr e ->
+            pr "%s %s = %s;" (cpp_type_of_size sz) name e;
+            Assigned name
+         | _, _ ->
+            result) in
+
+      let must_expr = function
+        | PureExpr e -> e
+        | Assigned v -> v
+        | NotAssigned -> assert false in
+
       let rec p_action (target: assignment_target) = function
         | SGA.Fail (_, _) ->
            p "return false;";
+           PureExpr "prims::unreachable()"
         | SGA.Var (_, v, _, _) ->
-           p_assign target v
+           PureExpr v
         | SGA.Const (_, sz, cst) ->
-           p_assign target (sp_const sz cst)
+           PureExpr (sp_const sz cst)
         | SGA.Seq (_, _, a1, a2) ->
-           p_action NoTarget a1;
+           ignore (p_action NoTarget a1);
            p_action target a2
         | SGA.Bind (_, sz, _, v, ex, rl) ->
            let target = p_declare_target target in
            p_scoped "/* bind */" (fun () ->
-               p_action (VarTarget (sz, false, v)) ex;
-               p_action target rl)
+               let vtarget = VarTarget { sz; declared = false; name = v } in
+               ignore (p_assign_pure vtarget (p_action vtarget ex));
+               p_assign_pure target (p_action target rl))
         | SGA.If (_, _, cond, tbr, fbr) ->
-           let cvar, ctarget = gensym_target 1 "c" in
-           p_action ctarget cond;
+           let ctarget = gensym_target 1 "c" in
+           let cexpr = p_action ctarget cond in
            let target = p_declare_target target in
-           p_scoped (sprintf "if (%s)" cvar) (fun () -> p_action target tbr);
-           p_scoped "else" (fun () -> p_action target fbr)
+           ignore (p_scoped (sprintf "if (%s)" (must_expr cexpr))
+                     (fun () -> p_assign_pure target (p_action target tbr)));
+           p_scoped "else"
+             (fun () -> p_assign_pure target (p_action target fbr))
         | SGA.Read (_, port, reg) ->
            let { reg_name; reg_size; _ } = hpp.cpp_registers reg in
            let var = p_ensure_target reg_size target in
            p_checked (fun () ->
                match port with
                | P0 -> pr "log.%s.read0(&%s, state.%s, Log.%s.rwset)" reg_name var reg_name reg_name
-               | P1 -> pr "log.%s.read1(&%s, Log.%s.rwset)" reg_name var reg_name)
+               | P1 -> pr "log.%s.read1(&%s, Log.%s.rwset)" reg_name var reg_name);
+           Assigned var
         | SGA.Write (_, port, reg, expr) ->
            let r = hpp.cpp_registers reg in
-           let v, vt = gensym_target reg.reg_size "v" in
-           p_action vt expr;
+           let vt = gensym_target reg.reg_size "v" in
+           let v = must_expr (p_action vt expr) in
            let fn_name = match port with
              | P0 -> "write0"
              | P1 -> "write1" in
            p_checked (fun () ->
                pr "log.%s.%s(%s, Log.%s.rwset)"
                  r.reg_name fn_name v r.reg_name);
-           p_assign target "prims::tt"
+           p_assign_pure target (PureExpr "prims::tt")
         | SGA.Call (_, fn, arg1, arg2) ->
            let f = hpp.cpp_functions fn in
-           let a1, t1 = gensym_target f.ffi_arg1size "x" in
-           let a2, t2 = gensym_target f.ffi_arg2size "y" in
-           p_action t1 arg1;
-           p_action t2 arg2;
-           p_assign target (sprintf "%s(%s, %s)" (cpp_fn_name f) a1 a2) in
+           let a1 = must_expr (p_action (gensym_target f.ffi_arg1size "x") arg1) in
+           let a2 = must_expr (p_action (gensym_target f.ffi_arg2size "y") arg2) in
+           PureExpr (sprintf "%s(%s, %s)" (cpp_fn_name f) a1 a2) in
 
       p_fn "bool" rule.rl_name (fun () ->
           p_reset ();
           nl ();
-          p_action NoTarget rule.rl_body;
+          ignore (p_action NoTarget rule.rl_body);
           nl ();
           p_commit ());
       nl () in
