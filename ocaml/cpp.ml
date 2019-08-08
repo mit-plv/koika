@@ -145,54 +145,6 @@ let writeout out (hpp: _ cpp_input_t) =
       prbody ();
       p ");" in
 
-    let rec p_impure_expr expr =
-      match expr with
-      | SGA.Var (v, sz', m) -> SGA.Var (v, sz', m)
-      | SGA.Const (sz', cst) -> SGA.Const (sz', cst)
-      | SGA.Read (port, reg) ->
-         let { reg_name; reg_size; _ } = hpp.cpp_registers reg in
-         let var = gensym "rd" in
-         p "%s %s;" (cpp_type_of_size reg_size) var;
-         p_checked (fun () ->
-             match port with
-             | P0 -> pr "log.%s.read0(&%s, state.%s, Log.%s.rwset)" reg_name var reg_name reg_name
-             | P1 -> pr "log.%s.read1(&%s, Log.%s.rwset)" reg_name var reg_name);
-         SGA.Read (port, var)
-      | SGA.Call (fn, arg1, arg2) ->
-         let arg1 = p_impure_expr arg1 in
-         let arg2 = p_impure_expr arg2 in
-         SGA.Call (fn, arg1, arg2) in
-
-    let sp_pure_expr =
-      let out = Buffer.create 80 in
-      let sp fmt = Printf.bprintf out fmt in
-
-      let sp_const sz bits =
-        let bs = SGALib.Util.bits_const_of_bits sz bits in
-        let s = SGALib.Util.string_of_bits ~mode:`Cpp bs in
-        sp "%s" (cpp_const_init sz s) in
-
-      let rec sp_expr = function
-        | SGA.Var (v, _, _)
-          | SGA.Read (_, v) ->
-           (* We've already run pr_expr_reads, so reads are really just
-              references to variables now. *)
-           sp "%s" v
-        | SGA.Const (sz, cst) ->
-           sp_const sz cst
-        | SGA.Call (fn, arg1, arg2) ->
-           let f = hpp.cpp_functions fn in
-           sp "%s(" (cpp_fn_name f);
-           sp_expr arg1;
-           sp ", ";
-           sp_expr arg2;
-           sp ")" in
-
-      fun expr ->
-      Buffer.clear out;
-      sp_expr expr;
-      Buffer.contents out in
-
     let p_rule (rule: _ cpp_rule_t) =
       gensym_reset ();
 
@@ -207,43 +159,80 @@ let writeout out (hpp: _ cpp_input_t) =
             p "return true;")
           rule.rl_footprint in
 
-      let p_assign sz target prexpr =
-        pr "%s %s = " (cpp_type_of_size sz) target;
-        prexpr ();
-        pr ";";
-        nl () in
+      let p_assign target exprval =
+        match target with
+        | None -> ()
+        | Some target ->
+           pr "%s = %s;" target exprval;
+           nl () in
 
-      let rec p_rule_body = function
-        | SGA.Skip _ ->
-           p ""
-        | SGA.Fail _ ->
-           p "return false;"
-        | SGA.Seq (_, r1, r2) ->
-           p_rule_body r1;
-           p_rule_body r2
-        | SGA.Bind (_, sz, v, ex, rl) ->
-           (* FIXME make sure name doesn't start with our prefix *)
-           let pure = p_impure_expr ex in
+      let sp_const sz bits =
+        let bs = SGALib.Util.bits_const_of_bits sz bits in
+        let s = SGALib.Util.string_of_bits ~mode:`Cpp bs in
+        cpp_const_init sz s in
+
+      let p_decl sz name =
+        p "%s %s;" (cpp_type_of_size sz) name in
+
+      let p_gensym sz prefix =
+        let v = gensym prefix in
+        p_decl sz v;
+        v in
+
+      let ensure_target sz = function
+        | Some t -> t
+        | None -> p_gensym sz "ignored" in
+
+      let rec p_action (target: var_t option) = function
+        | SGA.Fail (_, _) ->
+           p "return false;";
+        | SGA.Var (_, v, _, _) ->
+           p_assign target v
+        | SGA.Const (_, sz, cst) ->
+           p_assign target (sp_const sz cst)
+        | SGA.Seq (_, _, a1, a2) ->
+           p_action None a1;
+           p_action target a2
+        | SGA.Bind (_, sz, _, v, ex, rl) ->
            p_scoped "/* bind */" (fun () ->
-               p_assign sz v (fun () -> pr "%s" (sp_pure_expr pure));
-               p_rule_body rl)
-        | SGA.If (_, e, r1, r2) ->
-           let pure = p_impure_expr e in
-           p_scoped (sprintf "if (%s)" (sp_pure_expr pure)) (fun () -> p_rule_body r1);
-           p_scoped "else" (fun () -> p_rule_body r2)
+               p_decl sz v;
+               p_action (Some v) ex;
+               p_action target rl)
+        | SGA.If (_, _, cond, tbr, fbr) ->
+           let cvar = p_gensym 1 "c" in
+           p_action (Some cvar) cond;
+           p_scoped (sprintf "if (%s)" cvar) (fun () -> p_action target tbr);
+           p_scoped "else" (fun () -> p_action target fbr)
+        | SGA.Read (_, port, reg) ->
+           let { reg_name; reg_size; _ } = hpp.cpp_registers reg in
+           let var = ensure_target reg_size target in
+           p_checked (fun () ->
+               match port with
+               | P0 -> pr "log.%s.read0(&%s, state.%s, Log.%s.rwset)" reg_name var reg_name reg_name
+               | P1 -> pr "log.%s.read1(&%s, Log.%s.rwset)" reg_name var reg_name)
         | SGA.Write (_, port, reg, expr) ->
            let r = hpp.cpp_registers reg in
-           let pure = p_impure_expr expr in
+           let valvar = p_gensym r.reg_size "v" in
+           p_action (Some valvar) expr;
            let fn_name = match port with
              | P0 -> "write0"
              | P1 -> "write1" in
            p_checked (fun () ->
                pr "log.%s.%s(%s, Log.%s.rwset)"
-                 r.reg_name fn_name (sp_pure_expr pure) r.reg_name) in
+                 r.reg_name fn_name valvar r.reg_name);
+           p_assign target "prims::tt"
+        | SGA.Call (_, fn, arg1, arg2) ->
+           let f = hpp.cpp_functions fn in
+           let a1 = p_gensym f.ffi_arg1size "x" in
+           let a2 = p_gensym f.ffi_arg2size "y" in
+           p_action (Some a1) arg1;
+           p_action (Some a2) arg2;
+           p_assign target (sprintf "%s(%s, %s)" (cpp_fn_name f) a1 a2) in
+
       p_fn "bool" rule.rl_name (fun () ->
           p_reset ();
           nl ();
-          p_rule_body rule.rl_body;
+          p_action None rule.rl_body;
           nl ();
           p_commit ());
       nl () in
@@ -308,36 +297,34 @@ let writeout out (hpp: _ cpp_input_t) =
       p_impl ();
       nl ())
 
-let rule_footprint rl =
+let action_footprint a =
   let m = Hashtbl.create 25 in
 
-  let rec expr_footprint = function
+  let rec action_footprint = function
+    | SGA.Fail _ -> ()
     | SGA.Var _ | SGA.Const _ -> ()
-    | SGA.Read (_, r) -> Hashtbl.replace m r ()
-    | SGA.Call (_, ex1, ex2) ->
-       expr_footprint ex1;
-       expr_footprint ex2 in
-
-  let rec rule_footprint = function
-    | SGA.Skip _ | SGA.Fail _ -> ()
-    | SGA.If (_, _, r1, r2)
-      | SGA.Seq (_, r1, r2) ->
-       rule_footprint r1;
-       rule_footprint r2
-    | SGA.Bind (_, _, _, ex, rl) ->
-       expr_footprint ex;
-       rule_footprint rl
+    | SGA.If (_, _, _, r1, r2)
+      | SGA.Seq (_, _, r1, r2) ->
+       action_footprint r1;
+       action_footprint r2
+    | SGA.Bind (_, _, _, _, ex, a) ->
+       action_footprint ex;
+       action_footprint a
+    | SGA.Read (_, _, r) -> Hashtbl.replace m r ()
     | SGA.Write (_, _, r, ex) ->
        Hashtbl.replace m r ();
-       expr_footprint ex in
+       action_footprint ex
+    | SGA.Call (_, _, ex1, ex2) ->
+       action_footprint ex1;
+       action_footprint ex2 in
 
-  rule_footprint rl;
+  action_footprint a;
   List.of_seq (Hashtbl.to_seq_keys m)
 
 let input_of_compile_unit classname ({ c_registers; c_scheduler; c_rules }: SGALib.Compilation.compile_unit) =
   let tr_rule (name, rl_body) =
     { rl_name = "rule_" ^ name ;
-      rl_body; rl_footprint = rule_footprint rl_body } in
+      rl_body; rl_footprint = action_footprint rl_body } in
   { cpp_classname = classname;
     cpp_rules = List.map tr_rule c_rules;
     cpp_scheduler = c_scheduler;
