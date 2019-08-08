@@ -32,29 +32,27 @@ type ('loc_t, 'content_t) locd = {
     lcnt: 'content_t
   }
 
-type ('f, 'reg_t, 'fn_t) expr =
+type ('f, 'reg_t, 'fn_t) action =
+  | Skip
+  | Fail
   | Var of var_t
   | Num of int
   | Const of bool list
+  | Progn of ('f, ('f, 'reg_t, 'fn_t) action) locd list
+  | Let of (('f, var_t) locd * ('f, ('f, 'reg_t, 'fn_t) action) locd) list
+           * ('f, ('f, 'reg_t, 'fn_t) action) locd list
+  | If of ('f, ('f, 'reg_t, 'fn_t) action) locd
+          * ('f, ('f, 'reg_t, 'fn_t) action) locd
+          * ('f, ('f, 'reg_t, 'fn_t) action) locd list
+  | When of ('f, ('f, 'reg_t, 'fn_t) action) locd
+            * ('f, ('f, 'reg_t, 'fn_t) action) locd list
   | Read of port_t
             * ('f, 'reg_t) locd
-  | Call of ('f, 'fn_t) locd
-            * ('f, ('f, 'reg_t, 'fn_t) expr) locd list
-
-type ('f, 'reg_t, 'fn_t) rule =
-  | Skip
-  | Fail
-  | Progn of ('f, ('f, 'reg_t, 'fn_t) rule) locd list
-  | Let of (('f, var_t) locd * ('f, ('f, 'reg_t, 'fn_t) expr) locd) list
-           * ('f, ('f, 'reg_t, 'fn_t) rule) locd list
-  | If of ('f, ('f, 'reg_t, 'fn_t) expr) locd
-          * ('f, ('f, 'reg_t, 'fn_t) rule) locd
-          * ('f, ('f, 'reg_t, 'fn_t) rule) locd list
-  | When of ('f, ('f, 'reg_t, 'fn_t) expr) locd
-            * ('f, ('f, 'reg_t, 'fn_t) rule) locd list
   | Write of port_t
              * ('f, 'reg_t) locd
-             * ('f, ('f, 'reg_t, 'fn_t) expr) locd
+             * ('f, ('f, 'reg_t, 'fn_t) action) locd
+  | Call of ('f, 'fn_t) locd
+            * ('f, ('f, 'reg_t, 'fn_t) action) locd list
 
 type 'f scheduler =
   | Done

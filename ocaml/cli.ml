@@ -3,7 +3,7 @@ open Common
 type 'f smod = {
     m_name: ('f, string) locd;
     m_registers: (('f, string) locd * ('f, bool list) locd) list;
-    m_rules: (('f, string) locd * ('f, ('f, string, string) rule) locd) list;
+    m_rules: (('f, string) locd * ('f, ('f, string, string) action) locd) list;
     m_scheduler: ('f, string) locd * ('f, 'f scheduler) locd
   }
 
@@ -357,35 +357,32 @@ let resolve_rule fname registers rule =
     else
       let padding = list_const (2 - nargs) w0 in
       { lpos; lcnt = SGALib.SGA.UPrimFn fn }, List.append args padding in
-  let rec resolve_expr ({ lpos; lcnt }: ('f, ('f, string, string) expr) locd) =
-    { lpos;
-      lcnt = match lcnt with
-             | Var v -> Var v
-             | Num n -> untyped_number_error lpos n
-             | Const bs -> Const bs
-             | Read (port, r) ->
-                Read (port, find_register r)
-             | Call (fn, args) ->
-                let fn, args = find_function fn args in
-                Call (fn, List.map resolve_expr args) } in
-  let rec resolve_rule ({ lpos; lcnt }: ('f, ('f, string, string) rule) locd) =
+  let rec resolve_action ({ lpos; lcnt }: ('f, ('f, string, string) action) locd) =
     { lpos;
       lcnt = match lcnt with
              | Skip -> Skip
              | Fail -> Fail
-             | Progn rs -> Progn (List.map resolve_rule rs)
+             | Var v -> Var v
+             | Num n -> untyped_number_error lpos n
+             | Const bs -> Const bs
+             | Progn rs -> Progn (List.map resolve_action rs)
              | Let (bs, body) ->
-                Let (List.map (fun (var, expr) -> (var, resolve_expr expr)) bs,
-                     List.map resolve_rule body)
+                Let (List.map (fun (var, expr) -> (var, resolve_action expr)) bs,
+                     List.map resolve_action body)
              | If (c, l, rs) ->
-                If (resolve_expr c,
-                    resolve_rule l,
-                    List.map resolve_rule rs)
+                If (resolve_action c,
+                    resolve_action l,
+                    List.map resolve_action rs)
              | When (c, rs) ->
-                When (resolve_expr c, List.map resolve_rule rs)
+                When (resolve_action c, List.map resolve_action rs)
+             | Read (port, r) ->
+                Read (port, find_register r)
              | Write (port, r, v) ->
-                Write (port, find_register r, resolve_expr v) } in
-  resolve_rule rule
+                Write (port, find_register r, resolve_action v)
+             | Call (fn, args) ->
+                let fn, args = find_function fn args in
+                Call (fn, List.map resolve_action args) } in
+  resolve_action rule
 
 let resolve_scheduler rules (s: ('f, 'f scheduler) locd) =
   let check_rule { lpos; lcnt = name } =
