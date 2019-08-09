@@ -252,3 +252,107 @@ Module Collatz.
        vp_circuit := circuit;
     |}.
 End Collatz.
+
+Module Pipeline.
+  Definition var_t := string.
+  Inductive reg_t := r0 | outputReg | inputReg | invalid | correct.
+  Inductive custom_t := Stream | F | G.
+  Definition ufn_t := interop_ufn_t custom_t.
+  Definition fn_t := interop_fn_t custom_t.
+  Inductive name_t := doF | doG.
+
+  Definition sz := (pow2 5).
+
+  Definition R r :=
+    match r with
+    | r0 => bits_t sz
+    | inputReg => bits_t sz
+    | outputReg => bits_t sz
+    | invalid | correct => bits_t 1
+    end.
+
+  Definition Sigma (fn: custom_t) : ExternalSignature :=
+    match fn with
+    | Stream => {{ sz ~> 0 ~> sz }}
+    | F => {{ sz ~> 0 ~> sz }}
+    | G => {{ sz ~> 0 ~> sz }}
+    end.
+
+  Definition uSigma (fn: custom_t) (_ _: type) : custom_t := fn.
+  Definition iSigma idx := interop_Sigma Sigma idx.
+  Definition iuSigma := interop_uSigma uSigma.
+
+  Open Scope sga.
+
+  Definition _doF : uaction unit _ _ _ :=
+    Let "v" <- inputReg#read0 in
+    ((inputReg#write0(Stream[$"v"]));;
+     Let "invalid" <- invalid#read1 in
+     If $"invalid" Then
+       invalid#write1(UConst Ob~0);;
+       (r0#write0(F[$"v"]))
+     Else
+       fail
+     EndIf).
+
+  Definition _doG : uaction unit _ _ _ :=
+    Let "invalid" <- invalid#read0 in
+    If UNot[[$"invalid"]] Then
+      Let "data" <- r0#read0 in
+      Let "v" <- outputReg#read0 in
+      ((outputReg#write0(Stream[$"v"]));;
+       (invalid#write0(UConst Ob~1));;
+       If UEq[[G[$"data"], G[F[$"v"] ] ]] Then
+           skip
+       Else
+           correct#write0(UConst Ob~0)
+       EndIf)
+    Else
+        fail
+    EndIf.
+
+  Definition rules :=
+    tc_rules R iSigma iuSigma
+             (fun rl => match rl with
+                     | doF => _doF
+                     | doG => _doG
+                     end).
+
+  Definition Pipeline : scheduler _ :=
+    tc_scheduler (doG |> doF |> done).
+
+  Definition circuit :=
+    compile_scheduler (ContextEnv.(create) (readRegisters R iSigma)) rules Pipeline.
+
+  Definition package :=
+    {| vp_reg_t := reg_t;
+       vp_reg_types := R;
+       vp_reg_init r := match r with
+                       | r0 => Bits.of_N _ 0
+                       | outputReg => Bits.of_N _ 0
+                       | inputReg => Bits.of_N _ 0
+                       | invalid => Ob~0
+                       | correct => Ob~1
+                       end%N;
+       vp_reg_finite := _;
+       vp_reg_Env := ContextEnv;
+
+       vp_custom_fn_t := custom_t;
+       vp_custom_fn_types := Sigma;
+
+       vp_reg_names r := match r with
+                        | r0 => "r0"
+                        | outputReg => "outputReg"
+                        | inputReg => "inputReg"
+                        | invalid => "invalid"
+                        | correct => "correct"
+                        end;
+       vp_custom_fn_names fn := match fn with
+                               | Stream => "stream"
+                               | F => "f"
+                               | G => "g"
+                               end;
+
+       vp_circuit := circuit;
+    |}.
+End Pipeline.

@@ -24,6 +24,12 @@
  (libraries SGALib backends))
 
 (executable
+ (name pipeline)
+ (modules ("pipeline"))
+ (preprocess (pps ppx_jane ppx_deriving.show))
+ (libraries SGALib backends))
+
+(executable
  (name cli)
  (modules ("cli"))
  (preprocess (pps ppx_jane ppx_deriving.show))

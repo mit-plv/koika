@@ -26,4 +26,4 @@ Extraction "SGA.ml"
 
            Interop.VerilogPackage
            Environments.to_list Vect.vect_to_list Vect.vect_of_list Vect.Bits.to_nat Vect.index_to_nat
-           Demo.Collatz.package.
+           Demo.Collatz.package Demo.Pipeline.package.
