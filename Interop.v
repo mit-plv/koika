@@ -40,6 +40,14 @@ Section Interop.
            | CustomFn fn => sigma fn
            end.
 
+  Inductive interop_empty_t :=.
+  Definition interop_empty_Sigma (fn: interop_empty_t)
+    : ExternalSignature := match fn with end.
+  Definition interop_empty_uSigma (fn: interop_empty_t) (_ _: type)
+    : interop_empty_t := match fn with end.
+  Definition interop_empty_sigma fn
+    : interop_empty_Sigma fn := match fn with end.
+
   Record VerilogPackage :=
     { vp_reg_t: Type;
       (** [vp_reg_t]: The type of registers used in the program.
@@ -83,3 +91,9 @@ End Interop.
 
 Arguments interop_fn_t: clear implicits.
 Arguments interop_ufn_t: clear implicits.
+
+Definition interop_minimal_ufn_t := interop_ufn_t interop_empty_t.
+Definition interop_minimal_fn_t := interop_fn_t interop_empty_t.
+Definition interop_minimal_Sigma idx := interop_Sigma interop_empty_Sigma idx.
+Definition interop_minimal_uSigma := interop_uSigma interop_empty_uSigma.
+Definition interop_minimal_sigma := interop_sigma interop_empty_sigma.

@@ -147,9 +147,8 @@ End Ex2.
 Module Collatz.
   Definition var_t := string.
   Inductive reg_t := R0.
-  Inductive custom_t := .
-  Definition ufn_t := interop_ufn_t custom_t.
-  Definition fn_t := interop_fn_t custom_t.
+  Definition ufn_t := interop_minimal_ufn_t.
+  Definition fn_t := interop_minimal_fn_t.
   Inductive name_t := divide | multiply.
 
   Definition logsz := 5.
@@ -158,14 +157,6 @@ Module Collatz.
   Definition R r :=
     match r with
     | R0 => bits_t sz
-    end.
-
-  Definition Sigma (fn: custom_t) : ExternalSignature :=
-    match fn with
-    end.
-
-  Definition uSigma (fn: custom_t) (_ _: type) : custom_t :=
-    match fn with
     end.
 
   Definition r idx : R idx :=
@@ -179,10 +170,6 @@ Module Collatz.
   (*         | !!!! => 1 *)
   (*         end. *)
 
-  Definition sigma idx : Sigma idx :=
-    match idx with
-    end.
-
   Open Scope sga.
 
   Definition _divide : uaction unit var_t reg_t ufn_t :=
@@ -191,7 +178,7 @@ Module Collatz.
     If UNot[[$"odd"]] Then
        R0#write0(ULsr[[$"v", UConst Ob~1]])
     Else
-      fail
+       fail
     EndIf.
 
   Definition TimesThree (ex: uaction unit var_t reg_t ufn_t) :=
@@ -213,16 +200,16 @@ Module Collatz.
 (* Set Extraction KeepSingleton. *)
 (* Extraction Collatz.reg_t. *)
 
-  Definition iSigma := interop_Sigma Sigma.
-  Definition iuSigma := interop_uSigma uSigma.
-  Definition isigma := interop_sigma sigma.
   Definition cr := ContextEnv.(create) r.
 
   Definition collatz : scheduler _ :=
     tc_scheduler (divide |> multiply |> done).
 
+  (* Ltac __must_typecheck R Sigma tcres ::= *)
+  (*   __must_typecheck_cbn R Sigma tcres. *)
+
   Definition rules :=
-    tc_rules R iSigma iuSigma
+    tc_rules R interop_minimal_Sigma interop_minimal_uSigma
              (fun r => match r with
                     | divide => _divide
                     | multiply => _multiply
@@ -234,16 +221,17 @@ Module Collatz.
           exact (t: tt)) (only parsing).
 
   Definition result :=
-    compute (interp_scheduler cr isigma rules collatz).
+    compute (interp_scheduler cr interop_minimal_sigma rules collatz).
+
   Definition divide_result :=
-    compute (interp_action cr isigma CtxEmpty log_empty log_empty
+    compute (interp_action cr interop_minimal_sigma CtxEmpty log_empty log_empty
                            (rules divide)).
   Definition multiply_result :=
-    compute (interp_action cr isigma CtxEmpty log_empty log_empty
+    compute (interp_action cr interop_minimal_sigma CtxEmpty log_empty log_empty
                            (rules multiply)).
 
   Definition circuit :=
-    compile_scheduler (ContextEnv.(create) (readRegisters R iSigma)) rules collatz.
+    compile_scheduler (ContextEnv.(create) (readRegisters R interop_minimal_Sigma)) rules collatz.
 
   Definition package :=
     {| vp_reg_t := reg_t;
@@ -252,8 +240,8 @@ Module Collatz.
        vp_reg_finite := _;
        vp_reg_Env := ContextEnv;
 
-       vp_custom_fn_t := custom_t;
-       vp_custom_fn_types := Sigma;
+       vp_custom_fn_t := interop_empty_t;
+       vp_custom_fn_types := interop_empty_Sigma;
 
        vp_reg_names r := match r with
                         | R0 => "R0"
