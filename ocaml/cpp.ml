@@ -3,7 +3,7 @@ module SGA = SGALib.SGA
 
 type ('reg_t, 'fn_t) cpp_rule_t = {
     rl_name: string;
-    rl_footprint: reg_signature list;
+    rl_footprint: 'reg_t list;
     rl_body: (string, 'reg_t, 'fn_t) SGA.rule;
   }
 
@@ -89,7 +89,7 @@ type assignment_result =
   | Assigned of var_t
   | PureExpr of string
 
-let writeout out (hpp: _ cpp_input_t) =
+let writeout (type reg_t) out (hpp: (_, reg_t, _) cpp_input_t) =
   let nl _ = output_string out "\n" in
   let p fmt = Printf.kfprintf nl out fmt in
   let pr fmt = Printf.fprintf out fmt in
@@ -127,7 +127,10 @@ let writeout out (hpp: _ cpp_input_t) =
     let p_class pbody =
       p_scoped (sprintf "class %s" hpp.cpp_classname) ~terminator:";" pbody in
 
-    let iter_registers =
+    let iter_registers f regs =
+      List.iter (fun r -> f (hpp.cpp_registers r)) regs in
+
+    let iter_all_registers =
       let sigs = List.map hpp.cpp_registers hpp.cpp_register_names in
       fun f -> List.iter f sigs in
 
@@ -138,33 +141,33 @@ let writeout out (hpp: _ cpp_input_t) =
       let p_printf_register { reg_name; _ } =
         p "std::cout << \"%s = \" << %s << std::endl;" reg_name reg_name in
       p_scoped "struct state_t" ~terminator:";" (fun () ->
-          iter_registers p_state_register;
+          iter_all_registers p_state_register;
           nl ();
           p_fn "void" "dump" ~annot:" const" (fun () ->
-              iter_registers p_printf_register)) in
+              iter_all_registers p_printf_register)) in
 
     let p_log_register r =
       p "reg_log_t<%d> %s;" r.reg_size r.reg_name in
 
     let p_log_t () =
       p_scoped "struct log_t" ~terminator:";" (fun () ->
-          iter_registers p_log_register) in
+          iter_all_registers p_log_register) in
 
     let p_checked prbody =
       pr "CHECK_RETURN(";
       prbody ();
       p ");" in
 
-    let p_rule (rule: _ cpp_rule_t) =
+    let p_rule (rule: (reg_t, _) cpp_rule_t) =
       gensym_reset ();
 
       let p_reset () =
-        List.iter (fun { reg_name; _ } ->
+        iter_registers (fun { reg_name; _ } ->
             p "log.%s.reset(Log.%s);" reg_name reg_name)
           rule.rl_footprint in
 
       let p_commit () =
-        List.iter (fun { reg_name; _ } ->
+        iter_registers (fun { reg_name; _ } ->
             p "Log.%s = log.%s;" reg_name reg_name;
             p "return true;")
           rule.rl_footprint in
@@ -211,14 +214,15 @@ let writeout out (hpp: _ cpp_input_t) =
         | Assigned v -> v
         | NotAssigned -> assert false in
 
-      let rec p_action (target: assignment_target) = function
+      let rec p_action (target: assignment_target) (rl: (string, reg_t, _) SGA.action) =
+        match rl with
         | SGA.Fail (_, _) ->
            p "return false;";
            (match target with
             | NoTarget -> NotAssigned
             | VarTarget { declared = true; name; _ } -> Assigned name
             | VarTarget { sz; _ } -> PureExpr (sprintf "prims::unreachable<%d>()" sz))
-        | SGA.Var (_, v, _, m) ->
+        | SGA.Var (_, v, _, _m) ->
            PureExpr v (* FIXME fail if reference isn't to latest binding of v *)
         | SGA.Const (_, sz, cst) ->
            PureExpr (sp_const sz cst)
@@ -249,6 +253,7 @@ let writeout out (hpp: _ cpp_input_t) =
            Assigned var
         | SGA.Write (_, port, reg, expr) ->
            let r = hpp.cpp_registers reg in
+           let reg = hpp.cpp_registers reg in
            let vt = gensym_target reg.reg_size "v" in
            let v = must_expr (p_action vt expr) in
            let fn_name = match port with
@@ -277,7 +282,7 @@ let writeout out (hpp: _ cpp_input_t) =
         p "Log.%s.data0 = state.%s;" nm nm in
       p_fn "explicit" hpp.cpp_classname
         ~args:"state_t init" ~annot:" : state(init)"
-        (fun () -> iter_registers p_init_data0) in
+        (fun () -> iter_all_registers p_init_data0) in
 
     let rec p_scheduler = function
       | SGA.Done -> ()
@@ -293,7 +298,7 @@ let writeout out (hpp: _ cpp_input_t) =
         p "state.%s = Log.%s.commit();" r.reg_name r.reg_name in
       p_fn "void" "cycle" (fun () ->
           p_scheduler hpp.cpp_scheduler;
-          iter_registers p_commit_register) in
+          iter_all_registers p_commit_register) in
 
     let p_run () =
       p_fn "template<typename T> void" "run" ~args:"T ncycles" (fun () ->
@@ -356,12 +361,13 @@ let action_footprint a =
   action_footprint a;
   List.of_seq (Hashtbl.to_seq_keys m)
 
+let cpp_rule_of_action (name, rl_body) =
+  { rl_name = "rule_" ^ name ;
+    rl_body; rl_footprint = action_footprint rl_body }
+
 let input_of_compile_unit classname ({ c_registers; c_scheduler; c_rules }: SGALib.Compilation.compile_unit) =
-  let tr_rule (name, rl_body) =
-    { rl_name = "rule_" ^ name ;
-      rl_body; rl_footprint = action_footprint rl_body } in
   { cpp_classname = classname;
-    cpp_rules = List.map tr_rule c_rules;
+    cpp_rules = List.map cpp_rule_of_action c_rules;
     cpp_scheduler = c_scheduler;
     cpp_register_names = c_registers;
     cpp_registers = (fun r -> r);
