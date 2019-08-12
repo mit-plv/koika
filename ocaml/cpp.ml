@@ -168,9 +168,9 @@ let writeout (type reg_t) out (hpp: (_, reg_t, _) cpp_input_t) =
 
       let p_commit () =
         iter_registers (fun { reg_name; _ } ->
-            p "Log.%s = log.%s;" reg_name reg_name;
-            p "return true;")
-          rule.rl_footprint in
+            p "Log.%s = log.%s;" reg_name reg_name)
+          rule.rl_footprint;
+        p "return true;" in
 
       let sp_const sz bits =
         let bs = SGALib.Util.bits_const_of_bits sz bits in
