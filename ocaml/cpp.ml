@@ -1,19 +1,25 @@
 open Common
 module SGA = SGALib.SGA
 
-type ('reg_t, 'fn_t) cpp_rule_t = {
-    rl_name: string;
+type ('name_t, 'var_t, 'reg_t, 'fn_t) cpp_rule_t = {
+    rl_name: 'name_t;
     rl_footprint: 'reg_t list;
-    rl_body: (string, 'reg_t, 'fn_t) SGA.rule;
+    rl_body: ('var_t, 'reg_t, 'fn_t) SGA.rule;
   }
 
-type ('prim, 'reg_t, 'fn_t) cpp_input_t = {
+type ('prim, 'name_t, 'var_t, 'reg_t, 'fn_t) cpp_input_t = {
     cpp_classname: string;
-    cpp_scheduler: string SGA.scheduler;
-    cpp_rules: ('reg_t, 'fn_t) cpp_rule_t list;
-    cpp_register_names: 'reg_t list;
-    cpp_registers: 'reg_t -> reg_signature;
-    cpp_functions: 'fn_t -> 'prim ffi_signature
+    cpp_scheduler: 'name_t SGA.scheduler;
+
+    cpp_var_names: 'var_t -> string;
+
+    cpp_rules: ('name_t, 'var_t, 'reg_t, 'fn_t) cpp_rule_t list;
+    cpp_rule_names: 'name_t -> string;
+
+    cpp_registers: 'reg_t list;
+    cpp_register_sigs: 'reg_t -> reg_signature;
+
+    cpp_function_sigs: 'fn_t -> 'prim ffi_signature;
   }
 
 let sprintf = Printf.sprintf
@@ -42,8 +48,14 @@ let cpp_const_init sz cst =
     failwith (sprintf "Unsupported size: %d" sz)
 
 let cpp_fn_name = function
-  | { ffi_name = CustomFn _; _ } ->
-     failwith "FIXME: Custom functions not supported"
+  | { ffi_name = CustomFn f; _ } ->
+     (* The current implementation of external functions requires the client to
+        pass a class implementing those functions as a template argument.  An
+        other approach would have made custom functions virtual methods, but
+        then they couldn't have taken template arguments. *)
+     (* The ‘.template’ part ensures that ‘extfuns.xyz<p>()’ is not parsed as a
+        comparison. *)
+     sprintf "extfuns.template %s" f
   | { ffi_name = PrimFn f; ffi_arg1size = sz1; ffi_arg2size = sz2; _ } ->
      sprintf "prims::%s"
        (match f with
@@ -89,7 +101,7 @@ type assignment_result =
   | Assigned of var_t
   | PureExpr of string
 
-let writeout (type reg_t) out (hpp: (_, reg_t, _) cpp_input_t) =
+let writeout (type name_t var_t reg_t) out (hpp: (_, name_t, var_t, reg_t, _) cpp_input_t) =
   let nl _ = output_string out "\n" in
   let p fmt = Printf.kfprintf nl out fmt in
   let pr fmt = Printf.fprintf out fmt in
@@ -125,13 +137,14 @@ let writeout (type reg_t) out (hpp: (_, reg_t, _) cpp_input_t) =
     nl ();
 
     let p_class pbody =
-      p_scoped (sprintf "class %s" hpp.cpp_classname) ~terminator:";" pbody in
+      p_scoped (sprintf "template <typename extfuns_t> class %s" hpp.cpp_classname)
+        ~terminator:";" pbody in
 
     let iter_registers f regs =
-      List.iter (fun r -> f (hpp.cpp_registers r)) regs in
+      List.iter (fun r -> f (hpp.cpp_register_sigs r)) regs in
 
     let iter_all_registers =
-      let sigs = List.map hpp.cpp_registers hpp.cpp_register_names in
+      let sigs = List.map hpp.cpp_register_sigs hpp.cpp_registers in
       fun f -> List.iter f sigs in
 
     let p_state_register r =
@@ -158,7 +171,7 @@ let writeout (type reg_t) out (hpp: (_, reg_t, _) cpp_input_t) =
       prbody ();
       p ");" in
 
-    let p_rule (rule: (reg_t, _) cpp_rule_t) =
+    let p_rule (rule: (name_t, var_t, reg_t, _) cpp_rule_t) =
       gensym_reset ();
 
       let p_reset () =
@@ -201,10 +214,10 @@ let writeout (type reg_t) out (hpp: (_, reg_t, _) cpp_input_t) =
       let p_assign_pure target result =
         (match target, result with
          | VarTarget { declared = true; name; _ }, PureExpr e ->
-            pr "%s = %s;" name e; nl ();
+            p "%s = %s;" name e;
             Assigned name
          | VarTarget { sz; name; _ }, PureExpr e ->
-            pr "%s %s = %s;" (cpp_type_of_size sz) name e;
+            p "%s %s = %s;" (cpp_type_of_size sz) name e;
             Assigned name
          | _, _ ->
             result) in
@@ -214,7 +227,7 @@ let writeout (type reg_t) out (hpp: (_, reg_t, _) cpp_input_t) =
         | Assigned v -> v
         | NotAssigned -> assert false in
 
-      let rec p_action (target: assignment_target) (rl: (string, reg_t, _) SGA.action) =
+      let rec p_action (target: assignment_target) (rl: (var_t, reg_t, _) SGA.action) =
         match rl with
         | SGA.Fail (_, _) ->
            p "return false;";
@@ -223,7 +236,7 @@ let writeout (type reg_t) out (hpp: (_, reg_t, _) cpp_input_t) =
             | VarTarget { declared = true; name; _ } -> Assigned name
             | VarTarget { sz; _ } -> PureExpr (sprintf "prims::unreachable<%d>()" sz))
         | SGA.Var (_, v, _, _m) ->
-           PureExpr v (* FIXME fail if reference isn't to latest binding of v *)
+           PureExpr (hpp.cpp_var_names v) (* FIXME fail if reference isn't to latest binding of v *)
         | SGA.Const (_, sz, cst) ->
            PureExpr (sp_const sz cst)
         | SGA.Seq (_, _, a1, a2) ->
@@ -232,7 +245,7 @@ let writeout (type reg_t) out (hpp: (_, reg_t, _) cpp_input_t) =
         | SGA.Bind (_, sz, _, v, ex, rl) ->
            let target = p_declare_target target in
            p_scoped "/* bind */" (fun () ->
-               let vtarget = VarTarget { sz; declared = false; name = v } in
+               let vtarget = VarTarget { sz; declared = false; name = hpp.cpp_var_names v } in
                ignore (p_assign_pure vtarget (p_action vtarget ex));
                p_assign_pure target (p_action target rl))
         | SGA.If (_, _, cond, tbr, fbr) ->
@@ -244,7 +257,7 @@ let writeout (type reg_t) out (hpp: (_, reg_t, _) cpp_input_t) =
            p_scoped "else"
              (fun () -> p_assign_pure target (p_action target fbr))
         | SGA.Read (_, port, reg) ->
-           let { reg_name; reg_size; _ } = hpp.cpp_registers reg in
+           let { reg_name; reg_size; _ } = hpp.cpp_register_sigs reg in
            let var = p_ensure_target reg_size target in
            p_checked (fun () ->
                match port with
@@ -252,8 +265,8 @@ let writeout (type reg_t) out (hpp: (_, reg_t, _) cpp_input_t) =
                | P1 -> pr "log.%s.read1(&%s, Log.%s.rwset)" reg_name var reg_name);
            Assigned var
         | SGA.Write (_, port, reg, expr) ->
-           let r = hpp.cpp_registers reg in
-           let reg = hpp.cpp_registers reg in
+           let r = hpp.cpp_register_sigs reg in
+           let reg = hpp.cpp_register_sigs reg in
            let vt = gensym_target reg.reg_size "v" in
            let v = must_expr (p_action vt expr) in
            let fn_name = match port with
@@ -264,12 +277,12 @@ let writeout (type reg_t) out (hpp: (_, reg_t, _) cpp_input_t) =
                  r.reg_name fn_name v r.reg_name);
            p_assign_pure target (PureExpr "prims::tt")
         | SGA.Call (_, fn, arg1, arg2) ->
-           let f = hpp.cpp_functions fn in
+           let f = hpp.cpp_function_sigs fn in
            let a1 = must_expr (p_action (gensym_target f.ffi_arg1size "x") arg1) in
            let a2 = must_expr (p_action (gensym_target f.ffi_arg2size "y") arg2) in
            PureExpr (sprintf "%s(%s, %s)" (cpp_fn_name f) a1 a2) in
 
-      p_fn "bool" rule.rl_name (fun () ->
+      p_fn "bool" ("rule_" ^ hpp.cpp_rule_names rule.rl_name) (fun () ->
           p_reset ();
           nl ();
           ignore (p_action NoTarget rule.rl_body);
@@ -287,10 +300,10 @@ let writeout (type reg_t) out (hpp: (_, reg_t, _) cpp_input_t) =
     let rec p_scheduler = function
       | SGA.Done -> ()
       | SGA.Cons (rl_name, s) ->
-         p "rule_%s();" rl_name;
+         p "rule_%s();" (hpp.cpp_rule_names rl_name);
          p_scheduler s
       | SGA.Try (rl_name, s1, s2) ->
-         p_scoped (sprintf "if (rule_%s())" rl_name) (fun () -> p_scheduler s1);
+         p_scoped (sprintf "if (rule_%s())" (hpp.cpp_rule_names rl_name)) (fun () -> p_scheduler s1);
          p_scoped "else" (fun () -> p_scheduler s2) in
 
     let p_cycle () =
@@ -319,8 +332,10 @@ let writeout (type reg_t) out (hpp: (_, reg_t, _) cpp_input_t) =
         p "log_t Log;";
         p "log_t log;";
         p "state_t state;";
+        p "extfuns_t extfuns;";
         nl ();
         List.iter p_rule hpp.cpp_rules;
+        nl ();
 
         p "public:";
         p_constructor ();
@@ -361,21 +376,40 @@ let action_footprint a =
   action_footprint a;
   List.of_seq (Hashtbl.to_seq_keys m)
 
-let cpp_rule_of_action (name, rl_body) =
-  { rl_name = "rule_" ^ name ;
-    rl_body; rl_footprint = action_footprint rl_body }
+let cpp_rule_of_action (rl_name, rl_body) =
+  { rl_name; rl_body; rl_footprint = action_footprint rl_body }
 
 let input_of_compile_unit classname ({ c_registers; c_scheduler; c_rules }: SGALib.Compilation.compile_unit) =
   { cpp_classname = classname;
+    cpp_rule_names = (fun rl -> rl);
     cpp_rules = List.map cpp_rule_of_action c_rules;
     cpp_scheduler = c_scheduler;
-    cpp_register_names = c_registers;
-    cpp_registers = (fun r -> r);
-    cpp_functions = (fun fn ->
-      match fn with
-      | SGA.PrimFn fn -> SGALib.Util.ffi_signature_of_interop_fn
-                           (PrimFn fn) (SGA.prim_Sigma fn)
-      | SGA.CustomFn _ -> failwith "FIXME: Custom functions not supported") }
+    cpp_registers = c_registers;
+    cpp_register_sigs = (fun r -> r);
+    cpp_function_sigs = SGALib.Util.ffi_signature_of_interop_fn;
+    cpp_var_names = fun x -> x }
+
+let collect_rules sched =
+  let rec loop acc = function
+  | SGA.Done -> List.rev acc
+  | SGA.Cons (rl, s) -> loop (rl :: acc) s
+  | SGA.Try (rl, l, r) -> loop (loop (rl :: acc) l) r
+  in loop [] sched
+
+let cpp_rule_of_sga_package_rule (s: SGALib.SGA.sga_package_t) (rn: Obj.t) =
+  cpp_rule_of_action (rn, s.sga_rules rn)
+
+let input_of_sga_package (s: SGALib.SGA.sga_package_t)
+    : (SGA.prim_fn_t, Obj.t, Obj.t, Obj.t, 'custom_t SGA.interop_fn_t) cpp_input_t =
+  let rules = collect_rules s.sga_scheduler in
+  { cpp_classname = SGALib.Util.string_of_coq_string s.sga_module_name;
+    cpp_rule_names = (fun rn -> SGALib.Util.string_of_coq_string (s.sga_rule_names rn));
+    cpp_rules = List.map (cpp_rule_of_sga_package_rule s) rules;
+    cpp_scheduler = s.sga_scheduler;
+    cpp_registers = s.sga_reg_finite.finite_elems;
+    cpp_register_sigs = SGALib.Util.reg_sigs_of_sga_package s;
+    cpp_function_sigs = SGALib.Util.fn_sigs_of_sga_package s;
+    cpp_var_names = fun x -> SGALib.Util.string_of_coq_string (s.sga_var_names x) }
 
 let main (out: out_channel) (cu: _ cpp_input_t) =
   writeout out cu
