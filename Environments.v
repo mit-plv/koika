@@ -271,7 +271,7 @@ Definition to_list {K} (E: Env K) {V} (ev: E.(env_t) V) :=
   E.(fold_right) (fun (k: K) (v: V k) (t: list { k: K & V k }) =>
                     (existT _ k v) :: t) ev List.nil.
 
-Definition ContextEnv {K} `{FiniteType K}: Env K.
+Definition ContextEnv {K} `{FT: FiniteType K}: Env K.
   unshelve refine {| env_t V := context V finite_elems;
                      getenv {V} ctx k := cassoc (finite_index k) ctx;
                      putenv {V} ctx k v := creplace (finite_index k) v ctx;

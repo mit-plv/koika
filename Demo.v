@@ -4,10 +4,6 @@ Require SGA.Primitives.
 Require Import Coq.Strings.String.
 Open Scope string_scope.
 
-Definition readRegisters {reg_t fn_t: Type} (R: reg_t -> type) (Sigma: fn_t -> ExternalSignature)
-  : forall idx: reg_t, circuit R Sigma (R idx) :=
-  fun idx => CReadRegister (R := R) (Sigma := Sigma) idx.
-
 Module Ex1.
   Notation var_t := string.
   Inductive reg_t := R0 | R1.
@@ -234,22 +230,32 @@ Module Collatz.
     compile_scheduler (ContextEnv.(create) (readRegisters R interop_minimal_Sigma)) rules collatz.
 
   Definition package :=
-    {| vp_reg_t := reg_t;
-       vp_reg_types := R;
-       vp_reg_init := r;
-       vp_reg_finite := _;
-       vp_reg_Env := ContextEnv;
+    {| sga_var_t := string;
+       sga_var_names := fun x => x;
 
-       vp_custom_fn_t := interop_empty_t;
-       vp_custom_fn_types := interop_empty_Sigma;
+       sga_reg_t := reg_t;
+       sga_reg_types := R;
+       sga_reg_init := r;
+       sga_reg_finite := _;
 
-       vp_reg_names r := match r with
-                        | R0 => "R0"
+       sga_custom_fn_t := interop_empty_t;
+       sga_custom_fn_types := interop_empty_Sigma;
+
+       sga_reg_names r := match r with
+                        | R0 => "r0"
                         end;
-       vp_custom_fn_names fn := match fn with
-                               end;
+       sga_custom_fn_names fn := match fn with
+                                end;
 
-       vp_circuit := circuit;
+       sga_rule_name_t := name_t;
+       sga_rules := rules;
+       sga_rule_names r := match r with
+                          | divide => "divide"
+                          | multiply => "multiply"
+                          end;
+
+       sga_scheduler := collatz;
+       sga_module_name := "collatz";
     |}.
 End Collatz.
 
@@ -325,34 +331,44 @@ Module Pipeline.
     compile_scheduler (ContextEnv.(create) (readRegisters R iSigma)) rules Pipeline.
 
   Definition package :=
-    {| vp_reg_t := reg_t;
-       vp_reg_types := R;
-       vp_reg_init r := match r with
+    {| sga_var_t := string;
+       sga_var_names := fun x => x;
+
+       sga_reg_t := reg_t;
+       sga_reg_types := R;
+       sga_reg_init r := match r with
                        | r0 => Bits.of_N _ 0
                        | outputReg => Bits.of_N _ 0
                        | inputReg => Bits.of_N _ 0
                        | invalid => Ob~0
                        | correct => Ob~1
                        end%N;
-       vp_reg_finite := _;
-       vp_reg_Env := ContextEnv;
+       sga_reg_finite := _;
 
-       vp_custom_fn_t := custom_t;
-       vp_custom_fn_types := Sigma;
+       sga_custom_fn_t := custom_t;
+       sga_custom_fn_types := Sigma;
 
-       vp_reg_names r := match r with
+       sga_reg_names r := match r with
                         | r0 => "r0"
                         | outputReg => "outputReg"
                         | inputReg => "inputReg"
                         | invalid => "invalid"
                         | correct => "correct"
                         end;
-       vp_custom_fn_names fn := match fn with
+       sga_custom_fn_names fn := match fn with
                                | Stream => "stream"
                                | F => "f"
                                | G => "g"
-                               end;
+                                end;
 
-       vp_circuit := circuit;
+       sga_rule_name_t := name_t;
+       sga_rules := rules;
+       sga_rule_names r := match r with
+                          | doF => "doF"
+                          | doG => "doG"
+                          end;
+
+       sga_scheduler := Pipeline;
+       sga_module_name := "pipeline"
     |}.
 End Pipeline.

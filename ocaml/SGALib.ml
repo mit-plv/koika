@@ -44,7 +44,17 @@ module Util = struct
   let bits_const_to_int bs =
     List.fold_right (fun b bs -> (if b then 1 else 0) + 2 * bs) bs.bs_bits 0
 
-  let ffi_signature_of_interop_fn ffi_name (fsig: SGA.externalSignature) =
+  let custom_unsupported _ =
+    failwith "Custom functions not supported"
+
+  let ffi_signature_of_interop_fn ?(custom_fn_info = custom_unsupported) (fn: 'a SGA.interop_fn_t) =
+    let ffi_name, fsig = match fn with
+      | SGA.PrimFn fn ->
+         PrimFn fn,
+         SGA.prim_Sigma fn
+      | SGA.CustomFn fn ->
+         let name, sign = custom_fn_info fn in
+         CustomFn name, sign in
     { ffi_name;
       ffi_arg1size = fsig.arg1Type;
       ffi_arg2size = fsig.arg2Type;
@@ -53,40 +63,29 @@ module Util = struct
   let make_dedup_input registers circuits =
     { di_regs = registers;
       di_reg_sigs = (fun r -> r);
-      di_fn_sigs = (fun fn ->
-        let ffi_name, fsig = match fn with
-          | SGA.PrimFn fn ->
-             PrimFn fn,
-             SGA.prim_Sigma fn
-          | SGA.CustomFn _ ->
-             failwith "No custom functions" in
-        ffi_signature_of_interop_fn ffi_name fsig);
+      di_fn_sigs = ffi_signature_of_interop_fn;
       di_circuits = circuits }
 
-  let reg_sigs_of_verilog_package (pkg: SGA.verilogPackage) r =
-    let sz = pkg.vp_reg_types r in
-    { reg_name = string_of_coq_string (pkg.vp_reg_names r);
+  let reg_sigs_of_sga_package (pkg: SGA.sga_package_t) r =
+    let sz = pkg.sga_reg_types r in
+    { reg_name = string_of_coq_string (pkg.sga_reg_names r);
       reg_size = sz;
-      reg_init_val = bits_const_of_bits sz (pkg.vp_reg_init r) }
+      reg_init_val = bits_const_of_bits sz (pkg.sga_reg_init r) }
 
-  let fn_sigs_of_verilog_package (pkg: SGA.verilogPackage) fn =
-    let ffi_name, fsig = match fn with
-      | SGA.PrimFn fn ->
-         PrimFn fn,
-         SGA.prim_Sigma fn
-      | SGA.CustomFn fn ->
-         CustomFn (string_of_coq_string (pkg.vp_custom_fn_names fn)),
-         pkg.vp_custom_fn_types fn in
-    ffi_signature_of_interop_fn ffi_name fsig
+  let fn_sigs_of_sga_package (pkg: SGA.sga_package_t) fn =
+    let custom_fn_info fn =
+      string_of_coq_string (pkg.sga_custom_fn_names fn),
+      pkg.sga_custom_fn_types fn in
+    ffi_signature_of_interop_fn ~custom_fn_info fn
 
-  let dedup_input_of_verilogPackage (pkg: SGA.verilogPackage) =
+  let dedup_input_of_circuit_package (pkg: SGA.circuit_package_t) =
     let di_regs =
-      pkg.vp_reg_finite.finite_elems in
+      pkg.cp_prog.sga_reg_finite.finite_elems in
     let di_circuits r =
-      SGA.getenv pkg.vp_reg_Env pkg.vp_circuit r in
+      SGA.getenv pkg.cp_reg_Env pkg.cp_circuit r in
     { di_regs;
-      di_reg_sigs = reg_sigs_of_verilog_package pkg;
-      di_fn_sigs = fn_sigs_of_verilog_package pkg; di_circuits }
+      di_reg_sigs = reg_sigs_of_sga_package pkg.cp_prog;
+      di_fn_sigs = fn_sigs_of_sga_package pkg.cp_prog; di_circuits }
 end
 
 module Compilation = struct
@@ -228,6 +227,9 @@ module Compilation = struct
     let rules r = List.assoc r cu.c_rules in
     let env = SGA.compile_scheduler r sigma rEnv r0 rules cu.c_scheduler in
     (fun r -> SGA.getenv rEnv env r)
+
+  let circuit_package_of_sga_package (s: SGA.sga_package_t) =
+    SGA.compile_sga_package s
 end
 
 module Graphs = struct

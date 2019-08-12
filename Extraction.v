@@ -24,6 +24,6 @@ Extraction "SGA.ml"
            Primitives.prim_uSigma Primitives.prim_Sigma
            Interop.interop_fn_t Interop.interop_uSigma Interop.interop_Sigma
 
-           Interop.VerilogPackage
+           Interop.sga_package_t Interop.circuit_package_t Interop.compile_sga_package
            Environments.to_list Vect.vect_to_list Vect.vect_of_list Vect.Bits.to_nat Vect.index_to_nat
            Demo.Collatz.package Demo.Pipeline.package.

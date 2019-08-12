@@ -17,17 +17,23 @@
  (libraries common SGALib)
  (preprocess (pps ppx_jane ppx_deriving.show)))
 
+(library
+ (name CoqUtils)
+ (modules CoqUtils)
+ (libraries common SGALib backends)
+ (preprocess (pps ppx_jane ppx_deriving.show)))
+
 (executable
  (name collatz)
  (modules ("collatz"))
  (preprocess (pps ppx_jane ppx_deriving.show))
- (libraries SGALib backends))
+ (libraries CoqUtils))
 
 (executable
  (name pipeline)
  (modules ("pipeline"))
  (preprocess (pps ppx_jane ppx_deriving.show))
- (libraries SGALib backends))
+ (libraries CoqUtils))
 
 (executable
  (name cli)

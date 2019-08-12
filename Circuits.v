@@ -463,6 +463,10 @@ Section CircuitCompilation.
     REnv.(map2) (fun k r1 r2 => commit_rwdata r1 r2) s r.
 End CircuitCompilation.
 
+Definition readRegisters {reg_t fn_t: Type} (R: reg_t -> type) (Sigma: fn_t -> ExternalSignature)
+  : forall idx: reg_t, circuit R Sigma (R idx) :=
+  fun idx => CReadRegister (R := R) (Sigma := Sigma) idx.
+
 Arguments rwdata {_ _}.
 Arguments action_circuit {_ _}.
 Arguments scheduler_circuit {_ _}.
