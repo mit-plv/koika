@@ -106,13 +106,13 @@ let writeout (type name_t var_t reg_t) out (hpp: (_, name_t, var_t, reg_t, _) cp
   let p fmt = Printf.kfprintf nl out fmt in
   let pr fmt = Printf.fprintf out fmt in
 
-  let p_scoped header ?terminator:(terminator="") pbody =
+  let p_scoped header ?(terminator="") pbody =
     p "%s {" header;
     let r = pbody () in
     p "}%s" terminator;
     r in
 
-  let p_fn typ name ?args:(args="") ?annot:(annot="") pbody =
+  let p_fn typ name ?(args="") ?(annot="") pbody =
     p_scoped (sprintf "%s %s(%s)%s" typ name args annot) pbody in
 
   let p_includeguard pbody =

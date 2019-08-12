@@ -19,7 +19,7 @@ module Util = struct
   let string_eq_dec (s1: string) (s2: string) =
     s1 = s2
 
-  let string_of_bits ?mode:(mode=`Verilog) bs =
+  let string_of_bits ?(mode=`Verilog) bs =
     let bitstring = String.concat "" (List.rev_map (fun b -> if b then "1" else "0") bs.bs_bits) in
     (match mode with
      | `Cpp -> Printf.sprintf "0b%s"
