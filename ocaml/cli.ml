@@ -418,13 +418,6 @@ let check_result = function
   | Ok cs -> cs
   | Error err -> raise (Error err)
 
-let clang_format fname =
-  (* FIXME use Unix.open_process_args instead of Filename.quote (OCaml 4.08) *)
-  let cmd = sprintf "clang-format -i %s" (Filename.quote fname) in
-  let proc_in = Unix.open_process_in cmd in
-  let _ = really_input_string proc_in in
-  close_in proc_in
-
 let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
   try
     let sexps =
@@ -449,7 +442,7 @@ let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
                 let basename = Core.Filename.basename cli_in_fname in
                 let cls, _ = Core.Filename.split_extension basename in
                 Backends.Cpp.main out (Backends.Cpp.input_of_compile_unit cls c_unit);
-                clang_format cli_out_fname)
+                Common.clang_format cli_out_fname)
          | `Verilog | `Dot ->
             let graph =
               let circuits = SGALib.Compilation.compile c_unit in
