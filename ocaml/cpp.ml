@@ -59,6 +59,9 @@ let cpp_const_init (needs_multiprecision: bool ref) sz cst =
   else
     failwith (sprintf "Unsupported size: %d" sz)
 
+let cpp_size_needs_allocation sz =
+  sz > 64
+
 let cpp_fn_name = function
   | { ffi_name = CustomFn f; _ } ->
      (* The current implementation of external functions requires the client to
@@ -254,13 +257,13 @@ let compile (type name_t var_t reg_t)
           p_decl sz var;
         var in
 
-      let p_assign_pure target result =
+      let p_assign_pure ?(prefix = "") target result =
         (match target, result with
          | VarTarget { declared = true; name; _ }, PureExpr e ->
             p "%s = %s;" name e;
             Assigned name
          | VarTarget { sz; name; _ }, PureExpr e ->
-            p "%s %s = %s;" (cpp_type_of_size sz) name e;
+            p "%s %s %s = %s;" prefix (cpp_type_of_size sz) name e;
             Assigned name
          | _, _ ->
             result) in
@@ -281,7 +284,12 @@ let compile (type name_t var_t reg_t)
         | SGA.Var (_, v, _, _m) ->
            PureExpr (hpp.cpp_var_names v) (* FIXME fail if reference isn't to latest binding of v *)
         | SGA.Const (_, sz, cst) ->
-           PureExpr (sp_const sz cst)
+           let res = PureExpr (sp_const sz cst) in
+           if cpp_size_needs_allocation sz then
+             let ctarget = gensym_target sz "cst" in
+             let e = must_expr (p_assign_pure ~prefix:"static const" ctarget res) in
+             PureExpr e
+           else res
         | SGA.Seq (_, _, a1, a2) ->
            ignore (p_action NoTarget a1);
            p_action target a2
