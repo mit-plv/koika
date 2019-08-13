@@ -341,12 +341,12 @@ let resolve_rule fname registers rule =
     let (fn, nargs, args): SGALib.SGA.prim_ufn_t * int * _ =
       match name with
       | "sel" -> USel, 2, args
-      | "and" -> UAnd, 2, args
-      | "or" -> UOr, 2, args
-      | "not" -> UNot, 1, args
-      | "lsl" -> ULsl, 2, args
-      | "lsr" -> ULsr, 2, args
-      | "eq" -> UEq, 2, args
+      | "and" | "&" -> UAnd, 2, args
+      | "or" | "|" -> UOr, 2, args
+      | "not" | "~" -> UNot, 1, args
+      | "lsl" | "<<" -> ULsl, 2, args
+      | "lsr" | ">>" -> ULsr, 2, args
+      | "eq" | "=" -> UEq, 2, args
       | "concat" -> UConcat, 2, args
       | "uintplus" | "+" -> UUIntPlus, 2, args
       | "part" | "zextl" | "zextr" ->
