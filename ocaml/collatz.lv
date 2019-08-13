@@ -1,6 +1,6 @@
 ;; (progn (load "lv.el") (emacs-lisp-mode))
 (module Collatz
-  (register r0 32'0)
+  (register r0 32'hff)
 
   (rule test
     (write#1
