@@ -66,8 +66,13 @@ namespace prims {
   }
 
   template<size_t sz1, size_t sz2>
-  uint8_t sel(CONST_UINT_T(sz1) data, CONST_UINT_T(sz2) idx) {
-    return (data >> idx) & 1u;
+  UINT_T(1) sel(CONST_UINT_T(sz1) data, CONST_UINT_T(sz2) idx) {
+    return mask<1>(data >> idx);
+  }
+
+  template<size_t sz1, size_t sz2, size_t width>
+  UINT_T(width) part(CONST_UINT_T(sz1) data, CONST_UINT_T(sz2) idx) {
+    return mask<width>(data >> idx);
   }
 
   template<size_t sz>
@@ -105,6 +110,11 @@ namespace prims {
   template<size_t sz>
   UINT_T(sz) plus(CONST_UINT_T(sz) x, CONST_UINT_T(sz) y) {
     return mask<sz>(x + y);
+  }
+
+  template<size_t sz1, size_t sz2>
+  UINT_T(sz1 + sz2) concat(CONST_UINT_T(sz1) x, CONST_UINT_T(sz2) y) {
+    return static_cast<UINT_T(sz1 + sz2)>(x) << sz2 | y;
   }
 
   /// unit specializations

@@ -60,7 +60,7 @@ let cpp_fn_name = function
      sprintf "prims::%s"
        (match f with
         | SGA.Sel _logsz -> sprintf "sel<%d, %d>" sz1 sz2
-        | SGA.Part (_logsz, _width) -> failwith "FIXME: part"
+        | SGA.Part (_logsz, width) -> sprintf "part<%d, %d, %d>" sz1 sz2 width
         | SGA.And _sz -> sprintf "land<%d>" sz1
         | SGA.Or _sz -> sprintf "lor<%d>" sz1
         | SGA.Not _sz -> sprintf "lnot<%d>" sz1
