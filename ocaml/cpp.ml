@@ -30,7 +30,7 @@ let cpp_type_of_size (needs_multiprecision: bool ref) sz =
   if sz > 64 then
     needs_multiprecision := true;
   if sz <= 1024 then
-    sprintf "uint_t<%d>::t" sz
+    sprintf "uint_t<%d>" sz
   else
     failwith (sprintf "Unsupported size: %d" sz)
 

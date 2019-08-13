@@ -32,32 +32,23 @@ struct unit_t {};
 #ifdef NEEDS_BOOST_MULTIPRECISION
 #include <boost/multiprecision/cpp_int.hpp>
 template<size_t size>
-struct big_uint_t {
-  using t = std::conditional_t<size <= 128, boost::multiprecision::uint128_t,
-            std::conditional_t<size <= 256, boost::multiprecision::uint256_t,
-            std::conditional_t<size <= 512, boost::multiprecision::uint512_t,
-            std::conditional_t<size <= 1024, boost::multiprecision::uint1024_t,
-                               void>>>>;
-};
+using big_uint_t = std::conditional_t<size <= 128, boost::multiprecision::uint128_t,
+                   std::conditional_t<size <= 256, boost::multiprecision::uint256_t,
+                   std::conditional_t<size <= 512, boost::multiprecision::uint512_t,
+                   std::conditional_t<size <= 1024, boost::multiprecision::uint1024_t,
+                                      void>>>>;
 #else
 template<size_t size>
-struct big_uint_t {
-  using t = void;
-};
+using big_uint_t = void;
 #endif // #ifdef NEEDS_BOOST_MULTIPRECISION
 
 template<size_t size>
-struct uint_t {
-  using t = std::conditional_t<size ==  0, unit_t,
-            std::conditional_t<size <=  8, std::uint8_t,
-            std::conditional_t<size <= 16, std::uint16_t,
-            std::conditional_t<size <= 32, std::uint32_t,
-            std::conditional_t<size <= 64, std::uint64_t,
-                               typename big_uint_t<size>::t>>>>>;
-};
-
-#define UINT_T(sz) typename uint_t<sz>::t
-#define CONST_UINT_T(sz) const typename uint_t<sz>::t
+using uint_t = std::conditional_t<size ==  0, unit_t,
+               std::conditional_t<size <=  8, std::uint8_t,
+               std::conditional_t<size <= 16, std::uint16_t,
+               std::conditional_t<size <= 32, std::uint32_t,
+               std::conditional_t<size <= 64, std::uint64_t,
+                                  big_uint_t<size>>>>>>;
 
 // https://stackoverflow.com/questions/57417154/
 #define UINT8(c) static_cast<uint8_t>(UINT8_C(c))
@@ -73,97 +64,97 @@ using namespace boost::multiprecision::literals;
 #endif
 
 #define CHECK_SHIFT(nbits, sz, msg) \
-  SIM_ASSERT(idx <= std::numeric_limits<UINT_T(sz)>::digits, msg)
+  SIM_ASSERT(idx <= std::numeric_limits<uint_t<sz>>::digits, msg)
 
 namespace prims {
   const unit_t tt = {};
 
   template<size_t sz>
-  UINT_T(sz) __attribute__((noreturn)) unreachable() {
+  uint_t<sz> __attribute__((noreturn)) unreachable() {
     __builtin_unreachable();
   }
 
   template<size_t sz>
-  UINT_T(sz) mask(CONST_UINT_T(sz) arg) {
+  uint_t<sz> mask(const uint_t<sz> arg) {
     // GCC and Clang are smart enough to elide this when shift_amount == 0
-    constexpr uint8_t shift_amount = std::numeric_limits<UINT_T(sz)>::digits - sz;
+    constexpr uint8_t shift_amount = std::numeric_limits<uint_t<sz>>::digits - sz;
     // TODO: Find an alternative to boost::multiprecision that supports >> and max() as constexpr
-    static const UINT_T(sz) bitmask = std::numeric_limits<UINT_T(sz)>::max() >> shift_amount;
+    static const uint_t<sz> bitmask = std::numeric_limits<uint_t<sz>>::max() >> shift_amount;
     return arg & bitmask;
   }
 
   template<size_t ret_sz, size_t arg_sz>
-  UINT_T(ret_sz) truncate(CONST_UINT_T(arg_sz) arg) {
-    return mask<ret_sz>(static_cast<UINT_T(ret_sz)>(arg));
+  uint_t<ret_sz> truncate(const uint_t<arg_sz> arg) {
+    return mask<ret_sz>(static_cast<uint_t<ret_sz>>(arg));
   }
 
   template<size_t sz1, size_t sz2>
-  UINT_T(1) sel(CONST_UINT_T(sz1) data, CONST_UINT_T(sz2) idx) {
+  uint_t<1> sel(const uint_t<sz1> data, const uint_t<sz2> idx) {
     CHECK_SHIFT(idx, sz1, "sel: idx > size");
     return truncate<1,sz1>(data >> idx);
   }
 
   template<size_t sz1, size_t sz2, size_t width>
-  UINT_T(width) part(CONST_UINT_T(sz1) data, CONST_UINT_T(sz2) idx) {
+  uint_t<width> part(const uint_t<sz1> data, const uint_t<sz2> idx) {
     CHECK_SHIFT(idx, sz1, "part: idx > size");
     return truncate<width, sz1>(data >> idx);
   }
 
   template<size_t sz>
-  UINT_T(sz) lnot(CONST_UINT_T(sz) data, const unit_t /*unused*/) {
+  uint_t<sz> lnot(const uint_t<sz> data, const unit_t /*unused*/) {
     return mask<sz>(~data);
   }
 
   template<size_t sz>
-  UINT_T(sz) land(CONST_UINT_T(sz) data1, CONST_UINT_T(sz) data2) {
+  uint_t<sz> land(const uint_t<sz> data1, const uint_t<sz> data2) {
     return data1 & data2;
   }
 
   template<size_t sz>
-  UINT_T(sz) lor(CONST_UINT_T(sz) data1, CONST_UINT_T(sz) data2) {
+  uint_t<sz> lor(const uint_t<sz> data1, const uint_t<sz> data2) {
     return data1 | data2;
   }
 
   template<size_t sz1, size_t sz2>
-  UINT_T(sz1) lsr(CONST_UINT_T(sz1) data, CONST_UINT_T(sz2) shift) {
+  uint_t<sz1> lsr(const uint_t<sz1> data, const uint_t<sz2> shift) {
     CHECK_SHIFT(shift, sz1, "lsr: shift > size");
     return data >> shift;
   }
 
   template<size_t sz1, size_t sz2>
-  UINT_T(sz1) lsl(CONST_UINT_T(sz1) data, CONST_UINT_T(sz2) shift) {
+  uint_t<sz1> lsl(const uint_t<sz1> data, const uint_t<sz2> shift) {
     CHECK_SHIFT(shift, sz1, "lsl: shift > size");
     return mask<sz1>(data << shift);
   }
 
   template<size_t sz>
-  UINT_T(sz) eq(CONST_UINT_T(sz) x, CONST_UINT_T(sz) y) {
+  uint_t<sz> eq(const uint_t<sz> x, const uint_t<sz> y) {
     return x == y;
   }
 
   template<size_t sz>
-  UINT_T(sz) plus(CONST_UINT_T(sz) x, CONST_UINT_T(sz) y) {
+  uint_t<sz> plus(const uint_t<sz> x, const uint_t<sz> y) {
     return mask<sz>(x + y);
   }
 
   template<size_t sz1, size_t sz2>
-  UINT_T(sz1 + sz2) concat(CONST_UINT_T(sz1) x, CONST_UINT_T(sz2) y) {
-    return static_cast<UINT_T(sz1 + sz2)>(x) << sz2 | y;
+  uint_t<sz1 + sz2> concat(const uint_t<sz1> x, const uint_t<sz2> y) {
+    return static_cast<uint_t<sz1 + sz2>>(x) << sz2 | y;
   }
 
   template<size_t sz, size_t nzeroes>
-  UINT_T(nzeroes + sz) zextl(CONST_UINT_T(sz) x, const unit_t /*unused*/) {
-    return static_cast<UINT_T(nzeroes + sz)>(x);
+  uint_t<nzeroes + sz> zextl(const uint_t<sz> x, const unit_t /*unused*/) {
+    return static_cast<uint_t<nzeroes + sz>>(x);
   }
 
   template<size_t sz, size_t nzeroes>
-  UINT_T(sz + nzeroes) zextr(CONST_UINT_T(sz) x, const unit_t /*unused*/) {
-    return static_cast<UINT_T(sz + nzeroes)>(x) << nzeroes;
+  uint_t<sz + nzeroes> zextr(const uint_t<sz> x, const unit_t /*unused*/) {
+    return static_cast<uint_t<sz + nzeroes>>(x) << nzeroes;
   }
 } // namespace prims
 
 template<size_t sz>
-std::string uint_str(CONST_UINT_T(sz) val) {
+std::string uint_str(const uint_t<sz> val) {
   std::ostringstream stream;
   stream << sz << "'";
   if (sz <= 64) {
@@ -210,7 +201,7 @@ struct rwset_t {
 template<size_t size>
 struct reg_log_t {
   rwset_t rwset;
-  using T = typename uint_t<size>::t;
+  using T = uint_t<size>;
 
   // Reset alignment to prevent Clang from packing the fields together
   // This yielded a ~25x speedup when rwset was inline

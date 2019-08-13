@@ -14,7 +14,7 @@
 class collatz {
 public:
   struct state_t {
-    uint_t<32>::t r0 : 32; // FIXME: does this hurt?
+    uint_t<32> r0 : 32; // FIXME: does this hurt?
 
     void dump() const {
       std::cout << "r0 = " << r0 << std::endl;
@@ -33,8 +33,8 @@ private:
   bool rule_divide() {
     log.r0.reset(Log.r0);
 
-    { uint_t<32>::t v; CHECK_RETURN(log.r0.read0(&v, state.r0, Log.r0.rwset));
-      { uint_t<1>::t odd = prims::sel<32, 5>(v, UINT8(0b00000));
+    { uint_t<32> v; CHECK_RETURN(log.r0.read0(&v, state.r0, Log.r0.rwset));
+      { uint_t<1> odd = prims::sel<32, 5>(v, UINT8(0b00000));
         if (bool(prims::lnot<1>(odd, prims::tt))) {
           CHECK_RETURN(log.r0.write0(prims::lsr<32, 1>(v, UINT8(0b1)), Log.r0.rwset));
         } else {
@@ -50,8 +50,8 @@ private:
   bool rule_multiply() {
     log.r0.reset(Log.r0);
 
-    { uint_t<32>::t v; CHECK_RETURN(log.r0.read1(&v, Log.r0.rwset));
-      { uint_t<1>::t odd = prims::sel<32, 5>(v, UINT8(0b00000));
+    { uint_t<32> v; CHECK_RETURN(log.r0.read1(&v, Log.r0.rwset));
+      { uint_t<1> odd = prims::sel<32, 5>(v, UINT8(0b00000));
         if (bool(odd)) {
           CHECK_RETURN(log.r0.write1(prims::plus<32>(prims::plus<32>(prims::lsl<32, 1>(v, UINT8(0b1)), v), UINT32(0b00000000000000000000000000000001)), Log.r0.rwset));
         } else {
