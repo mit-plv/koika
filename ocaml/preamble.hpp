@@ -5,8 +5,7 @@
 #include <iostream>
 #include <limits>
 
-#define SIM_DEBUG
-
+#ifdef SIM_DEBUG
 inline void _SIM_ASSERT(const char* repr,
                         bool expr,
                         const char* file,
@@ -20,14 +19,11 @@ inline void _SIM_ASSERT(const char* repr,
   }
 }
 
-#ifdef SIM_DEBUG
 #define SIM_ASSERT(expr, msg) \
   _SIM_ASSERT(#expr, expr, __FILE__, __LINE__, msg)
 #else
 #define SIM_ASSERT(expr, msg) ;
-#endif
-
-#define CHECK_RETURN(can_fire) { if (!(can_fire)) { return false; } }
+#endif // #ifdef SIM_DEBUG
 
 struct unit_t {};
 
@@ -212,4 +208,6 @@ struct reg_log_t {
   reg_log_t() : data0(0), data1(0) {}
 };
 
-#endif
+#define CHECK_RETURN(can_fire) { if (!(can_fire)) { return false; } }
+
+#endif // #ifndef _PREAMBLE_HPP
