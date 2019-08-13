@@ -10,5 +10,9 @@ let coq_main (sga_pkg: SGA.sga_package_t) =
   let circuit = Graphs.dedup_circuit di in
   writeout modname ".v" Backends.Verilog.main circuit;
   writeout modname ".dot" Backends.Dot.main circuit;
-  writeout modname ".hpp" Backends.Cpp.main (Backends.Cpp.input_of_sga_package sga_pkg);
-  Common.clang_format (modname ^ ".hpp")
+  let cpp_input = Backends.Cpp.input_of_sga_package sga_pkg in
+  let cpp out kind = Backends.Cpp.main out kind cpp_input in
+  writeout modname ".hpp" cpp `Hpp;
+  Common.clang_format (modname ^ ".hpp");
+  writeout modname ".cpp" cpp `Cpp;
+  Common.clang_format (modname ^ ".cpp")

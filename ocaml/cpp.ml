@@ -101,10 +101,16 @@ type assignment_result =
   | Assigned of var_t
   | PureExpr of string
 
-let writeout (type name_t var_t reg_t) out (hpp: (_, name_t, var_t, reg_t, _) cpp_input_t) =
+let writeout (type name_t var_t reg_t)
+      out
+      (kind: [> `Hpp | `Cpp])
+      (hpp: (_, name_t, var_t, reg_t, _) cpp_input_t) =
   let nl _ = output_string out "\n" in
   let p fmt = Printf.kfprintf nl out fmt in
   let pr fmt = Printf.fprintf out fmt in
+
+  let p_comment s =
+    p "/* %s */" s in
 
   let p_scoped header ?(terminator="") pbody =
     p "%s {" header;
@@ -112,7 +118,7 @@ let writeout (type name_t var_t reg_t) out (hpp: (_, name_t, var_t, reg_t, _) cp
     p "}%s" terminator;
     r in
 
-  let p_fn typ name ?(args="") ?(annot="") pbody =
+  let p_fn ~typ ~name ?(args="") ?(annot="") pbody =
     p_scoped (sprintf "%s %s(%s)%s" typ name args annot) pbody in
 
   let p_includeguard pbody =
@@ -130,22 +136,26 @@ let writeout (type name_t var_t reg_t) out (hpp: (_, name_t, var_t, reg_t, _) cp
     nl ();
     p "%s" cpp_preamble in
 
+  let iter_registers f regs =
+    List.iter (fun r -> f (hpp.cpp_register_sigs r)) regs in
+
+  let iter_all_registers =
+    let sigs = List.map hpp.cpp_register_sigs hpp.cpp_registers in
+    fun f -> List.iter f sigs in
+
+  let sp_bits_const bs =
+    let s = SGALib.Util.string_of_bits ~mode:`Cpp bs in
+    cpp_const_init bs.bs_size s in
+
   let p_impl () =
     p "////////////////////";
     p "// IMPLEMENTATION //";
     p "////////////////////";
     nl ();
 
-    let p_class pbody =
+    let p_sim_class pbody =
       p_scoped (sprintf "template <typename extfuns_t> class %s" hpp.cpp_classname)
         ~terminator:";" pbody in
-
-    let iter_registers f regs =
-      List.iter (fun r -> f (hpp.cpp_register_sigs r)) regs in
-
-    let iter_all_registers =
-      let sigs = List.map hpp.cpp_register_sigs hpp.cpp_registers in
-      fun f -> List.iter f sigs in
 
     let p_state_register r =
       p "%s %s;" (cpp_type_of_size r.reg_size) r.reg_name in
@@ -156,7 +166,7 @@ let writeout (type name_t var_t reg_t) out (hpp: (_, name_t, var_t, reg_t, _) cp
       p_scoped "struct state_t" ~terminator:";" (fun () ->
           iter_all_registers p_state_register;
           nl ();
-          p_fn "void" "dump" ~annot:" const" (fun () ->
+          p_fn ~typ:"void" ~name:"dump" ~annot:" const" (fun () ->
               iter_all_registers p_printf_register)) in
 
     let p_log_register r =
@@ -187,8 +197,7 @@ let writeout (type name_t var_t reg_t) out (hpp: (_, name_t, var_t, reg_t, _) cp
 
       let sp_const sz bits =
         let bs = SGALib.Util.bits_const_of_bits sz bits in
-        let s = SGALib.Util.string_of_bits ~mode:`Cpp bs in
-        cpp_const_init sz s in
+        sp_bits_const bs in
 
       let p_decl sz name =
         p "%s %s;" (cpp_type_of_size sz) name in
@@ -282,7 +291,7 @@ let writeout (type name_t var_t reg_t) out (hpp: (_, name_t, var_t, reg_t, _) cp
            let a2 = must_expr (p_action (gensym_target f.ffi_arg2size "y") arg2) in
            PureExpr (sprintf "%s(%s, %s)" (cpp_fn_name f) a1 a2) in
 
-      p_fn "bool" ("rule_" ^ hpp.cpp_rule_names rule.rl_name) (fun () ->
+      p_fn ~typ:"bool" ~name:("rule_" ^ hpp.cpp_rule_names rule.rl_name) (fun () ->
           p_reset ();
           nl ();
           ignore (p_action NoTarget rule.rl_body);
@@ -293,7 +302,7 @@ let writeout (type name_t var_t reg_t) out (hpp: (_, name_t, var_t, reg_t, _) cp
     let p_constructor () =
       let p_init_data0 { reg_name = nm; _ } =
         p "Log.%s.data0 = state.%s;" nm nm in
-      p_fn "explicit" hpp.cpp_classname
+      p_fn ~typ:"explicit" ~name:hpp.cpp_classname
         ~args:"state_t init" ~annot:" : state(init)"
         (fun () -> iter_all_registers p_init_data0) in
 
@@ -309,19 +318,21 @@ let writeout (type name_t var_t reg_t) out (hpp: (_, name_t, var_t, reg_t, _) cp
     let p_cycle () =
       let p_commit_register r =
         p "state.%s = Log.%s.commit();" r.reg_name r.reg_name in
-      p_fn "void" "cycle" (fun () ->
+      p_fn ~typ:"void" ~name:"cycle" (fun () ->
           p_scheduler hpp.cpp_scheduler;
           iter_all_registers p_commit_register) in
 
     let p_run () =
-      p_fn "template<typename T> void" "run" ~args:"T ncycles" (fun () ->
+      let typ = sprintf "template<typename T> %s&" hpp.cpp_classname in
+      p_fn ~typ ~name:"run" ~args:"T ncycles" (fun () ->
           p_scoped "for (T cycle_id = 0; cycle_id < ncycles; cycle_id++)"
-            (fun () -> p "cycle();")) in
+            (fun () -> p "cycle();");
+          p "return *this;") in
 
     let p_observe () =
-      p_fn "state_t" "observe" (fun () -> p "return state;") in
+      p_fn ~typ:"state_t" ~name:"observe" (fun () -> p "return state;") in
 
-    p_class (fun () ->
+    p_sim_class (fun () ->
         p "public:";
         p_state_t ();
         nl ();
@@ -346,11 +357,42 @@ let writeout (type name_t var_t reg_t) out (hpp: (_, name_t, var_t, reg_t, _) cp
         nl ();
         p_observe ();
         nl ()) in
-  p_includeguard (fun () ->
-      p_preamble ();
-      nl ();
-      p_impl ();
-      nl ())
+
+  let p_hpp () =
+    p_includeguard (fun () ->
+        p_preamble ();
+        nl ();
+        p_impl ();
+        nl ()) in
+
+  let p_cpp () =
+    p "#include \"%s.hpp\"" hpp.cpp_classname;
+    nl ();
+
+    p_scoped "class extfuns" ~terminator:";" (fun () ->
+        p "public:";
+        p_comment "External methods (if any) can be implemented here.");
+    nl ();
+
+    let classtype =
+      sprintf "%s<extfuns>" hpp.cpp_classname in
+
+    p_fn ~typ:"int" ~name:"main" ~args:"int argc, char** argv" (fun () ->
+        p "unsigned long long int ncycles = 1000;";
+        p_scoped "if (argc >= 2) " (fun () ->
+            p "ncycles = std::stoull(argv[1]);");
+        nl ();
+        p_scoped (sprintf "%s simulator = %s(" classtype classtype)
+          ~terminator:");" (fun () ->
+            iter_all_registers (fun rn ->
+                p ".%s = %s," rn.reg_name (sp_bits_const rn.reg_init_val)));
+        nl ();
+        p "simulator.run(ncycles).observe().dump();";
+        p "return 0;") in
+
+  match kind with
+  | `Hpp -> p_hpp ()
+  | `Cpp -> p_cpp ()
 
 let action_footprint a =
   let m = Hashtbl.create 25 in
@@ -411,5 +453,5 @@ let input_of_sga_package (s: SGALib.SGA.sga_package_t)
     cpp_function_sigs = SGALib.Util.fn_sigs_of_sga_package s;
     cpp_var_names = fun x -> SGALib.Util.string_of_coq_string (s.sga_var_names x) }
 
-let main (out: out_channel) (cu: _ cpp_input_t) =
-  writeout out cu
+let main (out: out_channel) (kind: [> `Cpp | `Hpp]) (cu: _ cpp_input_t) =
+  writeout out kind cu

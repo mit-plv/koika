@@ -411,7 +411,7 @@ type cli_opts = {
     cli_in_fname: string;
     cli_out_fname: string;
     cli_frontend: [`Sexps | `Annotated];
-    cli_backend: [`Dot | `Verilog | `Hpp]
+    cli_backend: [`Dot | `Verilog | `Cpp | `Hpp]
   }
 
 let check_result = function
@@ -437,11 +437,11 @@ let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
         let c_unit : SGALib.Compilation.compile_unit =
           { c_scheduler; c_rules; c_registers = registers } in
         (match cli_backend with
-         | `Hpp ->
+         | (`Hpp | `Cpp) as kd ->
             Stdio.Out_channel.with_file cli_out_fname ~f:(fun out ->
                 let basename = Core.Filename.basename cli_in_fname in
                 let cls, _ = Core.Filename.split_extension basename in
-                Backends.Cpp.main out (Backends.Cpp.input_of_compile_unit cls c_unit);
+                Backends.Cpp.main out kd (Backends.Cpp.input_of_compile_unit cls c_unit);
                 Common.clang_format cli_out_fname)
          | `Verilog | `Dot ->
             let graph =
@@ -450,7 +450,7 @@ let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
               SGALib.Graphs.dedup_circuit di in
             Stdio.Out_channel.with_file cli_out_fname ~f:(fun out ->
                 (match cli_backend with
-                 | `Hpp -> assert false
+                 | `Hpp | `Cpp -> assert false
                  | `Dot -> Backends.Dot.main
                  | `Verilog -> Backends.Verilog.main) out graph))
      | [] -> parse_error (Pos.Filename cli_in_fname) "No modules declared")
