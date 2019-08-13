@@ -167,8 +167,8 @@ std::string uint_str(CONST_UINT_T(sz) val) {
   if (sz <= 64) {
     stream << "b";
     for (int pos = sz - 1; pos >= 0; pos--) {
-      bool bit = val >> pos != 0;
-      stream << (bit ? "1" : "0");
+      uint8_t bit = static_cast<uint8_t>((val >> pos) & 1u);
+      stream << (bool(bit) ? "1" : "0");
     }
     stream << " (0x" << std::hex << val << ", " << std::dec << val << ")";
   } else {
