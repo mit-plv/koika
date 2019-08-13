@@ -101,13 +101,25 @@ type assignment_result =
   | Assigned of var_t
   | PureExpr of string
 
-let writeout (type name_t var_t reg_t)
-      out
-      (kind: [> `Hpp | `Cpp])
+let compile (type name_t var_t reg_t)
       (hpp: (_, name_t, var_t, reg_t, _) cpp_input_t) =
-  let nl _ = output_string out "\n" in
-  let p fmt = Printf.kfprintf nl out fmt in
-  let pr fmt = Printf.fprintf out fmt in
+  let buffer = ref (Buffer.create 0) in
+
+  let nl _ = Buffer.add_string !buffer "\n" in
+  let p fmt = Printf.kbprintf nl !buffer fmt in
+  let pr fmt = Printf.bprintf !buffer fmt in
+  let p_buffer b = Buffer.add_buffer !buffer b in
+
+  let needs_multiprecision =
+    ref false in
+
+  let cpp_type_of_size =
+    cpp_type_of_size needs_multiprecision in
+  let cpp_const_init =
+    cpp_const_init needs_multiprecision in
+
+  let classname =
+    sprintf "sim_%s" hpp.cpp_classname in
 
   let p_comment s =
     p "/* %s */" s in
@@ -122,7 +134,7 @@ let writeout (type name_t var_t reg_t)
     p_scoped (sprintf "%s %s(%s)%s" typ name args annot) pbody in
 
   let p_includeguard pbody =
-    let cpp_define = sprintf "SIM_%s_HPP" (String.capitalize_ascii hpp.cpp_classname) in
+    let cpp_define = sprintf "%s_HPP" (String.capitalize_ascii classname) in
     p "#ifndef %s" cpp_define;
     p "#define %s" cpp_define;
     nl ();
@@ -134,6 +146,9 @@ let writeout (type name_t var_t reg_t)
     p "// PREAMBLE //";
     p "//////////////";
     nl ();
+    if !needs_multiprecision then (
+      p "#define NEEDS_BOOST_MULTIPRECISION";
+      nl ());
     p "%s" cpp_preamble in
 
   let iter_registers f regs =
@@ -160,7 +175,7 @@ let writeout (type name_t var_t reg_t)
     nl ();
 
     let p_sim_class pbody =
-      p_scoped (sprintf "template <typename extfuns_t> class %s" hpp.cpp_classname)
+      p_scoped (sprintf "template <typename extfuns_t> class %s" classname)
         ~terminator:";" pbody in
 
     let p_state_register r =
@@ -309,7 +324,7 @@ let writeout (type name_t var_t reg_t)
     let p_constructor () =
       let p_init_data0 { reg_name = nm; _ } =
         p "Log.%s.data0 = state.%s;" nm nm in
-      p_fn ~typ:"explicit" ~name:hpp.cpp_classname
+      p_fn ~typ:"explicit" ~name:classname
         ~args:"state_t init" ~annot:" : state(init)"
         (fun () -> iter_all_registers p_init_data0) in
 
@@ -330,7 +345,7 @@ let writeout (type name_t var_t reg_t)
           iter_all_registers p_commit_register) in
 
     let p_run () =
-      let typ = sprintf "template<typename T> %s&" hpp.cpp_classname in
+      let typ = sprintf "template<typename T> %s&" classname in
       p_fn ~typ ~name:"run" ~args:"T ncycles" (fun () ->
           p_scoped "for (T cycle_id = 0; cycle_id < ncycles; cycle_id++)"
             (fun () -> p "cycle();");
@@ -365,11 +380,20 @@ let writeout (type name_t var_t reg_t)
         p_observe ();
         nl ()) in
 
+  let with_output_to_buffer (pbody: unit -> unit) =
+    let buf = !buffer in
+    let temp = Buffer.create 4096 in
+    buffer := temp;
+    pbody ();
+    buffer := buf;
+    temp in
+
   let p_hpp () =
+    let impl = with_output_to_buffer p_impl in
     p_includeguard (fun () ->
         p_preamble ();
         nl ();
-        p_impl ();
+        p_buffer impl;
         nl ()) in
 
   let p_cpp () =
@@ -382,24 +406,25 @@ let writeout (type name_t var_t reg_t)
     nl ();
 
     let classtype =
-      sprintf "%s<extfuns>" hpp.cpp_classname in
+      sprintf "%s<extfuns>" classname in
 
     p_fn ~typ:"int" ~name:"main" ~args:"int argc, char** argv" (fun () ->
         p "unsigned long long int ncycles = 1000;";
         p_scoped "if (argc >= 2) " (fun () ->
             p "ncycles = std::stoull(argv[1]);");
         nl ();
-        p_scoped (sprintf "%s simulator = %s(" classtype classtype)
-          ~terminator:");" (fun () ->
+        p_scoped (sprintf "%s::state_t init = " classtype)
+          ~terminator:";" (fun () ->
             iter_all_registers (fun rn ->
                 p ".%s = %s," rn.reg_name (sp_bits_const rn.reg_init_val)));
+        nl ();
+        p "%s simulator(init);" classtype;
         nl ();
         p "simulator.run(ncycles).observe().dump();";
         p "return 0;") in
 
-  match kind with
-  | `Hpp -> p_hpp ()
-  | `Cpp -> p_cpp ()
+  (with_output_to_buffer p_hpp,
+   with_output_to_buffer p_cpp)
 
 let action_footprint a =
   let m = Hashtbl.create 25 in
@@ -460,5 +485,29 @@ let input_of_sga_package (s: SGALib.SGA.sga_package_t)
     cpp_function_sigs = SGALib.Util.fn_sigs_of_sga_package s;
     cpp_var_names = fun x -> SGALib.Util.string_of_coq_string (s.sga_var_names x) }
 
-let main (out: out_channel) (kind: [> `Cpp | `Hpp]) (cu: _ cpp_input_t) =
-  writeout out kind cu
+let command exe args =
+  (* FIXME use Unix.open_process_args instead of Filename.quote (OCaml 4.08) *)
+  let qargs = List.map Filename.quote (exe :: args) in
+  ignore (Sys.command (String.concat " " qargs))
+
+let clang_format fname =
+  command "clang-format" ["-i"; fname]
+
+let compile_cpp fname =
+  let srcname = fname ^ ".cpp" in
+  let exename = fname ^ ".exe" in
+  command "g++" ["-O3"; "-Wall"; "-Wextra"; srcname; "-o"; exename]
+
+let write_cpp fname ext buf =
+  let fname = fname ^ ext in
+  Common.with_output_to_file fname (fun out -> Buffer.output_buffer out buf);
+  clang_format fname
+
+let main target_fname (kind: [> `Cpp | `Hpp | `Exe]) (cu: _ cpp_input_t) =
+  let hpp, cpp = compile cu in
+  if kind = `Hpp || kind = `Exe then
+    write_cpp target_fname ".hpp" hpp;
+  if kind = `Cpp || kind = `Exe then
+    write_cpp target_fname ".cpp" cpp;
+  if kind = `Exe then
+    compile_cpp target_fname

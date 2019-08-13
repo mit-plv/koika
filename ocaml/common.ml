@@ -101,12 +101,10 @@ let compute_parents (circuits: 'p circuit list) =
     circuits;
   tag_to_parents
 
-let clang_format fname =
-  (* FIXME use Unix.open_process_args instead of Filename.quote (OCaml 4.08) *)
-  let cmd = Printf.sprintf "clang-format -i %s" (Filename.quote fname) in
-  let proc_in = Unix.open_process_in cmd in
-  let _ = really_input_string proc_in in
-  close_in proc_in
+let with_output_to_file fname (f: out_channel -> unit) =
+  let out = open_out fname in
+  try f out; close_out_noerr out
+  with e -> (close_out_noerr out; raise e)
 
 type 'f err_contents =
   { epos: 'f;

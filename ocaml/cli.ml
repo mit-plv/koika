@@ -411,7 +411,7 @@ type cli_opts = {
     cli_in_fname: string;
     cli_out_fname: string;
     cli_frontend: [`Sexps | `Annotated];
-    cli_backend: [`Dot | `Verilog | `Cpp | `Hpp]
+    cli_backend: [`Dot | `Verilog | `Cpp | `Hpp | `Exe]
   }
 
 let check_result = function
@@ -437,12 +437,10 @@ let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
         let c_unit : SGALib.Compilation.compile_unit =
           { c_scheduler; c_rules; c_registers = registers } in
         (match cli_backend with
-         | (`Hpp | `Cpp) as kd ->
-            Stdio.Out_channel.with_file cli_out_fname ~f:(fun out ->
-                let basename = Core.Filename.basename cli_in_fname in
-                let cls, _ = Core.Filename.split_extension basename in
-                Backends.Cpp.main out kd (Backends.Cpp.input_of_compile_unit cls c_unit);
-                Common.clang_format cli_out_fname)
+         | (`Hpp | `Cpp | `Exe) as kd ->
+            let fname, _ = Core.Filename.split_extension cli_in_fname in
+            let cls = Core.Filename.basename fname in
+            Backends.Cpp.main fname kd (Backends.Cpp.input_of_compile_unit cls c_unit)
          | `Verilog | `Dot ->
             let graph =
               let circuits = SGALib.Compilation.compile c_unit in
@@ -450,7 +448,7 @@ let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
               SGALib.Graphs.dedup_circuit di in
             Stdio.Out_channel.with_file cli_out_fname ~f:(fun out ->
                 (match cli_backend with
-                 | `Hpp | `Cpp -> assert false
+                 | `Hpp | `Cpp | `Exe -> assert false
                  | `Dot -> Backends.Dot.main
                  | `Verilog -> Backends.Verilog.main) out graph))
      | [] -> parse_error (Pos.Filename cli_in_fname) "No modules declared")
@@ -469,7 +467,9 @@ let backend_of_fname fname =
   | _, Some "v" -> `Verilog
   | _, Some "dot" -> `Dot
   | _, Some "hpp" -> `Hpp
-  | _, _ -> failwith "Output file must have extension .v, .dot, or .hpp"
+  | _, Some "cpp" -> `Cpp
+  | _, Some "exe" -> `Exe
+  | _, _ -> failwith "Output file must have extension .v, .dot, .hpp, .cpp, or .exe"
 
 let cli =
   let open Core in
