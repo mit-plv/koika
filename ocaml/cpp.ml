@@ -143,9 +143,15 @@ let writeout (type name_t var_t reg_t)
     let sigs = List.map hpp.cpp_register_sigs hpp.cpp_registers in
     fun f -> List.iter f sigs in
 
-  let sp_bits_const bs =
-    let s = SGALib.Util.string_of_bits ~mode:`Cpp bs in
-    cpp_const_init bs.bs_size s in
+  let bits_to_Z bits =
+    Z.(List.fold_right (fun b z ->
+           (if b then one else zero) + shift_left z 1)
+         bits zero) in
+
+  let sp_bits_const { bs_size; bs_bits } =
+    let w = (bs_size + 7) / 8 in
+    let fmt = sprintf "%%0#%dx" (w + 2) in
+    cpp_const_init bs_size (Z.format fmt (bits_to_Z bs_bits)) in
 
   let p_impl () =
     p "////////////////////";

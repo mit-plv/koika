@@ -14,7 +14,7 @@
 (library
  (name backends)
  (modules verilog dot cpp)
- (libraries common SGALib)
+ (libraries common SGALib zarith)
  (preprocess (pps ppx_jane ppx_deriving.show)))
 
 (library

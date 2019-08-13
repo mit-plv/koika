@@ -41,9 +41,6 @@ module Util = struct
     { bs_size = sz;
       bs_bits = SGA.vect_to_list sz bs }
 
-  let bits_const_to_int bs =
-    List.fold_right (fun b bs -> (if b then 1 else 0) + 2 * bs) bs.bs_bits 0
-
   let custom_unsupported _ =
     failwith "Custom functions not supported"
 
