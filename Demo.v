@@ -340,7 +340,7 @@ Module Pipeline.
                        | r0 => Bits.of_N _ 0
                        | outputReg => Bits.of_N _ 0
                        | inputReg => Bits.of_N _ 0
-                       | invalid => Ob~0
+                       | invalid => Ob~1
                        | correct => Ob~1
                        end%N;
        sga_reg_finite := _;
