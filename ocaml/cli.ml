@@ -354,8 +354,8 @@ let resolve_rule fname registers rule =
           | { lcnt = Num n; _}, args ->
              (match name with
               | "part" -> UPart n, 2, args
-              | "zextl" -> UZExtR n, 2, args
-              | "zextr" -> UZExtL n, 2, args
+              | "zextl" -> UZExtL n, 1, args
+              | "zextr" -> UZExtR n, 1, args
               | _ -> assert false)
           | { lpos; _ }, _ -> parse_error lpos "Expecting a type-level constant")
       | _ -> name_error lpos "function" name in
