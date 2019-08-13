@@ -170,9 +170,9 @@ std::string uint_str(CONST_UINT_T(sz) val) {
       uint8_t bit = static_cast<uint8_t>((val >> pos) & 1u);
       stream << (bool(bit) ? "1" : "0");
     }
-    stream << " (0x" << std::hex << val << ", " << std::dec << val << ")";
+    stream << " (0x" << std::hex << +val << ", " << std::dec << +val << ")";
   } else {
-    stream << "x" << std::hex << val;
+    stream << "x" << std::hex << +val;
   }
   return stream.str();
 };
