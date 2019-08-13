@@ -25,15 +25,19 @@ type ('prim, 'name_t, 'var_t, 'reg_t, 'fn_t) cpp_input_t = {
 let sprintf = Printf.sprintf
 let fprintf = Printf.fprintf
 
-let cpp_type_of_size sz =
+let cpp_type_of_size (needs_multiprecision: bool ref) sz =
   assert (sz >= 0);
-  if sz <= 64 then
+  if sz > 64 then
+    needs_multiprecision := true;
+  if sz <= 1024 then
     sprintf "uint_t<%d>::t" sz
   else
     failwith (sprintf "Unsupported size: %d" sz)
 
-let cpp_const_init sz cst =
+let cpp_const_init (needs_multiprecision: bool ref) sz cst =
   assert (sz >= 0);
+  if sz > 64 then
+    needs_multiprecision := true;
   if sz = 0 then
     "prims::tt"
   else if sz <= 8 then
@@ -44,6 +48,14 @@ let cpp_const_init sz cst =
     sprintf "UINT32(%s)" cst
   else if sz <= 64 then
     sprintf "UINT64(%s)" cst
+  else if sz <= 128 then
+    sprintf "UINT128(%s)" cst
+  else if sz <= 256 then
+    sprintf "UINT256(%s)" cst
+  else if sz <= 512 then
+    sprintf "UINT512(%s)" cst
+  else if sz <= 1024 then
+    sprintf "UINT1024(%s)" cst
   else
     failwith (sprintf "Unsupported size: %d" sz)
 

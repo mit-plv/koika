@@ -29,13 +29,31 @@ inline void _SIM_ASSERT(const char* repr,
 
 struct unit_t {};
 
+#ifdef NEEDS_BOOST_MULTIPRECISION
+#include <boost/multiprecision/cpp_int.hpp>
+template<size_t size>
+struct big_uint_t {
+  using t = std::conditional_t<size <= 128, boost::multiprecision::uint128_t,
+            std::conditional_t<size <= 256, boost::multiprecision::uint256_t,
+            std::conditional_t<size <= 512, boost::multiprecision::uint512_t,
+            std::conditional_t<size <= 1024, boost::multiprecision::uint1024_t,
+                               void>>>>;
+};
+#else
+template<size_t size>
+struct big_uint_t {
+  using t = void;
+};
+#endif // #ifdef NEEDS_BOOST_MULTIPRECISION
+
 template<size_t size>
 struct uint_t {
   using t = std::conditional_t<size ==  0, unit_t,
             std::conditional_t<size <=  8, std::uint8_t,
             std::conditional_t<size <= 16, std::uint16_t,
             std::conditional_t<size <= 32, std::uint32_t,
-            std::conditional_t<size <= 64, std::uint64_t, void>>>>>;
+            std::conditional_t<size <= 64, std::uint64_t,
+                               typename big_uint_t<size>::t>>>>>;
 };
 
 #define UINT_T(sz) typename uint_t<sz>::t
@@ -46,6 +64,12 @@ struct uint_t {
 #define UINT16(c) static_cast<uint16_t>(UINT16_C(c))
 #define UINT32(c) static_cast<uint32_t>(UINT32_C(c))
 #define UINT64(c) static_cast<uint64_t>(UINT64_C(c))
+#ifdef NEEDS_BOOST_MULTIPRECISION
+#define UINT128(c) boost::multiprecision::uint128_t(#c)
+#define UINT256(c) boost::multiprecision::uint256_t(#c)
+#define UINT512(c) boost::multiprecision::uint512_t(#c)
+#define UINT1024(c) boost::multiprecision::uint1024_t(#c)
+#endif
 
 #define CHECK_SHIFT(nbits, sz, msg) \
   SIM_ASSERT(idx <= std::numeric_limits<UINT_T(sz)>::digits, msg)
@@ -189,9 +213,9 @@ struct reg_log_t {
   // Reset alignment to prevent Clang from packing the fields together
   // This yielded a ~25x speedup when rwset was inline
   unsigned : 0;
-  T data0 : size;
+  T data0;
   unsigned : 0;
-  T data1 : size;
+  T data1;
 
   bool read0(T* const target, const T data, const rwset_t rLset) {
     bool ok = rwset.may_read0(rLset);
