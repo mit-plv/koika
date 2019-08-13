@@ -1,11 +1,4 @@
-;; (progn
-;;   (defmacro module (name &rest body)
-;;     (declare (indent defun)))
-;;   (defmacro rule (name args &rest body)
-;;     (declare (indent defun)))
-;;   (defmacro scheduler (&rest body)
-;;     (declare (indent defun))))
-
+;; (progn (load "lv.el") (emacs-lisp-mode))
 (module Collatz
   (register r0 32'0)
 
