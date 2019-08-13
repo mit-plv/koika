@@ -438,7 +438,7 @@ let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
           { c_scheduler; c_rules; c_registers = registers } in
         (match cli_backend with
          | (`Hpp | `Cpp | `Exe) as kd ->
-            let fname, _ = Core.Filename.split_extension cli_in_fname in
+            let fname, _ = Core.Filename.split_extension cli_out_fname in
             let cls = Core.Filename.basename fname in
             Backends.Cpp.main fname kd (Backends.Cpp.input_of_compile_unit cls c_unit)
          | `Verilog | `Dot ->
