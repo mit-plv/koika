@@ -47,6 +47,9 @@ struct uint_t {
 #define UINT32(c) static_cast<uint32_t>(UINT32_C(c))
 #define UINT64(c) static_cast<uint64_t>(UINT64_C(c))
 
+#define CHECK_SHIFT(nbits, sz, msg) \
+  SIM_ASSERT(idx <= std::numeric_limits<UINT_T(sz)>::digits, msg)
+
 namespace prims {
   const unit_t tt = {};
 
@@ -59,18 +62,25 @@ namespace prims {
   UINT_T(sz) mask(CONST_UINT_T(sz) arg) {
     // GCC and Clang are smart enough to elide this when shift_amount == 0
     constexpr uint8_t shift_amount = std::numeric_limits<UINT_T(sz)>::digits - sz;
-    constexpr UINT_T(sz) bitmask = std::numeric_limits<UINT_T(sz)>::max() >> shift_amount;
+    const UINT_T(sz) bitmask = std::numeric_limits<UINT_T(sz)>::max() >> shift_amount;
     return arg & bitmask;
+  }
+
+  template<size_t ret_sz, size_t arg_sz>
+  UINT_T(ret_sz) truncate(CONST_UINT_T(arg_sz) arg) {
+    return mask<ret_sz>(static_cast<UINT_T(ret_sz)>(arg));
   }
 
   template<size_t sz1, size_t sz2>
   UINT_T(1) sel(CONST_UINT_T(sz1) data, CONST_UINT_T(sz2) idx) {
-    return mask<1>(data >> idx);
+    CHECK_SHIFT(idx, sz1, "sel: idx > size");
+    return truncate<1,sz1>(data >> idx);
   }
 
   template<size_t sz1, size_t sz2, size_t width>
   UINT_T(width) part(CONST_UINT_T(sz1) data, CONST_UINT_T(sz2) idx) {
-    return mask<width>(data >> idx);
+    CHECK_SHIFT(idx, sz1, "part: idx > size");
+    return truncate<width, sz1>(data >> idx);
   }
 
   template<size_t sz>
@@ -90,13 +100,13 @@ namespace prims {
 
   template<size_t sz1, size_t sz2>
   UINT_T(sz1) lsr(CONST_UINT_T(sz1) data, CONST_UINT_T(sz2) shift) {
-    SIM_ASSERT(shift <= std::numeric_limits<UINT_T(sz1)>::digits, "lsr: shift > size");
+    CHECK_SHIFT(shift, sz1, "lsr: shift > size");
     return data >> shift;
   }
 
   template<size_t sz1, size_t sz2>
   UINT_T(sz1) lsl(CONST_UINT_T(sz1) data, CONST_UINT_T(sz2) shift) {
-    SIM_ASSERT(shift <= std::numeric_limits<UINT_T(sz1)>::digits, "lsl: shift > size");
+    CHECK_SHIFT(shift, sz1, "lsl: shift > size");
     return mask<sz1>(data << shift);
   }
 
