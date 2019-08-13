@@ -68,8 +68,8 @@ let cpp_fn_name = function
         | SGA.Lsr (_sz, _places) -> sprintf "lsr<%d, %d>" sz1 sz2
         | SGA.Eq _sz -> sprintf "eq<%d>" sz1
         | SGA.Concat (_sz1, _sz2) -> sprintf "concat<%d, %d>" sz1 sz2
-        | SGA.ZExtL (_sz, _nzeroes) -> failwith "FIXME: zextl"
-        | SGA.ZExtR (_sz, _nzeroes) -> failwith "FIXME: zextr"
+        | SGA.ZExtL (_sz, nzeroes) -> sprintf "zextl<%d, %d>" sz1 nzeroes
+        | SGA.ZExtR (_sz, nzeroes) -> sprintf "zextr<%d, %d>" sz1 nzeroes
         | SGA.UIntPlus _sz -> sprintf "plus<%d>" sz1)
 
 let cpp_preamble =

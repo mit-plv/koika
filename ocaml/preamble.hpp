@@ -117,7 +117,15 @@ namespace prims {
     return static_cast<UINT_T(sz1 + sz2)>(x) << sz2 | y;
   }
 
-  /// unit specializations
+  template<size_t sz, size_t nzeroes>
+  UINT_T(nzeroes + sz) zextl(CONST_UINT_T(sz) x, const unit_t /*unused*/) {
+    return static_cast<UINT_T(nzeroes + sz)>(x);
+  }
+
+  template<size_t sz, size_t nzeroes>
+  UINT_T(sz + nzeroes) zextr(CONST_UINT_T(sz) x, const unit_t /*unused*/) {
+    return static_cast<UINT_T(sz + nzeroes)>(x) << nzeroes;
+  }
 } // namespace prims
 
 struct rwset_t {
