@@ -65,10 +65,11 @@ struct uint_t {
 #define UINT32(c) static_cast<uint32_t>(UINT32_C(c))
 #define UINT64(c) static_cast<uint64_t>(UINT64_C(c))
 #ifdef NEEDS_BOOST_MULTIPRECISION
-#define UINT128(c) boost::multiprecision::uint128_t(#c)
-#define UINT256(c) boost::multiprecision::uint256_t(#c)
-#define UINT512(c) boost::multiprecision::uint512_t(#c)
-#define UINT1024(c) boost::multiprecision::uint1024_t(#c)
+using namespace boost::multiprecision::literals;
+#define UINT128(c) c##_cppui128
+#define UINT256(c) c##_cppui256
+#define UINT512(c) c##_cppui512
+#define UINT1024(c) c##_cppui1024
 #endif
 
 #define CHECK_SHIFT(nbits, sz, msg) \
@@ -86,7 +87,8 @@ namespace prims {
   UINT_T(sz) mask(CONST_UINT_T(sz) arg) {
     // GCC and Clang are smart enough to elide this when shift_amount == 0
     constexpr uint8_t shift_amount = std::numeric_limits<UINT_T(sz)>::digits - sz;
-    const UINT_T(sz) bitmask = std::numeric_limits<UINT_T(sz)>::max() >> shift_amount;
+    // TODO: Find an alternative to boost::multiprecision that supports >> and max() as constexpr
+    static const UINT_T(sz) bitmask = std::numeric_limits<UINT_T(sz)>::max() >> shift_amount;
     return arg & bitmask;
   }
 

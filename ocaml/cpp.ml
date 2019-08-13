@@ -59,8 +59,8 @@ let cpp_const_init (needs_multiprecision: bool ref) sz cst =
   else
     failwith (sprintf "Unsupported size: %d" sz)
 
-let cpp_size_needs_allocation sz =
-  sz > 64
+let cpp_size_needs_allocation _sz =
+  false (* boost::multiprecision has literals *)
 
 let cpp_fn_name = function
   | { ffi_name = CustomFn f; _ } ->
