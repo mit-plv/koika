@@ -161,13 +161,14 @@ let writeout (type name_t var_t reg_t)
       p "%s %s;" (cpp_type_of_size r.reg_size) r.reg_name in
 
     let p_state_t () =
-      let p_printf_register { reg_name; _ } =
-        p "std::cout << \"%s = \" << %s << std::endl;" reg_name reg_name in
+      let p_dump_register { reg_name; reg_size; _ } =
+        p "std::cout << \"%s = \" << uint_str<%d>(%s) << std::endl;"
+          reg_name reg_size reg_name in
       p_scoped "struct state_t" ~terminator:";" (fun () ->
           iter_all_registers p_state_register;
           nl ();
           p_fn ~typ:"void" ~name:"dump" ~annot:" const" (fun () ->
-              iter_all_registers p_printf_register)) in
+              iter_all_registers p_dump_register)) in
 
     let p_log_register r =
       p "reg_log_t<%d> %s;" r.reg_size r.reg_name in

@@ -2,6 +2,8 @@
 #define _PREAMBLE_HPP
 
 #include <cstdint>
+#include <string>
+#include <sstream>
 #include <iostream>
 #include <limits>
 
@@ -123,6 +125,23 @@ namespace prims {
     return static_cast<UINT_T(sz + nzeroes)>(x) << nzeroes;
   }
 } // namespace prims
+
+template<size_t sz>
+std::string uint_str(CONST_UINT_T(sz) val) {
+  std::ostringstream stream;
+  stream << sz << "'";
+  if (sz <= 64) {
+    stream << "b";
+    for (int pos = sz - 1; pos >= 0; pos--) {
+      bool bit = val >> pos != 0;
+      stream << (bit ? "1" : "0");
+    }
+    stream << " (0x" << std::hex << val << ", " << std::dec << val << ")";
+  } else {
+    stream << "x" << std::hex << val;
+  }
+  return stream.str();
+};
 
 struct rwset_t {
   bool r1 : 1; // FIXME does adding :1 always help?
