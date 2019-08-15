@@ -262,9 +262,9 @@ End Collatz.
 Module Pipeline.
   Definition var_t := string.
   Inductive reg_t := r0 | outputReg | inputReg | invalid | correct.
-  Inductive custom_t := Stream | F | G.
-  Definition ufn_t := interop_ufn_t custom_t.
-  Definition fn_t := interop_fn_t custom_t.
+  Inductive custom_fn_t := Stream | F | G.
+  Definition ufn_t := interop_ufn_t custom_fn_t.
+  Definition fn_t := interop_fn_t custom_fn_t.
   Inductive name_t := doF | doG.
 
   Definition sz := (pow2 5).
@@ -277,14 +277,14 @@ Module Pipeline.
     | invalid | correct => bits_t 1
     end.
 
-  Definition Sigma (fn: custom_t) : ExternalSignature :=
+  Definition Sigma (fn: custom_fn_t) : ExternalSignature :=
     match fn with
     | Stream => {{ sz ~> 0 ~> sz }}
     | F => {{ sz ~> 0 ~> sz }}
     | G => {{ sz ~> 0 ~> sz }}
     end.
 
-  Definition uSigma (fn: custom_t) (_ _: type) : custom_t := fn.
+  Definition uSigma (fn: custom_fn_t) (_ _: type) : custom_fn_t := fn.
   Definition iSigma idx := interop_Sigma Sigma idx.
   Definition iuSigma := interop_uSigma uSigma.
 
@@ -345,7 +345,7 @@ Module Pipeline.
                        end%N;
        sga_reg_finite := _;
 
-       sga_custom_fn_t := custom_t;
+       sga_custom_fn_t := custom_fn_t;
        sga_custom_fn_types := Sigma;
 
        sga_reg_names r := match r with

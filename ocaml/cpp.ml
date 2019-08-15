@@ -494,7 +494,7 @@ let cpp_rule_of_sga_package_rule (s: SGALib.SGA.sga_package_t) (rn: Obj.t) =
   cpp_rule_of_action (rn, s.sga_rules rn)
 
 let input_of_sga_package (s: SGALib.SGA.sga_package_t)
-    : (SGA.prim_fn_t, Obj.t, Obj.t, Obj.t, 'custom_t SGA.interop_fn_t) cpp_input_t =
+    : (SGA.prim_fn_t, Obj.t, Obj.t, Obj.t, 'custom_fn_t SGA.interop_fn_t) cpp_input_t =
   let rules = collect_rules s.sga_scheduler in
   { cpp_classname = SGALib.Util.string_of_coq_string s.sga_module_name;
     cpp_rule_names = (fun rn -> SGALib.Util.string_of_coq_string (s.sga_rule_names rn));
