@@ -20,7 +20,7 @@ Section TypedSyntax.
   | Bind {sig} {tau tau'}
          (var: var_t)
          (ex: action sig tau)
-         (body: action (cons (var, tau) sig) tau') : action sig tau'
+         (body: action (List.cons (var, tau) sig) tau') : action sig tau'
   | If {sig tau}
        (cond: action sig (bits_t 1))
        (tbranch fbranch: action sig tau) : action sig tau

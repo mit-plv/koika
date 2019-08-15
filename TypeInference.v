@@ -9,11 +9,27 @@ Section ErrorReporting.
 
   Inductive error_message :=
   | UnboundVariable (var: var_t)
-  | TypeMismatch {sig tau} (e: action var_t R Sigma sig tau) (expected: type).
+  | UnboundField (f: string) (sig: struct_sig)
+  | TypeMismatch {sig tau} (e: action var_t R Sigma sig tau) (expected: type)
+  | KindMismatch {sig tau} (e: action var_t R Sigma sig tau) (expected: type_kind).
 
   Record error :=
     { epos: pos_t;
       emsg: error_message }.
+
+  Definition lift_fn_tc_error {sig tau} pos (e: action var_t R Sigma sig tau) (err: fn_tc_error) :=
+    {| epos := pos;
+       emsg := match err with
+              | kind_mismatch expected => KindMismatch e expected
+              | unbound_field f sig => UnboundField f sig
+              end |}.
+
+  Definition lift_fn_tc_result {A sig tau} pos (e: action var_t R Sigma sig tau) (r: result A fn_tc_error)
+    : (result A error) :=
+    match r with
+    | Success a => Success a
+    | Failure err => Failure (lift_fn_tc_error pos e err)
+    end.
 End ErrorReporting.
 
 Arguments error_message _ {_ _} _ _.
@@ -25,7 +41,7 @@ Section TypeInference.
 
   Context (R: reg_t -> type).
   Context (Sigma: fn_t -> ExternalSignature).
-  Context (uSigma: forall (fn: ufn_t) (tau1 tau2: type), fn_t).
+  Context (uSigma: forall (fn: ufn_t) (tau1 tau2: type), result fn_t fn_tc_error).
 
   Notation uaction := (uaction pos_t var_t reg_t ufn_t).
   Notation uscheduler := (uscheduler pos_t name_t).
@@ -37,36 +53,95 @@ Section TypeInference.
   Notation schedule := (schedule name_t var_t R Sigma).
   Notation error := (error pos_t var_t R Sigma).
   Notation error_message := (error_message var_t R Sigma).
+  Notation result A := (result A error).
 
   Notation "` x" := (projT1 x) (at level 0).
   Notation "`` x" := (projT2 x) (at level 0).
 
-  Inductive result {A} :=
-  | WellTyped (tm: A)
-  | IllTyped (err: error).
-  Arguments result : clear implicits.
-
-  Definition opt_result {A} (o: option A) (e: error): result A :=
-    match o with
-    | Some x => WellTyped x
-    | None => IllTyped e
-    end.
-
   Definition must_typecheck {A} (r: result A) :=
     match r return (match r with
-                    | WellTyped tm => A
-                    | IllTyped err => error
+                    | Success tm => A
+                    | Failure err => error
                     end) with
-    | WellTyped tm => tm
-    | IllTyped err => err
+    | Success tm => tm
+    | Failure err => err
     end.
 
-  Notation "'let/res' var ':=' expr 'in' body" :=
-    (match expr with
-     | WellTyped var => body
-     | IllTyped err => IllTyped err
-     end)
-      (at level 200).
+  Ltac simple_eq :=
+    first [ left; solve[eauto] | right; inversion 1; subst; solve[congruence] ].
+
+  Definition EqDec_beq {A} {EQ: EqDec A} a1 a2 : bool :=
+    if eq_dec a1 a2 then true else false.
+
+  Lemma EqDec_beq_iff {A} (EQ: EqDec A) a1 a2 :
+    EqDec_beq a1 a2 = true <-> a1 = a2.
+  Proof.
+    unfold EqDec_beq; destruct eq_dec; subst.
+    - firstorder.
+    - split; intro; (eauto || discriminate).
+  Qed.
+
+  Instance EqDec_vector A (sz: nat) {EQ: EqDec A}: EqDec (Vector.t A sz).
+  Proof.
+    econstructor; intros; eapply Vector.eq_dec.
+    apply EqDec_beq_iff.
+  Defined.
+  (* Proof. *)
+  (*   constructor. *)
+  (*   revert sz. *)
+  (*   apply Vector.rect2. *)
+  (*   - auto. *)
+  (*   - intros n v1 v2 Hdec a b; destruct (eq_dec a b) as [ Heq | Hneq ]; subst. *)
+  (*     + destruct Hdec; subst. *)
+  (*       * auto. *)
+  (*       * right. inversion 1 as [heq]. *)
+  (*         apply Eqdep_dec.inj_pair2_eq_dec in heq; (eauto || apply eq_dec). *)
+  (*     + right; inversion 1; eauto. *)
+  (* Defined. *)
+
+  Instance EqDec_type : EqDec type.
+  Proof.
+    econstructor.
+    fix IHtau 1;
+      destruct t1 as [ sz1 | fs1 ];
+      destruct t2 as [ sz2 | fs2 ]; cbn;
+        try simple_eq.
+    - destruct (eq_dec sz1 sz2); subst;
+        simple_eq.
+    - destruct fs1 as [ sz1 nm1 f1 ];
+        destruct fs2 as [ sz2 nm2 f2 ]; cbn.
+      + destruct (eq_dec nm1 nm2); subst;
+          try simple_eq.
+        destruct (eq_dec sz1 sz2); subst;
+          try simple_eq.
+        revert sz2 f1 f2;
+          fix IHsz 1;
+          destruct sz2.
+        * left.
+          apply __magic__.
+        * intros f1 f2.
+          destruct (IHtau (snd (Vector.hd f1)) (snd (Vector.hd f2))).
+          all: apply __magic__.
+
+        apply Vector.rect2.
+        * auto.
+        * destruct 1 as [ Heq | Hneq ].
+          inversion Heq as [heq].
+          apply Eqdep_dec.inj_pair2_eq_dec in heq; (eauto || apply eq_dec).
+          destruct a as [ n1 tau1 ], b as [ n2 tau2 ].
+          destruct (eq_dec n1 n2); subst.
+          -- apply __magic__.
+             (* apply __magic__. *)
+          --              apply __magic__.
+  Defined.
+        apply __magic__.
+        apply __magic__.
+        admit
+        destruct (IHt1 sz1 sz2); subst;
+          try simple_eq.
+        destruct (IHfs1 fs1 fs2) as [ Heq | Hneq ]; try inversion Heq; subst;
+          try simple_eq.
+  Defined.
 
   Section Action.
     Definition cast_action (pos: pos_t)
@@ -74,9 +149,9 @@ Section TypeInference.
       : result (action sig tau2).
     Proof.
       destruct (eq_dec tau1 tau2); subst.
-      - exact (WellTyped e).
-      - exact (IllTyped {| epos := pos;
-                            emsg := TypeMismatch e tau2 |}).
+      - exact (Success e).
+      - exact (Failure {| epos := pos;
+                          emsg := TypeMismatch e tau2 |}).
     Defined.
 
     Notation EX Px := (existT _ _ Px).
@@ -93,39 +168,42 @@ Section TypeInference.
     Fixpoint type_action (pos: pos_t) (sig: tsig var_t) (e: uaction)
       : result ({ tau: type & action sig tau }) :=
       match e with
-      | UFail n => WellTyped (EX (Fail (bits_t n)))
+      | UFail n => Success (EX (Fail (bits_t n)))
       | UVar var =>
         let/res ktau_m := opt_result (assoc var sig) (unbound_variable pos var) in
-        WellTyped (EX (Var ``ktau_m))
-      | UConst cst => WellTyped (EX (Const cst))
+        Success (EX (Var ``ktau_m))
+      | UConst cst => Success (EX (Const cst))
       | USeq r1 r2 =>
         let/res r1' := type_action pos sig r1 in
         let/res r1' := cast_action (actpos pos r1) sig (bits_t 0) (``r1') in
         let/res r2' := type_action pos sig r2 in
-        WellTyped (EX (Seq r1' ``r2'))
+        Success (EX (Seq r1' ``r2'))
       | UBind v ex body =>
         let/res ex := type_action pos sig ex in
         let/res body := type_action pos ((v, `ex) :: sig) body in
-        WellTyped (EX (Bind v ``ex ``body))
+        Success (EX (Bind v ``ex ``body))
       | UIf cond tbranch fbranch =>
         let/res cond' := type_action pos sig cond in
         let/res cond' := cast_action (actpos pos cond) sig (bits_t 1) (``cond') in
         let/res tbranch' := type_action pos sig tbranch in
         let/res fbranch' := type_action pos sig fbranch in
         let/res fbranch' := cast_action (actpos pos fbranch) sig (`tbranch') (``fbranch') in
-        WellTyped (EX (If cond' ``tbranch' fbranch'))
-      | URead port idx => WellTyped (EX (Read port idx))
+        Success (EX (If cond' ``tbranch' fbranch'))
+      | URead port idx => Success (EX (Read port idx))
       | UWrite port idx value =>
         let/res value' := type_action pos sig value in
         let/res value' := cast_action (actpos pos value) sig (R idx) (``value') in
-        WellTyped (EX (Write port idx value'))
+        Success (EX (Write port idx value'))
       | UCall ufn arg1 arg2 =>
         let/res arg1' := type_action pos sig arg1 in
         let/res arg2' := type_action pos sig arg2 in
-        let fn := uSigma ufn `arg1' `arg2' in
-        let/res arg1' := cast_action (actpos pos arg1) sig (Sigma fn).(arg1Type) (``arg1') in
-        let/res arg2' := cast_action (actpos pos arg2) sig (Sigma fn).(arg2Type) (``arg2') in
-        WellTyped (EX (Call fn arg1' arg2'))
+        let pos1 := actpos pos arg1 in
+        let pos2 := actpos pos arg2 in
+        (* FIXME: uSigma should be able to raise any error; otherwise we can't tell which argument caused the error *)
+        let/res fn := uSigma ufn pos1 arg1' pos2 arg2' in
+        let/res arg1' := cast_action pos1 sig (Sigma fn).(arg1Type) (``arg1') in
+        let/res arg2' := cast_action pos2 sig (Sigma fn).(arg2Type) (``arg2') in
+        Success (EX (Call fn arg1' arg2'))
       | UAPos pos e => type_action pos sig e
       end.
   End Action.
@@ -149,10 +227,6 @@ Section TypeInference.
       end.
   End Scheduler.
 End TypeInference.
-
-Arguments error_message {_ _ _ _ _}.
-Arguments WellTyped {_ _ _ _ R Sigma A}.
-Arguments IllTyped {_ _ _ _ R Sigma A}.
 
 (* Coq bug: the name must_typecheck is not resolved at notation definition time *)
 

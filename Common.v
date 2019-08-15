@@ -139,4 +139,23 @@ Fixpoint list_find_opt {A B} (f: A -> option B) (l: list A) : option B :=
     end
   end.
 
+Inductive result {S F} :=
+| Success (s: S)
+| Failure (f: F).
+
+Arguments result : clear implicits.
+
+Definition opt_result {S F} (o: option S) (f: F): result S F :=
+  match o with
+  | Some x => Success x
+  | None => Failure f
+  end.
+
+Notation "'let/res' var ':=' expr 'in' body" :=
+  (match expr with
+   | Success var => body
+   | Failure f => Failure f
+   end)
+    (at level 200).
+
 Axiom __magic__ : forall {A}, A.

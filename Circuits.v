@@ -2,10 +2,16 @@ Require Import SGA.Common SGA.Environments SGA.Syntax SGA.TypedSyntax.
 Require Import Coq.Strings.String.
 Open Scope string_scope.
 
+Record CExternalSignature :=
+  CFunSig { arg1Size: nat; arg2Size: nat; retSize: nat }.
+
+Definition CExternalSignature_denote (sig: CExternalSignature) :=
+  bits sig.(arg1Size) -> bits sig.(arg2Size) -> bits sig.(retSize).
+
 Section Circuit.
   Context {reg_t fn_t: Type}.
-  Context {R: reg_t -> type}.
-  Context {Sigma: fn_t -> ExternalSignature}.
+  Context {R: reg_t -> nat}.
+  Context {Sigma: fn_t -> CExternalSignature}.
 
   Inductive circuit : nat -> Type :=
   | CNot (c: circuit 1): circuit 1
@@ -15,9 +21,9 @@ Section Circuit.
   | CConst {sz} (cst: bits sz): circuit sz
   | CReadRegister (reg: reg_t): circuit (R reg)
   | CExternal (idx: fn_t)
-              (a1: circuit (Sigma idx).(arg1Type))
-              (a2: circuit (Sigma idx).(arg2Type))
-    : circuit (Sigma idx).(retType)
+              (a1: circuit (Sigma idx).(arg1Size))
+              (a2: circuit (Sigma idx).(arg2Size))
+    : circuit (Sigma idx).(retSize)
   | CAnnot {sz} (annot: string) (c: circuit sz) : circuit sz.
 End Circuit.
 
@@ -25,11 +31,13 @@ Arguments circuit {reg_t fn_t} R Sigma sz.
 
 Section Interpretation.
   Context {reg_t fn_t: Type}.
-  Context {R: reg_t -> type}.
-  Context {Sigma: fn_t -> ExternalSignature}.
+
+  Context {R: reg_t -> nat}.
+  Context {Sigma: fn_t -> CExternalSignature}.
   Context {REnv: Env reg_t}.
-  Context (r: REnv.(env_t) R).
-  Context (sigma: forall f, Sigma f).
+
+  Context (r: REnv.(env_t) (fun idx => bits (R (idx)))).
+  Context (sigma: forall f, CExternalSignature_denote (Sigma f)).
 
   Fixpoint interp_circuit {n} (c: circuit R Sigma n) : bits n :=
     match c with
@@ -55,8 +63,8 @@ End Interpretation.
 
 Section CircuitOptimizer.
   Context {reg_t fn_t: Type}.
-  Context {R: reg_t -> type}.
-  Context {Sigma: fn_t -> ExternalSignature}.
+  Context {R: reg_t -> nat}.
+  Context {Sigma: fn_t -> CExternalSignature}.
 
   Notation Circuit := circuit.
   Notation circuit := (circuit R Sigma).
@@ -124,8 +132,9 @@ Section CircuitOptimizer.
     end c.
 
   Context {REnv: Env reg_t}.
-  Context (r: REnv.(env_t) R).
-  Context (sigma: forall f, Sigma f).
+
+  Context (r: REnv.(env_t) (fun idx => bits (R idx))).
+  Context (sigma: forall f, CExternalSignature_denote (Sigma f)).
 
   Lemma asconst_Some :
     forall {sz} (c: circuit sz) bs,
@@ -230,13 +239,24 @@ Local Open Scope circuit.
 Section CircuitCompilation.
   Context {name_t var_t reg_t fn_t: Type}.
   Context {reg_t_eq_dec: EqDec reg_t}.
+
   Context {R: reg_t -> type}.
   Context {Sigma: fn_t -> ExternalSignature}.
   Context {REnv: Env reg_t}.
-  Context (r: REnv.(env_t) (fun reg => circuit R Sigma (R reg))).
-  Context (sigma: forall f, Sigma f).
 
-  Notation circuit := (circuit R Sigma).
+  Definition CR idx :=
+    type_sz (R idx).
+
+  Definition CSigma fn :=
+    {| arg1Size := type_sz (Sigma fn).(arg1Type);
+       arg2Size := type_sz (Sigma fn).(arg2Type);
+       retSize := type_sz (Sigma fn).(retType) |}.
+
+  Notation circuit := (circuit CR CSigma).
+  Context (r: REnv.(env_t) (fun reg => circuit (CR reg))).
+
+  Definition readRegisters : forall idx: reg_t, circuit (CR idx) :=
+    fun idx => CReadRegister (R := CR) (Sigma := CSigma) idx.
 
   Record rwdata {sz} :=
     { read0: circuit 1;
@@ -247,7 +267,7 @@ Section CircuitCompilation.
       data1: circuit sz }.
 
   Definition rwset :=
-    REnv.(env_t) (fun reg => @rwdata (R reg)).
+    REnv.(env_t) (fun reg => @rwdata (CR reg)).
 
   Record rwcircuit :=
     { canFire: circuit 1;
@@ -261,7 +281,7 @@ Section CircuitCompilation.
     rwset.
 
   Definition ccontext (sig: tsig var_t) :=
-    context (fun '(k, tau) => circuit (Nat_of_type tau)) sig.
+    context (fun '(k, tau) => circuit (type_sz tau)) sig.
 
   Definition mux_rwdata {sz} an (cond: circuit 1) (tReg fReg: @rwdata sz) :=
     {| read0 := CAnnotOpt an (CMux cond (tReg.(read0)) (fReg.(read0)));
@@ -282,10 +302,10 @@ Section CircuitCompilation.
              (Gamma: ccontext sig)
              (a: action var_t R Sigma sig tau)
              (clog: rwcircuit):
-      @action_circuit tau :=
-      match a in action _ _ _ ts tau return ccontext ts -> @action_circuit tau with
+      @action_circuit (type_sz tau) :=
+      match a in action _ _ _ ts tau return ccontext ts -> @action_circuit (type_sz tau) with
       | Fail tau => fun _ =>
-        {| retVal := $`"fail"`Bits.zero tau; (* LATER: Question mark here *)
+        {| retVal := $`"fail"`Bits.zero (type_sz tau); (* LATER: Question mark here *)
            erwc := {| canFire := $`"fail_cF"` (w1 false);
                      regs := clog.(regs) |} |}
       | Var m => fun Gamma =>
@@ -463,10 +483,10 @@ Section CircuitCompilation.
     REnv.(map2) (fun k r1 r2 => commit_rwdata r1 r2) s r.
 End CircuitCompilation.
 
-Definition readRegisters {reg_t fn_t: Type} (R: reg_t -> type) (Sigma: fn_t -> ExternalSignature)
-  : forall idx: reg_t, circuit R Sigma (R idx) :=
-  fun idx => CReadRegister (R := R) (Sigma := Sigma) idx.
+Arguments CR {_} R idx.
+Arguments CSigma {_} Sigma fn.
 
+Arguments readRegisters {_ _}.
 Arguments rwdata {_ _}.
 Arguments action_circuit {_ _}.
 Arguments scheduler_circuit {_ _}.

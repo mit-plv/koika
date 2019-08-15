@@ -18,8 +18,8 @@ Module Ex1.
 
   Definition Sigma fn : ExternalSignature :=
     match fn with
-    | Even => {{ 3 ~> 0 ~> 1}}
-    | Odd => {{ 3 ~> 0 ~> 1}}
+    | Even => {{ bits_t 3 ~> bits_t 0 ~> bits_t 1}}
+    | Odd => {{ bits_t 3 ~> bits_t 0 ~> bits_t 1}}
     end.
 
   Definition uSigma (fn: fn_t) (_ _: type) : fn_t := fn.
@@ -76,15 +76,16 @@ Module Ex2.
 
   Definition Sigma fn :=
     match fn with
-    | Or n => {{ n ~> n ~> n }}
-    | Not n => {{ n ~> 0 ~> n }}
+    | Or n => {{ bits_t n ~> bits_t n ~> bits_t n }}
+    | Not n => {{ bits_t n ~> bits_t 0 ~> bits_t n }}
     end.
 
   Definition uSigma fn (tau1 _: type) :=
-    match fn, tau1 with
-    | UOr, (bits_t n) => Or n
-    | UNot, (bits_t n) => Not n
-    end.
+    let/res sz1 := assert_bits_t tau1 in
+    Success match fn with
+            | UOr => Or sz1
+            | UNot => Not sz1
+            end.
 
   Example _negate : uaction unit var_t reg_t ufn_t  :=
     UBind "x" (URead P1 R0)
@@ -279,9 +280,9 @@ Module Pipeline.
 
   Definition Sigma (fn: custom_fn_t) : ExternalSignature :=
     match fn with
-    | Stream => {{ sz ~> 0 ~> sz }}
-    | F => {{ sz ~> 0 ~> sz }}
-    | G => {{ sz ~> 0 ~> sz }}
+    | Stream => {{ bits_t sz ~> bits_t 0 ~> bits_t sz }}
+    | F => {{ bits_t sz ~> bits_t 0 ~> bits_t sz }}
+    | G => {{ bits_t sz ~> bits_t 0 ~> bits_t sz }}
     end.
 
   Definition uSigma (fn: custom_fn_t) (_ _: type) : custom_fn_t := fn.

@@ -118,7 +118,7 @@ Section Interp.
   Notation scheduler := (scheduler name_t).
 
   Definition vcontext (sig: tsig var_t) :=
-    context (fun '(k, tau) => Type_of_type tau) sig.
+    context (fun '(k, tau) => type_denote tau) sig.
 
   Section Action.
 
