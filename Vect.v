@@ -32,6 +32,9 @@ Fixpoint index_to_nat {sz} (idx: index sz) {struct sz} : nat :=
                    end
   end idx.
 
+Definition index_cast n n' (eq: n = n') (idx: index n) : index n' :=
+  ltac:(subst; assumption).
+
 Fixpoint vect T n : Type :=
   match n with
   | 0 => unit
@@ -185,6 +188,12 @@ Definition vect_cycle_l {T sz} n (v: vect T sz) :=
 
 Definition vect_cycle_r {T sz} n (v: vect T sz) :=
   vect_repeat vect_cycle_r1 n v.
+
+Fixpoint list_nth_index {K: Type} (l: list K) (idx: index (List.length l)) {struct l} : K.
+  destruct l; destruct idx.
+  - exact k.
+  - exact (list_nth_index K l a).
+Defined.
 
 Module Bits.
   Notation bits n := (vect bool n).
