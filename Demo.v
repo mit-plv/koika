@@ -22,7 +22,7 @@ Module Ex1.
     | Odd => {{ bits_t 3 ~> bits_t 0 ~> bits_t 1}}
     end.
 
-  Definition uSigma (fn: fn_t) (_ _: type) : fn_t := fn.
+  Definition uSigma (fn: fn_t) (_ _: type) : result fn_t fn_tc_error := Success fn.
 
   Definition r idx : R idx :=
     match idx with
@@ -81,7 +81,7 @@ Module Ex2.
     end.
 
   Definition uSigma fn (tau1 _: type) :=
-    let/res sz1 := assert_bits_t tau1 in
+    let/res sz1 := assert_bits_t Arg1 tau1 in
     Success match fn with
             | UOr => Or sz1
             | UNot => Not sz1
@@ -285,7 +285,7 @@ Module Pipeline.
     | G => {{ bits_t sz ~> bits_t 0 ~> bits_t sz }}
     end.
 
-  Definition uSigma (fn: custom_fn_t) (_ _: type) : custom_fn_t := fn.
+  Definition uSigma (fn: custom_fn_t) (_ _: type) : result custom_fn_t fn_tc_error := Success fn.
   Definition iSigma idx := interop_Sigma Sigma idx.
   Definition iuSigma := interop_uSigma uSigma.
 
