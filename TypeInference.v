@@ -17,19 +17,24 @@ Section ErrorReporting.
     { epos: pos_t;
       emsg: error_message }.
 
-  Definition lift_fn_tc_error {sig tau} pos (e: action var_t R Sigma sig tau) (err: fn_tc_error) :=
+  Definition lift_fn_tc_error' {sig tau} pos (e: action var_t R Sigma sig tau) (err: fn_tc_error') :=
     {| epos := pos;
        emsg := match err with
-              | kind_mismatch expected => KindMismatch e expected
-              | unbound_field f sig => UnboundField f sig
+              | FnKindMismatch expected => KindMismatch e expected
+              | FnUnboundField f sig => UnboundField f sig
               end |}.
 
-  Definition lift_fn_tc_result {A sig tau} pos (e: action var_t R Sigma sig tau) (r: result A fn_tc_error)
+  Definition lift_fn_tc_result
+             {A sig1 tau1 sig2 tau2}
+             pos1 (e1: action var_t R Sigma sig1 tau1)
+             pos2 (e2: action var_t R Sigma sig2 tau2)
+             (r: result A fn_tc_error)
     : (result A error) :=
-    match r with
-    | Success a => Success a
-    | Failure err => Failure (lift_fn_tc_error pos e err)
-    end.
+    result_map_failure (fun '(side, err) =>
+                          match side with
+                          | Arg1 => lift_fn_tc_error' pos1 e1 err
+                          | Arg2 => lift_fn_tc_error' pos2 e2 err
+                          end) r.
 End ErrorReporting.
 
 Arguments error_message _ {_ _} _ _.
@@ -66,82 +71,6 @@ Section TypeInference.
     | Success tm => tm
     | Failure err => err
     end.
-
-  Ltac simple_eq :=
-    first [ left; solve[eauto] | right; inversion 1; subst; solve[congruence] ].
-
-  Definition EqDec_beq {A} {EQ: EqDec A} a1 a2 : bool :=
-    if eq_dec a1 a2 then true else false.
-
-  Lemma EqDec_beq_iff {A} (EQ: EqDec A) a1 a2 :
-    EqDec_beq a1 a2 = true <-> a1 = a2.
-  Proof.
-    unfold EqDec_beq; destruct eq_dec; subst.
-    - firstorder.
-    - split; intro; (eauto || discriminate).
-  Qed.
-
-  Instance EqDec_vector A (sz: nat) {EQ: EqDec A}: EqDec (Vector.t A sz).
-  Proof.
-    econstructor; intros; eapply Vector.eq_dec.
-    apply EqDec_beq_iff.
-  Defined.
-  (* Proof. *)
-  (*   constructor. *)
-  (*   revert sz. *)
-  (*   apply Vector.rect2. *)
-  (*   - auto. *)
-  (*   - intros n v1 v2 Hdec a b; destruct (eq_dec a b) as [ Heq | Hneq ]; subst. *)
-  (*     + destruct Hdec; subst. *)
-  (*       * auto. *)
-  (*       * right. inversion 1 as [heq]. *)
-  (*         apply Eqdep_dec.inj_pair2_eq_dec in heq; (eauto || apply eq_dec). *)
-  (*     + right; inversion 1; eauto. *)
-  (* Defined. *)
-
-  Instance EqDec_type : EqDec type.
-  Proof.
-    econstructor.
-    fix IHtau 1;
-      destruct t1 as [ sz1 | fs1 ];
-      destruct t2 as [ sz2 | fs2 ]; cbn;
-        try simple_eq.
-    - destruct (eq_dec sz1 sz2); subst;
-        simple_eq.
-    - destruct fs1 as [ sz1 nm1 f1 ];
-        destruct fs2 as [ sz2 nm2 f2 ]; cbn.
-      + destruct (eq_dec nm1 nm2); subst;
-          try simple_eq.
-        destruct (eq_dec sz1 sz2); subst;
-          try simple_eq.
-        revert sz2 f1 f2;
-          fix IHsz 1;
-          destruct sz2.
-        * left.
-          apply __magic__.
-        * intros f1 f2.
-          destruct (IHtau (snd (Vector.hd f1)) (snd (Vector.hd f2))).
-          all: apply __magic__.
-
-        apply Vector.rect2.
-        * auto.
-        * destruct 1 as [ Heq | Hneq ].
-          inversion Heq as [heq].
-          apply Eqdep_dec.inj_pair2_eq_dec in heq; (eauto || apply eq_dec).
-          destruct a as [ n1 tau1 ], b as [ n2 tau2 ].
-          destruct (eq_dec n1 n2); subst.
-          -- apply __magic__.
-             (* apply __magic__. *)
-          --              apply __magic__.
-  Defined.
-        apply __magic__.
-        apply __magic__.
-        admit
-        destruct (IHt1 sz1 sz2); subst;
-          try simple_eq.
-        destruct (IHfs1 fs1 fs2) as [ Heq | Hneq ]; try inversion Heq; subst;
-          try simple_eq.
-  Defined.
 
   Section Action.
     Definition cast_action (pos: pos_t)
@@ -199,8 +128,7 @@ Section TypeInference.
         let/res arg2' := type_action pos sig arg2 in
         let pos1 := actpos pos arg1 in
         let pos2 := actpos pos arg2 in
-        (* FIXME: uSigma should be able to raise any error; otherwise we can't tell which argument caused the error *)
-        let/res fn := uSigma ufn pos1 arg1' pos2 arg2' in
+        let/res fn := lift_fn_tc_result pos1 ``arg1' pos2 ``arg2' (uSigma ufn `arg1' `arg2') in
         let/res arg1' := cast_action pos1 sig (Sigma fn).(arg1Type) (``arg1') in
         let/res arg2' := cast_action pos2 sig (Sigma fn).(arg2Type) (``arg2') in
         Success (EX (Call fn arg1' arg2'))

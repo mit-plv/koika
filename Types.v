@@ -144,14 +144,19 @@ Lemma ExternalSignature_injRet :
     retType = retType'.
 Proof. now inversion 1. Qed.
 
-Inductive type_kind := kind_bits | kind_struct {len: nat} (sig: struct_sig).
+Inductive type_kind :=
+  kind_bits | kind_struct (sig: struct_sig).
 
-Inductive fn_tc_error :=
-| kind_mismatch (expected: type_kind)
-| unbound_field (f: string) (sig: struct_sig).
+Inductive fn_tc_error' :=
+| FnKindMismatch (expected: type_kind)
+| FnUnboundField (f: string) (sig: struct_sig).
 
-Definition assert_bits_t (tau: type) : result nat fn_tc_error :=
+Inductive arg_id := Arg1 | Arg2.
+
+Definition fn_tc_error : Type := arg_id * fn_tc_error'.
+
+Definition assert_bits_t arg (tau: type) : result nat fn_tc_error :=
   match tau with
   | bits_t sz => Success sz
-  | struct_t _ => Failure (kind_mismatch kind_bits)
+  | struct_t _ => Failure (arg, FnKindMismatch kind_bits)
   end.

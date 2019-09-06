@@ -145,6 +145,12 @@ Inductive result {S F} :=
 
 Arguments result : clear implicits.
 
+Definition result_map_failure {S F1 F2} (fn: F1 -> F2) (r: result S F1) :=
+  match r with
+  | Success s => Success s
+  | Failure f => Failure (fn f)
+  end.
+
 Definition opt_result {S F} (o: option S) (f: F): result S F :=
   match o with
   | Some x => Success x
