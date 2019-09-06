@@ -1,6 +1,6 @@
 Require Export Coq.Bool.Bool Coq.Lists.List.
 Require Export SGA.Circuits.
-Require Import SGA.Common SGA.Environments SGA.Types SGA.Common.
+Require Import SGA.Common SGA.Environments SGA.Types.
 
 Section Bools.
   Definition bool_lt b1 b2 :=
@@ -83,15 +83,30 @@ End Bools.
 
 Section Circuits.
   Context {name_t var_t reg_t fn_t: Type}.
+
   Context {R: reg_t -> type}.
+  Definition circuit_R := (fun reg => type_sz (R reg)).
+  Notation cR := circuit_R.
+
   Context {Sigma: fn_t -> ExternalSignature}.
+  Definition circuit_Sigma := (fun fn => CExternalSignature_of_ExternalSignature (Sigma fn)).
+  Notation cSigma := circuit_Sigma.
+
   Context {REnv: Env reg_t}.
-
   Context (r: REnv.(env_t) R).
-  Context (sigma: forall f, Sigma f).
+  Definition circuit_r := REnv.(map) (fun idx v => bits_of_value v) r.
+  Notation cr := circuit_r.
 
-  Notation circuit := (circuit R Sigma).
-  Notation interp_circuit := (interp_circuit r sigma).
+  Context (sigma: forall f, ExternalSignature_denote (Sigma f)).
+  Definition circuit_fn_of_fn {sig} (fn: ExternalSignature_denote sig)
+    : CExternalSignature_denote (CExternalSignature_of_ExternalSignature sig) :=
+    fun bs1 bs2 => bits_of_value (fn (value_of_bits bs1) (value_of_bits bs2)).
+  Definition circuit_sigma : forall f, CExternalSignature_denote (cSigma f) :=
+    fun f => circuit_fn_of_fn (sigma f).
+  Notation csigma := circuit_sigma.
+
+  Notation circuit := (circuit cR cSigma).
+  Notation interp_circuit := (interp_circuit cr csigma).
 
   Definition circuit_lt (c1 c2: circuit 1) :=
     bool_lt (Bits.single (interp_circuit c1)) (Bits.single (interp_circuit c2)).
@@ -135,7 +150,6 @@ Section Circuits.
       circuit_lt c1 c2 ->
       circuit_lt c1 (CAnnot s c2).
   Proof. firstorder. Qed.
-
 
   Lemma circuit_lt_CAnd :
     forall c1 c1' c2 c2',
@@ -265,6 +279,11 @@ Section Circuits.
       + apply circuit_lt_CAnd_l; eassumption.
   Qed.
 End Circuits.
+
+Arguments circuit_R {reg_t} R.
+Arguments circuit_r {reg_t} {R} {REnv} r.
+Arguments circuit_Sigma {fn_t} Sigma.
+Arguments circuit_sigma {fn_t} {Sigma} sigma.
 
 Ltac circuit_lt_f_equal :=
   repeat (apply circuit_lt_CAnnot_l ||

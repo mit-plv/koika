@@ -8,6 +8,11 @@ Record CExternalSignature :=
 Definition CExternalSignature_denote (sig: CExternalSignature) :=
   bits sig.(arg1Size) -> bits sig.(arg2Size) -> bits sig.(retSize).
 
+Definition CExternalSignature_of_ExternalSignature (c: ExternalSignature) :=
+  {| arg1Size := type_sz c.(arg1Type);
+     arg2Size := type_sz c.(arg2Type);
+     retSize := type_sz c.(retType) |}.
+
 Section Circuit.
   Context {reg_t fn_t: Type}.
   Context {R: reg_t -> nat}.

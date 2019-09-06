@@ -1,44 +1,53 @@
-Require Import
-        SGA.Common SGA.Syntax
-        SGA.SemanticProperties SGA.CircuitProperties.
-
 Require Import Coq.setoid_ring.Ring_theory Coq.setoid_ring.Ring Coq.setoid_ring.Ring.
 Require Import Coq.Strings.String.
 Require Import Coq.Lists.List.
 Import ListNotations.
 
+Require Import
+        SGA.Common SGA.Environments SGA.Syntax
+        SGA.SemanticProperties SGA.CircuitProperties.
+
 Section CompilerCorrectness.
   Context {name_t var_t reg_t fn_t: Type}.
 
   Context {R: reg_t -> type}.
+  Definition cR := (circuit_R R).
+
   Context {Sigma: fn_t -> ExternalSignature}.
+  Notation cSigma := (circuit_Sigma Sigma).
+
   Context {REnv: Env reg_t}.
 
   Context (r: REnv.(env_t) R).
-  Context (rc: REnv.(env_t) (fun reg => circuit R Sigma (R reg))).
+  Notation cr := (circuit_r r).
+
+  Context (rc: REnv.(env_t) (fun reg => circuit cR cSigma (cR reg))).
 
   Instance reg_t_eq_dec : EqDec reg_t := @EqDec_FiniteType _ (REnv.(finite_keys)).
 
-  Context (sigma: forall f, Sigma f).
+  Context (sigma: forall f, ExternalSignature_denote (Sigma f)).
+  Notation csigma := (circuit_sigma sigma).
+
   Open Scope bool_scope.
 
   Definition circuit_env_equiv :=
-    forall idx, interp_circuit r sigma (REnv.(getenv) rc idx) = (REnv.(getenv) r idx).
+    forall idx, value_of_bits (interp_circuit cr csigma (REnv.(getenv) rc idx)) = REnv.(getenv) r idx.
 
   Notation Log := (Log R REnv).
-  Notation circuit := (circuit R Sigma).
+  Notation circuit := (circuit cR cSigma).
   Notation action := (action var_t R Sigma).
   Notation rule := (rule var_t R Sigma).
-  Notation interp_circuit := (interp_circuit r sigma).
-  Notation circuit_lt := (circuit_lt r sigma).
+  Notation interp_circuit := (interp_circuit cr csigma).
+  Notation circuit_lt := (circuit_lt r csigma).
 
   Definition log_data0_consistent' (l: Log) (regs: rwset) :=
     forall idx,
       let cidx := REnv.(getenv) regs idx in
-      interp_circuit (cidx.(data0)) = match latest_write0 l idx with
-                                       | Some v => v
-                                       | None => getenv REnv r idx
-                                       end.
+      value_of_bits (interp_circuit (cidx.(data0))) =
+      match latest_write0 l idx with
+      | Some v => v
+      | None => getenv REnv r idx
+      end.
 
   Definition log_data0_consistent (l L: Log) (regs: rwset) :=
     log_data0_consistent' (log_app l L) regs.
@@ -48,7 +57,7 @@ Section CompilerCorrectness.
       let cidx := REnv.(getenv) regs idx in
       log_existsb l idx is_write1 = true ->
       match latest_write1 l idx with
-      | Some v => interp_circuit (cidx.(data1)) = v
+      | Some v => value_of_bits (interp_circuit (cidx.(data1))) = v
       | None => False
       end.
 
@@ -83,7 +92,7 @@ Section CompilerCorrectness.
 
   Lemma log_data0_consistent_putenv_write0 :
     forall idx log Log rws rwd v,
-      v = interp_circuit (data0 rwd) ->
+      v = value_of_bits (interp_circuit (data0 rwd)) ->
       log_data0_consistent log Log rws ->
       log_data0_consistent (log_cons idx {| kind := LogWrite; port := P0; val := v |} log) Log
                             (REnv.(putenv) rws idx rwd).
@@ -153,7 +162,7 @@ Section CompilerCorrectness.
 
   Lemma log_data1_consistent_putenv_write1 :
     forall idx log Log rws rwd v,
-      v = interp_circuit (data1 rwd) ->
+      v = value_of_bits (interp_circuit (data1 rwd)) ->
       log_data1_consistent log Log rws ->
       log_data1_consistent (log_cons idx {| kind := LogWrite; port := P1; val := v |} log) Log
                             (REnv.(putenv) rws idx rwd).
@@ -639,14 +648,14 @@ Section CompilerCorrectness.
   Context {var_t_eq_dec: EqDec var_t}.
 
   Definition circuit_gamma_equiv {sig} (Gamma : vcontext sig) (gamma : ccontext sig) :=
-    (forall (k: var_t) tau (m : member (k, tau) sig),
-        interp_circuit (cassoc m gamma) = cassoc m Gamma).
+    forall (k: var_t) tau (m : member (k, tau) sig),
+      value_of_bits (interp_circuit (cassoc m gamma)) = cassoc m Gamma.
 
   Lemma circuit_gamma_equiv_CtxCons {sig}:
     forall Gamma gamma,
       circuit_gamma_equiv (Gamma: vcontext sig) (gamma: ccontext sig) ->
       forall (tau : type) (var : var_t) (c : circuit tau),
-        circuit_gamma_equiv (CtxCons (var, tau) (interp_circuit c) Gamma) (CtxCons (var, tau) c gamma).
+        circuit_gamma_equiv (CtxCons (var, tau) (value_of_bits (interp_circuit c)) Gamma) (CtxCons (var, tau) c gamma).
   Proof.
     unfold circuit_gamma_equiv; intros.
     destruct (mdestruct m) as [(? & ->) | (m' & ->)]; cbn.
@@ -959,7 +968,7 @@ Section CompilerCorrectness.
       let cExpr := compile_action rc gamma ex clog in
       match interp_action r sigma Gamma Log log ex with
       | Some (l', v) =>
-        interp_circuit cExpr.(retVal) = v /\
+        value_of_bits (interp_circuit cExpr.(retVal)) = v /\
         log_rwdata_consistent l' cExpr.(erwc).(regs) /\
         log_data0_consistent l' Log cExpr.(erwc).(regs) /\
         log_data1_consistent l' Log cExpr.(erwc).(regs) /\
@@ -990,10 +999,10 @@ Section CompilerCorrectness.
         * apply log_data1_consistent'_mux_l;
             eauto with circuits.
         * unfold mux_rwsets; interp_willFire_cleanup; t.
-          rewrite interp_circuit_willFire_of_canFire'_mux_rwdata; t.
+          rewrite (interp_circuit_willFire_of_canFire'_mux_rwdata idx); t.
       + unfold mux_rwsets; interp_willFire_cleanup; t.
         right. exists x; t.
-        rewrite interp_circuit_willFire_of_canFire'_mux_rwdata; t.
+        rewrite (interp_circuit_willFire_of_canFire'_mux_rwdata x); t.
       + repeat apply conj; try reflexivity.
         * apply log_rwdata_consistent_mux_r;
             eauto with circuits.
@@ -1002,10 +1011,10 @@ Section CompilerCorrectness.
         * apply log_data1_consistent'_mux_r;
             eauto with circuits.
         * unfold mux_rwsets; interp_willFire_cleanup; t.
-          rewrite interp_circuit_willFire_of_canFire'_mux_rwdata; t.
+          rewrite (interp_circuit_willFire_of_canFire'_mux_rwdata idx); t.
       + unfold mux_rwsets; interp_willFire_cleanup; t.
         right; exists x; t.
-        rewrite interp_circuit_willFire_of_canFire'_mux_rwdata; t.
+        rewrite (interp_circuit_willFire_of_canFire'_mux_rwdata x); t.
       + unfold mux_rwsets; interp_willFire_cleanup; t.
         * left.
           destruct Bits.single;
@@ -1013,7 +1022,7 @@ Section CompilerCorrectness.
              [ apply rwset_circuit_lt_compile_action_correct | ]; eauto).
         * right.
           exists x; t.
-          rewrite interp_circuit_willFire_of_canFire'_mux_rwdata; t.
+          rewrite (interp_circuit_willFire_of_canFire'_mux_rwdata x); t.
           destruct Bits.single; t;
             eapply interp_circuit_circuit_lt_helper_false;
             eauto using action_compile_willFire_of_canFire'_decreasing.
@@ -1092,8 +1101,9 @@ Section CompilerCorrectness.
           apply rwset_circuit_lt_invariant_putenv;
           eauto 8 with circuits.
     - (* Call *)
-      t;
-        eapply interp_circuit_circuit_lt_helper_false;
+      t.
+      unfold csigma; rewrite value_of_bits_of_value; eauto.
+      eapply interp_circuit_circuit_lt_helper_false;
         eauto using action_compile_willFire_of_canFire_decreasing.
   Qed.
 
@@ -1359,11 +1369,11 @@ Section CompilerCorrectness.
          end; eauto.
   Qed.
 
-  Theorem scheduler_compiler_correct':
+  Theorem scheduler_compiler_correct'':
     forall (s: scheduler),
       circuit_env_equiv ->
       forall idx,
-        interp_circuit (REnv.(getenv) (compile_scheduler rc rules s) idx) =
+        value_of_bits (interp_circuit (REnv.(getenv) (compile_scheduler rc rules s) idx)) =
         REnv.(getenv) (commit_update r (interp_scheduler r sigma rules s)) idx.
   Proof.
     intros; unfold compile_scheduler, commit_update, commit_rwdata, interp_scheduler, map2.
@@ -1389,8 +1399,19 @@ Section CompilerCorrectness.
     reflexivity.
     rewrite latest_write1_None by eauto.
     destruct (log_existsb _ _ is_write0) eqn:?; cbn.
-    destruct latest_write0; reflexivity.
-    rewrite latest_write0_None; eauto.
+    - destruct latest_write0; eauto.
+    - rewrite latest_write0_None; eauto.
+  Qed.
+
+  Theorem scheduler_compiler_correct':
+    forall (s: scheduler),
+      circuit_env_equiv ->
+      forall idx,
+        interp_circuit (REnv.(getenv) (compile_scheduler rc rules s) idx) =
+        bits_of_value (REnv.(getenv) (commit_update r (interp_scheduler r sigma rules s)) idx).
+  Proof.
+    intros; rewrite <- scheduler_compiler_correct'', bits_of_value_of_bits by eassumption;
+      reflexivity.
   Qed.
 End CompilerCorrectness.
 
@@ -1405,7 +1426,7 @@ Section Thm.
     forall (rules: name_t -> rule var_t R Sigma) (s: scheduler name_t) r sigma rc,
       circuit_env_equiv r rc sigma ->
       forall idx,
-        interp_circuit r sigma (REnv.(getenv) (compile_scheduler rc rules s) idx) =
-        REnv.(getenv) (commit_update r (interp_scheduler r sigma rules s)) idx.
+        interp_circuit (cr r) (csigma sigma) (REnv.(getenv) (compile_scheduler rc rules s) idx) =
+        bits_of_value (REnv.(getenv) (commit_update r (interp_scheduler r sigma rules s)) idx).
   Proof. eauto using scheduler_compiler_correct'. Qed.
 End Thm.
