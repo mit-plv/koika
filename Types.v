@@ -3,8 +3,8 @@ Require Import Coq.Vectors.Vector.
 Require Export SGA.Common SGA.Vect.
 
 Record struct_sig' {A} :=
-  { sv_name: string;
-    sv_data: list (string * A) }.
+  { struct_name: string;
+    struct_fields: list (string * A) }.
 Arguments struct_sig' : clear implicits.
 
 Inductive type : Type :=
@@ -44,7 +44,7 @@ Defined.
 Fixpoint type_sz tau :=
   match tau with
   | bits_t sz => sz
-  | struct_t fields => List.fold_right (fun '(_, tau') acc => type_sz tau' + acc) 0 fields.(sv_data)
+  | struct_t fields => List.fold_right (fun '(_, tau') acc => type_sz tau' + acc) 0 fields.(struct_fields)
   end.
 
 Coercion type_sz : type >-> nat.
@@ -53,7 +53,7 @@ Fixpoint type_denote tau : Type :=
   match tau with
   | bits_t sz => bits sz
   | struct_t fields =>
-    List.fold_right (fun '(_, tau) acc => type_denote tau * acc)%type unit fields.(sv_data)
+    List.fold_right (fun '(_, tau) acc => type_denote tau * acc)%type unit fields.(struct_fields)
   end.
 
 Coercion type_denote : type >-> Sortclass.
@@ -64,8 +64,8 @@ Proof.
   fix IHt 1; destruct tau as [sz | sig]; cbn.
   - intro x; exact x.
   - destruct sig; cbn.
-    revert sv_data0.
-    fix IH 1. destruct sv_data0 as [ | (nm & tau) sv_data0 ]; cbn.
+    revert struct_fields0.
+    fix IH 1. destruct struct_fields0 as [ | (nm & tau) struct_fields0 ]; cbn.
     + intro x; exact x.
     + intros (x & xs).
       apply Bits.app.
@@ -79,8 +79,8 @@ Proof.
   fix IHt 1; destruct tau as [sz | sig]; cbn.
   - intro x; exact x.
   - destruct sig; cbn.
-    revert sv_data0.
-    fix IH 1. destruct sv_data0 as [ | (nm & tau) sv_data0 ]; cbn.
+    revert struct_fields0.
+    fix IH 1. destruct struct_fields0 as [ | (nm & tau) struct_fields0 ]; cbn.
     + intro x; exact x.
     + intros v.
       apply Bits.split in v.
@@ -99,8 +99,8 @@ Proof.
   fix IHt 1; destruct tau as [sz | sig]; cbn.
   - reflexivity.
   - destruct sig; cbn.
-    revert sv_data0.
-    fix IH 1. destruct sv_data0 as [ | (nm & tau) sv_data0 ]; cbn.
+    revert struct_fields0.
+    fix IH 1. destruct struct_fields0 as [ | (nm & tau) struct_fields0 ]; cbn.
     + reflexivity.
     + cbn.
       intros. rewrite IH, IHt.
@@ -114,8 +114,8 @@ Proof.
   fix IHt 1; destruct tau as [sz | sig]; cbn.
   - reflexivity.
   - destruct sig; cbn.
-    revert sv_data0.
-    fix IH 1. destruct sv_data0 as [ | (nm & tau) sv_data0 ]; cbn.
+    revert struct_fields0.
+    fix IH 1. destruct struct_fields0 as [ | (nm & tau) struct_fields0 ]; cbn.
     + reflexivity.
     + cbn.
       intros.

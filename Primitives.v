@@ -14,11 +14,15 @@ Inductive prim_bits_ufn_t :=
 | UZExtL (nzeroes: nat)
 | UZExtR (nzeroes: nat).
 
-Inductive prim_struct_op := Init | Get | Put.
+Inductive prim_struct_accessor := Get | Sub.
+
+Inductive prim_struct_uop :=
+| UInit
+| UDo (op: prim_struct_accessor) (f: string).
 
 Inductive prim_ufn_t :=
 | BitsUFn (fn: prim_bits_ufn_t)
-| StructUFn (op: prim_struct_op) (sig: struct_sig) (f: string).
+| StructUFn (sig: struct_sig) (op: prim_struct_uop).
 
 Inductive prim_bits_fn_t :=
 | Sel (sz: nat)
@@ -34,9 +38,14 @@ Inductive prim_bits_fn_t :=
 | ZExtL (sz: nat) (nzeroes: nat)
 | ZExtR (sz: nat) (nzeroes: nat).
 
+Inductive prim_struct_op {sig: struct_sig} :=
+| Init
+| Do (op: prim_struct_accessor) (f: Vect.index (List.length sig.(struct_fields))).
+Arguments prim_struct_op : clear implicits.
+
 Inductive prim_fn_t :=
 | BitsFn (fn: prim_bits_fn_t)
-| StructFn (fn: prim_struct_op) (sig: struct_sig) (idx: Vect.index (List.length sig.(sv_data))).
+| StructFn (sig: struct_sig) (fn: prim_struct_op sig).
 
 (* Like Nat.log2_iter, but switches to next power of two one number earlier
    (computes ceil(log2(n)) instead of floor(log2(n))). *)
@@ -71,9 +80,11 @@ Definition prim_uSigma (fn: prim_ufn_t) (tau1 tau2: type): result prim_fn_t fn_t
                     | UZExtL nzeroes => ZExtL sz1 nzeroes
                     | UZExtR nzeroes => ZExtR sz1 nzeroes
                     end)
-  | StructUFn op sig f =>
-    let/res idx := opt_result (List_assoc f sig.(sv_data)) (Arg1, FnUnboundField f sig) in
-    Success (StructFn op sig idx)
+  | StructUFn sig UInit =>
+    Success (StructFn sig Init)
+  | StructUFn sig (UDo op f) =>
+    let/res idx := opt_result (List_assoc f sig.(struct_fields)) (Arg1, FnUnboundField f sig) in
+    Success (StructFn sig (Do op idx))
   end.
 
 Definition prim_Sigma (fn: prim_fn_t) : ExternalSignature :=
@@ -93,8 +104,12 @@ Definition prim_Sigma (fn: prim_fn_t) : ExternalSignature :=
     | ZExtL sz nzeroes => {{ bits_t sz ~> bits_t 0 ~> bits_t (nzeroes + sz) }}
     | ZExtR sz nzeroes => {{ bits_t sz ~> bits_t 0 ~> bits_t (sz + nzeroes) }}
     end
-  | @StructFn fn sig idx =>
-    {{ struct_t sig ~> bits_t 0 ~> snd (List_nth sig.(sv_data) idx) }}
+  | @StructFn sig Init =>
+    {{ bits_t 0 ~> bits_t 0 ~> struct_t sig }}
+  | @StructFn sig (Do Get idx) =>
+    {{ struct_t sig ~> bits_t 0 ~> snd (List_nth sig.(struct_fields) idx) }}
+  | @StructFn sig (Do Sub idx) =>
+    {{ struct_t sig ~> snd (List_nth sig.(struct_fields) idx) ~> struct_t sig }}
   end.
 
 Definition prim_sel {sz} (bs: bits sz) (idx: bits (log2 sz)) :=
@@ -119,7 +134,7 @@ Fixpoint type_accessor (tau: type) : Type :=
   match tau with
   | bits_t _sz => unit
   | struct_t fields =>
-    let fs := fields.(sv_data) in
+    let fs := fields.(struct_fields) in
     let field_accessors := List.map (fun '(k, tau) => type_accessor tau) fs in
     { k: index (List.length field_accessors) & List_nth field_accessors k }
   end.
@@ -138,10 +153,10 @@ Definition prim_sigma (fn: prim_fn_t) : prim_Sigma fn :=
     | Eq sz => fun bs1 bs2 => if eq_dec bs1 bs2 then w1 true else w1 false
     | UIntPlus _ => fun bs1 bs2 => prim_uint_plus bs1 bs2
     | Concat _ _ => fun bs1 bs2 => Bits.app bs1 bs2
-    | ZExtL _ nzeroes => fun bs _ => Bits.app (Bits.const nzeroes false) bs
-    | ZExtR _ nzeroes => fun bs _ => Bits.app bs (Bits.const nzeroes false)
+    | ZExtL _ nzeroes => fun bs _ => Bits.app (Bits.zeroes nzeroes) bs
+    | ZExtR _ nzeroes => fun bs _ => Bits.app bs (Bits.zeroes nzeroes)
     end
-  | StructFn Init sig m => fun s _ => __magic__
-  | StructFn Get sig m => fun s _ => __magic__
-  | StructFn Put sig m => fun s _ => __magic__
+  | StructFn sig Init => fun _ _ => value_of_bits (Bits.zeroes (type_sz (struct_t sig)))
+  | StructFn sig (Do Get idx) => fun s _ => __magic__
+  | StructFn sig (Do Sub idx) => fun s _ => __magic__
   end.
