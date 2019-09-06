@@ -49,6 +49,13 @@ Definition vect_nil {T} : vect T 0 := tt.
 Definition vect_cons {T n} (t: T) (v: vect T n) : vect T (S n) :=
   (t, v).
 
+Lemma vect_cons_hd_tl {T sz}:
+  forall (v: vect T (S sz)),
+    vect_cons (vect_hd v) (vect_tl v) = v.
+Proof.
+  destruct v; reflexivity.
+Qed.
+
 Fixpoint vect_const {T} sz (t: T) : vect T sz :=
   match sz with
   | 0 => vect_nil
@@ -60,6 +67,33 @@ Fixpoint vect_app {T} {sz1 sz2} (bs1: vect T sz1) (bs2: vect T sz2) {struct sz1}
   | 0 => fun _ => bs2
   | S sz1 => fun bs1 => vect_cons (vect_hd bs1) (vect_app (vect_tl bs1) bs2)
   end bs1.
+
+Fixpoint vect_split {T} {sz1 sz2} (v: vect T (sz1 + sz2)) {struct sz1} : vect T sz1 * vect T sz2 :=
+  match sz1 as n return (vect T (n + sz2) -> vect T n * vect T sz2) with
+  | 0 => fun v => (vect_nil, v)
+  | S sz1 =>
+    fun v => let '(v1, v2) := vect_split (vect_tl v) in
+          (vect_cons (vect_hd v) v1, v2)
+  end v.
+
+Lemma vect_app_split {T} {sz1 sz2}:
+  forall (v: vect T (sz1 + sz2)),
+    vect_app (fst (vect_split v)) (snd (vect_split v)) = v.
+Proof.
+  induction sz1; cbn; intros.
+  - reflexivity.
+  - rewrite (surjective_pairing (vect_split _)).
+    cbn. rewrite IHsz1, vect_cons_hd_tl. reflexivity.
+Qed.
+
+Lemma vect_split_app {T} {sz1 sz2}:
+  forall (v1: vect T sz1) (v2: vect T sz2),
+    vect_split (vect_app v1 v2) = (v1, v2).
+Proof.
+  induction sz1; destruct v1; cbn; intros.
+  - reflexivity.
+  - rewrite IHsz1; reflexivity.
+Qed.
 
 Fixpoint vect_nth {T n} (v: vect T n) (idx: index n) {struct n} : T :=
   match n return (vect T n -> index n -> T) with
@@ -158,6 +192,7 @@ Module Bits.
   Definition cons {n} (b: bool) (bs: bits n) := vect_cons b bs.
   Definition const sz (b: bool) : bits sz := vect_const sz b.
   Definition app {sz1 sz2} (bs1: bits sz1) (bs2: bits sz2) := vect_app bs1 bs2.
+  Definition split {sz1 sz2} (bs: bits (sz1 + sz2)) := vect_split bs.
   Definition nth {n} (bs: bits n) (idx: index n) := vect_nth bs idx.
   Definition hd {n} (bs: bits (S n)) := vect_hd bs.
   Definition tl {n} (bs: bits (S n)) := vect_tl bs.
