@@ -30,6 +30,12 @@
  (libraries CoqUtils))
 
 (executable
+ (name decoder)
+ (modules ("decoder"))
+ (preprocess (pps ppx_jane ppx_deriving.show))
+ (libraries CoqUtils))
+
+(executable
  (name pipeline)
  (modules ("pipeline"))
  (preprocess (pps ppx_jane ppx_deriving.show))

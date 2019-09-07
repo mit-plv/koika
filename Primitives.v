@@ -21,8 +21,8 @@ Inductive prim_struct_uop :=
 | UDo (op: prim_struct_accessor) (f: string).
 
 Inductive prim_ufn_t :=
-| BitsUFn (fn: prim_bits_ufn_t)
-| StructUFn (sig: struct_sig) (op: prim_struct_uop).
+| UBitsFn (fn: prim_bits_ufn_t)
+| UStructFn (sig: struct_sig) (op: prim_struct_uop).
 
 Inductive prim_bits_fn_t :=
 | Sel (sz: nat)
@@ -63,7 +63,7 @@ Definition log2 n := log2_iter (pred n) 0 1 0.
 
 Definition prim_uSigma (fn: prim_ufn_t) (tau1 tau2: type): result prim_fn_t fn_tc_error :=
   match fn with
-  | BitsUFn fn =>
+  | UBitsFn fn =>
     let/res sz1 := assert_bits_t Arg1 tau1 in
     let/res sz2 := assert_bits_t Arg2 tau2 in
     Success (BitsFn match fn with
@@ -80,9 +80,9 @@ Definition prim_uSigma (fn: prim_ufn_t) (tau1 tau2: type): result prim_fn_t fn_t
                     | UZExtL nzeroes => ZExtL sz1 nzeroes
                     | UZExtR nzeroes => ZExtR sz1 nzeroes
                     end)
-  | StructUFn sig UInit =>
+  | UStructFn sig UInit =>
     Success (StructFn sig Init)
-  | StructUFn sig (UDo op f) =>
+  | UStructFn sig (UDo op f) =>
     let/res idx := opt_result (List_assoc f sig.(struct_fields)) (Arg1, FnUnboundField f sig) in
     Success (StructFn sig (Do op idx))
   end.

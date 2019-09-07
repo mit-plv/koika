@@ -41,10 +41,10 @@ Notation "f [ arg1 ',' arg2 ]" :=
     (at level 99, arg1 at level 99, arg2 at level 99,
     format "f [ arg1 ','  arg2 ]") : sga_expr_scope.
 Notation "f [[ arg ]]" :=
-  (UCall (UPrimFn (BitsUFn f)) arg (UConst Ob))
+  (UCall (UPrimFn (UBitsFn f)) arg (UConst Ob))
     (at level 99, arg at level 99, format "f [[ arg ]]") : sga_expr_scope.
 Notation "f [[ arg1 ',' arg2 ]]" :=
-  (UCall (UPrimFn (BitsUFn f)) arg1 arg2)
+  (UCall (UPrimFn (UBitsFn f)) arg1 arg2)
     (at level 99, arg1 at level 99, arg2 at level 99,
     format "f [[ arg1 ','  arg2 ]]") : sga_expr_scope.
 

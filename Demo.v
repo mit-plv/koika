@@ -260,6 +260,157 @@ Module Collatz.
     |}.
 End Collatz.
 
+Require Import Coq.Lists.List.
+
+Module Decoder.
+  Definition var_t := string.
+  Inductive reg_t := Rpc | Rencoded | Rdecoded.
+  Definition ufn_t := interop_minimal_ufn_t.
+  Definition fn_t := interop_minimal_fn_t.
+  Inductive name_t := fetch | decode.
+
+  Definition logsz := 5.
+  Notation sz := (pow2 logsz).
+
+  Import ListNotations.
+  Definition decoded_sig :=
+    {| struct_name := "instr";
+       struct_fields := [("src", bits_t 8);
+                        ("dst", bits_t 8);
+                        ("immediate", bits_t 16)] |}.
+
+  Definition R r :=
+    match r with
+    | Rpc => bits_t 3
+    | Rencoded => bits_t sz
+    | Rdecoded => struct_t decoded_sig
+    end.
+
+  Notation zero := (Bits.zeroes _).
+
+  Definition r idx : R idx :=
+    match idx with
+    | Rpc => zero
+    | Rencoded => zero
+    | Rdecoded => (zero, (zero, (zero, tt)))
+    end.
+
+  Open Scope sga.
+
+  Notation uaction := (uaction unit var_t reg_t ufn_t).
+
+  Fixpoint USwitch
+           {sz}
+           (var: var_t)
+           (default: uaction)
+           (branches: list (bits_t sz * uaction)) : uaction :=
+    match branches with
+    | [] => default
+    | (val, action) :: branches =>
+      UIf (UCall (UPrimFn (UBitsFn UEq)) (UVar var) (UConst val))
+          action
+          (USwitch var default branches)
+    end.
+
+  Fixpoint all_branches sz (counter: N) (actions: list uaction) :=
+    match actions with
+    | [] => []
+    | action :: actions =>
+      (Bits.of_N sz counter, action)
+        :: (all_branches sz (N.add counter N.one) actions)
+    end.
+
+  Definition instructions : list uaction :=
+    [UConst Ob~1~1~0~1~1~0~0~0~0~0~1~0~1~1~0~0~0~0~0~0~0~1~1~1~1~1~0~0~1~1~0~1;
+     UConst Ob~0~1~1~0~1~0~1~1~1~0~1~0~1~0~1~0~1~0~0~1~0~1~0~0~0~1~0~1~0~1~0~1;
+     UConst Ob~1~0~0~0~0~0~1~0~1~1~1~0~0~0~1~0~1~1~1~0~0~1~1~0~0~1~1~0~0~0~1~0;
+     UConst Ob~0~1~1~1~1~0~1~0~0~0~0~0~0~0~1~0~0~1~0~0~0~0~1~0~0~0~0~0~0~1~0~0;
+     UConst Ob~1~1~1~0~1~0~0~0~0~1~1~1~1~0~1~0~0~0~0~1~0~1~1~0~0~0~0~1~0~0~1~1;
+     UConst Ob~1~0~0~0~0~0~0~1~0~0~1~1~0~0~1~1~0~0~1~0~1~0~0~0~0~1~1~1~0~1~1~0;
+     UConst Ob~0~1~0~0~1~0~0~0~0~0~1~0~0~1~1~0~1~0~0~0~0~1~1~0~0~1~1~1~0~0~1~1;
+     UConst Ob~1~1~0~0~0~0~0~1~0~1~1~1~1~1~0~0~0~1~1~0~0~0~1~0~0~1~1~1~1~0~0~1].
+
+  Definition switch_instr :=
+    Eval compute in (USwitch "pc" (UConst (Bits.zero sz)) (all_branches 3 N.zero instructions)).
+
+  Definition _fetch : uaction :=
+    Let "pc" <- Rpc#read0 in
+    ((Rencoded#write0(switch_instr));;
+     (Rpc#write0(UUIntPlus[[$"pc", UConst Ob~0~0~1]]))).
+
+  Definition _decode : uaction :=
+    Let "encoded" <- Rencoded#read1 in
+    Let "src" <- (UPart  8)[[$"encoded", UConst (Bits.of_N logsz 0)]] in
+    Let "dst" <- (UPart  8)[[$"encoded", UConst (Bits.of_N logsz 8)]] in
+    Let "imm" <- (UPart 16)[[$"encoded", UConst (Bits.of_N logsz 16)]] in
+    (Rdecoded#write0
+       (UCall (UPrimFn (UStructFn decoded_sig (UDo Sub "immediate")))
+              (UCall (UPrimFn (UStructFn decoded_sig (UDo Sub "dst")))
+                     (UCall (UPrimFn (UStructFn decoded_sig (UDo Sub "src")))
+                            (UCall (UPrimFn (UStructFn decoded_sig UInit))
+                                   (UConst Ob) (UConst Ob))
+                            ($"src"))
+                     ($"dst"))
+              ($"imm"))).
+
+  Definition cr := ContextEnv.(create) r.
+
+  Definition decoder : scheduler _ :=
+    tc_scheduler (fetch |> decode |> done).
+
+  (* Ltac __must_typecheck R Sigma tcres ::= *)
+  (*   __must_typecheck_cbn R Sigma tcres. *)
+
+  Definition rules :=
+    tc_rules R interop_minimal_Sigma interop_minimal_uSigma
+             (fun r => match r with
+                    | fetch => _fetch
+                    | decode => _decode
+                    end).
+
+  Notation compute t :=
+    ltac:(let tt := type of t in
+          let t := (eval lazy in t) in
+          exact (t: tt)) (only parsing).
+
+  Definition result :=
+    compute (interp_scheduler cr interop_minimal_sigma rules decoder).
+
+  Definition circuit :=
+    compile_scheduler (ContextEnv.(create) (readRegisters R interop_minimal_Sigma)) rules decoder.
+
+  Definition package :=
+    {| sga_var_t := string;
+       sga_var_names := fun x => x;
+
+       sga_reg_t := reg_t;
+       sga_reg_types := R;
+       sga_reg_init := r;
+       sga_reg_finite := _;
+
+       sga_custom_fn_t := interop_empty_t;
+       sga_custom_fn_types := interop_empty_Sigma;
+
+       sga_reg_names r := match r with
+                         | Rpc => "Rpc"
+                         | Rencoded => "Rencoded"
+                         | Rdecoded => "Rdecoded"
+                         end;
+       sga_custom_fn_names fn := match fn with
+                                end;
+
+       sga_rule_name_t := name_t;
+       sga_rules := rules;
+       sga_rule_names r := match r with
+                          | decode => "decode"
+                          | fetch => "fetch"
+                          end;
+
+       sga_scheduler := decoder;
+       sga_module_name := "decoder";
+    |}.
+End Decoder.
+
 Module Pipeline.
   Definition var_t := string.
   Inductive reg_t := r0 | outputReg | inputReg | invalid | correct.
