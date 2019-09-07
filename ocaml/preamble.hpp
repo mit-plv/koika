@@ -69,8 +69,8 @@ using namespace boost::multiprecision::literals;
 namespace prims {
   const unit_t tt = {};
 
-  template<size_t sz>
-  uint_t<sz> __attribute__((noreturn)) unreachable() {
+  template<typename T>
+  T __attribute__((noreturn)) unreachable() {
     __builtin_unreachable();
   }
 
@@ -198,10 +198,14 @@ struct rwset_t {
   rwset_t() : r1(false), w0(false), w1(false) {}
 };
 
-template<size_t size>
+// template<typename T>
+// struct zero {
+//   static const T val = {};
+// };
+
+template<typename T>
 struct reg_log_t {
   rwset_t rwset;
-  using T = uint_t<size>;
 
   // Reset alignment to prevent Clang from packing the fields together
   // This yielded a ~25x speedup when rwset was inline
@@ -251,7 +255,7 @@ struct reg_log_t {
     return data0;
   }
 
-  reg_log_t() : data0(0), data1(0) {}
+  reg_log_t() : data0(T{}), data1(T{}) {}
 };
 
 #define CHECK_RETURN(can_fire) { if (!(can_fire)) { return false; } }

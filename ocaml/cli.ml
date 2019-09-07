@@ -316,8 +316,8 @@ let parse fname sexps =
          let registers = List.map (fun (nm, init) ->
                              let bs_size = List.length init.lcnt in
                              { reg_name = nm.lcnt;
-                               reg_size = bs_size;
-                               reg_init_val = { bs_size; bs_bits = init.lcnt } })
+                               reg_type = Bits_t bs_size;
+                               reg_init_val = Bits { bs_size; bs_bits = init.lcnt } })
                            m_registers in
          (* FIXME: handle functions in generic way *)
          (registers, m_rules, m_scheduler)
@@ -338,7 +338,7 @@ let resolve_rule fname registers rule =
   let w0 = { lpos = Pos.Filename fname; lcnt = Const [] } in
   let find_function { lpos; lcnt = name } args =
     (* FIXME generalize to custom function definitions *)
-    let (fn, nargs, args): SGALib.SGA.prim_ufn_t * int * _ =
+    let (fn, nargs, args): SGALib.SGA.prim_bits_ufn_t * int * _ =
       match name with
       | "sel" -> USel, 2, args
       | "and" | "&" -> UAnd, 2, args
@@ -364,7 +364,7 @@ let resolve_rule fname registers rule =
       type_error lpos (sprintf "Function `%s' takes %d arguments" name nargs)
     else
       let padding = list_const (2 - nargs) w0 in
-      { lpos; lcnt = SGALib.SGA.UPrimFn fn }, List.append args padding in
+      { lpos; lcnt = SGALib.SGA.UPrimFn (SGALib.SGA.UBitsFn fn) }, List.append args padding in
   let rec resolve_action ({ lpos; lcnt }: ('f, ('f, string, string) action) locd) =
     { lpos;
       lcnt = match lcnt with

@@ -17,6 +17,7 @@ Extraction Inline Circuits.retVal.
 
 Extraction "SGA.ml"
            Common.EqDec
+           IndexUtils.List_nth
            Environments.FiniteType Environments.mem Environments.ContextEnv
            Syntax.uscheduler Syntax.uaction
            TypeInference.type_action TypeInference.type_scheduler

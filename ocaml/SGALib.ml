@@ -13,8 +13,45 @@ type ('prim, 'reg_t, 'fn_t) dedup_input_t = {
 module SGA = SGA
 
 module Util = struct
-  let type_to_string (tau: SGA.type0) =
-    Printf.sprintf "bits %d" tau
+  let list_nth (l: 'a list) (n: SGA.index) =
+    SGA.list_nth l n
+
+  let string_of_coq_string chars =
+    String.concat "" (List.map (String.make 1) chars)
+
+  let coq_string_of_string s =
+    List.of_seq (String.to_seq s)
+
+  let rec typ_of_sga_type (tau: SGA.type0) : typ =
+    match tau with
+    | SGA.Bits_t sz -> Bits_t sz
+    | SGA.Struct_t sg -> Struct_t (struct_sig_of_sga_struct_sig' sg)
+  and struct_sig_of_sga_struct_sig' { struct_name; struct_fields } : struct_sig =
+    { struct_name = string_of_coq_string struct_name;
+      struct_fields = List.map (fun (nm, tau) ->
+                          (string_of_coq_string nm, typ_of_sga_type tau))
+                        struct_fields }
+
+  let rec sga_type_of_typ (tau: typ) : SGA.type0 =
+    match tau with
+    | Bits_t sz -> SGA.Bits_t sz
+    | Struct_t sg -> SGA.Struct_t (sga_struct_sig'_of_struct_sig sg)
+  and sga_struct_sig'_of_struct_sig { struct_name; struct_fields } : SGA.type0 SGA.struct_sig' =
+    { struct_name = coq_string_of_string struct_name;
+      struct_fields = List.map (fun (nm, tau) ->
+                          (coq_string_of_string nm, sga_type_of_typ tau))
+                        struct_fields }
+
+  let sga_type_to_string tau =
+    typ_to_string (typ_of_sga_type tau)
+
+  let struct_sig'_to_string sg =
+    struct_sig_to_string (struct_sig_of_sga_struct_sig' sg)
+
+  let type_kind_to_string (tk: SGA.type_kind) =
+    match tk with
+    | SGA.Kind_bits -> "bits"
+    | SGA.Kind_struct sg -> struct_sig'_to_string sg
 
   let string_eq_dec (s1: string) (s2: string) =
     s1 = s2
@@ -25,16 +62,19 @@ module Util = struct
      | `Cpp -> Printf.sprintf "0b%s"
      | `Verilog -> Printf.sprintf "%d'b%s" bs.bs_size) bitstring
 
-  let string_of_coq_string chars =
-    String.concat "" (List.map (String.make 1) chars)
-
   let type_error_to_error (epos: 'f) (err: _ SGA.error_message) =
     let ekind, emsg = match err with
       | SGA.UnboundVariable var ->
          (`NameError, Printf.sprintf "Unbound variable `%s'" var)
+      | SGA.UnboundField (field, sg) ->
+         (`NameError, Printf.sprintf "Unbound field `%s' in structure `%s'"
+                        (string_of_coq_string field) (struct_sig'_to_string sg))
       | SGA.TypeMismatch (_tsig, actual, _expr, expected) ->
          (`TypeError, Printf.sprintf "This term has type `%s', but `%s' was expected"
-                        (type_to_string actual) (type_to_string expected))
+                        (sga_type_to_string actual) (sga_type_to_string expected))
+      | SGA.KindMismatch (_tsig, actual, _expr, expected) ->
+         (`TypeError, Printf.sprintf "This term has type `%s', but kind `%s' was expected"
+                        (sga_type_to_string actual) (type_kind_to_string expected))
     in { epos; ekind; emsg }
 
   let bits_const_of_bits sz bs =
@@ -53,9 +93,9 @@ module Util = struct
          let name, sign = custom_fn_info fn in
          CustomFn name, sign in
     { ffi_name;
-      ffi_arg1size = fsig.arg1Type;
-      ffi_arg2size = fsig.arg2Type;
-      ffi_retsize = fsig.retType }
+      ffi_arg1type = typ_of_sga_type fsig.arg1Type;
+      ffi_arg2type = typ_of_sga_type fsig.arg2Type;
+      ffi_rettype = typ_of_sga_type fsig.retType }
 
   let make_dedup_input registers circuits =
     { di_regs = registers;
@@ -63,11 +103,19 @@ module Util = struct
       di_fn_sigs = ffi_signature_of_interop_fn;
       di_circuits = circuits }
 
+  let rec value_of_sga_value tau v =
+    match tau with
+    | Bits_t sz -> Bits (bits_const_of_bits sz v)
+    | Struct_t sg ->
+       let taus = List.map snd sg.struct_fields in
+       let vals = SGA.vect_to_list (List.length taus) v in
+       Struct (sg.struct_name, List.map2 value_of_sga_value taus vals)
+
   let reg_sigs_of_sga_package (pkg: SGA.sga_package_t) r =
-    let sz = pkg.sga_reg_types r in
+    let tau = typ_of_sga_type (pkg.sga_reg_types r) in
     { reg_name = string_of_coq_string (pkg.sga_reg_names r);
-      reg_size = sz;
-      reg_init_val = bits_const_of_bits sz (pkg.sga_reg_init r) }
+      reg_type = tau;
+      reg_init_val = value_of_sga_value tau (pkg.sga_reg_init r) }
 
   let fn_sigs_of_sga_package (pkg: SGA.sga_package_t) fn =
     let custom_fn_info fn =
@@ -162,7 +210,7 @@ module Compilation = struct
           SGA.UTry (r.lcnt, translate_scheduler s1, translate_scheduler s2))
 
   let r = fun rs ->
-    rs.reg_size
+    Util.sga_type_of_typ rs.reg_type
 
   let sigma = fun fn ->
     SGA.interop_Sigma (fun _ -> failwith "No custom functions") fn
@@ -201,21 +249,21 @@ module Compilation = struct
     SGA.type_scheduler raw_ast.lpos ast
 
   let result_of_type_result = function
-    | SGA.WellTyped s -> Ok s
-    | SGA.IllTyped { epos; emsg } ->
+    | SGA.Success s -> Ok s
+    | SGA.Failure ({ epos; emsg }: _ SGA.error) ->
        Result.Error (Util.type_error_to_error epos emsg)
 
   let typecheck_rule (raw_ast: 'f raw_action) : (typechecked_action, 'f err_contents) result =
     let ast = translate_action raw_ast in
     match SGA.type_action Util.string_eq_dec r sigma uSigma raw_ast.lpos [] ast with
-    | WellTyped (SGA.ExistT (tau, r)) ->
-       if tau = 0 then Ok r
+    | Success (SGA.ExistT (tau, r)) ->
+       if tau = Bits_t 0 then Ok r
        else
          let msg =
            Printf.sprintf "This expression has type %s, but rules are expected to have type %s."
-             (Util.type_to_string tau) (Util.type_to_string 0) in
+             (Util.sga_type_to_string tau) (Util.sga_type_to_string (Bits_t 0)) in
          Error { epos = raw_ast.lpos; ekind = `TypeError; emsg = msg }
-    | IllTyped { epos; emsg } ->
+    | Failure { epos; emsg } ->
        Error (Util.type_error_to_error epos emsg)
 
   let compile (cu: compile_unit) : (reg_signature -> compiled_circuit) =

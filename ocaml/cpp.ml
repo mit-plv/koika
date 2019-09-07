@@ -25,14 +25,35 @@ type ('prim, 'name_t, 'var_t, 'reg_t, 'fn_t) cpp_input_t = {
 let sprintf = Printf.sprintf
 let fprintf = Printf.fprintf
 
-let cpp_type_of_size (needs_multiprecision: bool ref) sz =
-  assert (sz >= 0);
-  if sz > 64 then
-    needs_multiprecision := true;
-  if sz <= 1024 then
-    sprintf "uint_t<%d>" sz
-  else
-    failwith (sprintf "Unsupported size: %d" sz)
+let cpp_struct_name' name =
+  sprintf "struct_%s" name
+
+let cpp_struct_name { struct_name; _ } =
+  cpp_struct_name' struct_name
+
+let cpp_type_of_type
+      (struct_types: struct_sig list ref)
+      (needs_multiprecision: bool ref)
+      (tau: typ) =
+  match tau with
+  | Bits_t sz ->
+     assert (sz >= 0);
+     if sz > 64 then
+       needs_multiprecision := true;
+     if sz <= 1024 then
+       sprintf "uint_t<%d>" sz
+     else
+       failwith (sprintf "Unsupported size: %d" sz)
+  | Struct_t sg ->
+     (match List.find_opt (fun sg' -> sg'.struct_name = sg.struct_name) !struct_types with
+      | Some sg' ->
+         if sg <> sg' then
+           failwith (sprintf "Incompatible uses of structure name %s:\n%s\n%s"
+                       sg.struct_name
+                       (struct_sig_to_string sg)
+                       (struct_sig_to_string sg'))
+      | None -> struct_types := sg :: !struct_types);
+     cpp_struct_name sg
 
 let cpp_const_init (needs_multiprecision: bool ref) sz cst =
   assert (sz >= 0);
@@ -62,30 +83,37 @@ let cpp_const_init (needs_multiprecision: bool ref) sz cst =
 let cpp_size_needs_allocation _sz =
   false (* boost::multiprecision has literals *)
 
-let cpp_fn_name = function
-  | { ffi_name = CustomFn f; _ } ->
-     (* The current implementation of external functions requires the client to
-        pass a class implementing those functions as a template argument.  An
-        other approach would have made custom functions virtual methods, but
-        then they couldn't have taken template arguments. *)
-     (* The ‘.template’ part ensures that ‘extfuns.xyz<p>()’ is not parsed as a
-        comparison. *)
-     sprintf "extfuns.template %s" f
-  | { ffi_name = PrimFn f; ffi_arg1size = sz1; ffi_arg2size = sz2; _ } ->
-     sprintf "prims::%s"
-       (match f with
-        | SGA.Sel _logsz -> sprintf "sel<%d, %d>" sz1 sz2
-        | SGA.Part (_logsz, width) -> sprintf "part<%d, %d, %d>" sz1 sz2 width
-        | SGA.And _sz -> sprintf "land<%d>" sz1
-        | SGA.Or _sz -> sprintf "lor<%d>" sz1
-        | SGA.Not _sz -> sprintf "lnot<%d>" sz1
-        | SGA.Lsl (_sz, _places) -> sprintf "lsl<%d, %d>" sz1 sz2
-        | SGA.Lsr (_sz, _places) -> sprintf "lsr<%d, %d>" sz1 sz2
-        | SGA.Eq _sz -> sprintf "eq<%d>" sz1
-        | SGA.Concat (_sz1, _sz2) -> sprintf "concat<%d, %d>" sz1 sz2
-        | SGA.ZExtL (_sz, nzeroes) -> sprintf "zextl<%d, %d>" sz1 nzeroes
-        | SGA.ZExtR (_sz, nzeroes) -> sprintf "zextr<%d, %d>" sz1 nzeroes
-        | SGA.UIntPlus _sz -> sprintf "plus<%d>" sz1)
+let assert_bits (tau: typ) =
+  match tau with
+  | Bits_t sz -> sz
+  | Struct_t _ -> failwith "Expecting bits, not struct"
+
+let cpp_custom_fn_name f =
+  (* The current implementation of external functions requires the client to
+     pass a class implementing those functions as a template argument.  An
+     other approach would have made custom functions virtual methods, but
+     then they couldn't have taken template arguments. *)
+  (* The ‘.template’ part ensures that ‘extfuns.xyz<p>()’ is not parsed as a
+     comparison. *)
+  sprintf "extfuns.template %s" f
+
+let cpp_bits_fn_name f tau1 tau2 =
+  let sz1 = assert_bits tau1 in
+  let sz2 = assert_bits tau2 in
+  sprintf "prims::%s"
+    (match f with
+     | SGA.Sel _sz -> sprintf "sel<%d, %d>" sz1 sz2
+     | SGA.Part (_sz, width) -> sprintf "part<%d, %d, %d>" sz1 sz2 width
+     | SGA.And _sz -> sprintf "land<%d>" sz1
+     | SGA.Or _sz -> sprintf "lor<%d>" sz1
+     | SGA.Not _sz -> sprintf "lnot<%d>" sz1
+     | SGA.Lsl (_sz, _places) -> sprintf "lsl<%d, %d>" sz1 sz2
+     | SGA.Lsr (_sz, _places) -> sprintf "lsr<%d, %d>" sz1 sz2
+     | SGA.Eq _sz -> sprintf "eq<%d>" sz1
+     | SGA.Concat (_sz1, _sz2) -> sprintf "concat<%d, %d>" sz1 sz2
+     | SGA.ZExtL (_sz, nzeroes) -> sprintf "zextl<%d, %d>" sz1 nzeroes
+     | SGA.ZExtR (_sz, nzeroes) -> sprintf "zextr<%d, %d>" sz1 nzeroes
+     | SGA.UIntPlus _sz -> sprintf "plus<%d>" sz1)
 
 let cpp_preamble =
   let inc = open_in "preamble.hpp" in
@@ -107,9 +135,12 @@ let gensym, gensym_reset =
     sprintf "_%s%d" prefix counter in
   (next, reset)
 
+type target_info =
+  { tau: typ; declared: bool; name: var_t }
+
 type assignment_target =
   | NoTarget
-  | VarTarget of { sz: size_t; declared: bool; name: var_t }
+  | VarTarget of target_info
 
 type assignment_result =
   | NotAssigned
@@ -128,8 +159,11 @@ let compile (type name_t var_t reg_t)
   let needs_multiprecision =
     ref false in
 
-  let cpp_type_of_size =
-    cpp_type_of_size needs_multiprecision in
+  let struct_types =
+    ref [] in
+
+  let cpp_type_of_type =
+    cpp_type_of_type struct_types needs_multiprecision in
   let cpp_const_init =
     cpp_const_init needs_multiprecision in
 
@@ -156,6 +190,42 @@ let compile (type name_t var_t reg_t)
     pbody ();
     p "#endif" in
 
+  let p_struct_forward_decl sg =
+    p "struct %s;" (cpp_struct_name sg) in
+
+  let p_struct_printer_forward_decl sg =
+    p "std::string struct_str(const %s);" (cpp_struct_name sg) in
+
+  let p_struct_decl_field (name, tau) =
+    p "%s %s;" (cpp_type_of_type tau) name in
+
+  let p_struct_decl sg =
+    let decl = sprintf "struct %s" (cpp_struct_name sg) in
+    p_scoped decl ~terminator:";" (fun () ->
+        List.iter p_struct_decl_field sg.struct_fields) in
+  let cpp_value_printer = function
+    | Bits_t sz -> sprintf "uint_str<%d>" sz
+    | Struct_t _ -> "struct_str" in
+
+  let p_struct_printer sg =
+    let name = cpp_struct_name sg in
+    let cppsig = sprintf "std::string struct_str(const %s instance)" name in
+    p_scoped cppsig (fun () ->
+        p "std::ostringstream stream;";
+        p "stream << \"%s { \";" name;
+        List.iter (fun (fname, ftau) ->
+            p "stream << \".%s = \" << %s(instance.%s) << \"; \";"
+              fname (cpp_value_printer ftau) fname)
+          sg.struct_fields;
+        p "stream << \"}\";";
+        p "return stream.str();") in
+
+  let p_structs_declarations struct_sigs =
+    List.iter p_struct_forward_decl struct_sigs;
+    List.iter p_struct_decl struct_sigs;
+    List.iter p_struct_printer_forward_decl struct_sigs;
+    List.iter p_struct_printer struct_sigs in
+
   let p_preamble () =
     p "//////////////";
     p "// PREAMBLE //";
@@ -164,7 +234,10 @@ let compile (type name_t var_t reg_t)
     if !needs_multiprecision then (
       p "#define NEEDS_BOOST_MULTIPRECISION";
       nl ());
-    p "%s" cpp_preamble in
+    p "%s" cpp_preamble;
+    nl ();
+    p_structs_declarations !struct_types;
+  in
 
   let iter_registers f regs =
     List.iter (fun r -> f (hpp.cpp_register_sigs r)) regs in
@@ -178,10 +251,17 @@ let compile (type name_t var_t reg_t)
            (if b then one else zero) + shift_left z 1)
          bits zero) in
 
-  let sp_bits_const { bs_size; bs_bits } =
+  let sp_bits_value { bs_size; bs_bits } =
     let w = (bs_size + 7) / 8 in
     let fmt = sprintf "%%0#%dx" (w + 2) in
     cpp_const_init bs_size (Z.format fmt (bits_to_Z bs_bits)) in
+
+  let rec sp_value (v: value) =
+    match v with
+    | Bits bs -> sp_bits_value bs
+    | Struct (name, fields) ->
+       let fields = String.concat ", " (List.map sp_value fields) in
+       sprintf "%s { %s }" (cpp_struct_name' name) fields in
 
   let p_impl () =
     p "////////////////////";
@@ -194,12 +274,13 @@ let compile (type name_t var_t reg_t)
         ~terminator:";" pbody in
 
     let p_state_register r =
-      p "%s %s;" (cpp_type_of_size r.reg_size) r.reg_name in
+      p "%s %s;" (cpp_type_of_type r.reg_type) r.reg_name in
+
+    let p_dump_register { reg_name; reg_type; _ } =
+        p "std::cout << \"%s = \" << %s(%s) << std::endl;"
+          reg_name (cpp_value_printer reg_type) reg_name in
 
     let p_state_t () =
-      let p_dump_register { reg_name; reg_size; _ } =
-        p "std::cout << \"%s = \" << uint_str<%d>(%s) << std::endl;"
-          reg_name reg_size reg_name in
       p_scoped "struct state_t" ~terminator:";" (fun () ->
           iter_all_registers p_state_register;
           nl ();
@@ -207,7 +288,7 @@ let compile (type name_t var_t reg_t)
               iter_all_registers p_dump_register)) in
 
     let p_log_register r =
-      p "reg_log_t<%d> %s;" r.reg_size r.reg_name in
+      p "reg_log_t<%s> %s;" (cpp_type_of_type r.reg_type) r.reg_name in
 
     let p_log_t () =
       p_scoped "struct log_t" ~terminator:";" (fun () ->
@@ -234,36 +315,37 @@ let compile (type name_t var_t reg_t)
 
       let sp_const sz bits =
         let bs = SGALib.Util.bits_const_of_bits sz bits in
-        sp_bits_const bs in
+        sp_bits_value bs in
 
-      let p_decl sz name =
-        p "%s %s;" (cpp_type_of_size sz) name in
+      let p_decl tau name =
+        p "%s %s;" (cpp_type_of_type tau) name in
 
       let p_declare_target = function
-        | VarTarget { sz; declared = false; name } ->
-           p_decl sz name;
-           VarTarget { sz; declared = true; name }
+        | VarTarget { tau; declared = false; name } ->
+           p_decl tau name;
+           VarTarget { tau; declared = true; name }
         | t -> t in
 
-      let gensym_target sz prefix =
-        VarTarget { sz; declared = false; name = gensym prefix } in
+      let gensym_target tau prefix =
+        VarTarget { tau; declared = false; name = gensym prefix } in
 
-      let p_ensure_target sz t =
-        let declared, var =
-          match t with
-          | NoTarget -> false, gensym "ignored"
-          | VarTarget { declared; name; _ } -> declared, name in
-        if not declared then
-          p_decl sz var;
-        var in
+      let ensure_target tau t =
+        match t with
+        | NoTarget -> { declared = false; name = gensym "ignored"; tau }
+        | VarTarget info -> info in
+
+      let p_ensure_declared tinfo =
+        if not tinfo.declared then
+          p_decl tinfo.tau tinfo.name;
+        tinfo.name in
 
       let p_assign_pure ?(prefix = "") target result =
         (match target, result with
          | VarTarget { declared = true; name; _ }, PureExpr e ->
             p "%s = %s;" name e;
             Assigned name
-         | VarTarget { sz; name; _ }, PureExpr e ->
-            p "%s %s %s = %s;" prefix (cpp_type_of_size sz) name e;
+         | VarTarget { tau; name; _ }, PureExpr e ->
+            p "%s %s %s = %s;" prefix (cpp_type_of_type tau) name e;
             Assigned name
          | _, _ ->
             result) in
@@ -273,6 +355,27 @@ let compile (type name_t var_t reg_t)
         | Assigned v -> v
         | NotAssigned -> assert false in
 
+      let p_funcall target f a1 a2 =
+        let { ffi_name; ffi_arg1type = tau1; ffi_arg2type = tau2; _ } = f in
+        match ffi_name with
+        | CustomFn f ->
+           PureExpr (sprintf "%s(%s, %s)" (cpp_custom_fn_name f) a1 a2)
+        | PrimFn (SGA.BitsFn f) ->
+           PureExpr (sprintf "%s(%s, %s)" (cpp_bits_fn_name f tau1 tau2) a1 a2)
+        | PrimFn (SGA.StructFn (sg, op)) ->
+           let sg = SGALib.Util.struct_sig_of_sga_struct_sig' sg in
+           match op with
+           | SGA.Init -> PureExpr (sprintf "%s {}" (cpp_struct_name sg))
+           | SGA.Do (ac, idx) ->
+              let field, _tau = SGALib.Util.list_nth sg.struct_fields idx in
+              match ac with
+              | SGA.Get -> PureExpr (sprintf "(%s).%s" a1 field)
+              | SGA.Sub ->
+                 let tinfo = ensure_target (Struct_t sg) target in
+                 let res = p_assign_pure (VarTarget tinfo) (PureExpr a1) in
+                 p "%s.%s = %s;" tinfo.name field a2;
+                 res in
+
       let rec p_action (target: assignment_target) (rl: (var_t, reg_t, _) SGA.action) =
         match rl with
         | SGA.Fail (_, _) ->
@@ -280,27 +383,29 @@ let compile (type name_t var_t reg_t)
            (match target with
             | NoTarget -> NotAssigned
             | VarTarget { declared = true; name; _ } -> Assigned name
-            | VarTarget { sz; _ } -> PureExpr (sprintf "prims::unreachable<%d>()" sz))
+            | VarTarget { tau; _ } ->
+               PureExpr (sprintf "prims::unreachable<%s>()" (cpp_type_of_type tau)))
         | SGA.Var (_, v, _, _m) ->
            PureExpr (hpp.cpp_var_names v) (* FIXME fail if reference isn't to latest binding of v *)
         | SGA.Const (_, sz, cst) ->
            let res = PureExpr (sp_const sz cst) in
            if cpp_size_needs_allocation sz then
-             let ctarget = gensym_target sz "cst" in
+             let ctarget = gensym_target (Bits_t sz) "cst" in
              let e = must_expr (p_assign_pure ~prefix:"static const" ctarget res) in
              PureExpr e
            else res
         | SGA.Seq (_, _, a1, a2) ->
            ignore (p_action NoTarget a1);
            p_action target a2
-        | SGA.Bind (_, sz, _, v, ex, rl) ->
+        | SGA.Bind (_, tau, _, v, ex, rl) ->
            let target = p_declare_target target in
            p_scoped "/* bind */" (fun () ->
-               let vtarget = VarTarget { sz; declared = false; name = hpp.cpp_var_names v } in
+               let vtarget = VarTarget { tau = SGALib.Util.typ_of_sga_type tau;
+                                         declared = false; name = hpp.cpp_var_names v } in
                ignore (p_assign_pure vtarget (p_action vtarget ex));
                p_assign_pure target (p_action target rl))
         | SGA.If (_, _, cond, tbr, fbr) ->
-           let ctarget = gensym_target 1 "c" in
+           let ctarget = gensym_target (Bits_t 1) "c" in
            let cexpr = p_action ctarget cond in
            let target = p_declare_target target in
            ignore (p_scoped (sprintf "if (bool(%s))" (must_expr cexpr))
@@ -308,8 +413,8 @@ let compile (type name_t var_t reg_t)
            p_scoped "else"
              (fun () -> p_assign_pure target (p_action target fbr))
         | SGA.Read (_, port, reg) ->
-           let { reg_name; reg_size; _ } = hpp.cpp_register_sigs reg in
-           let var = p_ensure_target reg_size target in
+           let { reg_name; reg_type; _ } = hpp.cpp_register_sigs reg in
+           let var = p_ensure_declared (ensure_target reg_type target) in
            p_checked (fun () ->
                match port with
                | P0 -> pr "log.%s.read0(&%s, state.%s, Log.%s.rwset)" reg_name var reg_name reg_name
@@ -318,7 +423,7 @@ let compile (type name_t var_t reg_t)
         | SGA.Write (_, port, reg, expr) ->
            let r = hpp.cpp_register_sigs reg in
            let reg = hpp.cpp_register_sigs reg in
-           let vt = gensym_target reg.reg_size "v" in
+           let vt = gensym_target reg.reg_type "v" in
            let v = must_expr (p_action vt expr) in
            let fn_name = match port with
              | P0 -> "write0"
@@ -329,9 +434,9 @@ let compile (type name_t var_t reg_t)
            p_assign_pure target (PureExpr "prims::tt")
         | SGA.Call (_, fn, arg1, arg2) ->
            let f = hpp.cpp_function_sigs fn in
-           let a1 = must_expr (p_action (gensym_target f.ffi_arg1size "x") arg1) in
-           let a2 = must_expr (p_action (gensym_target f.ffi_arg2size "y") arg2) in
-           PureExpr (sprintf "%s(%s, %s)" (cpp_fn_name f) a1 a2) in
+           let a1 = must_expr (p_action (gensym_target f.ffi_arg1type "x") arg1) in
+           let a2 = must_expr (p_action (gensym_target f.ffi_arg2type "y") arg2) in
+           p_funcall target f a1 a2 in
 
       p_fn ~typ:"bool" ~name:("rule_" ^ hpp.cpp_rule_names rule.rl_name) (fun () ->
           p_reset ();
@@ -436,7 +541,7 @@ let compile (type name_t var_t reg_t)
         p_scoped (sprintf "%s::state_t init = " classtype)
           ~terminator:";" (fun () ->
             iter_all_registers (fun rn ->
-                p ".%s = %s," rn.reg_name (sp_bits_const rn.reg_init_val)));
+                p ".%s = %s," rn.reg_name (sp_value rn.reg_init_val)));
         nl ();
         p "%s simulator(init);" classtype;
         nl ();

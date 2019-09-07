@@ -35,14 +35,23 @@ let io_decl_to_string (io_decl:io_decl) =
 
 type io_decls = io_decl list
 
+let assert_bits (typ: typ) =
+  match typ with
+  | Bits_t sz -> sz
+  | Struct_t _ -> failwith "FIXME: Structs unsupported in Verilog backend"
+
+let assert_bits_val (v: value) =
+  match v with
+  | Bits bs -> bs
+  | Struct _ -> failwith "FIXME: Structs unsupported in Verilog backend"
 
 let io_from_reg (root: _ circuit_root) : io_decls =
   let reg_name = root.root_reg.reg_name in
-  let reg_size = root.root_reg.reg_size in
+  let reg_type = root.root_reg.reg_type in
   [
-    Input (reg_name ^ "__overwrite_data", reg_size);
+    Input (reg_name ^ "__overwrite_data", assert_bits reg_type);
     Input (reg_name ^ "__overwrite", 1);
-    Output (reg_name ^ "__data", reg_size)
+    Output (reg_name ^ "__data", assert_bits reg_type)
   ]
 let clock_and_reset : io_decls =
   [
@@ -82,8 +91,8 @@ type internal_decls = internal_decl list
 
 let internal_decl_for_reg (root: _ circuit_root) =
   let reg_name = root.root_reg.reg_name in
-  let reg_size = root.root_reg.reg_size in
-  Reg(reg_name,reg_size)
+  let reg_type = root.root_reg.reg_type in
+  Reg(reg_name, assert_bits reg_type)
 
 let internal_decl_for_net
       (environment: (int, string) Hashtbl.t)
@@ -104,8 +113,8 @@ let internal_decl_for_net
      Hashtbl.add environment c.tag (name ^ name_net);
      Wire(name ^ name_net, n) (* Prefix with the name given by the user *)
   | CConst l -> Wire(name_net, l.bs_size)
-  | CExternal (ffi_sig, _, _) -> Wire(name_net, ffi_sig.ffi_retsize)
-  | CReadRegister r_sig -> Wire(name_net, r_sig.reg_size)
+  | CExternal (ffi_sig, _, _) -> Wire(name_net, assert_bits ffi_sig.ffi_rettype)
+  | CReadRegister r_sig -> Wire(name_net, assert_bits r_sig.reg_type)
 
 let internal_declarations (environment: (int, string) Hashtbl.t) (circuit: _ circuit_graph) =
   let gensym = ref 0 in
@@ -161,7 +170,7 @@ let assignment_to_string (gensym: int ref) (assignment: assignment) =
                        gensym := !gensym + 1 ;
                        "\t"^ s ^ " " ^ (s ^ "__instance__" ^ string_of_int number_s) ^
                          "(" ^ arg1 ^ ", " ^ arg2 ^ "," ^ lhs ^ ")"
-       | PrimFn typePrim ->
+       | PrimFn (BitsFn typePrim) ->
           (match typePrim with
            | SGA.UIntPlus _ -> default_left ^ arg1 ^ " + " ^ arg2
            | SGA.Sel _ -> default_left ^ arg1 ^ "[" ^ arg2 ^ "]"
@@ -176,6 +185,8 @@ let assignment_to_string (gensym: int ref) (assignment: assignment) =
            | SGA.ZExtL (_, _) -> failwith "TODO UNIMPLEMENTED ZEXTL" (* TODO: convince clement that those are not needed as primitive *)
            | SGA.ZExtR (_, _) -> failwith "TODO UNIMPLEMENTED ZEXTR" (* TODO: convince clement that those are not needed as primitive *)
           )
+       | PrimFn (StructFn _) ->
+          failwith "FIXME: Structs unsupported in Verilog backend"
       )
    | EReadRegister r -> default_left ^ r
    | EAnnot (_, _, rhs) -> default_left ^ rhs) ^ ";"
@@ -251,7 +262,7 @@ let statements
   =
   List.map (fun root ->
       let reg_name = root.root_reg.reg_name in
-      let reg_init = string_of_bits (root.root_reg.reg_init_val) in
+      let reg_init = string_of_bits (assert_bits_val root.root_reg.reg_init_val) in
       let reg_wire_update = Hashtbl.find environment root.root_circuit.tag in
       Update (reg_name, reg_init, reg_wire_update))
     (circuit.graph_roots)

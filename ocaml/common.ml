@@ -1,10 +1,31 @@
 type size_t = int
 type ptr_t = int
 
-type bits_const = {
+type bits_value = {
     bs_size: size_t;
     bs_bits: bool list;
   }
+
+type typ =
+  | Bits_t of size_t
+  | Struct_t of struct_sig
+and struct_sig =
+  { struct_name: string;
+    struct_fields: (string * typ) list }
+
+type value =
+  | Bits of bits_value
+  | Struct of string * (value list)
+
+let rec typ_to_string (tau: typ) =
+  match tau with
+  | Bits_t n -> Printf.sprintf "bits %d" n
+  | Struct_t sg -> struct_sig_to_string sg
+and struct_field_to_string (nm, typ) =
+  Printf.sprintf "%s: %s" nm (typ_to_string typ)
+and struct_sig_to_string { struct_name; struct_fields } =
+  let fields = List.map struct_field_to_string struct_fields in
+  Printf.sprintf "struct %s { %s }" struct_name (String.concat "; " fields)
 
 type 'prim fun_id_t =
   | CustomFn of string
@@ -12,15 +33,15 @@ type 'prim fun_id_t =
 
 type 'prim ffi_signature = {
     ffi_name: 'prim fun_id_t;
-    ffi_arg1size: size_t;
-    ffi_arg2size: size_t;
-    ffi_retsize: size_t
+    ffi_arg1type: typ;
+    ffi_arg2type: typ;
+    ffi_rettype: typ
   }
 
 type reg_signature = {
     reg_name: string;
-    reg_size: size_t;
-    reg_init_val: bits_const;
+    reg_type: typ;
+    reg_init_val: value;
   }
 
 type name_t = string
@@ -65,7 +86,7 @@ and 'p circuit' =
   | CAnd of 'p circuit * 'p circuit
   | COr of 'p circuit * 'p circuit
   | CMux of size_t * 'p circuit * 'p circuit * 'p circuit
-  | CConst of bits_const
+  | CConst of bits_value
   | CExternal of 'p ffi_signature * 'p circuit * 'p circuit
   | CReadRegister of reg_signature
   | CAnnot of size_t * string * 'p circuit

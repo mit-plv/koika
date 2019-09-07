@@ -1,7 +1,7 @@
 open Common
 open SGALib
 
-let primitive_name = function
+let bits_primitive_name = function
   | SGA.Sel _logsz -> "Sel"
   | SGA.Part (_logsz, _width) -> "Part"
   | SGA.And _sz -> "And"
@@ -15,16 +15,25 @@ let primitive_name = function
   | SGA.ZExtR (_sz, _nzeroes) -> "ZExtR"
   | SGA.UIntPlus _sz -> "Plus"
 
-let fun_name = function
-  | CustomFn fn -> fn
-  | PrimFn fn -> primitive_name fn
-
 let rec label_ptrs tag_to_parents = function
   | CNot c -> Some ("Not", [c], [])
   | CAnd (c1, c2) -> Some ("And", [c1; c2], [])
   | COr (c1, c2) -> Some ("Or", [c1; c2], [])
   | CMux (_sz, s, c1, c2) -> Some ("Mux", [s; c1; c2], [])
-  | CExternal (ffi, c1, c2) -> Some (fun_name ffi.ffi_name, [c1; c2], [])
+  | CExternal (ffi, c1, c2) ->
+     Some
+       (match ffi.ffi_name with
+        | CustomFn fn -> (fn, [c1; c2], [])
+        | PrimFn (SGA.BitsFn fn) -> (bits_primitive_name fn, [c1; c2], [])
+        | PrimFn (SGA.StructFn (sg, op)) ->
+           let sg = SGALib.Util.struct_sig_of_sga_struct_sig' sg in
+           match op with
+           | SGA.Init -> (Printf.sprintf "%s {}" sg.struct_name, [], [])
+           | SGA.Do (ac, idx) ->
+              let field, _tau = SGALib.Util.list_nth sg.struct_fields idx in
+              match ac with
+              | SGA.Get -> (Printf.sprintf "%s.%s" sg.struct_name field, [c1], [])
+              | SGA.Sub -> (Printf.sprintf "%s / %s <-" sg.struct_name field, [c1; c2], []))
   | CReadRegister r -> Some (Printf.sprintf "Reg %s" r.reg_name, [], [])
   | CAnnot (_sz, annot, c) ->
      let nparents = List.length (Hashtbl.find tag_to_parents c.tag) in

@@ -8,7 +8,6 @@ let coq_main (sga_pkg: SGA.sga_package_t) =
   let di = Util.dedup_input_of_circuit_package circuit_pkg in
   let modname = Util.string_of_coq_string sga_pkg.sga_module_name in
   let circuit = Graphs.dedup_circuit di in
-  writeout modname ".v" Backends.Verilog.main circuit;
+  Backends.Cpp.main modname `Exe (Backends.Cpp.input_of_sga_package sga_pkg);
   writeout modname ".dot" Backends.Dot.main circuit;
-  let cpp_input = Backends.Cpp.input_of_sga_package sga_pkg in
-  Backends.Cpp.main modname `Exe cpp_input
+  writeout modname ".v" Backends.Verilog.main circuit;
