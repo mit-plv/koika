@@ -2,10 +2,14 @@
 #define _PREAMBLE_HPP
 
 #include <cstdint>
+#include <limits>
+#include <type_traits>
+
+#ifndef SIM_MINIMAL
 #include <string>
 #include <sstream>
 #include <iostream>
-#include <limits>
+#endif // #ifndef SIM_MINIMAL
 
 #ifdef SIM_DEBUG
 inline void _SIM_ASSERT(const char* repr,
@@ -31,18 +35,18 @@ struct unit_t {};
 
 #ifdef NEEDS_BOOST_MULTIPRECISION
 #include <boost/multiprecision/cpp_int.hpp>
-template<size_t size>
+template<std::size_t size>
 using big_uint_t = std::conditional_t<size <= 128, boost::multiprecision::uint128_t,
                    std::conditional_t<size <= 256, boost::multiprecision::uint256_t,
                    std::conditional_t<size <= 512, boost::multiprecision::uint512_t,
                    std::conditional_t<size <= 1024, boost::multiprecision::uint1024_t,
                                       void>>>>;
 #else
-template<size_t size>
+template<std::size_t size>
 using big_uint_t = void;
 #endif // #ifdef NEEDS_BOOST_MULTIPRECISION
 
-template<size_t size>
+template<std::size_t size>
 using uint_t = std::conditional_t<size ==  0, unit_t,
                std::conditional_t<size <=  8, std::uint8_t,
                std::conditional_t<size <= 16, std::uint16_t,
@@ -74,7 +78,7 @@ namespace prims {
     __builtin_unreachable();
   }
 
-  template<size_t sz>
+  template<std::size_t sz>
   uint_t<sz> mask(const uint_t<sz> arg) {
     // GCC and Clang are smart enough to elide this when shift_amount == 0
     constexpr uint8_t shift_amount = std::numeric_limits<uint_t<sz>>::digits - sz;
@@ -83,77 +87,81 @@ namespace prims {
     return arg & bitmask;
   }
 
-  template<size_t ret_sz, size_t arg_sz>
+  template<std::size_t ret_sz, std::size_t arg_sz>
   uint_t<ret_sz> truncate(const uint_t<arg_sz> arg) {
     return mask<ret_sz>(static_cast<uint_t<ret_sz>>(arg));
   }
 
-  template<size_t sz1, size_t sz2>
+  template<std::size_t sz1, std::size_t sz2>
   uint_t<1> sel(const uint_t<sz1> data, const uint_t<sz2> idx) {
     CHECK_SHIFT(idx, sz1, "sel: idx > size");
     return truncate<1,sz1>(data >> idx);
   }
 
-  template<size_t sz1, size_t sz2, size_t width>
+  template<std::size_t sz1, std::size_t sz2, std::size_t width>
   uint_t<width> part(const uint_t<sz1> data, const uint_t<sz2> idx) {
     CHECK_SHIFT(idx, sz1, "part: idx > size");
     return truncate<width, sz1>(data >> idx);
   }
 
-  template<size_t sz>
+  template<std::size_t sz>
   uint_t<sz> lnot(const uint_t<sz> data, const unit_t /*unused*/) {
     return mask<sz>(~data);
   }
 
-  template<size_t sz>
+  template<std::size_t sz>
   uint_t<sz> land(const uint_t<sz> data1, const uint_t<sz> data2) {
     return data1 & data2;
   }
 
-  template<size_t sz>
+  template<std::size_t sz>
   uint_t<sz> lor(const uint_t<sz> data1, const uint_t<sz> data2) {
     return data1 | data2;
   }
 
-  template<size_t sz1, size_t sz2>
+  template<std::size_t sz1, std::size_t sz2>
   uint_t<sz1> lsr(const uint_t<sz1> data, const uint_t<sz2> shift) {
     CHECK_SHIFT(shift, sz1, "lsr: shift > size");
     return data >> shift;
   }
 
-  template<size_t sz1, size_t sz2>
+  template<std::size_t sz1, std::size_t sz2>
   uint_t<sz1> lsl(const uint_t<sz1> data, const uint_t<sz2> shift) {
     CHECK_SHIFT(shift, sz1, "lsl: shift > size");
     return mask<sz1>(data << shift);
   }
 
-  template<size_t sz>
+  template<std::size_t sz>
   uint_t<sz> eq(const uint_t<sz> x, const uint_t<sz> y) {
     return x == y;
   }
 
-  template<size_t sz>
+  template<std::size_t sz>
   uint_t<sz> plus(const uint_t<sz> x, const uint_t<sz> y) {
     return mask<sz>(x + y);
   }
 
-  template<size_t sz1, size_t sz2>
+  template<std::size_t sz1, std::size_t sz2>
   uint_t<sz1 + sz2> concat(const uint_t<sz1> x, const uint_t<sz2> y) {
     return static_cast<uint_t<sz1 + sz2>>(x) << sz2 | y;
   }
 
-  template<size_t sz, size_t nzeroes>
+  template<std::size_t sz, std::size_t nzeroes>
   uint_t<nzeroes + sz> zextl(const uint_t<sz> x, const unit_t /*unused*/) {
     return static_cast<uint_t<nzeroes + sz>>(x);
   }
 
-  template<size_t sz, size_t nzeroes>
+  template<std::size_t sz, std::size_t nzeroes>
   uint_t<sz + nzeroes> zextr(const uint_t<sz> x, const unit_t /*unused*/) {
     return static_cast<uint_t<sz + nzeroes>>(x) << nzeroes;
   }
+
+  // Forward-declared; our compiler defines one instance per structure type
+  template<typename T, std::size_t sz> static T unpack(uint_t<sz>);
 } // namespace prims
 
-template<size_t sz>
+#ifndef SIM_MINIMAL
+template<std::size_t sz>
 std::string uint_str(const uint_t<sz> val) {
   std::ostringstream stream;
   stream << sz << "'";
@@ -169,9 +177,7 @@ std::string uint_str(const uint_t<sz> val) {
   }
   return stream.str();
 };
-
-// Forward-declared; our compiler defines one instance per structure type
-template<typename T, size_t sz> T struct_unpack(uint_t<sz>);
+#endif // #ifndef SIM_MINIMAL
 
 struct rwset_t {
   bool r1 : 1; // FIXME does adding :1 always help?
@@ -200,11 +206,6 @@ struct rwset_t {
 
   rwset_t() : r1(false), w0(false), w1(false) {}
 };
-
-// template<typename T>
-// struct zero {
-//   static const T val = {};
-// };
 
 template<typename T>
 struct reg_log_t {
