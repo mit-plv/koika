@@ -141,6 +141,11 @@ Module Ex2.
     compile_scheduler (ContextEnv.(create) (readRegisters R Sigma)) rules tsched.
 End Ex2.
 
+Notation compute t :=
+  ltac:(let tt := type of t in
+        let t := (eval lazy in t) in
+        exact (t: tt)) (only parsing).
+
 Module Collatz.
   Definition var_t := string.
   Inductive reg_t := R0.
@@ -212,11 +217,6 @@ Module Collatz.
                     | multiply => _multiply
                     end).
 
-  Notation compute t :=
-    ltac:(let tt := type of t in
-          let t := (eval lazy in t) in
-          exact (t: tt)) (only parsing).
-
   Definition result :=
     compute (interp_scheduler cr interop_minimal_sigma rules collatz).
 
@@ -262,7 +262,18 @@ End Collatz.
 
 Require Import Coq.Lists.List.
 
-Module Decoder.
+Module Type Unpacker.
+  Axiom unpack : forall reg_t (logsz: nat) (source: string), uaction unit string reg_t interop_minimal_ufn_t.
+End Unpacker.
+
+Definition decoded_sig :=
+  {| struct_name := "instr";
+     struct_fields := ("src", bits_t 8)
+                       :: ("dst", bits_t 8)
+                       :: ("immediate", bits_t 16)
+                       :: nil |}.
+
+Module Decoder (P: Unpacker).
   Definition var_t := string.
   Inductive reg_t := Rpc | Rencoded | Rdecoded.
   Definition ufn_t := interop_minimal_ufn_t.
@@ -271,13 +282,6 @@ Module Decoder.
 
   Definition logsz := 5.
   Notation sz := (pow2 logsz).
-
-  Import ListNotations.
-  Definition decoded_sig :=
-    {| struct_name := "instr";
-       struct_fields := [("src", bits_t 8);
-                        ("dst", bits_t 8);
-                        ("immediate", bits_t 16)] |}.
 
   Definition R r :=
     match r with
@@ -305,7 +309,7 @@ Module Decoder.
            (default: uaction)
            (branches: list (bits_t sz * uaction)) : uaction :=
     match branches with
-    | [] => default
+    | nil => default
     | (val, action) :: branches =>
       UIf (UCall (UPrimFn (UBitsFn UEq)) (UVar var) (UConst val))
           action
@@ -314,12 +318,13 @@ Module Decoder.
 
   Fixpoint all_branches sz (counter: N) (actions: list uaction) :=
     match actions with
-    | [] => []
+    | nil => nil
     | action :: actions =>
       (Bits.of_N sz counter, action)
         :: (all_branches sz (N.add counter N.one) actions)
     end.
 
+  Import ListNotations.
   Definition instructions : list uaction :=
     [UConst Ob~1~1~0~1~1~0~0~0~0~0~1~0~1~1~0~0~0~0~0~0~0~1~1~1~1~1~0~0~1~1~0~1;
      UConst Ob~0~1~1~0~1~0~1~1~1~0~1~0~1~0~1~0~1~0~0~1~0~1~0~0~0~1~0~1~0~1~0~1;
@@ -340,18 +345,7 @@ Module Decoder.
 
   Definition _decode : uaction :=
     Let "encoded" <- Rencoded#read1 in
-    Let "src" <- (UPart  8)[[$"encoded", UConst (Bits.of_N logsz 0)]] in
-    Let "dst" <- (UPart  8)[[$"encoded", UConst (Bits.of_N logsz 8)]] in
-    Let "imm" <- (UPart 16)[[$"encoded", UConst (Bits.of_N logsz 16)]] in
-    (Rdecoded#write0
-       (UCall (UPrimFn (UStructFn decoded_sig (UDo Sub "immediate")))
-              (UCall (UPrimFn (UStructFn decoded_sig (UDo Sub "dst")))
-                     (UCall (UPrimFn (UStructFn decoded_sig (UDo Sub "src")))
-                            (UCall (UPrimFn (UStructFn decoded_sig UInit))
-                                   (UConst Ob) (UConst Ob))
-                            ($"src"))
-                     ($"dst"))
-              ($"imm"))).
+    (Rdecoded#write0 (P.unpack _ logsz "encoded")).
 
   Definition cr := ContextEnv.(create) r.
 
@@ -361,25 +355,7 @@ Module Decoder.
   (* Ltac __must_typecheck R Sigma tcres ::= *)
   (*   __must_typecheck_cbn R Sigma tcres. *)
 
-  Definition rules :=
-    tc_rules R interop_minimal_Sigma interop_minimal_uSigma
-             (fun r => match r with
-                    | fetch => _fetch
-                    | decode => _decode
-                    end).
-
-  Notation compute t :=
-    ltac:(let tt := type of t in
-          let t := (eval lazy in t) in
-          exact (t: tt)) (only parsing).
-
-  Definition result :=
-    compute (interp_scheduler cr interop_minimal_sigma rules decoder).
-
-  Definition circuit :=
-    compile_scheduler (ContextEnv.(create) (readRegisters R interop_minimal_Sigma)) rules decoder.
-
-  Definition package :=
+  Definition make_package rules :=
     {| sga_var_t := string;
        sga_var_names := fun x => x;
 
@@ -410,6 +386,59 @@ Module Decoder.
        sga_module_name := "decoder";
     |}.
 End Decoder.
+
+Module ManualDecoder.
+  Module ManualUnpacker <: Unpacker.
+    Definition unpack reg_t logsz encoded: uaction unit string reg_t interop_minimal_ufn_t :=
+      (Let "imm" <- (UPart 16)[[$encoded, UConst (Bits.of_N logsz 0)]] in
+       Let "dst" <- (UPart  8)[[$encoded, UConst (Bits.of_N logsz 16)]] in
+       Let "src" <- (UPart  8)[[$encoded, UConst (Bits.of_N logsz 24)]] in
+       (UCall (UPrimFn (UStructFn decoded_sig (UDo Sub "immediate")))
+              (UCall (UPrimFn (UStructFn decoded_sig (UDo Sub "dst")))
+                     (UCall (UPrimFn (UStructFn decoded_sig (UDo Sub "src")))
+                            (UCall (UPrimFn (UStructFn decoded_sig (UConv Init)))
+                                   (UConst Ob) (UConst Ob))
+                            ($"src"))
+                     ($"dst"))
+              ($"imm"))%sga_expr)%sga.
+  End ManualUnpacker.
+
+  Include (Decoder ManualUnpacker).
+
+  Definition rules :=
+    tc_rules R interop_minimal_Sigma interop_minimal_uSigma
+             (fun r => match r with
+                    | fetch => _fetch
+                    | decode => _decode
+                    end).
+
+  Definition circuit :=
+    compile_scheduler (ContextEnv.(create) (readRegisters R interop_minimal_Sigma)) rules decoder.
+
+  Definition package := make_package rules.
+End ManualDecoder.
+
+Module PrimitiveDecoder.
+  Module PrimitiveUnpacker <: Unpacker.
+    Definition unpack reg_t (logsz: nat) encoded: uaction unit string reg_t interop_minimal_ufn_t :=
+      (UCall (UPrimFn (UStructFn decoded_sig (UConv Unpack)))
+             (UVar encoded) (UConst Ob)).
+  End PrimitiveUnpacker.
+
+  Include (Decoder PrimitiveUnpacker).
+
+  Definition rules :=
+    tc_rules R interop_minimal_Sigma interop_minimal_uSigma
+             (fun r => match r with
+                    | fetch => _fetch
+                    | decode => _decode
+                    end).
+
+  Definition circuit :=
+    compile_scheduler (ContextEnv.(create) (readRegisters R interop_minimal_Sigma)) rules decoder.
+
+  Definition package := make_package rules.
+End PrimitiveDecoder.
 
 Module Pipeline.
   Definition var_t := string.
