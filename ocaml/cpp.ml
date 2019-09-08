@@ -31,6 +31,14 @@ let cpp_struct_name' name =
 let cpp_struct_name { struct_name; _ } =
   cpp_struct_name' struct_name
 
+let cpp_struct_initializer sg =
+  sprintf "%s {}" (cpp_struct_name sg)
+
+let cpp_struct_unpacker sg =
+  sprintf "struct_unpack<%s, %d>"
+    (cpp_struct_name sg)
+    (struct_sz sg)
+
 let cpp_type_of_type
       (struct_types: struct_sig list ref)
       (needs_multiprecision: bool ref)
@@ -193,38 +201,97 @@ let compile (type name_t var_t reg_t)
   let p_struct_forward_decl sg =
     p "struct %s;" (cpp_struct_name sg) in
 
-  let p_struct_printer_forward_decl sg =
-    p "std::string struct_str(const %s);" (cpp_struct_name sg) in
+  let p_struct_fns_forward_decls sg =
+    let s_sz = struct_sz sg in
+    let s_tau = cpp_struct_name sg in
+    let bits_sz_tau = cpp_type_of_type (Bits_t s_sz) in
+    p "std::string struct_str(const %s);" s_tau;
+    p "%s struct_pack(const %s);" bits_sz_tau s_tau;
+    p "template <> %s %s(const %s);" s_tau (cpp_struct_unpacker sg) bits_sz_tau in
 
-  let p_struct_decl_field (name, tau) =
-    p "%s %s;" (cpp_type_of_type tau) name in
+  let p_decl ?(prefix = "") ?(init = None) tau name =
+    let t = cpp_type_of_type tau in
+    pr "%s" prefix;
+    match init with
+    | None -> p "%s %s;" t name
+    | Some init -> p "%s %s = %s;" t name init in
 
   let p_struct_decl sg =
     let decl = sprintf "struct %s" (cpp_struct_name sg) in
     p_scoped decl ~terminator:";" (fun () ->
-        List.iter p_struct_decl_field sg.struct_fields) in
+        List.iter (fun (name, tau) -> p_decl tau name) sg.struct_fields) in
+
   let cpp_value_printer = function
     | Bits_t sz -> sprintf "uint_str<%d>" sz
     | Struct_t _ -> "struct_str" in
 
-  let p_struct_printer sg =
-    let name = cpp_struct_name sg in
-    let cppsig = sprintf "std::string struct_str(const %s instance)" name in
-    p_scoped cppsig (fun () ->
-        p "std::ostringstream stream;";
-        p "stream << \"%s { \";" name;
-        List.iter (fun (fname, ftau) ->
-            p "stream << \".%s = \" << %s(instance.%s) << \"; \";"
-              fname (cpp_value_printer ftau) fname)
-          sg.struct_fields;
-        p "stream << \"}\";";
-        p "return stream.str();") in
+  let p_struct_fns sg =
+    let s_sz = struct_sz sg in
+    let s_arg = "val" in
+    let s_tau = cpp_struct_name sg in
+    let s_argdecl = sprintf "const %s %s" s_tau s_arg in
+    let bits_arg = "bits" in
+    let bits_tau = cpp_type_of_type (Bits_t s_sz) in
+    let bits_argdecl = sprintf "const %s %s" bits_tau bits_arg in
+
+    let p_printer () =
+      p_fn ~typ:"std::string" ~name:"struct_str"
+        ~args:s_argdecl (fun () ->
+          p "std::ostringstream stream;";
+          p "stream << \"%s { \";" s_tau;
+          List.iter (fun (fname, ftau) ->
+              p "stream << \".%s = \" << %s(%s.%s) << \"; \";"
+                fname (cpp_value_printer ftau) s_arg fname)
+            sg.struct_fields;
+          p "stream << \"}\";";
+          p "return stream.str();") in
+
+    let p_pack () =
+      let var = "packed" in
+      p_fn ~typ:bits_tau ~args:s_argdecl ~name:"struct_pack" (fun () ->
+          p_decl (Bits_t s_sz) var ~init:(Some (cpp_const_init s_sz "0"));
+          List.iter (fun (fname, ftau) ->
+              let sz = typ_sz ftau in
+              let fval = sprintf "%s.%s" s_arg fname in
+              let fpacked = match ftau with
+                | Bits_t _ -> fval
+                | Struct_t _ -> sprintf "struct_pack(%s)" fval in
+              p "%s <<= %d;" var sz;
+              p "%s |= %s;" var fpacked)
+            sg.struct_fields;
+        p "return %s;" var) in
+
+    let p_unpack () =
+      let var = "unpacked" in
+      p_fn ~typ:("template <> " ^ s_tau) ~args:bits_argdecl
+        ~name:(cpp_struct_unpacker sg) (fun () ->
+          p_decl (Struct_t sg) var ~init:(Some "{}");
+          List.fold_right (fun (fname, ftau) offset ->
+              let sz = typ_sz ftau in
+              let fval = sprintf "prims::truncate<%d, %d>(%s >> %d)"
+                           sz s_sz bits_arg offset in
+              let unpacked = match ftau with
+                | Bits_t _ -> fval
+                | Struct_t sg -> cpp_struct_unpacker sg in
+              p "%s.%s = %s;" var fname unpacked;
+              offset + sz)
+            sg.struct_fields 0 |> ignore;
+          p "return %s;" var) in
+
+    p_printer ();
+    nl ();
+    p_pack ();
+    nl ();
+    p_unpack () in
 
   let p_structs_declarations struct_sigs =
     List.iter p_struct_forward_decl struct_sigs;
+    nl ();
     List.iter p_struct_decl struct_sigs;
-    List.iter p_struct_printer_forward_decl struct_sigs;
-    List.iter p_struct_printer struct_sigs in
+    nl ();
+    List.iter p_struct_fns_forward_decls struct_sigs;
+    nl ();
+    List.iter p_struct_fns struct_sigs in
 
   let p_preamble () =
     p "//////////////";
@@ -274,7 +341,7 @@ let compile (type name_t var_t reg_t)
         ~terminator:";" pbody in
 
     let p_state_register r =
-      p "%s %s;" (cpp_type_of_type r.reg_type) r.reg_name in
+      p_decl r.reg_type r.reg_name in
 
     let p_dump_register { reg_name; reg_type; _ } =
         p "std::cout << \"%s = \" << %s(%s) << std::endl;"
@@ -317,9 +384,6 @@ let compile (type name_t var_t reg_t)
         let bs = SGALib.Util.bits_const_of_bits sz bits in
         sp_bits_value bs in
 
-      let p_decl tau name =
-        p "%s %s;" (cpp_type_of_type tau) name in
-
       let p_declare_target = function
         | VarTarget { tau; declared = false; name } ->
            p_decl tau name;
@@ -345,7 +409,7 @@ let compile (type name_t var_t reg_t)
             p "%s = %s;" name e;
             Assigned name
          | VarTarget { tau; name; _ }, PureExpr e ->
-            p "%s %s %s = %s;" prefix (cpp_type_of_type tau) name e;
+            p_decl ~prefix ~init:(Some e) tau name;
             Assigned name
          | _, _ ->
             result) in
@@ -365,7 +429,9 @@ let compile (type name_t var_t reg_t)
         | PrimFn (SGA.StructFn (sg, op)) ->
            let sg = SGALib.Util.struct_sig_of_sga_struct_sig' sg in
            match op with
-           | SGA.Init -> PureExpr (sprintf "%s {}" (cpp_struct_name sg))
+           | SGA.Conv Init -> PureExpr (cpp_struct_initializer sg)
+           | SGA.Conv Pack -> PureExpr (sprintf "struct_pack(%s)" a1)
+           | SGA.Conv Unpack -> PureExpr (sprintf "%s(%s)" (cpp_struct_unpacker sg) a1)
            | SGA.Do (ac, idx) ->
               let field, _tau = SGALib.Util.list_nth sg.struct_fields idx in
               match ac with

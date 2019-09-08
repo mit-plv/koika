@@ -27,4 +27,4 @@ Extraction "SGA.ml"
 
            Interop.sga_package_t Interop.circuit_package_t Interop.compile_sga_package
            Environments.to_list Vect.vect_to_list Vect.vect_of_list Vect.Bits.to_nat Vect.index_to_nat
-           Demo.Collatz.package Demo.Decoder.package Demo.Pipeline.package.
+           Demo.Collatz.package Demo.ManualDecoder.package Demo.PrimitiveDecoder.package Demo.Pipeline.package.

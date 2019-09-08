@@ -13,6 +13,12 @@ and struct_sig =
   { struct_name: string;
     struct_fields: (string * typ) list }
 
+let rec typ_sz = function
+  | Bits_t sz -> sz
+  | Struct_t sg -> struct_sz sg
+and struct_sz { struct_fields; _ } =
+  List.fold_left (fun acc (_, ftau) -> acc + typ_sz ftau) 0 struct_fields
+
 type value =
   | Bits of bits_value
   | Struct of string * (value list)

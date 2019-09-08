@@ -170,6 +170,9 @@ std::string uint_str(const uint_t<sz> val) {
   return stream.str();
 };
 
+// Forward-declared; our compiler defines one instance per structure type
+template<typename T, size_t sz> T struct_unpack(uint_t<sz>);
+
 struct rwset_t {
   bool r1 : 1; // FIXME does adding :1 always help?
   bool w0 : 1;

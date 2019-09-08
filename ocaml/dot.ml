@@ -28,7 +28,9 @@ let rec label_ptrs tag_to_parents = function
         | PrimFn (SGA.StructFn (sg, op)) ->
            let sg = SGALib.Util.struct_sig_of_sga_struct_sig' sg in
            match op with
-           | SGA.Init -> (Printf.sprintf "%s {}" sg.struct_name, [], [])
+           | SGA.Conv Init -> (Printf.sprintf "%s {}" sg.struct_name, [], [])
+           | SGA.Conv Pack -> (Printf.sprintf "struct_pack<%s>" sg.struct_name, [c1], [])
+           | SGA.Conv Unpack -> (Printf.sprintf "struct_unpack<%s>" sg.struct_name, [c1], [])
            | SGA.Do (ac, idx) ->
               let field, _tau = SGALib.Util.list_nth sg.struct_fields idx in
               match ac with
