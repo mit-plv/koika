@@ -15,9 +15,10 @@ Inductive prim_bits_ufn_t :=
 | UZExtR (nzeroes: nat).
 
 Inductive prim_struct_accessor := Get | Sub.
+Inductive prim_struct_converter := Init | Pack | Unpack.
 
 Inductive prim_struct_uop :=
-| UInit
+| UConv (op: prim_struct_converter)
 | UDo (op: prim_struct_accessor) (f: string).
 
 Inductive prim_ufn_t :=
@@ -39,8 +40,8 @@ Inductive prim_bits_fn_t :=
 | ZExtR (sz: nat) (nzeroes: nat).
 
 Inductive prim_struct_op {sig: struct_sig} :=
-| Init
-| Do (op: prim_struct_accessor) (f: Vect.index (List.length sig.(struct_fields))).
+| Conv (op: prim_struct_converter)
+| Do (op: prim_struct_accessor) (f: index (List.length sig.(struct_fields))).
 Arguments prim_struct_op : clear implicits.
 
 Inductive prim_fn_t :=
@@ -80,8 +81,8 @@ Definition prim_uSigma (fn: prim_ufn_t) (tau1 tau2: type): result prim_fn_t fn_t
                     | UZExtL nzeroes => ZExtL sz1 nzeroes
                     | UZExtR nzeroes => ZExtR sz1 nzeroes
                     end)
-  | UStructFn sig UInit =>
-    Success (StructFn sig Init)
+  | UStructFn sig (UConv op) =>
+    Success (StructFn sig (Conv op))
   | UStructFn sig (UDo op f) =>
     let/res idx := opt_result (List_assoc f sig.(struct_fields)) (Arg1, FnUnboundField f sig) in
     Success (StructFn sig (Do op idx))
@@ -104,8 +105,12 @@ Definition prim_Sigma (fn: prim_fn_t) : ExternalSignature :=
     | ZExtL sz nzeroes => {{ bits_t sz ~> bits_t 0 ~> bits_t (nzeroes + sz) }}
     | ZExtR sz nzeroes => {{ bits_t sz ~> bits_t 0 ~> bits_t (sz + nzeroes) }}
     end
-  | @StructFn sig Init =>
+  | @StructFn sig (Conv Init) =>
     {{ bits_t 0 ~> bits_t 0 ~> struct_t sig }}
+  | @StructFn sig (Conv Pack) =>
+    {{ struct_t sig ~> bits_t 0 ~> bits_t (type_sz (struct_t sig)) }}
+  | @StructFn sig (Conv Unpack) =>
+    {{ bits_t (type_sz (struct_t sig)) ~> bits_t 0 ~> struct_t sig }}
   | @StructFn sig (Do Get idx) =>
     {{ struct_t sig ~> bits_t 0 ~> snd (List_nth sig.(struct_fields) idx) }}
   | @StructFn sig (Do Sub idx) =>
@@ -156,7 +161,9 @@ Definition prim_sigma (fn: prim_fn_t) : prim_Sigma fn :=
     | ZExtL _ nzeroes => fun bs _ => Bits.app (Bits.zeroes nzeroes) bs
     | ZExtR _ nzeroes => fun bs _ => Bits.app bs (Bits.zeroes nzeroes)
     end
-  | StructFn sig Init => fun _ _ => value_of_bits (Bits.zeroes (type_sz (struct_t sig)))
+  | StructFn sig (Conv Init) => fun _ _ => value_of_bits (Bits.zeroes (type_sz (struct_t sig)))
+  | StructFn sig (Conv Pack) => fun v _ => bits_of_value v
+  | StructFn sig (Conv Unpack) => fun bs _ => value_of_bits bs
   | StructFn sig (Do Get idx) => fun s _ => __magic__
   | StructFn sig (Do Sub idx) => fun s _ => __magic__
   end.
