@@ -241,12 +241,15 @@ let compile (type name_t var_t reg_t)
     p_scoped decl ~terminator:";" (fun () ->
         List.iter (fun (name, tau) -> p_decl tau name) sg.struct_fields) in
 
+  let attr_unused =
+    "__attribute__((unused))" in
+
   let p_struct_printer sg =
     let s_arg = "val" in
     let s_tau = cpp_struct_name sg in
     let s_argdecl = sprintf "const %s %s" s_tau s_arg in
 
-    p_fn ~typ:"static std::string" ~name:"struct_str"
+    p_fn ~typ:("static std::string " ^ attr_unused) ~name:"struct_str"
       ~args:s_argdecl (fun () ->
         p "std::ostringstream stream;";
         p "stream << \"%s { \";" s_tau;
@@ -265,9 +268,6 @@ let compile (type name_t var_t reg_t)
     let bits_arg = "bits" in
     let bits_tau = cpp_type_of_type (Bits_t s_sz) in
     let bits_argdecl = sprintf "const %s %s" bits_tau bits_arg in
-
-    let attr_unused =
-      "__attribute__((unused))" in
 
     let p_pack () =
       let var = "packed" in
