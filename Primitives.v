@@ -2,7 +2,9 @@ Require Export SGA.Common SGA.Environments SGA.IndexUtils SGA.Types.
 
 Inductive prim_bits_ufn_t :=
 | USel
-| UPart (width: nat)
+| UPart (offset: nat) (width: nat)
+| UPartSubst (offset: nat) (width: nat)
+| UIndexedPart (width: nat)
 | UAnd
 | UOr
 | UNot
@@ -27,7 +29,9 @@ Inductive prim_ufn_t :=
 
 Inductive prim_bits_fn_t :=
 | Sel (sz: nat)
-| Part (sz: nat) (width: nat)
+| Part (sz: nat) (offset: nat) (width: nat)
+| PartSubst (sz: nat) (offset: nat) (width: nat)
+| IndexedPart (sz: nat) (width: nat)
 | And (sz: nat)
 | Or (sz: nat)
 | Not (sz: nat)
@@ -69,7 +73,9 @@ Definition prim_uSigma (fn: prim_ufn_t) (tau1 tau2: type): result prim_fn_t fn_t
     let/res sz2 := assert_bits_t Arg2 tau2 in
     Success (BitsFn match fn with
                     | USel => Sel sz1
-                    | UPart width => Part sz1 width
+                    | UPart offset width => Part sz1 offset width
+                    | UPartSubst offset width => PartSubst sz1 offset width
+                    | UIndexedPart width => IndexedPart sz1 width
                     | UAnd => And sz1
                     | UOr => Or sz1
                     | UNot => Not sz1
@@ -93,7 +99,9 @@ Definition prim_Sigma (fn: prim_fn_t) : ExternalSignature :=
   | BitsFn fn =>
     match fn with
     | Sel sz => {{ bits_t sz ~> bits_t (log2 sz) ~> bits_t 1 }}
-    | Part sz width => {{ bits_t sz ~> bits_t (log2 sz) ~> bits_t width }}
+    | Part sz offset width => {{ bits_t sz ~> unit_t ~> bits_t width }}
+    | PartSubst sz offset width => {{ bits_t sz ~> bits_t width ~> bits_t sz }}
+    | IndexedPart sz width => {{ bits_t sz ~> bits_t width ~> bits_t sz }}
     | And sz => {{ bits_t sz ~> bits_t sz ~> bits_t sz }}
     | Or sz => {{ bits_t sz ~> bits_t sz ~> bits_t sz }}
     | Not sz => {{ bits_t sz ~> unit_t ~> bits_t sz }}
@@ -149,7 +157,9 @@ Definition prim_sigma (fn: prim_fn_t) : prim_Sigma fn :=
   | BitsFn fn =>
     match fn with
     | Sel _ => fun bs idx => w1 (prim_sel bs idx)
-    | Part _ width => fun base _ => __magic__
+    | Part _ offset width => fun bs _ => __magic__
+    | PartSubst _ offset width => fun bs repl => __magic__
+    | IndexedPart _ width => fun bs idx => __magic__
     | And _ => Bits.map2 andb
     | Or _ => Bits.map2 orb
     | Not _ => fun bs _ => Bits.map negb bs
