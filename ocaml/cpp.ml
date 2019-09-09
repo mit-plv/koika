@@ -231,8 +231,8 @@ let compile (type name_t var_t reg_t)
     let s_sz = struct_sz sg in
     let s_tau = cpp_struct_name sg in
     let bits_sz_tau = cpp_type_of_type (Bits_t s_sz) in
-    p "static %s pack(const %s);" bits_sz_tau s_tau;
-    p "template <> %s %s(const %s);" s_tau (cpp_struct_unpacker sg) bits_sz_tau in
+    p "static %s pack(%s val);" bits_sz_tau s_tau;
+    p "template <> %s %s(%s bits);" s_tau (cpp_struct_unpacker sg) bits_sz_tau in
 
   let p_struct_decl sg =
     let decl = sprintf "struct %s" (cpp_struct_name sg) in
@@ -264,9 +264,13 @@ let compile (type name_t var_t reg_t)
     let bits_tau = cpp_type_of_type (Bits_t s_sz) in
     let bits_argdecl = sprintf "const %s %s" bits_tau bits_arg in
 
+    let attr_unused =
+      "__attribute__((unused))" in
+
     let p_pack () =
       let var = "packed" in
-      p_fn ~typ:("static " ^ bits_tau) ~args:s_argdecl ~name:"pack" (fun () ->
+      p_fn ~typ:("static " ^ bits_tau ^ " " ^ attr_unused)
+        ~args:s_argdecl ~name:"pack" (fun () ->
           p_decl (Bits_t s_sz) var ~init:(Some (cpp_const_init s_sz "0"));
           List.iter (fun (fname, ftau) ->
               let sz = typ_sz ftau in
@@ -281,12 +285,12 @@ let compile (type name_t var_t reg_t)
 
     let p_unpack () =
       let var = "unpacked" in
-      p_fn ~typ:("template <> " ^ s_tau) ~args:bits_argdecl
-        ~name:(cpp_struct_unpacker sg) (fun () ->
+      p_fn ~typ:("template <> " ^ s_tau ^ " " ^ attr_unused)
+        ~args:bits_argdecl ~name:(cpp_struct_unpacker sg) (fun () ->
           p_decl (Struct_t sg) var ~init:(Some "{}");
           List.fold_right (fun (fname, ftau) offset ->
               let sz = typ_sz ftau in
-              let fval = sprintf "prims::truncate<%d, %d>(%s >> %d)"
+              let fval = sprintf "prims::truncate<%d, %d>(%s >> %du)"
                            sz s_sz bits_arg offset in
               let unpacked = match ftau with
                 | Bits_t _ -> fval

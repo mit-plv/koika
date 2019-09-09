@@ -31,8 +31,6 @@ inline void _SIM_ASSERT(const char* repr,
 #define SIM_ASSERT(expr, msg) ;
 #endif // #ifdef SIM_DEBUG
 
-struct unit_t {};
-
 #ifdef NEEDS_BOOST_MULTIPRECISION
 #include <boost/multiprecision/cpp_int.hpp>
 template<std::size_t size>
@@ -45,6 +43,8 @@ using big_uint_t = std::conditional_t<size <= 128, boost::multiprecision::uint12
 template<std::size_t size>
 using big_uint_t = void;
 #endif // #ifdef NEEDS_BOOST_MULTIPRECISION
+
+struct unit_t {};
 
 template<std::size_t size>
 using uint_t = std::conditional_t<size ==  0, unit_t,
@@ -68,7 +68,7 @@ using namespace boost::multiprecision::literals;
 #endif
 
 #define CHECK_SHIFT(nbits, sz, msg) \
-  SIM_ASSERT(idx <= std::numeric_limits<uint_t<sz>>::digits, msg)
+  SIM_ASSERT((nbits) <= std::numeric_limits<uint_t<(sz)>>::digits, (msg))
 
 namespace prims {
   const unit_t tt = {};
