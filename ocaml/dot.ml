@@ -34,8 +34,8 @@ let rec label_ptrs tag_to_parents = function
            | SGA.Do (ac, idx) ->
               let field, _tau = SGALib.Util.list_nth sg.struct_fields idx in
               match ac with
-              | SGA.Get -> (Printf.sprintf "%s.%s" sg.struct_name field, [c1], [])
-              | SGA.Sub -> (Printf.sprintf "%s / %s <-" sg.struct_name field, [c1; c2], []))
+              | SGA.GetField -> (Printf.sprintf "%s.%s" sg.struct_name field, [c1], [])
+              | SGA.SubstField -> (Printf.sprintf "%s / %s <-" sg.struct_name field, [c1; c2], []))
   | CReadRegister r -> Some (Printf.sprintf "Reg %s" r.reg_name, [], [])
   | CAnnot (_sz, annot, c) ->
      let nparents = List.length (Hashtbl.find tag_to_parents c.tag) in

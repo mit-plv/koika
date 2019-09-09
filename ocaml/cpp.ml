@@ -462,8 +462,8 @@ let compile (type name_t var_t reg_t)
            | SGA.Do (ac, idx) ->
               let field, _tau = SGALib.Util.list_nth sg.struct_fields idx in
               match ac with
-              | SGA.Get -> PureExpr (sprintf "(%s).%s" a1 field)
-              | SGA.Sub ->
+              | SGA.GetField -> PureExpr (sprintf "(%s).%s" a1 field)
+              | SGA.SubstField ->
                  let tinfo = ensure_target (Struct_t sg) target in
                  let res = p_assign_pure (VarTarget tinfo) (PureExpr a1) in
                  p "%s.%s = %s;" tinfo.name field a2;
