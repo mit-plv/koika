@@ -67,9 +67,6 @@ using namespace boost::multiprecision::literals;
 #define UINT1024(c) c##_cppui1024
 #endif
 
-#define CHECK_SHIFT(nbits, sz, msg) \
-  SIM_ASSERT((nbits) <= std::numeric_limits<uint_t<(sz)>>::digits, (msg))
-
 namespace prims {
   const unit_t tt = {};
 
@@ -94,13 +91,11 @@ namespace prims {
 
   template<std::size_t sz1, std::size_t sz2>
   uint_t<1> sel(const uint_t<sz1> data, const uint_t<sz2> idx) {
-    CHECK_SHIFT(idx, sz1, "sel: idx > size");
     return truncate<1,sz1>(data >> idx);
   }
 
   template<std::size_t sz1, std::size_t sz2, std::size_t width>
   uint_t<width> part(const uint_t<sz1> data, const uint_t<sz2> idx) {
-    CHECK_SHIFT(idx, sz1, "part: idx > size");
     return truncate<width, sz1>(data >> idx);
   }
 
@@ -121,13 +116,11 @@ namespace prims {
 
   template<std::size_t sz1, std::size_t sz2>
   uint_t<sz1> lsr(const uint_t<sz1> data, const uint_t<sz2> shift) {
-    CHECK_SHIFT(shift, sz1, "lsr: shift > size");
     return data >> shift;
   }
 
   template<std::size_t sz1, std::size_t sz2>
   uint_t<sz1> lsl(const uint_t<sz1> data, const uint_t<sz2> shift) {
-    CHECK_SHIFT(shift, sz1, "lsl: shift > size");
     return mask<sz1>(data << shift);
   }
 
