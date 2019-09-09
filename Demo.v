@@ -1,5 +1,4 @@
 Require Import SGA.Notations.
-Require SGA.Primitives.
 
 Require Import Coq.Strings.String.
 Open Scope string_scope.
@@ -262,7 +261,7 @@ End Collatz.
 Require Import Coq.Lists.List.
 
 Module Type Unpacker.
-  Axiom unpack : forall reg_t custom_ufn_t (logsz: nat) (source: string), uaction unit string reg_t (interop_ufn_t custom_ufn_t).
+  Axiom unpack : forall reg_t custom_ufn_t (source: string), uaction unit string reg_t (interop_ufn_t custom_ufn_t).
 End Unpacker.
 
 Module Type Fetcher.
@@ -320,7 +319,7 @@ Module Decoder (P: Unpacker) (F: Fetcher).
 
   Definition _decode : uaction :=
     Let "encoded" <- Rencoded#read1 in
-    (Rdecoded#write0 (P.unpack _ _ logsz "encoded")).
+    (Rdecoded#write0 (P.unpack _ _ "encoded")).
 
   Definition cr := ContextEnv.(create) r.
 
@@ -362,13 +361,19 @@ Module Decoder (P: Unpacker) (F: Fetcher).
 End Decoder.
 
 Module ManualUnpacker <: Unpacker.
-  Definition unpack reg_t custom_ufn_t logsz encoded: uaction unit string reg_t (interop_ufn_t custom_ufn_t) :=
-    (Let "imm" <- (UPart 16)[[$encoded, UConst (Bits.of_N logsz 0)]] in
-     Let "dst" <- (UPart  8)[[$encoded, UConst (Bits.of_N logsz 16)]] in
-     Let "src" <- (UPart  8)[[$encoded, UConst (Bits.of_N logsz 24)]] in
-     (UCall (UPrimFn (UStructFn decoded_sig (UDo Sub "immediate")))
-            (UCall (UPrimFn (UStructFn decoded_sig (UDo Sub "dst")))
-                   (UCall (UPrimFn (UStructFn decoded_sig (UDo Sub "src")))
+  Notation SCall fn a1 a2 :=
+    (UCall (UPrimFn (UStructFn decoded_sig fn)) a1 a2).
+
+  Definition unpack reg_t custom_ufn_t encoded: uaction unit string reg_t (interop_ufn_t custom_ufn_t) :=
+    (Let "imm" <- SCall (UDoBits GetField "immediate") ($encoded) (UConst Ob) in
+     Let "src" <- SCall (UDoBits GetField "src") ($encoded) (UConst Ob) in
+     Let "dst" <- SCall (UDoBits GetField "dst") ($encoded) (UConst Ob) in
+     (* Let "imm" <- (UPart 0 16)[[$encoded, UConst Ob]] in *)
+     (* Let "dst" <- (UPart 16 8)[[$encoded, UConst Ob]] in *)
+     (* Let "src" <- (UPart 24 8)[[$encoded, UConst Ob]] in *)
+     (UCall (UPrimFn (UStructFn decoded_sig (UDo SubstField "immediate")))
+            (UCall (UPrimFn (UStructFn decoded_sig (UDo SubstField "dst")))
+                   (UCall (UPrimFn (UStructFn decoded_sig (UDo SubstField "src")))
                           (UCall (UPrimFn (UStructFn decoded_sig (UConv Init)))
                                  (UConst Ob) (UConst Ob))
                           ($"src"))
@@ -377,7 +382,7 @@ Module ManualUnpacker <: Unpacker.
 End ManualUnpacker.
 
 Module PrimitiveUnpacker <: Unpacker.
-  Definition unpack reg_t custom_ufn_t (logsz: nat) encoded: uaction unit string reg_t (interop_ufn_t custom_ufn_t) :=
+  Definition unpack reg_t custom_ufn_t encoded: uaction unit string reg_t (interop_ufn_t custom_ufn_t) :=
     (UCall (UPrimFn (UStructFn decoded_sig (UConv Unpack)))
            (UVar encoded) (UConst Ob)).
 End PrimitiveUnpacker.

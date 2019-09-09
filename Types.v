@@ -1,6 +1,6 @@
 Require Export Coq.Strings.String.
 Require Import Coq.Vectors.Vector.
-Require Export SGA.Common SGA.Vect.
+Require Export SGA.Common SGA.Vect SGA.IndexUtils.
 
 Record struct_sig' {A} :=
   { struct_name: string;
@@ -45,8 +45,34 @@ Defined.
 Fixpoint type_sz tau :=
   match tau with
   | bits_t sz => sz
-  | struct_t fields => List.fold_right (fun '(_, tau') acc => type_sz tau' + acc) 0 fields.(struct_fields)
+  | struct_t sig => List.fold_right (fun '(_, tau') acc => type_sz tau' + acc) 0 sig.(struct_fields)
   end.
+
+Definition struct_index (sig: struct_sig) :=
+  Vect.index (List.length sig.(struct_fields)).
+
+Definition struct_sz sig :=
+  type_sz (struct_t sig).
+
+Definition field_type (sig: struct_sig) idx :=
+  snd (List_nth sig.(struct_fields) idx).
+
+Definition field_sz (sig: struct_sig) idx :=
+  type_sz (field_type sig idx).
+
+Definition field_offset_left (sig: struct_sig) (idx: struct_index sig) :=
+  let prev_fields := List.firstn (index_to_nat idx) sig.(struct_fields) in
+  struct_sz {| struct_name := ""; struct_fields := prev_fields |}.
+
+Definition field_offset_right (sig: struct_sig) (idx: struct_index sig) :=
+  let next_fields := List.skipn (S (index_to_nat idx)) sig.(struct_fields) in
+  struct_sz {| struct_name := ""; struct_fields := next_fields |}.
+
+Notation struct_bits_t sig :=
+  (bits_t (struct_sz sig)).
+
+Notation field_bits_t sig idx :=
+  (bits_t (field_sz sig idx)).
 
 Coercion type_sz : type >-> nat.
 
