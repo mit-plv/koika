@@ -18,8 +18,8 @@ Module Ex1.
 
   Definition Sigma fn : ExternalSignature :=
     match fn with
-    | Even => {{ bits_t 3 ~> bits_t 0 ~> bits_t 1}}
-    | Odd => {{ bits_t 3 ~> bits_t 0 ~> bits_t 1}}
+    | Even => {{ bits_t 3 ~> unit_t ~> bits_t 1}}
+    | Odd => {{ bits_t 3 ~> unit_t ~> bits_t 1}}
     end.
 
   Definition uSigma (fn: fn_t) (_ _: type) : result fn_t fn_tc_error := Success fn.
@@ -77,7 +77,7 @@ Module Ex2.
   Definition Sigma fn :=
     match fn with
     | Or n => {{ bits_t n ~> bits_t n ~> bits_t n }}
-    | Not n => {{ bits_t n ~> bits_t 0 ~> bits_t n }}
+    | Not n => {{ bits_t n ~> unit_t ~> bits_t n }}
     end.
 
   Definition uSigma fn (tau1 _: type) :=
@@ -437,7 +437,7 @@ Module PrimitiveFetcher <: Fetcher.
 
   Definition custom_Sigma (fn: custom_fn_t) : ExternalSignature :=
     match fn with
-    | FetchInstr => {{ bits_t 3 ~> bits_t 0 ~> bits_t 32 }}
+    | FetchInstr => {{ bits_t 3 ~> unit_t ~> bits_t 32 }}
     end.
 
   Definition custom_uSigma (fn: custom_fn_t) (_ _: type) : result custom_fn_t fn_tc_error := Success fn.
@@ -506,9 +506,9 @@ Module Pipeline.
 
   Definition Sigma (fn: custom_fn_t) : ExternalSignature :=
     match fn with
-    | Stream => {{ bits_t sz ~> bits_t 0 ~> bits_t sz }}
-    | F => {{ bits_t sz ~> bits_t 0 ~> bits_t sz }}
-    | G => {{ bits_t sz ~> bits_t 0 ~> bits_t sz }}
+    | Stream => {{ bits_t sz ~> unit_t ~> bits_t sz }}
+    | F => {{ bits_t sz ~> unit_t ~> bits_t sz }}
+    | G => {{ bits_t sz ~> unit_t ~> bits_t sz }}
     end.
 
   Definition uSigma (fn: custom_fn_t) (_ _: type) : result custom_fn_t fn_tc_error := Success fn.

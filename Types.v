@@ -11,6 +11,7 @@ Inductive type : Type :=
 | bits_t (sz: nat)
 | struct_t (sig: struct_sig' type).
 
+Notation unit_t := (bits_t 0).
 Notation struct_sig := (struct_sig' type).
 
 Ltac simple_eq :=

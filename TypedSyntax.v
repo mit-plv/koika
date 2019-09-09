@@ -15,7 +15,7 @@ Section TypedSyntax.
   | Const {sig} {n: nat}
           (cst: bits n) : action sig (bits_t n)
   | Seq {sig tau}
-        (r1: action sig (bits_t 0))
+        (r1: action sig unit_t)
         (r2: action sig tau) : action sig tau
   | Bind {sig} {tau tau'}
          (var: var_t)
@@ -29,7 +29,7 @@ Section TypedSyntax.
          (idx: reg_t): action sig (R idx)
   | Write {sig}
           (port: Port) (idx: reg_t)
-          (value: action sig (R idx)) : action sig (bits_t 0)
+          (value: action sig (R idx)) : action sig unit_t
   | Call {sig}
          (fn: fn_t)
          (arg1: action sig (Sigma fn).(arg1Type))
@@ -40,7 +40,7 @@ Section TypedSyntax.
   | Cons (r: name_t) (s: scheduler)
   | Try (r: name_t) (s1 s2: scheduler).
 
-  Definition rule := action nil (bits_t 0).
+  Definition rule := action nil unit_t.
 
   Record schedule :=
     { s_sched : scheduler;

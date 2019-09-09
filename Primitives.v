@@ -96,14 +96,14 @@ Definition prim_Sigma (fn: prim_fn_t) : ExternalSignature :=
     | Part sz width => {{ bits_t sz ~> bits_t (log2 sz) ~> bits_t width }}
     | And sz => {{ bits_t sz ~> bits_t sz ~> bits_t sz }}
     | Or sz => {{ bits_t sz ~> bits_t sz ~> bits_t sz }}
-    | Not sz => {{ bits_t sz ~> bits_t 0 ~> bits_t sz }}
+    | Not sz => {{ bits_t sz ~> unit_t ~> bits_t sz }}
     | Lsl bits_sz shift_sz => {{ bits_t bits_sz ~> bits_t shift_sz ~> bits_t bits_sz }}
     | Lsr bits_sz shift_sz => {{ bits_t bits_sz ~> bits_t shift_sz ~> bits_t bits_sz }}
     | Eq sz => {{ bits_t sz ~> bits_t sz ~> bits_t 1 }}
     | Concat sz1 sz2 => {{ bits_t sz1 ~> bits_t sz2 ~> bits_t (sz1 + sz2) }}
     | UIntPlus sz => {{ bits_t sz ~> bits_t sz ~> bits_t sz }}
-    | ZExtL sz nzeroes => {{ bits_t sz ~> bits_t 0 ~> bits_t (nzeroes + sz) }}
-    | ZExtR sz nzeroes => {{ bits_t sz ~> bits_t 0 ~> bits_t (sz + nzeroes) }}
+    | ZExtL sz nzeroes => {{ bits_t sz ~> unit_t ~> bits_t (nzeroes + sz) }}
+    | ZExtR sz nzeroes => {{ bits_t sz ~> unit_t ~> bits_t (sz + nzeroes) }}
     end
   | @StructFn sig (Conv Init) =>
     {{ bits_t 0 ~> bits_t 0 ~> struct_t sig }}

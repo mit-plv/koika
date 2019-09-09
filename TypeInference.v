@@ -104,7 +104,7 @@ Section TypeInference.
       | UConst cst => Success (EX (Const cst))
       | USeq r1 r2 =>
         let/res r1' := type_action pos sig r1 in
-        let/res r1' := cast_action (actpos pos r1) sig (bits_t 0) (``r1') in
+        let/res r1' := cast_action (actpos pos r1) sig unit_t (``r1') in
         let/res r2' := type_action pos sig r2 in
         Success (EX (Seq r1' ``r2'))
       | UBind v ex body =>
