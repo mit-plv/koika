@@ -150,7 +150,6 @@ Module Collatz.
   Definition var_t := string.
   Inductive reg_t := R0.
   Definition ufn_t := interop_minimal_ufn_t.
-  Definition fn_t := interop_minimal_fn_t.
   Inductive name_t := divide | multiply.
 
   Definition logsz := 5.
@@ -263,8 +262,16 @@ End Collatz.
 Require Import Coq.Lists.List.
 
 Module Type Unpacker.
-  Axiom unpack : forall reg_t (logsz: nat) (source: string), uaction unit string reg_t interop_minimal_ufn_t.
+  Axiom unpack : forall reg_t custom_ufn_t (logsz: nat) (source: string), uaction unit string reg_t (interop_ufn_t custom_ufn_t).
 End Unpacker.
+
+Module Type Fetcher.
+  Axiom custom_fn_t : Type.
+  Axiom custom_Sigma : custom_fn_t -> ExternalSignature.
+  Axiom custom_uSigma : custom_fn_t -> type -> type -> result custom_fn_t fn_tc_error.
+  Axiom custom_fn_names : custom_fn_t -> string.
+  Axiom fetch_instr : forall reg_t (pc: string), uaction unit string reg_t (interop_ufn_t custom_fn_t).
+End Fetcher.
 
 Definition decoded_sig :=
   {| struct_name := "instr";
@@ -273,12 +280,14 @@ Definition decoded_sig :=
                        :: ("immediate", bits_t 16)
                        :: nil |}.
 
-Module Decoder (P: Unpacker).
+Module Decoder (P: Unpacker) (F: Fetcher).
   Definition var_t := string.
   Inductive reg_t := Rpc | Rencoded | Rdecoded.
-  Definition ufn_t := interop_minimal_ufn_t.
-  Definition fn_t := interop_minimal_fn_t.
+  Definition ufn_t := interop_ufn_t F.custom_fn_t.
   Inductive name_t := fetch | decode.
+
+  Definition Sigma := interop_Sigma F.custom_Sigma.
+  Definition uSigma := interop_uSigma F.custom_uSigma.
 
   Definition logsz := 5.
   Notation sz := (pow2 logsz).
@@ -303,49 +312,15 @@ Module Decoder (P: Unpacker).
 
   Notation uaction := (uaction unit var_t reg_t ufn_t).
 
-  Fixpoint USwitch
-           {sz}
-           (var: var_t)
-           (default: uaction)
-           (branches: list (bits_t sz * uaction)) : uaction :=
-    match branches with
-    | nil => default
-    | (val, action) :: branches =>
-      UIf (UCall (UPrimFn (UBitsFn UEq)) (UVar var) (UConst val))
-          action
-          (USwitch var default branches)
-    end.
-
-  Fixpoint all_branches sz (counter: N) (actions: list uaction) :=
-    match actions with
-    | nil => nil
-    | action :: actions =>
-      (Bits.of_N sz counter, action)
-        :: (all_branches sz (N.add counter N.one) actions)
-    end.
-
-  Import ListNotations.
-  Definition instructions : list uaction :=
-    [UConst Ob~1~1~0~1~1~0~0~0~0~0~1~0~1~1~0~0~0~0~0~0~0~1~1~1~1~1~0~0~1~1~0~1;
-     UConst Ob~0~1~1~0~1~0~1~1~1~0~1~0~1~0~1~0~1~0~0~1~0~1~0~0~0~1~0~1~0~1~0~1;
-     UConst Ob~1~0~0~0~0~0~1~0~1~1~1~0~0~0~1~0~1~1~1~0~0~1~1~0~0~1~1~0~0~0~1~0;
-     UConst Ob~0~1~1~1~1~0~1~0~0~0~0~0~0~0~1~0~0~1~0~0~0~0~1~0~0~0~0~0~0~1~0~0;
-     UConst Ob~1~1~1~0~1~0~0~0~0~1~1~1~1~0~1~0~0~0~0~1~0~1~1~0~0~0~0~1~0~0~1~1;
-     UConst Ob~1~0~0~0~0~0~0~1~0~0~1~1~0~0~1~1~0~0~1~0~1~0~0~0~0~1~1~1~0~1~1~0;
-     UConst Ob~0~1~0~0~1~0~0~0~0~0~1~0~0~1~1~0~1~0~0~0~0~1~1~0~0~1~1~1~0~0~1~1;
-     UConst Ob~1~1~0~0~0~0~0~1~0~1~1~1~1~1~0~0~0~1~1~0~0~0~1~0~0~1~1~1~1~0~0~1].
-
-  Definition switch_instr :=
-    Eval compute in (USwitch "pc" (UConst (Bits.zero sz)) (all_branches 3 N.zero instructions)).
-
   Definition _fetch : uaction :=
     Let "pc" <- Rpc#read0 in
-    ((Rencoded#write0(switch_instr));;
+    Let "encoded" <- F.fetch_instr _ "pc" in
+    ((Rencoded#write0($"encoded"));;
      (Rpc#write0(UUIntPlus[[$"pc", UConst Ob~0~0~1]]))).
 
   Definition _decode : uaction :=
     Let "encoded" <- Rencoded#read1 in
-    (Rdecoded#write0 (P.unpack _ logsz "encoded")).
+    (Rdecoded#write0 (P.unpack _ _ logsz "encoded")).
 
   Definition cr := ContextEnv.(create) r.
 
@@ -355,7 +330,7 @@ Module Decoder (P: Unpacker).
   (* Ltac __must_typecheck R Sigma tcres ::= *)
   (*   __must_typecheck_cbn R Sigma tcres. *)
 
-  Definition make_package rules :=
+  Definition make_package (rules: name_t -> rule string R (interop_Sigma F.custom_Sigma)) :=
     {| sga_var_t := string;
        sga_var_names := fun x => x;
 
@@ -364,16 +339,15 @@ Module Decoder (P: Unpacker).
        sga_reg_init := r;
        sga_reg_finite := _;
 
-       sga_custom_fn_t := interop_empty_t;
-       sga_custom_fn_types := interop_empty_Sigma;
+       sga_custom_fn_t := F.custom_fn_t;
+       sga_custom_fn_types := F.custom_Sigma;
 
        sga_reg_names r := match r with
                          | Rpc => "Rpc"
                          | Rencoded => "Rencoded"
                          | Rdecoded => "Rdecoded"
                          end;
-       sga_custom_fn_names fn := match fn with
-                                end;
+       sga_custom_fn_names := F.custom_fn_names;
 
        sga_rule_name_t := name_t;
        sga_rules := rules;
@@ -387,55 +361,128 @@ Module Decoder (P: Unpacker).
     |}.
 End Decoder.
 
-Module ManualDecoder.
-  Module ManualUnpacker <: Unpacker.
-    Definition unpack reg_t logsz encoded: uaction unit string reg_t interop_minimal_ufn_t :=
-      (Let "imm" <- (UPart 16)[[$encoded, UConst (Bits.of_N logsz 0)]] in
-       Let "dst" <- (UPart  8)[[$encoded, UConst (Bits.of_N logsz 16)]] in
-       Let "src" <- (UPart  8)[[$encoded, UConst (Bits.of_N logsz 24)]] in
-       (UCall (UPrimFn (UStructFn decoded_sig (UDo Sub "immediate")))
-              (UCall (UPrimFn (UStructFn decoded_sig (UDo Sub "dst")))
-                     (UCall (UPrimFn (UStructFn decoded_sig (UDo Sub "src")))
-                            (UCall (UPrimFn (UStructFn decoded_sig (UConv Init)))
-                                   (UConst Ob) (UConst Ob))
-                            ($"src"))
-                     ($"dst"))
-              ($"imm"))%sga_expr)%sga.
-  End ManualUnpacker.
+Module ManualUnpacker <: Unpacker.
+  Definition unpack reg_t custom_ufn_t logsz encoded: uaction unit string reg_t (interop_ufn_t custom_ufn_t) :=
+    (Let "imm" <- (UPart 16)[[$encoded, UConst (Bits.of_N logsz 0)]] in
+     Let "dst" <- (UPart  8)[[$encoded, UConst (Bits.of_N logsz 16)]] in
+     Let "src" <- (UPart  8)[[$encoded, UConst (Bits.of_N logsz 24)]] in
+     (UCall (UPrimFn (UStructFn decoded_sig (UDo Sub "immediate")))
+            (UCall (UPrimFn (UStructFn decoded_sig (UDo Sub "dst")))
+                   (UCall (UPrimFn (UStructFn decoded_sig (UDo Sub "src")))
+                          (UCall (UPrimFn (UStructFn decoded_sig (UConv Init)))
+                                 (UConst Ob) (UConst Ob))
+                          ($"src"))
+                   ($"dst"))
+            ($"imm"))%sga_expr)%sga.
+End ManualUnpacker.
 
-  Include (Decoder ManualUnpacker).
+Module PrimitiveUnpacker <: Unpacker.
+  Definition unpack reg_t custom_ufn_t (logsz: nat) encoded: uaction unit string reg_t (interop_ufn_t custom_ufn_t) :=
+    (UCall (UPrimFn (UStructFn decoded_sig (UConv Unpack)))
+           (UVar encoded) (UConst Ob)).
+End PrimitiveUnpacker.
+
+Module ManualFetcher <: Fetcher.
+  Import ListNotations.
+
+  Definition var_t := string.
+  Definition custom_fn_t := interop_empty_t.
+  Definition custom_Sigma := interop_empty_Sigma.
+  Definition custom_uSigma := interop_empty_uSigma.
+  Definition custom_fn_names (fn: custom_fn_t) : string :=
+    match fn with
+    end.
+
+  Notation uaction reg_t := (uaction unit string reg_t (interop_ufn_t custom_fn_t)).
+
+  Fixpoint USwitch
+           {sz reg_t}
+           (var: var_t)
+           (default: uaction reg_t)
+           (branches: list (bits_t sz * uaction reg_t)) : uaction reg_t :=
+    match branches with
+    | nil => default
+    | (val, action) :: branches =>
+      UIf (UCall (UPrimFn (UBitsFn UEq)) (UVar var) (UConst val))
+          action
+          (USwitch var default branches)
+    end.
+
+  Definition instructions {reg_t} : list (uaction reg_t) :=
+    [UConst Ob~1~1~0~1~1~0~0~0~0~0~1~0~1~1~0~0~0~0~0~0~0~1~1~1~1~1~0~0~1~1~0~1;
+     UConst Ob~0~1~1~0~1~0~1~1~1~0~1~0~1~0~1~0~1~0~0~1~0~1~0~0~0~1~0~1~0~1~0~1;
+     UConst Ob~1~0~0~0~0~0~1~0~1~1~1~0~0~0~1~0~1~1~1~0~0~1~1~0~0~1~1~0~0~0~1~0;
+     UConst Ob~0~1~1~1~1~0~1~0~0~0~0~0~0~0~1~0~0~1~0~0~0~0~1~0~0~0~0~0~0~1~0~0;
+     UConst Ob~1~1~1~0~1~0~0~0~0~1~1~1~1~0~1~0~0~0~0~1~0~1~1~0~0~0~0~1~0~0~1~1;
+     UConst Ob~1~0~0~0~0~0~0~1~0~0~1~1~0~0~1~1~0~0~1~0~1~0~0~0~0~1~1~1~0~1~1~0;
+     UConst Ob~0~1~0~0~1~0~0~0~0~0~1~0~0~1~1~0~1~0~0~0~0~1~1~0~0~1~1~1~0~0~1~1;
+     UConst Ob~1~1~0~0~0~0~0~1~0~1~1~1~1~1~0~0~0~1~1~0~0~0~1~0~0~1~1~1~1~0~0~1].
+
+  Fixpoint all_branches {reg_t} sz (counter: N) (actions: list (uaction reg_t)) :=
+    match actions with
+    | nil => nil
+    | action :: actions =>
+      (Bits.of_N sz counter, action)
+        :: (all_branches sz (N.add counter N.one) actions)
+    end.
+
+  Definition fetch_instr reg_t pc : uaction reg_t :=
+    Eval compute in (USwitch pc (UConst (Bits.zero 32)) (all_branches 3 N.zero instructions)).
+End ManualFetcher.
+
+Module PrimitiveFetcher <: Fetcher.
+  Definition var_t := string.
+  Inductive custom_fn_t' := FetchInstr.
+  Definition custom_fn_t := custom_fn_t'.
+
+  Definition custom_Sigma (fn: custom_fn_t) : ExternalSignature :=
+    match fn with
+    | FetchInstr => {{ bits_t 3 ~> bits_t 0 ~> bits_t 32 }}
+    end.
+
+  Definition custom_uSigma (fn: custom_fn_t) (_ _: type) : result custom_fn_t fn_tc_error := Success fn.
+
+  Definition custom_fn_names (fn: custom_fn_t) : string :=
+    match fn with
+    | FetchInstr => "fetch_instr"
+    end.
+
+  Notation uaction reg_t := (uaction unit string reg_t (interop_ufn_t custom_fn_t)).
+
+  Definition fetch_instr reg_t pc : uaction reg_t :=
+    Eval compute in (UCall (UCustomFn FetchInstr) (UVar pc) (UConst Ob)).
+End PrimitiveFetcher.
+
+Module ManualDecoder.
+  Module F := ManualFetcher.
+  Include (Decoder ManualUnpacker F).
 
   Definition rules :=
-    tc_rules R interop_minimal_Sigma interop_minimal_uSigma
+    tc_rules R Sigma uSigma
              (fun r => match r with
                     | fetch => _fetch
                     | decode => _decode
                     end).
 
   Definition circuit :=
-    compile_scheduler (ContextEnv.(create) (readRegisters R interop_minimal_Sigma)) rules decoder.
+    compile_scheduler (ContextEnv.(create) (readRegisters R Sigma)) rules decoder.
 
   Definition package := make_package rules.
 End ManualDecoder.
 
 Module PrimitiveDecoder.
-  Module PrimitiveUnpacker <: Unpacker.
-    Definition unpack reg_t (logsz: nat) encoded: uaction unit string reg_t interop_minimal_ufn_t :=
-      (UCall (UPrimFn (UStructFn decoded_sig (UConv Unpack)))
-             (UVar encoded) (UConst Ob)).
-  End PrimitiveUnpacker.
-
-  Include (Decoder PrimitiveUnpacker).
+  Module F := PrimitiveFetcher.
+  Include (Decoder PrimitiveUnpacker F).
 
   Definition rules :=
-    tc_rules R interop_minimal_Sigma interop_minimal_uSigma
+    tc_rules R (interop_Sigma F.custom_Sigma) (interop_uSigma F.custom_uSigma)
              (fun r => match r with
                     | fetch => _fetch
                     | decode => _decode
                     end).
 
   Definition circuit :=
-    compile_scheduler (ContextEnv.(create) (readRegisters R interop_minimal_Sigma)) rules decoder.
+    compile_scheduler (ContextEnv.(create) (readRegisters R Sigma)) rules decoder.
 
   Definition package := make_package rules.
 End PrimitiveDecoder.
@@ -445,7 +492,6 @@ Module Pipeline.
   Inductive reg_t := r0 | outputReg | inputReg | invalid | correct.
   Inductive custom_fn_t := Stream | F | G.
   Definition ufn_t := interop_ufn_t custom_fn_t.
-  Definition fn_t := interop_fn_t custom_fn_t.
   Inductive name_t := doF | doG.
 
   Definition sz := (pow2 5).
