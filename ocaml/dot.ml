@@ -3,7 +3,9 @@ open SGALib
 
 let bits_primitive_name = function
   | SGA.Sel _logsz -> "Sel"
-  | SGA.Part (_logsz, _width) -> "Part"
+  | SGA.Part (_logsz, _offset, _width) -> "Part"
+  | SGA.PartSubst (_logsz, _offset, _width) -> "PartSubst"
+  | SGA.IndexedPart (_logsz, _width) -> "IndexedPart"
   | SGA.And _sz -> "And"
   | SGA.Or _sz -> "Or"
   | SGA.Not _sz -> "Not"

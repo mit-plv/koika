@@ -111,7 +111,9 @@ let cpp_bits_fn_name f tau1 tau2 =
   sprintf "prims::%s"
     (match f with
      | SGA.Sel _sz -> sprintf "sel<%d, %d>" sz1 sz2
-     | SGA.Part (_sz, width) -> sprintf "part<%d, %d, %d>" sz1 sz2 width
+     | SGA.Part (_sz, offset, width) -> sprintf "part<%d, %d, %d>" sz1 offset width
+     | SGA.PartSubst (_sz, offset, width) -> sprintf "part_subst<%d, %d, %d>" sz1 offset width
+     | SGA.IndexedPart (_sz, width) -> sprintf "indexed_part<%d, %d, %d>" sz1 sz2 width
      | SGA.And _sz -> sprintf "land<%d>" sz1
      | SGA.Or _sz -> sprintf "lor<%d>" sz1
      | SGA.Not _sz -> sprintf "lnot<%d>" sz1

@@ -47,6 +47,14 @@ let expect_cons loc msg = function
      parse_error loc (Printf.sprintf "Missing %s" msg)
   | hd :: tl -> hd, tl
 
+let expect_num = function
+  | { lcnt = Num n; _} -> n
+  | { lpos; _ } -> parse_error lpos "Expecting a type-level constant"
+
+let expect_num_arg loc args =
+  let n, args = expect_cons loc "argument" args in
+  expect_num n, args
+
 let rec list_const n x =
   if n = 0 then [] else x :: list_const (n - 1) x
 
@@ -349,15 +357,19 @@ let resolve_rule fname registers rule =
       | "eq" | "=" -> UEq, 2, args
       | "concat" -> UConcat, 2, args
       | "uintplus" | "+" -> UUIntPlus, 2, args
-      | "part" | "zextl" | "zextr" ->
-         (match expect_cons lpos "argument" args with
-          | { lcnt = Num n; _}, args ->
+      | "zextl" | "zextr" | "indexed-part" | "part" | "part-subst" ->
+         let n, args = expect_num_arg lpos args in
+         (match name with
+          | "zextl" -> UZExtL n, 1, args
+          | "zextr" -> UZExtR n, 1, args
+          | "indexed-part" -> UIndexedPart n, 2, args
+          | "part" | "part-subst" ->
+             let n', args = expect_num_arg lpos args in
              (match name with
-              | "part" -> UPart n, 2, args
-              | "zextl" -> UZExtL n, 1, args
-              | "zextr" -> UZExtR n, 1, args
+              | "part" -> UPart (n, n'), 1, args
+              | "part-subst" -> UPart (n, n'), 2, args
               | _ -> assert false)
-          | { lpos; _ }, _ -> parse_error lpos "Expecting a type-level constant")
+          | _ -> assert false)
       | _ -> name_error lpos "function" name in
     assert (nargs <= 2);
     if List.length args <> nargs then

@@ -174,7 +174,9 @@ let assignment_to_string (gensym: int ref) (assignment: assignment) =
           (match typePrim with
            | SGA.UIntPlus _ -> default_left ^ arg1 ^ " + " ^ arg2
            | SGA.Sel _ -> default_left ^ arg1 ^ "[" ^ arg2 ^ "]"
-           | SGA.Part (_, slice_sz) -> default_left ^ arg1 ^ "[" ^ arg2 ^ " +: " ^ string_of_int slice_sz ^ "]"
+           | SGA.Part (_, offset, slice_sz) -> default_left ^ arg1 ^ "[" ^ (string_of_int offset) ^ " +: " ^ string_of_int slice_sz ^ "]"
+           | SGA.PartSubst (_, _offset, _slice_sz) -> failwith "TODO UNIMPLEMENTED PARTSUBST"
+           | SGA.IndexedPart (_, slice_sz) -> default_left ^ arg1 ^ "[" ^ arg2 ^ " +: " ^ string_of_int slice_sz ^ "]"
            | SGA.And _ ->  default_left ^ arg1 ^ " & " ^ arg2
            | SGA.Or _ -> default_left ^ arg1 ^ " | " ^ arg2
            | SGA.Not _ -> default_left ^ "~" ^ arg1

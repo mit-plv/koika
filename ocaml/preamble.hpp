@@ -76,17 +76,25 @@ namespace prims {
   }
 
   template<std::size_t sz>
-  uint_t<sz> mask(const uint_t<sz> arg) {
+  uint_t<sz> ones() {
     // GCC and Clang are smart enough to elide this when shift_amount == 0
     constexpr uint8_t shift_amount = std::numeric_limits<uint_t<sz>>::digits - sz;
-    // TODO: Find an alternative to boost::multiprecision that supports >> and max() as constexpr
-    static const uint_t<sz> bitmask = std::numeric_limits<uint_t<sz>>::max() >> shift_amount;
-    return arg & bitmask;
+    return std::numeric_limits<uint_t<sz>>::max() >> shift_amount;
+  }
+
+  template<std::size_t sz>
+  uint_t<sz> mask(const uint_t<sz> arg) {
+    return arg & ones<sz>();
+  }
+
+  template<std::size_t sz, typename T>
+  uint_t<sz> widen(const T arg) {
+    return static_cast<uint_t<sz>>(arg);
   }
 
   template<std::size_t ret_sz, std::size_t arg_sz>
   uint_t<ret_sz> truncate(const uint_t<arg_sz> arg) {
-    return mask<ret_sz>(static_cast<uint_t<ret_sz>>(arg));
+    return mask<ret_sz>(widen<ret_sz>(arg));
   }
 
   template<std::size_t sz1, std::size_t sz2>
@@ -94,8 +102,19 @@ namespace prims {
     return truncate<1,sz1>(data >> idx);
   }
 
+  template<std::size_t sz1, std::size_t idx, std::size_t width>
+  uint_t<width> part(const uint_t<sz1> data) {
+    return truncate<width, sz1>(data >> idx);
+  }
+
+  template<std::size_t sz1, std::size_t idx, std::size_t width>
+  uint_t<sz1> part_subst(const uint_t<sz1> data, const uint_t<width> repl) {
+    const uint_t<sz1> mask = ~(widen<sz1>(ones<width>()) << idx);
+    return (data & mask) | (widen<sz1>(repl) << idx);
+  }
+
   template<std::size_t sz1, std::size_t sz2, std::size_t width>
-  uint_t<width> part(const uint_t<sz1> data, const uint_t<sz2> idx) {
+  uint_t<width> indexed_part(const uint_t<sz1> data, const uint_t<sz2> idx) {
     return truncate<width, sz1>(data >> idx);
   }
 
@@ -136,17 +155,17 @@ namespace prims {
 
   template<std::size_t sz1, std::size_t sz2>
   uint_t<sz1 + sz2> concat(const uint_t<sz1> x, const uint_t<sz2> y) {
-    return static_cast<uint_t<sz1 + sz2>>(x) << sz2 | y;
+    return widen<sz1 + sz2>(x) << sz2 | y;
   }
 
   template<std::size_t sz, std::size_t nzeroes>
   uint_t<nzeroes + sz> zextl(const uint_t<sz> x, const unit_t /*unused*/) {
-    return static_cast<uint_t<nzeroes + sz>>(x);
+    return widen<nzeroes + sz>(x);
   }
 
   template<std::size_t sz, std::size_t nzeroes>
   uint_t<sz + nzeroes> zextr(const uint_t<sz> x, const unit_t /*unused*/) {
-    return static_cast<uint_t<sz + nzeroes>>(x) << nzeroes;
+    return widen<sz + nzeroes>(x) << nzeroes;
   }
 
   // Forward-declared; our compiler defines one instance per structure type
