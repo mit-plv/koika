@@ -24,14 +24,14 @@
  (preprocess (pps ppx_jane ppx_deriving.show)))
 
 (executable
- (name demos)
- (modules ("demos"))
+ (name coq_examples)
+ (modules coq_examples)
  (preprocess (pps ppx_jane ppx_deriving.show))
  (libraries CoqUtils))
 
 (executable
  (name cli)
- (modules ("cli"))
+ (modules cli)
  (preprocess (pps ppx_jane ppx_deriving.show))
  (libraries parsexp str zarith base core stdio SGALib common backends))
 

@@ -1,6 +1,6 @@
 default:
 	rm -f *.exe
-	dune build cli.bc demos.bc cli.exe demos.exe
+	dune build cli.bc coq_examples.bc cli.exe coq_examples.exe
 
 dot: default
 	../_build/default/ocaml/demos.exe
