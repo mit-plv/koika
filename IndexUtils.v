@@ -1,4 +1,52 @@
-Require Import SGA.Common SGA.Vect.
+Require Import Coq.Logic.FinFun.
+Require Import SGA.Common SGA.Vect SGA.Member.
+
+Fixpoint all_indices (bound: nat) : vect (index bound) bound :=
+  match bound as n return (vect (index n) n) with
+  | 0 => vect_nil
+  | S bound => (thisone, vect_map anotherone (all_indices bound))
+  end.
+
+Lemma all_indices_eqn bound:
+  forall idx, vect_nth (all_indices bound) idx = idx.
+Proof.
+  induction bound; destruct idx; cbn.
+  - reflexivity.
+  - rewrite vect_nth_map.
+    rewrite IHbound.
+    reflexivity.
+Qed.
+
+Lemma all_indices_NoDup bound:
+  List.NoDup (vect_to_list (all_indices bound)).
+Proof.
+  induction bound; cbn; econstructor.
+  - intro.
+    apply vect_to_list_In in H.
+    apply vect_map_In_ex in H.
+    destruct H as [t (? & ?)]; discriminate.
+  - setoid_rewrite vect_to_list_map.
+    apply Injective_map_NoDup.
+    + red; inversion 1; reflexivity.
+    + eassumption.
+Qed.
+
+Lemma all_indices_surjective bound:
+  forall idx, member idx (vect_to_list (all_indices bound)).
+Proof.
+  intros.
+  eapply nth_member.
+  rewrite vect_to_list_nth.
+  f_equal.
+  apply all_indices_eqn.
+Qed.
+
+Instance FiniteType_index {n} : FiniteType (Vect.index n).
+Proof.
+  refine {| finite_elems := vect_to_list (all_indices n) |}.
+  - apply all_indices_NoDup.
+  - apply all_indices_surjective.
+Defined.
 
 Fixpoint Vector_find {K: Type} {n: nat} {EQ: EqDec K} (k: K) (v: Vector.t K n) {struct n} : option (Vect.index n).
 Proof.

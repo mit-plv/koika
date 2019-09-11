@@ -120,6 +120,13 @@ Fixpoint vect_map {T T' n} (f: T -> T') (v: vect T n) : vect T' n :=
   | S _ => fun '(hd, tl) => (f hd, vect_map f tl)
   end v.
 
+Lemma vect_nth_map {T T' sz} (f: T -> T'):
+  forall (v: vect T sz) idx,
+    vect_nth (vect_map f v) idx = f (vect_nth v idx).
+Proof.
+  induction sz; destruct v, idx; cbn; auto.
+Qed.
+
 Fixpoint vect_zip {T1 T2 n} (v1: vect T1 n) (v2: vect T2 n) : vect (T1 * T2) n :=
   match n return vect T1 n -> vect T2 n -> vect (T1 * T2) n with
   | O => fun _ _ => tt
@@ -137,6 +144,16 @@ Fixpoint vect_fold_left {A T n} (f: A -> T -> A) (a0: A) (v: vect T n) : A :=
 
 Definition vect_to_list {T n} (v: vect T n) : list T :=
   vect_fold_left (fun acc t => List.cons t acc) List.nil v.
+
+Lemma vect_to_list_nth {T sz}:
+  forall (v: vect T sz) idx,
+    List.nth_error (vect_to_list v) (index_to_nat idx) =
+    Some (vect_nth v idx).
+Proof.
+  induction sz; destruct v, idx; cbn.
+  - reflexivity.
+  - setoid_rewrite IHsz; reflexivity.
+Qed.
 
 Fixpoint vect_of_list {T} (l: list T) : vect T (length l) :=
   match l with
@@ -189,11 +206,53 @@ Definition vect_cycle_l {T sz} n (v: vect T sz) :=
 Definition vect_cycle_r {T sz} n (v: vect T sz) :=
   vect_repeat vect_cycle_r1 n v.
 
-Fixpoint list_nth_index {K: Type} (l: list K) (idx: index (List.length l)) {struct l} : K.
-  destruct l; destruct idx.
-  - exact k.
-  - exact (list_nth_index K l a).
-Defined.
+Definition vect_In {T sz} t (v: vect T sz) : Prop :=
+  vect_fold_left (fun acc t' => acc \/ t = t') False v.
+
+Lemma vect_map_In {T T' sz} (f: T -> T'):
+  forall t (v: vect T sz),
+    vect_In t v -> vect_In (f t) (vect_map f v).
+Proof.
+  induction sz; destruct v; cbn;
+    firstorder (subst; firstorder).
+Qed.
+
+Lemma vect_map_In_ex {T T' sz} (f: T -> T'):
+  forall t' (v: vect T sz),
+    vect_In t' (vect_map f v) -> (exists t, t' = f t /\ vect_In t v).
+Proof.
+  induction sz; destruct v; cbn.
+  - destruct 1.
+  - firstorder.
+Qed.
+
+Lemma vect_map_In_iff {T T' sz} (f: T -> T'):
+  forall t' (v: vect T sz),
+    (exists t, t' = f t /\ vect_In t v) <-> vect_In t' (vect_map f v).
+Proof.
+  split.
+  - intros [t (-> & H)]; eauto using vect_map_In.
+  - apply vect_map_In_ex.
+Qed.
+
+Lemma vect_to_list_map {T T' sz} (f: T -> T'):
+  forall (v: vect T sz),
+    vect_to_list (vect_map f v) = List.map f (vect_to_list v).
+Proof.
+  induction sz; destruct v; cbn.
+  - reflexivity.
+  - setoid_rewrite IHsz; reflexivity.
+Qed.
+
+Lemma vect_to_list_In {T sz} :
+  forall t (v: vect T sz),
+    vect_In t v <-> List.In t (vect_to_list v).
+Proof.
+  induction sz; destruct v; cbn.
+  - reflexivity.
+  - setoid_rewrite IHsz.
+    firstorder.
+Qed.
 
 Module Bits.
   Notation bits n := (vect bool n).
@@ -228,17 +287,14 @@ Module Bits.
   Definition lsl {sz} nplaces (b: bits sz) :=
     vect_repeat lsl1 nplaces b.
 
-  Fixpoint to_nat {sz: nat} (bs: bits sz) : nat :=
-    match sz return bits sz -> nat with
-    | 0 => fun _ => 0
-    | S n => fun bs => (if Bits.hd bs then 1 else 0) + 2 * to_nat (Bits.tl bs)
-    end bs.
-
   Fixpoint to_N {sz: nat} (bs: bits sz) {struct sz} : N :=
     match sz return bits sz -> N with
     | O => fun _ => 0%N
     | S n => fun bs => ((if hd bs then 1 else 0) + 2 * to_N (tl bs))%N
     end bs.
+
+  Definition to_nat {sz: nat} (bs: bits sz) : nat :=
+    N.to_nat (to_N bs).
 
   Fixpoint of_positive (sz: nat) (p: positive) {struct sz} : bits sz :=
     match sz with
@@ -256,6 +312,9 @@ Module Bits.
     | N0 => const sz false
     | Npos p => of_positive sz p
     end.
+
+  Definition of_nat sz (n: nat) : bits sz :=
+    of_N sz (N.of_nat n).
 
   Definition zero sz : bits sz := of_N sz N.zero.
   Definition one sz : bits sz := of_N sz N.one.
