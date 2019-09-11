@@ -103,7 +103,7 @@ namespace prims {
   }
 
   template<std::size_t sz1, std::size_t idx, std::size_t width>
-  uint_t<width> part(const uint_t<sz1> data) {
+  uint_t<width> part(const uint_t<sz1> data, const unit_t /*unused*/) {
     return truncate<width, sz1>(data >> idx);
   }
 

@@ -24,20 +24,8 @@
  (preprocess (pps ppx_jane ppx_deriving.show)))
 
 (executable
- (name collatz)
- (modules ("collatz"))
- (preprocess (pps ppx_jane ppx_deriving.show))
- (libraries CoqUtils))
-
-(executable
- (name decoder)
- (modules ("decoder"))
- (preprocess (pps ppx_jane ppx_deriving.show))
- (libraries CoqUtils))
-
-(executable
- (name pipeline)
- (modules ("pipeline"))
+ (name demos)
+ (modules ("demos"))
  (preprocess (pps ppx_jane ppx_deriving.show))
  (libraries CoqUtils))
 

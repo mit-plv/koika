@@ -1,11 +1,12 @@
 default:
 	rm -f *.exe
-	dune build cli.exe collatz.exe decoder.exe pipeline.exe
+	dune build cli.bc demos.bc cli.exe demos.exe
 
 dot: default
-	../_build/default/ocaml/collatz.exe && dot -Tpng -o collatz.png
-	../_build/default/ocaml/decoder.exe && dot -Tpng -o decoder.png
-	../_build/default/ocaml/pipeline.exe && dot -Tpng -o pipeline.png
+	../_build/default/ocaml/demos.exe
+	dot collatz.dot -Tpng -o decoder.png
+	dot decoder.dot -Tpng -o decoder.png
+	dot pipeline.dot -Tpng -o pipeline.png
 
 sim:
 	g++ -O3 -Wall -Wextra main.cpp -o main.exe
