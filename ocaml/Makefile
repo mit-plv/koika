@@ -4,9 +4,7 @@ default:
 
 dot: default
 	../_build/default/ocaml/demos.exe
-	dot collatz.dot -Tpng -o decoder.png
-	dot decoder.dot -Tpng -o decoder.png
-	dot pipeline.dot -Tpng -o pipeline.png
+	for f in *.dot; do dot "$f" -Tpng -o "$f.png"; done
 
 sim:
 	g++ -O3 -Wall -Wextra main.cpp -o main.exe
