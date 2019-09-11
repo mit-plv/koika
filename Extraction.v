@@ -15,6 +15,8 @@ Extraction Inline Circuits.retVal.
         (assert false (* Proj Args *)) ex0), gamma)) body ex0.erwc
  *)
 
+Set Extraction KeepSingleton.
+
 Extraction "SGA.ml"
            Common.EqDec
            Member.mem Member.FiniteType

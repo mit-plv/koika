@@ -39,7 +39,7 @@ Proof.
   rewrite vect_to_list_nth.
   f_equal.
   apply all_indices_eqn.
-Qed.
+Defined.
 
 Instance FiniteType_index {n} : FiniteType (Vect.index n).
 Proof.

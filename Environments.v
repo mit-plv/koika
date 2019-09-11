@@ -95,7 +95,7 @@ Section Contexts.
       + congruence.
       + reflexivity.
     - destruct (cdestruct ctx) as (vtl & Heq); cbn; subst.
-      destruct (mdestruct m') as [ (eqn & Heq) | (m'' & Heq)]; subst; cbn in *; subst; cbn.
+      destruct (mdestruct m') as [ (-> & Heq) | (m'' & Heq)]; subst; cbn in *; subst; cbn.
       + reflexivity.
       + cbn. rewrite IHm; eauto.
   Qed.
@@ -105,10 +105,10 @@ Section Contexts.
     econstructor.
     induction sig; intros m1 m2.
     - destruct (mdestruct m1).
-    - destruct (mdestruct m1) as [(eqn & Heq) | (m1' & Heq)]; subst; cbn in *; subst; cbn;
+    - destruct (mdestruct m1) as [(-> & Heq) | (m1' & Heq)]; subst; cbn in *; subst; cbn;
         destruct (mdestruct m2) as [(eqn & Heq) | (m2' & Heq)];
         try (rewrite <- Eqdep_dec.eq_rect_eq_dec in Heq by apply eq_dec);
-        subst; cbn in *; subst.
+        unfold eq_type in *; subst; cbn in *; subst.
       + left; reflexivity.
       + right; intro; discriminate.
       + right; intro; discriminate.

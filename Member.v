@@ -7,21 +7,21 @@ Inductive member {K: Type}: K -> list K -> Type :=
 | MemberHd: forall k sig, member k (k :: sig)
 | MemberTl: forall k k' sig, member k sig -> member k (k' :: sig).
 
+(* https://github.com/coq/coq/issues/10749 *)
+Definition eq_type {A} (a a': A) : Type :=
+  eq a a'.
+
 Definition mdestruct {K sig} {k: K} (m: member k sig)
   : match sig return member k sig -> Type with
     | [] => fun m => False
-    | k' :: sig => fun m => ({ eqn: k = k' & m = eq_rect _ _ (fun _ => MemberHd k sig) _ eqn m } +
-                        { m': member k sig & m = MemberTl k k' sig m' })%type
+    | k' :: sig =>
+      fun m => ({ eqn: (eq_type k k') & m = eq_rect _ _ (fun _ => MemberHd k sig) _ eqn m } +
+             { m': member k sig & m = MemberTl k k' sig m' })%type
     end m.
   destruct m; cbn.
   - left; exists eq_refl; eauto.
   - right; eauto.
 Defined.
-
-Require Import Program.
-
-(* Definition mdestruct_same {K sig} {k: K} (m: member k (k :: sig)) : *)
-(*   { m': member k sig & m = MemberTl k k sig m' } + { m = MemberHd k sig }. *)
 
 Lemma member_In {K} (sig: list K):
   forall k, member k sig -> List.In k sig.
@@ -57,7 +57,7 @@ Lemma member_map {A B} (f: A -> B) a:
 Proof.
   induction ls; cbn; intros m.
   - destruct (mdestruct m).
-  - destruct (mdestruct m) as [(eqn & Heq) | (m' & Heq)];
+  - destruct (mdestruct m) as [(-> & Heq) | (m' & Heq)];
       subst; eauto using MemberHd, MemberTl.
 Defined.
 
@@ -68,7 +68,7 @@ Lemma member_app_l {A} (a: A):
 Proof.
   induction ls; cbn; intros ls' m.
   - destruct (mdestruct m).
-  - destruct (mdestruct m) as [(eqn & Heq) | (m' & Heq)];
+  - destruct (mdestruct m) as [(-> & Heq) | (m' & Heq)];
       subst; eauto using MemberHd, MemberTl.
 Defined.
 
