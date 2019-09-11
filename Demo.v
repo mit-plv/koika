@@ -424,6 +424,23 @@ Section Switch.
       if_eq (UVar var) (UConst val)
             action (USwitch var default branches)
     end.
+
+  Fixpoint gen_switch {sz}
+           (var: var_t)
+           {nb} (branches: vect (bits_t sz * uaction) (S nb)) : uaction :=
+    let '(label, branch) := vect_hd branches in
+    match nb return vect _ (S nb) -> uaction with
+    | 0 => fun _ => branch
+    | S nb => fun '(_, br) => if_eq (UVar var) (UConst label)
+                                branch (gen_switch var br)
+    end branches.
+
+  Definition UCompleteSwitch
+             sz bound
+             (var: var_t)
+             (branches: vect uaction (S bound)) :=
+    gen_switch var (vect_map2 (fun n a => (Bits.of_nat sz (index_to_nat n), a))
+                              (all_indices (S bound)) branches).
 End Switch.
 
 Module ManualFetcher <: Fetcher.
@@ -634,6 +651,93 @@ using extfuns = pipeline_extfuns;" |};
                 vp_custom_fn_names := fn_names |} |}.
 End Pipeline.
 
+Module RegisterFile_Ordered.
+  Definition nregs := 16.
+  Definition reg_sz := 32.
+
+  (* Definition instr_sig := *)
+  (*   {| struct_name := "instr"; *)
+  (*      struct_fields := ("next_reg", bits_t (log2 nregs)) *)
+  (*                        :: ("val", bits_t 8) *)
+  (*                        :: ("immediate", bits_t 16) *)
+  (*                        :: nil |}. *)
+
+  Definition var_t := string.
+  Inductive reg_t := rIndex | rData (n: Vect.index nregs) | rOutput.
+  Definition ufn_t := interop_minimal_ufn_t.
+  Inductive name_t := ReadReg.
+
+  Definition R r :=
+    match r with
+    | rIndex => bits_t (log2 nregs)
+    | rData n => bits_t reg_sz
+    | rOutput => bits_t reg_sz
+    end.
+
+  Definition Sigma := interop_minimal_Sigma.
+  Definition uSigma := interop_minimal_uSigma.
+
+  Open Scope sga.
+
+  Definition _ReadReg : uaction unit _ _ interop_minimal_ufn_t :=
+    Let "v" <- rIndex#read0 in
+    ((rIndex#write0(UUIntPlus[[$"v", UConst (Bits.of_nat (log2 nregs) 1)]]));;
+     (rOutput#write0(UCompleteSwitch (log2 nregs) (pred nregs) "v"
+                                     (vect_map (fun idx => (rData idx)#read0) (all_indices nregs))))).
+
+  Definition rules :=
+    tc_rules R iSigma iuSigma
+             (fun rl => match rl with
+                     | ReadReg => _ReadReg
+                     end).
+
+  Definition regfile : scheduler _ :=
+    tc_scheduler (ReadReg |> done).
+
+  Instance FiniteType_reg_t : FiniteType reg_t := _.
+
+  Definition circuit :=
+    compile_scheduler (ContextEnv.(create) (readRegisters R Sigma)) rules regfile.
+
+  Definition sga_package :=
+    {| sga_reg_types := R;
+       sga_reg_init r := match r with
+                        | rIndex => Bits.zero _
+                        | rData n => Bits.of_nat _ (index_to_nat n)
+                        | rOutput => Bits.zero _
+                        end%N;
+       sga_reg_finite := _;
+       sga_reg_names r := match r with
+                         | rIndex => "rIndex"
+                         | rData n => String.append "rData" (string_of_nat (index_to_nat n))
+                         | rOutput => "rOutput"
+                         end;
+
+       sga_custom_fn_types := interop_empty_Sigma;
+
+       sga_rules := rules;
+
+       sga_scheduler := regfile;
+       sga_module_name := "regfile_ordered"
+    |}.
+
+  Definition package :=
+    {| sga := sga_package;
+       sp := {| sp_pkg := sga_package;
+                sp_var_names := fun x => x;
+               sp_custom_fn_names := interop_empty_fn_names;
+               sp_rule_names r := match r with
+                                 | _ReadReg => "read_reg"
+                                 end;
+               sp_extfuns := None |};
+       vp := {| vp_pkg := sga_package;
+                vp_custom_fn_names := interop_empty_fn_names |} |}.
+End RegisterFile_Ordered.
+
 Import ListNotations.
 Definition demo_packages :=
-  [ ManualDecoder.package; PrimitiveDecoder.package; Pipeline.package ]
+  [ Collatz.package;
+    ManualDecoder.package; PrimitiveDecoder.package;
+    Pipeline.package;
+    RegisterFile_Ordered.package ].
+
