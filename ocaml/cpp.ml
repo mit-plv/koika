@@ -20,6 +20,8 @@ type ('prim, 'name_t, 'var_t, 'reg_t, 'fn_t) cpp_input_t = {
     cpp_register_sigs: 'reg_t -> reg_signature;
 
     cpp_function_sigs: 'fn_t -> ('prim, string) ffi_signature;
+
+    cpp_extfuns: string option;
   }
 
 let sprintf = Printf.sprintf
@@ -619,9 +621,12 @@ let compile (type name_t var_t reg_t)
     p "#include \"%s.hpp\"" hpp.cpp_classname;
     nl ();
 
-    p_scoped "class extfuns" ~terminator:";" (fun () ->
-        p "public:";
-        p_comment "External methods (if any) can be implemented here.");
+    (match hpp.cpp_extfuns with
+     | Some cpp -> p "%s" cpp
+     | None ->
+        p_scoped "class extfuns" ~terminator:";" (fun () ->
+            p "public:";
+            p_comment "External methods (if any) can be implemented here."));
     nl ();
 
     let classtype =
@@ -687,7 +692,8 @@ let input_of_compile_unit classname ({ c_registers; c_scheduler; c_rules }: SGAL
     cpp_registers = c_registers;
     cpp_register_sigs = (fun r -> r);
     cpp_function_sigs = SGALib.Util.ffi_signature_of_interop_fn;
-    cpp_var_names = fun x -> x }
+    cpp_var_names = (fun x -> x);
+    cpp_extfuns = None; }
 
 let collect_rules sched =
   let rec loop acc = function
@@ -711,7 +717,10 @@ let input_of_sim_package (sp: _ SGALib.SGA.sim_package_t)
     cpp_registers = sga.sga_reg_finite.finite_elems;
     cpp_register_sigs = SGALib.Util.reg_sigs_of_sga_package sga;
     cpp_function_sigs = SGALib.Util.fn_sigs_of_sga_package custom_fn_names sga;
-    cpp_var_names = (fun x -> SGALib.Util.string_of_coq_string (sp.sp_var_names x)) }
+    cpp_var_names = (fun x -> SGALib.Util.string_of_coq_string (sp.sp_var_names x));
+    cpp_extfuns = (match sp.sp_extfuns with
+                   | None -> None
+                   | Some s -> Some (SGALib.Util.string_of_coq_string s)); }
 
 let command exe args =
   (* FIXME use Unix.open_process_args instead of Filename.quote (OCaml 4.08) *)
