@@ -17,14 +17,13 @@ Extraction Inline Circuits.retVal.
 
 Extraction "SGA.ml"
            Common.EqDec
+           Member.mem Member.FiniteType
            IndexUtils.List_nth
-           Environments.FiniteType Environments.mem Environments.ContextEnv
+           Environments.ContextEnv Environments.to_list Vect.vect_to_list Vect.vect_of_list Vect.Bits.to_nat Vect.index_to_nat
            Syntax.uscheduler Syntax.uaction
            TypeInference.type_action TypeInference.type_scheduler
            Circuits.compile_scheduler
            Primitives.prim_uSigma Primitives.prim_Sigma
            Interop.interop_fn_t Interop.interop_uSigma Interop.interop_Sigma
-
-           Interop.sga_package_t Interop.circuit_package_t Interop.compile_sga_package
-           Environments.to_list Vect.vect_to_list Vect.vect_of_list Vect.Bits.to_nat Vect.index_to_nat
-           Demo.Collatz.package Demo.ManualDecoder.package Demo.PrimitiveDecoder.package Demo.Pipeline.package.
+           Interop.sga_package_t Interop.circuit_package_t Interop.sim_package_t Interop.compile_sga_package
+           Demo.demo_packages.

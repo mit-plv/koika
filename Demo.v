@@ -3,6 +3,10 @@ Require Import SGA.Notations.
 Require Import Coq.Strings.String.
 Open Scope string_scope.
 
+Record demo_package :=
+  { vp : verilog_package_t;
+    sp : sim_package_t }.
+
 Module Ex1.
   Notation var_t := string.
   Inductive reg_t := R0 | R1.
@@ -228,9 +232,8 @@ Module Collatz.
   Definition circuit :=
     compile_scheduler (ContextEnv.(create) (readRegisters R interop_minimal_Sigma)) rules collatz.
 
-  Definition package :=
+  Definition sga_package :=
     {| sga_var_t := string;
-       sga_var_names := fun x => x;
 
        sga_reg_t := reg_t;
        sga_reg_types := R;
@@ -241,21 +244,27 @@ Module Collatz.
        sga_custom_fn_types := interop_empty_Sigma;
 
        sga_reg_names r := match r with
-                        | R0 => "r0"
-                        end;
-       sga_custom_fn_names fn := match fn with
-                                end;
+                         | R0 => "r0"
+                         end;
 
        sga_rule_name_t := name_t;
        sga_rules := rules;
-       sga_rule_names r := match r with
-                          | divide => "divide"
-                          | multiply => "multiply"
-                          end;
 
        sga_scheduler := collatz;
        sga_module_name := "collatz";
     |}.
+
+  Definition package :=
+    {| sp := {| sp_pkg := sga_package;
+               sp_var_names x := x;
+               sp_custom_fn_names := interop_empty_fn_names;
+               sp_rule_names r := match r with
+                                 | divide => "divide"
+                                 | multiply => "multiply"
+                                 end;
+               sp_extfuns := None |};
+       vp := {| vp_pkg := sga_package;
+               vp_custom_fn_names := interop_empty_fn_names |} |}.
 End Collatz.
 
 Require Import Coq.Lists.List.
@@ -329,35 +338,48 @@ Module Decoder (P: Unpacker) (F: Fetcher).
   (* Ltac __must_typecheck R Sigma tcres ::= *)
   (*   __must_typecheck_cbn R Sigma tcres. *)
 
-  Definition make_package (rules: name_t -> rule string R (interop_Sigma F.custom_Sigma)) :=
-    {| sga_var_t := string;
-       sga_var_names := fun x => x;
+  Notation rulemap_t :=
+    (name_t -> rule string R (interop_Sigma F.custom_Sigma)).
 
-       sga_reg_t := reg_t;
-       sga_reg_types := R;
-       sga_reg_init := r;
-       sga_reg_finite := _;
+  Definition make_packages (rules: rulemap_t) :=
+    let sga_pkg :=
+        {| sga_var_t := string;
 
-       sga_custom_fn_t := F.custom_fn_t;
-       sga_custom_fn_types := F.custom_Sigma;
+           sga_reg_t := reg_t;
+           sga_reg_types := R;
+           sga_reg_init := r;
+           sga_reg_finite := _;
 
-       sga_reg_names r := match r with
-                         | Rpc => "Rpc"
-                         | Rencoded => "Rencoded"
-                         | Rdecoded => "Rdecoded"
-                         end;
-       sga_custom_fn_names := F.custom_fn_names;
+           sga_custom_fn_t := F.custom_fn_t;
+           sga_custom_fn_types := F.custom_Sigma;
 
-       sga_rule_name_t := name_t;
-       sga_rules := rules;
-       sga_rule_names r := match r with
-                          | decode => "decode"
-                          | fetch => "fetch"
-                          end;
+           sga_reg_names r := match r with
+                             | Rpc => "Rpc"
+                             | Rencoded => "Rencoded"
+                             | Rdecoded => "Rdecoded"
+                             end;
 
-       sga_scheduler := decoder;
-       sga_module_name := "decoder";
-    |}.
+           sga_rule_name_t := name_t;
+           sga_rules := rules;
+
+           sga_scheduler := decoder;
+           sga_module_name := "decoder" |} in
+    let sim :=
+        {| sp_pkg := sga_pkg;
+
+           sp_var_names := fun x => x;
+           sp_custom_fn_names := F.custom_fn_names;
+           sp_rule_names r := match r with
+                             | decode => "decode"
+                             | fetch => "fetch"
+                             end;
+
+           sp_extfuns := Some "#include ""extfuns.hpp""
+using extfuns = decoder_extfuns;" |} in
+    let verilog :=
+        {| vp_pkg := sga_pkg;
+           vp_custom_fn_names := F.custom_fn_names |} in
+    (sga_pkg, {| sp := sim; vp := verilog |}).
 End Decoder.
 
 Module ManualUnpacker <: Unpacker.
@@ -387,6 +409,29 @@ Module PrimitiveUnpacker <: Unpacker.
            (UVar encoded) (UConst Ob)).
 End PrimitiveUnpacker.
 
+Section Switch.
+  Context {pos_t var_t reg_t custom_fn_t: Type}.
+
+  Notation uaction := (uaction pos_t var_t reg_t (interop_ufn_t custom_fn_t)).
+
+  Definition if_eq a1 a2 (tbranch fbranch: uaction) :=
+    UIf (UCall (UPrimFn (UBitsFn UEq)) a1 a2)
+        tbranch
+        fbranch.
+
+  Fixpoint USwitch {sz}
+           (var: var_t)
+           (default: uaction)
+           (branches: list (bits_t sz * uaction))
+    : uaction :=
+    match branches with
+    | nil => default
+    | (val, action) :: branches =>
+      if_eq (UVar var) (UConst val)
+            action (USwitch var default branches)
+    end.
+End Switch.
+
 Module ManualFetcher <: Fetcher.
   Import ListNotations.
 
@@ -394,24 +439,9 @@ Module ManualFetcher <: Fetcher.
   Definition custom_fn_t := interop_empty_t.
   Definition custom_Sigma := interop_empty_Sigma.
   Definition custom_uSigma := interop_empty_uSigma.
-  Definition custom_fn_names (fn: custom_fn_t) : string :=
-    match fn with
-    end.
+  Definition custom_fn_names := interop_empty_fn_names.
 
   Notation uaction reg_t := (uaction unit string reg_t (interop_ufn_t custom_fn_t)).
-
-  Fixpoint USwitch
-           {sz reg_t}
-           (var: var_t)
-           (default: uaction reg_t)
-           (branches: list (bits_t sz * uaction reg_t)) : uaction reg_t :=
-    match branches with
-    | nil => default
-    | (val, action) :: branches =>
-      UIf (UCall (UPrimFn (UBitsFn UEq)) (UVar var) (UConst val))
-          action
-          (USwitch var default branches)
-    end.
 
   Definition instructions {reg_t} : list (uaction reg_t) :=
     [UConst Ob~1~1~0~1~1~0~0~0~0~0~1~0~1~1~0~0~0~0~0~0~0~1~1~1~1~1~0~0~1~1~0~1;
@@ -472,7 +502,9 @@ Module ManualDecoder.
   Definition circuit :=
     compile_scheduler (ContextEnv.(create) (readRegisters R Sigma)) rules decoder.
 
-  Definition package := make_package rules.
+  Definition packages := make_packages rules.
+  Definition sga_package := fst packages.
+  Definition package := snd packages.
 End ManualDecoder.
 
 Module PrimitiveDecoder.
@@ -489,7 +521,9 @@ Module PrimitiveDecoder.
   Definition circuit :=
     compile_scheduler (ContextEnv.(create) (readRegisters R Sigma)) rules decoder.
 
-  Definition package := make_package rules.
+  Definition packages := make_packages rules.
+  Definition sga_package := fst packages.
+  Definition package := snd packages.
 End PrimitiveDecoder.
 
 Module Pipeline.
@@ -562,45 +596,58 @@ Module Pipeline.
   Definition circuit :=
     compile_scheduler (ContextEnv.(create) (readRegisters R iSigma)) rules Pipeline.
 
-  Definition package :=
+  Definition fn_names fn :=
+    match fn with
+    | Stream => "stream"
+    | F => "f"
+    | G => "g"
+    end.
+
+  Definition sga_package :=
     {| sga_var_t := string;
-       sga_var_names := fun x => x;
 
        sga_reg_t := reg_t;
        sga_reg_types := R;
        sga_reg_init r := match r with
-                       | r0 => Bits.of_N _ 0
-                       | outputReg => Bits.of_N _ 0
-                       | inputReg => Bits.of_N _ 0
-                       | invalid => Ob~1
-                       | correct => Ob~1
-                       end%N;
+                        | r0 => Bits.of_N _ 0
+                        | outputReg => Bits.of_N _ 0
+                        | inputReg => Bits.of_N _ 0
+                        | invalid => Ob~1
+                        | correct => Ob~1
+                        end%N;
        sga_reg_finite := _;
+       sga_reg_names r := match r with
+                         | r0 => "r0"
+                         | outputReg => "outputReg"
+                         | inputReg => "inputReg"
+                         | invalid => "invalid"
+                         | correct => "correct"
+                         end;
 
        sga_custom_fn_t := custom_fn_t;
        sga_custom_fn_types := Sigma;
 
-       sga_reg_names r := match r with
-                        | r0 => "r0"
-                        | outputReg => "outputReg"
-                        | inputReg => "inputReg"
-                        | invalid => "invalid"
-                        | correct => "correct"
-                        end;
-       sga_custom_fn_names fn := match fn with
-                               | Stream => "stream"
-                               | F => "f"
-                               | G => "g"
-                                end;
-
        sga_rule_name_t := name_t;
        sga_rules := rules;
-       sga_rule_names r := match r with
-                          | doF => "doF"
-                          | doG => "doG"
-                          end;
 
        sga_scheduler := Pipeline;
        sga_module_name := "pipeline"
     |}.
+
+  Definition package :=
+    {| sp := {| sp_pkg := sga_package;
+               sp_var_names := fun x => x;
+               sp_custom_fn_names := fn_names;
+               sp_rule_names r := match r with
+                                 | doF => "doF"
+                                 | doG => "doG"
+                                 end;
+               sp_extfuns := Some "#include ""extfuns.hpp""
+using extfuns = pipeline_extfuns;" |};
+       vp := {| vp_pkg := sga_package;
+               vp_custom_fn_names := fn_names |} |}.
 End Pipeline.
+
+Import ListNotations.
+Definition demo_packages :=
+  [ ManualDecoder.package; PrimitiveDecoder.package; Pipeline.package ]
