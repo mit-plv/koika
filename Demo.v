@@ -368,7 +368,7 @@ Module Decoder (P: Unpacker) (F: Fetcher).
                              | fetch => "fetch"
                              end;
 
-           sp_extfuns := Some "#include ""extfuns.hpp""
+           sp_extfuns := Some "#include ""../extfuns.hpp""
 using extfuns = decoder_extfuns;" |} in
     let verilog :=
         {| vp_pkg := sga_package;
@@ -645,7 +645,7 @@ Module Pipeline.
                                  | doF => "doF"
                                  | doG => "doG"
                                  end;
-               sp_extfuns := Some "#include ""extfuns.hpp""
+               sp_extfuns := Some "#include ""../extfuns.hpp""
 using extfuns = pipeline_extfuns;" |};
        vp := {| vp_pkg := sga_package;
                 vp_custom_fn_names := fn_names |} |}.
