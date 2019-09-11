@@ -3,9 +3,14 @@ Require Import SGA.Notations.
 Require Import Coq.Strings.String.
 Open Scope string_scope.
 
-Record demo_package :=
-  { vp : verilog_package_t;
-    sp : sim_package_t }.
+Record demo_package_t :=
+  { dp_var_t : Type;
+    dp_reg_t : Type;
+    dp_name_t : Type;
+    dp_custom_fn_t : Type;
+    sga : @sga_package_t dp_var_t dp_reg_t dp_name_t dp_custom_fn_t;
+    vp : @verilog_package_t dp_var_t dp_reg_t dp_name_t dp_custom_fn_t;
+    sp : @sim_package_t dp_var_t dp_reg_t dp_name_t dp_custom_fn_t }.
 
 Module Ex1.
   Notation var_t := string.
@@ -233,29 +238,24 @@ Module Collatz.
     compile_scheduler (ContextEnv.(create) (readRegisters R interop_minimal_Sigma)) rules collatz.
 
   Definition sga_package :=
-    {| sga_var_t := string;
-
-       sga_reg_t := reg_t;
-       sga_reg_types := R;
+    {| sga_reg_types := R;
        sga_reg_init := r;
        sga_reg_finite := _;
 
-       sga_custom_fn_t := interop_empty_t;
        sga_custom_fn_types := interop_empty_Sigma;
 
        sga_reg_names r := match r with
                          | R0 => "r0"
                          end;
 
-       sga_rule_name_t := name_t;
        sga_rules := rules;
 
        sga_scheduler := collatz;
-       sga_module_name := "collatz";
-    |}.
+       sga_module_name := "collatz" |}.
 
   Definition package :=
-    {| sp := {| sp_pkg := sga_package;
+    {| sga := sga_package;
+       sp := {| sp_pkg := sga_package;
                sp_var_names x := x;
                sp_custom_fn_names := interop_empty_fn_names;
                sp_rule_names r := match r with
@@ -341,16 +341,12 @@ Module Decoder (P: Unpacker) (F: Fetcher).
   Notation rulemap_t :=
     (name_t -> rule string R (interop_Sigma F.custom_Sigma)).
 
-  Definition make_packages (rules: rulemap_t) :=
-    let sga_pkg :=
-        {| sga_var_t := string;
-
-           sga_reg_t := reg_t;
-           sga_reg_types := R;
+  Definition make_package (modname: string) (rules: rulemap_t) :=
+    let sga_package :=
+        {| sga_reg_types := R;
            sga_reg_init := r;
            sga_reg_finite := _;
 
-           sga_custom_fn_t := F.custom_fn_t;
            sga_custom_fn_types := F.custom_Sigma;
 
            sga_reg_names r := match r with
@@ -359,14 +355,12 @@ Module Decoder (P: Unpacker) (F: Fetcher).
                              | Rdecoded => "Rdecoded"
                              end;
 
-           sga_rule_name_t := name_t;
            sga_rules := rules;
 
            sga_scheduler := decoder;
-           sga_module_name := "decoder" |} in
+           sga_module_name := modname |} in
     let sim :=
-        {| sp_pkg := sga_pkg;
-
+        {| sp_pkg := sga_package;
            sp_var_names := fun x => x;
            sp_custom_fn_names := F.custom_fn_names;
            sp_rule_names r := match r with
@@ -377,9 +371,9 @@ Module Decoder (P: Unpacker) (F: Fetcher).
            sp_extfuns := Some "#include ""extfuns.hpp""
 using extfuns = decoder_extfuns;" |} in
     let verilog :=
-        {| vp_pkg := sga_pkg;
+        {| vp_pkg := sga_package;
            vp_custom_fn_names := F.custom_fn_names |} in
-    (sga_pkg, {| sp := sim; vp := verilog |}).
+    {| sga := sga_package; sp := sim; vp := verilog |}.
 End Decoder.
 
 Module ManualUnpacker <: Unpacker.
@@ -502,9 +496,7 @@ Module ManualDecoder.
   Definition circuit :=
     compile_scheduler (ContextEnv.(create) (readRegisters R Sigma)) rules decoder.
 
-  Definition packages := make_packages rules.
-  Definition sga_package := fst packages.
-  Definition package := snd packages.
+  Definition package := make_package "manual_decoder" rules.
 End ManualDecoder.
 
 Module PrimitiveDecoder.
@@ -521,9 +513,7 @@ Module PrimitiveDecoder.
   Definition circuit :=
     compile_scheduler (ContextEnv.(create) (readRegisters R Sigma)) rules decoder.
 
-  Definition packages := make_packages rules.
-  Definition sga_package := fst packages.
-  Definition package := snd packages.
+  Definition package := make_package "primitive_decoder" rules.
 End PrimitiveDecoder.
 
 Module Pipeline.
@@ -604,10 +594,7 @@ Module Pipeline.
     end.
 
   Definition sga_package :=
-    {| sga_var_t := string;
-
-       sga_reg_t := reg_t;
-       sga_reg_types := R;
+    {| sga_reg_types := R;
        sga_reg_init r := match r with
                         | r0 => Bits.of_N _ 0
                         | outputReg => Bits.of_N _ 0
@@ -624,10 +611,8 @@ Module Pipeline.
                          | correct => "correct"
                          end;
 
-       sga_custom_fn_t := custom_fn_t;
        sga_custom_fn_types := Sigma;
 
-       sga_rule_name_t := name_t;
        sga_rules := rules;
 
        sga_scheduler := Pipeline;
@@ -635,8 +620,9 @@ Module Pipeline.
     |}.
 
   Definition package :=
-    {| sp := {| sp_pkg := sga_package;
-               sp_var_names := fun x => x;
+    {| sga := sga_package;
+       sp := {| sp_pkg := sga_package;
+                sp_var_names := fun x => x;
                sp_custom_fn_names := fn_names;
                sp_rule_names r := match r with
                                  | doF => "doF"
@@ -645,7 +631,7 @@ Module Pipeline.
                sp_extfuns := Some "#include ""extfuns.hpp""
 using extfuns = pipeline_extfuns;" |};
        vp := {| vp_pkg := sga_package;
-               vp_custom_fn_names := fn_names |} |}.
+                vp_custom_fn_names := fn_names |} |}.
 End Pipeline.
 
 Import ListNotations.

@@ -454,10 +454,7 @@ let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
             let cls = Core.Filename.basename fname in
             Backends.Cpp.main fname kd (Backends.Cpp.input_of_compile_unit cls c_unit)
          | `Verilog | `Dot ->
-            let graph =
-              let circuits = SGALib.Compilation.compile c_unit in
-              let di = SGALib.Util.make_dedup_input registers circuits in
-              SGALib.Graphs.dedup_circuit di in
+            let graph = SGALib.Graphs.graph_of_compile_unit c_unit in
             Stdio.Out_channel.with_file cli_out_fname ~f:(fun out ->
                 (match cli_backend with
                  | `Hpp | `Cpp | `Exe -> assert false

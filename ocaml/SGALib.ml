@@ -2,14 +2,6 @@ type __ = Obj.t
 let __ = let rec f _ = Obj.repr f in Obj.repr f
 
 open Common
-
-type ('prim, 'reg_t, 'fn_t) dedup_input_t = {
-    di_regs: 'reg_t list;
-    di_reg_sigs: 'reg_t -> reg_signature;
-    di_fn_sigs: 'fn_t -> 'prim ffi_signature;
-    di_circuits : 'reg_t -> ('reg_t, 'fn_t) SGA.circuit
-  }
-
 module SGA = SGA
 
 module Util = struct
@@ -53,8 +45,8 @@ module Util = struct
     | SGA.Kind_bits -> "bits"
     | SGA.Kind_struct sg -> struct_sig'_to_string sg
 
-  let string_eq_dec (s1: string) (s2: string) =
-    s1 = s2
+  let string_eq_dec =
+    { SGA.eq_dec = fun (s1: string) (s2: string) -> s1 = s2 }
 
   let string_of_bits ?(mode=`Verilog) bs =
     let bitstring = String.concat "" (List.rev_map (fun b -> if b then "1" else "0") bs.bs_bits) in
@@ -87,21 +79,14 @@ module Util = struct
   let ffi_signature_of_interop_fn ?(custom_fn_info = custom_unsupported) (fn: 'a SGA.interop_fn_t) =
     let ffi_name, fsig = match fn with
       | SGA.PrimFn fn ->
-         PrimFn fn,
-         SGA.prim_Sigma fn
+         PrimFn fn, (SGA.prim_Sigma fn)
       | SGA.CustomFn fn ->
-         let name, sign = custom_fn_info fn in
-         CustomFn name, sign in
+         let fn, sg = custom_fn_info fn in
+         CustomFn fn, sg in
     { ffi_name;
       ffi_arg1type = typ_of_sga_type fsig.arg1Type;
       ffi_arg2type = typ_of_sga_type fsig.arg2Type;
       ffi_rettype = typ_of_sga_type fsig.retType }
-
-  let make_dedup_input registers circuits =
-    { di_regs = registers;
-      di_reg_sigs = (fun r -> r);
-      di_fn_sigs = ffi_signature_of_interop_fn;
-      di_circuits = circuits }
 
   let rec value_of_sga_value tau v =
     match tau with
@@ -111,26 +96,16 @@ module Util = struct
        let vals = SGA.vect_to_list (List.length taus) v in
        Struct (sg.struct_name, List.map2 value_of_sga_value taus vals)
 
-  let reg_sigs_of_sga_package (pkg: SGA.sga_package_t) r =
+  let reg_sigs_of_sga_package (pkg: _ SGA.sga_package_t) r =
     let tau = typ_of_sga_type (pkg.sga_reg_types r) in
     { reg_name = string_of_coq_string (pkg.sga_reg_names r);
       reg_type = tau;
       reg_init_val = value_of_sga_value tau (pkg.sga_reg_init r) }
 
-  let fn_sigs_of_sga_package (pkg: SGA.sga_package_t) fn =
+  let fn_sigs_of_sga_package custom_fn_names (pkg: _ SGA.sga_package_t) =
     let custom_fn_info fn =
-      string_of_coq_string (pkg.sga_custom_fn_names fn),
-      pkg.sga_custom_fn_types fn in
-    ffi_signature_of_interop_fn ~custom_fn_info fn
-
-  let dedup_input_of_circuit_package (pkg: SGA.circuit_package_t) =
-    let di_regs =
-      pkg.cp_prog.sga_reg_finite.finite_elems in
-    let di_circuits r =
-      SGA.getenv pkg.cp_reg_Env pkg.cp_circuit r in
-    { di_regs;
-      di_reg_sigs = reg_sigs_of_sga_package pkg.cp_prog;
-      di_fn_sigs = fn_sigs_of_sga_package pkg.cp_prog; di_circuits }
+      (custom_fn_names fn, pkg.sga_custom_fn_types fn) in
+    fun fn -> ffi_signature_of_interop_fn ~custom_fn_info fn
 end
 
 module Compilation = struct
@@ -219,9 +194,9 @@ module Compilation = struct
     SGA.interop_uSigma (fun _ -> failwith "No custom functions") fn
 
   let rEnv_of_register_list tc_registers =
-    let eqdec r1 r2 = Util.string_eq_dec r1.reg_name r2.reg_name in
+    let eq_dec = { SGA.eq_dec = fun r1 r2 -> Util.string_eq_dec.eq_dec r1.reg_name r2.reg_name } in
     SGA.contextEnv { SGA.finite_elems = tc_registers; (* TODO memoize call to mem *)
-                     SGA.finite_index = fun rn -> match SGA.mem eqdec rn tc_registers with
+                     SGA.finite_index = fun rn -> match SGA.mem eq_dec rn tc_registers with
                                                   | Inl m -> m
                                                   | Inr _ -> failwith "Unexpected register name" }
 
@@ -272,22 +247,26 @@ module Compilation = struct
     let rules r = List.assoc r cu.c_rules in
     let env = SGA.compile_scheduler r sigma rEnv r0 rules cu.c_scheduler in
     (fun r -> SGA.getenv rEnv env r)
-
-  let circuit_package_of_sga_package (s: SGA.sga_package_t) =
-    SGA.compile_sga_package s
 end
 
 module Graphs = struct
-  type 'prim circuit_graph = {
-      graph_roots: 'prim circuit_root list;
-      graph_nodes: 'prim circuit list
+  type ('p, 'k) circuit_graph = {
+      graph_roots: ('p, 'k) circuit_root list;
+      graph_nodes: ('p, 'k) circuit list
     }
 
-  let dedup_circuit (type prim reg_t fn_t)
-        (pkg: (prim, reg_t, fn_t) dedup_input_t) : prim circuit_graph =
+  type ('prim, 'custom, 'reg_t, 'fn_t) dedup_input_t = {
+      di_regs: 'reg_t list;
+      di_reg_sigs: 'reg_t -> reg_signature;
+      di_fn_sigs: 'fn_t -> ('prim, 'custom) ffi_signature;
+      di_circuits : 'reg_t -> ('reg_t, 'fn_t) SGA.circuit
+    }
+
+  let dedup_circuit (type prim custom reg_t fn_t)
+        (pkg: (prim, custom, reg_t, fn_t) dedup_input_t) : (prim, custom) circuit_graph =
     let module CircuitHash = struct
-        type t = prim circuit'
-        let equal (c: prim circuit') (c': prim circuit') =
+        type t = (prim, custom) circuit'
+        let equal (c: (prim, custom) circuit') (c': (prim, custom) circuit') =
           match c, c' with
           | CNot c1, CNot c1' ->
              c1 == c1'
@@ -315,7 +294,7 @@ module Graphs = struct
         let hash o = Hashtbl.hash o
       end in
     let module HasconsedOrder = struct
-        type t = prim circuit
+        type t = (prim, custom) circuit
         let compare x y = compare x.Hashcons.tag y.Hashcons.tag
       end in
     let module CircuitBag = Set.Make(HasconsedOrder) in
@@ -360,4 +339,25 @@ module Graphs = struct
                         pkg.di_regs in
     let graph_nodes = List.of_seq (CircuitBag.to_seq !tagged_circuits) in
     { graph_roots; graph_nodes }
+
+  let graph_of_compile_unit (cu: Compilation.compile_unit) =
+    dedup_circuit
+      { di_regs = cu.c_registers;
+        di_reg_sigs = (fun r -> r);
+        di_fn_sigs = Util.ffi_signature_of_interop_fn;
+        di_circuits = Compilation.compile cu }
+
+  let graph_of_verilog_package (vp: _ SGA.verilog_package_t) =
+    let sga = vp.vp_pkg in
+    let di_regs =
+      sga.sga_reg_finite.finite_elems in
+    let di_circuits =
+      let cp = SGA.compile_sga_package sga in
+      fun r -> SGA.getenv cp.cp_reg_Env cp.cp_circuit r in
+    let custom_fn_names f =
+      Util.string_of_coq_string (vp.vp_custom_fn_names f) in
+    dedup_circuit
+      { di_regs;
+        di_reg_sigs = Util.reg_sigs_of_sga_package sga;
+        di_fn_sigs = Util.fn_sigs_of_sga_package custom_fn_names sga; di_circuits }
 end

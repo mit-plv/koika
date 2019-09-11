@@ -147,7 +147,7 @@ type expression =
   | EOr of string * string
   | EMux of size_t * string * string * string
   | EConst of string
-  | EExternal of SGA.prim_fn_t ffi_signature * string * string
+  | EExternal of (SGA.prim_fn_t, string) ffi_signature * string * string
   | EReadRegister of string
   | EAnnot of size_t * string * string
 
@@ -269,7 +269,7 @@ let statements
       Update (reg_name, reg_init, reg_wire_update))
     (circuit.graph_roots)
 
-let main out (circuit: _ circuit_graph) =
+let main out (circuit: (SGALib.SGA.prim_fn_t, _) circuit_graph) =
   let environment = Hashtbl.create 50 in
   let instance_external_gensym = ref 0 in
   let io_decls = io_declarations circuit in

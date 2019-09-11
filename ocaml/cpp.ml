@@ -19,7 +19,7 @@ type ('prim, 'name_t, 'var_t, 'reg_t, 'fn_t) cpp_input_t = {
     cpp_registers: 'reg_t list;
     cpp_register_sigs: 'reg_t -> reg_signature;
 
-    cpp_function_sigs: 'fn_t -> 'prim ffi_signature;
+    cpp_function_sigs: 'fn_t -> ('prim, string) ffi_signature;
   }
 
 let sprintf = Printf.sprintf
@@ -696,20 +696,22 @@ let collect_rules sched =
   | SGA.Try (rl, l, r) -> loop (loop (rl :: acc) l) r
   in loop [] sched
 
-let cpp_rule_of_sga_package_rule (s: SGALib.SGA.sga_package_t) (rn: Obj.t) =
+let cpp_rule_of_sga_package_rule (s: _ SGALib.SGA.sga_package_t) (rn: Obj.t) =
   cpp_rule_of_action (rn, s.sga_rules rn)
 
-let input_of_sga_package (s: SGALib.SGA.sga_package_t)
-    : (SGA.prim_fn_t, Obj.t, Obj.t, Obj.t, 'custom_fn_t SGA.interop_fn_t) cpp_input_t =
-  let rules = collect_rules s.sga_scheduler in
-  { cpp_classname = SGALib.Util.string_of_coq_string s.sga_module_name;
-    cpp_rule_names = (fun rn -> SGALib.Util.string_of_coq_string (s.sga_rule_names rn));
-    cpp_rules = List.map (cpp_rule_of_sga_package_rule s) rules;
-    cpp_scheduler = s.sga_scheduler;
-    cpp_registers = s.sga_reg_finite.finite_elems;
-    cpp_register_sigs = SGALib.Util.reg_sigs_of_sga_package s;
-    cpp_function_sigs = SGALib.Util.fn_sigs_of_sga_package s;
-    cpp_var_names = fun x -> SGALib.Util.string_of_coq_string (s.sga_var_names x) }
+let input_of_sim_package (sp: _ SGALib.SGA.sim_package_t)
+    : (SGA.prim_fn_t, Obj.t, Obj.t, Obj.t, string SGA.interop_fn_t) cpp_input_t =
+  let sga = sp.sp_pkg in
+  let rules = collect_rules sga.sga_scheduler in
+  let custom_fn_names f = SGALib.Util.string_of_coq_string (sp.sp_custom_fn_names f) in
+  { cpp_classname = SGALib.Util.string_of_coq_string sga.sga_module_name;
+    cpp_rule_names = (fun rn -> SGALib.Util.string_of_coq_string (sp.sp_rule_names rn));
+    cpp_rules = List.map (cpp_rule_of_sga_package_rule sga) rules;
+    cpp_scheduler = sga.sga_scheduler;
+    cpp_registers = sga.sga_reg_finite.finite_elems;
+    cpp_register_sigs = SGALib.Util.reg_sigs_of_sga_package sga;
+    cpp_function_sigs = SGALib.Util.fn_sigs_of_sga_package custom_fn_names sga;
+    cpp_var_names = (fun x -> SGALib.Util.string_of_coq_string (sp.sp_var_names x)) }
 
 let command exe args =
   (* FIXME use Unix.open_process_args instead of Filename.quote (OCaml 4.08) *)

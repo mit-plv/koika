@@ -33,12 +33,12 @@ and struct_sig_to_string { struct_name; struct_fields } =
   let fields = List.map struct_field_to_string struct_fields in
   Printf.sprintf "struct %s { %s }" struct_name (String.concat "; " fields)
 
-type 'prim fun_id_t =
-  | CustomFn of string
+type ('prim, 'custom) fun_id_t =
+  | CustomFn of 'custom
   | PrimFn of 'prim
 
-type 'prim ffi_signature = {
-    ffi_name: 'prim fun_id_t;
+type ('prim, 'custom) ffi_signature = {
+    ffi_name: ('prim, 'custom) fun_id_t;
     ffi_arg1type: typ;
     ffi_arg2type: typ;
     ffi_rettype: typ
@@ -86,20 +86,20 @@ type 'f scheduler =
   | Sequence of ('f, string) locd list
   | Try of ('f, string) locd * ('f, 'f scheduler) locd * ('f, 'f scheduler) locd
 
-type 'p circuit = 'p circuit' Hashcons.hash_consed
-and 'p circuit' =
-  | CNot of 'p circuit
-  | CAnd of 'p circuit * 'p circuit
-  | COr of 'p circuit * 'p circuit
-  | CMux of size_t * 'p circuit * 'p circuit * 'p circuit
+type ('p, 'k) circuit = ('p, 'k) circuit' Hashcons.hash_consed
+and ('p, 'k) circuit' =
+  | CNot of ('p, 'k) circuit
+  | CAnd of ('p, 'k) circuit * ('p, 'k) circuit
+  | COr of ('p, 'k) circuit * ('p, 'k) circuit
+  | CMux of size_t * ('p, 'k) circuit * ('p, 'k) circuit * ('p, 'k) circuit
   | CConst of bits_value
-  | CExternal of 'p ffi_signature * 'p circuit * 'p circuit
+  | CExternal of ('p, 'k) ffi_signature * ('p, 'k) circuit * ('p, 'k) circuit
   | CReadRegister of reg_signature
-  | CAnnot of size_t * string * 'p circuit
+  | CAnnot of size_t * string * ('p, 'k) circuit
 
-type 'p circuit_root = {
+type ('p, 'k) circuit_root = {
     root_reg: reg_signature;
-    root_circuit: 'p circuit;
+    root_circuit: ('p, 'k) circuit;
   }
 
 let subcircuits = function
@@ -118,7 +118,7 @@ let hashtbl_update tbl k v_dflt v_fn =
            | Some v -> v
            | None -> v_dflt))
 
-let compute_parents (circuits: 'p circuit list) =
+let compute_parents (circuits: ('p, 'k) circuit list) =
   let tag_to_parents = Hashtbl.create 50 in
   List.iter (fun c ->
       List.iter (fun (child: _ circuit) ->

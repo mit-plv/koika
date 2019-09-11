@@ -1,13 +1,22 @@
 open SGALib
 
-let writeout name ext fn input =
-  Common.with_output_to_file (name ^ ext) (fun out -> fn out input)
+let modname (pkg: _ SGA.sga_package_t) =
+  Util.string_of_coq_string pkg.sga_module_name
 
-let coq_main (sga_pkg: SGA.sga_package_t) =
-  let circuit_pkg = Compilation.circuit_package_of_sga_package sga_pkg in
-  let di = Util.dedup_input_of_circuit_package circuit_pkg in
-  let modname = Util.string_of_coq_string sga_pkg.sga_module_name in
-  let circuit = Graphs.dedup_circuit di in
-  Backends.Cpp.main modname `Exe (Backends.Cpp.input_of_sga_package sga_pkg);
+let do_sim (sp: _ SGA.sim_package_t) =
+  let sga = sp.sp_pkg in
+  Backends.Cpp.main (modname sga) `Exe (Backends.Cpp.input_of_sim_package (Obj.magic sp))
+
+let writeout name ext fn circuit =
+  Common.with_output_to_file (name ^ ext) (fun out -> fn out circuit)
+
+let do_verilog (vp: _ SGA.verilog_package_t) =
+  let circuit = Graphs.graph_of_verilog_package vp in
+  let modname = modname vp.vp_pkg in
   writeout modname ".dot" Backends.Dot.main circuit;
-  writeout modname ".v" Backends.Verilog.main circuit;
+  writeout modname ".v" Backends.Verilog.main circuit
+
+let coq_main ?(sim = true) ?(verilog = true) ({ vp; sp; _ }: SGA.demo_package_t) =
+  Printf.fprintf stderr ">> Compiling %s\n%!" (modname vp.vp_pkg);
+  if sim then do_sim sp;
+  if verilog then do_verilog vp
