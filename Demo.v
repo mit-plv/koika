@@ -639,7 +639,7 @@ Module Pipeline.
   Definition package :=
     {| sga := sga_package;
        sp := {| sp_pkg := sga_package;
-                sp_var_names := fun x => x;
+               sp_var_names := fun x => x;
                sp_custom_fn_names := fn_names;
                sp_rule_names r := match r with
                                  | doF => "doF"
@@ -648,7 +648,7 @@ Module Pipeline.
                sp_extfuns := Some "#include ""../extfuns.hpp""
 using extfuns = pipeline_extfuns;" |};
        vp := {| vp_pkg := sga_package;
-                vp_custom_fn_names := fn_names |} |}.
+               vp_custom_fn_names := fn_names |} |}.
 End Pipeline.
 
 Module RegisterFile_Ordered.
@@ -724,14 +724,14 @@ Module RegisterFile_Ordered.
   Definition package :=
     {| sga := sga_package;
        sp := {| sp_pkg := sga_package;
-                sp_var_names := fun x => x;
+               sp_var_names := fun x => x;
                sp_custom_fn_names := interop_empty_fn_names;
                sp_rule_names r := match r with
                                  | _ReadReg => "read_reg"
                                  end;
                sp_extfuns := None |};
        vp := {| vp_pkg := sga_package;
-                vp_custom_fn_names := interop_empty_fn_names |} |}.
+               vp_custom_fn_names := interop_empty_fn_names |} |}.
 End RegisterFile_Ordered.
 
 Import ListNotations.
