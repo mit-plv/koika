@@ -19,7 +19,7 @@ Set Extraction KeepSingleton.
 
 Extraction "SGA.ml"
            Common.EqDec
-           Member.mem Member.FiniteType
+           FiniteType.FiniteType Member.mem
            IndexUtils.List_nth
            Environments.ContextEnv Environments.to_list Vect.vect_to_list Vect.vect_of_list Vect.Bits.to_nat Vect.index_to_nat
            Syntax.uscheduler Syntax.uaction

@@ -1,4 +1,4 @@
-Require Import Coq.Logic.FinFun.
+Require Coq.Logic.FinFun.
 Require Import SGA.Common SGA.Vect SGA.Member.
 
 Fixpoint all_indices (bound: nat) : vect (index bound) bound :=
@@ -26,7 +26,7 @@ Proof.
     apply vect_map_In_ex in H.
     destruct H as [t (? & ?)]; discriminate.
   - setoid_rewrite vect_to_list_map.
-    apply Injective_map_NoDup.
+    apply FinFun.Injective_map_NoDup.
     + red; inversion 1; reflexivity.
     + eassumption.
 Qed.
@@ -41,11 +41,24 @@ Proof.
   apply all_indices_eqn.
 Defined.
 
+Lemma index_to_nat_injective {n: nat}:
+  forall x y : index n,
+    index_to_nat x = index_to_nat y ->
+    x = y.
+Proof.
+  induction n; destruct x, y; cbn; inversion 1.
+  - reflexivity.
+  - f_equal; eauto.
+Qed.
+
 Instance FiniteType_index {n} : FiniteType (Vect.index n).
 Proof.
-  refine {| finite_elems := vect_to_list (all_indices n) |}.
-  - apply all_indices_NoDup.
-  - apply all_indices_surjective.
+  refine {| finite_index := index_to_nat;
+            finite_elements := vect_to_list (all_indices n) |}.
+  - intros; rewrite vect_to_list_nth, all_indices_eqn; reflexivity.
+  - apply FinFun.Injective_map_NoDup.
+    red; apply index_to_nat_injective.
+    apply all_indices_NoDup.
 Defined.
 
 Fixpoint Vector_find {K: Type} {n: nat} {EQ: EqDec K} (k: K) (v: Vector.t K n) {struct n} : option (Vect.index n).

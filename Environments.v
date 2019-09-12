@@ -179,17 +179,24 @@ Definition map2 {K} (E: Env K) {V1 V2 V3: esig K} (fn: forall k, V1 k -> V2 k ->
   E.(create) (fun k => fn k (E.(getenv) ev1 k) (E.(getenv) ev2 k)).
 
 Definition fold_right {K} (E: Env K) {V T} (f: forall k: K, V k -> T -> T) (ev: E.(env_t) V) (t0: T) :=
-  List.fold_right (fun (k: K) (t: T) => f k (E.(getenv) ev k) t) t0 (@finite_elems K E.(finite_keys)).
+  List.fold_right (fun (k: K) (t: T) => f k (E.(getenv) ev k) t) t0 (@finite_elements K E.(finite_keys)).
 
 Definition to_list {K} (E: Env K) {V} (ev: E.(env_t) V) :=
   E.(fold_right) (fun (k: K) (v: V k) (t: list { k: K & V k }) =>
                     (existT _ k v) :: t) ev List.nil.
 
-Definition ContextEnv {K} `{FT: FiniteType K}: Env K.
-  unshelve refine {| env_t V := context V finite_elems;
-                     getenv {V} ctx k := cassoc (finite_index k) ctx;
-                     putenv {V} ctx k v := creplace (finite_index k) v ctx;
-                     create {V} fn := ccreate finite_elems (fun k _ => fn k) |}.
+Definition finite_member {T} {FT: FiniteType T} (t: T) :
+  member t finite_elements.
+Proof.
+  eapply nth_member.
+  apply finite_surjective.
+Defined.
+
+Definition ContextEnv {K} {FT: FiniteType K}: Env K.
+  unshelve refine {| env_t V := context V finite_elements;
+                     getenv {V} ctx k := cassoc (finite_member k) ctx;
+                     putenv {V} ctx k v := creplace (finite_member k) v ctx;
+                     create {V} fn := ccreate finite_elements (fun k _ => fn k) |}.
   - intros; rewrite <- ccreate_cassoc; apply ccreate_funext.
     intros; f_equal; apply member_NoDup; try typeclasses eauto; apply finite_nodup.
   - intros; apply ccreate_funext; eauto.

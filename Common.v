@@ -1,6 +1,6 @@
 Require Import Coq.Lists.List Coq.Bool.Bool.
 Import ListNotations.
-Require Export SGA.Vect.
+Require Export SGA.Vect SGA.FiniteType.
 
 (* https://coq-club.inria.narkive.com/HeWqgvKm/boolean-simplification *)
 Hint Rewrite
@@ -114,6 +114,15 @@ Instance EqDec_vect T n `{EqDec T} : EqDec (vect T n).
 Proof. induction n; cbn; eauto using EqDec_unit, EqDec_pair; eassumption. Defined.
 Instance EqDec_vector A (sz: nat) {EQ: EqDec A}: EqDec (Vector.t A sz).
 Proof. econstructor; intros; eapply Vector.eq_dec; apply EqDec_beq_iff. Defined.
+
+Instance EqDec_FiniteType {T} {FT: FiniteType T} : EqDec T.
+Proof.
+  econstructor; intros.
+  destruct (PeanoNat.Nat.eq_dec (finite_index t1) (finite_index t2)) as [ ? | Hneq ].
+  - eauto using finite_index_injective.
+  - right; intro Habs; apply (f_equal finite_index) in Habs.
+    contradiction.
+Qed.
 
 Definition opt_bind {A B} (o: option A) (f: A -> option B) :=
   match o with
