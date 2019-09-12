@@ -50,7 +50,9 @@ let cpp_type_of_type
      assert (sz >= 0);
      if sz > 64 then
        needs_multiprecision := true;
-     if sz <= 1024 then
+     if sz = 0 then
+       "unit_t"
+     else if sz <= 1024 then
        sprintf "uint_t<%d>" sz
      else
        failwith (sprintf "Unsupported size: %d" sz)
