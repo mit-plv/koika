@@ -166,15 +166,14 @@ let compile (type name_t var_t reg_t)
   let buffer = ref (Buffer.create 0) in
 
   let nl _ = Buffer.add_string !buffer "\n" in
-  let p fmt = Printf.kbprintf nl !buffer fmt in
-  let pr fmt = Printf.bprintf !buffer fmt in
+  let pk k fmt = Printf.kbprintf k !buffer fmt in
+  let p fmt = pk nl fmt in
+  let pr fmt = pk ignore fmt in
   let p_buffer b = Buffer.add_buffer !buffer b in
 
-  let needs_multiprecision =
-    ref false in
-
-  let struct_types =
-    ref [] in
+  let needs_multiprecision = ref false in
+  let struct_types = ref [] in
+  let custom_funcalls = Hashtbl.create 50 in
 
   let cpp_type_of_type =
     cpp_type_of_type struct_types needs_multiprecision in
@@ -189,8 +188,8 @@ let compile (type name_t var_t reg_t)
     | item :: [] -> body item
     | item :: items -> body item; sep (); iter_sep sep body items in
 
-  let p_comment s =
-    p "/* %s */" s in
+  let p_comment fmt =
+    pr "/* "; pk (fun _ -> pr " */"; nl ()) fmt in
 
   let p_ifdef condition pbody =
     p "#if%s" condition;
@@ -452,10 +451,11 @@ let compile (type name_t var_t reg_t)
         | Assigned v -> v
         | NotAssigned -> assert false in
 
-      let p_funcall target f a1 a2 =
-        let { ffi_name; ffi_arg1type = tau1; ffi_arg2type = tau2; _ } = f in
+      let p_funcall target fn a1 a2 =
+        let { ffi_name; ffi_arg1type = tau1; ffi_arg2type = tau2; _ } = fn in
         match ffi_name with
         | CustomFn f ->
+           Hashtbl.replace custom_funcalls f fn;
            PureExpr (sprintf "%s(%s, %s)" (cpp_custom_fn_name f) a1 a2)
         | PrimFn (SGA.BitsFn f) ->
            PureExpr (sprintf "%s(%s, %s)" (cpp_bits_fn_name f tau1 tau2) a1 a2)
@@ -619,6 +619,12 @@ let compile (type name_t var_t reg_t)
         p_buffer impl;
         nl ()) in
 
+  let p_extfun_decl (name, { ffi_arg1type; ffi_arg2type; ffi_rettype; _ }) =
+    let sp_arg i typ = sprintf "const %s a%d" (cpp_type_of_type typ) i in
+    let args = sprintf "%s, %s" (sp_arg 1 ffi_arg1type) (sp_arg 2 ffi_arg2type) in
+    let typ = cpp_type_of_type ffi_rettype in
+    p_comment "%s %s(%s);" typ name args in
+
   let p_cpp () =
     p "#include \"%s.hpp\"" hpp.cpp_classname;
     nl ();
@@ -628,7 +634,11 @@ let compile (type name_t var_t reg_t)
      | None ->
         p_scoped "class extfuns" ~terminator:";" (fun () ->
             p "public:";
-            p_comment "External methods (if any) can be implemented here."));
+            p_comment "External methods (if any) can be implemented here.";
+            p_comment "Approximate signatures are provided below for convenience.";
+            let fns = List.of_seq (Hashtbl.to_seq custom_funcalls) in
+            let cmp f1 f2 = compare (fst f1) (fst f2) in
+            List.iter p_extfun_decl (List.sort cmp fns)));
     nl ();
 
     let classtype =
@@ -656,8 +666,9 @@ let compile (type name_t var_t reg_t)
             p "run(ncycles).dump();";
             p "return 0;")) in
 
-  (with_output_to_buffer p_hpp,
-   with_output_to_buffer p_cpp)
+  let buf_hpp = with_output_to_buffer p_hpp in
+  let buf_cpp = with_output_to_buffer p_cpp in
+  (buf_hpp, buf_cpp)
 
 let action_footprint a =
   let m = Hashtbl.create 25 in

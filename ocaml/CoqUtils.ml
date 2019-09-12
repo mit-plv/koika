@@ -17,6 +17,6 @@ let do_verilog (vp: _ SGA.verilog_package_t) =
   writeout modname ".v" Backends.Verilog.main circuit
 
 let coq_main ?(sim = true) ?(verilog = true) ({ vp; sp; _ }: SGA.demo_package_t) =
-  Printf.fprintf stderr ">> Compiling %s\n%!" (modname vp.vp_pkg);
+  Printf.eprintf ">> Compiling %s\n%!" (modname vp.vp_pkg);
   if sim then do_sim sp;
   if verilog then do_verilog vp
