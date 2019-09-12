@@ -68,7 +68,7 @@ using namespace boost::multiprecision::literals;
 #endif
 
 namespace prims {
-  const unit_t tt = {};
+  const unit_t __attribute__((unused)) tt = {};
 
   template<typename T>
   T __attribute__((noreturn)) unreachable() {
