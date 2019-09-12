@@ -135,6 +135,27 @@ let cpp_preamble =
   close_in inc;
   preamble
 
+let reconstruct_switch sigs action =
+  let rec loop v = function
+    | SGA.If (_, _, SGA.Call (_,
+                              fn,
+                              SGA.Var (_, v', _, _m),
+                              SGA.Const (_, sz, cst)),
+              tbr, fbr) when (match v with
+                              | Some v -> v' = v
+                              | None -> true) ->
+       (match sigs fn with
+        | { ffi_name = PrimFn (SGA.BitsFn (SGA.Eq _)); _ } ->
+           let default, branches = match loop (Some v') fbr with
+             | Some (_, default, branches) -> default, branches
+             | None -> fbr, [] in
+           Some (v', default, ((sz, cst), tbr) :: branches)
+        | _ -> None)
+    | _ -> None in
+  match loop None action with
+  | Some (_, _, [_]) | None -> None
+  | res -> res
+
 let gensym, gensym_reset =
   let state = Hashtbl.create 8 in
   let reset () =
@@ -504,13 +525,17 @@ let compile (type name_t var_t reg_t)
                ignore (p_assign_pure vtarget (p_action vtarget ex));
                p_assign_pure target (p_action target rl))
         | SGA.If (_, _, cond, tbr, fbr) ->
-           let ctarget = gensym_target (Bits_t 1) "c" in
-           let cexpr = p_action ctarget cond in
            let target = p_declare_target target in
-           ignore (p_scoped (sprintf "if (bool(%s))" (must_expr cexpr))
-                     (fun () -> p_assign_pure target (p_action target tbr)));
-           p_scoped "else"
-             (fun () -> p_assign_pure target (p_action target fbr))
+           (match reconstruct_switch hpp.cpp_function_sigs rl with
+            | Some (var, default, branches) ->
+               p_switch target var default branches
+            | None ->
+               let ctarget = gensym_target (Bits_t 1) "c" in
+               let cexpr = p_action ctarget cond in
+               ignore (p_scoped (sprintf "if (bool(%s))" (must_expr cexpr))
+                         (fun () -> p_assign_pure target (p_action target tbr)));
+               p_scoped "else"
+                 (fun () -> p_assign_pure target (p_action target fbr)))
         | SGA.Read (_, port, reg) ->
            let { reg_name; reg_type; _ } = hpp.cpp_register_sigs reg in
            let var = p_ensure_declared (ensure_target reg_type target) in
@@ -535,7 +560,19 @@ let compile (type name_t var_t reg_t)
            let f = hpp.cpp_function_sigs fn in
            let a1 = must_expr (p_action (gensym_target f.ffi_arg1type "x") arg1) in
            let a2 = must_expr (p_action (gensym_target f.ffi_arg2type "y") arg2) in
-           p_funcall target f a1 a2 in
+           p_funcall target f a1 a2
+      and p_switch target var default branches =
+        let rec loop = function
+          | [] ->
+             p "default:";
+             p_assign_pure target (p_action target default);
+          | ((sz, const), action) :: branches ->
+             p "case %s:" (sp_const sz const);
+             ignore (p_assign_pure target (p_action target action));
+             p "break;";
+             loop branches in
+        p_scoped (sprintf "switch (%s)" (hpp.cpp_var_names var)) (fun () ->
+            loop branches) in
 
       p_fn ~typ:"bool" ~name:("rule_" ^ hpp.cpp_rule_names rule.rl_name) (fun () ->
           p_reset ();
