@@ -38,7 +38,7 @@ Section CompilerCorrectness.
   Notation action := (action var_t R Sigma).
   Notation rule := (rule var_t R Sigma).
   Notation interp_circuit := (interp_circuit cr csigma).
-  Notation circuit_lt := (circuit_lt r csigma).
+  Notation circuit_lt := (circuit_lt r sigma).
 
   Definition log_data0_consistent' (l: Log) (regs: rwset) :=
     forall idx,
@@ -174,7 +174,7 @@ Section CompilerCorrectness.
 
   Ltac log_consistent_mux_t :=
     intros cond * H0 H1 idx;
-    unfold mux_rwsets, map2; rewrite !getenv_create;
+    unfold mux_rwsets; rewrite !getenv_map2;
     unfold mux_rwdata; cbn;
     rewrite !opt1_correct; cbn;
     destruct (interp_circuit cond) as [ [ | ] [] ]; cbn;
@@ -368,6 +368,12 @@ Section CompilerCorrectness.
 
   Opaque willFire_of_canFire'.
 
+  Lemma finite_In {T} {FT: FiniteType T}:
+    forall t: T, List.In t finite_elements.
+  Proof.
+    eauto using nth_error_In, finite_surjective.
+  Qed.
+
   Lemma interp_willFire_of_canFire_true :
     forall clog (cLog: scheduler_circuit R Sigma REnv),
       interp_circuit (willFire_of_canFire clog cLog) = Ob~1 <->
@@ -386,7 +392,7 @@ Section CompilerCorrectness.
         lazymatch goal with
         | [ H: forallb _ _ = _ |- _ ] =>
           rewrite forallb_forall in H;
-            specialize (H idx ltac:(eauto using member_In, finite_index))
+            specialize (H idx ltac:(eauto using @finite_In))
         end.
         eauto using Bits.single_inj.
     - repeat cleanup_step.
@@ -419,7 +425,7 @@ Section CompilerCorrectness.
       + reflexivity.
       + rewrite forallb_exists.
         exists idx; rewrite Heq.
-        eauto using member_In, finite_index.
+        eauto using @finite_In.
   Qed.
 
   Transparent willFire_of_canFire'.
@@ -551,8 +557,8 @@ Section CompilerCorrectness.
       + circuit_lt_f_equal.
         apply circuit_lt_CMux_l;
           intuition eauto using circuit_lt_trans, rwset_circuit_lt_invariant_trans.
-      + unfold mux_rwsets, map2; red; intros.
-        rewrite getenv_create.
+      + unfold mux_rwsets; red; intros.
+        rewrite getenv_map2.
         apply rwdata_circuit_lt_invariant_mux_rwdata_r;
           intros; eapply rwset_circuit_lt_invariant_trans; intuition eauto.
     - destruct port; cbn.
@@ -906,7 +912,7 @@ Section CompilerCorrectness.
       cbv zeta in IH;
       destruct (interp_action _ _ Gamma Log log ex) as [(? & ?) | ] eqn:?; cbn
     | [  |- context[REnv.(getenv) (REnv.(map2) _ _ _)] ] =>
-      unfold map2; rewrite !getenv_create
+      rewrite getenv_map2
     end.
 
   (* Create HintDb circuits discriminated. *)
@@ -1102,7 +1108,7 @@ Section CompilerCorrectness.
           eauto 8 with circuits.
     - (* Call *)
       t.
-      unfold csigma; rewrite value_of_bits_of_value; eauto.
+      unfold csigma, circuit_fn_of_fn; rewrite value_of_bits_of_value; eauto.
       eapply interp_circuit_circuit_lt_helper_false;
         eauto using action_compile_willFire_of_canFire_decreasing.
   Qed.
@@ -1116,7 +1122,7 @@ Section CompilerCorrectness.
       log_rwdata_consistent (log_app l L) (update_accumulated_rwset l' L').
   Proof.
     unfold log_rwdata_consistent, update_accumulated_rwset; intros * HL Hl ** ;
-      unfold map2; rewrite getenv_create; cbn.
+      rewrite getenv_map2; cbn.
     specialize (HL idx); specialize (Hl idx);
       repeat (rewrite !opt1_correct || bool_cleanup || rewrite log_existsb_app);
       eauto.
@@ -1128,7 +1134,7 @@ Section CompilerCorrectness.
       log_data0_consistent' (log_app l Log) (update_accumulated_rwset rws cLog).
   Proof.
     unfold log_data0_consistent, log_data0_consistent', update_accumulated_rwset; intros * Hl ** ;
-      unfold map2; rewrite getenv_create; cbn;
+      rewrite getenv_map2; cbn;
         eauto.
   Qed.
 
@@ -1141,7 +1147,7 @@ Section CompilerCorrectness.
       log_data1_consistent' (log_app l L) (update_accumulated_rwset rws cLog).
   Proof.
     unfold log_data1_consistent', update_accumulated_rwset; intros * Hl (* HL Hcl HcL *) Hrw idx H;
-      unfold map2; rewrite getenv_create; cbn.
+      rewrite getenv_map2; cbn.
     repeat match goal with
            | _ => cleanup_step
            | _ => progress cbv zeta in *
@@ -1164,7 +1170,7 @@ Section CompilerCorrectness.
     log_rwdata_consistent log_empty (regs (adapter cLog)).
   Proof.
     red; intros; cbn.
-    unfold Environments.map; rewrite getenv_create; cbn.
+    rewrite getenv_map; cbn.
     rewrite !log_existsb_empty; auto.
   Qed.
 
@@ -1173,7 +1179,7 @@ Section CompilerCorrectness.
     log_data0_consistent log_empty Log (regs (adapter cLog)).
   Proof.
     red; unfold log_data0_consistent'; intros; cbn.
-    unfold Environments.map; rewrite getenv_create; cbn.
+    rewrite getenv_map; cbn.
     rewrite log_app_empty_r.
     eauto.
   Qed.
@@ -1183,7 +1189,7 @@ Section CompilerCorrectness.
     log_data1_consistent log_empty Log (regs (adapter cLog)).
   Proof.
     red; unfold log_data1_consistent'; intros * Hcst idx Hex; cbn.
-    unfold Environments.map; rewrite getenv_create; cbn.
+    rewrite getenv_map; cbn.
     specialize (Hcst idx).
     rewrite log_app_empty_r.
     rewrite log_app_empty_r in Hex.
@@ -1194,7 +1200,7 @@ Section CompilerCorrectness.
     interp_circuit (willFire_of_canFire (adapter cLog) cLog) = Ob~1.
   Proof.
     interp_willFire_cleanup.
-    unfold Environments.map; rewrite getenv_create.
+    rewrite getenv_map.
     reflexivity.
   Qed.
 
@@ -1328,7 +1334,7 @@ Section CompilerCorrectness.
         [ destruct may_read0 | destruct may_read1 ]; cbn; eauto;
         unfold log_writes_ordered, log_cons in *;
         unfold latest_write, latest_write0, latest_write1, log_find in *;
-        unfold log_app, map2 in *; rewrite !getenv_create in *;
+        unfold log_app in *; rewrite !getenv_map2 in *;
           (destruct (eq_dec idx idx0); subst;
            [ rewrite !get_put_eq | rewrite !get_put_neq by eassumption ];
            [ |  ]); cbn;
@@ -1336,7 +1342,7 @@ Section CompilerCorrectness.
     - destruct port;
         unfold log_writes_ordered, log_cons in *;
         unfold latest_write, latest_write0, latest_write1, log_find in *;
-        unfold log_app, map2 in *; rewrite !getenv_create in *;
+        unfold log_app in *; rewrite !getenv_map2 in *;
           (destruct (eq_dec idx idx0); subst;
            [ rewrite !get_put_eq | rewrite !get_put_neq by eassumption ];
            [ |  ]); cbn;
@@ -1376,8 +1382,8 @@ Section CompilerCorrectness.
         value_of_bits (interp_circuit (REnv.(getenv) (compile_scheduler rc rules s) idx)) =
         REnv.(getenv) (commit_update r (interp_scheduler r sigma rules s)) idx.
   Proof.
-    intros; unfold compile_scheduler, commit_update, commit_rwdata, interp_scheduler, map2.
-    rewrite !getenv_create; cbn.
+    intros; unfold compile_scheduler, commit_update, commit_rwdata, interp_scheduler.
+    rewrite !getenv_map2, !getenv_create; cbn.
     repeat (rewrite !opt1_correct; cbn).
     pose proof (scheduler_compiler'_correct' s log_empty (init_scheduler_circuit rc)
                                              ltac:(ceauto) ltac:(ceauto)
@@ -1417,16 +1423,32 @@ End CompilerCorrectness.
 
 Section Thm.
   Context {name_t var_t reg_t fn_t: Type}.
+  Context {eq_dec_var_t: EqDec var_t}.
 
   Context {R: reg_t -> type}.
   Context {Sigma: fn_t -> ExternalSignature}.
   Context {REnv: Env reg_t}.
 
-  Theorem scheduler_compiler_correct `{EqDec var_t}:
-    forall (rules: name_t -> rule var_t R Sigma) (s: scheduler name_t) r sigma rc,
-      circuit_env_equiv r rc sigma ->
-      forall idx,
-        interp_circuit (cr r) (csigma sigma) (REnv.(getenv) (compile_scheduler rc rules s) idx) =
-        bits_of_value (REnv.(getenv) (commit_update r (interp_scheduler r sigma rules s)) idx).
-  Proof. eauto using scheduler_compiler_correct'. Qed.
+  Context (r: REnv.(env_t) R).
+  Context (sigma: forall f, Sigma f).
+
+  Lemma circuit_env_equiv_CReadRegister :
+    circuit_env_equiv r (REnv.(create) CReadRegister) sigma.
+  Proof.
+    unfold circuit_env_equiv, circuit_r; intros.
+    rewrite getenv_create; cbn;
+      rewrite getenv_map; cbn;
+        apply value_of_bits_of_value.
+  Qed.
+
+  Context (rules: name_t -> rule var_t R Sigma).
+  Context (s: scheduler name_t).
+
+  Theorem scheduler_compiler_correct:
+    let spec_results := commit_update r (interp_scheduler r sigma rules s) in
+    let circuits := compile_scheduler (REnv.(create) CReadRegister) rules s in
+    forall reg,
+      interp_circuit (circuit_r r) (circuit_sigma sigma) (REnv.(getenv) circuits reg) =
+      bits_of_value (REnv.(getenv) spec_results reg).
+  Proof. eauto using scheduler_compiler_correct', circuit_env_equiv_CReadRegister. Qed.
 End Thm.

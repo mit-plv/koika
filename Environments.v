@@ -163,6 +163,10 @@ Definition map {K} (E: Env K) {V1 V2: esig K} (fn: forall k, V1 k -> V2 k)
            (ev1: E.(env_t) V1) : E.(env_t) V2 :=
   E.(create) (fun k => fn k (E.(getenv) ev1 k)).
 
+Lemma getenv_map {K} (E: Env K) {V1 V2: esig K} (fn: forall k, V1 k -> V2 k) :
+    forall ev k, E.(getenv) (map E fn ev) k = fn k (E.(getenv) ev k).
+Proof. intros; unfold map; rewrite getenv_create; reflexivity. Qed.
+
 Definition zip {K} (E: Env K) {V1 V2: esig K} (ev1: E.(env_t) V1) (ev2: E.(env_t) V2)
   : E.(env_t) (fun k => V1 k * V2 k)%type :=
   E.(create) (fun k => (E.(getenv) ev1 k, E.(getenv) ev2 k)).
@@ -177,6 +181,10 @@ Definition map2 {K} (E: Env K) {V1 V2 V3: esig K} (fn: forall k, V1 k -> V2 k ->
            (ev1: E.(env_t) V1) (ev2: E.(env_t) V2)
   : E.(env_t) V3 :=
   E.(create) (fun k => fn k (E.(getenv) ev1 k) (E.(getenv) ev2 k)).
+
+Lemma getenv_map2 {K} (E: Env K) {V1 V2 V3: esig K} (fn: forall k, V1 k -> V2 k -> V3 k) :
+    forall ev1 ev2 k, E.(getenv) (map2 E fn ev1 ev2) k = fn k (E.(getenv) ev1 k) (E.(getenv) ev2 k).
+Proof. intros; unfold map2; rewrite getenv_create; reflexivity. Qed.
 
 Definition fold_right {K} (E: Env K) {V T} (f: forall k: K, V k -> T -> T) (ev: E.(env_t) V) (t0: T) :=
   List.fold_right (fun (k: K) (t: T) => f k (E.(getenv) ev k) t) t0 (@finite_elements K E.(finite_keys)).
