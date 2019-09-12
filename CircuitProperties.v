@@ -130,7 +130,7 @@ Section Circuits.
   Proof.
     unfold circuit_lt; intros * Hlt Heq;
       destruct (interp_circuit c1) as (? & [ ]), (interp_circuit c2) as ([ | ] & []);
-      inversion Heq; subst; intuition.
+      inversion Heq; subst; cbv; f_equal; symmetry; apply Hlt; cbn; congruence.
   Qed.
 
   Lemma circuit_lt_CAnnot :
@@ -274,7 +274,7 @@ Section Circuits.
         * eassumption.
         * apply circuit_lt_true.
     - cbn.
-      induction finite_elems; cbn.
+      induction finite_elements; cbn.
       + apply circuit_lt_refl.
       + apply circuit_lt_CAnd_l; eassumption.
   Qed.

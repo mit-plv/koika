@@ -352,10 +352,10 @@ Section CompilerCorrectness.
                                       (willFire_of_canFire'
                                          (REnv.(getenv) clog.(regs) idx)
                                          (REnv.(getenv) cLog idx)))))
-                             (finite_elems (FiniteType := finite_keys REnv)))).
+                             (finite_elements (FiniteType := finite_keys REnv)))).
   Proof.
     unfold willFire_of_canFire, Environments.fold_right; cbn.
-    induction finite_elems; cbn; intros.
+    induction finite_elements; cbn; intros.
     - bool_simpl; rewrite Bits.single_cons; reflexivity.
     - rewrite getenv_zip; cbn.
       rewrite opt1_correct; cbn.
@@ -431,7 +431,7 @@ Section CompilerCorrectness.
   (* Proof. *)
   (*   intros. *)
   (*   unfold willFire_of_canFire, Environments.fold_right; cbn. *)
-  (*   destruct (in_split idx finite_elems (member_In _ _ (@finite_index _ (finite_keys REnv) idx))) *)
+  (*   destruct (in_split idx finite_elements (member_In _ _ (@finite_index _ (finite_keys REnv) idx))) *)
   (*     as (l1 & l2 & ->). *)
   (*   rewrite fold_right_app; cbn. *)
   (*   rewrite !getenv_zip; cbn. *)

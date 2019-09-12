@@ -764,7 +764,7 @@ let input_of_sim_package (sp: _ SGALib.SGA.sim_package_t)
     cpp_rule_names = (fun rn -> SGALib.Util.string_of_coq_string (sp.sp_rule_names rn));
     cpp_rules = List.map (cpp_rule_of_sga_package_rule sga) rules;
     cpp_scheduler = sga.sga_scheduler;
-    cpp_registers = sga.sga_reg_finite.finite_elems;
+    cpp_registers = sga.sga_reg_finite.finite_elements;
     cpp_register_sigs = SGALib.Util.reg_sigs_of_sga_package sga;
     cpp_function_sigs = SGALib.Util.fn_sigs_of_sga_package custom_fn_names sga;
     cpp_var_names = (fun x -> SGALib.Util.string_of_coq_string (sp.sp_var_names x));

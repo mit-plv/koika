@@ -194,11 +194,10 @@ module Compilation = struct
     SGA.interop_uSigma (fun _ -> failwith "No custom functions") fn
 
   let rEnv_of_register_list tc_registers =
-    let eq_dec = { SGA.eq_dec = fun r1 r2 -> Util.string_eq_dec.eq_dec r1.reg_name r2.reg_name } in
-    SGA.contextEnv { SGA.finite_elems = tc_registers; (* TODO memoize call to mem *)
-                     SGA.finite_index = fun rn -> match SGA.mem eq_dec rn tc_registers with
-                                                  | Inl m -> m
-                                                  | Inr _ -> failwith "Unexpected register name" }
+    let reg_indices = List.mapi (fun i x -> x.reg_name, i) tc_registers in
+    let regmap = Hashtbl.of_seq (List.to_seq reg_indices) in
+    SGA.contextEnv { SGA.finite_elements = tc_registers;
+                     SGA.finite_index = fun r -> Hashtbl.find regmap r.reg_name }
 
   type 'f raw_action =
     ('f, ('f, reg_signature, string SGA.interop_ufn_t) action) locd
@@ -350,7 +349,7 @@ module Graphs = struct
   let graph_of_verilog_package (vp: _ SGA.verilog_package_t) =
     let sga = vp.vp_pkg in
     let di_regs =
-      sga.sga_reg_finite.finite_elems in
+      sga.sga_reg_finite.finite_elements in
     let di_circuits =
       let cp = SGA.compile_sga_package sga in
       fun r -> SGA.getenv cp.cp_reg_Env cp.cp_circuit r in
