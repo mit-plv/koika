@@ -1,6 +1,8 @@
 #ifndef _EXTFUNS_HPP
 #define _EXTFUNS_HPP
 
+// #include "../preamble.hpp"
+
 static constexpr uint_t<32> instructions[8] = {
   0b11011000001011000000011111001101,
   0b01101011101010101001010001010101,
@@ -21,9 +23,16 @@ public:
 
 class pipeline_extfuns {
 public:
-  uint_t<32> fetch_instr(const uint_t<3> idx, const unit_t /*unused*/) {
-    return instructions[idx];
+  static uint_t<32> stream(uint_t<32> lfsr, unit_t /*unused*/) {
+    return lfsr + 1u;
+  }
+
+  static uint_t<32> f(uint_t<32> x, unit_t /*unused*/) {
+    return ~(x << 2u) - 1u;
+  }
+
+  static uint_t<32> g(uint_t<32> x, unit_t /*unused*/) {
+    return 5u * ((x + 1u) >> 1u);
   }
 };
-
 #endif
