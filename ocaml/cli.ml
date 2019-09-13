@@ -423,12 +423,57 @@ type cli_opts = {
     cli_in_fname: string;
     cli_out_fname: string;
     cli_frontend: [`Sexps | `Annotated];
-    cli_backend: [`Dot | `Verilog | `Cpp | `Hpp | `Exe]
+    cli_backend: [`All | `Dot | `Verilog | `Cpp | `Hpp | `Exe]
   }
 
 let check_result = function
   | Ok cs -> cs
   | Error err -> raise (Error err)
+
+let exts_to_backends =
+  [("v", `Verilog);
+   ("dot", `Dot);
+   ("hpp", `Hpp);
+   ("cpp", `Cpp);
+   ("exe", `Exe);
+   ("all", `All)]
+
+let backends_to_exts =
+  List.map (fun (x, y) -> (y, x)) exts_to_backends
+
+let all_backends =
+  (* Exe implies Hpp and Cpp *)
+  [`Verilog; `Dot; `Exe]
+
+let backend_of_fname fname =
+  let fail () =
+    failwith "Output file must have extension .v, .dot, .hpp, .cpp, .exe, or .all" in
+  match Core.Filename.split_extension fname with
+  | _, None -> fail ()
+  | _, Some ext ->
+     match List.assoc_opt ext exts_to_backends with
+     | None -> fail ()
+     | Some backend -> backend
+
+let ext_of_backend backend =
+  List.assoc backend backends_to_exts
+
+let rec run_backend backend out_fname c_unit =
+  let fname_noext, _ = Core.Filename.split_extension out_fname in
+  match backend with
+  | `All ->
+     let new_fname backend = fname_noext ^ "." ^ ext_of_backend backend in
+     let run_one backend = run_backend backend (new_fname backend) c_unit in
+     List.iter run_one all_backends
+  | (`Hpp | `Cpp | `Exe) as kd ->
+     let cls = Core.Filename.basename fname_noext in
+     Backends.Cpp.main fname_noext kd (Backends.Cpp.input_of_compile_unit cls c_unit)
+  | (`Verilog | `Dot) as backend ->
+     let graph = SGALib.Graphs.graph_of_compile_unit c_unit in
+     Stdio.Out_channel.with_file out_fname ~f:(fun out ->
+         (match backend with
+          | `Dot -> Backends.Dot.main
+          | `Verilog -> Backends.Verilog.main) out graph)
 
 let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
   try
@@ -448,18 +493,7 @@ let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
           SGALib.Compilation.typecheck_scheduler s in
         let c_unit : SGALib.Compilation.compile_unit =
           { c_scheduler; c_rules; c_registers = registers } in
-        (match cli_backend with
-         | (`Hpp | `Cpp | `Exe) as kd ->
-            let fname, _ = Core.Filename.split_extension cli_out_fname in
-            let cls = Core.Filename.basename fname in
-            Backends.Cpp.main fname kd (Backends.Cpp.input_of_compile_unit cls c_unit)
-         | `Verilog | `Dot ->
-            let graph = SGALib.Graphs.graph_of_compile_unit c_unit in
-            Stdio.Out_channel.with_file cli_out_fname ~f:(fun out ->
-                (match cli_backend with
-                 | `Hpp | `Cpp | `Exe -> assert false
-                 | `Dot -> Backends.Dot.main
-                 | `Verilog -> Backends.Verilog.main) out graph))
+        run_backend cli_backend cli_out_fname c_unit
      | [] -> parse_error (Pos.Filename cli_in_fname) "No modules declared")
   with Error { epos; ekind; emsg } ->
     Printf.eprintf "%s: %s: %s\n"
@@ -470,15 +504,6 @@ let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
        | `TypeError -> "Type error")
       emsg;
     exit 1
-
-let backend_of_fname fname =
-  match Core.Filename.split_extension fname with
-  | _, Some "v" -> `Verilog
-  | _, Some "dot" -> `Dot
-  | _, Some "hpp" -> `Hpp
-  | _, Some "cpp" -> `Cpp
-  | _, Some "exe" -> `Exe
-  | _, _ -> failwith "Output file must have extension .v, .dot, .hpp, .cpp, or .exe"
 
 let cli =
   let open Core in
