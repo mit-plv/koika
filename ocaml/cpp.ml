@@ -227,7 +227,7 @@ let compile (type name_t var_t reg_t)
     p_scoped (sprintf "%s %s(%s)%s" typ name args annot) pbody in
 
   let p_includeguard pbody =
-    let cpp_define = sprintf "%s_HPP" (String.capitalize_ascii classname) in
+    let cpp_define = sprintf "%s_HPP" (String.uppercase_ascii classname) in
     p "#ifndef %s" cpp_define;
     p "#define %s" cpp_define;
     nl ();
@@ -251,7 +251,7 @@ let compile (type name_t var_t reg_t)
     p "struct %s;" (cpp_struct_name sg) in
 
   let p_struct_printer_forward_decl sg =
-    p "static std::string struct_str(const %s);" (cpp_struct_name sg) in
+    p "static std::string struct_str(%s /*val*/);" (cpp_struct_name sg) in
 
   let p_struct_prims_forward_decls sg =
     let s_sz = struct_sz sg in

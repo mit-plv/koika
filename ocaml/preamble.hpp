@@ -169,7 +169,7 @@ namespace prims {
   }
 
   // Forward-declared; our compiler defines one instance per structure type
-  template<typename T, std::size_t sz> static T unpack(uint_t<sz>);
+  template<typename T, std::size_t sz> static T unpack(uint_t<sz> /*bits*/);
 } // namespace prims
 
 #ifndef SIM_MINIMAL
@@ -179,9 +179,8 @@ std::string uint_str(const uint_t<sz> val) {
   stream << sz << "'";
   if (sz <= 64) {
     stream << "b";
-    for (int pos = sz - 1; pos >= 0; pos--) {
-      uint8_t bit = static_cast<uint8_t>((val >> pos) & 1u);
-      stream << (bool(bit) ? "1" : "0");
+    for (size_t pos = sz; pos > 0; pos--) {
+      stream << prims::truncate<1, sz>(val >> (pos - 1u));
     }
     stream << " (0x" << std::hex << +val << ", " << std::dec << +val << ")";
   } else {
