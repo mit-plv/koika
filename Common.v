@@ -110,8 +110,10 @@ Instance EqDec_string : EqDec string := _.
 Instance EqDec_unit : EqDec unit := _.
 Instance EqDec_pair A B `{EqDec A} `{EqDec B} : EqDec (A * B) := _.
 Instance EqDec_option A `{EqDec A} : EqDec (option A) := _.
+Instance EqDec_vect_nil T `{EqDec T} : EqDec (vect_nil_t T) := _.
+Instance EqDec_vect_cons A B `{EqDec A} `{EqDec B} : EqDec (vect_cons_t A B) := _.
 Instance EqDec_vect T n `{EqDec T} : EqDec (vect T n).
-Proof. induction n; cbn; eauto using EqDec_unit, EqDec_pair; eassumption. Defined.
+Proof. induction n; cbn; eauto using EqDec_vect_nil, EqDec_vect_cons; eassumption. Defined.
 Instance EqDec_vector A (sz: nat) {EQ: EqDec A}: EqDec (Vector.t A sz).
 Proof. econstructor; intros; eapply Vector.eq_dec; apply EqDec_beq_iff. Defined.
 

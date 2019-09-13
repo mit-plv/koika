@@ -431,8 +431,8 @@ Section Switch.
     let '(label, branch) := vect_hd branches in
     match nb return vect _ (S nb) -> uaction with
     | 0 => fun _ => branch
-    | S nb => fun '(_, br) => if_eq (UVar var) (UConst label)
-                                branch (gen_switch var br)
+    | S nb => fun branches => if_eq (UVar var) (UConst label)
+                                branch (gen_switch var (vect_tl branches))
     end branches.
 
   Definition UCompleteSwitch

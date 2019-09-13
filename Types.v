@@ -93,7 +93,7 @@ Proof.
   - destruct sig; cbn.
     revert struct_fields0.
     fix IH 1. destruct struct_fields0 as [ | (nm & tau) struct_fields0 ]; cbn.
-    + intro x; exact x.
+    + intros; exact vect_nil.
     + intros (x & xs).
       apply Bits.app.
       apply (IHt tau x).
@@ -108,7 +108,7 @@ Proof.
   - destruct sig; cbn.
     revert struct_fields0.
     fix IH 1. destruct struct_fields0 as [ | (nm & tau) struct_fields0 ]; cbn.
-    + intro x; exact x.
+    + intros; exact tt.
     + intros v.
       apply Bits.split in v.
       exact (IHt _ (fst v), IH _ (snd v)).
@@ -128,7 +128,7 @@ Proof.
   - destruct sig; cbn.
     revert struct_fields0.
     fix IH 1. destruct struct_fields0 as [ | (nm & tau) struct_fields0 ]; cbn.
-    + reflexivity.
+    + destruct bs; reflexivity.
     + cbn.
       intros. rewrite IH, IHt.
       apply vect_app_split.
@@ -143,7 +143,7 @@ Proof.
   - destruct sig; cbn.
     revert struct_fields0.
     fix IH 1. destruct struct_fields0 as [ | (nm & tau) struct_fields0 ]; cbn.
-    + reflexivity.
+    + destruct v; reflexivity.
     + cbn.
       intros.
       rewrite (surjective_pairing v).

@@ -4,7 +4,7 @@ Require Import SGA.Common SGA.Vect SGA.Member.
 Fixpoint all_indices (bound: nat) : vect (index bound) bound :=
   match bound as n return (vect (index n) n) with
   | 0 => vect_nil
-  | S bound => (thisone, vect_map anotherone (all_indices bound))
+  | S bound => vect_cons thisone (vect_map anotherone (all_indices bound))
   end.
 
 Lemma all_indices_eqn bound:

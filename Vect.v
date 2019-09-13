@@ -35,34 +35,41 @@ Fixpoint index_to_nat {sz} (idx: index sz) {struct sz} : nat :=
 Definition index_cast n n' (eq: n = n') (idx: index n) : index n' :=
   ltac:(subst; assumption).
 
+Local Set Primitive Projections.
+Inductive vect_nil_t {T: Type} := _vect_nil.
+Record vect_cons_t {A B: Type} := { vhd: A; vtl: B }.
+Arguments vect_nil_t : clear implicits.
+Arguments vect_cons_t : clear implicits.
+
 Fixpoint vect T n : Type :=
   match n with
-  | 0 => unit
-  | S n => (T * @vect T n)%type
+  | 0 => vect_nil_t T
+  | S n => vect_cons_t T (@vect T n)
   end.
 
 Definition vect_hd {T n} (v: vect T (S n)) : T :=
-  fst v.
+  v.(vhd).
 
 Definition vect_tl {T n} (v: vect T (S n)) : vect T n :=
-  snd v.
+  v.(vtl).
 
-Definition vect_nil {T} : vect T 0 := tt.
+Definition vect_nil {T} : vect T 0 := _vect_nil.
 
 Definition vect_cons {T n} (t: T) (v: vect T n) : vect T (S n) :=
-  (t, v).
+  {| vhd := t; vtl := v |}.
 
 Lemma vect_cons_hd_tl {T sz}:
   forall (v: vect T (S sz)),
     vect_cons (vect_hd v) (vect_tl v) = v.
 Proof.
-  destruct v; reflexivity.
+  unfold vect_hd, vect_tl.
+  reflexivity.
 Qed.
 
 Fixpoint vect_const {T} sz (t: T) : vect T sz :=
   match sz with
   | 0 => vect_nil
-  | S sz => (t, vect_const sz t)
+  | S sz => vect_cons t (vect_const sz t)
   end.
 
 Fixpoint vect_app {T} {sz1 sz2} (bs1: vect T sz1) (bs2: vect T sz2) {struct sz1} : vect T (sz1 + sz2) :=
@@ -110,14 +117,14 @@ Fixpoint vect_nth {T n} (v: vect T n) (idx: index n) {struct n} : T :=
 
 Fixpoint vect_last {T n} (v: vect T (S n)) : T :=
   match n return vect T (S n) -> T with
-  | O => fun v => (fst v)
-  | S _ => fun v => vect_last (snd v)
+  | O => fun v => vect_hd v
+  | S _ => fun v => vect_last (vect_tl v)
   end v.
 
 Fixpoint vect_map {T T' n} (f: T -> T') (v: vect T n) : vect T' n :=
   match n return vect T n -> vect T' n with
-  | O => fun _ => tt
-  | S _ => fun '(hd, tl) => (f hd, vect_map f tl)
+  | O => fun _ => vect_nil
+  | S _ => fun v => vect_cons (f (vect_hd v)) (vect_map f (vect_tl v))
   end v.
 
 Lemma vect_nth_map {T T' sz} (f: T -> T'):
@@ -129,8 +136,9 @@ Qed.
 
 Fixpoint vect_zip {T1 T2 n} (v1: vect T1 n) (v2: vect T2 n) : vect (T1 * T2) n :=
   match n return vect T1 n -> vect T2 n -> vect (T1 * T2) n with
-  | O => fun _ _ => tt
-  | S _ => fun '(hd1, tl1) '(hd2, tl2) => ((hd1,  hd2), vect_zip tl1 tl2)
+  | O => fun _ _ => vect_nil
+  | S _ => fun v1 v2 => vect_cons (vect_hd v1,  vect_hd v2)
+                              (vect_zip (vect_tl v1) (vect_tl v2))
   end v1 v2.
 
 Definition vect_map2 {T1 T2 T n} (f: T1 -> T2 -> T) (v1: vect T1 n) (v2: vect T2 n) : vect T n :=
@@ -139,7 +147,7 @@ Definition vect_map2 {T1 T2 T n} (f: T1 -> T2 -> T) (v1: vect T1 n) (v2: vect T2
 Fixpoint vect_fold_left {A T n} (f: A -> T -> A) (a0: A) (v: vect T n) : A :=
   match n return vect T n -> A with
   | O => fun _ => a0
-  | S _ => fun '(hd, tl) => f (vect_fold_left f a0 tl) hd
+  | S _ => fun v => f (vect_fold_left f a0 (vect_tl v)) (vect_hd v)
   end v.
 
 Definition vect_to_list {T n} (v: vect T n) : list T :=
@@ -164,7 +172,7 @@ Fixpoint vect_of_list {T} (l: list T) : vect T (length l) :=
 Fixpoint vect_truncate_left {T sz} n (v: vect T (n + sz)) : vect T sz :=
   match n return vect T (n + sz) -> vect T sz with
   | 0 => fun v => v
-  | S n => fun '(h, t) => vect_truncate_left n t
+  | S n => fun v => vect_truncate_left n (vect_tl v)
   end v.
 
 Fixpoint vect_snoc {T sz} (t: T) (v: vect T sz) : vect T (S sz) :=

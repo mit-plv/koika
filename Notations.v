@@ -11,17 +11,17 @@ Delimit Scope sga_scope with sga.
 Delimit Scope sga_expr_scope with sga_expr.
 
 (* These are just for pattern-matching, since '~' doesn't work in matches *)
-Notation "'Ob'" := (tt) (at level 7, left associativity, only parsing) : bitparsing.
-Notation "bs '~' 0" := (false, bs) (at level 7, left associativity, only parsing) : bitparsing.
-Notation "bs '~' 1" := (true, bs) (at level 7, left associativity, only parsing) : bitparsing.
-Notation "bs '~' b" := (b, bs) (at level 7, left associativity, only parsing) : bitparsing.
+Notation "'Ob'" := (vect_nil) (at level 7, left associativity, only parsing) : bitparsing.
+Notation "bs '~' 0" := {| vhd := false; vtl := bs |} (at level 7, left associativity, only parsing) : bitparsing.
+Notation "bs '~' 1" := {| vhd := true; vtl := bs |} (at level 7, left associativity, only parsing) : bitparsing.
+Notation "bs '~' b" := {| vhd := b; vtl := bs |} (at level 7, left associativity, only parsing) : bitparsing.
 Delimit Scope bitparsing with bitparsing.
 Notation "`` bs" := (bs%bitparsing) (only parsing, at level 6).
 
-Notation "'Ob'" := (tt) (at level 7, left associativity, only printing) : bits_printing.
-Notation "bs '~' b" := (b, bs) (at level 7, left associativity, only printing) : bits_printing. (* FIXME *)
-Notation "bs '~' 0" := (false, bs) (at level 7, left associativity, only printing) : bits_printing.
-Notation "bs '~' 1" := (true, bs) (at level 7, left associativity, only printing) : bits_printing.
+Notation "'Ob'" := (@vect_nil bool) (at level 7, left associativity, only printing) : bits_printing.
+(* Notation "bs '~' b" := {| vhd := b; vtl := bs |} (at level 7, left associativity, only printing) : bits_printing. (* FIXME *) *)
+Notation "bs '~' 0" := {| vhd := false; vtl := bs |} (at level 7, left associativity, only printing) : bits_printing.
+Notation "bs '~' 1" := {| vhd := true; vtl := bs |} (at level 7, left associativity, only printing) : bits_printing.
 Global Open Scope bits_printing.
 
 Notation "$ var" :=
