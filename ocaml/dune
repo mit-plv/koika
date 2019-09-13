@@ -17,17 +17,11 @@
  (libraries common SGALib zarith)
  (preprocess (pps ppx_jane ppx_deriving.show)))
 
-(library
- (name CoqUtils)
- (modules CoqUtils)
- (libraries common SGALib backends)
- (preprocess (pps ppx_jane ppx_deriving.show)))
-
 (executable
  (name coq_examples)
  (modules coq_examples)
- (preprocess (pps ppx_jane ppx_deriving.show))
- (libraries CoqUtils))
+ (libraries common SGALib backends)
+ (preprocess (pps ppx_jane ppx_deriving.show)))
 
 (executable
  (name cli)
