@@ -1,0 +1,11 @@
+;; (progn (load (expand-file-name "../lv-mode.el")) (emacs-lisp-mode))
+
+(module uint128
+  (register r 128'1)
+
+  (rule rotate1
+    (let ((r (read#0 r)))
+      (write#0 r (+ (<< r 7'1) (+ 128'15 (zextl 127 (sel r 7'127)))))))
+
+  (scheduler _
+    (sequence rotate1)))
