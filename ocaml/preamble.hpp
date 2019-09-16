@@ -187,7 +187,7 @@ std::string uint_str(const uint_t<sz> val) {
     stream << "x" << std::hex << +val;
   }
   return stream.str();
-};
+}
 #endif // #ifndef SIM_MINIMAL
 
 struct rwset_t {
