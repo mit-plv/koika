@@ -772,10 +772,14 @@ let input_of_sim_package (sp: _ SGALib.SGA.sim_package_t)
                    | None -> None
                    | Some s -> Some (SGALib.Util.string_of_coq_string s)); }
 
-let command exe args =
+let command ?(verbose=false) exe args =
   (* FIXME use Unix.open_process_args instead of Filename.quote (OCaml 4.08) *)
   let qargs = List.map Filename.quote (exe :: args) in
-  ignore (Sys.command (String.concat " " qargs))
+  let cmd = String.concat " " qargs in
+  let time = Unix.gettimeofday () in
+  if verbose then Printf.eprintf ">> %s\n%!" cmd;
+  ignore (Sys.command cmd);
+  if verbose then Printf.eprintf "   (%.2f s)\n%!" (Unix.gettimeofday () -. time)
 
 let clang_format fname =
   command "clang-format" ["-i"; fname]
@@ -783,7 +787,7 @@ let clang_format fname =
 let compile_cpp fname =
   let srcname = fname ^ ".cpp" in
   let exename = fname ^ ".exe" in
-  command "g++" ["-O3"; "-Wall"; "-Wextra"; srcname; "-o"; exename]
+  command ~verbose:true "g++" ["-O3"; "-Wall"; "-Wextra"; srcname; "-o"; exename]
 
 let write_cpp fname ext buf =
   let fname = fname ^ ext in
