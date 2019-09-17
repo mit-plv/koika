@@ -98,12 +98,12 @@ Section Circuits.
   Notation cr := circuit_r.
 
   Context (sigma: forall f, ExternalSignature_denote (Sigma f)).
-  Definition circuit_fn_of_fn {sig} (fn: ExternalSignature_denote sig)
-    : CExternalSignature_denote (CExternalSignature_of_ExternalSignature sig) :=
-    fun bs1 bs2 => bits_of_value (fn (value_of_bits bs1) (value_of_bits bs2)).
-  Definition circuit_sigma : forall f, CExternalSignature_denote (cSigma f) :=
-    fun f => circuit_fn_of_fn (sigma f).
-  Notation csigma := circuit_sigma.
+  Context (csigma: forall f, CExternalSignature_denote (cSigma f)).
+
+  Definition circuit_sigma_spec :=
+    forall fn (v1: (Sigma fn).(arg1Type)) (v2: (Sigma fn).(arg2Type)),
+      csigma fn (bits_of_value v1) (bits_of_value v2) =
+      bits_of_value (sigma fn v1 v2).
 
   Notation circuit := (circuit cR cSigma).
   Notation interp_circuit := (interp_circuit cr csigma).
@@ -283,7 +283,8 @@ End Circuits.
 Arguments circuit_R {reg_t} R.
 Arguments circuit_r {reg_t} {R} {REnv} r.
 Arguments circuit_Sigma {fn_t} Sigma.
-Arguments circuit_sigma {fn_t} {Sigma} sigma.
+Arguments circuit_sigma_spec {fn_t} {Sigma} sigma.
+(* Arguments csigma {fn_t} {Sigma} sigma. *)
 
 Ltac circuit_lt_f_equal :=
   repeat (apply circuit_lt_CAnnot_l ||
