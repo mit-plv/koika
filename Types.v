@@ -1,52 +1,75 @@
 Require Export Coq.Strings.String.
-Require Import Coq.Vectors.Vector.
 Require Export SGA.Common SGA.Vect SGA.IndexUtils.
+Require Import Coq.Lists.List.
+Import ListNotations.
 
 Record struct_sig' {A} :=
   { struct_name: string;
     struct_fields: list (string * A) }.
 Arguments struct_sig' : clear implicits.
 
+Record enum_sig :=
+  { enum_name: string;
+    enum_size: nat;
+    enum_bitsize: nat;
+    enum_members: vect string enum_size;
+    enum_bitpatterns: vect (bits enum_bitsize) enum_size }.
+
 Inductive type : Type :=
 | bits_t (sz: nat)
+| enum_t (sig: enum_sig)
 | struct_t (sig: struct_sig' type).
 
 Notation unit_t := (bits_t 0).
 Notation struct_sig := (struct_sig' type).
 
+Ltac existT_dec :=
+  repeat match goal with
+         | [ H: existT _ _ ?x = existT _ _ ?y |- _ ] =>
+           apply Eqdep_dec.inj_pair2_eq_dec in H; [ | apply eq_dec ]
+         end.
+
 Ltac simple_eq :=
-  first [ left; solve[eauto] | right; inversion 1; subst; solve[congruence] ].
+  first [ left; solve[eauto] | right; inversion 1; existT_dec; subst; solve[congruence] ].
 
 Instance EqDec_type : EqDec type.
 Proof.
   econstructor.
   fix IHtau 1;
-    destruct t1 as [ sz1 | fs1 ];
-    destruct t2 as [ sz2 | fs2 ]; cbn;
+    destruct t1 as [ sz1 | en1 | fs1 ];
+    destruct t2 as [ sz2 | en2 | fs2 ]; cbn;
       try simple_eq.
   - destruct (eq_dec sz1 sz2); subst;
       simple_eq.
+  - destruct en1 as [en1 es1 ebsz1 em1 ebp1];
+      destruct en2 as [en2 es2 ebsz2 em2 ebp2].
+    destruct (eq_dec en1 en2); subst; try simple_eq.
+    destruct (eq_dec es1 es2); subst; try simple_eq.
+    destruct (eq_dec ebsz1 ebsz2); subst; try simple_eq.
+    destruct (eq_dec em1 em2); subst; try simple_eq.
+    destruct (eq_dec ebp1 ebp2); subst; try simple_eq.
   - destruct fs1 as [ nm1 f1 ];
       destruct fs2 as [ nm2 f2 ]; cbn.
-    + destruct (eq_dec nm1 nm2); subst;
-        try simple_eq.
-      revert f1 f2;
-        fix IHf 1;
-        destruct f1 as [ | (n1 & tau1) f1 ], f2 as [ | (n2 & tau2) f2 ];
-        try simple_eq.
-      destruct (eq_dec n1 n2); subst;
-        try simple_eq.
-      destruct (IHtau tau1 tau2); subst;
-        try simple_eq.
-      destruct (IHf f1 f2) as [ Heq | Hneq ]; subst;
-        try inversion Heq; try simple_eq.
+    destruct (eq_dec nm1 nm2); subst; try simple_eq.
+    revert f1 f2; fix IHf 1;
+      destruct f1 as [ | (n1 & tau1) f1 ], f2 as [ | (n2 & tau2) f2 ]; try simple_eq.
+    destruct (eq_dec n1 n2); subst; try simple_eq.
+    destruct (IHtau tau1 tau2); subst; try simple_eq.
+    destruct (IHf f1 f2) as [ Heq | Hneq ]; subst; try inversion Heq;
+      try simple_eq.
 Defined.
+
+Definition struct_fields_sz' (type_sz: type -> nat) (fields: list (string * type)) :=
+  List.fold_right (fun '(_, tau') acc => type_sz tau' + acc) 0 fields.
 
 Fixpoint type_sz tau :=
   match tau with
   | bits_t sz => sz
-  | struct_t sig => List.fold_right (fun '(_, tau') acc => type_sz tau' + acc) 0 sig.(struct_fields)
+  | enum_t sig => sig.(enum_bitsize)
+  | struct_t sig => struct_fields_sz' type_sz sig.(struct_fields)
   end.
+
+Notation struct_fields_sz := (struct_fields_sz' type_sz).
 
 Definition struct_index (sig: struct_sig) :=
   Vect.index (List.length sig.(struct_fields)).
@@ -62,11 +85,11 @@ Definition field_sz (sig: struct_sig) idx :=
 
 Definition field_offset_left (sig: struct_sig) (idx: struct_index sig) :=
   let prev_fields := List.firstn (index_to_nat idx) sig.(struct_fields) in
-  struct_sz {| struct_name := ""; struct_fields := prev_fields |}.
+  struct_fields_sz prev_fields.
 
 Definition field_offset_right (sig: struct_sig) (idx: struct_index sig) :=
   let next_fields := List.skipn (S (index_to_nat idx)) sig.(struct_fields) in
-  struct_sz {| struct_name := ""; struct_fields := next_fields |}.
+  struct_fields_sz next_fields.
 
 Notation struct_bits_t sig :=
   (bits_t (struct_sz sig)).
@@ -76,69 +99,77 @@ Notation field_bits_t sig idx :=
 
 Coercion type_sz : type >-> nat.
 
+Definition struct_denote' (type_denote: type -> Type) (fields: list (string * type)) :=
+  List.fold_right (fun '(_, tau) acc => type_denote tau * acc)%type unit fields.
+
 Fixpoint type_denote tau : Type :=
   match tau with
   | bits_t sz => bits sz
-  | struct_t fields =>
-    List.fold_right (fun '(_, tau) acc => type_denote tau * acc)%type unit fields.(struct_fields)
+  | enum_t sig => bits sig.(enum_bitsize)
+  | struct_t sig => struct_denote' type_denote sig.(struct_fields)
   end.
+
+Notation struct_denote := (struct_denote' type_denote).
 
 Coercion type_denote : type >-> Sortclass.
 
-Definition bits_of_value {tau: type} (x: type_denote tau) : bits (type_sz tau).
-Proof.
-  revert tau x.
-  fix IHt 1; destruct tau as [sz | sig]; cbn.
-  - intro x; exact x.
-  - destruct sig; cbn.
-    revert struct_fields0.
-    fix IH 1. destruct struct_fields0 as [ | (nm & tau) struct_fields0 ]; cbn.
-    + intros; exact vect_nil.
-    + intros (x & xs).
-      apply Bits.app.
-      apply (IHt tau x).
-      apply (IH _ xs).
-Defined.
+Fixpoint bits_of_value {tau: type} (x: type_denote tau) {struct tau} : bits (type_sz tau) :=
+  let bits_of_struct_value :=
+      (fix bits_of_struct_value
+           {fields}
+           (x: struct_denote fields)
+       : bits (struct_fields_sz fields) :=
+         match fields return struct_denote fields -> bits (struct_fields_sz fields) with
+         | [] => fun _ => vect_nil
+         | (nm, tau) :: fields => fun '(x, xs) => Bits.app (bits_of_value x) (bits_of_struct_value xs)
+         end x) in
+  match tau return type_denote tau -> bits (type_sz tau) with
+  | bits_t sz => fun bs => bs
+  | enum_t sig => fun bs => bs
+  | struct_t sig => fun str => bits_of_struct_value str
+  end x.
 
-Program Definition value_of_bits {tau: type} (bs: bits (type_sz tau)) : type_denote tau.
-Proof.
-  revert tau bs.
-  fix IHt 1; destruct tau as [sz | sig]; cbn.
-  - intro x; exact x.
-  - destruct sig; cbn.
-    revert struct_fields0.
-    fix IH 1. destruct struct_fields0 as [ | (nm & tau) struct_fields0 ]; cbn.
-    + intros; exact tt.
-    + intros v.
-      apply Bits.split in v.
-      exact (IHt _ (fst v), IH _ (snd v)).
-Defined.
-
-Ltac fold_fixes :=
-  repeat match goal with
-         | [  |- context[?x] ] => is_fix x; set x
-         end.
+Fixpoint value_of_bits {tau: type} (bs: bits (type_sz tau)) {struct tau}: type_denote tau :=
+  let value_of_struct_bits :=
+      (fix value_of_struct_bits
+           {fields: list (string * type)}
+           (bs: bits (struct_fields_sz fields))
+       : struct_denote fields :=
+         match fields return bits (struct_fields_sz fields) -> struct_denote fields with
+         | [] => fun bs => tt
+         | (nm, tau) :: fields =>
+           fun bs =>
+             let splt := Bits.split bs in
+             let hd := value_of_bits (fst splt) in
+             let tl := value_of_struct_bits (snd splt) in
+             (hd, tl)
+         end bs) in
+  match tau return bits (type_sz tau) -> type_denote tau with
+  | bits_t sz => fun bs => bs
+  | enum_t sig => fun bs => bs
+  | struct_t sig => fun bs => value_of_struct_bits bs
+  end bs.
 
 Definition bits_of_value_of_bits :
   forall tau (bs: bits (type_sz tau)),
     bits_of_value (value_of_bits bs) = bs.
 Proof.
-  fix IHt 1; destruct tau as [sz | sig]; cbn.
+  fix IHtau 1; destruct tau as [sz | sig | sig]; cbn.
+  - reflexivity.
   - reflexivity.
   - destruct sig; cbn.
     revert struct_fields0.
-    fix IH 1. destruct struct_fields0 as [ | (nm & tau) struct_fields0 ]; cbn.
+    fix IHfields 1. destruct struct_fields0 as [ | (nm & tau) struct_fields0 ]; cbn.
     + destruct bs; reflexivity.
-    + cbn.
-      intros. rewrite IH, IHt.
-      apply vect_app_split.
+    + intros; rewrite IHtau, IHfields; apply vect_app_split.
 Qed.
 
 Definition value_of_bits_of_value :
   forall tau (v: type_denote tau),
     (value_of_bits (bits_of_value v)) = v.
 Proof.
-  fix IHt 1; destruct tau as [sz | sig]; cbn.
+  fix IHt 1; destruct tau as [sz | sig | sig]; cbn.
+  - reflexivity.
   - reflexivity.
   - destruct sig; cbn.
     revert struct_fields0.
@@ -172,7 +203,7 @@ Lemma ExternalSignature_injRet :
 Proof. now inversion 1. Qed.
 
 Inductive type_kind :=
-  kind_bits | kind_struct (sig: struct_sig).
+  kind_bits | kind_enum (sig: enum_sig) | kind_struct (sig: struct_sig).
 
 Inductive fn_tc_error' :=
 | FnKindMismatch (expected: type_kind)
@@ -185,5 +216,6 @@ Definition fn_tc_error : Type := arg_id * fn_tc_error'.
 Definition assert_bits_t arg (tau: type) : result nat fn_tc_error :=
   match tau with
   | bits_t sz => Success sz
+  | enum_t _ => Failure (arg, FnKindMismatch kind_bits)
   | struct_t _ => Failure (arg, FnKindMismatch kind_bits)
   end.

@@ -26,3 +26,5 @@ Instance EqDec_pair A B `{EqDec A} `{EqDec B} : EqDec (A * B) := _.
 Instance EqDec_option A `{EqDec A} : EqDec (option A) := _.
 Instance EqDec_vector A (sz: nat) {EQ: EqDec A}: EqDec (Vector.t A sz).
 Proof. econstructor; intros; eapply Vector.eq_dec; apply EqDec_beq_iff. Defined.
+Instance EqDec_eq_true {A} (f: A -> bool) (a: A) : EqDec (f a = true).
+Proof. constructor; left; apply Eqdep_dec.UIP_dec, eq_dec. Qed.
