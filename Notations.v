@@ -7,6 +7,11 @@ Require Export
         SGA.Primitives
         SGA.Interop.
 
+Section UConstBits.
+  Context {pos_t var_t reg_t fn_t : Type}.
+  Definition UConstBits {sz} (bs: bits sz) := @UConst pos_t var_t reg_t fn_t (bits_t sz) bs.
+End UConstBits.
+
 Delimit Scope sga_scope with sga.
 Delimit Scope sga_expr_scope with sga_expr.
 
@@ -34,14 +39,14 @@ Notation "reg '#read1'" :=
   (URead P1 reg)
     (at level 99, format "reg '#read1'") : sga_expr_scope.
 Notation "f [ arg ]" :=
-  (UCall (UCustomFn f) arg (UConst Ob))
+  (UCall (UCustomFn f) arg (UConstBits Ob))
     (at level 99, arg at level 99, format "f [ arg ]") : sga_expr_scope.
 Notation "f [ arg1 ',' arg2 ]" :=
   (UCall (UCustomFn f) arg1 arg2)
     (at level 99, arg1 at level 99, arg2 at level 99,
     format "f [ arg1 ','  arg2 ]") : sga_expr_scope.
 Notation "f [[ arg ]]" :=
-  (UCall (UPrimFn (UBitsFn f)) arg (UConst Ob))
+  (UCall (UPrimFn (UBitsFn f)) arg (UConstBits Ob))
     (at level 99, arg at level 99, format "f [[ arg ]]") : sga_expr_scope.
 Notation "f [[ arg1 ',' arg2 ]]" :=
   (UCall (UPrimFn (UBitsFn f)) arg1 arg2)
@@ -49,9 +54,9 @@ Notation "f [[ arg1 ',' arg2 ]]" :=
     format "f [[ arg1 ','  arg2 ]]") : sga_expr_scope.
 
 Notation "'skip'" :=
-  (UConst Bits.nil) (at level 99) : sga_scope.
+  (UConstBits Ob) (at level 99) : sga_scope.
 Notation "'fail'" :=
-  (UFail 0) (at level 99) : sga_scope.
+  (UFail (bits_t 0)) (at level 99) : sga_scope.
 Notation "r1 ';;' r2" :=
   (USeq r1 r2) (at level 99) : sga_scope.
 Notation "'Let' var '<-' expr 'in' body" :=

@@ -48,9 +48,9 @@ Module Ex1.
     match r with
     | r1 =>
       UBind "x" (URead P0 R0)
-            (UIf (UCall Even (UVar "x") (UConst Ob))
-                 (UWrite P0 R1 (UConst Ob~1))
-                 (UWrite P0 R1 (UConst Ob~1)))
+            (UIf (UCall Even (UVar "x") (UConstBits Ob))
+                 (UWrite P0 R1 (UConstBits Ob~1))
+                 (UWrite P0 R1 (UConstBits Ob~1)))
     end.
 
   Definition rules :=
@@ -183,22 +183,22 @@ Module Collatz.
 
   Definition _divide : uaction unit var_t reg_t ufn_t :=
     Let "v" <- R0#read0 in
-    Let "odd" <- USel[[$"v", UConst (Bits.zero logsz)]] in
+    Let "odd" <- USel[[$"v", UConstBits (Bits.zero logsz)]] in
     If UNot[[$"odd"]] Then
-       R0#write0(ULsr[[$"v", UConst Ob~1]])
+       R0#write0(ULsr[[$"v", UConstBits Ob~1]])
     Else
        fail
     EndIf.
 
   Definition TimesThree (ex: uaction unit var_t reg_t ufn_t) :=
-    UUIntPlus[[ULsl[[ex, UConst Ob~1]], ex]]%sga_expr.
+    UUIntPlus[[ULsl[[ex, UConstBits Ob~1]], ex]]%sga_expr.
 
   Definition _multiply : uaction unit var_t reg_t ufn_t :=
     Let "v" <- R0#read1 in
-    Let "odd" <- USel[[$"v", UConst (Bits.zero logsz)]] in
+    Let "odd" <- USel[[$"v", UConstBits (Bits.zero logsz)]] in
     If $"odd" Then
        R0#write1(UUIntPlus[[TimesThree ($"v"),
-                            UConst (Bits.one sz)]])
+                            UConstBits (Bits.one sz)]])
     Else
        fail
     EndIf.
@@ -324,7 +324,7 @@ Module Decoder (P: Unpacker) (F: Fetcher).
     Let "pc" <- Rpc#read0 in
     Let "encoded" <- F.fetch_instr _ "pc" in
     ((Rencoded#write0($"encoded"));;
-     (Rpc#write0(UUIntPlus[[$"pc", UConst Ob~0~0~1]]))).
+     (Rpc#write0(UUIntPlus[[$"pc", UConstBits Ob~0~0~1]]))).
 
   Definition _decode : uaction :=
     Let "encoded" <- Rencoded#read1 in
@@ -381,17 +381,17 @@ Module ManualUnpacker <: Unpacker.
     (UCall (UPrimFn (UStructFn decoded_sig fn)) a1 a2).
 
   Definition unpack reg_t custom_ufn_t encoded: uaction unit string reg_t (interop_ufn_t custom_ufn_t) :=
-    (Let "imm" <- SCall (UDoBits GetField "immediate") ($encoded) (UConst Ob) in
-     Let "src" <- SCall (UDoBits GetField "src") ($encoded) (UConst Ob) in
-     Let "dst" <- SCall (UDoBits GetField "dst") ($encoded) (UConst Ob) in
-     (* Let "imm" <- (UPart 0 16)[[$encoded, UConst Ob]] in *)
-     (* Let "dst" <- (UPart 16 8)[[$encoded, UConst Ob]] in *)
-     (* Let "src" <- (UPart 24 8)[[$encoded, UConst Ob]] in *)
+    (Let "imm" <- SCall (UDoBits GetField "immediate") ($encoded) (UConstBits Ob) in
+     Let "src" <- SCall (UDoBits GetField "src") ($encoded) (UConstBits Ob) in
+     Let "dst" <- SCall (UDoBits GetField "dst") ($encoded) (UConstBits Ob) in
+     (* Let "imm" <- (UPart 0 16)[[$encoded, UConstBits Ob]] in *)
+     (* Let "dst" <- (UPart 16 8)[[$encoded, UConstBits Ob]] in *)
+     (* Let "src" <- (UPart 24 8)[[$encoded, UConstBits Ob]] in *)
      (SCall (UDo SubstField "immediate")
             (SCall (UDo SubstField "dst")
                    (SCall (UDo SubstField "src")
                           (UCall (UPrimFn (UConvFn (struct_t decoded_sig) Init))
-                                 (UConst Ob) (UConst Ob))
+                                 (UConstBits Ob) (UConstBits Ob))
                           ($"src"))
                    ($"dst"))
             ($"imm"))%sga_expr)%sga.
@@ -400,7 +400,7 @@ End ManualUnpacker.
 Module PrimitiveUnpacker <: Unpacker.
   Definition unpack reg_t custom_ufn_t encoded: uaction unit string reg_t (interop_ufn_t custom_ufn_t) :=
     (UCall (UPrimFn (UConvFn (struct_t decoded_sig) Unpack))
-           (UVar encoded) (UConst Ob)).
+           (UVar encoded) (UConstBits Ob)).
 End PrimitiveUnpacker.
 
 Section Switch.
@@ -421,7 +421,7 @@ Section Switch.
     match branches with
     | nil => default
     | (val, action) :: branches =>
-      if_eq (UVar var) (UConst val)
+      if_eq (UVar var) (UConstBits val)
             action (USwitch var default branches)
     end.
 
@@ -431,7 +431,7 @@ Section Switch.
     let '(label, branch) := vect_hd branches in
     match nb return vect _ (S nb) -> uaction with
     | 0 => fun _ => branch
-    | S nb => fun branches => if_eq (UVar var) (UConst label)
+    | S nb => fun branches => if_eq (UVar var) (UConstBits label)
                                 branch (gen_switch var (vect_tl branches))
     end branches.
 
@@ -455,14 +455,15 @@ Module ManualFetcher <: Fetcher.
   Notation uaction reg_t := (uaction unit string reg_t (interop_ufn_t custom_fn_t)).
 
   Definition instructions {reg_t} : list (uaction reg_t) :=
-    [UConst Ob~1~1~0~1~1~0~0~0~0~0~1~0~1~1~0~0~0~0~0~0~0~1~1~1~1~1~0~0~1~1~0~1;
-     UConst Ob~0~1~1~0~1~0~1~1~1~0~1~0~1~0~1~0~1~0~0~1~0~1~0~0~0~1~0~1~0~1~0~1;
-     UConst Ob~1~0~0~0~0~0~1~0~1~1~1~0~0~0~1~0~1~1~1~0~0~1~1~0~0~1~1~0~0~0~1~0;
-     UConst Ob~0~1~1~1~1~0~1~0~0~0~0~0~0~0~1~0~0~1~0~0~0~0~1~0~0~0~0~0~0~1~0~0;
-     UConst Ob~1~1~1~0~1~0~0~0~0~1~1~1~1~0~1~0~0~0~0~1~0~1~1~0~0~0~0~1~0~0~1~1;
-     UConst Ob~1~0~0~0~0~0~0~1~0~0~1~1~0~0~1~1~0~0~1~0~1~0~0~0~0~1~1~1~0~1~1~0;
-     UConst Ob~0~1~0~0~1~0~0~0~0~0~1~0~0~1~1~0~1~0~0~0~0~1~1~0~0~1~1~1~0~0~1~1;
-     UConst Ob~1~1~0~0~0~0~0~1~0~1~1~1~1~1~0~0~0~1~1~0~0~0~1~0~0~1~1~1~1~0~0~1].
+    List.map UConstBits
+      [Ob~1~1~0~1~1~0~0~0~0~0~1~0~1~1~0~0~0~0~0~0~0~1~1~1~1~1~0~0~1~1~0~1;
+       Ob~0~1~1~0~1~0~1~1~1~0~1~0~1~0~1~0~1~0~0~1~0~1~0~0~0~1~0~1~0~1~0~1;
+       Ob~1~0~0~0~0~0~1~0~1~1~1~0~0~0~1~0~1~1~1~0~0~1~1~0~0~1~1~0~0~0~1~0;
+       Ob~0~1~1~1~1~0~1~0~0~0~0~0~0~0~1~0~0~1~0~0~0~0~1~0~0~0~0~0~0~1~0~0;
+       Ob~1~1~1~0~1~0~0~0~0~1~1~1~1~0~1~0~0~0~0~1~0~1~1~0~0~0~0~1~0~0~1~1;
+       Ob~1~0~0~0~0~0~0~1~0~0~1~1~0~0~1~1~0~0~1~0~1~0~0~0~0~1~1~1~0~1~1~0;
+       Ob~0~1~0~0~1~0~0~0~0~0~1~0~0~1~1~0~1~0~0~0~0~1~1~0~0~1~1~1~0~0~1~1;
+       Ob~1~1~0~0~0~0~0~1~0~1~1~1~1~1~0~0~0~1~1~0~0~0~1~0~0~1~1~1~1~0~0~1].
 
   Fixpoint all_branches {reg_t} sz (counter: N) (actions: list (uaction reg_t)) :=
     match actions with
@@ -473,7 +474,7 @@ Module ManualFetcher <: Fetcher.
     end.
 
   Definition fetch_instr reg_t pc : uaction reg_t :=
-    Eval compute in (USwitch pc (UConst (Bits.zero 32)) (all_branches 3 N.zero instructions)).
+    Eval compute in (USwitch pc (UConstBits (Bits.zero 32)) (all_branches 3 N.zero instructions)).
 End ManualFetcher.
 
 Module PrimitiveFetcher <: Fetcher.
@@ -496,7 +497,7 @@ Module PrimitiveFetcher <: Fetcher.
   Notation uaction reg_t := (uaction unit string reg_t (interop_ufn_t custom_fn_t)).
 
   Definition fetch_instr reg_t pc : uaction reg_t :=
-    Eval compute in (UCall (UCustomFn FetchInstr) (UVar pc) (UConst Ob)).
+    Eval compute in (UCall (UCustomFn FetchInstr) (UVar pc) (UConstBits Ob)).
 End PrimitiveFetcher.
 
 Module ManualDecoder.
@@ -568,7 +569,7 @@ Module Pipeline.
     ((inputReg#write0(Stream[$"v"]));;
      Let "invalid" <- invalid#read1 in
      If $"invalid" Then
-       invalid#write1(UConst Ob~0);;
+       invalid#write1(UConstBits Ob~0);;
        (r0#write0(F[$"v"]))
      Else
        fail
@@ -580,11 +581,11 @@ Module Pipeline.
       Let "data" <- r0#read0 in
       Let "v" <- outputReg#read0 in
       ((outputReg#write0(Stream[$"v"]));;
-       (invalid#write0(UConst Ob~1));;
+       (invalid#write0(UConstBits Ob~1));;
        If UEq[[G[$"data"], G[F[$"v"] ] ]] Then
            skip
        Else
-           correct#write0(UConst Ob~0)
+           correct#write0(UConstBits Ob~0)
        EndIf)
     Else
         fail
@@ -681,7 +682,7 @@ Module RegisterFile_Ordered.
 
   Definition _ReadReg : uaction unit _ _ interop_minimal_ufn_t :=
     Let "v" <- rIndex#read0 in
-    ((rIndex#write0(UUIntPlus[[$"v", UConst (Bits.of_nat (log2 nregs) 1)]]));;
+    ((rIndex#write0(UUIntPlus[[$"v", UConstBits (Bits.of_nat (log2 nregs) 1)]]));;
      (rOutput#write0(UCompleteSwitch (log2 nregs) (pred nregs) "v"
                                      (vect_map (fun idx => (rData idx)#read0) (all_indices nregs))))).
 

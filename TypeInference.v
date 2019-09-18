@@ -10,6 +10,7 @@ Section ErrorReporting.
   Inductive error_message :=
   | UnboundVariable (var: var_t)
   | UnboundField (f: string) (sig: struct_sig)
+  | UnboundEnumMember (f: string) (sig: enum_sig)
   | TypeMismatch {sig tau} (e: action var_t R Sigma sig tau) (expected: type)
   | KindMismatch {sig tau} (e: action var_t R Sigma sig tau) (expected: type_kind).
 
@@ -91,17 +92,20 @@ Section TypeInference.
       | _ => pos
       end.
 
-    Definition unbound_variable pos var : error :=
-      {| epos := pos; emsg := UnboundVariable var |}.
+    Definition mkerror pos msg : error :=
+      {| epos := pos; emsg := msg |}.
 
     Fixpoint type_action (pos: pos_t) (sig: tsig var_t) (e: uaction)
       : result ({ tau: type & action sig tau }) :=
       match e with
       | UFail n => Success (EX (Fail (bits_t n)))
       | UVar var =>
-        let/res ktau_m := opt_result (assoc var sig) (unbound_variable pos var) in
+        let/res ktau_m := opt_result (assoc var sig) (mkerror pos (UnboundVariable var)) in
         Success (EX (Var ``ktau_m))
-      | UConst cst => Success (EX (Const (tau := bits_t _) cst))
+      | UConst cst => Success (EX (Const cst))
+      | UConstEnum sig name =>
+        let/res idx := opt_result (vect_index name sig.(enum_members)) (mkerror pos (UnboundEnumMember name sig)) in
+        Success (EX (Const (tau := enum_t sig) (vect_nth sig.(enum_bitpatterns) idx)))
       | USeq r1 r2 =>
         let/res r1' := type_action pos sig r1 in
         let/res r1' := cast_action (actpos pos r1) sig unit_t (``r1') in

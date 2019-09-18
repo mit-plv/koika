@@ -1,15 +1,13 @@
-Require Import SGA.Common.
-
-Inductive Port :=
-  P0 | P1.
+Require Import SGA.Common SGA.TypedSyntax.
 
 Section Syntax.
   Context {pos_t name_t var_t reg_t fn_t: Type}.
 
   Inductive uaction :=
-  | UFail (n: nat)
+  | UFail (tau: type)
   | UVar (var: var_t)
-  | UConst {n} (cst: bits n)
+  | UConst {tau: type} (cst: type_denote tau)
+  | UConstEnum (sig: enum_sig) (cst: string)
   | USeq (r1 r2: uaction)
   | UBind (v: var_t) (ex: uaction) (body: uaction)
   | UIf (cond: uaction) (tbranch: uaction) (fbranch: uaction)

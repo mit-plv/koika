@@ -1,5 +1,8 @@
 Require Import Coq.Lists.List.
-Require Export SGA.Common SGA.Environments SGA.Types SGA.Syntax.
+Require Export SGA.Common SGA.Environments SGA.Types.
+
+Inductive Port :=
+  P0 | P1.
 
 Section TypedSyntax.
   Context {name_t var_t reg_t fn_t: Type}.
