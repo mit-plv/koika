@@ -50,16 +50,14 @@ Proof.
     eauto using MemberHd, MemberTl.
 Defined.
 
-Lemma member_map {A B} (f: A -> B) a:
-  forall ls,
-    member a ls ->
-    member (f a) (List.map f ls).
-Proof.
-  induction ls; cbn; intros m.
-  - destruct (mdestruct m).
-  - destruct (mdestruct m) as [(-> & Heq) | (m' & Heq)];
-      subst; eauto using MemberHd, MemberTl.
-Defined.
+Fixpoint member_map {K K'} (f: K -> K') (k: K) (ls: list K)
+         (m: member k ls) : member (f k) (List.map f ls) :=
+  match m in (member k ls) return (member (f k) (List.map f ls)) with
+  | MemberHd k sig =>
+    MemberHd (f k) (List.map f sig)
+  | MemberTl k k' sig m' =>
+    MemberTl (f k) (f k') (List.map f sig) (member_map f k sig m')
+  end.
 
 Lemma member_app_l {A} (a: A):
   forall ls ls',

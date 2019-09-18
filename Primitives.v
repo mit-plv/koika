@@ -152,23 +152,14 @@ Definition prim_sel {sz} (bs: bits sz) (idx: bits (log2 sz)) :=
 Definition prim_uint_plus {sz} (bs1 bs2: bits sz) :=
   Bits.of_N sz (Bits.to_N bs1 + Bits.to_N bs2)%N.
 
-Fixpoint member_map {K K': Type} (f: K -> K') (k: K) (ls: list K)
-         (m: member k ls) : member (f k) (List.map f ls) :=
-  match m in (member k ls) return (member (f k) (List.map f ls)) with
-  | MemberHd k sig =>
-    MemberHd (f k) (List.map f sig)
-  | MemberTl k k' sig m' =>
-    MemberTl (f k) (f k') (List.map f sig) (member_map f k sig m')
-  end.
-
-Fixpoint type_accessor (tau: type) : Type :=
-  match tau with
-  | bits_t _sz => unit
-  | struct_t fields =>
-    let fs := fields.(struct_fields) in
-    let field_accessors := List.map (fun '(k, tau) => type_accessor tau) fs in
-    { k: index (List.length field_accessors) & List_nth field_accessors k }
-  end.
+(* Fixpoint type_accessor (tau: type) : Type := *)
+(*   match tau with *)
+(*   | bits_t _sz => unit *)
+(*   | struct_t fields => *)
+(*     let fs := fields.(struct_fields) in *)
+(*     let field_accessors := List.map (fun '(k, tau) => type_accessor tau) fs in *)
+(*     { k: index (List.length field_accessors) & List_nth field_accessors k } *)
+(*   end. *)
 
 Definition prim_sigma (fn: prim_fn_t) : prim_Sigma fn :=
   match fn with

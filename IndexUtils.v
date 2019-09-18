@@ -18,7 +18,7 @@ Proof.
 Qed.
 
 Lemma all_indices_NoDup bound:
-  List.NoDup (vect_to_list (all_indices bound)).
+  vect_NoDup (all_indices bound).
 Proof.
   induction bound; cbn; econstructor.
   - intro.
@@ -40,16 +40,6 @@ Proof.
   f_equal.
   apply all_indices_eqn.
 Defined.
-
-Lemma index_to_nat_injective {n: nat}:
-  forall x y : index n,
-    index_to_nat x = index_to_nat y ->
-    x = y.
-Proof.
-  induction n; destruct x, y; cbn; inversion 1.
-  - reflexivity.
-  - f_equal; eauto.
-Qed.
 
 Instance FiniteType_index {n} : FiniteType (Vect.index n).
 Proof.

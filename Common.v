@@ -1,6 +1,6 @@
-Require Import Coq.Lists.List Coq.Bool.Bool.
+Require Import Coq.Lists.List Coq.Bool.Bool Coq.Strings.String.
 Import ListNotations.
-Require Export SGA.Vect SGA.FiniteType.
+Require Export SGA.EqDec SGA.Vect SGA.FiniteType.
 
 (* https://coq-club.inria.narkive.com/HeWqgvKm/boolean-simplification *)
 Hint Rewrite
@@ -84,38 +84,6 @@ Ltac constr_hd c :=
 
 Definition and_fst {A B} := fun '(conj a _: and A B) => a.
 Definition and_snd {A B} := fun '(conj _ b: and A B) => b.
-
-Class EqDec (T: Type) :=
-  { eq_dec: forall t1 t2: T, { t1 = t2 } + { t1 <> t2 } }.
-
-Definition EqDec_beq {A} {EQ: EqDec A} a1 a2 : bool :=
-  if eq_dec a1 a2 then true else false.
-
-Lemma EqDec_beq_iff {A} (EQ: EqDec A) a1 a2 :
-  EqDec_beq a1 a2 = true <-> a1 = a2.
-Proof.
-  unfold EqDec_beq; destruct eq_dec; subst.
-  - firstorder.
-  - split; intro; (eauto || discriminate).
-Qed.
-
-Require Import String.
-
-Hint Extern 1 (EqDec _) => econstructor; decide equality : typeclass_instances.
-Hint Extern 1 ({ _ = _ } + { _ <> _ }) => apply eq_dec : typeclass_instances.
-
-Instance EqDec_bool : EqDec bool := _.
-Instance EqDec_ascii : EqDec Ascii.ascii := _.
-Instance EqDec_string : EqDec string := _.
-Instance EqDec_unit : EqDec unit := _.
-Instance EqDec_pair A B `{EqDec A} `{EqDec B} : EqDec (A * B) := _.
-Instance EqDec_option A `{EqDec A} : EqDec (option A) := _.
-Instance EqDec_vect_nil T `{EqDec T} : EqDec (vect_nil_t T) := _.
-Instance EqDec_vect_cons A B `{EqDec A} `{EqDec B} : EqDec (vect_cons_t A B) := _.
-Instance EqDec_vect T n `{EqDec T} : EqDec (vect T n).
-Proof. induction n; cbn; eauto using EqDec_vect_nil, EqDec_vect_cons; eassumption. Defined.
-Instance EqDec_vector A (sz: nat) {EQ: EqDec A}: EqDec (Vector.t A sz).
-Proof. econstructor; intros; eapply Vector.eq_dec; apply EqDec_beq_iff. Defined.
 
 Instance EqDec_FiniteType {T} {FT: FiniteType T} : EqDec T.
 Proof.

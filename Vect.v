@@ -1,5 +1,6 @@
 Require Import Coq.Lists.List.
-Require Export NArith.          (* Coq bug: If this isn't exported, other files can't import Vect.vo *)
+Require Export Coq.NArith.NArith.          (* Coq bug: If this isn't exported, other files can't import Vect.vo *)
+Require Import SGA.EqDec.
 
 Inductive index' {A} := thisone | anotherone (a: A).
 Arguments index': clear implicits.
@@ -34,6 +35,55 @@ Fixpoint index_to_nat {sz} (idx: index sz) {struct sz} : nat :=
 
 Definition index_cast n n' (eq: n = n') (idx: index n) : index n' :=
   ltac:(subst; assumption).
+
+Lemma index_to_nat_injective {n: nat}:
+  forall x y : index n,
+    index_to_nat x = index_to_nat y ->
+    x = y.
+Proof.
+  induction n; destruct x, y; cbn; inversion 1.
+  - reflexivity.
+  - f_equal; eauto.
+Qed.
+
+Lemma index_to_nat_bounded {sz}:
+  forall (idx: index sz), index_to_nat idx < sz.
+Proof.
+  induction sz; cbn; destruct idx; auto with arith.
+Qed.
+
+Lemma index_of_nat_bounded {sz n}:
+  n < sz -> exists idx, index_of_nat sz n = Some idx.
+Proof.
+  revert n; induction sz; destruct n; cbn; try solve [inversion 1].
+  - eauto.
+  - intros Hlt.
+    destruct (IHsz n ltac:(auto with arith)) as [ idx0 Heq ].
+    eexists; rewrite Heq; reflexivity.
+Qed.
+
+Lemma index_to_nat_of_nat {sz}:
+  forall n (idx: index sz),
+    index_of_nat sz n = Some idx ->
+    index_to_nat idx = n.
+Proof.
+  induction sz; cbn.
+  - destruct idx.
+  - destruct n.
+    + inversion 1; reflexivity.
+    + intros idx Heq.
+      destruct (index_of_nat sz n) eqn:?; try discriminate.
+      inversion Heq; erewrite IHsz; eauto.
+Qed.
+
+Lemma index_of_nat_to_nat {sz}:
+  forall (idx: index sz),
+    index_of_nat sz (index_to_nat idx) = Some idx.
+Proof.
+  induction sz; cbn; destruct idx.
+  - reflexivity.
+  - rewrite IHsz; reflexivity.
+Qed.
 
 Local Set Primitive Projections.
 Inductive vect_nil_t {T: Type} := _vect_nil.
@@ -163,6 +213,15 @@ Proof.
   - setoid_rewrite IHsz; reflexivity.
 Qed.
 
+Lemma vect_to_list_length {T sz}:
+  forall (v: vect T sz),
+    List.length (vect_to_list v) = sz.
+Proof.
+  induction sz; cbn; intros.
+  - reflexivity.
+  - f_equal; apply IHsz; assumption.
+Qed.
+
 Fixpoint vect_of_list {T} (l: list T) : vect T (length l) :=
   match l with
   | nil => vect_nil
@@ -214,6 +273,54 @@ Definition vect_cycle_l {T sz} n (v: vect T sz) :=
 Definition vect_cycle_r {T sz} n (v: vect T sz) :=
   vect_repeat vect_cycle_r1 n v.
 
+Fixpoint vect_find {T sz} (f: T -> bool) (v: vect T sz) : option T :=
+  match sz return vect T sz -> option T with
+  | 0 => fun _ => None
+  | S n => fun v => if f (vect_hd v) then Some (vect_hd v)
+                else vect_find f (vect_tl v)
+  end v.
+
+Fixpoint vect_find_index {T sz} (f: T -> bool) (v: vect T sz) : option (index sz) :=
+  match sz return vect T sz -> option (index sz) with
+  | 0 => fun _ => None
+  | S n => fun v => if f (vect_hd v) then Some thisone
+                else match vect_find_index f (vect_tl v) with
+                     | Some idx => Some (anotherone idx)
+                     | None => None
+                     end
+  end v.
+
+Definition vect_index {T sz} {EQ: EqDec T} (k: T) (v: vect T sz) : option (index sz) :=
+  vect_find_index (fun t => if eq_dec t k then true else false) v.
+
+Lemma vect_nth_index {T sz} {EQ: EqDec T}:
+  forall (t: T) (v: vect T sz) (idx: index sz),
+    vect_index t v = Some idx ->
+    vect_nth v idx = t.
+Proof.
+  induction sz.
+  - destruct idx.
+  - cbn; intros t v idx Heq;
+      destruct (eq_dec (vect_hd v) t); subst.
+        inversion Heq; subst.
+    + reflexivity.
+    + destruct (vect_find_index _ _) eqn:?; inversion Heq; subst; eauto.
+Qed.
+
+Lemma vect_nth_index_None {T sz} {EQ: EqDec T}:
+  forall (t: T) (v: vect T sz),
+    vect_index t v = None ->
+    forall idx, vect_nth v idx <> t.
+Proof.
+  induction sz.
+  - destruct idx.
+  - cbn; intros t v Heq idx;
+      destruct (eq_dec (vect_hd v) t); subst; try discriminate;
+        destruct idx.
+    + assumption.
+    + destruct (vect_find_index _ _) eqn:?; try discriminate; eauto.
+Qed.
+
 Definition vect_In {T sz} t (v: vect T sz) : Prop :=
   vect_fold_left (fun acc t' => acc \/ t = t') False v.
 
@@ -261,6 +368,70 @@ Proof.
   - setoid_rewrite IHsz.
     firstorder.
 Qed.
+
+Definition vect_NoDup {T n} (v: vect T n) : Prop :=
+  List.NoDup (vect_to_list v).
+
+Lemma NoDup_dec {A}:
+  (forall x y:A, {x = y} + {x <> y}) ->
+  forall (l: list A), {NoDup l} + {~ NoDup l}.
+Proof.
+  intro Hdec; induction l as [| a0 l IHl].
+  - eauto using NoDup_nil.
+  - destruct (in_dec Hdec a0 l), IHl;
+      (eauto using NoDup_cons || (right; inversion 1; subst; contradiction)).
+Defined.
+
+Definition vect_no_dup {A n} {EQ: EqDec A} (v: vect A n) :=
+  if NoDup_dec eq_dec (vect_to_list v) then true else false.
+
+Lemma vect_NoDup_nth {T sz}:
+  forall (v: vect T sz),
+    vect_NoDup v <-> (forall idx idx', vect_nth v idx' = vect_nth v idx -> idx' = idx).
+Proof.
+  unfold vect_NoDup; split.
+  - intros HNoDup **; rewrite NoDup_nth_error in HNoDup.
+    apply index_to_nat_injective, HNoDup.
+    rewrite vect_to_list_length; apply index_to_nat_bounded.
+    rewrite !vect_to_list_nth; congruence.
+  - intros Hinj. rewrite NoDup_nth_error; intros n1 n2 Hlt Heq.
+    rewrite vect_to_list_length in Hlt.
+    destruct (index_of_nat_bounded Hlt) as [ idx1 Heq1 ].
+    apply index_to_nat_of_nat in Heq1; subst.
+    rewrite vect_to_list_nth in Heq.
+    assert (n2 < sz) as Hlt2 by (rewrite <- (vect_to_list_length v); apply nth_error_Some; congruence).
+    destruct (index_of_nat_bounded Hlt2) as [ idx2 Heq2 ].
+    apply index_to_nat_of_nat in Heq2; subst.
+    rewrite vect_to_list_nth in Heq.
+    inversion Heq as [Heq'].
+    rewrite (Hinj _ _ Heq');
+      reflexivity.
+Qed.
+
+Lemma vect_no_dup_NoDup {T sz} {EQ: EqDec T}:
+  forall (v: vect T sz), vect_no_dup v = true <-> vect_NoDup v.
+Proof.
+  unfold vect_NoDup, vect_no_dup.
+  intros; destruct NoDup_dec; intuition; discriminate.
+Qed.
+
+Lemma vect_index_nth {T sz} {EQ: EqDec T}:
+  forall (v: vect T sz),
+    vect_NoDup v ->
+    forall (idx: index sz), vect_index (vect_nth v idx) v = Some idx.
+Proof.
+  intros v HNoDup idx.
+  destruct (vect_index _ _) as [ idx' | ] eqn:Heq.
+  - rewrite vect_NoDup_nth in HNoDup.
+    f_equal; apply vect_nth_index in Heq; eauto.
+  - eapply vect_nth_index_None in Heq.
+    contradiction Heq; reflexivity.
+Qed.
+
+Instance EqDec_vect_nil T `{EqDec T} : EqDec (vect_nil_t T) := _.
+Instance EqDec_vect_cons A B `{EqDec A} `{EqDec B} : EqDec (vect_cons_t A B) := _.
+Instance EqDec_vect T n `{EqDec T} : EqDec (vect T n).
+Proof. induction n; cbn; eauto using EqDec_vect_nil, EqDec_vect_cons; eassumption. Defined.
 
 Module Bits.
   Notation bits n := (vect bool n).
