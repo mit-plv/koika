@@ -12,7 +12,7 @@ Section TypedSyntax.
   | Fail {sig} tau : action sig tau
   | Var {sig} {k: var_t} {tau: type}
         (m: member (k, tau) sig) : action sig tau
-  | Const {sig} (tau: type)
+  | Const {sig} {tau: type}
           (cst: type_denote tau) : action sig tau
   | Seq {sig tau}
         (r1: action sig unit_t)

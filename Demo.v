@@ -387,10 +387,10 @@ Module ManualUnpacker <: Unpacker.
      (* Let "imm" <- (UPart 0 16)[[$encoded, UConst Ob]] in *)
      (* Let "dst" <- (UPart 16 8)[[$encoded, UConst Ob]] in *)
      (* Let "src" <- (UPart 24 8)[[$encoded, UConst Ob]] in *)
-     (UCall (UPrimFn (UStructFn decoded_sig (UDo SubstField "immediate")))
-            (UCall (UPrimFn (UStructFn decoded_sig (UDo SubstField "dst")))
-                   (UCall (UPrimFn (UStructFn decoded_sig (UDo SubstField "src")))
-                          (UCall (UPrimFn (UStructFn decoded_sig (UConv Init)))
+     (SCall (UDo SubstField "immediate")
+            (SCall (UDo SubstField "dst")
+                   (SCall (UDo SubstField "src")
+                          (UCall (UPrimFn (UConvFn (struct_t decoded_sig) Init))
                                  (UConst Ob) (UConst Ob))
                           ($"src"))
                    ($"dst"))
@@ -399,7 +399,7 @@ End ManualUnpacker.
 
 Module PrimitiveUnpacker <: Unpacker.
   Definition unpack reg_t custom_ufn_t encoded: uaction unit string reg_t (interop_ufn_t custom_ufn_t) :=
-    (UCall (UPrimFn (UStructFn decoded_sig (UConv Unpack)))
+    (UCall (UPrimFn (UConvFn (struct_t decoded_sig) Unpack))
            (UVar encoded) (UConst Ob)).
 End PrimitiveUnpacker.
 

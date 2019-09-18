@@ -16,15 +16,15 @@ Inductive prim_bits_ufn_t :=
 | UZExtL (nzeroes: nat)
 | UZExtR (nzeroes: nat).
 
+Inductive prim_converter := Init | Pack | Unpack.
 Inductive prim_struct_accessor := GetField | SubstField.
-Inductive prim_struct_converter := Init | Pack | Unpack.
 
 Inductive prim_struct_uop :=
-| UConv (op: prim_struct_converter)
 | UDo (op: prim_struct_accessor) (f: string)
 | UDoBits (op: prim_struct_accessor) (f: string).
 
 Inductive prim_ufn_t :=
+| UConvFn (tau: type) (op: prim_converter)
 | UBitsFn (fn: prim_bits_ufn_t)
 | UStructFn (sig: struct_sig) (op: prim_struct_uop).
 
@@ -44,14 +44,10 @@ Inductive prim_bits_fn_t :=
 | ZExtL (sz: nat) (nzeroes: nat)
 | ZExtR (sz: nat) (nzeroes: nat).
 
-Inductive prim_struct_op {sig: struct_sig} :=
-| Conv (op: prim_struct_converter)
-| Do (op: prim_struct_accessor) (f: struct_index sig).
-Arguments prim_struct_op : clear implicits.
-
 Inductive prim_fn_t :=
+| ConvFn (tau: type) (op: prim_converter)
 | BitsFn (fn: prim_bits_fn_t)
-| StructFn (sig: struct_sig) (fn: prim_struct_op sig).
+| StructFn (sig: struct_sig) (op: prim_struct_accessor) (f: struct_index sig).
 
 (* Like Nat.log2_iter, but switches to next power of two one number earlier
    (computes ceil(log2(n)) instead of floor(log2(n))). *)
@@ -75,6 +71,8 @@ Definition SubstFieldBits (sig: struct_sig) (idx: struct_index sig) : prim_fn_t 
 
 Definition prim_uSigma (fn: prim_ufn_t) (tau1 tau2: type): result prim_fn_t fn_tc_error :=
   match fn with
+  | UConvFn tau op =>
+    Success (ConvFn tau op)
   | UBitsFn fn =>
     let/res sz1 := assert_bits_t Arg1 tau1 in
     let/res sz2 := assert_bits_t Arg2 tau2 in
@@ -98,11 +96,9 @@ Definition prim_uSigma (fn: prim_ufn_t) (tau1 tau2: type): result prim_fn_t fn_t
     let find_field f :=
         opt_result (List_assoc f sig.(struct_fields)) (Arg1, FnUnboundField f sig) in
     match fn with
-      | UConv op =>
-        Success (StructFn sig (Conv op))
       | UDo op f =>
         let/res idx := find_field f in
-        Success (StructFn sig (Do op idx))
+        Success (StructFn sig op idx)
       | UDoBits op f =>
         let/res idx := find_field f in
         Success match op with
@@ -114,6 +110,9 @@ Definition prim_uSigma (fn: prim_ufn_t) (tau1 tau2: type): result prim_fn_t fn_t
 
 Definition prim_Sigma (fn: prim_fn_t) : ExternalSignature :=
   match fn with
+  | ConvFn tau Init => {{ unit_t ~> unit_t ~> tau }}
+  | ConvFn tau Pack => {{ tau ~> unit_t ~> bits_t (type_sz tau) }}
+  | ConvFn tau Unpack => {{ bits_t (type_sz tau) ~> unit_t ~> tau }}
   | BitsFn fn =>
     match fn with
     | Sel sz => {{ bits_t sz ~> bits_t (log2 sz) ~> bits_t 1 }}
@@ -131,15 +130,12 @@ Definition prim_Sigma (fn: prim_fn_t) : ExternalSignature :=
     | ZExtL sz nzeroes => {{ bits_t sz ~> unit_t ~> bits_t (nzeroes + sz) }}
     | ZExtR sz nzeroes => {{ bits_t sz ~> unit_t ~> bits_t (sz + nzeroes) }}
     end
-  | @StructFn sig fn =>
-    match fn with
-    | Conv Init => {{ unit_t ~> unit_t ~> struct_t sig }}
-    | Conv Pack => {{ struct_t sig ~> unit_t ~> struct_bits_t sig }}
-    | Conv Unpack => {{ struct_bits_t sig ~> unit_t ~> struct_t sig }}
-    | Do GetField idx => {{ struct_t sig ~> unit_t ~> field_type sig idx }}
-    | Do SubstField idx => {{ struct_t sig ~> field_type sig idx ~> struct_t sig }}
-    (* | Do LazyGetField idx => {{ struct_bits_t sig ~> unit_t ~> bits_t (field_sz sig idx) }} *)
-    (* | Do LazySubstField idx => {{ struct_bits_t sig ~> bits_t (field_sz sig idx) ~> struct_bits_t sig }} *)
+  | @StructFn sig op idx =>
+    match op with
+    | GetField => {{ struct_t sig ~> unit_t ~> field_type sig idx }}
+    | SubstField => {{ struct_t sig ~> field_type sig idx ~> struct_t sig }}
+    (* | LazyGetField => {{ struct_bits_t sig ~> unit_t ~> bits_t (field_sz sig idx) }} *)
+    (* | LazySubstField => {{ struct_bits_t sig ~> bits_t (field_sz sig idx) ~> struct_bits_t sig }} *)
     end
   end.
 
@@ -163,6 +159,12 @@ Definition prim_uint_plus {sz} (bs1 bs2: bits sz) :=
 
 Definition prim_sigma (fn: prim_fn_t) : prim_Sigma fn :=
   match fn with
+  | ConvFn tau fn =>
+    match fn with
+    | Init => fun _ _ => value_of_bits (Bits.zeroes (type_sz tau))
+    | Pack => fun v _ => bits_of_value v
+    | Unpack => fun bs _ => value_of_bits bs
+    end
   | BitsFn fn =>
     match fn with
     | Sel _ => fun bs idx => w1 (prim_sel bs idx)
@@ -180,9 +182,6 @@ Definition prim_sigma (fn: prim_fn_t) : prim_Sigma fn :=
     | ZExtL _ nzeroes => fun bs _ => Bits.app (Bits.zeroes nzeroes) bs
     | ZExtR _ nzeroes => fun bs _ => Bits.app bs (Bits.zeroes nzeroes)
     end
-  | StructFn sig (Conv Init) => fun _ _ => value_of_bits (Bits.zeroes (struct_sz sig))
-  | StructFn sig (Conv Pack) => fun v _ => bits_of_value v
-  | StructFn sig (Conv Unpack) => fun bs _ => value_of_bits bs
-  | StructFn sig (Do GetField idx) => fun s _ => __magic__
-  | StructFn sig (Do SubstField idx) => fun s _ => __magic__
+  | StructFn sig GetField idx => fun s _ => __magic__
+  | StructFn sig SubstField idx => fun s _ => __magic__
   end.
