@@ -317,7 +317,7 @@ Section CircuitCompilation.
         {| retVal := CAnnotOpt "var_reference" (cassoc m Gamma);
            erwc := clog |}
       | Const cst => fun _ =>
-        {| retVal := $`"constant_value_from_source"`cst;
+        {| retVal := CAnnotOpt "constant_value_from_source" (CConst (bits_of_value cst));
            erwc := clog |}
       | Seq r1 r2 => fun Gamma =>
         compile_action Gamma r2 (compile_action Gamma r1 clog).(erwc)

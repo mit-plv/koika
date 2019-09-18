@@ -101,7 +101,7 @@ Section TypeInference.
       | UVar var =>
         let/res ktau_m := opt_result (assoc var sig) (unbound_variable pos var) in
         Success (EX (Var ``ktau_m))
-      | UConst cst => Success (EX (Const cst))
+      | UConst cst => Success (EX (Const (bits_t _) cst))
       | USeq r1 r2 =>
         let/res r1' := type_action pos sig r1 in
         let/res r1' := cast_action (actpos pos r1) sig unit_t (``r1') in
