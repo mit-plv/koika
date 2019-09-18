@@ -27,45 +27,43 @@ Proof.
   apply finite_injective.
 Qed.
 
-Fixpoint increasing' n (l: list nat) :=
+Fixpoint increasing (l: list nat) :=
   match l with
   | [] => true
-  | n' :: l => andb (Nat.ltb n n') (increasing' n' l)
+  | n1 :: [] => true
+  | n1 :: (n2 :: _) as l => andb (Nat.ltb n1 n2) (increasing l)
   end.
 
-Definition increasing (l: list nat) :=
-  match l with
-  | [] => true
-  | n :: l => increasing' n l
-  end.
-
-Lemma increasing'_not_In :
-  forall l n, increasing' n l = true -> forall n', n' <= n -> ~ In n' l.
+Lemma increasing_not_In :
+  forall l n, increasing (n :: l) = true -> forall n', n' <= n -> ~ In n' l.
 Proof.
   induction l; intros n H n' Hle Habs.
   - auto.
-  - apply Bool.andb_true_iff in H; destruct H.
-    destruct Habs; subst; apply PeanoNat.Nat.ltb_lt in H.
-    + omega.
-    + unfold not in IHl; eapply IHl;
-        [ eassumption | .. | eassumption ]; omega.
+  - apply Bool.andb_true_iff in H; destruct H; apply PeanoNat.Nat.ltb_lt in H.
+    destruct Habs as [ ? | ? ]; subst; try omega.
+    eapply IHl; [ eassumption | .. | eassumption ]; omega.
 Qed.
 
-Lemma increasing'_NoDup :
-  forall l n, increasing' n l = true -> NoDup l.
+Lemma increasing_not_In' :
+  forall l n, increasing (n :: l) = true -> forall n', n' <? n = true -> ~ In n' (n :: l).
 Proof.
-  induction l; cbn; intros n H.
-  - constructor.
-  - apply Bool.andb_true_iff in H; destruct H.
-    econstructor; eauto using increasing'_not_In.
+  unfold not; intros l n Hincr n' Hlt [ -> | Hin ]; apply PeanoNat.Nat.ltb_lt in Hlt.
+  - omega.
+  - eapply increasing_not_In;
+      [ eassumption | apply Nat.lt_le_incl | eassumption ]; eauto.
 Qed.
 
 Lemma increasing_NoDup :
   forall l, increasing l = true -> NoDup l.
 Proof.
-  destruct l.
-  - econstructor.
-  - cbn; econstructor; eauto using increasing'_NoDup, increasing'_not_In.
+  induction l as [ | n1 l IHl]; cbn; intros H.
+  - constructor.
+  - destruct l.
+    + repeat constructor; inversion 1.
+    + apply Bool.andb_true_iff in H; destruct H.
+      constructor.
+      apply increasing_not_In'; eauto.
+      eauto.
 Qed.
 
 Lemma nth_error_app_l :
