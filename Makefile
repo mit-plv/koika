@@ -5,3 +5,6 @@ default:
 
 all:
 	dune build $(patsubst %.v,%.vo,$(wildcard *.v))
+
+clean:
+	dune clean
