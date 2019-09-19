@@ -180,7 +180,7 @@ std::string repr(const uint_t<sz> val) {
   if (sz <= 64) {
     stream << "b";
     for (size_t pos = sz; pos > 0; pos--) {
-      stream << prims::truncate<1, sz>(val >> (pos - 1u));
+      stream << uint(prims::truncate<1, sz>(val >> (pos - 1u)));
     }
     stream << " (0x" << std::hex << +val << ", " << std::dec << +val << ")";
   } else {
