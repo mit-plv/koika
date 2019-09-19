@@ -59,6 +59,16 @@ Fixpoint member_map {K K'} (f: K -> K') (k: K) (ls: list K)
     MemberTl (f k) (f k') (List.map f sig) (member_map f k sig m')
   end.
 
+Fixpoint member_unmap {K K'} (f: K -> K') (k': K') (ls: list K)
+         (m: member k' (List.map f ls)) : { k: K & member k ls }.
+  destruct ls; cbn in *.
+  - destruct (mdestruct m).
+  - destruct (mdestruct m) as [(-> & Heq) | (m' & ->)]; cbn in *.
+    + exact (existT _ k (MemberHd k ls)).
+    + destruct (member_unmap _ _ f k' ls m') as [ k0 m0 ].
+      exact (existT _ k0 (MemberTl k0 k ls m0)).
+Defined.
+
 Lemma member_app_l {A} (a: A):
   forall ls ls',
     member a ls ->
