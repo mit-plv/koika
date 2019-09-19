@@ -1,5 +1,6 @@
 open Common
 open SGALib
+open Printf
 
 let bits_primitive_name = function
   | SGA.Sel _logsz -> "Sel"
@@ -27,18 +28,23 @@ let rec label_ptrs tag_to_parents = function
        (match ffi.ffi_name with
         | CustomFn fn -> (fn, [c1; c2], [])
         | PrimFn (SGA.BitsFn fn) -> (bits_primitive_name fn, [c1; c2], [])
-        | PrimFn (SGA.StructFn (sg, op)) ->
-           let sg = SGALib.Util.struct_sig_of_sga_struct_sig' sg in
-           match op with
-           | SGA.Conv Init -> (Printf.sprintf "%s {}" sg.struct_name, [], [])
-           | SGA.Conv Pack -> (Printf.sprintf "struct_pack<%s>" sg.struct_name, [c1], [])
-           | SGA.Conv Unpack -> (Printf.sprintf "struct_unpack<%s>" sg.struct_name, [c1], [])
-           | SGA.Do (ac, idx) ->
-              let field, _tau = SGALib.Util.list_nth sg.struct_fields idx in
-              match ac with
-              | SGA.GetField -> (Printf.sprintf "%s.%s" sg.struct_name field, [c1], [])
-              | SGA.SubstField -> (Printf.sprintf "%s / %s <-" sg.struct_name field, [c1; c2], []))
-  | CReadRegister r -> Some (Printf.sprintf "Reg %s" r.reg_name, [], [])
+        | PrimFn (SGA.ConvFn (tau, fn)) ->
+           let open SGA in
+           let op_name = match fn with
+             | Init -> "init"
+             | Pack -> "pack"
+             | Unpack -> "unpack" in
+           ((match tau with
+             | Bits_t sz -> sprintf "bits_%s<%d>" op_name sz
+             | Enum_t sg -> sprintf "enum_%s<%s>" op_name (SGALib.Util.string_of_coq_string sg.enum_name)
+             | Struct_t sg -> sprintf "srtuct_%s<%s>" op_name (SGALib.Util.string_of_coq_string sg.struct_name)), [], [])
+        | PrimFn (SGA.StructFn (sg, ac, idx)) ->
+           let sg = SGALib.Util.struct_sig_of_sga_struct_sig sg in
+           let field, _tau = SGALib.Util.list_nth sg.struct_fields idx in
+           match ac with
+           | SGA.GetField -> (sprintf "%s.%s" sg.struct_name field, [c1], [])
+           | SGA.SubstField -> (sprintf "%s / %s <-" sg.struct_name field, [c1; c2], []))
+  | CReadRegister r -> Some (sprintf "Reg %s" r.reg_name, [], [])
   | CAnnot (_sz, annot, c) ->
      let nparents = List.length (Hashtbl.find tag_to_parents c.tag) in
      if nparents = 0 then
@@ -60,20 +66,20 @@ type ptr_or_label =
   | Label of string
 
 let field_label i pl =
-  Printf.sprintf "<f%d> %s" i (match pl with
+  sprintf "<f%d> %s" i (match pl with
                                | Label lbl -> lbl
                                | Ptr _ -> "·")
 
 let field_ptr_or_label (c: _ circuit) =
   match c.node with
-  (* | CQuestionMark n -> Label (Printf.sprintf "?'%d" n) *)
+  (* | CQuestionMark n -> Label (sprintf "?'%d" n) *)
   | CConst bs -> Label (Util.string_of_bits bs)
   | _ -> Ptr c.tag
 
 let dot_record_label head args =
   let fields = List.mapi field_label args in
   let head = (if head = "constant_value_from_source" then "" else head) in
-  String.concat "|" (Printf.sprintf "<hd> %s" head :: fields)
+  String.concat "|" (sprintf "<hd> %s" head :: fields)
 
 let print_dot_file out Graphs.{ graph_roots = roots; graph_nodes = circuits } =
   let tag_to_parents = compute_parents circuits in
@@ -88,23 +94,23 @@ let print_dot_file out Graphs.{ graph_roots = roots; graph_nodes = circuits } =
     circuits;
   List.iter (fun c -> Hashtbl.remove tag_to_graph_data c.Hashcons.tag) !orphaned;
 
-  Printf.fprintf out "digraph {\n";
-  (* Printf.fprintf out "rankdir=BT\n"; *)
+  fprintf out "digraph {\n";
+  (* fprintf out "rankdir=BT\n"; *)
   Hashtbl.iter (fun ptr (lbl, children) ->
       let args_or_ptrs = List.map field_ptr_or_label children in
       let lbl = dot_record_label lbl args_or_ptrs in
-      Printf.fprintf out "N%d [label=\"%s\", shape=\"record\"]\n" ptr lbl;
+      fprintf out "N%d [label=\"%s\", shape=\"record\"]\n" ptr lbl;
       List.iteri (fun i pl ->
           match pl with
-          | Ptr ptr' -> Printf.fprintf out "N%d:hd -> N%d:f%d\n" ptr' ptr i
+          | Ptr ptr' -> fprintf out "N%d:hd -> N%d:f%d\n" ptr' ptr i
           | _ -> ())
         args_or_ptrs)
     tag_to_graph_data;
   List.iteri (fun i { root_reg; root_circuit } ->
-      Printf.fprintf out "R%d [label=\"Register %s\", shape=\"record\"]\n" i root_reg.reg_name;
-      Printf.fprintf out "N%d:hd -> R%d\n" root_circuit.tag i)
+      fprintf out "R%d [label=\"Register %s\", shape=\"record\"]\n" i root_reg.reg_name;
+      fprintf out "N%d:hd -> R%d\n" root_circuit.tag i)
     roots;
-  Printf.fprintf out "}\n"
+  fprintf out "}\n"
 
 let main out g =
   print_dot_file out g

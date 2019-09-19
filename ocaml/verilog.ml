@@ -38,12 +38,12 @@ type io_decls = io_decl list
 let assert_bits (typ: typ) =
   match typ with
   | Bits_t sz -> sz
-  | Struct_t _ -> failwith "FIXME: Structs unsupported in Verilog backend"
+  | _ -> failwith "FIXME: Structs and enums unsupported in Verilog backend"
 
 let assert_bits_val (v: value) =
   match v with
   | Bits bs -> bs
-  | Struct _ -> failwith "FIXME: Structs unsupported in Verilog backend"
+  | _ -> failwith "FIXME: Structs unsupported in Verilog backend"
 
 let io_from_reg (root: _ circuit_root) : io_decls =
   let reg_name = root.root_reg.reg_name in
@@ -112,7 +112,7 @@ let internal_decl_for_net
   | CAnnot (n, name , _) ->
      Hashtbl.add environment c.tag (name ^ name_net);
      Wire(name ^ name_net, n) (* Prefix with the name given by the user *)
-  | CConst l -> Wire(name_net, l.bs_size)
+  | CConst l -> Wire(name_net, Array.length l)
   | CExternal (ffi_sig, _, _) -> Wire(name_net, assert_bits ffi_sig.ffi_rettype)
   | CReadRegister r_sig -> Wire(name_net, assert_bits r_sig.reg_type)
 
@@ -187,8 +187,9 @@ let assignment_to_string (gensym: int ref) (assignment: assignment) =
            | SGA.ZExtL (_, _) -> failwith "TODO UNIMPLEMENTED ZEXTL" (* TODO: convince clement that those are not needed as primitive *)
            | SGA.ZExtR (_, _) -> failwith "TODO UNIMPLEMENTED ZEXTR" (* TODO: convince clement that those are not needed as primitive *)
           )
-       | PrimFn (StructFn _) ->
-          failwith "FIXME: Structs unsupported in Verilog backend"
+       | PrimFn (SGA.ConvFn _)
+       | PrimFn (SGA.StructFn _) ->
+          failwith "FIXME: Structs and enums unsupported in Verilog backend"
       )
    | EReadRegister r -> default_left ^ r
    | EAnnot (_, _, rhs) -> default_left ^ rhs) ^ ";"

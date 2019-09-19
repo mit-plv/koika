@@ -7,11 +7,6 @@ Require Export
         SGA.Primitives
         SGA.Interop.
 
-Section UConstBits.
-  Context {pos_t var_t reg_t fn_t : Type}.
-  Definition UConstBits {sz} (bs: bits sz) := @UConst pos_t var_t reg_t fn_t (bits_t sz) bs.
-End UConstBits.
-
 Delimit Scope sga_scope with sga.
 Delimit Scope sga_expr_scope with sga_expr.
 

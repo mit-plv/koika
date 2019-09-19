@@ -174,7 +174,7 @@ namespace prims {
 
 #ifndef SIM_MINIMAL
 template<std::size_t sz>
-std::string uint_str(const uint_t<sz> val) {
+std::string repr(const uint_t<sz> val) {
   std::ostringstream stream;
   stream << sz << "'";
   if (sz <= 64) {

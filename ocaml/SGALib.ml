@@ -14,45 +14,64 @@ module Util = struct
   let coq_string_of_string s =
     List.of_seq (String.to_seq s)
 
+  let bits_const_of_sga_bits sz bs =
+    Array.of_list (SGA.vect_to_list sz bs)
+
+  let sga_bits_of_bits_const (bs: bits_value) =
+    SGA.vect_of_list (Array.to_list bs)
+
   let rec typ_of_sga_type (tau: SGA.type0) : typ =
     match tau with
     | SGA.Bits_t sz -> Bits_t sz
-    | SGA.Struct_t sg -> Struct_t (struct_sig_of_sga_struct_sig' sg)
-  and struct_sig_of_sga_struct_sig' { struct_name; struct_fields } : struct_sig =
+    | SGA.Enum_t sg -> Enum_t (enum_sig_of_sga_enum_sig sg)
+    | SGA.Struct_t sg -> Struct_t (struct_sig_of_sga_struct_sig sg)
+  and struct_sig_of_sga_struct_sig { struct_name; struct_fields } : struct_sig =
     { struct_name = string_of_coq_string struct_name;
       struct_fields = List.map (fun (nm, tau) ->
                           (string_of_coq_string nm, typ_of_sga_type tau))
                         struct_fields }
+  and enum_sig_of_sga_enum_sig { enum_name; enum_size; enum_bitsize; enum_members; enum_bitpatterns } : enum_sig =
+    { enum_name = string_of_coq_string enum_name;
+      enum_bitsize = enum_bitsize;
+      enum_members =
+        List.map (fun (nm, bs) ->
+            (string_of_coq_string nm, bits_const_of_sga_bits enum_bitsize bs))
+          (SGA.vect_to_list enum_size (SGA.vect_zip enum_size enum_members enum_bitpatterns)) }
 
   let rec sga_type_of_typ (tau: typ) : SGA.type0 =
     match tau with
     | Bits_t sz -> SGA.Bits_t sz
-    | Struct_t sg -> SGA.Struct_t (sga_struct_sig'_of_struct_sig sg)
-  and sga_struct_sig'_of_struct_sig { struct_name; struct_fields } : SGA.type0 SGA.struct_sig' =
+    | Enum_t sg -> SGA.Enum_t (sga_enum_sig_of_enum_sig sg)
+    | Struct_t sg -> SGA.Struct_t (sga_struct_sig_of_struct_sig sg)
+  and sga_struct_sig_of_struct_sig { struct_name; struct_fields } : SGA.type0 SGA.struct_sig' =
     { struct_name = coq_string_of_string struct_name;
       struct_fields = List.map (fun (nm, tau) ->
                           (coq_string_of_string nm, sga_type_of_typ tau))
                         struct_fields }
+  and sga_enum_sig_of_enum_sig { enum_name; enum_bitsize; enum_members } : SGA.enum_sig =
+    { enum_name = coq_string_of_string enum_name;
+      enum_bitsize = enum_bitsize;
+      enum_size = List.length enum_members;
+      enum_members = SGA.vect_of_list (List.map (fun (nm, _) -> coq_string_of_string nm) enum_members);
+      enum_bitpatterns = SGA.vect_of_list (List.map (fun (_, bs) -> sga_bits_of_bits_const bs) enum_members) }
 
   let sga_type_to_string tau =
     typ_to_string (typ_of_sga_type tau)
 
-  let struct_sig'_to_string sg =
-    struct_sig_to_string (struct_sig_of_sga_struct_sig' sg)
+  let sga_struct_sig_to_string sg =
+    struct_sig_to_string (struct_sig_of_sga_struct_sig sg)
+
+  let sga_enum_sig_to_string sg =
+    enum_sig_to_string (enum_sig_of_sga_enum_sig sg)
 
   let type_kind_to_string (tk: SGA.type_kind) =
     match tk with
     | SGA.Kind_bits -> "bits"
-    | SGA.Kind_struct sg -> struct_sig'_to_string sg
+    | SGA.Kind_enum sg -> sga_enum_sig_to_string sg
+    | SGA.Kind_struct sg -> sga_struct_sig_to_string sg
 
   let string_eq_dec =
     { SGA.eq_dec = fun (s1: string) (s2: string) -> s1 = s2 }
-
-  let string_of_bits ?(mode=`Verilog) bs =
-    let bitstring = String.concat "" (List.rev_map (fun b -> if b then "1" else "0") bs.bs_bits) in
-    (match mode with
-     | `Cpp -> Printf.sprintf "0b%s"
-     | `Verilog -> Printf.sprintf "%d'b%s" bs.bs_size) bitstring
 
   let type_error_to_error (epos: 'f) (err: _ SGA.error_message) =
     let ekind, emsg = match err with
@@ -60,7 +79,10 @@ module Util = struct
          (`NameError, Printf.sprintf "Unbound variable `%s'" var)
       | SGA.UnboundField (field, sg) ->
          (`NameError, Printf.sprintf "Unbound field `%s' in structure `%s'"
-                        (string_of_coq_string field) (struct_sig'_to_string sg))
+                        (string_of_coq_string field) (sga_struct_sig_to_string sg))
+      | SGA.UnboundEnumMember (name, sg) ->
+         (`NameError, Printf.sprintf "Constant `%s' is not a member of enum `%s'"
+                        (string_of_coq_string name) (sga_enum_sig_to_string sg))
       | SGA.TypeMismatch (_tsig, actual, _expr, expected) ->
          (`TypeError, Printf.sprintf "This term has type `%s', but `%s' was expected"
                         (sga_type_to_string actual) (sga_type_to_string expected))
@@ -68,10 +90,6 @@ module Util = struct
          (`TypeError, Printf.sprintf "This term has type `%s', but kind `%s' was expected"
                         (sga_type_to_string actual) (type_kind_to_string expected))
     in { epos; ekind; emsg }
-
-  let bits_const_of_bits sz bs =
-    { bs_size = sz;
-      bs_bits = SGA.vect_to_list sz bs }
 
   let custom_unsupported _ =
     failwith "Custom functions not supported"
@@ -90,11 +108,33 @@ module Util = struct
 
   let rec value_of_sga_value tau v =
     match tau with
-    | Bits_t sz -> Bits (bits_const_of_bits sz v)
+    | Bits_t sz -> Bits (bits_const_of_sga_bits sz v)
+    | Enum_t sg -> Enum (sg, bits_const_of_sga_bits sg.enum_bitsize v)
     | Struct_t sg ->
        let taus = List.map snd sg.struct_fields in
        let vals = SGA.vect_to_list (List.length taus) v in
-       Struct (sg.struct_name, List.map2 value_of_sga_value taus vals)
+       Struct (sg, List.map2 value_of_sga_value taus vals)
+
+  let rec string_of_value (v: value) =
+    match v with
+    | Bits bs -> string_of_bits bs
+    | Enum (sg, v) -> string_of_enum sg v
+    | Struct (sg, v) -> string_of_struct sg v
+  and string_of_bits ?(mode=`Verilog) (bs: bits_value) =
+    let bitstring = String.concat "" (List.rev_map (fun b -> if b then "1" else "0") (Array.to_list bs)) in
+    (match mode with
+     | `Cpp -> Printf.sprintf "0b%s"
+     | `Verilog -> Printf.sprintf "%d'b%s" (Array.length bs)) bitstring
+  and string_of_enum sg bs =
+    sg.enum_name ^
+      match List.find_opt (fun (_nm, bs') -> bs' = bs) sg.enum_members with
+      | Some (nm, _) -> "::" ^ nm
+      | None -> Printf.sprintf "{%s}" (string_of_bits bs)
+  and string_of_struct sg v =
+    let sp_field ((nm, _tau), v) =
+      Printf.sprintf "%s = %s" nm (string_of_value v) in
+    Printf.sprintf "%s { %s }" sg.struct_name
+      (String.concat ", " (List.map sp_field (List.combine sg.struct_fields v)))
 
   let reg_sigs_of_sga_package (pkg: _ SGA.sga_package_t) r =
     let tau = typ_of_sga_type (pkg.sga_reg_types r) in
@@ -118,11 +158,13 @@ module Compilation = struct
       | P1 -> "P1"
 
     let rec pp_action = function
-      | UFail sz -> (sprintf "Fail#%d" sz)
+      | UFail tau -> (sprintf "Fail (%s)" (Util.sga_type_to_string tau))
       | UVar v -> sprintf "var %s" v
-      | UConst (n, bs) ->
-         sprintf "%d'%s" n
-           (String.concat "" (List.rev_map (fun x -> if x then "1" else "0") (SGA.vect_to_list n bs)))
+      | UConst (tau, v) ->
+         sprintf "%s"
+           (Util.string_of_value (Util.value_of_sga_value (Util.typ_of_sga_type tau) v))
+      | UConstEnum (sg, nm) ->
+         sprintf "%s::%s" (Util.string_of_coq_string sg.enum_name) (Util.string_of_coq_string nm)
       | USeq (r1, r2) -> sprintf "Seq (%s) (%s)" (pp_action r1) (pp_action r2)
       | UBind (v, e, r) -> sprintf "Bind (%s <- %s) (%s)" v (pp_action e) (pp_action r)
       | UIf (c, r1, r2) -> sprintf "If %s Then %s Else %s EndIf" (pp_action c) (pp_action r1) (pp_action r2)
@@ -144,21 +186,21 @@ module Compilation = struct
     | _ -> assert false
 
   let uskip =
-    SGA.UConst (0, Obj.magic SGA.Bits.nil)
+    SGA.UConst (SGA.Bits_t 0, Obj.magic (SGA.Bits.zero 0))
 
   let rec translate_action { lpos; lcnt } =
     SGA.UAPos
       (lpos,
        match lcnt with
        | Skip -> uskip
-       | Fail sz -> SGA.UFail sz
+       | Fail sz -> SGA.UFail (SGA.Bits_t sz)
        | Var v -> SGA.UVar v
        | Num _ -> assert false
-       | Const bs -> SGA.UConst (List.length bs, SGA.vect_of_list bs)
+       | Const bs -> SGA.uConstBits (Array.length bs) (SGA.vect_of_list (Array.to_list bs))
        | Progn rs -> translate_seq rs
        | Let (bs, body) -> translate_bindings bs body
        | If (e, r, rs) -> SGA.UIf (translate_action e, translate_action r, translate_seq rs)
-       | When (e, rs) -> SGA.UIf (translate_action e, translate_seq rs, SGA.UFail 0) (* FIXME syntax for when in typechecker? *)
+       | When (e, rs) -> SGA.UIf (translate_action e, translate_seq rs, SGA.UFail (SGA.Bits_t 0)) (* FIXME syntax for when in typechecker? *)
        | Read (port, reg) -> SGA.URead (translate_port port, reg.lcnt)
        | Write (port, reg, v) -> SGA.UWrite (translate_port port, reg.lcnt, translate_action v)
        | Call (fn, a1 :: a2 :: []) -> SGA.UCall (fn.lcnt, translate_action a1, translate_action a2)
@@ -320,7 +362,7 @@ module Graphs = struct
            | SGA.CMux (sz, s, c1, c2) ->
               CMux (sz, aux s, aux c1, aux c2)
            | SGA.CConst (sz, bs) ->
-              CConst (Util.bits_const_of_bits sz bs)
+              CConst (Util.bits_const_of_sga_bits sz bs)
            | SGA.CExternal (fn, c1, c2) ->
               CExternal (pkg.di_fn_sigs fn, aux c1, aux c2)
            | SGA.CReadRegister r ->

@@ -27,22 +27,16 @@ type ('prim, 'name_t, 'var_t, 'reg_t, 'fn_t) cpp_input_t = {
 let sprintf = Printf.sprintf
 let fprintf = Printf.fprintf
 
-let cpp_struct_name' name =
-  sprintf "struct_%s" name
-
-let cpp_struct_name { struct_name; _ } =
-  cpp_struct_name' struct_name
-
-let cpp_struct_initializer sg =
-  sprintf "%s {}" (cpp_struct_name sg)
-
-let cpp_struct_unpacker sg =
-  sprintf "unpack<%s, %d>"
-    (cpp_struct_name sg)
-    (struct_sz sg)
+let check_type_consistent (user_types: (string * typ) list ref) nm tau =
+  match List.assoc_opt nm !user_types with
+  | Some tau' ->
+     if tau <> tau' then
+       failwith (sprintf "Incompatible uses of type name %s:\n%s\n%s"
+                   nm (typ_to_string tau) (typ_to_string tau'))
+  | None -> user_types := (nm, tau) :: !user_types
 
 let cpp_type_of_type
-      (struct_types: struct_sig list ref)
+      (user_types: (string * typ) list ref)
       (needs_multiprecision: bool ref)
       (tau: typ) =
   match tau with
@@ -56,16 +50,18 @@ let cpp_type_of_type
        sprintf "uint_t<%d>" sz
      else
        failwith (sprintf "Unsupported size: %d" sz)
+  | Enum_t sg ->
+     check_type_consistent user_types sg.enum_name tau;
+     sprintf "enum_%s" sg.enum_name
   | Struct_t sg ->
-     (match List.find_opt (fun sg' -> sg'.struct_name = sg.struct_name) !struct_types with
-      | Some sg' ->
-         if sg <> sg' then
-           failwith (sprintf "Incompatible uses of structure name %s:\n%s\n%s"
-                       sg.struct_name
-                       (struct_sig_to_string sg)
-                       (struct_sig_to_string sg'))
-      | None -> struct_types := sg :: !struct_types);
-     cpp_struct_name sg
+     check_type_consistent user_types sg.struct_name tau;
+     sprintf "struct_%s" sg.struct_name
+
+let cpp_struct_name user_types needs_multiprecision sg =
+  cpp_type_of_type user_types needs_multiprecision (Struct_t sg)
+
+let cpp_enum_name user_types needs_multiprecision sg =
+  cpp_type_of_type user_types needs_multiprecision (Enum_t sg)
 
 let cpp_const_init (needs_multiprecision: bool ref) sz cst =
   assert (sz >= 0);
@@ -92,13 +88,13 @@ let cpp_const_init (needs_multiprecision: bool ref) sz cst =
   else
     failwith (sprintf "Unsupported size: %d" sz)
 
-let cpp_size_needs_allocation _sz =
+let cpp_type_needs_allocation _tau =
   false (* boost::multiprecision has literals *)
 
 let assert_bits (tau: typ) =
   match tau with
   | Bits_t sz -> sz
-  | Struct_t _ -> failwith "Expecting bits, not struct"
+  | _ -> failwith "Expecting bits, not struct or enum"
 
 let cpp_custom_fn_name f =
   (* The current implementation of external functions requires the client to
@@ -140,7 +136,7 @@ let reconstruct_switch sigs action =
     | SGA.If (_, _, SGA.Call (_,
                               fn,
                               SGA.Var (_, v', _, _m),
-                              SGA.Const (_, sz, cst)),
+                              SGA.Const (_, SGA.Bits_t sz, cst)),
               tbr, fbr) when (match v with
                               | Some v -> v' = v
                               | None -> true) ->
@@ -149,7 +145,7 @@ let reconstruct_switch sigs action =
            let default, branches = match loop (Some v') fbr with
              | Some (_, default, branches) -> default, branches
              | None -> fbr, [] in
-           Some (v', default, ((sz, cst), tbr) :: branches)
+           Some (v', default, (SGALib.Util.bits_const_of_sga_bits sz cst, tbr) :: branches)
         | _ -> None)
     | _ -> None in
   match loop None action with
@@ -193,11 +189,15 @@ let compile (type name_t var_t reg_t)
   let p_buffer b = Buffer.add_buffer !buffer b in
 
   let needs_multiprecision = ref false in
-  let struct_types = ref [] in
+  let user_types = ref [] in
   let custom_funcalls = Hashtbl.create 50 in
 
   let cpp_type_of_type =
-    cpp_type_of_type struct_types needs_multiprecision in
+    cpp_type_of_type user_types needs_multiprecision in
+  let cpp_enum_name =
+    cpp_enum_name user_types needs_multiprecision in
+  let cpp_struct_name =
+    cpp_struct_name user_types needs_multiprecision in
   let cpp_const_init =
     cpp_const_init needs_multiprecision in
 
@@ -243,22 +243,79 @@ let compile (type name_t var_t reg_t)
   let p_decl ?(prefix = "") ?(init = None) tau name =
     p_decl' ~prefix ~init (cpp_type_of_type tau) name in
 
-  let cpp_value_printer = function
-    | Bits_t sz -> sprintf "uint_str<%d>" sz
-    | Struct_t _ -> "struct_str" in
+  let bits_to_Z bits =
+    Z.(Array.fold_right (fun b z ->
+           (if b then one else zero) + shift_left z 1)
+         bits zero) in
+
+  let rec sp_value (v: value) =
+    match v with
+    | Bits bs -> sp_bits_value bs
+    | Enum (sg, v) -> sp_enum_value sg v
+    | Struct (sg, fields) -> sp_struct_value sg fields
+  and sp_bits_value bs =
+    let bs_size = Array.length bs in
+    let w = (bs_size + 7) / 8 in
+    let fmt = sprintf "%%0#%dx" (w + 2) in
+    cpp_const_init bs_size (Z.format fmt (bits_to_Z bs))
+  and sp_enum_value sg v =
+    match List.find_opt (fun (_nm, bs) -> bs = v) sg.enum_members with
+    | None -> sprintf "static_cast<%s>(%s)" (cpp_enum_name sg) (sp_bits_value v)
+    | Some (nm, _) -> sprintf "%s::%s" (cpp_enum_name sg) nm
+  and sp_struct_value sg fields =
+    let fields = String.concat ", " (List.map sp_value fields) in
+    sprintf "%s{ %s }" (cpp_struct_name sg) fields in
+
+  let sp_value_printer = function
+    | Bits_t sz -> sprintf "repr<%d>" sz
+    | Enum_t _ | Struct_t _ -> "repr" in
+
+  let sp_initializer tau =
+    let bs0 sz = Array.make sz false in
+    match tau with
+    | Bits_t sz -> sp_value (Bits (bs0 sz))
+    | Enum_t sg -> sp_value (Enum (sg, (bs0 sg.enum_bitsize)))
+    | Struct_t sg -> sprintf "%s {}" (cpp_struct_name sg) in
+
+  let sp_parenthesized arg =
+    if arg = "" then "" else sprintf "(%s)" arg in
+
+  let sp_packer ?(ns = "") ?(arg = "") tau =
+    let parg = sp_parenthesized arg in
+    match tau with
+    | Bits_t _ -> arg
+    | Enum_t _ | Struct_t _ -> sprintf "%spack%s" ns parg in
+
+  let sp_unpacker ?(ns = "") ?(arg = "") tau =
+    let parg = sp_parenthesized arg in
+    match tau with
+    | Bits_t _ -> arg
+    | Enum_t sg -> sprintf "%sunpack<%s, %d>%s" ns (cpp_enum_name sg) (enum_sz sg) parg
+    | Struct_t sg -> sprintf "%sunpack<%s, %d>%s" ns (cpp_struct_name sg) (struct_sz sg) parg in
 
   let p_struct_forward_decl sg =
     p "struct %s;" (cpp_struct_name sg) in
 
-  let p_struct_printer_forward_decl sg =
-    p "static std::string struct_str(%s /*val*/);" (cpp_struct_name sg) in
+  let p_printer_forward_decl (tau: typ) =
+    p "static std::string repr(%s /*val*/);"
+      (cpp_type_of_type tau) in
 
-  let p_struct_prims_forward_decls sg =
-    let s_sz = struct_sz sg in
-    let s_tau = cpp_struct_name sg in
-    let bits_sz_tau = cpp_type_of_type (Bits_t s_sz) in
-    p "static %s pack(%s val);" bits_sz_tau s_tau;
-    p "template <> %s %s(%s bits);" s_tau (cpp_struct_unpacker sg) bits_sz_tau in
+  let p_prims_forward_decls tau =
+    let v_sz = typ_sz tau in
+    let v_tau = cpp_type_of_type tau in
+    let bits_sz_tau = cpp_type_of_type (Bits_t v_sz) in
+    p "static %s pack(%s val);" bits_sz_tau v_tau;
+    p "template <> %s %s(%s bits);" v_tau (sp_unpacker tau) bits_sz_tau in
+
+  let p_enum_decl sg =
+    let esz = enum_sz sg in
+    if esz > 64 then failwith (sprintf "Enum %s is too large (%d > 64)"
+                                 (cpp_enum_name sg) esz);
+    let decl = sprintf "enum class %s : %s"
+                 (cpp_enum_name sg) (cpp_type_of_type (Bits_t (enum_sz sg))) in
+    p_scoped decl ~terminator:";" (fun () ->
+        iter_sep (fun () -> p ", ")
+          (fun (name, v) -> p "%s = %s" name (sp_bits_value v)) sg.enum_members) in
 
   let p_struct_decl sg =
     let decl = sprintf "struct %s" (cpp_struct_name sg) in
@@ -268,82 +325,134 @@ let compile (type name_t var_t reg_t)
   let attr_unused =
     "__attribute__((unused))" in
 
-  let p_struct_printer sg =
-    let s_arg = "val" in
-    let s_tau = cpp_struct_name sg in
-    let s_argdecl = sprintf "const %s %s" s_tau s_arg in
+  let p_printer tau =
+    let v_arg = "val" in
+    let v_tau = cpp_type_of_type tau in
+    let v_argdecl = sprintf "const %s %s" v_tau v_arg in
 
-    p_fn ~typ:("static std::string " ^ attr_unused) ~name:"struct_str"
-      ~args:s_argdecl (fun () ->
-        p "std::ostringstream stream;";
-        p "stream << \"%s { \";" s_tau;
-        List.iter (fun (fname, ftau) ->
-            p "stream << \".%s = \" << %s(%s.%s) << \"; \";"
-              fname (cpp_value_printer ftau) s_arg fname)
-          sg.struct_fields;
-        p "stream << \"}\";";
-        p "return stream.str();") in
+    let p_printer pbody =
+      p_fn ~typ:("static std::string " ^ attr_unused)
+        ~name:"repr" ~args:v_argdecl pbody in
 
-  let p_struct_prims sg =
-    let s_sz = struct_sz sg in
-    let s_arg = "val" in
-    let s_tau = cpp_struct_name sg in
-    let s_argdecl = sprintf "const %s %s" s_tau s_arg in
+    let p_enum_printer sg =
+      p_printer (fun () ->
+          p_scoped (sprintf "switch (%s)" v_arg) (fun () ->
+              List.iter (fun (nm, _v) ->
+                  let lbl = (cpp_enum_name sg) ^ "::" ^ nm in
+                  p "case %s: return \"%s\";" lbl lbl)
+                sg.enum_members;
+              let v_sz = typ_sz tau in
+              let bits_sz_tau = cpp_type_of_type (Bits_t v_sz) in
+              let v_cast = sprintf "static_cast<%s>(%s)" bits_sz_tau v_arg in
+              p "default: return \"%s{\" + repr<%d>(%s) + \"}\";"
+                (cpp_enum_name sg) v_sz v_cast)) in
+
+    let p_struct_printer sg =
+      p_printer (fun () ->
+          p "std::ostringstream stream;";
+          p "stream << \"%s { \";" v_tau;
+          List.iter (fun (fname, ftau) ->
+              p "stream << \".%s = \" << %s(%s.%s) << \"; \";"
+                fname (sp_value_printer ftau) v_arg fname)
+            sg.struct_fields;
+          p "stream << \"}\";";
+          p "return stream.str();") in
+
+    match tau with
+    | Bits_t _ -> ()
+    | Enum_t sg -> p_enum_printer sg
+    | Struct_t sg -> p_struct_printer sg in
+
+  let p_prims tau =
+    let v_sz = typ_sz tau in
+    let v_arg = "val" in
+    let v_tau = cpp_type_of_type tau in
+    let v_argdecl = sprintf "const %s %s" v_tau v_arg in
     let bits_arg = "bits" in
-    let bits_tau = cpp_type_of_type (Bits_t s_sz) in
+    let bits_tau = cpp_type_of_type (Bits_t v_sz) in
     let bits_argdecl = sprintf "const %s %s" bits_tau bits_arg in
 
-    let p_pack () =
-      let var = "packed" in
+    let p_pack pbody =
       p_fn ~typ:("static " ^ bits_tau ^ " " ^ attr_unused)
-        ~args:s_argdecl ~name:"pack" (fun () ->
-          p_decl (Bits_t s_sz) var ~init:(Some (cpp_const_init s_sz "0"));
+        ~args:v_argdecl ~name:(sp_packer tau) pbody in
+    let p_unpack pbody =
+      p_fn ~typ:("template <> " ^ v_tau ^ " " ^ attr_unused)
+        ~args:bits_argdecl ~name:(sp_unpacker tau) pbody in
+
+    let p_enum_pack _ =
+      p_pack (fun () -> p "return static_cast<%s>(%s);" bits_tau v_arg) in
+
+    let p_enum_unpack _ =
+      p_unpack (fun () -> p "return static_cast<%s>(%s);" v_tau bits_arg) in
+
+    let p_struct_pack sg =
+      let var = "packed" in
+      p_pack (fun () ->
+          p_decl (Bits_t v_sz) var ~init:(Some (cpp_const_init v_sz "0"));
           List.iter (fun (fname, ftau) ->
               let sz = typ_sz ftau in
-              let fval = sprintf "%s.%s" s_arg fname in
+              let fval = sprintf "%s.%s" v_arg fname in
               let fpacked = match ftau with
                 | Bits_t _ -> fval
-                | Struct_t _ -> sprintf "pack(%s)" fval in
+                | Enum_t _ | Struct_t _ -> sprintf "pack(%s)" fval in
               p "%s <<= %d;" var sz;
               p "%s |= %s;" var fpacked)
             sg.struct_fields;
-        p "return %s;" var) in
+          p "return %s;" var) in
 
-    let p_unpack () =
+    let p_struct_unpack sg =
       let var = "unpacked" in
-      p_fn ~typ:("template <> " ^ s_tau ^ " " ^ attr_unused)
-        ~args:bits_argdecl ~name:(cpp_struct_unpacker sg) (fun () ->
-          p_decl (Struct_t sg) var ~init:(Some "{}");
+      p_unpack (fun () ->
+          p_decl tau var ~init:(Some "{}");
           List.fold_right (fun (fname, ftau) offset ->
               let sz = typ_sz ftau in
               let fval = sprintf "prims::truncate<%d, %d>(%s >> %du)"
-                           sz s_sz bits_arg offset in
-              let unpacked = match ftau with
-                | Bits_t _ -> fval
-                | Struct_t sg -> cpp_struct_unpacker sg in
+                           sz v_sz bits_arg offset in
+              let unpacked = sp_unpacker ~arg:fval ftau in
               p "%s.%s = %s;" var fname unpacked;
               offset + sz)
             sg.struct_fields 0 |> ignore;
           p "return %s;" var) in
 
-    p_pack ();
-    nl ();
-    p_unpack () in
+    match tau with
+    | Bits_t _ -> ()
+    | Enum_t sg -> p_enum_pack sg; nl (); p_enum_unpack sg
+    | Struct_t sg -> p_struct_pack sg; nl (); p_struct_unpack sg in
 
-  let p_structs_declarations struct_sigs =
-    List.iter p_struct_forward_decl struct_sigs;
+  let compare_type tau1 tau2 =
+    match tau1, tau2 with
+    | Bits_t sz1, Bits_t sz2 -> compare sz1 sz2
+    | Bits_t _, _ -> -1
+    | _, Bits_t _ -> 1
+    | Enum_t sg1, Enum_t sg2 -> compare sg1.enum_name sg2.enum_name
+    | Enum_t _, _ -> -1
+    | _, Enum_t _ -> 1
+    | Struct_t sg1, Struct_t sg2 -> compare sg1.struct_name sg2.struct_name in
+
+  let p_type_declarations types =
+    let types = List.sort compare_type types in
+    let enums, structs =
+      List.fold_right (fun tau (enums, structs) ->
+          match tau with
+          | Enum_t sg -> (sg :: enums, structs)
+          | Struct_t sg -> (enums, sg :: structs)
+          | _ -> (enums, structs))
+      types ([], []) in
+    List.iter p_enum_decl enums;
     nl ();
-    iter_sep nl p_struct_decl struct_sigs;
+    List.iter p_struct_forward_decl structs;
+    nl ();
+    iter_sep nl p_struct_decl structs;
     nl ();
     p_ifdef "ndef SIM_MINIMAL" (fun () ->
-        List.iter p_struct_printer_forward_decl struct_sigs;
+        List.iter p_printer_forward_decl types;
         nl ();
-        iter_sep nl p_struct_printer struct_sigs);
+        iter_sep nl p_printer types);
     nl ();
     p_scoped "namespace prims" (fun () ->
-        List.iter p_struct_prims_forward_decls struct_sigs;
+        List.iter p_prims_forward_decls types;
         nl ();
-        iter_sep nl p_struct_prims struct_sigs) in
+        iter_sep nl p_prims types) in
 
   let p_preamble () =
     p "//////////////";
@@ -355,7 +464,7 @@ let compile (type name_t var_t reg_t)
       nl ());
     p "%s" cpp_preamble;
     nl ();
-    p_structs_declarations !struct_types;
+    p_type_declarations (List.map snd !user_types);
   in
 
   let iter_registers f regs =
@@ -364,23 +473,6 @@ let compile (type name_t var_t reg_t)
   let iter_all_registers =
     let sigs = List.map hpp.cpp_register_sigs hpp.cpp_registers in
     fun f -> List.iter f sigs in
-
-  let bits_to_Z bits =
-    Z.(List.fold_right (fun b z ->
-           (if b then one else zero) + shift_left z 1)
-         bits zero) in
-
-  let sp_bits_value { bs_size; bs_bits } =
-    let w = (bs_size + 7) / 8 in
-    let fmt = sprintf "%%0#%dx" (w + 2) in
-    cpp_const_init bs_size (Z.format fmt (bits_to_Z bs_bits)) in
-
-  let rec sp_value (v: value) =
-    match v with
-    | Bits bs -> sp_bits_value bs
-    | Struct (name, fields) ->
-       let fields = String.concat ", " (List.map sp_value fields) in
-       sprintf "%s { %s }" (cpp_struct_name' name) fields in
 
   let p_impl () =
     p "////////////////////";
@@ -397,7 +489,7 @@ let compile (type name_t var_t reg_t)
 
     let p_dump_register { reg_name; reg_type; _ } =
         p "std::cout << \"%s = \" << %s(%s) << std::endl;"
-          reg_name (cpp_value_printer reg_type) reg_name in
+          reg_name (sp_value_printer reg_type) reg_name in
 
     let p_state_t () =
       p_scoped "struct state_t" ~terminator:";" (fun () ->
@@ -432,10 +524,6 @@ let compile (type name_t var_t reg_t)
             p "Log.%s = log.%s;" reg_name reg_name)
           rule.rl_footprint;
         p "return true;" in
-
-      let sp_const sz bits =
-        let bs = SGALib.Util.bits_const_of_bits sz bits in
-        sp_bits_value bs in
 
       let p_declare_target = function
         | VarTarget { tau; declared = false; name } ->
@@ -478,23 +566,24 @@ let compile (type name_t var_t reg_t)
         | CustomFn f ->
            Hashtbl.replace custom_funcalls f fn;
            PureExpr (sprintf "%s(%s, %s)" (cpp_custom_fn_name f) a1 a2)
+        | PrimFn (SGA.ConvFn (tau, fn)) ->
+           let tau = SGALib.Util.typ_of_sga_type tau in
+           PureExpr (match fn with
+                     | SGA.Init -> sp_initializer tau
+                     | SGA.Pack -> sp_packer ~ns:"prims::" ~arg:a1 tau
+                     | SGA.Unpack -> sp_unpacker ~ns:"prims::" ~arg:a1 tau)
         | PrimFn (SGA.BitsFn f) ->
            PureExpr (sprintf "%s(%s, %s)" (cpp_bits_fn_name f tau1 tau2) a1 a2)
-        | PrimFn (SGA.StructFn (sg, op)) ->
-           let sg = SGALib.Util.struct_sig_of_sga_struct_sig' sg in
-           match op with
-           | SGA.Conv Init -> PureExpr (cpp_struct_initializer sg)
-           | SGA.Conv Pack -> PureExpr (sprintf "prims::pack(%s)" a1)
-           | SGA.Conv Unpack -> PureExpr (sprintf "prims::%s(%s)" (cpp_struct_unpacker sg) a1)
-           | SGA.Do (ac, idx) ->
-              let field, _tau = SGALib.Util.list_nth sg.struct_fields idx in
-              match ac with
-              | SGA.GetField -> PureExpr (sprintf "(%s).%s" a1 field)
-              | SGA.SubstField ->
-                 let tinfo = ensure_target (Struct_t sg) target in
-                 let res = p_assign_pure (VarTarget tinfo) (PureExpr a1) in
-                 p "%s.%s = %s;" tinfo.name field a2;
-                 res in
+        | PrimFn (SGA.StructFn (sg, ac, idx)) ->
+           let sg = SGALib.Util.struct_sig_of_sga_struct_sig sg in
+           let field, _tau = SGALib.Util.list_nth sg.struct_fields idx in
+           match ac with
+           | SGA.GetField -> PureExpr (sprintf "(%s).%s" a1 field)
+           | SGA.SubstField ->
+              let tinfo = ensure_target (Struct_t sg) target in
+              let res = p_assign_pure (VarTarget tinfo) (PureExpr a1) in
+              p "%s.%s = %s;" tinfo.name field a2;
+              res in
 
       let rec p_action (target: assignment_target) (rl: (var_t, reg_t, _) SGA.action) =
         match rl with
@@ -507,10 +596,11 @@ let compile (type name_t var_t reg_t)
                PureExpr (sprintf "prims::unreachable<%s>()" (cpp_type_of_type tau)))
         | SGA.Var (_, v, _, _m) ->
            PureExpr (hpp.cpp_var_names v) (* FIXME fail if reference isn't to latest binding of v *)
-        | SGA.Const (_, sz, cst) ->
-           let res = PureExpr (sp_const sz cst) in
-           if cpp_size_needs_allocation sz then
-             let ctarget = gensym_target (Bits_t sz) "cst" in
+        | SGA.Const (_, tau, cst) ->
+           let tau = SGALib.Util.typ_of_sga_type tau in
+           let res = PureExpr (sp_value (SGALib.Util.value_of_sga_value tau cst)) in
+           if cpp_type_needs_allocation tau then
+             let ctarget = gensym_target tau "cst" in
              let e = must_expr (p_assign_pure ~prefix:"static const" ctarget res) in
              PureExpr e
            else res
@@ -562,12 +652,13 @@ let compile (type name_t var_t reg_t)
            let a2 = must_expr (p_action (gensym_target f.ffi_arg2type "y") arg2) in
            p_funcall target f a1 a2
       and p_switch target var default branches =
+        (* FIXME extend to enums as well *)
         let rec loop = function
           | [] ->
              p "default:";
              p_assign_pure target (p_action target default);
-          | ((sz, const), action) :: branches ->
-             p "case %s:" (sp_const sz const);
+          | (const, action) :: branches ->
+             p "case %s:" (sp_value (Bits const));
              ignore (p_assign_pure target (p_action target action));
              p "break;";
              loop branches in

@@ -2,7 +2,7 @@ open Common
 
 type 'f smod = {
     m_name: ('f, string) locd;
-    m_registers: (('f, string) locd * ('f, bool list) locd) list;
+    m_registers: (('f, string) locd * ('f, bool array) locd) list;
     m_rules: (('f, string) locd * ('f, ('f, string, string) action) locd) list;
     m_scheduler: ('f, string) locd * ('f, 'f scheduler) locd
   }
@@ -169,13 +169,13 @@ let parse fname sexps =
         let padding = list_const (size - nbits) false in
         let char2bool = function '0' -> false | '1' -> true | _ -> assert false in
         let bools = List.append (List.rev_map char2bool bits) padding in
-        Some (Const bools)
+        Some (Const (Array.of_list bools))
     else match int_of_string_opt a with
          | Some n -> Some (Num n)
          | None -> None in
   let try_number loc = function
-    | "true" -> Some (Const [true])
-    | "false" -> Some (Const [false])
+    | "true" -> Some (Const [|true|])
+    | "false" -> Some (Const [|false|])
     | a -> try_number' loc a in
   let expect_number_or_var loc a =
     match try_number loc a with
@@ -322,10 +322,9 @@ let parse fname sexps =
       match expect_decl sexp "module declaration" with
       | _, `Module { m_registers; m_rules; m_scheduler; _ } ->
          let registers = List.map (fun (nm, init) ->
-                             let bs_size = List.length init.lcnt in
                              { reg_name = nm.lcnt;
-                               reg_type = Bits_t bs_size;
-                               reg_init_val = Bits { bs_size; bs_bits = init.lcnt } })
+                               reg_type = Bits_t (Array.length init.lcnt);
+                               reg_init_val = Bits init.lcnt })
                            m_registers in
          (* FIXME: handle functions in generic way *)
          (registers, m_rules, m_scheduler)
@@ -343,7 +342,7 @@ let resolve_rule fname registers rule =
     match List.find_opt (fun rsig -> rsig.reg_name = name) registers with
     | Some rsig -> { lpos; lcnt = rsig }
     | None -> name_error lpos "register" name in
-  let w0 = { lpos = Pos.Filename fname; lcnt = Const [] } in
+  let w0 = { lpos = Pos.Filename fname; lcnt = Const [||] } in
   let find_function { lpos; lcnt = name } args =
     (* FIXME generalize to custom function definitions *)
     let (fn, nargs, args): SGALib.SGA.prim_bits_ufn_t * int * _ =
