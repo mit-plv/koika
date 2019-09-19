@@ -47,11 +47,11 @@ Section Interpretation.
   Fixpoint interp_circuit {n} (c: circuit R Sigma n) : bits n :=
     match c with
     | CNot c =>
-      w1 (negb (Bits.single (interp_circuit c)))
+      Ob~(negb (Bits.single (interp_circuit c)))
     | CAnd c1 c2 =>
-      w1 (andb (Bits.single (interp_circuit c1)) (Bits.single (interp_circuit c2)))
+      Ob~(andb (Bits.single (interp_circuit c1)) (Bits.single (interp_circuit c2)))
     | COr c1 c2 =>
-      w1 (orb (Bits.single (interp_circuit c1)) (Bits.single (interp_circuit c2)))
+      Ob~(orb (Bits.single (interp_circuit c1)) (Bits.single (interp_circuit c2)))
     | CMux select c1 c2 =>
       if Bits.single (interp_circuit select) then interp_circuit c1
       else interp_circuit c2
@@ -311,7 +311,7 @@ Section CircuitCompilation.
       match a in action _ _ _ ts tau return ccontext ts -> @action_circuit (type_sz tau) with
       | Fail tau => fun _ =>
         {| retVal := $`"fail"`Bits.zero (type_sz tau); (* LATER: Question mark here *)
-           erwc := {| canFire := $`"fail_cF"` (w1 false);
+           erwc := {| canFire := $`"fail_cF"` Ob~0;
                      regs := clog.(regs) |} |}
       | Var m => fun Gamma =>
         {| retVal := CAnnotOpt "var_reference" (cassoc m Gamma);
@@ -336,7 +336,7 @@ Section CircuitCompilation.
         {| retVal := CAnnotOpt "read0" (REnv.(getenv) r idx);
            erwc := {| canFire := (clog.(canFire) &&`"read0_cF"`
                                 (!`"no_write1"` reg.(write1)));
-                     regs := REnv.(putenv) clog.(regs) idx {| read0 := $`"read0"` (w1 true);
+                     regs := REnv.(putenv) clog.(regs) idx {| read0 := $`"read0"` Ob~1;
                                                              (* Unchanged *)
                                                              read1 := reg.(read1);
                                                              write0 := reg.(write0);
@@ -347,7 +347,7 @@ Section CircuitCompilation.
         let reg := REnv.(getenv) clog.(regs) idx in
         {| retVal := reg.(data0);
            erwc := {| canFire := clog.(canFire);
-                     regs := REnv.(putenv) clog.(regs) idx {| read1 := $`"read1"` (w1 true);
+                     regs := REnv.(putenv) clog.(regs) idx {| read1 := $`"read1"` Ob~1;
                                                              (* Unchanged *)
                                                              read0 := reg.(read0);
                                                              write0 := reg.(write0);
@@ -362,7 +362,7 @@ Section CircuitCompilation.
                                 (!`"no_read1"` reg.(read1) &&`"write0_cF"`
                                  !`"no_write0"` reg.(write0) &&`"write0_cF"`
                                  !`"no_write1"` reg.(write1)));
-                     regs := REnv.(putenv) val.(erwc).(regs) idx {| write0 := $`"write0"` (w1 true);
+                     regs := REnv.(putenv) val.(erwc).(regs) idx {| write0 := $`"write0"` Ob~1;
                                                                    data0 := val.(retVal);
                                                                    (* Unchanged *)
                                                                    read0 := reg.(read0);
@@ -374,7 +374,7 @@ Section CircuitCompilation.
         let reg := REnv.(getenv) val.(erwc).(regs) idx in
         {| retVal := $`"write_retVal"`Bits.nil;
            erwc := {| canFire := val.(erwc).(canFire) &&`"write1_cF"` !`"no_write1"` reg.(write1);
-                     regs := REnv.(putenv) val.(erwc).(regs) idx {| write1 := $`"write1"` (w1 true);
+                     regs := REnv.(putenv) val.(erwc).(regs) idx {| write1 := $`"write1"` Ob~1;
                                                             data1 := val.(retVal);
                                                             (* Unchanged *)
                                                             read0 := reg.(read0);
@@ -390,11 +390,11 @@ Section CircuitCompilation.
   End Action.
 
   Definition adapter (cs: scheduler_circuit) : rwcircuit :=
-    {| canFire := $`"cF_init"` (w1 true);
-       regs := REnv.(map) (fun k reg => {| read0 := $`"init_no_read0"` (w1 false);
-                                       read1 := $`"init_no_read1"` (w1 false);
-                                       write0 := $`"init_no_write0"` (w1 false);
-                                       write1 := $`"init_no_write1"` (w1 false);
+    {| canFire := $`"cF_init"` Ob~1;
+       regs := REnv.(map) (fun k reg => {| read0 := $`"init_no_read0"` Ob~0;
+                                       read1 := $`"init_no_read1"` Ob~0;
+                                       write0 := $`"init_no_write0"` Ob~0;
+                                       write1 := $`"init_no_write1"` Ob~0;
                                        data0 := reg.(data0);
                                        data1 := reg.(data1) |})
                          cs |}.
@@ -473,10 +473,10 @@ Section CircuitCompilation.
     REnv.(env_t) (fun reg => circuit (R reg)).
 
   Definition init_scheduler_rwdata idx : rwdata :=
-    {| read0 := $`"sched_init_no_read0"` (w1 false);
-       read1 := $`"sched_init_no_read1"` (w1 false);
-       write0 := $`"sched_init_no_write0"` (w1 false);
-       write1 := $`"sched_init_no_write1"` (w1 false);
+    {| read0 := $`"sched_init_no_read0"` Ob~0;
+       read1 := $`"sched_init_no_read1"` Ob~0;
+       write0 := $`"sched_init_no_write0"` Ob~0;
+       write1 := $`"sched_init_no_write1"` Ob~0;
        data0 := CAnnotOpt "sched_init_data0_is_reg" (REnv.(getenv) r idx);
        data1 := CAnnotOpt "sched_init_no_data1" (CConst (Bits.zeroes _)) |}.
 

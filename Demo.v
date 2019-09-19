@@ -40,8 +40,8 @@ Module Ex1.
 
   Definition sigma idx : Sigma idx :=
     match idx with
-    | Even => fun (bs: bits 3) _ => w1 (negb (Bits.lsb bs))
-    | Odd => fun (bs: bits 3) _ => w1 (Bits.lsb bs)
+    | Even => fun (bs: bits 3) _ => Ob~(negb (Bits.lsb bs))
+    | Odd => fun (bs: bits 3) _ => Ob~(Bits.lsb bs)
     end.
 
   Example uactions r : uaction unit var_t reg_t fn_t :=

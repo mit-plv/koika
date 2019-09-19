@@ -167,7 +167,7 @@ Definition prim_sigma (fn: prim_fn_t) : prim_Sigma fn :=
     end
   | BitsFn fn =>
     match fn with
-    | Sel _ => fun bs idx => w1 (prim_sel bs idx)
+    | Sel _ => fun bs idx => Ob~(prim_sel bs idx)
     | Part _ offset width => fun bs _ => __magic__
     | PartSubst _ offset width => fun bs repl => __magic__
     | IndexedPart _ width => fun bs idx => __magic__
@@ -176,7 +176,7 @@ Definition prim_sigma (fn: prim_fn_t) : prim_Sigma fn :=
     | Not _ => fun bs _ => Bits.map negb bs
     | Lsl _ _ => fun bs places => Bits.lsl (Bits.to_nat places) bs
     | Lsr _ _ => fun bs places => Bits.lsr (Bits.to_nat places) bs
-    | Eq sz => fun bs1 bs2 => if eq_dec bs1 bs2 then w1 true else w1 false
+    | Eq sz => fun bs1 bs2 => if eq_dec bs1 bs2 then Ob~1 else Ob~0
     | UIntPlus _ => fun bs1 bs2 => prim_uint_plus bs1 bs2
     | Concat _ _ => fun bs1 bs2 => Bits.app bs1 bs2
     | ZExtL _ nzeroes => fun bs _ => Bits.app (Bits.zeroes nzeroes) bs
