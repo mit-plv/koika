@@ -735,10 +735,95 @@ Module RegisterFile_Ordered.
                vp_custom_fn_names := interop_empty_fn_names |} |}.
 End RegisterFile_Ordered.
 
+Module Enums.
+  Definition var_t := string.
+  Inductive reg_t := rA | rB.
+  Definition ufn_t := interop_minimal_ufn_t.
+  Inductive name_t := Incr.
+
+  Import ListNotations.
+  Definition flag_sig :=
+    {| enum_name := "flag";
+       enum_bitsize := 3;
+       enum_members := vect_of_list ["ABC"; "DEF"];
+       enum_bitpatterns := vect_of_list [Ob~1~1~0; Ob~0~0~1] |}.
+
+  Definition R r :=
+    match r with
+    | rA | rB => enum_t flag_sig
+    end.
+
+  Definition Sigma := interop_minimal_Sigma.
+  Definition uSigma := interop_minimal_uSigma.
+
+  Open Scope sga.
+
+  Definition _Incr : uaction unit _ _ interop_minimal_ufn_t :=
+    Let "bits_a" <- (UCall (UPrimFn (UConvFn (enum_t flag_sig) Pack))
+                          (rA#read0) (UConstBits Ob)) in
+    Let "bits_b" <- (UCall (UPrimFn (UConvFn (enum_t flag_sig) Pack))
+                          (rB#read0) (UConstBits Ob)) in
+    Let "neg_a" <- UNot[[$"bits_a", UConstBits Ob]] in
+    Let "succ_b" <- UUIntPlus[[$"bits_b", UConstBits Ob~0~0~1]] in
+    ((rA#write0(UCall (UPrimFn (UConvFn (enum_t flag_sig) Unpack))
+                      ($"neg_a") (UConstBits Ob)));;
+     (rB#write0(UCall (UPrimFn (UConvFn (enum_t flag_sig) Unpack))
+                      ($"succ_b") (UConstBits Ob)))).
+
+  (* Ltac __must_typecheck R Sigma tcres ::= *)
+  (*   __must_typecheck_cbn R Sigma tcres. *)
+
+  Definition rules :=
+    tc_rules R iSigma iuSigma
+             (fun rl => match rl with
+                     | Incr => _Incr
+                     end).
+
+  Definition enum_scheduler : scheduler _ :=
+    tc_scheduler (Incr |> done).
+
+  Instance FiniteType_reg_t : FiniteType reg_t := _.
+
+  Definition circuit :=
+    compile_scheduler (ContextEnv.(create) (readRegisters R Sigma)) rules enum_scheduler.
+
+  Definition sga_package :=
+    {| sga_reg_types := R;
+       sga_reg_init r := match r with
+                        | rA => Ob~1~1~0
+                        | rB => Bits.zero _
+                        end%N;
+       sga_reg_finite := _;
+       sga_reg_names r := match r with
+                         | rA => "rA"
+                         | rB => "rB"
+                         end;
+
+       sga_custom_fn_types := interop_empty_Sigma;
+
+       sga_rules := rules;
+
+       sga_scheduler := enum_scheduler;
+       sga_module_name := "enums"
+    |}.
+
+  Definition package :=
+    {| sga := sga_package;
+       sp := {| sp_pkg := sga_package;
+               sp_var_names := fun x => x;
+               sp_custom_fn_names := interop_empty_fn_names;
+               sp_rule_names r := match r with
+                                 | _Incr => "incr"
+                                 end;
+               sp_extfuns := None |};
+       vp := {| vp_pkg := sga_package;
+               vp_custom_fn_names := interop_empty_fn_names |} |}.
+End Enums.
+
 Import ListNotations.
 Definition demo_packages :=
   [ Collatz.package;
     ManualDecoder.package; PrimitiveDecoder.package;
     Pipeline.package;
-    RegisterFile_Ordered.package ].
-
+    RegisterFile_Ordered.package;
+    Enums.package ].
