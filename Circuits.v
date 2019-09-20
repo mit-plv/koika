@@ -1,4 +1,5 @@
-Require Import SGA.Common SGA.Environments SGA.Syntax SGA.TypedSyntax.
+Require Export SGA.Common SGA.Environments.
+Require Import SGA.Syntax SGA.TypedSyntax.
 Require Import Coq.Strings.String.
 Open Scope string_scope.
 

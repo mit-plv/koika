@@ -118,7 +118,7 @@ Definition prim_Sigma (fn: prim_fn_t) : ExternalSignature :=
     | Sel sz => {{ bits_t sz ~> bits_t (log2 sz) ~> bits_t 1 }}
     | Part sz offset width => {{ bits_t sz ~> unit_t ~> bits_t width }}
     | PartSubst sz offset width => {{ bits_t sz ~> bits_t width ~> bits_t sz }}
-    | IndexedPart sz width => {{ bits_t sz ~> bits_t width ~> bits_t sz }}
+    | IndexedPart sz width => {{ bits_t sz ~> bits_t (log2 sz) ~> bits_t width }}
     | And sz => {{ bits_t sz ~> bits_t sz ~> bits_t sz }}
     | Or sz => {{ bits_t sz ~> bits_t sz ~> bits_t sz }}
     | Not sz => {{ bits_t sz ~> unit_t ~> bits_t sz }}
@@ -157,6 +157,60 @@ Definition prim_uint_plus {sz} (bs1 bs2: bits sz) :=
 (*     { k: index (List.length field_accessors) & List_nth field_accessors k } *)
 (*   end. *)
 
+Definition prim_part {sz} (bs: bits sz) (offset: nat) (width: nat) :=
+  vect_extend_firstn (vect_firstn width (vect_skipn offset bs)) false.
+
+Lemma prim_part_subst_eqn :
+  forall sz width offset,
+    Nat.min sz (Nat.min offset sz + (width + (sz - (offset + width)))) = sz.
+Proof.
+  induction sz, width, offset; cbn; auto using Min.min_idempotent.
+  - f_equal; apply (IHsz 0 offset).
+  - f_equal; apply (IHsz width 0).
+  - f_equal; apply (IHsz (S width) offset).
+Defined.
+
+Definition prim_part_subst {sz}
+           (bs: bits sz)
+           (offset: nat)
+           (width: nat)
+           (v: bits width) : bits sz :=
+  let head := vect_firstn offset bs in
+  let tail := vect_skipn (offset + width) bs in
+  ltac:(rewrite <- (prim_part_subst_eqn sz width offset);
+          exact (vect_firstn sz (vect_app head (vect_app v tail)))).
+
+(* destruct offset. *)
+(* - destruct width. *)
+(*   + exact bs. *)
+(*   + *)
+(* destruct sz. *)
+(* - exact vect_nil. *)
+(* - destruct width. *)
+(*   destruct offset. *)
+(*   + destruct width. *)
+
+Fixpoint get_field fields
+         (v: struct_denote fields)
+         (idx: index (List.length fields))
+         {struct fields}
+  : type_denote (snd (List_nth fields idx)).
+  destruct fields, idx, p; cbn.
+  - apply (fst v).
+  - apply (get_field fields (snd v) a).
+Defined.
+
+Fixpoint subst_field fields
+         (v: struct_denote fields)
+         (idx: index (List.length fields))
+         (v': type_denote (snd (List_nth fields idx)))
+         {struct fields}
+  : (struct_denote fields).
+  destruct fields, idx, p; cbn.
+  - apply (v', snd v).
+  - apply (fst v, subst_field fields (snd v) a v').
+Defined.
+
 Definition prim_sigma (fn: prim_fn_t) : prim_Sigma fn :=
   match fn with
   | ConvFn tau fn =>
@@ -168,9 +222,9 @@ Definition prim_sigma (fn: prim_fn_t) : prim_Sigma fn :=
   | BitsFn fn =>
     match fn with
     | Sel _ => fun bs idx => Ob~(prim_sel bs idx)
-    | Part _ offset width => fun bs _ => __magic__
-    | PartSubst _ offset width => fun bs repl => __magic__
-    | IndexedPart _ width => fun bs idx => __magic__
+    | Part _ offset width => fun bs _ => prim_part bs offset width
+    | PartSubst _ offset width => fun bs repl => prim_part_subst bs offset width repl
+    | IndexedPart _ width => fun bs offset => prim_part bs (Bits.to_nat offset) width
     | And _ => Bits.map2 andb
     | Or _ => Bits.map2 orb
     | Not _ => fun bs _ => Bits.map negb bs
@@ -182,6 +236,6 @@ Definition prim_sigma (fn: prim_fn_t) : prim_Sigma fn :=
     | ZExtL _ nzeroes => fun bs _ => Bits.app (Bits.zeroes nzeroes) bs
     | ZExtR _ nzeroes => fun bs _ => Bits.app bs (Bits.zeroes nzeroes)
     end
-  | StructFn sig GetField idx => fun s _ => __magic__
-  | StructFn sig SubstField idx => fun s _ => __magic__
+  | StructFn sig GetField idx => fun s _ => get_field sig.(struct_fields) s idx
+  | StructFn sig SubstField idx => fun s v => subst_field sig.(struct_fields) s idx v
   end.

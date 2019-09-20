@@ -273,6 +273,52 @@ Definition vect_cycle_l {T sz} n (v: vect T sz) :=
 Definition vect_cycle_r {T sz} n (v: vect T sz) :=
   vect_repeat vect_cycle_r1 n v.
 
+Fixpoint vect_skipn {T sz} (n: nat) (v: vect T sz) : vect T (sz - n) :=
+  match n with
+  | 0 => ltac:(rewrite <- (Minus.minus_n_O sz); exact v)
+  | S n' => match sz return vect T sz -> vect T (sz - S n') with
+           | 0 => fun v => v
+           | S sz' => fun v => vect_skipn n' (vect_tl v)
+           end v
+  end.
+
+Fixpoint vect_firstn {T sz} (n: nat) (v: vect T sz) : vect T (min n sz) :=
+  match n with
+  | 0 => vect_nil
+  | S n' => match sz return vect T sz -> vect T (min (S n') sz) with
+           | 0 => fun v => v
+           | S sz' => fun v => vect_cons (vect_hd v) (vect_firstn n' (vect_tl v))
+           end v
+  end.
+
+Lemma vect_firstn_plus_eqn:
+  forall sz n, Nat.min n (n + sz) = n.
+Proof. induction n; cbn; eauto. Defined.
+
+Definition vect_firstn_plus {T sz} (n: nat) (v: vect T (n + sz)) : vect T n :=
+  ltac:(rewrite <- (vect_firstn_plus_eqn sz n); exact (vect_firstn n v)).
+
+Lemma vect_skipn_plus_eqn :
+  forall sz n, n + sz - n = sz.
+Proof. induction n, sz; cbn; auto. Defined.
+
+Definition vect_skipn_plus {T sz} (n: nat) (v: vect T (n + sz)) : vect T sz :=
+  ltac:(rewrite <- (vect_skipn_plus_eqn sz n); exact (vect_skipn n v)).
+
+Lemma vect_extend_eqn :
+  forall sz sz', sz + (sz' - sz) = Nat.max sz sz'.
+Proof. induction sz, sz'; cbn; auto. Defined.
+
+Definition vect_extend {T sz} (v: vect T sz) (sz': nat) (t: T) : vect T (Nat.max sz sz') :=
+  ltac:(rewrite <- (vect_extend_eqn sz sz'); exact (vect_app v (vect_const (sz' - sz) t))).
+
+Lemma vect_extend_firstn_eqn:
+  forall sz sz', Nat.max (Nat.min sz sz') sz = sz.
+Proof. induction sz, sz'; cbn; auto. Defined.
+
+Definition vect_extend_firstn {T sz sz'} (v: vect T (Nat.min sz sz')) (t: T) : vect T sz :=
+  ltac:(rewrite <- (vect_extend_firstn_eqn sz sz'); exact (vect_extend v sz t)).
+
 Fixpoint vect_find {T sz} (f: T -> bool) (v: vect T sz) : option T :=
   match sz return vect T sz -> option T with
   | 0 => fun _ => None
