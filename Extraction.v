@@ -1,7 +1,14 @@
 Require Import Coq.extraction.Extraction.
 Require Import Coq.extraction.ExtrOcamlBasic Coq.extraction.ExtrOcamlString Coq.extraction.ExtrOcamlNatInt.
 
-Require SGA.Common SGA.Environments SGA.TypedSyntax SGA.TypeInference SGA.Circuits SGA.Interop SGA.Demo.
+Require SGA.Common
+        SGA.Environments
+        SGA.TypedSyntax
+        SGA.TypeInference
+        SGA.Circuits
+        SGA.Interop
+        SGA.CircuitElaboration
+        SGA.Demo.
 
 Extract Inductive list => "list" [ "[]" "(::)" ].
 
@@ -28,5 +35,6 @@ Extraction "SGA.ml"
            Circuits.compile_scheduler
            Primitives.prim_uSigma Primitives.prim_Sigma
            Interop.interop_fn_t Interop.interop_uSigma Interop.interop_Sigma
-           Interop.sga_package_t Interop.circuit_package_t Interop.sim_package_t Interop.compile_sga_package
+           Interop.sga_package_t Interop.circuit_package_t Interop.sim_package_t
+           CircuitElaboration.compile_sga_package
            Demo.demo_packages.

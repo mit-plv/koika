@@ -75,6 +75,26 @@ Section CircuitOptimizer.
   Notation Circuit := circuit.
   Notation circuit := (circuit R Sigma).
 
+  Context {REnv: Env reg_t}.
+
+  Context (r: REnv.(env_t) (fun idx => bits (R idx))).
+  Context (sigma: forall f, CExternalSignature_denote (Sigma f)).
+
+  Record local_circuit_optimizer :=
+    { lco_fn :> forall {sz}, circuit sz -> circuit sz;
+      lco_proof: forall {sz} (c: circuit sz),
+          interp_circuit r sigma (lco_fn c) =
+          interp_circuit r sigma c }.
+
+  Definition lco_opt_compose
+             (o1 o2: forall {sz}, circuit sz -> circuit sz) sz (c: circuit sz) :=
+    o2 (o1 c).
+
+  Definition lco_compose (l1 l2: local_circuit_optimizer) :=
+    {| lco_fn := @lco_opt_compose (l1.(@lco_fn)) (l2.(@lco_fn));
+       lco_proof := ltac:(abstract (intros; unfold lco_opt_compose;
+                                     cbn; rewrite !lco_proof; reflexivity)) |}.
+
   Fixpoint unannot {sz} (c: circuit sz) : circuit sz :=
     match c with
     | CAnnot annot c => unannot c
@@ -95,7 +115,7 @@ Section CircuitOptimizer.
 
   Instance EqDec_ListBool : EqDec (list bool) := _.
 
-  Definition opt1' {sz} (c: circuit sz): circuit sz :=
+  Definition simplify_bool_1' {sz} (c: circuit sz): circuit sz :=
     match c in Circuit _ _ sz return circuit sz with
     | (CNot c) as c0 =>
       match asconst c with
@@ -131,16 +151,11 @@ Section CircuitOptimizer.
     | c => c
     end.
 
-  Definition opt1 {sz} (c: circuit sz): circuit sz :=
+  Definition simplify_bool_1 {sz} (c: circuit sz): circuit sz :=
     match sz as n return (circuit n -> circuit n) with
     | 0 => fun c => CConst Bits.nil
-    | _ => fun c => opt1' c
+    | _ => fun c => simplify_bool_1' c
     end c.
-
-  Context {REnv: Env reg_t}.
-
-  Context (r: REnv.(env_t) (fun idx => bits (R idx))).
-  Context (sigma: forall f, CExternalSignature_denote (Sigma f)).
 
   Lemma asconst_Some :
     forall {sz} (c: circuit sz) bs,
@@ -158,7 +173,7 @@ Section CircuitOptimizer.
     apply IHc; eassumption.
   Qed.
 
-  Arguments opt1 sz !c.
+  Arguments simplify_bool_1 sz !c.
 
   Lemma vect_to_list_inj T :
     forall sz (v1 v2: vect T sz),
@@ -171,9 +186,9 @@ Section CircuitOptimizer.
   Qed.
 
   Arguments EqDec_ListBool: simpl never.
-  Lemma opt1'_correct :
+  Lemma simplify_bool_1'_correct :
     forall {sz} (c: circuit sz),
-      interp_circuit r sigma (opt1' c) = interp_circuit r sigma c.
+      interp_circuit r sigma (simplify_bool_1' c) = interp_circuit r sigma c.
   Proof.
     induction c; cbn.
     Ltac t := match goal with
@@ -196,19 +211,48 @@ Section CircuitOptimizer.
     all: repeat t.
   Qed.
 
-  Lemma opt1_correct :
+  Lemma simplify_bool_1_correct :
     forall {sz} (c: circuit sz),
-      interp_circuit r sigma (opt1 c) = interp_circuit r sigma c.
+      interp_circuit r sigma (simplify_bool_1 c) = interp_circuit r sigma c.
   Proof.
-    unfold opt1; destruct sz.
+    unfold simplify_bool_1; destruct sz.
     - cbn; intros.
       destruct interp_circuit; reflexivity.
-    - eauto using opt1'_correct.
+    - eauto using simplify_bool_1'_correct.
   Qed.
+
+  Definition bool_simpl_lco :=
+    {| lco_fn := @simplify_bool_1; lco_proof := @simplify_bool_1_correct |}.
 End CircuitOptimizer.
 
-Module CircuitNotations.
-  Notation CAnnotOpt an c := (CAnnot an (opt1 c)).
+Arguments simplify_bool_1 {_ _ _ _} [_] _.
+Arguments lco_fn {_ _ _ _ _ _ _} _ {_}.
+Arguments lco_proof {_ _ _ _ _ _ _} _ {_}.
+Arguments lco_compose {_ _ _ _ _ _ _} _ _.
+Arguments bool_simpl_lco {_ _ _ _ _ _ _}.
+
+Section CircuitCompilation.
+  Context {name_t var_t reg_t fn_t: Type}.
+  Context {reg_t_eq_dec: EqDec reg_t}.
+
+  Context {R: reg_t -> type}.
+  Context {Sigma: fn_t -> ExternalSignature}.
+  Context {REnv: Env reg_t}.
+
+  Definition CR idx :=
+    type_sz (R idx).
+
+  Definition CSigma fn :=
+    {| arg1Size := type_sz (Sigma fn).(arg1Type);
+       arg2Size := type_sz (Sigma fn).(arg2Type);
+       retSize := type_sz (Sigma fn).(retType) |}.
+
+  Notation circuit := (circuit CR CSigma).
+
+  Context (opt: forall {sz}, circuit sz -> circuit sz).
+  Context (r: REnv.(env_t) (fun reg => circuit (CR reg))).
+
+  Notation CAnnotOpt an c := (CAnnot an (opt _ c)).
   (* Notation CAnnotOpt an c := (CAnnot an c). *)
 
   Notation "f [ arg ]` an `" :=
@@ -237,29 +281,8 @@ Module CircuitNotations.
     (CAnnotOpt an (COr (CAnnotOpt "impl" (CNot c1)) c2))
       (at level 70, no associativity) : circuit.
   (* Notation "s ?? c1 // c2" := (CMux s c1 c2) (at level 80, no associativity) : circuit. *)
-End CircuitNotations.
 
-Import CircuitNotations.
-Local Open Scope circuit.
-
-Section CircuitCompilation.
-  Context {name_t var_t reg_t fn_t: Type}.
-  Context {reg_t_eq_dec: EqDec reg_t}.
-
-  Context {R: reg_t -> type}.
-  Context {Sigma: fn_t -> ExternalSignature}.
-  Context {REnv: Env reg_t}.
-
-  Definition CR idx :=
-    type_sz (R idx).
-
-  Definition CSigma fn :=
-    {| arg1Size := type_sz (Sigma fn).(arg1Type);
-       arg2Size := type_sz (Sigma fn).(arg2Type);
-       retSize := type_sz (Sigma fn).(retType) |}.
-
-  Notation circuit := (circuit CR CSigma).
-  Context (r: REnv.(env_t) (fun reg => circuit (CR reg))).
+  Local Open Scope circuit.
 
   Definition readRegisters : forall idx: reg_t, circuit (CR idx) :=
     fun idx => CReadRegister (R := CR) (Sigma := CSigma) idx.

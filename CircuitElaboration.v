@@ -18,9 +18,11 @@ Section Elaboration.
 
   Context {Sigma: custom_fn_t -> ExternalSignature}.
   Notation cSigma := (circuit_Sigma (interop_Sigma Sigma)).
-  Context (csigma: forall f, CExternalSignature_denote (cSigma f)).
 
-  Definition elaborate_external_1 {n} (c: circuit cR cSigma n) : circuit cR cSigma n.
+  Context (custom_sigma: forall f, ExternalSignature_denote (Sigma f)).
+  Notation csigma := (circuit_sigma (interop_sigma custom_sigma)).
+
+  Definition elaborate_externals_1 {n} (c: circuit cR cSigma n) : circuit cR cSigma n.
   Proof.
     pose proof c as c0.
     destruct c; [ exact c0.. | | exact c0 ].
@@ -47,18 +49,6 @@ Section Elaboration.
   Notation cr := (circuit_r r).
   Context (rc: REnv.(env_t) (fun reg => circuit cR cSigma (cR reg))).
   Context (sigma: forall f, ExternalSignature_denote (Sigma f)).
-  Context {csigma_correct: circuit_sigma_spec (interop_sigma sigma) csigma}.
-
-  Lemma csigma_circuit_correct:
-    forall fn c1 c2,
-      csigma (PrimFn fn) (interp_circuit cr csigma c1) (interp_circuit cr csigma c2) =
-      bits_of_value ((interop_sigma sigma)
-                       (PrimFn fn)
-                       (value_of_bits (interp_circuit cr csigma c1))
-                       (value_of_bits (interp_circuit cr csigma c2))).
-  Proof.
-    intros; rewrite <- csigma_correct, !bits_of_value_of_bits; reflexivity.
-  Qed.
 
   Lemma prim_part_end :
     forall sz sz' (v : bits (sz + sz')),
@@ -147,20 +137,18 @@ Section Elaboration.
     reflexivity.
   Qed.
 
-  Theorem elaborate_external_1_correct :
+  Theorem elaborate_externals_1_correct :
     forall {sz} (c: circuit cR cSigma sz),
-    interp_circuit cr csigma (elaborate_external_1 c) = interp_circuit cr csigma c.
+    interp_circuit cr csigma (elaborate_externals_1 c) = interp_circuit cr csigma c.
   Proof.
     destruct c; try reflexivity.
     destruct idx; try reflexivity.
     destruct fn; try reflexivity.
     - (* Conv *)
       destruct op; cbn in *;
-        rewrite csigma_circuit_correct; cbn in *;
-          rewrite bits_of_value_of_bits; reflexivity.
+        rewrite bits_of_value_of_bits; reflexivity.
     - (* StructFn *)
-      destruct op; cbn in *;
-        rewrite !csigma_circuit_correct; cbn in *.
+      destruct op; cbn in *.
       + (* GetField *)
         generalize (interp_circuit cr csigma c1); clear c1.
         repeat unfold struct_index, field_type, field_sz in *;
@@ -190,4 +178,24 @@ Section Elaboration.
              apply prim_part_subst_front.
              apply prim_part_correct_le.
   Qed.
+
+  Definition external_elaboration_lco :=
+    {| lco_fn := @elaborate_externals_1;
+       lco_proof := @elaborate_externals_1_correct |}.
 End Elaboration.
+
+Arguments elaborate_externals_1 {_ _ _ _} [_] _.
+Arguments external_elaboration_lco {_ _ _ _ _ _ _}.
+
+Definition compile_sga_package
+           {name_t var_t reg_t custom_fn_t: Type}
+           (s: @sga_package_t name_t var_t reg_t custom_fn_t) : circuit_package_t :=
+  let FT := s.(sga_reg_finite) in
+  {| cp_pkg := s;
+     cp_reg_Env := ContextEnv;
+     cp_circuit :=
+       let R := s.(sga_reg_types) in
+       let Sigma := interop_Sigma s.(sga_custom_fn_types) in
+       let r := ContextEnv.(create) (readRegisters R Sigma) in
+       compile_scheduler (REnv := ContextEnv) (lco_opt_compose simplify_bool_1 elaborate_externals_1)
+                         r s.(sga_rules) s.(sga_scheduler) |}.

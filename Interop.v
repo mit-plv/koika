@@ -156,13 +156,4 @@ Section Packages.
           [sp_custom_fn_names] **)
       sp_extfuns: option string
     }.
-
-  Definition compile_sga_package (s: sga_package_t) :=
-    let FT := s.(sga_reg_finite) in
-    {| cp_pkg := s;
-       cp_circuit :=
-         let R := s.(sga_reg_types) in
-         let Sigma := interop_Sigma s.(sga_custom_fn_types) in
-         let r := ContextEnv.(create) (readRegisters R Sigma) in
-         compile_scheduler r s.(sga_rules) s.(sga_scheduler) |}.
 End Packages.

@@ -98,15 +98,32 @@ Section Circuits.
   Notation cr := circuit_r.
 
   Context (sigma: forall f, ExternalSignature_denote (Sigma f)).
-  Context (csigma: forall f, CExternalSignature_denote (cSigma f)).
 
-  Definition circuit_sigma_spec :=
+  Definition circuit_sigma_spec csigma :=
     forall fn (v1: (Sigma fn).(arg1Type)) (v2: (Sigma fn).(arg2Type)),
       csigma fn (bits_of_value v1) (bits_of_value v2) =
       bits_of_value (sigma fn v1 v2).
 
+  Context (csigma: forall f, CExternalSignature_denote (cSigma f)).
+  Context (lco: local_circuit_optimizer cr csigma).
+
   Notation circuit := (circuit cR cSigma).
   Notation interp_circuit := (interp_circuit cr csigma).
+
+  Definition circuit_fn_of_fn {sig} (fn: ExternalSignature_denote sig)
+    : CExternalSignature_denote (CExternalSignature_of_ExternalSignature sig) :=
+    fun bs1 bs2 => bits_of_value (fn (value_of_bits bs1) (value_of_bits bs2)).
+
+  Definition circuit_sigma : forall f, CExternalSignature_denote (circuit_Sigma f) :=
+    fun f => circuit_fn_of_fn (sigma f).
+
+  Lemma circuit_sigma_spec_circuit_sigma :
+    circuit_sigma_spec circuit_sigma.
+  Proof.
+    unfold circuit_sigma_spec, circuit_sigma, circuit_fn_of_fn.
+    intros; rewrite !value_of_bits_of_value.
+    reflexivity.
+  Qed.
 
   Definition circuit_lt (c1 c2: circuit 1) :=
     bool_lt (Bits.single (interp_circuit c1)) (Bits.single (interp_circuit c2)).
@@ -248,22 +265,22 @@ Section Circuits.
   Lemma circuit_lt_opt_l :
     forall c1 c2,
       circuit_lt c1 c2 ->
-      circuit_lt (opt1 c1) c2.
+      circuit_lt (lco.(lco_fn) c1) c2.
   Proof.
-    unfold circuit_lt; intros; rewrite opt1_correct; assumption.
+    unfold circuit_lt; intros; rewrite lco.(lco_proof); assumption.
   Qed.
 
   Lemma circuit_lt_opt_r :
     forall c1 c2,
       circuit_lt c1 c2 ->
-      circuit_lt c1 (opt1 c2).
+      circuit_lt c1 (lco.(lco_fn) c2).
   Proof.
-    unfold circuit_lt; intros; rewrite opt1_correct; assumption.
+    unfold circuit_lt; intros; rewrite lco.(lco_proof); assumption.
   Qed.
 
   Lemma circuit_lt_willFire_of_canFire_canFire :
     forall c1 (cLog: scheduler_circuit R Sigma REnv) rws,
-      circuit_lt (willFire_of_canFire {| canFire := c1; regs := rws |} cLog) c1.
+      circuit_lt (willFire_of_canFire lco {| canFire := c1; regs := rws |} cLog) c1.
   Proof.
     unfold willFire_of_canFire; intros.
     eapply circuit_lt_trans.

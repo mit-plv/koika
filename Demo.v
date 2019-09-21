@@ -12,6 +12,9 @@ Record demo_package_t :=
     vp : @verilog_package_t dp_var_t dp_reg_t dp_name_t dp_custom_fn_t;
     sp : @sim_package_t dp_var_t dp_reg_t dp_name_t dp_custom_fn_t }.
 
+Notation opt := simplify_bool_1.
+Notation interop_opt := (lco_opt_compose simplify_bool_1 elaborate_externals_1).
+
 Module Ex1.
   Notation var_t := string.
   Inductive reg_t := R0 | R1.
@@ -65,7 +68,7 @@ Module Ex1.
   Definition s1_result :=
     Eval compute in interp_scheduler (ContextEnv.(create) r) sigma rules s1.
   Definition s1_circuit :=
-    compile_scheduler (ContextEnv.(create) (readRegisters R Sigma)) rules s1.
+    compile_scheduler opt (ContextEnv.(create) (readRegisters R Sigma)) rules s1.
 End Ex1.
 
 Module Ex2.
@@ -146,7 +149,7 @@ Module Ex2.
   Definition tsched_result :=
     Eval compute in interp_scheduler (ContextEnv.(create) r) sigma rules tsched.
   Definition tsched_circuit :=
-    compile_scheduler (ContextEnv.(create) (readRegisters R Sigma)) rules tsched.
+    compile_scheduler opt (ContextEnv.(create) (readRegisters R Sigma)) rules tsched.
 End Ex2.
 
 Notation compute t :=
@@ -235,7 +238,7 @@ Module Collatz.
                            (rules multiply)).
 
   Definition circuit :=
-    compile_scheduler (ContextEnv.(create) (readRegisters R interop_minimal_Sigma)) rules collatz.
+    compile_scheduler interop_opt (ContextEnv.(create) (readRegisters R interop_minimal_Sigma)) rules collatz.
 
   Definition sga_package :=
     {| sga_reg_types := R;
@@ -512,7 +515,7 @@ Module ManualDecoder.
                     end).
 
   Definition circuit :=
-    compile_scheduler (ContextEnv.(create) (readRegisters R Sigma)) rules decoder.
+    compile_scheduler interop_opt (ContextEnv.(create) (readRegisters R Sigma)) rules decoder.
 
   Definition package := make_package "manual_decoder" rules.
 End ManualDecoder.
@@ -529,7 +532,7 @@ Module PrimitiveDecoder.
                     end).
 
   Definition circuit :=
-    compile_scheduler (ContextEnv.(create) (readRegisters R Sigma)) rules decoder.
+    compile_scheduler interop_opt (ContextEnv.(create) (readRegisters R Sigma)) rules decoder.
 
   Definition package := make_package "primitive_decoder" rules.
 End PrimitiveDecoder.
@@ -602,7 +605,7 @@ Module Pipeline.
     tc_scheduler (doG |> doF |> done).
 
   Definition circuit :=
-    compile_scheduler (ContextEnv.(create) (readRegisters R iSigma)) rules Pipeline.
+    compile_scheduler interop_opt (ContextEnv.(create) (readRegisters R iSigma)) rules Pipeline.
 
   Definition fn_names fn :=
     match fn with
@@ -698,7 +701,7 @@ Module RegisterFile_Ordered.
   Instance FiniteType_reg_t : FiniteType reg_t := _.
 
   Definition circuit :=
-    compile_scheduler (ContextEnv.(create) (readRegisters R Sigma)) rules regfile.
+    compile_scheduler interop_opt (ContextEnv.(create) (readRegisters R Sigma)) rules regfile.
 
   Definition sga_package :=
     {| sga_reg_types := R;
@@ -785,7 +788,7 @@ Module Enums.
   Instance FiniteType_reg_t : FiniteType reg_t := _.
 
   Definition circuit :=
-    compile_scheduler (ContextEnv.(create) (readRegisters R Sigma)) rules enum_scheduler.
+    compile_scheduler interop_opt (ContextEnv.(create) (readRegisters R Sigma)) rules enum_scheduler.
 
   Definition sga_package :=
     {| sga_reg_types := R;

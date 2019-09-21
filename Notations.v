@@ -5,7 +5,8 @@ Require Export
         SGA.Semantics
         SGA.Circuits
         SGA.Primitives
-        SGA.Interop.
+        SGA.Interop
+        SGA.CircuitElaboration.
 
 Delimit Scope sga_scope with sga.
 Delimit Scope sga_expr_scope with sga_expr.
