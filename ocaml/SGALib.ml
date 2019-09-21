@@ -108,12 +108,32 @@ module Util = struct
 
   let rec value_of_sga_value tau v =
     match tau with
-    | Bits_t sz -> Bits (bits_const_of_sga_bits sz v)
-    | Enum_t sg -> Enum (sg, bits_const_of_sga_bits sg.enum_bitsize v)
-    | Struct_t sg ->
-       let taus = List.map snd sg.struct_fields in
-       let vals = SGA.vect_to_list (List.length taus) v in
-       Struct (sg, List.map2 value_of_sga_value taus vals)
+    | SGA.Bits_t sz ->
+       Bits (bits_const_of_sga_bits sz v)
+    | SGA.Enum_t sg ->
+       Enum (enum_sig_of_sga_enum_sig sg, bits_const_of_sga_bits sg.enum_bitsize v)
+    | SGA.Struct_t sg ->
+       Struct (struct_sig_of_sga_struct_sig sg,
+               List.map snd (SGA.struct_to_list value_of_sga_value sg.struct_fields v))
+
+  let typ_of_value = function
+    | Bits bs -> Bits_t (Array.length bs)
+    | Enum (sg, _) -> Enum_t sg
+    | Struct (sg, _) -> Struct_t sg
+
+  let rec sga_value_of_value (v: value) =
+    match v with
+    | Bits bs -> SGA.Bits_t (Array.length bs), (sga_bits_of_bits_const bs)
+    | Enum (sg, v) -> SGA.Enum_t (sga_enum_sig_of_enum_sig sg), (sga_bits_of_bits_const v)
+    | Struct (sg, sv) ->
+       let vv = List.map2 (fun (nm, _) v -> coq_string_of_string nm, v) sg.struct_fields sv in
+       let conv v = let tau, sga_v = sga_value_of_value v in SGA.ExistT (tau, sga_v) in
+       (SGA.Struct_t (sga_struct_sig_of_struct_sig sg),
+        SGA.struct_of_list conv vv)
+
+  let bits_of_value (v: value) =
+    let tau, v = sga_value_of_value v in
+    bits_const_of_sga_bits (SGA.type_sz tau) (SGA.bits_of_value tau v)
 
   let rec string_of_value (v: value) =
     match v with
@@ -137,10 +157,10 @@ module Util = struct
       (String.concat ", " (List.map sp_field (List.combine sg.struct_fields v)))
 
   let reg_sigs_of_sga_package (pkg: _ SGA.sga_package_t) r =
-    let tau = typ_of_sga_type (pkg.sga_reg_types r) in
+    let init = value_of_sga_value (pkg.sga_reg_types r) (pkg.sga_reg_init r) in
     { reg_name = string_of_coq_string (pkg.sga_reg_names r);
-      reg_type = tau;
-      reg_init_val = value_of_sga_value tau (pkg.sga_reg_init r) }
+      reg_type = typ_of_value init;
+      reg_init_val = init }
 
   let fn_sigs_of_sga_package custom_fn_names (pkg: _ SGA.sga_package_t) =
     let custom_fn_info fn =
@@ -162,7 +182,7 @@ module Compilation = struct
       | UVar v -> sprintf "var %s" v
       | UConst (tau, v) ->
          sprintf "%s"
-           (Util.string_of_value (Util.value_of_sga_value (Util.typ_of_sga_type tau) v))
+           (Util.string_of_value (Util.value_of_sga_value tau v))
       | UConstEnum (sg, nm) ->
          sprintf "%s::%s" (Util.string_of_coq_string sg.enum_name) (Util.string_of_coq_string nm)
       | USeq (r1, r2) -> sprintf "Seq (%s) (%s)" (pp_action r1) (pp_action r2)
@@ -196,7 +216,7 @@ module Compilation = struct
        | Fail sz -> SGA.UFail (SGA.Bits_t sz)
        | Var v -> SGA.UVar v
        | Num _ -> assert false
-       | Const bs -> SGA.uConstBits (Array.length bs) (SGA.vect_of_list (Array.to_list bs))
+       | Const bs -> SGA.uConstBits (Array.length bs) (Util.sga_bits_of_bits_const bs)
        | Progn rs -> translate_seq rs
        | Let (bs, body) -> translate_bindings bs body
        | If (e, r, rs) -> SGA.UIf (translate_action e, translate_action r, translate_seq rs)
@@ -226,14 +246,10 @@ module Compilation = struct
        | Try (r, s1, s2) ->
           SGA.UTry (r.lcnt, translate_scheduler s1, translate_scheduler s2))
 
-  let r = fun rs ->
-    Util.sga_type_of_typ rs.reg_type
-
-  let sigma = fun fn ->
-    SGA.interop_Sigma (fun _ -> failwith "No custom functions") fn
-
-  let uSigma = fun fn ->
-    SGA.interop_uSigma (fun _ -> failwith "No custom functions") fn
+  let _R = fun rs -> Util.sga_type_of_typ rs.reg_type
+  let custom_Sigma = fun _ -> failwith "No custom functions"
+  let interop_Sigma = fun fn -> SGA.interop_Sigma custom_Sigma fn
+  let interop_uSigma = fun fn -> SGA.interop_uSigma custom_Sigma fn
 
   let rEnv_of_register_list tc_registers =
     let reg_indices = List.mapi (fun i x -> x.reg_name, i) tc_registers in
@@ -271,7 +287,7 @@ module Compilation = struct
 
   let typecheck_rule (raw_ast: 'f raw_action) : (typechecked_action, 'f err_contents) result =
     let ast = translate_action raw_ast in
-    match SGA.type_action Util.string_eq_dec r sigma uSigma raw_ast.lpos [] ast with
+    match SGA.type_action Util.string_eq_dec _R interop_Sigma interop_uSigma raw_ast.lpos [] ast with
     | Success (SGA.ExistT (tau, r)) ->
        if tau = Bits_t 0 then Ok r
        else
@@ -286,7 +302,8 @@ module Compilation = struct
     let rEnv = rEnv_of_register_list cu.c_registers in
     let r0: _ SGA.env_t = SGA.create rEnv (fun r -> SGA.CReadRegister r) in
     let rules r = List.assoc r cu.c_rules in
-    let env = SGA.compile_scheduler r sigma rEnv r0 rules cu.c_scheduler in
+    let opt = SGA.interop_opt _R custom_Sigma in
+    let env = SGA.compile_scheduler _R interop_Sigma rEnv opt r0 rules cu.c_scheduler in
     (fun r -> SGA.getenv rEnv env r)
 end
 

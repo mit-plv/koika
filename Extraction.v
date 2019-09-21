@@ -36,5 +36,6 @@ Extraction "SGA.ml"
            Primitives.prim_uSigma Primitives.prim_Sigma
            Interop.interop_fn_t Interop.interop_uSigma Interop.interop_Sigma
            Interop.sga_package_t Interop.circuit_package_t Interop.sim_package_t
+           Interop.struct_of_list Interop.struct_to_list
            CircuitElaboration.compile_sga_package
            Demo.demo_packages.

@@ -1,5 +1,6 @@
-Require Import Coq.Strings.String.
+Require Import Coq.Strings.String Coq.Lists.List.
 Require Import SGA.Environments SGA.Types SGA.Circuits SGA.Primitives.
+Import ListNotations.
 
 Section Interop.
   Context {custom_ufn_t custom_fn_t: Type}.
@@ -157,3 +158,78 @@ Section Packages.
       sp_extfuns: option string
     }.
 End Packages.
+
+Section TypeConv.
+  Fixpoint struct_to_list {A} (f: forall tau: type, type_denote tau -> A)
+           (fields: list (string * type)) (v: struct_denote fields): list (string * A) :=
+    match fields return struct_denote fields -> list (string * A) with
+    | [] => fun v => []
+    | (nm, tau) :: fields => fun v => (nm, f tau (fst v)) :: struct_to_list f fields (snd v)
+    end v.
+
+  Definition struct_of_list_fn_t A :=
+    forall a: A, { tau: type & type_denote tau }.
+
+  Definition struct_of_list_fields {A} (f: struct_of_list_fn_t A) (aa: list (string * A)) :=
+    List.map (fun a => (fst a, projT1 (f (snd a)))) aa.
+
+  Fixpoint struct_of_list {A} (f: struct_of_list_fn_t A) (aa: list (string * A))
+    : struct_denote (struct_of_list_fields f aa) :=
+    match aa with
+    | [] => tt
+    | a :: aa => (projT2 (f (snd a)), struct_of_list f aa)
+    end.
+
+  Lemma struct_of_list_to_list {A}
+        (f_ls: forall tau: type, type_denote tau -> A)
+        (f_sl: struct_of_list_fn_t A) :
+    (forall a, f_ls (projT1 (f_sl a)) (projT2 (f_sl a)) = a) ->
+    (* (forall a, f_ls (projT1 (f_sl a)) = a) -> *)
+    forall (aa: list (string * A)),
+      struct_to_list f_ls _ (struct_of_list f_sl aa) = aa.
+  Proof.
+    induction aa; cbn.
+    - reflexivity.
+    - setoid_rewrite IHaa. rewrite H; destruct a; reflexivity.
+  Qed.
+
+  Fixpoint struct_to_list_of_list_cast {A}
+        (f_ls: forall tau: type, type_denote tau -> A)
+        (f_sl: struct_of_list_fn_t A)
+        (pr: forall tau a, projT1 (f_sl (f_ls tau a)) = tau)
+        (fields: list (string * type)) (v: struct_denote fields) {struct fields}:
+    struct_of_list_fields f_sl (struct_to_list f_ls fields v) = fields.
+  Proof.
+    destruct fields as [| (nm, tau) fields]; cbn.
+    - reflexivity.
+    - unfold struct_of_list_fields in *;
+        rewrite struct_to_list_of_list_cast by eauto.
+      rewrite pr; reflexivity.
+  Defined.
+
+  Lemma struct_to_list_of_list {A}
+        (f_ls: forall tau: type, type_denote tau -> A)
+        (f_sl: struct_of_list_fn_t A)
+        (fields: list (string * type))
+        (pr: forall tau a, f_sl (f_ls tau a) = existT _ tau a):
+    forall (v: struct_denote fields),
+      (struct_of_list f_sl (struct_to_list f_ls _ v)) =
+      ltac:(rewrite struct_to_list_of_list_cast by (intros; rewrite pr; eauto); exact v).
+  Proof.
+    induction fields as [| (nm, tau) fields]; cbn; destruct v; cbn in *.
+    - reflexivity.
+    - rewrite IHfields; clear IHfields.
+      unfold eq_ind_r, eq_ind, eq_sym.
+      set (struct_to_list_of_list_cast _ _ _ _ _) as Hcast; clearbody Hcast.
+      change (fold_right _ _ ?fields) with (struct_denote fields) in *.
+      set (struct_to_list f_ls fields f) as sfs in *; clearbody sfs;
+        destruct Hcast; cbn.
+      set (pr _ _) as pr'; clearbody pr'.
+      set ((f_sl (f_ls tau t))) as a in *; clearbody a.
+      set (struct_of_list_fields f_sl sfs) as ssfs in *.
+      destruct a; cbn; inversion pr'; subst.
+      apply Eqdep_dec.inj_pair2_eq_dec in H1; try apply eq_dec; subst.
+      setoid_rewrite <- Eqdep_dec.eq_rect_eq_dec; try apply eq_dec.
+      reflexivity.
+  Qed.
+End TypeConv.

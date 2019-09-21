@@ -597,10 +597,9 @@ let compile (type name_t var_t reg_t)
         | SGA.Var (_, v, _, _m) ->
            PureExpr (hpp.cpp_var_names v) (* FIXME fail if reference isn't to latest binding of v *)
         | SGA.Const (_, tau, cst) ->
-           let tau = SGALib.Util.typ_of_sga_type tau in
            let res = PureExpr (sp_value (SGALib.Util.value_of_sga_value tau cst)) in
            if cpp_type_needs_allocation tau then
-             let ctarget = gensym_target tau "cst" in
+             let ctarget = gensym_target (SGALib.Util.typ_of_sga_type tau) "cst" in
              let e = must_expr (p_assign_pure ~prefix:"static const" ctarget res) in
              PureExpr e
            else res

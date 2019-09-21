@@ -187,15 +187,25 @@ End Elaboration.
 Arguments elaborate_externals_1 {_ _ _ _} [_] _.
 Arguments external_elaboration_lco {_ _ _ _ _ _ _}.
 
-Definition compile_sga_package
-           {name_t var_t reg_t custom_fn_t: Type}
-           (s: @sga_package_t name_t var_t reg_t custom_fn_t) : circuit_package_t :=
-  let FT := s.(sga_reg_finite) in
-  {| cp_pkg := s;
-     cp_reg_Env := ContextEnv;
-     cp_circuit :=
-       let R := s.(sga_reg_types) in
-       let Sigma := interop_Sigma s.(sga_custom_fn_types) in
-       let r := ContextEnv.(create) (readRegisters R Sigma) in
-       compile_scheduler (REnv := ContextEnv) (lco_opt_compose simplify_bool_1 elaborate_externals_1)
-                         r s.(sga_rules) s.(sga_scheduler) |}.
+Section Interop.
+  Context {name_t var_t reg_t custom_fn_t: Type}.
+
+  Definition interop_opt
+             {R : reg_t -> type}
+             {Sigma : custom_fn_t -> ExternalSignature}
+    : forall sz : nat, circuit (@cR _ R) (circuit_Sigma (interop_Sigma Sigma)) sz ->
+                circuit (@cR _ R) (circuit_Sigma (interop_Sigma Sigma)) sz :=
+    (lco_opt_compose simplify_bool_1 elaborate_externals_1).
+
+  Definition compile_sga_package
+             (s: @sga_package_t name_t var_t reg_t custom_fn_t) : circuit_package_t :=
+    let FT := s.(sga_reg_finite) in
+    {| cp_pkg := s;
+       cp_reg_Env := ContextEnv;
+       cp_circuit :=
+         let R := s.(sga_reg_types) in
+         let Sigma := interop_Sigma s.(sga_custom_fn_types) in
+         let r := ContextEnv.(create) (readRegisters R Sigma) in
+         compile_scheduler (REnv := ContextEnv) interop_opt
+                           r s.(sga_rules) s.(sga_scheduler) |}.
+End Interop.
