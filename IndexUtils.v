@@ -1,5 +1,8 @@
 Require Coq.Logic.FinFun.
+Require Import Coq.Lists.List.
 Require Import SGA.Common SGA.Vect SGA.Member.
+
+Import ListNotations.
 
 Fixpoint all_indices (bound: nat) : vect (index bound) bound :=
   match bound as n return (vect (index n) n) with
@@ -97,3 +100,50 @@ Proof.
   - exact h.
   - exact (List_nth K l a).
 Defined.
+
+Fixpoint List_nth_map_cast {A B} (f: A -> B) l:
+  List.length l = List.length (List.map f l).
+Proof. destruct l; cbn; auto. Defined.
+
+Lemma List_nth_map {A B} (f: A -> B):
+  forall l idx,
+    f (List_nth l idx) =
+    List_nth (List.map f l)
+             ltac:(rewrite <- List_nth_map_cast; exact idx).
+Proof.
+  induction l; destruct idx; cbn;
+    set (List_nth (List.map f l)) as x in *; clearbody x.
+  - set (List_nth_map_cast _ _) as Heq in *; clearbody Heq.
+    destruct Heq; reflexivity.
+  - rewrite IHl; clear.
+    set (List_nth_map_cast _ _) as Heq in *; clearbody Heq.
+    destruct Heq; reflexivity.
+Qed.
+
+Lemma List_nth_firstn_1_skipn {A} (l: list A) a:
+  List.firstn 1 (List.skipn (index_to_nat a) l) =
+  [List_nth l a].
+Proof.
+  induction l; destruct a; cbn.
+  - reflexivity.
+  - specialize (IHl a).
+    destruct (skipn _ _); inversion IHl; reflexivity.
+Qed.
+
+Lemma List_nth_skipn_cons_next {A}:
+  forall (l: list A) idx,
+    List_nth l idx :: (List.skipn (S (index_to_nat idx)) l) =
+    List.skipn (index_to_nat idx) l.
+Proof.
+  induction l; destruct idx; cbn; try rewrite IHl; reflexivity.
+Qed.
+
+Lemma list_sum_member_le:
+  forall l idx,
+    List_nth l idx <=
+    list_sum l.
+Proof.
+  induction l; destruct idx.
+  - cbn; omega.
+  - specialize (IHl a0); unfold list_sum, list_sum' in *; cbn; omega.
+Qed.

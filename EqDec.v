@@ -28,3 +28,12 @@ Instance EqDec_vector A (sz: nat) {EQ: EqDec A}: EqDec (Vector.t A sz).
 Proof. econstructor; intros; eapply Vector.eq_dec; apply EqDec_beq_iff. Defined.
 Instance EqDec_eq_true {A} (f: A -> bool) (a: A) : EqDec (f a = true).
 Proof. constructor; left; apply Eqdep_dec.UIP_dec, eq_dec. Qed.
+
+Lemma eq_rect_eqdec_irrel {A} {EQ: EqDec A} (x: A) (P: A -> Type):
+  forall (px: P x) (y: A) (pr1 pr2: x = y),
+    eq_rect x P px y pr1 =
+    eq_rect x P px y pr2.
+Proof.
+  destruct pr1; cbn; intros.
+  apply Eqdep_dec.eq_rect_eq_dec, eq_dec.
+Qed.

@@ -1,7 +1,7 @@
 (coq.theory
  (name SGA)
  (modules EqDec Vect FiniteType Common Member Environments IndexUtils Syntax
-          Types TypedSyntax Circuits CircuitProperties TypeInference
+          Types TypedSyntax Circuits CircuitProperties CircuitElaboration TypeInference
           Semantics SemanticProperties OneRuleAtATime CircuitCorrectness
           Primitives Interop Notations
           Demo Extraction))

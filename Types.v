@@ -51,16 +51,17 @@ Proof.
   - destruct fs1 as [ nm1 f1 ];
       destruct fs2 as [ nm2 f2 ]; cbn.
     destruct (eq_dec nm1 nm2); subst; try simple_eq.
-    revert f1 f2; fix IHf 1;
-      destruct f1 as [ | (n1 & tau1) f1 ], f2 as [ | (n2 & tau2) f2 ]; try simple_eq.
-    destruct (eq_dec n1 n2); subst; try simple_eq.
-    destruct (IHtau tau1 tau2); subst; try simple_eq.
-    destruct (IHf f1 f2) as [ Heq | Hneq ]; subst; try inversion Heq;
-      try simple_eq.
+    destruct (eq_dec (EqDec := _) f1 f2); subst; try simple_eq.
+    (* revert f1 f2; fix IHf 1; *)
+    (*   destruct f1 as [ | (n1 & tau1) f1 ], f2 as [ | (n2 & tau2) f2 ]; try simple_eq. *)
+    (* destruct (eq_dec n1 n2); subst; try simple_eq. *)
+    (* destruct (IHtau tau1 tau2); subst; try simple_eq. *)
+    (* destruct (IHf f1 f2) as [ Heq | Hneq ]; subst; try inversion Heq; *)
+    (*   try simple_eq. *)
 Defined.
 
 Definition struct_fields_sz' (type_sz: type -> nat) (fields: list (string * type)) :=
-  List.fold_right (fun '(_, tau') acc => type_sz tau' + acc) 0 fields.
+  list_sum (List.map (fun nm_tau => type_sz (snd nm_tau)) fields).
 
 Fixpoint type_sz tau :=
   match tau with
@@ -121,7 +122,7 @@ Fixpoint bits_of_value {tau: type} (x: type_denote tau) {struct tau} : bits (typ
        : bits (struct_fields_sz fields) :=
          match fields return struct_denote fields -> bits (struct_fields_sz fields) with
          | [] => fun _ => vect_nil
-         | (nm, tau) :: fields => fun '(x, xs) => Bits.app (bits_of_value x) (bits_of_struct_value xs)
+         | (nm, tau) :: fields => fun '(x, xs) => Bits.app (bits_of_struct_value xs) (bits_of_value x)
          end x) in
   match tau return type_denote tau -> bits (type_sz tau) with
   | bits_t sz => fun bs => bs
@@ -140,8 +141,8 @@ Fixpoint value_of_bits {tau: type} (bs: bits (type_sz tau)) {struct tau}: type_d
          | (nm, tau) :: fields =>
            fun bs =>
              let splt := Bits.split bs in
-             let hd := value_of_bits (fst splt) in
-             let tl := value_of_struct_bits (snd splt) in
+             let hd := value_of_bits (snd splt) in
+             let tl := value_of_struct_bits (fst splt) in
              (hd, tl)
          end bs) in
   match tau return bits (type_sz tau) -> type_denote tau with

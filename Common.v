@@ -1,4 +1,5 @@
 Require Import Coq.Lists.List Coq.Bool.Bool Coq.Strings.String.
+Require Export Coq.omega.Omega.
 Import ListNotations.
 Require Export SGA.EqDec SGA.Vect SGA.FiniteType.
 
@@ -42,6 +43,11 @@ Ltac cleanup_step :=
   | [ H: _ /\ _ |- _ ] =>
     destruct H
   end.
+
+Ltac set_fixes :=
+  repeat match goal with
+         | [  |- context[?x] ] => is_fix x; set x in *
+         end.
 
 Inductive DP {A: Type} (a: A) : Prop :=.
 
@@ -120,16 +126,103 @@ Definition must {A} (o: option A) : if o then A else unit :=
   | None => tt
   end.
 
-Fixpoint list_find_opt {A B} (f: A -> option B) (l: list A) : option B :=
-  match l with
-  | [] => None
-  | x :: l =>
-    let fx := f x in
-    match fx with
-    | Some y => Some y
-    | None => list_find_opt f l
-    end
-  end.
+Section Lists.
+  Fixpoint list_find_opt {A B} (f: A -> option B) (l: list A) : option B :=
+    match l with
+    | [] => None
+    | x :: l =>
+      let fx := f x in
+      match fx with
+      | Some y => Some y
+      | None => list_find_opt f l
+      end
+    end.
+
+  Definition list_sum' n l :=
+    List.fold_right (fun x acc => acc + x) n l.
+
+  Definition list_sum l :=
+    list_sum' 0 l.
+
+  Lemma list_sum'_0 :
+    forall l n, list_sum' n l = list_sum' 0 l + n.
+  Proof.
+    induction l; cbn; intros.
+    - reflexivity.
+    - rewrite IHl.
+      rewrite !Plus.plus_assoc_reverse.
+      rewrite (Plus.plus_comm n a); reflexivity.
+  Qed.
+
+  Lemma list_sum_app :
+    forall l1 l2, list_sum (l1 ++ l2) = list_sum l1 + list_sum l2.
+  Proof.
+    unfold list_sum, list_sum'; intros.
+    rewrite fold_right_app, list_sum'_0.
+    reflexivity.
+  Qed.
+
+  Lemma list_sum_firstn_le :
+    forall n l, list_sum (firstn n l) <= list_sum l.
+  Proof.
+    induction n; destruct l; cbn; auto with arith.
+  Qed.
+
+  Lemma list_sum_skipn_le :
+    forall n l, list_sum (skipn n l) <= list_sum l.
+  Proof.
+    induction n; destruct l; cbn; auto with arith.
+  Qed.
+
+  Fixpoint skipn_firstn {A} n n' (l: list A):
+    List.skipn n (List.firstn n' l) =
+    List.firstn (n' - n) (List.skipn n l).
+  Proof.
+    destruct n, n', l; cbn; try reflexivity.
+    - destruct (n' - n); reflexivity.
+    - rewrite skipn_firstn; reflexivity.
+  Qed.
+
+  Fixpoint firstn_skipn {A} n n' (l: list A):
+    List.firstn n (List.skipn n' l) =
+    List.skipn n' (List.firstn (n' + n) l).
+  Proof.
+    destruct n, n', l; cbn; try reflexivity;
+      rewrite <- firstn_skipn; reflexivity.
+  Qed.
+
+  Fixpoint firstn_firstn {A} n n' (l: list A):
+    List.firstn n (List.firstn n' l) =
+    List.firstn (Nat.min n n') l.
+  Proof.
+    destruct n, n', l; cbn; auto using f_equal.
+  Qed.
+
+  Lemma firstn_map {A B} (f : A -> B) :
+    forall n (l: list A),
+      List.firstn n (List.map f l) =
+      List.map f (List.firstn n l).
+  Proof.
+    induction n; destruct l; subst; cbn; auto using f_equal.
+  Qed.
+
+  Lemma skipn_map {A B} (f : A -> B) :
+    forall n (l: list A),
+      List.skipn n (List.map f l) =
+      List.map f (List.skipn n l).
+  Proof.
+    induction n; destruct l; subst; cbn; auto using f_equal.
+  Qed.
+
+  Lemma skipn_app {A}:
+    forall (l1 l2: list A) n,
+      n <= List.length l1 ->
+      skipn n (List.app l1 l2) = List.app (skipn n l1) l2.
+  Proof.
+    induction l1; destruct n; cbn; try (inversion 1; reflexivity).
+    - intros; apply IHl1; omega.
+  Qed.
+End Lists.
 
 Inductive result {S F} :=
 | Success (s: S)

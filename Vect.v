@@ -1,4 +1,5 @@
 Require Import Coq.Lists.List.
+Require Import Coq.omega.Omega.
 Require Export Coq.NArith.NArith.          (* Coq bug: If this isn't exported, other files can't import Vect.vo *)
 Require Import SGA.EqDec.
 
@@ -128,6 +129,23 @@ Fixpoint vect_app {T} {sz1 sz2} (bs1: vect T sz1) (bs2: vect T sz2) {struct sz1}
   | S sz1 => fun bs1 => vect_cons (vect_hd bs1) (vect_app (vect_tl bs1) bs2)
   end bs1.
 
+Fixpoint vect_app_nil_cast n:
+  n = n + 0.
+Proof. destruct n; cbn; auto. Defined.
+
+Lemma vect_app_nil :
+  forall {T sz} (v: vect T sz) (v0: vect T 0),
+    vect_app v v0 =
+    ltac:(rewrite <- vect_app_nil_cast; exact v).
+Proof.
+  destruct v0.
+  induction sz; destruct v; cbn.
+  - reflexivity.
+  - rewrite IHsz.
+    unfold f_equal_nat, f_equal.
+    rewrite <- vect_app_nil_cast; reflexivity.
+Defined.
+
 Fixpoint vect_split {T} {sz1 sz2} (v: vect T (sz1 + sz2)) {struct sz1} : vect T sz1 * vect T sz2 :=
   match sz1 as n return (vect T (n + sz2) -> vect T n * vect T sz2) with
   | 0 => fun v => (vect_nil, v)
@@ -200,34 +218,6 @@ Fixpoint vect_fold_left {A T n} (f: A -> T -> A) (a0: A) (v: vect T n) : A :=
   | S _ => fun v => f (vect_fold_left f a0 (vect_tl v)) (vect_hd v)
   end v.
 
-Definition vect_to_list {T n} (v: vect T n) : list T :=
-  vect_fold_left (fun acc t => List.cons t acc) List.nil v.
-
-Lemma vect_to_list_nth {T sz}:
-  forall (v: vect T sz) idx,
-    List.nth_error (vect_to_list v) (index_to_nat idx) =
-    Some (vect_nth v idx).
-Proof.
-  induction sz; destruct v, idx; cbn.
-  - reflexivity.
-  - setoid_rewrite IHsz; reflexivity.
-Qed.
-
-Lemma vect_to_list_length {T sz}:
-  forall (v: vect T sz),
-    List.length (vect_to_list v) = sz.
-Proof.
-  induction sz; cbn; intros.
-  - reflexivity.
-  - f_equal; apply IHsz; assumption.
-Qed.
-
-Fixpoint vect_of_list {T} (l: list T) : vect T (length l) :=
-  match l with
-  | nil => vect_nil
-  | cons h t => vect_cons h (vect_of_list t)
-  end.
-
 Fixpoint vect_truncate_left {T sz} n (v: vect T (n + sz)) : vect T sz :=
   match n return vect T (n + sz) -> vect T sz with
   | 0 => fun v => v
@@ -273,9 +263,13 @@ Definition vect_cycle_l {T sz} n (v: vect T sz) :=
 Definition vect_cycle_r {T sz} n (v: vect T sz) :=
   vect_repeat vect_cycle_r1 n v.
 
+Fixpoint vect_skipn_cast n:
+  n = n - 0.
+Proof. destruct n; cbn; auto. Defined.
+
 Fixpoint vect_skipn {T sz} (n: nat) (v: vect T sz) : vect T (sz - n) :=
   match n with
-  | 0 => ltac:(rewrite <- (Minus.minus_n_O sz); exact v)
+  | 0 => ltac:(rewrite <- (vect_skipn_cast sz); exact v)
   | S n' => match sz return vect T sz -> vect T (sz - S n') with
            | 0 => fun v => v
            | S sz' => fun v => vect_skipn n' (vect_tl v)
@@ -291,33 +285,103 @@ Fixpoint vect_firstn {T sz} (n: nat) (v: vect T sz) : vect T (min n sz) :=
            end v
   end.
 
-Lemma vect_firstn_plus_eqn:
-  forall sz n, Nat.min n (n + sz) = n.
-Proof. induction n; cbn; eauto. Defined.
+Fixpoint vect_firstn_id_cast sz:
+  Nat.min sz sz = sz.
+Proof. destruct sz; cbn; auto. Defined.
+
+Lemma vect_firstn_id :
+  forall {T sz} (v: vect T sz),
+    vect_firstn sz v =
+    ltac:(rewrite (vect_firstn_id_cast sz); exact v).
+Proof.
+  induction sz; destruct v.
+  - reflexivity.
+  - cbn.
+    rewrite IHsz.
+    unfold f_equal_nat, f_equal;
+      rewrite vect_firstn_id_cast; reflexivity.
+Qed.
+
+Fixpoint vect_firstn_plus_cast sz n:
+  Nat.min n (n + sz) = n.
+Proof. destruct n; cbn; eauto. Defined.
 
 Definition vect_firstn_plus {T sz} (n: nat) (v: vect T (n + sz)) : vect T n :=
-  ltac:(rewrite <- (vect_firstn_plus_eqn sz n); exact (vect_firstn n v)).
+  ltac:(rewrite <- (vect_firstn_plus_cast sz n); exact (vect_firstn n v)).
 
-Lemma vect_skipn_plus_eqn :
-  forall sz n, n + sz - n = sz.
-Proof. induction n, sz; cbn; auto. Defined.
+Lemma vect_firstn_plus_eqn {T sz sz'}:
+  forall hd (v: vect T (sz + sz')),
+    vect_firstn_plus (S sz) (vect_cons hd v) =
+    vect_cons hd (vect_firstn_plus sz v).
+Proof.
+  unfold vect_firstn_plus; cbn.
+  rewrite <- (vect_firstn_plus_cast sz' sz); reflexivity.
+Qed.
+
+Fixpoint vect_skipn_plus_cast sz n:
+  n + sz - n = sz.
+Proof. destruct n, sz; cbn; auto. Defined.
 
 Definition vect_skipn_plus {T sz} (n: nat) (v: vect T (n + sz)) : vect T sz :=
-  ltac:(rewrite <- (vect_skipn_plus_eqn sz n); exact (vect_skipn n v)).
+  ltac:(rewrite <- (vect_skipn_plus_cast sz n); exact (vect_skipn n v)).
 
-Lemma vect_extend_eqn :
-  forall sz sz', sz + (sz' - sz) = Nat.max sz sz'.
-Proof. induction sz, sz'; cbn; auto. Defined.
+Lemma vect_skipn_plus_eqn {T sz sz'}:
+  forall hd (v: vect T (sz + sz')),
+    vect_skipn_plus (S sz) (vect_cons hd v) =
+    vect_skipn_plus sz v.
+Proof.
+  unfold vect_skipn_plus; cbn; intros.
+  destruct sz'; try rewrite <- (vect_skipn_plus_cast 0 sz); reflexivity.
+Qed.
+
+Lemma vect_skipn_skipn_plus :
+  forall {T sz} (n: nat) (v: vect T (n + sz)),
+    vect_skipn n v =
+    ltac:(rewrite (vect_skipn_plus_cast sz n); exact (vect_skipn_plus n v)).
+Proof. unfold vect_skipn_plus; intros; destruct vect_skipn_plus_cast; reflexivity. Qed.
+
+Lemma vect_split_firstn_skipn :
+  forall {T sz sz'} (v: vect T (sz + sz')),
+    vect_split v =
+    (vect_firstn_plus sz v, vect_skipn_plus sz v).
+Proof.
+  induction sz, sz'; cbn; destruct v; cbn;
+    try rewrite <- Eqdep_dec.eq_rect_eq_dec by apply eq_dec;
+    auto; rewrite IHsz; cbn;
+      setoid_rewrite vect_firstn_plus_eqn;
+      setoid_rewrite vect_skipn_plus_eqn;
+      reflexivity.
+Qed.
+
+Fixpoint vect_extend_cast sz sz':
+  sz + (sz' - sz) = Nat.max sz sz'.
+Proof. destruct sz, sz'; cbn; auto. Defined.
 
 Definition vect_extend {T sz} (v: vect T sz) (sz': nat) (t: T) : vect T (Nat.max sz sz') :=
-  ltac:(rewrite <- (vect_extend_eqn sz sz'); exact (vect_app v (vect_const (sz' - sz) t))).
+  ltac:(rewrite <- (vect_extend_cast sz sz'); exact (vect_app v (vect_const (sz' - sz) t))).
 
-Lemma vect_extend_firstn_eqn:
-  forall sz sz', Nat.max (Nat.min sz sz') sz = sz.
-Proof. induction sz, sz'; cbn; auto. Defined.
+Fixpoint vect_extend_firstn_cast sz sz':
+  Nat.max (Nat.min sz sz') sz = sz.
+Proof. destruct sz, sz'; cbn; auto. Defined.
 
 Definition vect_extend_firstn {T sz sz'} (v: vect T (Nat.min sz sz')) (t: T) : vect T sz :=
-  ltac:(rewrite <- (vect_extend_firstn_eqn sz sz'); exact (vect_extend v sz t)).
+  ltac:(rewrite <- (vect_extend_firstn_cast sz sz'); exact (vect_extend v sz t)).
+
+Lemma vect_extend_firstn_simpl :
+  forall {T sz} (v: vect T sz) n b,
+  forall (eqn: Nat.min n sz = n),
+    vect_extend_firstn (vect_firstn n v) b =
+    ltac:(rewrite <- eqn; exact (vect_firstn n v)).
+Proof.
+  unfold vect_extend_firstn, vect_extend; intros.
+  rewrite <- eq_trans_rew_distr.
+  set (eq_trans _ _) as Heq; clearbody Heq.
+  revert Heq; replace (n - Nat.min n sz) with 0 by omega; intros.
+  rewrite vect_app_nil.
+  rewrite <- eq_trans_rew_distr.
+  set (eq_trans _ _) as Heq'; clearbody Heq'.
+  apply eq_rect_eqdec_irrel.
+Qed.
 
 Fixpoint vect_find {T sz} (f: T -> bool) (v: vect T sz) : option T :=
   match sz return vect T sz -> option T with
@@ -396,24 +460,109 @@ Proof.
   - apply vect_map_In_ex.
 Qed.
 
-Lemma vect_to_list_map {T T' sz} (f: T -> T'):
-  forall (v: vect T sz),
-    vect_to_list (vect_map f v) = List.map f (vect_to_list v).
-Proof.
-  induction sz; destruct v; cbn.
-  - reflexivity.
-  - setoid_rewrite IHsz; reflexivity.
-Qed.
+Section Conversions.
+  Fixpoint vect_of_list {T} (l: list T) : vect T (length l) :=
+    match l with
+    | nil => vect_nil
+    | cons h t => vect_cons h (vect_of_list t)
+    end.
 
-Lemma vect_to_list_In {T sz} :
-  forall t (v: vect T sz),
-    vect_In t v <-> List.In t (vect_to_list v).
-Proof.
-  induction sz; destruct v; cbn.
-  - reflexivity.
-  - setoid_rewrite IHsz.
-    firstorder.
-Qed.
+  Definition vect_to_list {T n} (v: vect T n) : list T :=
+    vect_fold_left (fun acc t => List.cons t acc) List.nil v.
+
+  Lemma vect_to_list_In {T sz} :
+    forall t (v: vect T sz),
+      vect_In t v <-> List.In t (vect_to_list v).
+  Proof.
+    induction sz; destruct v; cbn.
+    - reflexivity.
+    - setoid_rewrite IHsz.
+      firstorder.
+  Qed.
+
+  Lemma vect_to_list_app {T sz sz'}:
+    forall (v: vect T sz) (v': vect T sz'),
+      vect_to_list (vect_app v v') =
+      List.app (vect_to_list v) (vect_to_list v').
+  Proof.
+    induction sz; destruct v; cbn; intros;
+      try setoid_rewrite IHsz; reflexivity.
+  Qed.
+
+  Lemma vect_to_list_nth {T sz}:
+    forall (v: vect T sz) idx,
+      List.nth_error (vect_to_list v) (index_to_nat idx) =
+      Some (vect_nth v idx).
+  Proof.
+    induction sz; destruct v, idx; cbn.
+    - reflexivity.
+    - setoid_rewrite IHsz; reflexivity.
+  Qed.
+
+  Lemma vect_to_list_length {T sz}:
+    forall (v: vect T sz),
+      List.length (vect_to_list v) = sz.
+  Proof.
+    induction sz; cbn; intros.
+    - reflexivity.
+    - f_equal; apply IHsz; assumption.
+  Qed.
+
+  Lemma vect_to_list_eq_rect {T sz sz'} :
+    forall (v: vect T sz) (pr: sz = sz'),
+      vect_to_list (eq_rect _ _ v _ pr) = vect_to_list v.
+  Proof. destruct pr; reflexivity. Defined.
+
+  Fixpoint vect_to_list_firstn {T sz}:
+    forall n (v: vect T sz),
+      vect_to_list (vect_firstn n v) =
+      List.firstn n (vect_to_list v).
+  Proof.
+    destruct n, sz; cbn in *; try reflexivity; destruct v.
+    setoid_rewrite vect_to_list_firstn.
+    reflexivity.
+  Qed.
+
+  Fixpoint vect_to_list_skipn {T sz}:
+    forall n (v: vect T sz),
+      vect_to_list (vect_skipn n v) =
+      List.skipn n (vect_to_list v).
+  Proof.
+    destruct n, sz; cbn in *; try reflexivity; destruct v.
+    setoid_rewrite vect_to_list_skipn.
+    reflexivity.
+  Qed.
+
+  Fixpoint const {T} (n: nat) (t: T) :=
+    match n with
+    | O => List.nil
+    | S n => List.cons t (const n t)
+    end.
+
+  Lemma vect_to_list_const {T}:
+    forall n (t: T),
+      vect_to_list (vect_const n t) =
+      const n t.
+  Proof.
+    induction n; cbn; try setoid_rewrite IHn; reflexivity.
+  Qed.
+
+  Lemma vect_to_list_map {T T' sz} (f: T -> T'):
+    forall (v: vect T sz),
+      vect_to_list (vect_map f v) = List.map f (vect_to_list v).
+  Proof.
+    induction sz; destruct v; cbn.
+    - reflexivity.
+    - setoid_rewrite IHsz; reflexivity.
+  Qed.
+End Conversions.
+
+Hint Rewrite @vect_to_list_eq_rect : vect_to_list.
+Hint Rewrite @vect_to_list_app : vect_to_list.
+Hint Rewrite @vect_to_list_firstn : vect_to_list.
+Hint Rewrite @vect_to_list_skipn : vect_to_list.
+Hint Rewrite @vect_to_list_const : vect_to_list.
+Hint Rewrite @vect_to_list_map : vect_to_list.
 
 Definition vect_NoDup {T n} (v: vect T n) : Prop :=
   List.NoDup (vect_to_list v).

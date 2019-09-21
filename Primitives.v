@@ -160,7 +160,7 @@ Definition prim_uint_plus {sz} (bs1 bs2: bits sz) :=
 Definition prim_part {sz} (bs: bits sz) (offset: nat) (width: nat) :=
   vect_extend_firstn (vect_firstn width (vect_skipn offset bs)) false.
 
-Lemma prim_part_subst_eqn :
+Lemma prim_part_subst_cast :
   forall sz width offset,
     Nat.min sz (Nat.min offset sz + (width + (sz - (offset + width)))) = sz.
 Proof.
@@ -177,7 +177,7 @@ Definition prim_part_subst {sz}
            (v: bits width) : bits sz :=
   let head := vect_firstn offset bs in
   let tail := vect_skipn (offset + width) bs in
-  ltac:(rewrite <- (prim_part_subst_eqn sz width offset);
+  ltac:(rewrite <- (prim_part_subst_cast sz width offset);
           exact (vect_firstn sz (vect_app head (vect_app v tail)))).
 
 (* destruct offset. *)
