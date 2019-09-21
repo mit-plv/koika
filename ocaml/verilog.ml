@@ -35,23 +35,13 @@ let io_decl_to_string (io_decl:io_decl) =
 
 type io_decls = io_decl list
 
-let assert_bits (typ: typ) =
-  match typ with
-  | Bits_t sz -> sz
-  | _ -> failwith "FIXME: Structs and enums unsupported in Verilog backend"
-
-let assert_bits_val (v: value) =
-  match v with
-  | Bits bs -> bs
-  | _ -> failwith "FIXME: Structs unsupported in Verilog backend"
-
 let io_from_reg (root: _ circuit_root) : io_decls =
   let reg_name = root.root_reg.reg_name in
   let reg_type = root.root_reg.reg_type in
   [
-    Input (reg_name ^ "__overwrite_data", assert_bits reg_type);
+    Input (reg_name ^ "__overwrite_data", typ_sz reg_type);
     Input (reg_name ^ "__overwrite", 1);
-    Output (reg_name ^ "__data", assert_bits reg_type)
+    Output (reg_name ^ "__data", typ_sz reg_type)
   ]
 let clock_and_reset : io_decls =
   [
@@ -92,7 +82,7 @@ type internal_decls = internal_decl list
 let internal_decl_for_reg (root: _ circuit_root) =
   let reg_name = root.root_reg.reg_name in
   let reg_type = root.root_reg.reg_type in
-  Reg(reg_name, assert_bits reg_type)
+  Reg(reg_name, typ_sz reg_type)
 
 let internal_decl_for_net
       (environment: (int, string) Hashtbl.t)
@@ -113,8 +103,8 @@ let internal_decl_for_net
      Hashtbl.add environment c.tag (name ^ name_net);
      Wire(name ^ name_net, n) (* Prefix with the name given by the user *)
   | CConst l -> Wire(name_net, Array.length l)
-  | CExternal (ffi_sig, _, _) -> Wire(name_net, assert_bits ffi_sig.ffi_rettype)
-  | CReadRegister r_sig -> Wire(name_net, assert_bits r_sig.reg_type)
+  | CExternal (ffi_sig, _, _) -> Wire(name_net, typ_sz ffi_sig.ffi_rettype)
+  | CReadRegister r_sig -> Wire(name_net, typ_sz r_sig.reg_type)
 
 let internal_declarations (environment: (int, string) Hashtbl.t) (circuit: _ circuit_graph) =
   let gensym = ref 0 in
@@ -175,7 +165,9 @@ let assignment_to_string (gensym: int ref) (assignment: assignment) =
            | SGA.UIntPlus _ -> default_left ^ arg1 ^ " + " ^ arg2
            | SGA.Sel _ -> default_left ^ arg1 ^ "[" ^ arg2 ^ "]"
            | SGA.Part (_, offset, slice_sz) -> default_left ^ arg1 ^ "[" ^ (string_of_int offset) ^ " +: " ^ string_of_int slice_sz ^ "]"
-           | SGA.PartSubst (_, _offset, _slice_sz) -> failwith "TODO UNIMPLEMENTED PARTSUBST"
+           | SGA.PartSubst (_, offset, slice_sz) ->
+              Printf.sprintf "assign %s = %s; assign %s[%d +: %d] = %s; // FIXME"
+                lhs arg1 lhs offset slice_sz arg2
            | SGA.IndexedPart (_, slice_sz) -> default_left ^ arg1 ^ "[" ^ arg2 ^ " +: " ^ string_of_int slice_sz ^ "]"
            | SGA.And _ ->  default_left ^ arg1 ^ " & " ^ arg2
            | SGA.Or _ -> default_left ^ arg1 ^ " | " ^ arg2
@@ -189,7 +181,8 @@ let assignment_to_string (gensym: int ref) (assignment: assignment) =
           )
        | PrimFn (SGA.ConvFn _)
        | PrimFn (SGA.StructFn _) ->
-          failwith "FIXME: Structs and enums unsupported in Verilog backend"
+          failwith "The verilog backend doesn't support enum and structs.
+Make sure to pass elaborate_externals_1 to compile_scheduler."
       )
    | EReadRegister r -> default_left ^ r
    | EAnnot (_, _, rhs) -> default_left ^ rhs) ^ ";"
@@ -265,7 +258,7 @@ let statements
   =
   List.map (fun root ->
       let reg_name = root.root_reg.reg_name in
-      let reg_init = string_of_bits (assert_bits_val root.root_reg.reg_init_val) in
+      let reg_init = string_of_bits (SGALib.Util.bits_of_value root.root_reg.reg_init_val) in
       let reg_wire_update = Hashtbl.find environment root.root_circuit.tag in
       Update (reg_name, reg_init, reg_wire_update))
     (circuit.graph_roots)

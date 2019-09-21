@@ -28,4 +28,4 @@ let mkcd dirname =
 let _ =
   let open SGALib.SGA in
   mkcd "examples"; mkcd "coq";
-  List.iter (fun dp -> coq_main ~verilog:false dp) demo_packages
+  List.iter (fun dp -> coq_main dp) demo_packages
