@@ -62,6 +62,10 @@ Definition interop_minimal_uSigma := interop_uSigma interop_empty_uSigma.
 Definition interop_minimal_sigma := interop_sigma interop_empty_sigma.
 
 Section Packages.
+  (** [rule_name_t]: The type of rule names.
+      Typically an inductive [rule1 | rule2 | …]. **)
+  Context {rule_name_t: Type}.
+
   (** [var_t]: The type of variables used in let bindings.
       Typically [string]. *)
   Context {var_t: Type}.
@@ -69,10 +73,6 @@ Section Packages.
   (** [reg_t]: The type of registers used in the program.
       Typically an inductive [R0 | R1 | …] *)
   Context {reg_t: Type}.
-
-  (** [rule_name_t]: The type of rule names.
-      Typically an inductive [rule1 | rule2 | …]. **)
-  Context {rule_name_t: Type}.
 
   (** [custom_fn_t]: The type of custom functions used in the program.
       The [fn_t] used by the program itself should be [interop_fn_t
