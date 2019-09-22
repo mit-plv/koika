@@ -127,8 +127,8 @@ Definition prim_Sigma (fn: prim_fn_t) : ExternalSignature :=
     | Eq sz => {{ bits_t sz ~> bits_t sz ~> bits_t 1 }}
     | Concat sz1 sz2 => {{ bits_t sz1 ~> bits_t sz2 ~> bits_t (sz1 + sz2) }}
     | UIntPlus sz => {{ bits_t sz ~> bits_t sz ~> bits_t sz }}
-    | ZExtL sz nzeroes => {{ bits_t sz ~> unit_t ~> bits_t (nzeroes + sz) }}
-    | ZExtR sz nzeroes => {{ bits_t sz ~> unit_t ~> bits_t (sz + nzeroes) }}
+    | ZExtL sz nzeroes => {{ bits_t sz ~> unit_t ~> bits_t (sz + nzeroes) }}
+    | ZExtR sz nzeroes => {{ bits_t sz ~> unit_t ~> bits_t (nzeroes + sz) }}
     end
   | @StructFn sig op idx =>
     match op with
@@ -233,8 +233,8 @@ Definition prim_sigma (fn: prim_fn_t) : prim_Sigma fn :=
     | Eq sz => fun bs1 bs2 => if eq_dec bs1 bs2 then Ob~1 else Ob~0
     | UIntPlus _ => fun bs1 bs2 => prim_uint_plus bs1 bs2
     | Concat _ _ => fun bs1 bs2 => Bits.app bs1 bs2
-    | ZExtL _ nzeroes => fun bs _ => Bits.app (Bits.zeroes nzeroes) bs
-    | ZExtR _ nzeroes => fun bs _ => Bits.app bs (Bits.zeroes nzeroes)
+    | ZExtL _ nzeroes => fun bs _ => Bits.app bs (Bits.zeroes nzeroes)
+    | ZExtR _ nzeroes => fun bs _ => Bits.app (Bits.zeroes nzeroes) bs
     end
   | StructFn sig GetField idx => fun s _ => get_field sig.(struct_fields) s idx
   | StructFn sig SubstField idx => fun s v => subst_field sig.(struct_fields) s idx v
