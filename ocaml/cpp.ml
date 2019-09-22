@@ -309,10 +309,10 @@ let compile (type name_t var_t reg_t)
 
   let p_enum_decl sg =
     let esz = enum_sz sg in
-    if esz > 64 then failwith (sprintf "Enum %s is too large (%d > 64)"
-                                 (cpp_enum_name sg) esz);
-    let decl = sprintf "enum class %s : %s"
-                 (cpp_enum_name sg) (cpp_type_of_type (Bits_t (enum_sz sg))) in
+    let nm = cpp_enum_name sg in
+    if esz = 0 then failwith (sprintf "Enum %s is empty" nm);
+    if esz > 64 then failwith (sprintf "Enum %s is too large (%d > 64)" nm esz);
+    let decl = sprintf "enum class %s : %s" nm (cpp_type_of_type (Bits_t esz)) in
     p_scoped decl ~terminator:";" (fun () ->
         iter_sep (fun () -> p ", ")
           (fun (name, v) -> p "%s = %s" name (sp_bits_value v)) sg.enum_members) in
