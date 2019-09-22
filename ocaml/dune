@@ -17,6 +17,12 @@
  (libraries common SGALib zarith)
  (preprocess (pps ppx_jane ppx_deriving.show)))
 
+(library
+ (name lv)
+ (modules lv)
+ (libraries parsexp common SGALib zarith)
+ (preprocess (pps ppx_jane ppx_deriving.show)))
+
 (executable
  (name coq_examples)
  (modules coq_examples)
@@ -27,7 +33,7 @@
  (name cli)
  (modules cli)
  (preprocess (pps ppx_jane ppx_deriving.show))
- (libraries parsexp str zarith base core stdio SGALib common backends))
+ (libraries str zarith base core stdio SGALib common lv backends))
 
 (env
  (dev
