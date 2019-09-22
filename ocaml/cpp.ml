@@ -133,10 +133,11 @@ let cpp_preamble =
 
 let reconstruct_switch sigs action =
   let rec loop v = function
-    | SGA.If (_, _, SGA.Call (_,
-                              fn,
-                              SGA.Var (_, v', _, _m),
-                              SGA.Const (_, SGA.Bits_t sz, cst)),
+    | SGA.If (_, _,
+              SGA.Call (_,
+                        fn,
+                        SGA.Var (_, v', _, _m),
+                        SGA.Const (_, ((SGA.Bits_t _ | SGA.Enum_t _) as tau), cst)),
               tbr, fbr) when (match v with
                               | Some v -> v' = v
                               | None -> true) ->
@@ -145,7 +146,7 @@ let reconstruct_switch sigs action =
            let default, branches = match loop (Some v') fbr with
              | Some (_, default, branches) -> default, branches
              | None -> fbr, [] in
-           Some (v', default, (SGALib.Util.bits_const_of_sga_bits sz cst, tbr) :: branches)
+           Some (v', default, (SGALib.Util.value_of_sga_value tau cst, tbr) :: branches)
         | _ -> None)
     | _ -> None in
   match loop None action with
@@ -651,13 +652,12 @@ let compile (type name_t var_t reg_t)
            let a2 = must_expr (p_action (gensym_target f.ffi_arg2type "y") arg2) in
            p_funcall target f a1 a2
       and p_switch target var default branches =
-        (* FIXME extend to enums as well *)
         let rec loop = function
           | [] ->
              p "default:";
              p_assign_pure target (p_action target default);
           | (const, action) :: branches ->
-             p "case %s:" (sp_value (Bits const));
+             p "case %s:" (sp_value const);
              ignore (p_assign_pure target (p_action target action));
              p "break;";
              loop branches in
