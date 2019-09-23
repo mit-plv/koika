@@ -186,6 +186,9 @@ let add_or_raise loc k v m errf =
   | Some v' -> errf loc k v v'
   | None -> StringMap.add k v m
 
+let gensym, gensym_reset =
+  make_gensym ()
+
 let parse fname sexps =
   Printf.printf "Parsing %s\n%!" fname;
   let expect_single loc kind where = function
@@ -237,6 +240,7 @@ let parse fname sexps =
   let bits_const_re =
     Str.regexp "^\\([0-9]+\\)'\\(b[01]*\\|h[0-9a-fA-F]*\\|[0-9]+\\)$" in
   let ident_re =
+    (* Must not start with __ to not clash w/ our gensym *)
     Str.regexp "^[a-z][a-zA-Z0-9_]*$" in
   let underscore_re =
     Str.regexp "_" in
@@ -369,9 +373,40 @@ let parse fname sexps =
              let reg = expect_single loc "register name" "read expression" args in
              let port = int_of_string (String.sub hd (String.length hd - 1) 1) in
              Read (port, locd_of_pair (expect_atom "a register name" reg))
+          | "switch" ->
+             let operand, branches = expect_cons loc "switch operand" args in
+             let branches = List.map expect_switch_branch branches in
+             let opname = gensym "switch_operand" in
+             let opvar = locd_make loc_hd (Var opname) in
+             let body = build_switch_body opvar branches in
+             Let ([(locd_make loc_hd opname, expect_action operand)],
+                  [match body with | Some b -> b
+                                   | None -> parse_error loc "Empty switch"])
           | _ ->
              let args = List.map expect_action args in
              Call (locd_make loc_hd hd, args))
+  and expect_switch_branch branch =
+    let loc, lst = expect_list "switch case" branch in
+    let lbl, body = expect_cons loc "case label" lst in
+    let lbl = match lbl with
+      | Atom { loc; atom = "_" } -> `AnyLabel loc
+      | _ -> let loc, cst = expect_const "a case label" lbl in
+             `SomeLabel (locd_make loc (Const cst)) in
+    (lbl, locd_make loc (Progn (List.map expect_action body)))
+  and build_switch_body opvar branches =
+    List.fold_right (fun (lbl, (branch: _ action locd)) acc ->
+        match acc, lbl with
+        | None, `AnyLabel _ ->
+           Some branch
+        | None, `SomeLabel l ->
+           parse_error l.lpos "Last case of switch must be default (_)"
+        | Some _, `AnyLabel loc  ->
+           parse_error loc "Duplicated default case in switch"
+        | Some acc, `SomeLabel l ->
+           let cond = Call (locd_make l.lpos "eq", [opvar; l]) in
+           let test = If (locd_make l.lpos cond, branch, [acc]) in
+           Some (locd_make l.lpos test))
+      branches None
   and expect_let_binding b =
     let loc, b = expect_list "a let binding" b in
     let var, values = expect_cons loc "identifier" b in

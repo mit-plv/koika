@@ -158,3 +158,17 @@ type 'f err_contents =
   { epos: 'f;
     ekind: [`ParseError | `NameError | `ResolutionError | `TypeError];
     emsg: string }
+
+let make_gensym () =
+  let state = Hashtbl.create 8 in
+  let reset () =
+    Hashtbl.clear state in
+  let next prefix =
+    let counter =
+      match Hashtbl.find_opt state prefix with
+      | None -> 0
+      | Some n -> n in
+    if counter = max_int then failwith "gensym";
+    Hashtbl.replace state prefix (succ counter);
+    Printf.sprintf "_%s%d" prefix counter in
+  (next, reset)

@@ -154,18 +154,7 @@ let reconstruct_switch sigs action =
   | res -> res
 
 let gensym, gensym_reset =
-  let state = Hashtbl.create 8 in
-  let reset () =
-    Hashtbl.clear state in
-  let next prefix =
-    let counter =
-      match Hashtbl.find_opt state prefix with
-      | None -> 0
-      | Some n -> n in
-    if counter = max_int then failwith "gensym";
-    Hashtbl.replace state prefix (succ counter);
-    sprintf "_%s%d" prefix counter in
-  (next, reset)
+  make_gensym ()
 
 type target_info =
   { tau: typ; declared: bool; name: var_t }
