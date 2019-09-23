@@ -285,15 +285,17 @@ let parse fname sexps =
     | "true" -> Some (`Const [|true|])
     | "false" -> Some (`Const [|false|])
     | a -> try_number' loc a in
-  let keyword_re = Str.regexp (sprintf "^:%s$" name_re_str) in
-  let is_kwd nm =
-    Str.string_match keyword_re nm 0 in
-  let enumerator_re = Str.regexp "::" in (* FIXME *)
+  let keyword_re = Str.regexp (sprintf "^:\\(%s\\)$" name_re_str) in
+  let try_keyword nm =
+    if Str.string_match keyword_re nm 0 then Some (Str.matched_group 1 nm)
+    else None in
+  let enumerator_re = Str.regexp (sprintf "^\\(%s\\)::\\(%s\\)$" name_re_str name_re_str) in
   let try_enumerator nm =
-    match Str.split enumerator_re nm with
-    | [enum; field] -> Some (Some enum, ":" ^ field)
-    | [field] when is_kwd field -> Some (None, field)
-    | _ -> None in
+    if Str.string_match enumerator_re nm 0 then
+      Some (Some (Str.matched_group 1 nm), Str.matched_group 2 nm)
+    else match try_keyword nm with
+         | Some k -> Some (None, k)
+         | None -> None in
   let symbol_re = Str.regexp (sprintf "^'\\(%s\\)$" name_re_str) in
   let try_symbol nm =
     if Str.string_match symbol_re nm 0 then Some (Str.matched_group 1 nm)
@@ -336,8 +338,9 @@ let parse fname sexps =
         | None -> parse_error loc "Expecting a bits constant (e.g. 16'hffff) or an enumerator (eg proto::ipv4)") in
   let expect_keyword msg nm =
     let loc, nm = expect_atom msg nm in
-    if is_kwd nm then loc, nm
-    else parse_error loc (sprintf "Expecting %s starting with a colon (:), got `%s'" msg nm) in
+    match try_keyword nm with
+    | Some k -> loc, k
+    | None -> parse_error loc (sprintf "Expecting %s starting with a colon (:), got `%s'" msg nm) in
   let expect_type = function (* (bit 16), typename *)
     | Atom { loc; atom } ->
        (loc, Unknown_u atom)
