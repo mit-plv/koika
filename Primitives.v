@@ -16,17 +16,17 @@ Inductive prim_bits_ufn_t :=
 | UZExtL (nzeroes: nat)
 | UZExtR (nzeroes: nat).
 
-Inductive prim_converter := Init | Pack | Unpack.
+Inductive prim_uconverter := UInit (tau: type) | UPack | UUnpack (tau: type).
 Inductive prim_struct_accessor := GetField | SubstField.
 
 Inductive prim_struct_uop :=
 | UDo (op: prim_struct_accessor) (f: string)
-| UDoBits (op: prim_struct_accessor) (f: string).
+| UDoBits (sig: struct_sig) (op: prim_struct_accessor) (f: string).
 
 Inductive prim_ufn_t :=
-| UConvFn (tau: type) (op: prim_converter)
+| UConvFn (op: prim_uconverter)
 | UBitsFn (fn: prim_bits_ufn_t)
-| UStructFn (sig: struct_sig) (op: prim_struct_uop).
+| UStructFn (op: prim_struct_uop).
 
 Inductive prim_bits_fn_t :=
 | Sel (sz: nat)
@@ -43,6 +43,8 @@ Inductive prim_bits_fn_t :=
 | UIntPlus (sz : nat)
 | ZExtL (sz: nat) (nzeroes: nat)
 | ZExtR (sz: nat) (nzeroes: nat).
+
+Inductive prim_converter := Init | Pack | Unpack.
 
 Inductive prim_fn_t :=
 | ConvFn (tau: type) (op: prim_converter)
@@ -71,8 +73,12 @@ Definition SubstFieldBits (sig: struct_sig) (idx: struct_index sig) : prim_fn_t 
 
 Definition prim_uSigma (fn: prim_ufn_t) (tau1 tau2: type): result prim_fn_t fn_tc_error :=
   match fn with
-  | UConvFn tau op =>
-    Success (ConvFn tau op)
+  | UConvFn op =>
+    Success (match op with
+             | UPack => ConvFn tau1 Pack
+             | UInit tau => ConvFn tau Init
+             | UUnpack tau => ConvFn tau Unpack
+             end)
   | UBitsFn fn =>
     let/res sz1 := assert_bits_t Arg1 tau1 in
     let/res sz2 := assert_bits_t Arg2 tau2 in
@@ -92,15 +98,16 @@ Definition prim_uSigma (fn: prim_ufn_t) (tau1 tau2: type): result prim_fn_t fn_t
                     | UZExtL nzeroes => ZExtL sz1 nzeroes
                     | UZExtR nzeroes => ZExtR sz1 nzeroes
                     end)
-  | UStructFn sig fn =>
-    let find_field f :=
+  | UStructFn fn =>
+    let find_field sig f :=
         opt_result (List_assoc f sig.(struct_fields)) (Arg1, FnUnboundField f sig) in
     match fn with
       | UDo op f =>
-        let/res idx := find_field f in
+        let/res sig := assert_struct_t Arg1 tau1 in
+        let/res idx := find_field sig f in
         Success (StructFn sig op idx)
-      | UDoBits op f =>
-        let/res idx := find_field f in
+      | UDoBits sig op f =>
+        let/res idx := find_field sig f in
         Success match op with
                 | GetField => GetFieldBits sig idx
                 | SubstField => SubstFieldBits sig idx

@@ -381,19 +381,19 @@ End Decoder.
 
 Module ManualUnpacker <: Unpacker.
   Notation SCall fn a1 a2 :=
-    (UCall (UPrimFn (UStructFn decoded_sig fn)) a1 a2).
+    (UCall (UPrimFn (UStructFn fn)) a1 a2).
 
   Definition unpack reg_t custom_ufn_t encoded: uaction unit string reg_t (interop_ufn_t custom_ufn_t) :=
-    (Let "imm" <- SCall (UDoBits GetField "immediate") ($encoded) (UConstBits Ob) in
-     Let "src" <- SCall (UDoBits GetField "src") ($encoded) (UConstBits Ob) in
-     Let "dst" <- SCall (UDoBits GetField "dst") ($encoded) (UConstBits Ob) in
+    (Let "imm" <- SCall (UDoBits decoded_sig GetField "immediate") ($encoded) (UConstBits Ob) in
+     Let "src" <- SCall (UDoBits decoded_sig GetField "src") ($encoded) (UConstBits Ob) in
+     Let "dst" <- SCall (UDoBits decoded_sig GetField "dst") ($encoded) (UConstBits Ob) in
      (* Let "imm" <- (UPart 0 16)[[$encoded, UConstBits Ob]] in *)
      (* Let "dst" <- (UPart 16 8)[[$encoded, UConstBits Ob]] in *)
      (* Let "src" <- (UPart 24 8)[[$encoded, UConstBits Ob]] in *)
      (SCall (UDo SubstField "immediate")
             (SCall (UDo SubstField "dst")
                    (SCall (UDo SubstField "src")
-                          (UCall (UPrimFn (UConvFn (struct_t decoded_sig) Init))
+                          (UCall (UPrimFn (UConvFn (UInit (struct_t decoded_sig))))
                                  (UConstBits Ob) (UConstBits Ob))
                           ($"src"))
                    ($"dst"))
@@ -402,7 +402,7 @@ End ManualUnpacker.
 
 Module PrimitiveUnpacker <: Unpacker.
   Definition unpack reg_t custom_ufn_t encoded: uaction unit string reg_t (interop_ufn_t custom_ufn_t) :=
-    (UCall (UPrimFn (UConvFn (struct_t decoded_sig) Unpack))
+    (UCall (UPrimFn (UConvFn (UUnpack (struct_t decoded_sig))))
            (UVar encoded) (UConstBits Ob)).
 End PrimitiveUnpacker.
 
@@ -762,15 +762,15 @@ Module Enums.
   Open Scope sga.
 
   Definition _Incr : uaction unit _ _ interop_minimal_ufn_t :=
-    Let "bits_a" <- (UCall (UPrimFn (UConvFn (enum_t flag_sig) Pack))
+    Let "bits_a" <- (UCall (UPrimFn (UConvFn UPack))
                           (rA#read0) (UConstBits Ob)) in
-    Let "bits_b" <- (UCall (UPrimFn (UConvFn (enum_t flag_sig) Pack))
+    Let "bits_b" <- (UCall (UPrimFn (UConvFn UPack))
                           (rB#read0) (UConstBits Ob)) in
     Let "neg_a" <- UNot[[$"bits_a", UConstBits Ob]] in
     Let "succ_b" <- UUIntPlus[[$"bits_b", UConstBits Ob~0~0~1]] in
-    ((rA#write0(UCall (UPrimFn (UConvFn (enum_t flag_sig) Unpack))
+    ((rA#write0(UCall (UPrimFn (UConvFn (UUnpack (enum_t flag_sig))))
                       ($"neg_a") (UConstBits Ob)));;
-     (rB#write0(UCall (UPrimFn (UConvFn (enum_t flag_sig) Unpack))
+     (rB#write0(UCall (UPrimFn (UConvFn (UUnpack (enum_t flag_sig))))
                       ($"succ_b") (UConstBits Ob)))).
 
   (* Ltac __must_typecheck R Sigma tcres ::= *)

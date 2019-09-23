@@ -67,8 +67,10 @@ module Util = struct
   let type_kind_to_string (tk: SGA.type_kind) =
     match tk with
     | SGA.Kind_bits -> "bits"
-    | SGA.Kind_enum sg -> sga_enum_sig_to_string sg
-    | SGA.Kind_struct sg -> sga_struct_sig_to_string sg
+    | SGA.Kind_enum None -> "enum"
+    | SGA.Kind_enum (Some sg) -> sga_enum_sig_to_string sg
+    | SGA.Kind_struct None -> "struct"
+    | SGA.Kind_struct (Some sg) -> sga_struct_sig_to_string sg
 
   let string_eq_dec =
     { SGA.eq_dec = fun (s1: string) (s2: string) -> s1 = s2 }

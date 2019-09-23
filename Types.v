@@ -204,19 +204,26 @@ Lemma ExternalSignature_injRet :
 Proof. now inversion 1. Qed.
 
 Inductive type_kind :=
-  kind_bits | kind_enum (sig: enum_sig) | kind_struct (sig: struct_sig).
+  kind_bits | kind_enum (sig: option enum_sig) | kind_struct (sig: option struct_sig).
 
 Inductive fn_tc_error' :=
 | FnKindMismatch (expected: type_kind)
 | FnUnboundField (f: string) (sig: struct_sig).
 
-Inductive arg_id := Arg1 | Arg2.
+(* FIXME add ability to report error on meta arguments *)
+(* FIXME and use this to fix the location of unbound field errors *)
+Inductive fn_tc_error_loc := Arg1 | Arg2.
 
-Definition fn_tc_error : Type := arg_id * fn_tc_error'.
+Definition fn_tc_error : Type := fn_tc_error_loc * fn_tc_error'.
 
 Definition assert_bits_t arg (tau: type) : result nat fn_tc_error :=
   match tau with
   | bits_t sz => Success sz
-  | enum_t _ => Failure (arg, FnKindMismatch kind_bits)
-  | struct_t _ => Failure (arg, FnKindMismatch kind_bits)
+  | enum_t _ | struct_t _ => Failure (arg, FnKindMismatch kind_bits)
+  end.
+
+Definition assert_struct_t arg (tau: type) : result struct_sig fn_tc_error :=
+  match tau with
+  | struct_t sg => Success sg
+  | bits_t _ | enum_t _ => Failure (arg, FnKindMismatch (kind_struct None))
   end.
