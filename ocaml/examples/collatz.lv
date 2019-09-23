@@ -3,29 +3,29 @@
   (register r0 32'hff)
 
   (rule test
-    (write#1
+    (write.1
      r0
      (progn
-       (write#0 r0 (if (let ((r (read#0 r0)))
+       (write.0 r0 (if (let ((r (read.0 r0)))
                          (eq (+ r 32'1) 32'1))
                        32'0 32'b01010111100011))
-       (if (let ((r (read#0 r0)))
+       (if (let ((r (read.0 r0)))
              (eq r 32'0))
            32'fail 32'hDEAD_beef)))
-    (if (not (eq (read#0 r0) 32'0))
-        (write#0 r0 32'fail)))
+    (if (not (eq (read.0 r0) 32'0))
+        (write.0 r0 32'fail)))
 
   (rule divide
-    (let ((v (read#0 r0))
+    (let ((v (read.0 r0))
           (odd (sel v 5'0)))
       (when (not odd)
-        (write#0 r0 (lsr v 1'1)))))
+        (write.0 r0 (lsr v 1'1)))))
 
   (rule multiply
-    (let ((v (read#1 r0))
+    (let ((v (read.1 r0))
           (odd (sel v 5'0)))
       (when odd
-        (write#1 r0 (+ (+ (lsl v 1'1) v) 32'1)))))
+        (write.1 r0 (+ (+ (lsl v 1'1) v) 32'1)))))
 
   (scheduler main
     (try test done (sequence divide multiply))))

@@ -223,15 +223,14 @@ let parse fname sexps =
           | "when" ->
              let cond, body = expect_cons loc "when condition" args in
              When (expect_action cond, List.map expect_action body)
-          | "write#0" | "write#1" ->
+          | "write.0" | "write.1" ->
              let reg, body = expect_cons loc "register name" args in
              let port = int_of_string (String.sub hd (String.length hd - 1) 1) in
              Write (port, locd_of_pair (expect_atom "a register name" reg),
                     expect_action (expect_single loc "value" "write expression" body))
-          | "read#0" | "read#1" ->
-             let reg, body = expect_cons loc "register name" args in
+          | "read.0" | "read.1" ->
+             let reg = expect_single loc "register name" "read expression" args in
              let port = int_of_string (String.sub hd (String.length hd - 1) 1) in
-             let () = expect_nil body in
              Read (port, locd_of_pair (expect_atom "a register name" reg))
           | _ ->
              let args = List.map expect_action args in
