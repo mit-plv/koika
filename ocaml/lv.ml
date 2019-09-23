@@ -1,12 +1,5 @@
 open Common
 
-type 'f smod = {
-    m_name: ('f, string) locd;
-    m_registers: (('f, string) locd * ('f, bool array) locd) list;
-    m_rules: (('f, string) locd * ('f, ('f, string, string) action) locd) list;
-    m_scheduler: ('f, string) locd * ('f, 'f scheduler) locd
-  }
-
 let sprintf = Printf.sprintf
 let (<<) f g x = f (g x)
 
@@ -17,25 +10,87 @@ module Pos = struct
     | SexpPos of string * Parsexp.Positions.pos
     | SexpRange of string * Parsexp.Positions.range
 
+  let range_to_string begpos endpos =
+    if begpos = endpos then sprintf "%d" begpos
+    else sprintf "%d-%d" begpos endpos
+
+  (* Emacs expects columns to start at 1 in compilation output *)
   let to_string = function
     | StrPos s -> s
     | Filename f ->
        sprintf "%s:?:?" f
     | SexpPos (fname, { line; col; _ }) ->
-       sprintf "%s:%d:%d" fname line col
+       sprintf "%s:%d:%d" fname line (col + 1)
     | SexpRange (fname, { start_pos; end_pos }) ->
-       sprintf "%s:%d-%d:%d-%d" fname
-         start_pos.line end_pos.line start_pos.col end_pos.col
+       let line = range_to_string start_pos.line end_pos.line in
+       let col = range_to_string (start_pos.col + 1) (end_pos.col + 1) in
+       sprintf "%s:%s:%s" fname line col
 end
 
+type nonrec 'a locd = (Pos.t, 'a) locd
+
+let locd_make lpos lcnt =
+  { lpos; lcnt }
+
+let locd_of_pair (pos, x) =
+  locd_make pos x
+
+type unresolved_rule =
+  string locd * ((Pos.t, string, string) action) locd
+
+type unresolved_scheduler =
+  string locd * (Pos.t scheduler) locd
+
+type unresolved_register =
+  string locd * bits_value locd
+
+type unresolved_module = {
+    m_name: string locd;
+    m_registers: unresolved_register list;
+    m_rules: unresolved_rule list;
+    m_schedulers: unresolved_scheduler list;
+  }
+
+type unresolved_typedecl =
+  | Enum_u of { name: string locd; bitsize: int locd; members: (string locd * bits_value locd) list }
+  | Struct_u of { name: string locd; fields: (string locd * unresolved_type locd) list }
+and unresolved_type =
+  | Bits_u of int
+  | Unknown_u of string
+
+type unresolved_extfun = {
+    name: string locd;
+    argtypes: unresolved_type locd list;
+    rettype: unresolved_type locd
+  }
+
+type unresolved_unit = {
+    types: unresolved_typedecl locd list;
+    extfuns: unresolved_extfun list;
+    mods: unresolved_module locd list;
+  }
+
+type resolved_module = {
+    registers: reg_signature list;
+    rules: (string * Pos.t SGALib.Compilation.raw_action) list;
+    scheduler: Pos.t SGALib.Compilation.raw_scheduler
+  }
+
 exception Error of Pos.t err_contents
+
+let check_result = function
+  | Ok cs -> cs
+  | Error err -> raise (Error err)
 
 let parse_error (epos: Pos.t) emsg =
   raise (Error { epos; ekind = `ParseError; emsg })
 
-let name_error (epos: Pos.t) kind name =
+let resolution_error (epos: Pos.t) emsg =
+  raise (Error { epos; ekind = `ResolutionError; emsg = emsg })
+
+let name_error (epos: Pos.t) kind ?(extra="") name =
   raise (Error { epos; ekind = `NameError;
-                 emsg = sprintf "Unbound %s: `%s'" kind name })
+                 emsg = sprintf "Unbound %s: `%s'%s" kind name extra })
 
 let type_error (epos: Pos.t) emsg =
   raise (Error { epos; ekind = `TypeError; emsg })
@@ -46,14 +101,6 @@ let untyped_number_error (pos: Pos.t) n =
 let expect_cons loc msg = function
   | [] -> parse_error loc (Printf.sprintf "Missing %s" msg)
   | hd :: tl -> hd, tl
-
-let expect_num = function
-  | { lcnt = Num n; _} -> n
-  | { lpos; _ } -> parse_error lpos "Expecting a type-level constant"
-
-let expect_num_arg loc args =
-  let n, args = expect_cons loc "argument" args in
-  expect_num n, args
 
 let rec list_const n x =
   if n = 0 then [] else x :: list_const (n - 1) x
@@ -101,6 +148,32 @@ let read_annotated_sexps fname =
      let msg = Parsexp.Parse_error.message err in
      parse_error (Pos.SexpPos (fname, pos)) msg
 
+module OrderedString = struct
+  type t = string
+  let compare = compare
+end
+module StringSet = Set.Make (OrderedString)
+module StringMap = Map.Make (OrderedString)
+
+let first_duplicate keyfn ls =
+  let rec loop acc = function
+    | [] -> None
+    | x :: xs ->
+       let key = keyfn x in
+       if StringSet.mem key acc then Some x
+       else loop (StringSet.add key acc) xs in
+ loop StringSet.empty ls
+
+let check_no_duplicates msg keyfn ls =
+  (match first_duplicate keyfn ls with
+   | Some (nm, _) -> parse_error nm.lpos (sprintf "Duplicate %s: `%s'" msg nm.lcnt)
+   | None -> ())
+
+let add_or_raise loc k v m errf =
+  match StringMap.find_opt k m with
+  | Some v' -> errf loc k v v'
+  | None -> StringMap.add k v m
+
 let parse fname sexps =
   Printf.printf "Parsing %s\n%!" fname;
   let expect_single loc kind where = function
@@ -111,10 +184,6 @@ let parse fname sexps =
        parse_error loc
          (sprintf "More than one %s found in %s" kind where)
     | [x] -> x in
-  let locd_make lpos lcnt =
-    { lpos; lcnt } in
-  let locd_of_pair (pos, x) =
-    locd_make pos x in
   let num_fmt =
     "(number format: size'number)" in
   let expect_atom msg = function
@@ -133,6 +202,16 @@ let parse fname sexps =
     | [] -> ()
     | List { loc; _ } :: _ -> parse_error loc "Unexpected list"
     | Atom { loc; _ } :: _ -> parse_error loc "Unexpected atom" in
+  let expect_pair loc msg1 msg2 lst =
+    let x1, lst = expect_cons loc msg1 lst in
+    let x2, lst = expect_cons loc msg2 lst in
+    expect_nil lst;
+    (x1, x2) in
+  let rec expect_pairs msg = function
+    | [] -> []
+    | h1 :: h2 :: tl -> (h1, h2) :: expect_pairs msg tl
+    | [(Atom { loc; _ } | List { loc; _ } )] ->
+       parse_error loc (sprintf "Missing %s after this element" msg) in
   let expect_constant csts c =
     let quote x = "`" ^ x ^ "'" in
     let optstrs = List.map (quote << fst) csts in
@@ -173,23 +252,45 @@ let parse fname sexps =
         let char2bool = function '0' -> false | '1' -> true | _ -> assert false in
         let bits = List.of_seq (String.to_seq bits) in
         let bools = List.append (List.rev_map char2bool bits) padding in
-        Some (Const (Array.of_list bools))
+        Some (`Const (Array.of_list bools))
     else match int_of_string_opt a with
-         | Some n -> Some (Num n)
+         | Some n -> Some (`Num n)
          | None -> None in
   let try_number loc = function
-    | "true" -> Some (Const [|true|])
-    | "false" -> Some (Const [|false|])
+    | "true" -> Some (`Const [|true|])
+    | "false" -> Some (`Const [|false|])
     | a -> try_number' loc a in
   let expect_number_or_var loc a =
     match try_number loc a with
-    | Some c -> c
+    | Some (`Num n) -> Num n
+    | Some (`Const bs) -> Const bs
     | None ->
        match try_variable a with
        | Some var -> Var var
        | None ->
           let msg = sprintf "Cannot parse `%s' as a number or identifier %s" a num_fmt in
           parse_error loc msg in
+  let expect_bits msg v =
+    let loc, init_val = expect_atom msg v in
+    match try_number loc init_val with
+    | Some (`Const c) -> loc, c
+    | Some (`Num n) -> untyped_number_error loc n
+    | _ -> parse_error loc (sprintf "Expecting a bits constant (e.g. 2'b01), got `%s' %s" init_val num_fmt) in
+  let keyword_re = Str.regexp "^:" in
+  let expect_keyword msg nm =
+    let loc, nm = expect_atom msg nm in
+    if Str.string_match keyword_re nm 0 then loc, nm
+    else parse_error loc (sprintf "Expecting %s starting with a colon (:), got `%s'" msg nm) in
+  let expect_type = function (* (bit 16), typename *)
+    | Atom { loc; atom } ->
+       (loc, Unknown_u atom)
+    | List { loc; elements } ->
+       let hd, sizes = expect_cons loc "a type" elements in
+       let _ = expect_constant [("bits", ())] hd in
+       let loc, szstr = expect_atom "a size" (expect_single loc "size" "bit type" sizes) in
+       match try_number loc szstr with
+       | Some (`Num size) -> (loc, Bits_u size)
+       | _ -> parse_error loc (sprintf "Expecting a bit size, got `%s'" szstr) in
   let expect_funapp loc kind elements =
     let hd, args = expect_cons loc kind elements in
     let loc_hd, hd = expect_atom (sprintf "a %s name" kind) hd in
@@ -252,23 +353,11 @@ let parse fname sexps =
   and expect_let_bindings bs =
     let _, bs = expect_list "let bindings" bs in
     List.map expect_let_binding bs in
-  let expect_register init_val =
-    (* let loc, taus = expect_list "a type declaration" taus in
-     * let bit, sizes = expect_cons loc "a type declaration" taus in
-     * let _ = expect_constant [("bit", ())] bit in
-     * let size = expect_single loc "size" "type declaration" sizes in
-     * let sloc, size = expect_atom "size" size in
-     * try locd_make sloc (int_of_string size)
-     * with Failure _ ->
-     *   parse_error loc (sprintf "Unparsable size %s" size) in *)
-    let loc, init_val = expect_atom "an initial value" init_val in
-    match try_number loc init_val with
-    | Some (Const c) -> locd_make loc c
-    | Some (Num n) -> untyped_number_error loc n
-    | _ -> parse_error loc (sprintf "Expecting a number, got `%s' %s" init_val num_fmt) in
+  let expect_register name init_val =
+    (name, locd_of_pair (expect_bits "an initial value" init_val)) in
   let expect_actions loc body =
     locd_make loc (Progn (List.map expect_action body)) in
-  let rec expect_scheduler : 'f sexp -> ('f, 'f scheduler) locd = function
+  let rec expect_scheduler : Pos.t sexp -> Pos.t scheduler locd = function
     | (Atom _) as a ->
        locd_of_pair (expect_constant [("done", Done)] a)
     | List { loc; elements } ->
@@ -276,68 +365,154 @@ let parse fname sexps =
        locd_make loc
          (match hd with
           | "sequence" ->
-             Sequence (List.map (fun a -> locd_of_pair (expect_atom "a rule name" a)) args)
+             Sequence (List.map (locd_of_pair << (expect_atom "a rule name")) args)
           | "try" ->
              let rname, args = expect_cons loc "rule name" args in
-             let s1, args = expect_cons loc "subscheduler 1" args in
-             let s2, args = expect_cons loc "subscheduler 2" args in
-             let _ = expect_nil args in
+             let s1, s2 = expect_pair loc "subscheduler 1" "subscheduler 2" args in
              Try (locd_of_pair (expect_atom "a rule name" rname),
                   expect_scheduler s1,
                   expect_scheduler s2)
           | _ ->
              parse_error loc_hd (sprintf "Unexpected in scheduler: `%s'" hd)) in
-  let rec expect_decl d skind =
+  let expect_enum_field (name, value) = (* (:a 2'b00) *)
+    (* let name, value = expect_pair loc "enumerator" "enumerator value" lst in *)
+    (expect_keyword "an enumerator" name |> locd_of_pair,
+     expect_bits "an enumerator value" value |> locd_of_pair) in
+  let check_size sz { lpos; lcnt } =
+    let sz' = Array.length lcnt in
+    if sz' <> sz then
+      parse_error lpos
+        (sprintf "Inconsistent sizes in enum: expecting `bits %d', got `bits %d'" sz sz') in
+  let expect_enum name loc body = (* ((:true 1'b1) (:false 1'b0) …) *)
+    let members = List.map expect_enum_field (expect_pairs "enumerator value" body) in
+    let (_, eval), _ = expect_cons loc "enumerator (empty enums are not supported)" members in
+    let bitsize = Array.length eval.lcnt in
+    List.iter ((check_size bitsize) << snd) members;
+    locd_make loc (Enum_u { name; bitsize = locd_make eval.lpos bitsize; members }) in
+  let expect_struct_field (name, typ) = (* (:label, typename) *)
+    (expect_keyword "a field name" name |> locd_of_pair, expect_type typ |> locd_of_pair) in
+  let expect_struct name loc body = (* ((:kind kind) (:imm (bits 12) …) *)
+    let fields = List.map expect_struct_field (expect_pairs "field type" body) in
+    check_no_duplicates "field in struct" (fun (nm, _) -> nm.lcnt) fields;
+    locd_make loc (Struct_u { name; fields }) in
+  let expect_extfun name loc body =
+    let args, rettype = expect_pair loc "argument declarations" "return type" body in
+    let _, args = expect_list "argument declarations" args in
+    let argtypes = List.map (locd_of_pair << expect_type) args in
+    let rettype = locd_of_pair (expect_type rettype) in
+    { name; argtypes; rettype } in
+  let rec expect_decl d skind expected =
     let d_loc, d = expect_list ("a " ^ skind) d in
     let kind, name_body = expect_cons d_loc skind d in
-    let csts = [("rule", `Rule); ("scheduler", `Scheduler);
-                ("register", `Register); ("module", `Module)] in
-    let _, kind = expect_constant csts kind in
+    let _, kind = expect_constant expected kind in
     let name, body = expect_cons d_loc "name" name_body in
     let name = locd_of_pair (expect_atom "a name" name) in
     Printf.printf "Processing decl %s\n%!" name.lcnt;
     (d_loc,
      match kind with
-     | `Register ->
-        `Register (name, expect_register (expect_single d_loc "value" "register initialization" body))
+     | `Enum ->
+        `Enum (expect_enum name d_loc body)
+     | `Struct ->
+        `Struct (expect_struct name d_loc body)
+     | `Extfun ->
+        `Extfun (expect_extfun name d_loc body)
      | `Module ->
         `Module (expect_module name d_loc body)
+     | `Register ->
+        `Register (expect_register name (expect_single d_loc "value" "register initialization" body))
      | `Rule ->
         `Rule (name, expect_actions d_loc body)
      | `Scheduler ->
         `Scheduler (name, expect_scheduler (expect_single d_loc "body" "scheduler declaration" body)))
-  and expect_module m_name m_loc body =
-    let registers, rules,  schedulers =
-      List.fold_left (fun (registers, rules, schedulers) decl ->
-          match expect_decl decl "register, rule, or scheduler declaration" with
-          | _, `Register r -> (r :: registers, rules, schedulers)
-          | _, `Rule r -> (registers, r :: rules, schedulers)
-          | _, `Scheduler s -> (registers, rules, s :: schedulers)
-          | loc, `Module _ -> parse_error loc "Unexpected nested module declaration")
-        ([], [], []) body in
-    let m_scheduler = expect_single m_loc "scheduler"
-                        (sprintf "module `%s'" m_name.lcnt) schedulers in
-    { m_name;
-      m_registers = List.rev registers;
-      m_rules = List.rev rules;
-      m_scheduler } in
-  List.map (fun sexp ->
-      match expect_decl sexp "module declaration" with
-      | _, `Module { m_registers; m_rules; m_scheduler; _ } ->
-         let registers = List.map (fun (nm, init) ->
-                             { reg_name = nm.lcnt;
-                               reg_init = Bits init.lcnt })
-                           m_registers in
-         (* FIXME: handle functions in generic way *)
-         (registers, m_rules, m_scheduler)
-      | loc, kind ->
-         parse_error loc (sprintf "Unexpected %s at top level"
-                            (match kind with
-                             | `Register _ -> "register"
-                             | `Module _ -> assert false
-                             | `Rule _ -> "rule"
-                             | `Scheduler _ -> "scheduler")))
-    sexps
+  and expect_module m_name loc body =
+    let expected = [("register", `Register); ("rule", `Rule); ("scheduler", `Scheduler)] in
+    let m =
+      List.fold_left (fun m decl ->
+          match expect_decl decl "register, rule, or scheduler declaration" expected |> snd with
+          | `Register r -> { m with m_registers = r :: m.m_registers }
+          | `Rule r -> { m with m_rules = r :: m.m_rules }
+          | `Scheduler s -> { m with m_schedulers = s :: m.m_schedulers }
+          | _ -> assert false)
+        { m_name; m_registers = []; m_rules = []; m_schedulers = [] } body in
+    check_no_duplicates "register" (fun (nm, _) -> nm.lcnt) m.m_registers;
+    check_no_duplicates "rule" (fun (nm, _) -> nm.lcnt) m.m_rules;
+    check_no_duplicates "scheduler" (fun (nm, _) -> nm.lcnt) m.m_schedulers;
+    let m_scheduler = expect_single loc "scheduler"
+                        (sprintf "module `%s'" m_name.lcnt) m.m_schedulers in
+    locd_make loc
+      { m with m_registers = List.rev m.m_registers;
+               m_rules = List.rev m.m_rules;
+               m_schedulers = [m_scheduler] } in
+  let expected_toplevel =
+    [("enum", `Enum); ("struct", `Struct); ("extfun", `Extfun); ("module", `Module)] in
+  let { types; extfuns; mods } =
+    List.fold_left (fun u sexp ->
+        (* FIXME: handle functions in generic way *)
+        match expect_decl sexp "module, type, or extfun declaration" expected_toplevel |> snd with
+        | `Enum e -> { u with types = e :: u.types }
+        | `Struct s -> { u with types = s :: u.types }
+        | `Extfun fn -> { u with extfuns = fn :: u.extfuns }
+        | `Module m -> { u with mods = m :: u.mods }
+        | _ -> assert false)
+      { types = []; extfuns = []; mods = [] } sexps in
+  { types = List.rev types;
+    extfuns = List.rev extfuns;
+    mods = List.rev mods }
+
+let rexpect_num = function
+  | { lcnt = Num n; _} -> n
+  | { lpos; _ } -> parse_error lpos "Expecting a type level constant"
+
+let rexpect_num_arg loc args =
+  let n, args = expect_cons loc "argument" args in
+  rexpect_num n, args
+
+let resolve_type types { lpos; lcnt: unresolved_type } =
+  match lcnt with
+  | Bits_u sz -> Bits_t sz
+  | Unknown_u nm ->
+     match StringMap.find_opt nm types with
+     | Some tau -> tau
+     | None ->
+        let known_types = StringMap.fold (fun k _ acc -> k :: acc) types [] in
+        let msg = " (known types: " ^ String.concat ", " (List.sort compare known_types) ^ ")" in
+        name_error lpos "type" ~extra:msg nm
+
+let resolve_typedecl types (typ: unresolved_typedecl locd) =
+  let resolve_struct_field_type (nm, tau) =
+    (nm.lcnt, resolve_type types tau) in
+  match typ.lcnt with
+  | Enum_u { name; bitsize; members } ->
+     name.lcnt,
+     Enum_t { enum_name = name.lcnt; enum_bitsize = bitsize.lcnt;
+              enum_members = List.map (fun (n, t) -> n.lcnt, t.lcnt) members }
+  | Struct_u { name; fields } ->
+     let struct_fields = List.map resolve_struct_field_type fields in
+     name.lcnt,
+     Struct_t { struct_name = name.lcnt; struct_fields }
+
+let resolve_typedecls types =
+  let errf loc k v v' =
+    let msg = sprintf "Duplicate name: %s `%s' previously declared as a %s"
+                (kind_to_str v) k (kind_to_str v') in
+    resolution_error loc msg in
+  List.fold_left (fun types t ->
+      let name, typ = resolve_typedecl types t in
+      add_or_raise t.lpos name typ types errf)
+    StringMap.empty types
+
+let resolve_extfun types { name; argtypes; rettype } =
+  let unit_u = locd_make name.lpos (Bits_u 0) in
+  let a1, a2 = match argtypes with
+    | [] -> unit_u, unit_u
+    | [t] -> t, unit_u
+    | [x; y] -> x, y
+    | _ -> parse_error name.lpos ("External functions with more than 2 arguments are not supported" ^
+                                    " (consider using a struct to pass more arguments)") in
+  { ffi_name = CustomFn name.lcnt;
+    ffi_arg1type = resolve_type types a1;
+    ffi_arg2type = resolve_type types a2;
+    ffi_rettype = resolve_type types rettype }
 
 let prim_fns =
   let open SGALib.SGA in
@@ -365,35 +540,36 @@ let prim_fns =
         ("part", (`Prim2 (fun n n' -> UPart (n, n')), 1));
         ("part-subst", (`Prim2 (fun n n' -> UPart (n, n')), 2))])
 
-let resolve_rule fname registers rule =
+let resolve_function types extfuns { lpos; lcnt = name } args =
+  (* FIXME generalize to custom function definitions *)
+  let bits_fn nm = SGALib.SGA.UPrimFn (SGALib.SGA.UBitsFn nm) in
+  let fn, nargs, args =
+    match StringMap.find_opt name prim_fns with
+    | Some (fn, nargs) ->
+       (match fn with
+        | `Prim0 fn ->
+           bits_fn fn, nargs, args
+        | `Prim1 fn ->
+           let n, args = rexpect_num_arg lpos args in
+           bits_fn (fn n), nargs, args
+        | `Prim2 fn ->
+           let n, args = rexpect_num_arg lpos args in
+           let n', args = rexpect_num_arg lpos args in
+           bits_fn (fn n n'), nargs, args)
+    | None -> name_error lpos "function" name in
+  assert (nargs <= 2);
+  if List.length args <> nargs then
+    type_error lpos (sprintf "Function `%s' takes %d arguments" name nargs)
+  else
+    let padding = list_const (2 - nargs) { lpos; lcnt = Const [||] } in
+    { lpos; lcnt = fn }, List.append args padding
+
+let resolve_rule types extfuns registers ((nm, action): unresolved_rule) =
   let find_register { lpos; lcnt = name } =
     match List.find_opt (fun rsig -> rsig.reg_name = name) registers with
     | Some rsig -> { lpos; lcnt = rsig }
     | None -> name_error lpos "register" name in
-  let find_function types extfuns { lpos; lcnt = name } args =
-    (* FIXME generalize to custom function definitions *)
-    let bits_fn nm = SGALib.SGA.UPrimFn (SGALib.SGA.UBitsFn nm) in
-    let fn, nargs, args =
-      match StringMap.find_opt name prim_fns with
-      | Some (fn, nargs) ->
-         (match fn with
-          | `Prim0 fn ->
-             bits_fn fn, nargs, args
-          | `Prim1 fn ->
-             let n, args = rexpect_num_arg lpos args in
-             bits_fn (fn n), nargs, args
-          | `Prim2 fn ->
-             let n, args = rexpect_num_arg lpos args in
-             let n', args = rexpect_num_arg lpos args in
-             bits_fn (fn n n'), nargs, args)
-      | None -> name_error lpos "function" name in
-    assert (nargs <= 2);
-    if List.length args <> nargs then
-      type_error lpos (sprintf "Function `%s' takes %d arguments" name nargs)
-    else
-      let padding = list_const (2 - nargs) { lpos; lcnt = Const [||] } in
-      { lpos; lcnt = fn }, List.append args padding in
-  let rec resolve_action ({ lpos; lcnt }: ('f, ('f, string, string) action) locd) =
+  let rec resolve_action ({ lpos; lcnt }: (Pos.t, string, string) action locd) =
     { lpos;
       lcnt = match lcnt with
              | Skip -> Skip
@@ -416,15 +592,19 @@ let resolve_rule fname registers rule =
              | Write (port, r, v) ->
                 Write (port, find_register r, resolve_action v)
              | Call (fn, args) ->
-                let fn, args = find_function fn args in
+                let fn, args = resolve_function types extfuns fn args in
                 Call (fn, List.map resolve_action args) } in
-  resolve_action rule
+  (nm.lcnt, resolve_action action)
 
-let resolve_scheduler rules (s: ('f, 'f scheduler) locd) =
+let resolve_register types extfuns (name, init) =
+  { reg_name = name.lcnt;
+    reg_init = Bits init.lcnt }
+
+let resolve_scheduler rules (s: Pos.t scheduler locd) =
   let check_rule { lpos; lcnt = name } =
     if not (List.mem_assoc name rules) then
       name_error lpos "rule" name in
-  let rec check_scheduler ({ lcnt; _ }: ('f, 'f scheduler) locd) =
+  let rec check_scheduler ({ lcnt; _ }: Pos.t scheduler locd) =
     match lcnt with
     | Done -> ()
     | Sequence rs ->
@@ -434,3 +614,21 @@ let resolve_scheduler rules (s: ('f, 'f scheduler) locd) =
        check_scheduler s1;
        check_scheduler s2 in
   check_scheduler s; s
+
+let resolve_module types extfuns { lcnt = { m_registers; m_rules; m_schedulers; _ }; _ } =
+  let registers = List.map (resolve_register types extfuns) m_registers in
+  let rules = List.map (resolve_rule types extfuns registers) m_rules in
+  let scheduler = resolve_scheduler rules (List.hd m_schedulers |> snd) in
+  { registers; rules; scheduler }
+
+let resolve { types; extfuns; mods } =
+  let types = resolve_typedecls types in
+  let extfuns = List.map (resolve_extfun types) extfuns in
+  List.map (resolve_module types extfuns) mods
+
+let typecheck { registers; rules; scheduler } =
+  let open SGALib.Compilation in
+  let tc_rule (nm, r) = (nm, check_result (typecheck_rule r)) in
+  let c_rules = List.map tc_rule rules in
+  let c_scheduler = SGALib.Compilation.typecheck_scheduler scheduler in
+  { c_registers = registers; c_rules; c_scheduler }

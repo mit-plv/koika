@@ -8,10 +8,6 @@ type cli_opts = {
     cli_backend: [`All | `Dot | `Verilog | `Cpp | `Hpp | `Exe]
   }
 
-let check_result = function
-  | Ok cs -> cs
-  | Error err -> raise (Error err)
-
 let exts_to_backends =
   [("v", `Verilog);
    ("dot", `Dot);
@@ -63,26 +59,16 @@ let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
       match cli_frontend with
       | `Annotated -> read_annotated_sexps cli_in_fname
       | `Sexps -> read_cst_sexps cli_in_fname in
-    (match parse cli_in_fname sexps with
-     | (registers, rules, scheduler) :: _ ->
-        let c_rules =
-          List.map (fun (nm, r) ->
-              let r = resolve_rule cli_in_fname registers r in
-              (nm.lcnt, check_result (SGALib.Compilation.typecheck_rule r)))
-            rules in
-        let c_scheduler =
-          let s = resolve_scheduler c_rules (snd scheduler) in
-          SGALib.Compilation.typecheck_scheduler s in
-        let c_unit : SGALib.Compilation.compile_unit =
-          { c_scheduler; c_rules; c_registers = registers } in
-        run_backend cli_backend cli_out_fname c_unit
-     | [] -> parse_error (Pos.Filename cli_in_fname) "No modules declared")
+    match resolve (parse cli_in_fname sexps) with
+    | [] -> parse_error (Pos.Filename cli_in_fname) "No modules declared"
+    | rmod :: _ -> run_backend cli_backend cli_out_fname (typecheck rmod)
   with Error { epos; ekind; emsg } ->
     Printf.eprintf "%s: %s: %s\n"
       (Pos.to_string epos)
       (match ekind with
        | `ParseError -> "Parse error"
        | `NameError -> "Name error"
+       | `ResolutionError -> "Resolution error"
        | `TypeError -> "Type error")
       emsg;
     exit 1

@@ -24,6 +24,11 @@ and enum_sz { enum_bitsize; _ } =
 and struct_sz { struct_fields; _ } =
   List.fold_left (fun acc (_, ftau) -> acc + typ_sz ftau) 0 struct_fields
 
+let kind_to_str = function
+  | Bits_t _ -> "bits"
+  | Enum_t _ -> "enum"
+  | Struct_t _ -> "struct"
+
 type value =
   | Bits of bits_value
   | Enum of enum_sig * bits_value
@@ -151,5 +156,5 @@ let with_output_to_file fname (f: out_channel -> unit) =
 
 type 'f err_contents =
   { epos: 'f;
-    ekind: [`ParseError | `NameError | `TypeError];
+    ekind: [`ParseError | `NameError | `ResolutionError | `TypeError];
     emsg: string }
