@@ -27,3 +27,7 @@ sim-lint: coq-bear
 
 sim-diff:
 	bash -c "diff -u <(clang-format examples/collatz.handwritten.hpp | sed -n '/IMPLEMENTATION/,\$$p') <(sed -n '/IMPLEMENTATION/,\$$p' examples/coq/.hpp)" | colordiff
+
+clean:
+	dune clean
+	rm -rf examples/coq examples/lv
