@@ -339,45 +339,60 @@ let parse fname sexps =
                              | `Scheduler _ -> "scheduler")))
     sexps
 
+let prim_fns =
+  let open SGALib.SGA in
+  StringMap.of_seq
+    (List.to_seq
+       [("sel", (`Prim0 USel, 2));
+        ("and", (`Prim0 UAnd, 2));
+        ("&", (`Prim0 UAnd, 2));
+        ("or", (`Prim0 UOr, 2));
+        ("|", (`Prim0 UOr, 2));
+        ("not", (`Prim0 UNot, 1));
+        ("~", (`Prim0 UNot, 1));
+        ("lsl", (`Prim0 ULsl, 2));
+        ("<<", (`Prim0 ULsl, 2));
+        ("lsr", (`Prim0 ULsr, 2));
+        (">>", (`Prim0 ULsr, 2));
+        ("eq", (`Prim0 UEq, 2));
+        ("=", (`Prim0 UEq, 2));
+        ("concat", (`Prim0 UConcat, 2));
+        ("uintplus", (`Prim0 UUIntPlus, 2));
+        ("+", (`Prim0 UUIntPlus, 2));
+        ("zextl", (`Prim1 (fun n -> UZExtL n), 1));
+        ("zextr", (`Prim1 (fun n -> UZExtR n), 1));
+        ("indexed-part", (`Prim1 (fun n -> UIndexedPart n), 2));
+        ("part", (`Prim2 (fun n n' -> UPart (n, n')), 1));
+        ("part-subst", (`Prim2 (fun n n' -> UPart (n, n')), 2))])
+
 let resolve_rule fname registers rule =
   let find_register { lpos; lcnt = name } =
     match List.find_opt (fun rsig -> rsig.reg_name = name) registers with
     | Some rsig -> { lpos; lcnt = rsig }
     | None -> name_error lpos "register" name in
-  let w0 = { lpos = Pos.Filename fname; lcnt = Const [||] } in
-  let find_function { lpos; lcnt = name } args =
+  let find_function types extfuns { lpos; lcnt = name } args =
     (* FIXME generalize to custom function definitions *)
-    let (fn, nargs, args): SGALib.SGA.prim_bits_ufn_t * int * _ =
-      match name with
-      | "sel" -> USel, 2, args
-      | "and" | "&" -> UAnd, 2, args
-      | "or" | "|" -> UOr, 2, args
-      | "not" | "~" -> UNot, 1, args
-      | "lsl" | "<<" -> ULsl, 2, args
-      | "lsr" | ">>" -> ULsr, 2, args
-      | "eq" | "=" -> UEq, 2, args
-      | "concat" -> UConcat, 2, args
-      | "uintplus" | "+" -> UUIntPlus, 2, args
-      | "zextl" | "zextr" | "indexed-part" | "part" | "part-subst" ->
-         let n, args = expect_num_arg lpos args in
-         (match name with
-          | "zextl" -> UZExtL n, 1, args
-          | "zextr" -> UZExtR n, 1, args
-          | "indexed-part" -> UIndexedPart n, 2, args
-          | "part" | "part-subst" ->
-             let n', args = expect_num_arg lpos args in
-             (match name with
-              | "part" -> UPart (n, n'), 1, args
-              | "part-subst" -> UPart (n, n'), 2, args
-              | _ -> assert false)
-          | _ -> assert false)
-      | _ -> name_error lpos "function" name in
+    let bits_fn nm = SGALib.SGA.UPrimFn (SGALib.SGA.UBitsFn nm) in
+    let fn, nargs, args =
+      match StringMap.find_opt name prim_fns with
+      | Some (fn, nargs) ->
+         (match fn with
+          | `Prim0 fn ->
+             bits_fn fn, nargs, args
+          | `Prim1 fn ->
+             let n, args = rexpect_num_arg lpos args in
+             bits_fn (fn n), nargs, args
+          | `Prim2 fn ->
+             let n, args = rexpect_num_arg lpos args in
+             let n', args = rexpect_num_arg lpos args in
+             bits_fn (fn n n'), nargs, args)
+      | None -> name_error lpos "function" name in
     assert (nargs <= 2);
     if List.length args <> nargs then
       type_error lpos (sprintf "Function `%s' takes %d arguments" name nargs)
     else
-      let padding = list_const (2 - nargs) w0 in
-      { lpos; lcnt = SGALib.SGA.UPrimFn (SGALib.SGA.UBitsFn fn) }, List.append args padding in
+      let padding = list_const (2 - nargs) { lpos; lcnt = Const [||] } in
+      { lpos; lcnt = fn }, List.append args padding in
   let rec resolve_action ({ lpos; lcnt }: ('f, ('f, string, string) action) locd) =
     { lpos;
       lcnt = match lcnt with
