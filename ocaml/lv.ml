@@ -160,14 +160,16 @@ let parse fname sexps =
                    parse_error loc (sprintf "Unparsable size annotation: `%s'" sizestr) in
       let numstr = Str.matched_group 2 a in
       let num = Z.of_string ("0" ^ (Str.replace_first leading_h_re "x" numstr)) in
-      let bits = if size = 0 && num = Z.zero then []
-                 else List.of_seq (String.to_seq (Z.format "%b" num)) in
-      let nbits = List.length bits in
+      let bits = if size = 0 && num = Z.zero then ""
+                 else Z.format "%b" num in
+      let nbits = String.length bits in
       if nbits > size then
-        parse_error loc (sprintf "Number `%s' does not fit in %d bit(s)" numstr size)
+        parse_error loc (sprintf "Number `%s' (%d'b%s) does not fit in %d bit(s)"
+                           numstr nbits bits size)
       else
         let padding = list_const (size - nbits) false in
         let char2bool = function '0' -> false | '1' -> true | _ -> assert false in
+        let bits = List.of_seq (String.to_seq bits) in
         let bools = List.append (List.rev_map char2bool bits) padding in
         Some (Const (Array.of_list bools))
     else match int_of_string_opt a with
