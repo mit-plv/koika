@@ -29,6 +29,11 @@ type value =
   | Enum of enum_sig * bits_value
   | Struct of struct_sig * (value list)
 
+let typ_of_value = function
+  | Bits bs -> Bits_t (Array.length bs)
+  | Enum (sg, _) -> Enum_t sg
+  | Struct (sg, _) -> Struct_t sg
+
 let rec typ_to_string (tau: typ) =
   match tau with
   | Bits_t sz -> Printf.sprintf "bits %d" sz
@@ -55,9 +60,11 @@ type ('prim, 'custom) ffi_signature = {
 
 type reg_signature = {
     reg_name: string;
-    reg_type: typ;
-    reg_init_val: value;
+    reg_init: value;
   }
+
+let reg_type r =
+  typ_of_value r.reg_init
 
 type name_t = string
 type var_t = string

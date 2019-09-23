@@ -323,8 +323,7 @@ let parse fname sexps =
       | _, `Module { m_registers; m_rules; m_scheduler; _ } ->
          let registers = List.map (fun (nm, init) ->
                              { reg_name = nm.lcnt;
-                               reg_type = Bits_t (Array.length init.lcnt);
-                               reg_init_val = Bits init.lcnt })
+                               reg_init = Bits init.lcnt })
                            m_registers in
          (* FIXME: handle functions in generic way *)
          (registers, m_rules, m_scheduler)

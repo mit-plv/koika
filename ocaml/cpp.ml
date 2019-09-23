@@ -486,11 +486,11 @@ let compile (type name_t var_t reg_t)
         ~terminator:";" pbody in
 
     let p_state_register r =
-      p_decl r.reg_type r.reg_name in
+      p_decl (reg_type r) r.reg_name in
 
-    let p_dump_register { reg_name; reg_type; _ } =
-        p "std::cout << \"%s = \" << %s(%s) << std::endl;"
-          reg_name (sp_value_printer reg_type) reg_name in
+    let p_dump_register r =
+      p "std::cout << \"%s = \" << %s(%s) << std::endl;"
+        r.reg_name (sp_value_printer (reg_type r)) r.reg_name in
 
     let p_state_t () =
       p_scoped "struct state_t" ~terminator:";" (fun () ->
@@ -501,7 +501,7 @@ let compile (type name_t var_t reg_t)
                   iter_all_registers p_dump_register))) in
 
     let p_log_register r =
-      p "reg_log_t<%s> %s;" (cpp_type_of_type r.reg_type) r.reg_name in
+      p "reg_log_t<%s> %s;" (cpp_type_of_type (reg_type r)) r.reg_name in
 
     let p_log_t () =
       p_scoped "struct log_t" ~terminator:";" (fun () ->
@@ -627,17 +627,16 @@ let compile (type name_t var_t reg_t)
                p_scoped "else"
                  (fun () -> p_assign_pure target (p_action target fbr)))
         | SGA.Read (_, port, reg) ->
-           let { reg_name; reg_type; _ } = hpp.cpp_register_sigs reg in
-           let var = p_ensure_declared (ensure_target reg_type target) in
+           let r = hpp.cpp_register_sigs reg in
+           let var = p_ensure_declared (ensure_target (reg_type r) target) in
            p_checked (fun () ->
                match port with
-               | P0 -> pr "log.%s.read0(&%s, state.%s, Log.%s.rwset)" reg_name var reg_name reg_name
-               | P1 -> pr "log.%s.read1(&%s, Log.%s.rwset)" reg_name var reg_name);
+               | P0 -> pr "log.%s.read0(&%s, state.%s, Log.%s.rwset)" r.reg_name var r.reg_name r.reg_name
+               | P1 -> pr "log.%s.read1(&%s, Log.%s.rwset)" r.reg_name var r.reg_name);
            Assigned var
         | SGA.Write (_, port, reg, expr) ->
            let r = hpp.cpp_register_sigs reg in
-           let reg = hpp.cpp_register_sigs reg in
-           let vt = gensym_target reg.reg_type "v" in
+           let vt = gensym_target (reg_type r) "v" in
            let v = must_expr (p_action vt expr) in
            let fn_name = match port with
              | P0 -> "write0"
@@ -778,7 +777,7 @@ let compile (type name_t var_t reg_t)
         p_scoped (sprintf "%s init = " state_t)
           ~terminator:";" (fun () ->
             iter_all_registers (fun rn ->
-                p ".%s = %s," rn.reg_name (sp_value rn.reg_init_val)));
+                p ".%s = %s," rn.reg_name (sp_value rn.reg_init)));
         nl ();
         p "%s simulator(init);" classtype;
         p "return simulator.run(ncycles).observe();");

@@ -116,11 +116,6 @@ module Util = struct
        Struct (struct_sig_of_sga_struct_sig sg,
                List.map snd (SGA.struct_to_list value_of_sga_value sg.struct_fields v))
 
-  let typ_of_value = function
-    | Bits bs -> Bits_t (Array.length bs)
-    | Enum (sg, _) -> Enum_t sg
-    | Struct (sg, _) -> Struct_t sg
-
   let rec sga_value_of_value (v: value) =
     match v with
     | Bits bs -> SGA.Bits_t (Array.length bs), (sga_bits_of_bits_const bs)
@@ -159,8 +154,7 @@ module Util = struct
   let reg_sigs_of_sga_package (pkg: _ SGA.sga_package_t) r =
     let init = value_of_sga_value (pkg.sga_reg_types r) (pkg.sga_reg_init r) in
     { reg_name = string_of_coq_string (pkg.sga_reg_names r);
-      reg_type = typ_of_value init;
-      reg_init_val = init }
+      reg_init = init }
 
   let fn_sigs_of_sga_package custom_fn_names (pkg: _ SGA.sga_package_t) =
     let custom_fn_info fn =
@@ -246,7 +240,7 @@ module Compilation = struct
        | Try (r, s1, s2) ->
           SGA.UTry (r.lcnt, translate_scheduler s1, translate_scheduler s2))
 
-  let _R = fun rs -> Util.sga_type_of_typ rs.reg_type
+  let _R = fun rs -> Util.sga_type_of_typ (reg_type rs)
   let custom_Sigma = fun _ -> failwith "No custom functions"
   let interop_Sigma = fun fn -> SGA.interop_Sigma custom_Sigma fn
   let interop_uSigma = fun fn -> SGA.interop_uSigma custom_Sigma fn

@@ -37,7 +37,7 @@ type io_decls = io_decl list
 
 let io_from_reg (root: _ circuit_root) : io_decls =
   let reg_name = root.root_reg.reg_name in
-  let reg_type = root.root_reg.reg_type in
+  let reg_type = reg_type root.root_reg in
   [
     Input (reg_name ^ "__overwrite_data", typ_sz reg_type);
     Input (reg_name ^ "__overwrite", 1);
@@ -81,7 +81,7 @@ type internal_decls = internal_decl list
 
 let internal_decl_for_reg (root: _ circuit_root) =
   let reg_name = root.root_reg.reg_name in
-  let reg_type = root.root_reg.reg_type in
+  let reg_type = reg_type root.root_reg in
   Reg(reg_name, typ_sz reg_type)
 
 let internal_decl_for_net
@@ -104,7 +104,7 @@ let internal_decl_for_net
      Wire(name ^ name_net, n) (* Prefix with the name given by the user *)
   | CConst l -> Wire(name_net, Array.length l)
   | CExternal (ffi_sig, _, _) -> Wire(name_net, typ_sz ffi_sig.ffi_rettype)
-  | CReadRegister r_sig -> Wire(name_net, typ_sz r_sig.reg_type)
+  | CReadRegister r_sig -> Wire(name_net, typ_sz (reg_type r_sig))
 
 let internal_declarations (environment: (int, string) Hashtbl.t) (circuit: _ circuit_graph) =
   let gensym = ref 0 in
@@ -258,7 +258,7 @@ let statements
   =
   List.map (fun root ->
       let reg_name = root.root_reg.reg_name in
-      let reg_init = string_of_bits (SGALib.Util.bits_of_value root.root_reg.reg_init_val) in
+      let reg_init = string_of_bits (SGALib.Util.bits_of_value root.root_reg.reg_init) in
       let reg_wire_update = Hashtbl.find environment root.root_circuit.tag in
       Update (reg_name, reg_init, reg_wire_update))
     (circuit.graph_roots)
