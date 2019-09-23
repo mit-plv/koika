@@ -19,7 +19,7 @@ type ('prim, 'name_t, 'var_t, 'reg_t, 'fn_t) cpp_input_t = {
     cpp_registers: 'reg_t list;
     cpp_register_sigs: 'reg_t -> reg_signature;
 
-    cpp_function_sigs: 'fn_t -> ('prim, string) ffi_signature;
+    cpp_function_sigs: 'fn_t -> ('prim, string) fun_id_t ffi_signature;
 
     cpp_extfuns: string option;
   }

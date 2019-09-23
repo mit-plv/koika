@@ -35,14 +35,18 @@ let locd_make lpos lcnt =
 let locd_of_pair (pos, x) =
   locd_make pos x
 
+type unresolved_value =
+  | UBits of bool array
+  | UEnum of string * string
+
 type unresolved_rule =
-  string locd * ((Pos.t, string, string) action) locd
+  string locd * ((Pos.t, unresolved_value, string, string) action) locd
 
 type unresolved_scheduler =
   string locd * (Pos.t scheduler) locd
 
 type unresolved_register =
-  string locd * bits_value locd
+  string locd * unresolved_value locd
 
 type unresolved_module = {
     m_name: string locd;
@@ -88,9 +92,14 @@ let parse_error (epos: Pos.t) emsg =
 let resolution_error (epos: Pos.t) emsg =
   raise (Error { epos; ekind = `ResolutionError; emsg = emsg })
 
-let name_error (epos: Pos.t) kind ?(extra="") name =
-  raise (Error { epos; ekind = `NameError;
-                 emsg = sprintf "Unbound %s: `%s'%s" kind name extra })
+let name_error epos ?(extra="") msg =
+  raise (Error { epos; ekind = `NameError; emsg = msg ^ extra })
+
+let unbound_error (epos: Pos.t) ?(bound=[]) kind name =
+  let msg = sprintf "Unbound %s: `%s'" kind name in
+  let lst = String.concat ", " (List.sort compare bound) in
+  let extra = if bound = [] then "" else sprintf " (expecting one of %s)" lst in
+  name_error epos ~extra msg
 
 let type_error (epos: Pos.t) emsg =
   raise (Error { epos; ekind = `TypeError; emsg })
@@ -154,6 +163,9 @@ module OrderedString = struct
 end
 module StringSet = Set.Make (OrderedString)
 module StringMap = Map.Make (OrderedString)
+
+let keys s =
+  StringMap.fold (fun k _ acc -> k :: acc) s []
 
 let first_duplicate keyfn ls =
   let rec loop acc = function
@@ -263,23 +275,43 @@ let parse fname sexps =
   let expect_number_or_var loc a =
     match try_number loc a with
     | Some (`Num n) -> Num n
-    | Some (`Const bs) -> Const bs
+    | Some (`Const bs) -> Const (UBits bs)
     | None ->
        match try_variable a with
        | Some var -> Var var
        | None ->
           let msg = sprintf "Cannot parse `%s' as a number or identifier %s" a num_fmt in
           parse_error loc msg in
-  let expect_bits msg v =
-    let loc, init_val = expect_atom msg v in
-    match try_number loc init_val with
-    | Some (`Const c) -> loc, c
+  let try_bits loc v =
+    match try_number loc v with
+    | Some (`Const c) -> Some c
     | Some (`Num n) -> untyped_number_error loc n
-    | _ -> parse_error loc (sprintf "Expecting a bits constant (e.g. 2'b01), got `%s' %s" init_val num_fmt) in
+    | _ -> None in
+  let expect_bits msg v =
+    let loc, sbits = expect_atom msg v in
+    match try_bits loc sbits with
+    | Some c -> loc, c
+    | _ -> parse_error loc (sprintf "Expecting a bits constant (e.g. 2'b01), got `%s' %s" sbits num_fmt) in
+  let enumerator_re = Str.regexp "::" in (* FIXME force global uniqueness of enum fields and disambiguate on that? *)
+  let try_enumerator nm =
+    match Str.split enumerator_re nm with
+    | [enum; field] -> Some (enum, field)
+    | _ -> None in
+  let expect_const msg v =
+    let loc, scst = expect_atom msg v in
+    (loc,
+     match try_bits loc scst with
+     | Some c -> UBits c
+     | None ->
+        match try_enumerator scst with
+        | Some (e, f) -> UEnum (e, f)
+        | None -> parse_error loc "Expecting a bits constant (e.g. 16'hffff) or an enumerator (eg proto::ipv4)") in
   let keyword_re = Str.regexp "^:" in
+  let is_kwd nm =
+    Str.string_match keyword_re nm 0 in
   let expect_keyword msg nm =
     let loc, nm = expect_atom msg nm in
-    if Str.string_match keyword_re nm 0 then loc, nm
+    if is_kwd nm then loc, nm
     else parse_error loc (sprintf "Expecting %s starting with a colon (:), got `%s'" msg nm) in
   let expect_type = function (* (bit 16), typename *)
     | Atom { loc; atom } ->
@@ -354,7 +386,7 @@ let parse fname sexps =
     let _, bs = expect_list "let bindings" bs in
     List.map expect_let_binding bs in
   let expect_register name init_val =
-    (name, locd_of_pair (expect_bits "an initial value" init_val)) in
+    (name, locd_of_pair (expect_const "an initial value" init_val)) in
   let expect_actions loc body =
     locd_make loc (Progn (List.map expect_action body)) in
   let rec expect_scheduler : Pos.t sexp -> Pos.t scheduler locd = function
@@ -475,8 +507,7 @@ let resolve_type types { lpos; lcnt: unresolved_type } =
      | Some tau -> tau
      | None ->
         let known_types = StringMap.fold (fun k _ acc -> k :: acc) types [] in
-        let msg = " (known types: " ^ String.concat ", " (List.sort compare known_types) ^ ")" in
-        name_error lpos "type" ~extra:msg nm
+        unbound_error lpos ~bound:known_types "type" nm
 
 let resolve_typedecl types (typ: unresolved_typedecl locd) =
   let resolve_struct_field_type (nm, tau) =
@@ -500,19 +531,6 @@ let resolve_typedecls types =
       let name, typ = resolve_typedecl types t in
       add_or_raise t.lpos name typ types errf)
     StringMap.empty types
-
-let resolve_extfun types { name; argtypes; rettype } =
-  let unit_u = locd_make name.lpos (Bits_u 0) in
-  let a1, a2 = match argtypes with
-    | [] -> unit_u, unit_u
-    | [t] -> t, unit_u
-    | [x; y] -> x, y
-    | _ -> parse_error name.lpos ("External functions with more than 2 arguments are not supported" ^
-                                    " (consider using a struct to pass more arguments)") in
-  { ffi_name = CustomFn name.lcnt;
-    ffi_arg1type = resolve_type types a1;
-    ffi_arg2type = resolve_type types a2;
-    ffi_rettype = resolve_type types rettype }
 
 let prim_fns =
   let open SGALib.SGA in
@@ -540,6 +558,34 @@ let prim_fns =
         ("part", (`Prim2 (fun n n' -> UPart (n, n')), 1));
         ("part-subst", (`Prim2 (fun n n' -> UPart (n, n')), 2))])
 
+let resolve_extfun_decl types { name; argtypes; rettype } =
+  let unit_u = locd_make name.lpos (Bits_u 0) in
+  if StringMap.mem name.lcnt prim_fns then
+    name_error name.lpos "External function name `%s' conflicts with existing primitive.";
+  let nargs, a1, a2 = match argtypes with
+    | [] -> 0, unit_u, unit_u
+    | [t] -> 1, t, unit_u
+    | [x; y] -> 2, x, y
+    | _ -> parse_error name.lpos ("External functions with more than 2 arguments are not supported" ^
+                                    " (consider using a struct to pass more arguments)") in
+  name.lcnt, (nargs, { ffi_name = name.lcnt;
+                       ffi_arg1type = resolve_type types a1;
+                       ffi_arg2type = resolve_type types a2;
+                       ffi_rettype = resolve_type types rettype })
+
+let resolve_value types { lpos; lcnt } =
+  match lcnt with
+  | UBits bs -> Bits bs
+  | UEnum (nm, f) ->
+     match StringMap.find_opt nm types with
+     | Some (Enum_t sg) ->
+        (match List.assoc_opt (":" ^ f) sg.enum_members with
+         | Some bs -> Enum (sg, bs)
+         | None -> unbound_error lpos ~bound:(List.map fst sg.enum_members)
+                     (sprintf "enumerator in type `%s'" nm) f)
+     | Some tau -> type_error lpos (sprintf "Type `%s' is not an enum" (typ_to_string tau))
+     | None -> unbound_error lpos ~bound:(keys types) "enum" nm
+
 let resolve_function types extfuns { lpos; lcnt = name } args =
   (* FIXME generalize to custom function definitions *)
   let bits_fn nm = SGALib.SGA.UPrimFn (SGALib.SGA.UBitsFn nm) in
@@ -561,22 +607,22 @@ let resolve_function types extfuns { lpos; lcnt = name } args =
   if List.length args <> nargs then
     type_error lpos (sprintf "Function `%s' takes %d arguments" name nargs)
   else
-    let padding = list_const (2 - nargs) { lpos; lcnt = Const [||] } in
+    let padding = list_const (2 - nargs) { lpos; lcnt = Const (UBits [||]) } in
     { lpos; lcnt = fn }, List.append args padding
 
 let resolve_rule types extfuns registers ((nm, action): unresolved_rule) =
   let find_register { lpos; lcnt = name } =
     match List.find_opt (fun rsig -> rsig.reg_name = name) registers with
     | Some rsig -> { lpos; lcnt = rsig }
-    | None -> name_error lpos "register" name in
-  let rec resolve_action ({ lpos; lcnt }: (Pos.t, string, string) action locd) =
+    | None -> unbound_error lpos "register" name in
+  let rec resolve_action ({ lpos; lcnt }: (Pos.t, unresolved_value, string, string) action locd) =
     { lpos;
       lcnt = match lcnt with
              | Skip -> Skip
              | Fail sz -> Fail sz
              | Var v -> Var v
              | Num n -> untyped_number_error lpos n
-             | Const bs -> Const bs
+             | Const bs -> Const (resolve_value types (locd_make lpos bs))
              | Progn rs -> Progn (List.map resolve_action rs)
              | Let (bs, body) ->
                 Let (List.map (fun (var, expr) -> (var, resolve_action expr)) bs,
@@ -596,14 +642,14 @@ let resolve_rule types extfuns registers ((nm, action): unresolved_rule) =
                 Call (fn, List.map resolve_action args) } in
   (nm.lcnt, resolve_action action)
 
-let resolve_register types extfuns (name, init) =
+let resolve_register types (name, init) =
   { reg_name = name.lcnt;
-    reg_init = Bits init.lcnt }
+    reg_init = resolve_value types init }
 
 let resolve_scheduler rules (s: Pos.t scheduler locd) =
   let check_rule { lpos; lcnt = name } =
     if not (List.mem_assoc name rules) then
-      name_error lpos "rule" name in
+      unbound_error lpos "rule" name in
   let rec check_scheduler ({ lcnt; _ }: Pos.t scheduler locd) =
     match lcnt with
     | Done -> ()
@@ -615,15 +661,16 @@ let resolve_scheduler rules (s: Pos.t scheduler locd) =
        check_scheduler s2 in
   check_scheduler s; s
 
-let resolve_module types extfuns { lcnt = { m_registers; m_rules; m_schedulers; _ }; _ } =
-  let registers = List.map (resolve_register types extfuns) m_registers in
+let resolve_module types (extfuns: (int * string ffi_signature) StringMap.t)
+      { lcnt = { m_registers; m_rules; m_schedulers; _ }; _ } =
+  let registers = List.map (resolve_register types) m_registers in
   let rules = List.map (resolve_rule types extfuns registers) m_rules in
   let scheduler = resolve_scheduler rules (List.hd m_schedulers |> snd) in
   { registers; rules; scheduler }
 
 let resolve { types; extfuns; mods } =
   let types = resolve_typedecls types in
-  let extfuns = List.map (resolve_extfun types) extfuns in
+  let extfuns = extfuns |> List.to_seq |> Seq.map (resolve_extfun_decl types) |> StringMap.of_seq in
   List.map (resolve_module types extfuns) mods
 
 let typecheck { registers; rules; scheduler } =

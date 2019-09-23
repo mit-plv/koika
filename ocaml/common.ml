@@ -56,8 +56,8 @@ type ('prim, 'custom) fun_id_t =
   | CustomFn of 'custom
   | PrimFn of 'prim
 
-type ('prim, 'custom) ffi_signature = {
-    ffi_name: ('prim, 'custom) fun_id_t;
+type 'name_t ffi_signature = {
+    ffi_name: 'name_t;
     ffi_arg1type: typ;
     ffi_arg2type: typ;
     ffi_rettype: typ
@@ -80,47 +80,47 @@ type ('loc_t, 'content_t) locd = {
     lcnt: 'content_t
   }
 
-type ('f, 'reg_t, 'fn_t) action =
+type ('f, 'cst_t, 'reg_t, 'fn_t) action =
   | Skip
   | Fail of size_t
   | Var of var_t
   | Num of int
-  | Const of bool array
-  | Progn of ('f, ('f, 'reg_t, 'fn_t) action) locd list
-  | Let of (('f, var_t) locd * ('f, ('f, 'reg_t, 'fn_t) action) locd) list
-           * ('f, ('f, 'reg_t, 'fn_t) action) locd list
-  | If of ('f, ('f, 'reg_t, 'fn_t) action) locd
-          * ('f, ('f, 'reg_t, 'fn_t) action) locd
-          * ('f, ('f, 'reg_t, 'fn_t) action) locd list
-  | When of ('f, ('f, 'reg_t, 'fn_t) action) locd
-            * ('f, ('f, 'reg_t, 'fn_t) action) locd list
+  | Const of 'cst_t
+  | Progn of ('f, ('f, 'cst_t, 'reg_t, 'fn_t) action) locd list
+  | Let of (('f, var_t) locd * ('f, ('f, 'cst_t, 'reg_t, 'fn_t) action) locd) list
+           * ('f, ('f, 'cst_t, 'reg_t, 'fn_t) action) locd list
+  | If of ('f, ('f, 'cst_t, 'reg_t, 'fn_t) action) locd
+          * ('f, ('f, 'cst_t, 'reg_t, 'fn_t) action) locd
+          * ('f, ('f, 'cst_t, 'reg_t, 'fn_t) action) locd list
+  | When of ('f, ('f, 'cst_t, 'reg_t, 'fn_t) action) locd
+            * ('f, ('f, 'cst_t, 'reg_t, 'fn_t) action) locd list
   | Read of port_t
             * ('f, 'reg_t) locd
   | Write of port_t
              * ('f, 'reg_t) locd
-             * ('f, ('f, 'reg_t, 'fn_t) action) locd
+             * ('f, ('f, 'cst_t, 'reg_t, 'fn_t) action) locd
   | Call of ('f, 'fn_t) locd
-            * ('f, ('f, 'reg_t, 'fn_t) action) locd list
+            * ('f, ('f, 'cst_t, 'reg_t, 'fn_t) action) locd list
 
 type 'f scheduler =
   | Done
   | Sequence of ('f, string) locd list
   | Try of ('f, string) locd * ('f, 'f scheduler) locd * ('f, 'f scheduler) locd
 
-type ('p, 'k) circuit = ('p, 'k) circuit' Hashcons.hash_consed
-and ('p, 'k) circuit' =
-  | CNot of ('p, 'k) circuit
-  | CAnd of ('p, 'k) circuit * ('p, 'k) circuit
-  | COr of ('p, 'k) circuit * ('p, 'k) circuit
-  | CMux of size_t * ('p, 'k) circuit * ('p, 'k) circuit * ('p, 'k) circuit
+type 'fn circuit = 'fn circuit' Hashcons.hash_consed
+and 'fn circuit' =
+  | CNot of 'fn circuit
+  | CAnd of 'fn circuit * 'fn circuit
+  | COr of 'fn circuit * 'fn circuit
+  | CMux of size_t * 'fn circuit * 'fn circuit * 'fn circuit
   | CConst of bits_value
-  | CExternal of ('p, 'k) ffi_signature * ('p, 'k) circuit * ('p, 'k) circuit
+  | CExternal of 'fn ffi_signature * 'fn circuit * 'fn circuit
   | CReadRegister of reg_signature
-  | CAnnot of size_t * string * ('p, 'k) circuit
+  | CAnnot of size_t * string * 'fn circuit
 
-type ('p, 'k) circuit_root = {
+type 'fn circuit_root = {
     root_reg: reg_signature;
-    root_circuit: ('p, 'k) circuit;
+    root_circuit: 'fn circuit;
   }
 
 let subcircuits = function
@@ -139,7 +139,7 @@ let hashtbl_update tbl k v_dflt v_fn =
            | Some v -> v
            | None -> v_dflt))
 
-let compute_parents (circuits: ('p, 'k) circuit list) =
+let compute_parents (circuits: 'fn circuit list) =
   let tag_to_parents = Hashtbl.create 50 in
   List.iter (fun c ->
       List.iter (fun (child: _ circuit) ->

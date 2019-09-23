@@ -210,7 +210,7 @@ module Compilation = struct
        | Fail sz -> SGA.UFail (SGA.Bits_t sz)
        | Var v -> SGA.UVar v
        | Num _ -> assert false
-       | Const bs -> SGA.uConstBits (Array.length bs) (Util.sga_bits_of_bits_const bs)
+       | Const v -> let tau, v = Util.sga_value_of_value v in SGA.UConst (tau, v)
        | Progn rs -> translate_seq rs
        | Let (bs, body) -> translate_bindings bs body
        | If (e, r, rs) -> SGA.UIf (translate_action e, translate_action r, translate_seq rs)
@@ -252,7 +252,7 @@ module Compilation = struct
                      SGA.finite_index = fun r -> Hashtbl.find regmap r.reg_name }
 
   type 'f raw_action =
-    ('f, ('f, reg_signature, string SGA.interop_ufn_t) action) locd
+    ('f, ('f, value, reg_signature, (string ffi_signature) SGA.interop_ufn_t) action) locd
 
   type typechecked_action =
     (var_t, reg_signature, string SGA.interop_fn_t) SGA.action
@@ -303,22 +303,22 @@ end
 
 module Graphs = struct
   type ('p, 'k) circuit_graph = {
-      graph_roots: ('p, 'k) circuit_root list;
-      graph_nodes: ('p, 'k) circuit list
+      graph_roots: ('p, 'k) fun_id_t circuit_root list;
+      graph_nodes: ('p, 'k) fun_id_t circuit list
     }
 
   type ('prim, 'custom, 'reg_t, 'fn_t) dedup_input_t = {
       di_regs: 'reg_t list;
       di_reg_sigs: 'reg_t -> reg_signature;
-      di_fn_sigs: 'fn_t -> ('prim, 'custom) ffi_signature;
+      di_fn_sigs: 'fn_t -> ('prim, 'custom) fun_id_t ffi_signature;
       di_circuits : 'reg_t -> ('reg_t, 'fn_t) SGA.circuit
     }
 
   let dedup_circuit (type prim custom reg_t fn_t)
         (pkg: (prim, custom, reg_t, fn_t) dedup_input_t) : (prim, custom) circuit_graph =
     let module CircuitHash = struct
-        type t = (prim, custom) circuit'
-        let equal (c: (prim, custom) circuit') (c': (prim, custom) circuit') =
+        type t = (prim, custom) fun_id_t circuit'
+        let equal (c: (prim, custom) fun_id_t circuit') (c': (prim, custom) fun_id_t circuit') =
           match c, c' with
           | CNot c1, CNot c1' ->
              c1 == c1'
@@ -346,7 +346,7 @@ module Graphs = struct
         let hash o = Hashtbl.hash o
       end in
     let module HasconsedOrder = struct
-        type t = (prim, custom) circuit
+        type t = (prim, custom) fun_id_t circuit
         let compare x y = compare x.Hashcons.tag y.Hashcons.tag
       end in
     let module CircuitBag = Set.Make(HasconsedOrder) in

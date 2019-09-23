@@ -137,7 +137,7 @@ type expression =
   | EOr of string * string
   | EMux of size_t * string * string * string
   | EConst of string
-  | EExternal of (SGA.prim_fn_t, string) ffi_signature * string * string
+  | EExternal of (SGA.prim_fn_t, string) fun_id_t ffi_signature * string * string
   | EReadRegister of string
   | EAnnot of size_t * string * string
 
