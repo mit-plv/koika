@@ -8,6 +8,7 @@ type 'f smod = {
   }
 
 let sprintf = Printf.sprintf
+let (<<) f g x = f (g x)
 
 module Pos = struct
   type t =
@@ -43,8 +44,7 @@ let untyped_number_error (pos: Pos.t) n =
   type_error pos (sprintf "Missing size annotation on number `%d'" n)
 
 let expect_cons loc msg = function
-  | [] ->
-     parse_error loc (Printf.sprintf "Missing %s" msg)
+  | [] -> parse_error loc (Printf.sprintf "Missing %s" msg)
   | hd :: tl -> hd, tl
 
 let expect_num = function
@@ -135,8 +135,10 @@ let parse fname sexps =
     | Atom { loc; _ } :: _ -> parse_error loc "Unexpected atom" in
   let expect_constant csts c =
     let quote x = "`" ^ x ^ "'" in
-    let optstrs = List.map (fun x -> quote (fst x)) csts in
-    let msg = sprintf "one of %s" (String.concat ", " optstrs) in
+    let optstrs = List.map (quote << fst) csts in
+    let msg = match optstrs with
+      | [c] -> c
+      | _ -> sprintf "one of %s" (String.concat ", " optstrs) in
     let loc, s = expect_atom msg c in
     match List.assoc_opt s csts with
     | None -> parse_error loc (sprintf "Expecting %s, got `%s'" msg s)
