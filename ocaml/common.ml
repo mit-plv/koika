@@ -24,10 +24,10 @@ and enum_sz { enum_bitsize; _ } =
 and struct_sz { struct_fields; _ } =
   List.fold_left (fun acc (_, ftau) -> acc + typ_sz ftau) 0 struct_fields
 
-let kind_to_str = function
+let kind_to_str ?(pre=false) = function
   | Bits_t _ -> "bits"
-  | Enum_t _ -> "enum"
-  | Struct_t _ -> "struct"
+  | Enum_t _ -> (if pre then "an enum" else "enum")
+  | Struct_t _ -> (if pre then "a struct" else "struct")
 
 type value =
   | Bits of bits_value
@@ -85,6 +85,8 @@ type ('f, 'cst_t, 'reg_t, 'fn_t) action =
   | Fail of size_t
   | Var of var_t
   | Num of int
+  | Symbol of string
+  | Keyword of string
   | Const of 'cst_t
   | Progn of ('f, ('f, 'cst_t, 'reg_t, 'fn_t) action) locd list
   | Let of (('f, var_t) locd * ('f, ('f, 'cst_t, 'reg_t, 'fn_t) action) locd) list

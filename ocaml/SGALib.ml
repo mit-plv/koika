@@ -211,7 +211,7 @@ module Compilation = struct
        | Skip -> uskip
        | Fail sz -> SGA.UFail (SGA.Bits_t sz)
        | Var v -> SGA.UVar v
-       | Num _ -> assert false
+       | Num _ | Symbol _ | Keyword _ -> assert false
        | Const v -> let tau, v = Util.sga_value_of_value v in SGA.UConst (tau, v)
        | Progn rs -> translate_seq rs
        | Let (bs, body) -> translate_bindings bs body
