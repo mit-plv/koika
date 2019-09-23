@@ -479,7 +479,6 @@ let parse fname sexps =
     [("enum", `Enum); ("struct", `Struct); ("extfun", `Extfun); ("module", `Module)] in
   let { types; extfuns; mods } =
     List.fold_left (fun u sexp ->
-        (* FIXME: handle functions in generic way *)
         match expect_decl sexp "module, type, or extfun declaration" expected_toplevel |> snd with
         | `Enum e -> { u with types = e :: u.types }
         | `Struct s -> { u with types = s :: u.types }
@@ -587,7 +586,6 @@ let resolve_value types { lpos; lcnt } =
      | None -> unbound_error lpos ~bound:(keys types) "enum" nm
 
 let resolve_function types extfuns { lpos; lcnt = name } args =
-  (* FIXME generalize to custom function definitions *)
   let bits_fn nm = SGALib.SGA.UPrimFn (SGALib.SGA.UBitsFn nm) in
   let fn, nargs, args =
     match StringMap.find_opt name prim_fns with
@@ -602,7 +600,10 @@ let resolve_function types extfuns { lpos; lcnt = name } args =
            let n, args = rexpect_num_arg lpos args in
            let n', args = rexpect_num_arg lpos args in
            bits_fn (fn n n'), nargs, args)
-    | None -> name_error lpos "function" name in
+    | None ->
+       match StringMap.find_opt name extfuns with
+       | Some (nargs, fn) -> SGALib.SGA.UCustomFn fn, nargs, args
+       | None -> unbound_error lpos ~bound:(keys prim_fns @ keys extfuns) "function" name in
   assert (nargs <= 2);
   if List.length args <> nargs then
     type_error lpos (sprintf "Function `%s' takes %d arguments" name nargs)
