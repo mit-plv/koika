@@ -114,6 +114,21 @@ Notation struct_denote := (struct_denote' type_denote).
 
 Coercion type_denote : type >-> Sortclass.
 
+Instance EqDec_type_denote {tau: type} : EqDec (type_denote tau).
+Proof.
+  econstructor.
+  revert tau; fix eq_dec_td 1;
+    destruct tau as [ ? | ? | [? fields] ]; cbn.
+  - apply eq_dec.
+  - apply eq_dec.
+  - revert fields; fix eq_dec_struct 1.
+    destruct fields as [ | (nm, tau) fields ]; cbn.
+    + apply eq_dec.
+    + destruct t1 as [t1 tt1], t2 as [t2 tt2].
+      destruct (eq_dec_td _ t1 t2); subst; try simple_eq.
+      destruct (eq_dec_struct _ tt1 tt2); subst; try simple_eq.
+Defined.
+
 Fixpoint bits_of_value {tau: type} (x: type_denote tau) {struct tau} : bits (type_sz tau) :=
   let bits_of_struct_value :=
       (fix bits_of_struct_value

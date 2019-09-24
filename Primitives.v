@@ -10,13 +10,17 @@ Inductive prim_bits_ufn_t :=
 | UNot
 | ULsl
 | ULsr
-| UEq
 | UConcat
 | UUIntPlus
 | UZExtL (nzeroes: nat)
 | UZExtR (nzeroes: nat).
 
-Inductive prim_uconverter := UInit (tau: type) | UPack | UUnpack (tau: type).
+Inductive prim_uconverter :=
+| UEq
+| UInit (tau: type)
+| UPack
+| UUnpack (tau: type).
+
 Inductive prim_struct_accessor := GetField | SubstField.
 
 Inductive prim_struct_uop :=
@@ -38,13 +42,13 @@ Inductive prim_bits_fn_t :=
 | Not (sz: nat)
 | Lsl (bits_sz: nat) (shift_sz: nat)
 | Lsr (bits_sz: nat) (shift_sz: nat)
-| Eq (sz: nat)
+| EqBits (sz: nat)
 | Concat (sz1 sz2 : nat)
 | UIntPlus (sz : nat)
 | ZExtL (sz: nat) (nzeroes: nat)
 | ZExtR (sz: nat) (nzeroes: nat).
 
-Inductive prim_converter := Init | Pack | Unpack.
+Inductive prim_converter := Eq | Init | Pack | Unpack.
 
 Inductive prim_fn_t :=
 | ConvFn (tau: type) (op: prim_converter)
@@ -75,6 +79,7 @@ Definition prim_uSigma (fn: prim_ufn_t) (tau1 tau2: type): result prim_fn_t fn_t
   match fn with
   | UConvFn op =>
     Success (match op with
+             | UEq => ConvFn tau1 Eq
              | UPack => ConvFn tau1 Pack
              | UInit tau => ConvFn tau Init
              | UUnpack tau => ConvFn tau Unpack
@@ -92,7 +97,6 @@ Definition prim_uSigma (fn: prim_ufn_t) (tau1 tau2: type): result prim_fn_t fn_t
                     | UNot => Not sz1
                     | ULsl => Lsl sz1 sz2
                     | ULsr => Lsr sz1 sz2
-                    | UEq => Eq sz1
                     | UConcat => Concat sz1 sz2
                     | UUIntPlus => UIntPlus sz1
                     | UZExtL nzeroes => ZExtL sz1 nzeroes
@@ -117,9 +121,13 @@ Definition prim_uSigma (fn: prim_ufn_t) (tau1 tau2: type): result prim_fn_t fn_t
 
 Definition prim_Sigma (fn: prim_fn_t) : ExternalSignature :=
   match fn with
-  | ConvFn tau Init => {{ unit_t ~> unit_t ~> tau }}
-  | ConvFn tau Pack => {{ tau ~> unit_t ~> bits_t (type_sz tau) }}
-  | ConvFn tau Unpack => {{ bits_t (type_sz tau) ~> unit_t ~> tau }}
+  | ConvFn tau op =>
+    match op with
+    | Eq => {{ tau ~> tau ~> bits_t 1 }}
+    | Init => {{ unit_t ~> unit_t ~> tau }}
+    | Pack => {{ tau ~> unit_t ~> bits_t (type_sz tau) }}
+    | Unpack => {{ bits_t (type_sz tau) ~> unit_t ~> tau }}
+    end
   | BitsFn fn =>
     match fn with
     | Sel sz => {{ bits_t sz ~> bits_t (log2 sz) ~> bits_t 1 }}
@@ -131,7 +139,7 @@ Definition prim_Sigma (fn: prim_fn_t) : ExternalSignature :=
     | Not sz => {{ bits_t sz ~> unit_t ~> bits_t sz }}
     | Lsl bits_sz shift_sz => {{ bits_t bits_sz ~> bits_t shift_sz ~> bits_t bits_sz }}
     | Lsr bits_sz shift_sz => {{ bits_t bits_sz ~> bits_t shift_sz ~> bits_t bits_sz }}
-    | Eq sz => {{ bits_t sz ~> bits_t sz ~> bits_t 1 }}
+    | EqBits sz => {{ bits_t sz ~> bits_t sz ~> bits_t 1 }}
     | Concat sz1 sz2 => {{ bits_t sz1 ~> bits_t sz2 ~> bits_t (sz1 + sz2) }}
     | UIntPlus sz => {{ bits_t sz ~> bits_t sz ~> bits_t sz }}
     | ZExtL sz nzeroes => {{ bits_t sz ~> unit_t ~> bits_t (sz + nzeroes) }}
@@ -141,8 +149,6 @@ Definition prim_Sigma (fn: prim_fn_t) : ExternalSignature :=
     match op with
     | GetField => {{ struct_t sig ~> unit_t ~> field_type sig idx }}
     | SubstField => {{ struct_t sig ~> field_type sig idx ~> struct_t sig }}
-    (* | LazyGetField => {{ struct_bits_t sig ~> unit_t ~> bits_t (field_sz sig idx) }} *)
-    (* | LazySubstField => {{ struct_bits_t sig ~> bits_t (field_sz sig idx) ~> struct_bits_t sig }} *)
     end
   end.
 
@@ -222,6 +228,7 @@ Definition prim_sigma (fn: prim_fn_t) : prim_Sigma fn :=
   match fn with
   | ConvFn tau fn =>
     match fn with
+    | Eq => fun v1 v2 => if eq_dec v1 v2 then Ob~1 else Ob~0
     | Init => fun _ _ => value_of_bits (Bits.zeroes (type_sz tau))
     | Pack => fun v _ => bits_of_value v
     | Unpack => fun bs _ => value_of_bits bs
@@ -237,7 +244,7 @@ Definition prim_sigma (fn: prim_fn_t) : prim_Sigma fn :=
     | Not _ => fun bs _ => Bits.map negb bs
     | Lsl _ _ => fun bs places => Bits.lsl (Bits.to_nat places) bs
     | Lsr _ _ => fun bs places => Bits.lsr (Bits.to_nat places) bs
-    | Eq sz => fun bs1 bs2 => if eq_dec bs1 bs2 then Ob~1 else Ob~0
+    | EqBits sz => fun bs1 bs2 => if eq_dec bs1 bs2 then Ob~1 else Ob~0
     | UIntPlus _ => fun bs1 bs2 => prim_uint_plus bs1 bs2
     | Concat _ _ => fun bs1 bs2 => Bits.app bs1 bs2
     | ZExtL _ nzeroes => fun bs _ => Bits.app bs (Bits.zeroes nzeroes)

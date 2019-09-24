@@ -30,6 +30,7 @@ Section Elaboration.
     destruct fn; [ | exact c0 | ].
     - (* Conv *)
       destruct op; cbn in *.
+      + (* Eq *) exact (CExternal (PrimFn (BitsFn (EqBits tau))) c1 c2).
       + (* Init *) exact (CConst (Bits.zeroes _)).
       + (* Pack *) exact c1.
       + (* Unpack *) exact c1.
@@ -146,7 +147,13 @@ Section Elaboration.
     destruct fn; try reflexivity.
     - (* Conv *)
       destruct op; cbn in *;
-        rewrite bits_of_value_of_bits; reflexivity.
+        try (rewrite bits_of_value_of_bits; reflexivity).
+      + (* Eq *)
+        change (_ tau ?x ?y) with (eq_dec x y).
+        destruct (eq_dec (interp_circuit _ _ _) _) as [ -> | Hneq ];
+          destruct (eq_dec (value_of_bits _) _) as [ Heq | ? ]; try congruence.
+        apply (f_equal bits_of_value) in Heq; rewrite !bits_of_value_of_bits in Heq.
+        congruence.
     - (* StructFn *)
       destruct op; cbn in *.
       + (* GetField *)

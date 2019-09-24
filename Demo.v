@@ -412,7 +412,7 @@ Section Switch.
   Notation uaction := (uaction pos_t var_t reg_t (interop_ufn_t custom_fn_t)).
 
   Definition if_eq a1 a2 (tbranch fbranch: uaction) :=
-    UIf (UCall (UPrimFn (UBitsFn UEq)) a1 a2)
+    UIf (UCall (UPrimFn (UConvFn UEq)) a1 a2)
         tbranch
         fbranch.
 
@@ -585,7 +585,7 @@ Module Pipeline.
       Let "v" <- outputReg#read0 in
       ((outputReg#write0(Stream[$"v"]));;
        (invalid#write0(UConstBits Ob~1));;
-       If UEq[[G[$"data"], G[F[$"v"] ] ]] Then
+       If (UCall (UPrimFn (UConvFn UEq)) (G[$"data"]) (G[F[$"v"] ])) Then
            skip
        Else
            correct#write0(UConstBits Ob~0)
