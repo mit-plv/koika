@@ -27,11 +27,11 @@ type ('prim, 'name_t, 'var_t, 'reg_t, 'fn_t) cpp_input_t = {
 let sprintf = Printf.sprintf
 let fprintf = Printf.fprintf
 
-let check_type_consistent (user_types: (string * typ) list ref) nm tau =
+let register_type (user_types: (string * typ) list ref) nm tau =
   match List.assoc_opt nm !user_types with
   | Some tau' ->
      if tau <> tau' then
-       failwith (sprintf "Incompatible uses of type name %s:\n%s\n%s"
+       failwith (sprintf "Incompatible uses of type name `%s':\n%s\n%s"
                    nm (typ_to_string tau) (typ_to_string tau'))
   | None -> user_types := (nm, tau) :: !user_types
 
@@ -51,11 +51,25 @@ let cpp_type_of_type
      else
        failwith (sprintf "Unsupported size: %d" sz)
   | Enum_t sg ->
-     check_type_consistent user_types sg.enum_name tau;
+     register_type user_types sg.enum_name tau;
      sprintf "enum_%s" sg.enum_name
   | Struct_t sg ->
-     check_type_consistent user_types sg.struct_name tau;
+     register_type user_types sg.struct_name tau;
      sprintf "struct_%s" sg.struct_name
+
+let register_subtypes
+      (user_types: (string * typ) list ref)
+      (needs_multiprecision: bool ref)
+      tau =
+  let rec loop tau = match tau with
+    | Bits_t sz ->
+       if sz > 64 then needs_multiprecision := true;
+    | Enum_t sg ->
+       register_type user_types sg.enum_name tau;
+    | Struct_t sg ->
+       register_type user_types sg.struct_name tau;
+       List.iter (loop << snd) sg.struct_fields in
+  loop tau
 
 let cpp_struct_name user_types needs_multiprecision sg =
   cpp_type_of_type user_types needs_multiprecision (Struct_t sg)
@@ -447,7 +461,9 @@ let compile (type name_t var_t reg_t)
       nl ());
     p "%s" cpp_preamble;
     nl ();
-    p_type_declarations (List.map snd !user_types);
+    let reg_typ (_, t) = register_subtypes user_types needs_multiprecision t in
+    List.iter reg_typ !user_types;
+    p_type_declarations !user_types;
   in
 
   let iter_registers f regs =
