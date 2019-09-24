@@ -173,7 +173,7 @@ Module Collatz.
 
   Definition r idx : R idx :=
     match idx with
-    | R0 => Ob~0~1~0~1~0~1~1~1~1~0~0~0~1~1~0~0~0~0~1~0~1~0~1~1~1~1~0~0~0~1~1~0
+    | R0 => Bits.of_nat 32 19
     end.
 
   (* TODO bug report *)
