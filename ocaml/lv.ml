@@ -618,7 +618,9 @@ let core_primitives =
   let open SGALib.SGA in
   let conv_fn f = UPrimFn (UConvFn f) in
   let struct_fn f = UPrimFn (UStructFn f) in
-  [("new", (`TypeFn (fun tau -> conv_fn (UInit tau)), 0));
+  [("eq", (`Fn (conv_fn UEq), 2));
+   ("=", (`Fn (conv_fn UEq), 2));
+   ("new", (`TypeFn (fun tau -> conv_fn (UInit tau)), 0));
    ("pack", (`Fn (conv_fn UPack), 1));
    ("unpack", (`TypeFn (fun tau -> conv_fn (UUnpack tau)), 1));
    ("get", (`FieldFn (fun f -> struct_fn (UDo (GetField, f))) , 1));
@@ -640,8 +642,6 @@ let bits_primitives =
    ("<<", (`Prim0 ULsl, 2));
    ("lsr", (`Prim0 ULsr, 2));
    (">>", (`Prim0 ULsr, 2));
-   ("eq", (`Prim0 UEq, 2));
-   ("=", (`Prim0 UEq, 2));
    ("concat", (`Prim0 UConcat, 2));
    ("uintplus", (`Prim0 UUIntPlus, 2));
    ("+", (`Prim0 UUIntPlus, 2));

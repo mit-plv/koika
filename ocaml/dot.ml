@@ -12,7 +12,7 @@ let bits_primitive_name = function
   | SGA.Not _sz -> "Not"
   | SGA.Lsl (_sz, _places) -> "Lsl"
   | SGA.Lsr (_sz, _places) -> "Lsr"
-  | SGA.Eq _sz -> "Eq"
+  | SGA.EqBits _sz -> "EqBits"
   | SGA.Concat (_sz1, _sz2) -> "Concat"
   | SGA.ZExtL (_sz, _nzeroes) -> "ZExtL"
   | SGA.ZExtR (_sz, _nzeroes) -> "ZExtR"
@@ -31,6 +31,7 @@ let rec label_ptrs tag_to_parents = function
         | PrimFn (SGA.ConvFn (tau, fn)) ->
            let open SGA in
            let op_name = match fn with
+             | Eq -> "eq"
              | Init -> "init"
              | Pack -> "pack"
              | Unpack -> "unpack" in

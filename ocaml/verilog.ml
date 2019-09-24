@@ -174,7 +174,7 @@ let assignment_to_string (gensym: int ref) (assignment: assignment) =
            | SGA.Not _ -> default_left ^ "~" ^ arg1
            | SGA.Lsl (_, _) -> default_left ^ arg1 ^ " << " ^ arg2
            | SGA.Lsr (_, _) -> default_left ^ arg1 ^ " >> " ^ arg2
-           | SGA.Eq _ -> default_left ^ arg1 ^ " == " ^ arg2
+           | SGA.EqBits _ -> default_left ^ arg1 ^ " == " ^ arg2
            | SGA.Concat (_, _) -> default_left ^ "{" ^ arg1 ^ ", " ^ arg2 ^ "}"
            | SGA.ZExtL (_, _) -> failwith "TODO UNIMPLEMENTED ZEXTL" (* TODO: convince clement that those are not needed as primitive *)
            | SGA.ZExtR (_, _) -> failwith "TODO UNIMPLEMENTED ZEXTR" (* TODO: convince clement that those are not needed as primitive *)

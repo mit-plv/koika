@@ -133,7 +133,7 @@ let cpp_bits_fn_name f tau1 tau2 =
      | SGA.Not _sz -> sprintf "lnot<%d>" sz1
      | SGA.Lsl (_sz, _places) -> sprintf "lsl<%d, %d>" sz1 sz2
      | SGA.Lsr (_sz, _places) -> sprintf "lsr<%d, %d>" sz1 sz2
-     | SGA.Eq _sz -> sprintf "eq<%d>" sz1
+     | SGA.EqBits _sz -> sprintf "eq<%d>" sz1
      | SGA.Concat (_sz1, _sz2) -> sprintf "concat<%d, %d>" sz1 sz2
      | SGA.ZExtL (_sz, nzeroes) -> sprintf "zextl<%d, %d>" sz1 nzeroes
      | SGA.ZExtR (_sz, nzeroes) -> sprintf "zextr<%d, %d>" sz1 nzeroes
@@ -156,7 +156,7 @@ let reconstruct_switch sigs action =
                               | Some v -> v' = v
                               | None -> true) ->
        (match sigs fn with
-        | { ffi_name = PrimFn (SGA.BitsFn (SGA.Eq _)); _ } ->
+        | { ffi_name = PrimFn (SGA.BitsFn (SGA.EqBits _) | SGA.ConvFn (_, SGA.Eq)); _ } ->
            let default, branches = match loop (Some v') fbr with
              | Some (_, default, branches) -> default, branches
              | None -> fbr, [] in
@@ -274,6 +274,13 @@ let compile (type name_t var_t reg_t)
     | Bits_t sz -> sprintf "repr<%d>" sz
     | Enum_t _ | Struct_t _ -> "repr" in
 
+  let sp_comparator ?(ns="") = function
+    | Bits_t sz -> sprintf "%seq<%d>" ns sz
+    | Enum_t _ | Struct_t _ -> ns ^ "eq" in
+
+  let sp_comparison ?(ns="") tau a1 a2 =
+    sprintf "%s(%s, %s)" (sp_comparator ~ns tau) a1 a2 in
+
   let sp_initializer tau =
     let bs0 sz = Array.make sz false in
     match tau with
@@ -355,16 +362,20 @@ let compile (type name_t var_t reg_t)
 
   let p_prims tau =
     let v_sz = typ_sz tau in
-    let v_arg = "val" in
+    let v_arg, v1, v2 = "val", "v1", "v2" in
     let v_tau = cpp_type_of_type tau in
-    let v_argdecl = sprintf "const %s %s" v_tau v_arg in
+    let v_argdecl v = sprintf "const %s %s" v_tau v in
     let bits_arg = "bits" in
     let bits_tau = cpp_type_of_type (Bits_t v_sz) in
     let bits_argdecl = sprintf "const %s %s" bits_tau bits_arg in
 
+    let p_eq prbody =
+      p_fn ~typ:("static bool " ^ attr_unused)
+        ~args:(sprintf "%s, %s" (v_argdecl v1) (v_argdecl v2))
+        ~name:"eq" (fun () -> pr "return ("; prbody (); p ");") in
     let p_pack pbody =
       p_fn ~typ:("static " ^ bits_tau ^ " " ^ attr_unused)
-        ~args:v_argdecl ~name:(sp_packer tau) pbody in
+        ~args:(v_argdecl v_arg) ~name:(sp_packer tau) pbody in
     let p_unpack pbody =
       p_fn ~typ:("template <> " ^ v_tau ^ " " ^ attr_unused)
         ~args:bits_argdecl ~name:(sp_unpacker tau) pbody in
@@ -375,6 +386,17 @@ let compile (type name_t var_t reg_t)
     let p_enum_unpack _ =
       p_unpack (fun () -> p "return static_cast<%s>(%s);" v_tau bits_arg) in
 
+    let p_enum_eq sg =
+      p_eq (fun () -> pr "%s == %s" v1 v2) in
+
+    let sp_field_eq v1 v2 tau field =
+      sp_comparison tau (v1 ^ "." ^ field) (v2 ^ "." ^ field) in
+
+    let p_struct_eq sg =
+      p_eq (fun () -> iter_sep (fun () -> pr " && ") (fun (nm, tau) ->
+                          pr "%s" (sp_field_eq v1 v2 tau nm))
+                        sg.struct_fields) in
+
     let p_struct_pack sg =
       let var = "packed" in
       p_pack (fun () ->
@@ -382,9 +404,7 @@ let compile (type name_t var_t reg_t)
           List.iteri (fun idx (fname, ftau) ->
               let sz = typ_sz ftau in
               let fval = sprintf "%s.%s" v_arg fname in
-              let fpacked = match ftau with
-                | Bits_t _ -> fval
-                | Enum_t _ | Struct_t _ -> sprintf "pack(%s)" fval in
+              let fpacked = sp_packer ftau ~arg:fval in
               if idx <> 0 then p "%s <<= %d;" var sz;
               p "%s |= %s;" var fpacked)
             sg.struct_fields;
@@ -406,8 +426,8 @@ let compile (type name_t var_t reg_t)
 
     match tau with
     | Bits_t _ -> ()
-    | Enum_t sg -> p_enum_pack sg; nl (); p_enum_unpack sg
-    | Struct_t sg -> p_struct_pack sg; nl (); p_struct_unpack sg in
+    | Enum_t sg -> p_enum_eq sg; p_enum_pack sg; nl (); p_enum_unpack sg
+    | Struct_t sg -> p_struct_eq sg; nl (); p_struct_pack sg; nl (); p_struct_unpack sg in
 
   let compare_type tau1 tau2 =
     match tau1, tau2 with
@@ -566,11 +586,13 @@ let compile (type name_t var_t reg_t)
            Hashtbl.replace custom_funcalls f fn;
            PureExpr (sprintf "%s(%s, %s)" (cpp_custom_fn_name f) a1 a2)
         | PrimFn (SGA.ConvFn (tau, fn)) ->
+           let ns = "prims::" in
            let tau = SGALib.Util.typ_of_sga_type tau in
            PureExpr (match fn with
+                     | SGA.Eq -> sp_comparison ~ns tau a1 a2
                      | SGA.Init -> sp_initializer tau
-                     | SGA.Pack -> sp_packer ~ns:"prims::" ~arg:a1 tau
-                     | SGA.Unpack -> sp_unpacker ~ns:"prims::" ~arg:a1 tau)
+                     | SGA.Pack -> sp_packer ~ns ~arg:a1 tau
+                     | SGA.Unpack -> sp_unpacker ~ns ~arg:a1 tau)
         | PrimFn (SGA.BitsFn f) ->
            PureExpr (sprintf "%s(%s, %s)" (cpp_bits_fn_name f tau1 tau2) a1 a2)
         | PrimFn (SGA.StructFn (sg, ac, idx)) ->
