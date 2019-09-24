@@ -283,20 +283,6 @@ let compile (type name_t var_t reg_t)
     | Enum_t sg -> sprintf "%sunpack<%s, %d>%s" ns (cpp_enum_name sg) (enum_sz sg) parg
     | Struct_t sg -> sprintf "%sunpack<%s, %d>%s" ns (cpp_struct_name sg) (struct_sz sg) parg in
 
-  let p_struct_forward_decl sg =
-    p "struct %s;" (cpp_struct_name sg) in
-
-  let p_printer_forward_decl (tau: typ) =
-    p "static std::string repr(%s /*val*/);"
-      (cpp_type_of_type tau) in
-
-  let p_prims_forward_decls tau =
-    let v_sz = typ_sz tau in
-    let v_tau = cpp_type_of_type tau in
-    let bits_sz_tau = cpp_type_of_type (Bits_t v_sz) in
-    p "static %s pack(%s val);" bits_sz_tau v_tau;
-    p "template <> %s %s(%s bits);" v_tau (sp_unpacker tau) bits_sz_tau in
-
   let p_enum_decl sg =
     let esz = enum_sz sg in
     let nm = cpp_enum_name sg in
@@ -419,29 +405,36 @@ let compile (type name_t var_t reg_t)
     | _, Enum_t _ -> 1
     | Struct_t sg1, Struct_t sg2 -> compare sg1.struct_name sg2.struct_name in
 
+  let topo_sort_types types =
+    let add (seen, ordered) nm = function
+      | Bits_t _ -> (seen, ordered)
+      | (Struct_t _ | Enum_t _) as tau -> (StringSet.add nm seen, tau :: ordered) in
+    let rec loop ((seen, _) as acc) (nm, tau) =
+      if StringSet.mem nm seen then acc
+      else let acc = match tau with
+             | Struct_t sg -> List.fold_left loop acc sg.struct_fields
+             | _ -> acc in
+           add acc nm tau in
+    List.rev (snd (List.fold_left loop (StringSet.empty, []) types)) in
+
   let p_type_declarations types =
-    let types = List.sort compare_type types in
+    let types = List.sort (fun (_, t) (_, t') -> compare_type t t') types in
+    let types = topo_sort_types types in
     let enums, structs =
       List.fold_right (fun tau (enums, structs) ->
           match tau with
           | Enum_t sg -> (sg :: enums, structs)
           | Struct_t sg -> (enums, sg :: structs)
           | _ -> (enums, structs))
-      types ([], []) in
+        types ([], []) in
     List.iter p_enum_decl enums;
-    nl ();
-    List.iter p_struct_forward_decl structs;
     nl ();
     iter_sep nl p_struct_decl structs;
     nl ();
     p_ifdef "ndef SIM_MINIMAL" (fun () ->
-        List.iter p_printer_forward_decl types;
-        nl ();
         iter_sep nl p_printer types);
     nl ();
     p_scoped "namespace prims" (fun () ->
-        List.iter p_prims_forward_decls types;
-        nl ();
         iter_sep nl p_prims types) in
 
   let p_preamble () =

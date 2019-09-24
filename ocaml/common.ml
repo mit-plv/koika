@@ -174,3 +174,12 @@ let make_gensym () =
     Hashtbl.replace state prefix (succ counter);
     Printf.sprintf "_%s%d" prefix counter in
   (next, reset)
+
+let (<<) f g x = f (g x)
+
+module OrderedString = struct
+  type t = string
+  let compare = compare
+end
+module StringSet = Set.Make (OrderedString)
+module StringMap = Map.Make (OrderedString)

@@ -1,14 +1,6 @@
 open Common
 
 let sprintf = Printf.sprintf
-let (<<) f g x = f (g x)
-
-module OrderedString = struct
-  type t = string
-  let compare = compare
-end
-module StringSet = Set.Make (OrderedString)
-module StringMap = Map.Make (OrderedString)
 
 module Pos = struct
   type t =
