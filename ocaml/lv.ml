@@ -558,9 +558,6 @@ let rexpect_arg k loc args =
   let a, args = expect_cons loc "argument" args in
   k a, args
 
-let all_types types =
-  StringMap.fold (fun k _ acc -> k :: acc) types.all []
-
 let types_empty =
   { enums = StringMap.empty;
     enum_fields = StringMap.empty;
@@ -596,7 +593,7 @@ let resolve_type types { lpos; lcnt: unresolved_type } =
      match StringMap.find_opt nm types.all with
      | Some tau -> tau
      | None ->
-        unbound_error lpos ~bound:(all_types types) "type" nm
+        unbound_error lpos ~bound:(keys types.all) "type" nm
 
 let resolve_typedecl types (typ: unresolved_typedecl locd) =
   let resolve_struct_field_type (nm, tau) =

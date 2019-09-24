@@ -386,7 +386,7 @@ let compile (type name_t var_t reg_t)
     let p_enum_unpack _ =
       p_unpack (fun () -> p "return static_cast<%s>(%s);" v_tau bits_arg) in
 
-    let p_enum_eq sg =
+    let p_enum_eq _sg =
       p_eq (fun () -> pr "%s == %s" v1 v2) in
 
     let sp_field_eq v1 v2 tau field =
