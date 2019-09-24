@@ -55,6 +55,17 @@ module Util = struct
       enum_members = SGA.vect_of_list (List.map (fun (nm, _) -> coq_string_of_string nm) enum_members);
       enum_bitpatterns = SGA.vect_of_list (List.map (fun (_, bs) -> sga_bits_of_bits_const bs) enum_members) }
 
+  let ffi_sig_of_sga_external_sig ffi_name fsig =
+    SGA.{ ffi_name;
+          ffi_arg1type = typ_of_sga_type fsig.arg1Type;
+          ffi_arg2type = typ_of_sga_type fsig.arg2Type;
+          ffi_rettype = typ_of_sga_type fsig.retType }
+
+  let sga_external_sig_of_ffi_sig { ffi_arg1type; ffi_arg2type; ffi_rettype; _ } =
+    SGA.{ arg1Type = sga_type_of_typ ffi_arg1type;
+          arg2Type = sga_type_of_typ ffi_arg2type;
+          retType = sga_type_of_typ ffi_rettype }
+
   let sga_type_to_string tau =
     typ_to_string (typ_of_sga_type tau)
 
@@ -93,20 +104,14 @@ module Util = struct
                         (sga_type_to_string actual) (type_kind_to_string expected))
     in { epos; ekind; emsg }
 
-  let custom_unsupported _ =
-    failwith "Custom functions not supported"
-
-  let ffi_signature_of_interop_fn ?(custom_fn_info = custom_unsupported) (fn: 'a SGA.interop_fn_t) =
-    let ffi_name, fsig = match fn with
-      | SGA.PrimFn fn ->
-         PrimFn fn, (SGA.prim_Sigma fn)
-      | SGA.CustomFn fn ->
-         let fn, sg = custom_fn_info fn in
-         CustomFn fn, sg in
-    { ffi_name;
-      ffi_arg1type = typ_of_sga_type fsig.arg1Type;
-      ffi_arg2type = typ_of_sga_type fsig.arg2Type;
-      ffi_rettype = typ_of_sga_type fsig.retType }
+  (*  *)
+  let ffi_sig_of_interop_fn ~custom_fn_info (fn: 'a SGA.interop_fn_t) =
+    match fn with
+    | SGA.PrimFn fn ->
+       ffi_sig_of_sga_external_sig (PrimFn fn) (SGA.prim_Sigma fn)
+    | SGA.CustomFn fn ->
+       let ffi = custom_fn_info fn in
+       { ffi with ffi_name = CustomFn ffi.ffi_name }
 
   let rec value_of_sga_value tau v =
     match tau with
@@ -160,8 +165,9 @@ module Util = struct
 
   let fn_sigs_of_sga_package custom_fn_names (pkg: _ SGA.sga_package_t) =
     let custom_fn_info fn =
-      (custom_fn_names fn, pkg.sga_custom_fn_types fn) in
-    fun fn -> ffi_signature_of_interop_fn ~custom_fn_info fn
+      let name, fn = custom_fn_names fn, pkg.sga_custom_fn_types fn in
+      ffi_sig_of_sga_external_sig name fn in
+    fun fn -> ffi_sig_of_interop_fn ~custom_fn_info fn
 end
 
 module Compilation = struct
@@ -243,9 +249,10 @@ module Compilation = struct
           SGA.UTry (r.lcnt, translate_scheduler s1, translate_scheduler s2))
 
   let _R = fun rs -> Util.sga_type_of_typ (reg_type rs)
-  let custom_Sigma = fun _ -> failwith "No custom functions"
-  let interop_Sigma = fun fn -> SGA.interop_Sigma custom_Sigma fn
-  let interop_uSigma = fun fn -> SGA.interop_uSigma custom_Sigma fn
+  let custom_Sigma fn = Util.sga_external_sig_of_ffi_sig fn
+  let custom_uSigma fn _a1 _a2 = SGA.Success fn
+  let interop_Sigma fn = SGA.interop_Sigma custom_Sigma fn
+  let interop_uSigma fn = SGA.interop_uSigma custom_uSigma fn
 
   let rEnv_of_register_list tc_registers =
     let reg_indices = List.mapi (fun i x -> x.reg_name, i) tc_registers in
@@ -257,7 +264,7 @@ module Compilation = struct
     ('f, ('f, value, reg_signature, (string ffi_signature) SGA.interop_ufn_t) action) locd
 
   type typechecked_action =
-    (var_t, reg_signature, string SGA.interop_fn_t) SGA.action
+    (var_t, reg_signature, (string ffi_signature) SGA.interop_fn_t) SGA.action
 
   type 'f raw_scheduler = ('f, 'f scheduler) locd
 
@@ -269,8 +276,8 @@ module Compilation = struct
       c_scheduler: string SGA.scheduler;
       c_rules: (name_t * typechecked_action) list }
 
-  type compiled_circuit =
-    (reg_signature, string SGA.interop_fn_t) SGA.circuit
+  type 'k compiled_circuit =
+    (reg_signature, 'k SGA.interop_fn_t) SGA.circuit
 
   let typecheck_scheduler (raw_ast: 'f raw_scheduler) : var_t SGA.scheduler =
     let ast = translate_scheduler raw_ast in
@@ -283,6 +290,7 @@ module Compilation = struct
 
   let typecheck_rule (raw_ast: 'f raw_action) : (typechecked_action, 'f err_contents) result =
     let ast = translate_action raw_ast in
+    (* Printf.printf "AST: %s\n%!" (DebugPrinter.pp_action ast); *)
     match SGA.type_action Util.string_eq_dec _R interop_Sigma interop_uSigma raw_ast.lpos [] ast with
     | Success (SGA.ExistT (tau, r)) ->
        if tau = Bits_t 0 then Ok r
@@ -294,7 +302,7 @@ module Compilation = struct
     | Failure { epos; emsg } ->
        Error (Util.type_error_to_error epos emsg)
 
-  let compile (cu: compile_unit) : (reg_signature -> compiled_circuit) =
+  let compile (cu: compile_unit) : (reg_signature -> 'k compiled_circuit) =
     let rEnv = rEnv_of_register_list cu.c_registers in
     let r0: _ SGA.env_t = SGA.create rEnv (fun r -> SGA.CReadRegister r) in
     let rules r = List.assoc r cu.c_rules in
@@ -394,11 +402,11 @@ module Graphs = struct
     let graph_nodes = List.of_seq (CircuitBag.to_seq !tagged_circuits) in
     { graph_roots; graph_nodes }
 
-  let graph_of_compile_unit (cu: Compilation.compile_unit) =
+  let graph_of_compile_unit (cu: Compilation.compile_unit) : (SGA.prim_fn_t, string) circuit_graph =
     dedup_circuit
       { di_regs = cu.c_registers;
         di_reg_sigs = (fun r -> r);
-        di_fn_sigs = Util.ffi_signature_of_interop_fn;
+        di_fn_sigs = (fun fn -> Util.ffi_sig_of_interop_fn ~custom_fn_info:(fun f -> f) fn);
         di_circuits = Compilation.compile cu }
 
   let graph_of_verilog_package (vp: _ SGA.verilog_package_t) =

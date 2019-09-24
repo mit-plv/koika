@@ -850,7 +850,7 @@ let input_of_compile_unit classname ({ c_registers; c_scheduler; c_rules }: SGAL
     cpp_scheduler = c_scheduler;
     cpp_registers = c_registers;
     cpp_register_sigs = (fun r -> r);
-    cpp_function_sigs = SGALib.Util.ffi_signature_of_interop_fn;
+    cpp_function_sigs = SGALib.Util.ffi_sig_of_interop_fn ~custom_fn_info:(fun f -> f);
     cpp_var_names = (fun x -> x);
     cpp_extfuns = None; }
 
