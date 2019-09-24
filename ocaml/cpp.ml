@@ -379,13 +379,13 @@ let compile (type name_t var_t reg_t)
       let var = "packed" in
       p_pack (fun () ->
           p_decl (Bits_t v_sz) var ~init:(Some (cpp_const_init v_sz "0"));
-          List.iter (fun (fname, ftau) ->
+          List.iteri (fun idx (fname, ftau) ->
               let sz = typ_sz ftau in
               let fval = sprintf "%s.%s" v_arg fname in
               let fpacked = match ftau with
                 | Bits_t _ -> fval
                 | Enum_t _ | Struct_t _ -> sprintf "pack(%s)" fval in
-              p "%s <<= %d;" var sz;
+              if idx <> 0 then p "%s <<= %d;" var sz;
               p "%s |= %s;" var fpacked)
             sg.struct_fields;
           p "return %s;" var) in
