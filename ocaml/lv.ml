@@ -392,10 +392,11 @@ let parse fname sexps =
           | "switch" ->
              let operand, branches = expect_cons loc "switch operand" args in
              let branches = List.map expect_switch_branch branches in
+             let operand_value = expect_action operand in
              let opname = gensym "switch_operand" in
-             let opvar = locd_make loc_hd (Var opname) in
+             let opvar = locd_make operand_value.lpos (Var opname) in
              let body = build_switch_body opvar branches in
-             Let ([(locd_make loc_hd opname, expect_action operand)],
+             Let ([(locd_make loc_hd opname, operand_value)],
                   [match body with | Some b -> b
                                    | None -> parse_error loc "Empty switch"])
           | _ ->
