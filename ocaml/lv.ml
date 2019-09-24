@@ -743,7 +743,8 @@ let resolve_function types extfuns { lpos; lcnt = name } args =
     | Some r -> r
     | None -> match try_resolve_extfun extfuns name args with
               | Some r -> r
-              | None -> unbound_error lpos ~bound:(keys bits_primitives @ keys extfuns) "function" name in
+              | None -> let bound = List.concat [keys core_primitives; keys bits_primitives; keys extfuns] in
+                        unbound_error lpos ~bound "function" name in
   assert (nargs <= 2);
   if List.length args <> nargs then
     type_error lpos (sprintf "Function `%s' takes %d arguments" name nargs)
