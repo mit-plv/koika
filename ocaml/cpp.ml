@@ -599,7 +599,7 @@ let compile (type name_t var_t reg_t)
            let sg = SGALib.Util.struct_sig_of_sga_struct_sig sg in
            let field, _tau = SGALib.Util.list_nth sg.struct_fields idx in
            match ac with
-           | SGA.GetField -> PureExpr (sprintf "(%s).%s" a1 field)
+           | SGA.GetField -> PureExpr (sprintf "%s.%s" a1 field)
            | SGA.SubstField ->
               let tinfo = ensure_target (Struct_t sg) target in
               let res = p_assign_pure (VarTarget tinfo) (PureExpr a1) in
