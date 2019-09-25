@@ -21,6 +21,27 @@ Section Contexts.
     - exists (v, ctx); reflexivity.
   Defined.
 
+  Definition chd {k sig} (ctx: context (k :: sig)) : V k :=
+    match ctx in (context sig')
+          return match sig' with [] => unit | k :: _ => V k end with
+    | CtxEmpty => tt
+    | CtxCons _ v _ => v
+    end.
+
+  Definition ctl {k sig} (ctx: context (k :: sig)) : context sig :=
+    match ctx in (context sig')
+          return match sig' with [] => unit | _ :: sig => context sig end with
+    | CtxEmpty => tt
+    | CtxCons _ _ ctx' => ctx'
+    end.
+
+  Lemma ceqn {sig} (ctx: context sig)
+    : match sig with
+      | [] => fun ctx => ctx = CtxEmpty
+      | k :: sig => fun ctx => ctx = CtxCons k (chd ctx) (ctl ctx)
+      end ctx.
+  Proof. destruct ctx; reflexivity. Defined.
+
   Fixpoint ccreate (sig: list K) (f: forall k, member k sig -> V k) : context sig :=
     match sig return (forall k, member k sig -> V k) -> context sig with
     | nil => fun _ => CtxEmpty
@@ -59,19 +80,17 @@ Section Contexts.
     ccreate sig (fun k m => cassoc m ctx) = ctx.
   Proof.
     induction sig; cbn; intros.
-    - rewrite (cdestruct ctx).
+    - rewrite (ceqn ctx).
       reflexivity.
-    - destruct (cdestruct ctx) as ((h & t) & ->); cbn.
+    - rewrite (ceqn ctx); cbn.
       rewrite IHsig; reflexivity.
   Qed.
 
   Fixpoint creplace {sig} {k} (m: member k sig) (v: V k)
            (ctx: context sig) {struct m} : context sig.
     destruct m.
-    - destruct (cdestruct ctx) as (vtl & H).
-      eapply (CtxCons k v (snd vtl)).
-    - destruct (cdestruct ctx) as (vtl & H).
-      eapply (CtxCons k' (fst vtl) (creplace sig k m v (snd vtl))).
+    - eapply (CtxCons k v (ctl ctx)).
+    - eapply (CtxCons k' (chd ctx) (creplace sig k m v (ctl ctx))).
   Defined.
 
   Lemma cassoc_creplace_eq {sig} :
@@ -79,9 +98,8 @@ Section Contexts.
       cassoc m (creplace m v ctx) = v.
   Proof.
     induction m; cbn; intros.
-    - destruct (cdestruct ctx); cbn. reflexivity.
-    - destruct (cdestruct ctx) as (vtl & Heq); cbn.
-      rewrite IHm; reflexivity.
+    - reflexivity.
+    - rewrite IHm; reflexivity.
   Qed.
 
   Lemma cassoc_creplace_neq {sig} :
@@ -89,13 +107,11 @@ Section Contexts.
       k <> k' ->
       cassoc m' (creplace m v ctx) = cassoc m' ctx.
   Proof.
-    induction m; cbn; intros.
-    - destruct (cdestruct ctx) as (vtl & Heq); cbn; subst.
-      destruct (mdestruct m') as [ (eqn & Heq) | (m'' & Heq)]; subst; cbn in *; subst; cbn.
+    induction m; cbn; intros; rewrite (ceqn ctx).
+    - destruct (mdestruct m') as [ (eqn & Heq) | (m'' & Heq)]; subst; cbn in *; subst; cbn.
       + congruence.
       + reflexivity.
-    - destruct (cdestruct ctx) as (vtl & Heq); cbn; subst.
-      destruct (mdestruct m') as [ (-> & Heq) | (m'' & Heq)]; subst; cbn in *; subst; cbn.
+    - destruct (mdestruct m') as [ (-> & Heq) | (m'' & Heq)]; subst; cbn in *; subst; cbn.
       + reflexivity.
       + cbn. rewrite IHm; eauto.
   Qed.
