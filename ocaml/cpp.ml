@@ -135,8 +135,8 @@ let cpp_bits_fn_name f tau1 tau2 =
      | SGA.Lsr (_sz, _places) -> sprintf "lsr<%d, %d>" sz1 sz2
      | SGA.EqBits _sz -> sprintf "eq<%d>" sz1
      | SGA.Concat (_sz1, _sz2) -> sprintf "concat<%d, %d>" sz1 sz2
-     | SGA.ZExtL (_sz, nzeroes) -> sprintf "zextl<%d, %d>" sz1 nzeroes
-     | SGA.ZExtR (_sz, nzeroes) -> sprintf "zextr<%d, %d>" sz1 nzeroes
+     | SGA.ZExtL (_sz, width) -> sprintf "zextl<%d, %d>" sz1 width
+     | SGA.ZExtR (_sz, width) -> sprintf "zextr<%d, %d>" sz1 width
      | SGA.UIntPlus _sz -> sprintf "plus<%d>" sz1)
 
 let cpp_preamble =

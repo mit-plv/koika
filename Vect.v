@@ -353,27 +353,41 @@ Proof.
       reflexivity.
 Qed.
 
-Fixpoint vect_extend_cast sz sz':
+Fixpoint vect_extend_beginning_cast' x y:
+  x + S y = S (x + y).
+Proof. destruct x; cbn; auto. Defined.
+
+Fixpoint vect_extend_beginning_cast sz sz':
+  sz' - sz + sz = Nat.max sz sz'.
+Proof.
+  destruct sz, sz'; cbn; auto.
+  cbn; rewrite <- vect_extend_beginning_cast; apply vect_extend_beginning_cast'.
+Defined.
+
+Definition vect_extend_beginning {T sz} (v: vect T sz) (sz': nat) (t: T) : vect T (Nat.max sz sz') :=
+  ltac:(rewrite <- (vect_extend_beginning_cast sz sz'); exact (vect_app (vect_const (sz' - sz) t) v)).
+
+Fixpoint vect_extend_end_cast sz sz':
   sz + (sz' - sz) = Nat.max sz sz'.
 Proof. destruct sz, sz'; cbn; auto. Defined.
 
-Definition vect_extend {T sz} (v: vect T sz) (sz': nat) (t: T) : vect T (Nat.max sz sz') :=
-  ltac:(rewrite <- (vect_extend_cast sz sz'); exact (vect_app v (vect_const (sz' - sz) t))).
+Definition vect_extend_end {T sz} (v: vect T sz) (sz': nat) (t: T) : vect T (Nat.max sz sz') :=
+  ltac:(rewrite <- (vect_extend_end_cast sz sz'); exact (vect_app v (vect_const (sz' - sz) t))).
 
-Fixpoint vect_extend_firstn_cast sz sz':
+Fixpoint vect_extend_end_firstn_cast sz sz':
   Nat.max (Nat.min sz sz') sz = sz.
 Proof. destruct sz, sz'; cbn; auto. Defined.
 
-Definition vect_extend_firstn {T sz sz'} (v: vect T (Nat.min sz sz')) (t: T) : vect T sz :=
-  ltac:(rewrite <- (vect_extend_firstn_cast sz sz'); exact (vect_extend v sz t)).
+Definition vect_extend_end_firstn {T sz sz'} (v: vect T (Nat.min sz sz')) (t: T) : vect T sz :=
+  ltac:(rewrite <- (vect_extend_end_firstn_cast sz sz'); exact (vect_extend_end v sz t)).
 
-Lemma vect_extend_firstn_simpl :
+Lemma vect_extend_end_firstn_simpl :
   forall {T sz} (v: vect T sz) n b,
   forall (eqn: Nat.min n sz = n),
-    vect_extend_firstn (vect_firstn n v) b =
+    vect_extend_end_firstn (vect_firstn n v) b =
     ltac:(rewrite <- eqn; exact (vect_firstn n v)).
 Proof.
-  unfold vect_extend_firstn, vect_extend; intros.
+  unfold vect_extend_end_firstn, vect_extend_end; intros.
   rewrite <- eq_trans_rew_distr.
   set (eq_trans _ _) as Heq; clearbody Heq.
   revert Heq; replace (n - Nat.min n sz) with 0 by omega; intros.
@@ -643,6 +657,9 @@ Module Bits.
   Definition map {n} (f: bool -> bool) (bs: bits n) := vect_map f bs.
   Definition map2 {n} (f: bool -> bool -> bool) (bs1 bs2: bits n) := vect_map2 f bs1 bs2.
   Definition of_list (l: list bool) : bits (length l) := vect_of_list l.
+  Definition extend_beginning {n} (bs: bits n) n' (b: bool): bits (Nat.max n n') := vect_extend_beginning bs n' b.
+  Definition extend_end {n} (bs: bits n) n' (b: bool): bits (Nat.max n n') := vect_extend_end bs n' b.
+
   Definition zeroes sz := const sz false.
   Definition ones sz := const sz true.
 

@@ -158,14 +158,14 @@ namespace prims {
     return widen<sz1 + sz2>(x) << sz2 | y;
   }
 
-  template<std::size_t sz, std::size_t nzeroes>
-  uint_t<nzeroes + sz> zextl(const uint_t<sz> x, const unit_t /*unused*/) {
-    return widen<nzeroes + sz>(x);
+  template<std::size_t sz, std::size_t width>
+  uint_t<std::max(sz, width)> zextl(const uint_t<sz> x, const unit_t /*unused*/) {
+    return widen<std::max(sz, width)>(x);
   }
 
-  template<std::size_t sz, std::size_t nzeroes>
-  uint_t<sz + nzeroes> zextr(const uint_t<sz> x, const unit_t /*unused*/) {
-    return widen<sz + nzeroes>(x) << nzeroes;
+  template<std::size_t sz, std::size_t width>
+  uint_t<std::max(sz, width)> zextr(const uint_t<sz> x, const unit_t /*unused*/) {
+    return widen<std::max(sz, width)>(x) << (std::max(width, sz) - sz);
   }
 
   // Forward-declared; our compiler defines one instance per structure type

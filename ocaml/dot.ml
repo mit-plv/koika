@@ -14,8 +14,8 @@ let bits_primitive_name = function
   | SGA.Lsr (_sz, _places) -> "Lsr"
   | SGA.EqBits _sz -> "EqBits"
   | SGA.Concat (_sz1, _sz2) -> "Concat"
-  | SGA.ZExtL (_sz, _nzeroes) -> "ZExtL"
-  | SGA.ZExtR (_sz, _nzeroes) -> "ZExtR"
+  | SGA.ZExtL (_sz, _width) -> "ZExtL"
+  | SGA.ZExtR (_sz, _width) -> "ZExtR"
   | SGA.UIntPlus _sz -> "Plus"
 
 let rec label_ptrs tag_to_parents = function
