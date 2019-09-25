@@ -5,7 +5,7 @@ ML=$(wildcard *.ml)
 BEAR=bear -o examples/compile_commands.json
 
 default:
-	dune build coq_examples.bc coq_examples.exe cli.bc cli.exe
+	dune build --no-print-directory coq_examples.bc coq_examples.exe cli.bc cli.exe
 
 dirs:
 	mkdir -p examples/coq examples/lv
