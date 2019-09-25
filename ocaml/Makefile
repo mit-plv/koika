@@ -4,19 +4,20 @@ CLI=${OCAML_BUILD_DIR}/cli.exe
 ML=$(wildcard *.ml)
 BEAR=bear -o examples/compile_commands.json
 
-default:
-	dune build --no-print-directory coq_examples.bc coq_examples.exe cli.bc cli.exe
+build:
+	dune build coq_examples.bc coq_examples.exe cli.bc cli.exe
+	@echo Leaving directory \`$(abspath $(dir $(lastword $(PWD))))\'
 
 dirs:
 	mkdir -p examples/coq examples/lv
 
-coq: default dirs
+coq: build dirs
 	${COQ_EXAMPLES}
 
-coq-bear: default dirs
+coq-bear: build dirs
 	${BEAR} ${COQ_EXAMPLES}
 
-lv: default dirs
+lv: build dirs
 	for f in examples/*.lv; do ${CLI} "$$f" "examples/lv/$$(basename "$${f%.*}.all")"; done
 
 dot: lv
