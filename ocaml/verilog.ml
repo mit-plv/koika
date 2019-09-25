@@ -143,6 +143,10 @@ type expression =
 
 type assignment = string * expression (* LHS, RHS *)
 
+let failwith_unlowered () =
+  failwith "The verilog backend doesn't support enums, structs, nor zextl and zextr.
+Make sure to pass `elaborate_externals_1' to `compile_scheduler'."
+
 let assignment_to_string (gensym: int ref) (assignment: assignment) =
   let (lhs,expr) = assignment in
   let default_left = "\tassign " ^ lhs ^ " = " in
@@ -176,13 +180,11 @@ let assignment_to_string (gensym: int ref) (assignment: assignment) =
            | SGA.Lsr (_, _) -> default_left ^ arg1 ^ " >> " ^ arg2
            | SGA.EqBits _ -> default_left ^ arg1 ^ " == " ^ arg2
            | SGA.Concat (_, _) -> default_left ^ "{" ^ arg1 ^ ", " ^ arg2 ^ "}"
-           | SGA.ZExtL (_, _) -> failwith "TODO UNIMPLEMENTED ZEXTL" (* TODO: convince clement that those are not needed as primitive *)
-           | SGA.ZExtR (_, _) -> failwith "TODO UNIMPLEMENTED ZEXTR" (* TODO: convince clement that those are not needed as primitive *)
+           | SGA.ZExtL _ | SGA.ZExtR _ -> failwith_unlowered ()
           )
        | PrimFn (SGA.ConvFn _)
        | PrimFn (SGA.StructFn _) ->
-          failwith "The verilog backend doesn't support enum and structs.
-Make sure to pass elaborate_externals_1 to compile_scheduler."
+          failwith_unlowered ()
       )
    | EReadRegister r -> default_left ^ r
    | EAnnot (_, _, rhs) -> default_left ^ rhs) ^ ";"

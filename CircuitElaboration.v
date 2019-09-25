@@ -27,13 +27,21 @@ Section Elaboration.
     pose proof c as c0.
     destruct c; [ exact c0.. | | exact c0 ].
     destruct idx; [ | exact c0 ].
-    destruct fn; [ | exact c0 | ].
+    destruct fn.
     - (* Conv *)
       destruct op; cbn in *.
       + (* Eq *) exact (CExternal (PrimFn (BitsFn (EqBits tau))) c1 c2).
       + (* Init *) exact (CConst (Bits.zeroes _)).
       + (* Pack *) exact c1.
       + (* Unpack *) exact c1.
+    - (* Bits *)
+      destruct fn; [ exact c0.. | | ]; cbn in *.
+      + (* ZExtL *)
+        rewrite <- vect_extend_end_cast;
+          exact (CExternal (PrimFn (BitsFn (Concat _ _))) c1 (CConst (Bits.zeroes _))).
+      + (* ZExtR *)
+        rewrite <- vect_extend_beginning_cast;
+          exact (CExternal (PrimFn (BitsFn (Concat _ _))) (CConst (Bits.zeroes _)) c1).
     - (* Struct *)
       destruct op; cbn in *.
       + (* GetField *)
@@ -57,7 +65,7 @@ Section Elaboration.
   Proof.
     intros.
     apply vect_to_list_inj.
-    unfold prim_part, vect_skipn_plus, vect_extend_firstn, vect_extend.
+    unfold prim_part, vect_skipn_plus, vect_extend_end_firstn, vect_extend_end.
     autorewrite with vect_to_list.
     min_t; rewrite Nat.sub_diag by omega; cbn.
     rewrite app_nil_r.
@@ -74,7 +82,7 @@ Section Elaboration.
   Proof.
     intros.
     apply vect_to_list_inj.
-    unfold prim_part, vect_extend_firstn, vect_extend, vect_firstn_plus.
+    unfold prim_part, vect_extend_end_firstn, vect_extend_end, vect_firstn_plus.
     autorewrite with vect_to_list.
     rewrite skipn_firstn, firstn_firstn.
     min_t; reflexivity.
@@ -99,7 +107,7 @@ Section Elaboration.
   Proof.
     unfold Bits.split; intros; rewrite vect_split_firstn_skipn; cbn.
     apply vect_to_list_inj.
-    unfold prim_part_subst, vect_skipn_plus, vect_firstn_plus, vect_extend_firstn, vect_extend.
+    unfold prim_part_subst, vect_skipn_plus, vect_firstn_plus, vect_extend_end_firstn, vect_extend_end.
     autorewrite with vect_to_list.
     rewrite !firstn_app.
     rewrite firstn_length_le by (rewrite vect_to_list_length; omega).
@@ -118,7 +126,7 @@ Section Elaboration.
     clear.
     intros.
     apply vect_to_list_inj;
-      unfold prim_part_subst, vect_skipn_plus, vect_firstn_plus, vect_extend_firstn, vect_extend.
+      unfold prim_part_subst, vect_skipn_plus, vect_firstn_plus, vect_extend_end_firstn, vect_extend_end.
     autorewrite with vect_to_list.
     rewrite !firstn_app.
     rewrite firstn_length_le by (rewrite vect_to_list_length; omega).
@@ -154,6 +162,12 @@ Section Elaboration.
           destruct (eq_dec (value_of_bits _) _) as [ Heq | ? ]; try congruence.
         apply (f_equal bits_of_value) in Heq; rewrite !bits_of_value_of_bits in Heq.
         congruence.
+    - (* BitsFn *)
+      destruct fn; cbn in *; try reflexivity.
+      + (* ZExtL *) unfold Bits.extend_end, vect_extend_end.
+        destruct (vect_extend_end_cast sz width); cbn; reflexivity.
+      + (* ZExtR *) unfold Bits.extend_beginning, vect_extend_beginning.
+        destruct (vect_extend_beginning_cast sz width); cbn; reflexivity.
     - (* StructFn *)
       destruct op; cbn in *.
       + (* GetField *)
