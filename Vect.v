@@ -88,9 +88,10 @@ Qed.
 
 Local Set Primitive Projections.
 Inductive vect_nil_t {T: Type} := _vect_nil.
-Record vect_cons_t {A B: Type} := { vhd: A; vtl: B }.
+Record vect_cons_t {A B: Type} := _vect_cons { vhd: A; vtl: B }.
 Arguments vect_nil_t : clear implicits.
 Arguments vect_cons_t : clear implicits.
+Arguments _vect_cons {A B} _ _.
 
 Fixpoint vect T n : Type :=
   match n with
@@ -643,25 +644,24 @@ Instance EqDec_vect T n `{EqDec T} : EqDec (vect T n).
 Proof. induction n; cbn; eauto using EqDec_vect_nil, EqDec_vect_cons; eassumption. Defined.
 
 Module Bits.
-  Notation bits n := (vect bool n).
-  Definition nil : bits 0 := vect_nil.
-  Definition cons {n} (b: bool) (bs: bits n) := vect_cons b bs.
-  Definition const sz (b: bool) : bits sz := vect_const sz b.
-  Definition app {sz1 sz2} (bs1: bits sz1) (bs2: bits sz2) := vect_app bs1 bs2.
-  Definition split {sz1 sz2} (bs: bits (sz1 + sz2)) := vect_split bs.
-  Definition nth {n} (bs: bits n) (idx: index n) := vect_nth bs idx.
-  Definition hd {n} (bs: bits (S n)) := vect_hd bs.
-  Definition tl {n} (bs: bits (S n)) := vect_tl bs.
-  Definition single (bs: bits 1) := vect_hd bs.
-  Definition lsb {n} (bs: bits (S n)) := vect_last bs.
-  Definition map {n} (f: bool -> bool) (bs: bits n) := vect_map f bs.
-  Definition map2 {n} (f: bool -> bool -> bool) (bs1 bs2: bits n) := vect_map2 f bs1 bs2.
-  Definition of_list (l: list bool) : bits (length l) := vect_of_list l.
-  Definition extend_beginning {n} (bs: bits n) n' (b: bool): bits (Nat.max n n') := vect_extend_beginning bs n' b.
-  Definition extend_end {n} (bs: bits n) n' (b: bool): bits (Nat.max n n') := vect_extend_end bs n' b.
-
-  Definition zeroes sz := const sz false.
-  Definition ones sz := const sz true.
+  Notation bits := (vect bool).
+  Notation nil := (@vect_nil bool).
+  Notation cons := (@vect_cons bool).
+  Notation const := (@vect_const bool).
+  Notation app := (@vect_app bool).
+  Notation split := (@vect_split bool).
+  Notation nth := (@vect_nth bool).
+  Notation hd := (@vect_hd bool).
+  Notation tl := (@vect_tl bool).
+  Notation single := (@hd 0).
+  Notation lsb := (@vect_last bool).
+  Notation map := (@vect_map bool).
+  Notation map2 := (@vect_map2 bool).
+  Notation of_list := (@vect_of_list bool).
+  Notation extend_beginning := (@vect_extend_beginning bool).
+  Notation extend_end := (@vect_extend_end bool).
+  Notation zeroes n := (@const n false).
+  Notation ones n := (@const n true).
 
   Definition lsr1 {sz} (b: bits sz) :=
     match sz return bits sz -> bits sz with
