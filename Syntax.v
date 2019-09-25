@@ -21,8 +21,6 @@ Section Syntax.
   | UTry (r: name_t) (s1 s2: uscheduler)
   | UCons (r: name_t) (s: uscheduler)
   | USPos (p: pos_t) (s: uscheduler).
-
-  Definition UConstBits {sz} (bs: bits sz) := @UConst (bits_t sz) bs.
 End Syntax.
 
 Arguments uaction : clear implicits.

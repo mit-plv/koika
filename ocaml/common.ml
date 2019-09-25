@@ -88,21 +88,27 @@ type ('f, 'cst_t, 'reg_t, 'fn_t) action =
   | Symbol of string
   | Keyword of string
   | Const of 'cst_t
-  | Progn of ('f, ('f, 'cst_t, 'reg_t, 'fn_t) action) locd list
-  | Let of (('f, var_t) locd * ('f, ('f, 'cst_t, 'reg_t, 'fn_t) action) locd) list
-           * ('f, ('f, 'cst_t, 'reg_t, 'fn_t) action) locd list
-  | If of ('f, ('f, 'cst_t, 'reg_t, 'fn_t) action) locd
-          * ('f, ('f, 'cst_t, 'reg_t, 'fn_t) action) locd
-          * ('f, ('f, 'cst_t, 'reg_t, 'fn_t) action) locd list
-  | When of ('f, ('f, 'cst_t, 'reg_t, 'fn_t) action) locd
-            * ('f, ('f, 'cst_t, 'reg_t, 'fn_t) action) locd list
+  | Progn of ('f, 'cst_t, 'reg_t, 'fn_t) action_locd list
+  | Let of (('f, var_t) locd * ('f, 'cst_t, 'reg_t, 'fn_t) action_locd) list
+           * ('f, 'cst_t, 'reg_t, 'fn_t) action_locd list
+  | If of ('f, 'cst_t, 'reg_t, 'fn_t) action_locd
+          * ('f, 'cst_t, 'reg_t, 'fn_t) action_locd
+          * ('f, 'cst_t, 'reg_t, 'fn_t) action_locd list
+  | When of ('f, 'cst_t, 'reg_t, 'fn_t) action_locd
+            * ('f, 'cst_t, 'reg_t, 'fn_t) action_locd list
+  | Switch of { operand: ('f, 'cst_t, 'reg_t, 'fn_t) action_locd;
+                default: ('f, 'cst_t, 'reg_t, 'fn_t) action_locd;
+                branches: (('f, 'cst_t, 'reg_t, 'fn_t) action_locd
+                           * ('f, 'cst_t, 'reg_t, 'fn_t) action_locd) list } (* branches *)
   | Read of port_t
             * ('f, 'reg_t) locd
   | Write of port_t
              * ('f, 'reg_t) locd
-             * ('f, ('f, 'cst_t, 'reg_t, 'fn_t) action) locd
+             * ('f, 'cst_t, 'reg_t, 'fn_t) action_locd
   | Call of ('f, 'fn_t) locd
-            * ('f, ('f, 'cst_t, 'reg_t, 'fn_t) action) locd list
+            * ('f, 'cst_t, 'reg_t, 'fn_t) action_locd list
+and ('f, 'cst_t, 'reg_t, 'fn_t) action_locd =
+  ('f, ('f, 'cst_t, 'reg_t, 'fn_t) action) locd
 
 type 'f scheduler =
   | Done

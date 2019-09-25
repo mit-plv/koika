@@ -406,46 +406,6 @@ Module PrimitiveUnpacker <: Unpacker.
            (UVar encoded) (UConstBits Ob)).
 End PrimitiveUnpacker.
 
-Section Switch.
-  Context {pos_t var_t reg_t custom_fn_t: Type}.
-
-  Notation uaction := (uaction pos_t var_t reg_t (interop_ufn_t custom_fn_t)).
-
-  Definition if_eq a1 a2 (tbranch fbranch: uaction) :=
-    UIf (UCall (UPrimFn (UConvFn UEq)) a1 a2)
-        tbranch
-        fbranch.
-
-  Fixpoint USwitch {sz}
-           (var: var_t)
-           (default: uaction)
-           (branches: list (bits_t sz * uaction))
-    : uaction :=
-    match branches with
-    | nil => default
-    | (val, action) :: branches =>
-      if_eq (UVar var) (UConstBits val)
-            action (USwitch var default branches)
-    end.
-
-  Fixpoint gen_switch {sz}
-           (var: var_t)
-           {nb} (branches: vect (bits_t sz * uaction) (S nb)) : uaction :=
-    let '(label, branch) := vect_hd branches in
-    match nb return vect _ (S nb) -> uaction with
-    | 0 => fun _ => branch
-    | S nb => fun branches => if_eq (UVar var) (UConstBits label)
-                                branch (gen_switch var (vect_tl branches))
-    end branches.
-
-  Definition UCompleteSwitch
-             sz bound
-             (var: var_t)
-             (branches: vect uaction (S bound)) :=
-    gen_switch var (vect_map2 (fun n a => (Bits.of_nat sz (index_to_nat n), a))
-                              (all_indices (S bound)) branches).
-End Switch.
-
 Module ManualFetcher <: Fetcher.
   Import ListNotations.
 
@@ -468,16 +428,17 @@ Module ManualFetcher <: Fetcher.
        Ob~0~1~0~0~1~0~0~0~0~0~1~0~0~1~1~0~1~0~0~0~0~1~1~0~0~1~1~1~0~0~1~1;
        Ob~1~1~0~0~0~0~0~1~0~1~1~1~1~1~0~0~0~1~1~0~0~0~1~0~0~1~1~1~1~0~0~1].
 
-  Fixpoint all_branches {reg_t} sz (counter: N) (actions: list (uaction reg_t)) :=
+  Fixpoint all_branches {reg_t} sz (counter: N) actions : list (uaction reg_t * uaction reg_t) :=
     match actions with
     | nil => nil
     | action :: actions =>
-      (Bits.of_N sz counter, action)
+      (UConstBits (Bits.of_N sz counter), action)
         :: (all_branches sz (N.add counter N.one) actions)
     end.
 
   Definition fetch_instr reg_t pc : uaction reg_t :=
-    Eval compute in (USwitch pc (UConstBits (Bits.zero 32)) (all_branches 3 N.zero instructions)).
+    Eval compute in (USwitch (UVar pc) (UConstBits (Bits.zero 32))
+                             (all_branches 3 N.zero instructions)).
 End ManualFetcher.
 
 Module PrimitiveFetcher <: Fetcher.

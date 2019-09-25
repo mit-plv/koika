@@ -210,7 +210,10 @@ module Compilation = struct
   let uskip =
     SGA.UConst (SGA.Bits_t 0, Obj.magic (SGA.Bits.zero 0))
 
-  let rec translate_action { lpos; lcnt } =
+  type 'f raw_action =
+    ('f, ('f, value, reg_signature, (string ffi_signature) SGA.interop_ufn_t) action) locd
+
+  let rec translate_action ({ lpos; lcnt }: _ raw_action) =
     SGA.UAPos
       (lpos,
        match lcnt with
@@ -223,6 +226,16 @@ module Compilation = struct
        | Let (bs, body) -> translate_bindings bs body
        | If (e, r, rs) -> SGA.UIf (translate_action e, translate_action r, translate_seq rs)
        | When (e, rs) -> SGA.UIf (translate_action e, translate_seq rs, SGA.UFail (SGA.Bits_t 0)) (* FIXME syntax for when in typechecker? *)
+       | Switch { operand; default; branches } ->
+          let opname = (* gensym *) "switch_operand" in
+          let opvar = locd_make operand.lpos (Var opname) in
+          let switch = SGA.uSwitch (translate_action opvar)
+                        (translate_action default)
+                        (List.map (fun (lbl, br) ->
+                             translate_action lbl,
+                             translate_action br)
+                           branches) in
+          SGA.UBind (opname, (translate_action operand), switch)
        | Read (port, reg) -> SGA.URead (translate_port port, reg.lcnt)
        | Write (port, reg, v) -> SGA.UWrite (translate_port port, reg.lcnt, translate_action v)
        | Call (fn, a1 :: a2 :: []) -> SGA.UCall (fn.lcnt, translate_action a1, translate_action a2)
@@ -259,9 +272,6 @@ module Compilation = struct
     let regmap = Hashtbl.of_seq (List.to_seq reg_indices) in
     SGA.contextEnv { SGA.finite_elements = tc_registers;
                      SGA.finite_index = fun r -> Hashtbl.find regmap r.reg_name }
-
-  type 'f raw_action =
-    ('f, ('f, value, reg_signature, (string ffi_signature) SGA.interop_ufn_t) action) locd
 
   type typechecked_action =
     (var_t, reg_signature, (string ffi_signature) SGA.interop_fn_t) SGA.action

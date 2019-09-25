@@ -392,13 +392,10 @@ let parse fname sexps =
           | "switch" ->
              let operand, branches = expect_cons loc "switch operand" args in
              let branches = List.map expect_switch_branch branches in
-             let operand_value = expect_action operand in
-             let opname = gensym "switch_operand" in
-             let opvar = locd_make operand_value.lpos (Var opname) in
-             let body = build_switch_body opvar branches in
-             Let ([(locd_make loc_hd opname, operand_value)],
-                  [match body with | Some b -> b
-                                   | None -> parse_error loc "Empty switch"])
+             let operand = expect_action operand in
+             (match build_switch_body branches with
+              | Some (default, branches) -> Switch { operand; default; branches }
+              | None -> parse_error loc "Empty switch")
           | _ ->
              let args = List.map expect_action args in
              Call (locd_make loc_hd hd, args))
@@ -410,19 +407,17 @@ let parse fname sexps =
       | _ -> let loc, cst = expect_const "a case label" lbl in
              `SomeLabel (locd_make loc (Const cst)) in
     (lbl, locd_make loc (Progn (List.map expect_action body)))
-  and build_switch_body opvar branches =
+  and build_switch_body branches =
     List.fold_right (fun (lbl, (branch: _ action locd)) acc ->
         match acc, lbl with
         | None, `AnyLabel _ ->
-           Some branch
+           Some (branch, [])
         | None, `SomeLabel l ->
            parse_error l.lpos "Last case of switch must be default (_)"
         | Some _, `AnyLabel loc  ->
            parse_error loc "Duplicated default case in switch"
-        | Some acc, `SomeLabel l ->
-           let cond = Call (locd_make l.lpos "eq", [opvar; l]) in
-           let test = If (locd_make l.lpos cond, branch, [acc]) in
-           Some (locd_make l.lpos test))
+        | Some (default, branches), `SomeLabel l ->
+           Some (default, (l, branch) :: branches))
       branches None
   and expect_let_binding b =
     let loc, b = expect_list "a let binding" b in
@@ -776,6 +771,12 @@ let resolve_rule types extfuns registers ((nm, action): unresolved_rule) =
                     List.map resolve_action rs)
              | When (c, rs) ->
                 When (resolve_action c, List.map resolve_action rs)
+             | Switch { operand; default; branches } ->
+                Switch { operand = resolve_action operand;
+                         default = resolve_action default;
+                         branches = List.map (fun (lbl, br) ->
+                                        resolve_action lbl, resolve_action br)
+                                      branches }
              | Read (port, r) ->
                 Read (port, find_register r)
              | Write (port, r, v) ->

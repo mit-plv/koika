@@ -1,6 +1,7 @@
 Require Export
         SGA.Common
         SGA.Syntax
+        SGA.SyntaxMacros
         SGA.TypeInference
         SGA.Semantics
         SGA.Circuits

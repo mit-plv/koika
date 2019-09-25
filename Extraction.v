@@ -30,7 +30,7 @@ Extraction "SGA.ml"
            IndexUtils.List_nth
            Environments.ContextEnv Environments.to_list
            Vect.vect_to_list Vect.vect_of_list Vect.Bits.to_nat Vect.index_to_nat Vect.vect_zip
-           Syntax.uscheduler Syntax.uaction Syntax.UConstBits
+           Syntax.uscheduler SyntaxMacros.UConstBits SyntaxMacros.USwitch SyntaxMacros.UInitStruct
            TypeInference.type_action TypeInference.type_scheduler
            Circuits.compile_scheduler
            Primitives.prim_uSigma Primitives.prim_Sigma
