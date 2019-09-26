@@ -51,12 +51,11 @@ Section SyntaxMacros.
                (vect_map2 (fun n a => (Bits.of_nat sz (index_to_nat n), a))
                           (all_indices (S bound)) branches).
 
-  Fixpoint UInitStruct
-           (sig: struct_sig)
-           (fields: list (string * uaction)) :=
-    match fields with
-    | [] => UCall (UPrimFn (UConvFn (UInit (struct_t sig)))) (UConstBits Ob) (UConstBits Ob)
-    | (f, a) :: fields => UCall (UPrimFn (UStructFn (UDo SubstField f)))
-                              (UInitStruct sig fields) a
-    end.
+  Definition UInitStruct
+             (sig: struct_sig)
+             (fields: list (string * uaction)) :=
+    let uinit := UPrimFn (UConvFn (UInit (struct_t sig))) in
+    let usubst f := UPrimFn (UStructFn (UDo SubstField f)) in
+    List.fold_left (fun acc '(f, a) => UCall (usubst f) acc a)
+                   fields (UCall uinit (UConstBits Ob) (UConstBits Ob)).
 End SyntaxMacros.
