@@ -87,6 +87,7 @@ type ('f, 'cst_t, 'reg_t, 'fn_t) action =
   | Num of int
   | Symbol of string
   | Keyword of string
+  | Enumerator of { name: string; field: string }
   | Const of 'cst_t
   | Progn of ('f, 'cst_t, 'reg_t, 'fn_t) action_locd list
   | Let of (('f, var_t) locd * ('f, 'cst_t, 'reg_t, 'fn_t) action_locd) list

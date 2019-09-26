@@ -34,12 +34,20 @@ let locd_make lpos lcnt =
 let locd_of_pair (pos, x) =
   locd_make pos x
 
+type unresolved_enum = {
+    name: string;
+    field: string
+  }
+
 type unresolved_value =
   | UBits of bool array
-  | UEnum of { name: string option; field: string }
+  | UEnum of unresolved_enum
+
+type unresolved_action =
+  (Pos.t, unresolved_value, string, string) action
 
 type unresolved_rule =
-  string locd * ((Pos.t, unresolved_value, string, string) action) locd
+  string locd * unresolved_action locd
 
 type unresolved_scheduler =
   string locd * (Pos.t scheduler) locd
@@ -224,9 +232,9 @@ let parse fname sexps =
     let x2, lst = expect_cons loc msg2 lst in
     expect_nil lst;
     (x1, x2) in
-  let rec expect_pairs msg = function
+  let rec expect_pairs msg fn = function
     | [] -> []
-    | h1 :: h2 :: tl -> (h1, h2) :: expect_pairs msg tl
+    | h1 :: h2 :: tl -> fn h1 h2 :: expect_pairs msg fn tl
     | [(Atom { loc; _ } | List { loc; _ } )] ->
        parse_error loc (sprintf "Missing %s after this element" msg) in
   let expect_constant csts c =
@@ -294,21 +302,23 @@ let parse fname sexps =
     else None in
   let expect_literal loc a =
     match try_enumerator a with
-    | Some (Some _ as name, field) -> Const (UEnum { name; field })
-    | Some (None, kwd) -> Keyword kwd
+    | Some { name; field } -> Enumerator { name; field }
     | None ->
-       match try_symbol a with
-       | Some name -> Symbol name
+       match try_keyword a with
+       | Some name -> Keyword name
        | None ->
-          match try_number loc a with
-          | Some (`Num n) -> Num n
-          | Some (`Const bs) -> Const (UBits bs)
+          match try_symbol a with
+          | Some name -> Symbol name
           | None ->
-             match try_variable a with
-             | Some var -> Var var
+             match try_number loc a with
+             | Some (`Num n) -> Num n
+             | Some (`Const bs) -> Const (UBits bs)
              | None ->
-                let msg = sprintf "Cannot parse `%s' as a literal (number, variable, symbol or keyword)" a in
-                parse_error loc msg in
+                match try_variable a with
+                | Some var -> Var var
+                | None ->
+                   let msg = sprintf "Cannot parse `%s' as a literal (number, variable, symbol or keyword)" a in
+                   parse_error loc msg in
   let try_bits loc v =
     match try_number loc v with
     | Some (`Const c) -> Some c
@@ -326,16 +336,21 @@ let parse fname sexps =
      | Some c -> UBits c
      | None ->
         match try_enumerator scst with
-        | Some (name, field) -> UEnum { name; field }
+        | Some { name; field } -> UEnum { name; field }
         | None -> parse_error loc "Expecting a bits constant (e.g. 16'hffff) or an enumerator (eg proto::ipv4)") in
-  let expect_keyword msg nm =
-    let loc, nm = expect_atom msg nm in
+  let expect_keyword loc msg nm =
     match try_keyword nm with
-    | Some k -> loc, k
+    | Some k -> k
     | None -> parse_error loc (sprintf "Expecting %s starting with a colon (:), got `%s'" msg nm) in
-  let expect_type = function (* (bit 16), typename *)
+  let expect_enumerator loc nm =
+    match try_enumerator nm with
+    | Some ev -> ev
+    | None -> parse_error loc (sprintf "Expecting an enumerator (format: abc::xyz or ::xyz), got `%s'" nm) in
+  let expect_type = function (* (bit 16), 'typename *)
     | Atom { loc; atom } ->
-       (loc, Unknown_u atom)
+       (match try_symbol atom with
+        | Some s -> (loc, Unknown_u s)
+        | None -> parse_error loc (sprintf "Type names must be quoted (try '%s)" atom))
     | List { loc; elements } ->
        let hd, sizes = expect_cons loc "a type" elements in
        let _ = expect_constant [("bits", ())] hd in
@@ -453,9 +468,12 @@ let parse fname sexps =
                   expect_scheduler s2)
           | _ ->
              parse_error loc_hd (sprintf "Unexpected in scheduler: `%s'" hd)) in
-  let expect_enum_field (name, value) = (* (:a 2'b00) *)
-    (* let name, value = expect_pair loc "enumerator" "enumerator value" lst in *)
-    (expect_keyword "an enumerator" name |> locd_of_pair,
+  let expect_enum_field enumerator value = (* (:a 2'b00) *)
+    let loc, enumerator = expect_atom "an enumerator" enumerator in
+    let { name; field } = expect_enumerator loc enumerator in
+    if name <> "" then
+      parse_error loc (sprintf "Expecting an unqualified enumerator (format: ::xyz), got `%s'" enumerator);
+    (field |> locd_make loc,
      expect_bits "an enumerator value" value |> locd_of_pair) in
   let check_size sz { lpos; lcnt } =
     let sz' = Array.length lcnt in
@@ -463,15 +481,17 @@ let parse fname sexps =
       parse_error lpos
         (sprintf "Inconsistent sizes in enum: expecting `bits %d', got `bits %d'" sz sz') in
   let expect_enum name loc body = (* ((:true 1'b1) (:false 1'b0) …) *)
-    let members = List.map expect_enum_field (expect_pairs "enumerator value" body) in
+    let members = expect_pairs "enumerator value" expect_enum_field body in
     let (_, eval), _ = expect_cons loc "enumerator (empty enums are not supported)" members in
     let bitsize = Array.length eval.lcnt in
     List.iter ((check_size bitsize) << snd) members;
     locd_make loc (Enum_u { name; bitsize = locd_make eval.lpos bitsize; members }) in
-  let expect_struct_field (name, typ) = (* (:label, typename) *)
-    (expect_keyword "a field name" name |> locd_of_pair, expect_type typ |> locd_of_pair) in
+  let expect_struct_field name typ = (* (:label, typename) *)
+    let loc, name = expect_atom "a field name" name in
+    (expect_keyword loc "a field name" name |> locd_make loc,
+     expect_type typ |> locd_of_pair) in
   let expect_struct name loc body = (* ((:kind kind) (:imm (bits 12) …) *)
-    let fields = List.map expect_struct_field (expect_pairs "field type" body) in
+    let fields = expect_pairs "field type" expect_struct_field body in
     check_no_duplicates "field in struct" (fun (nm, _) -> nm.lcnt) fields;
     locd_make loc (Struct_u { name; fields }) in
   let expect_extfun name loc body =
@@ -668,16 +688,16 @@ let resolve_value types { lpos; lcnt } =
                 (sprintf "enumerator in type `%s'" sg.enum_name) field in
   match lcnt with
   | UBits bs -> Bits bs
-  | UEnum { name = Some nm; field } ->
-     (match StringMap.find_opt nm types.all with
-      | Some (Enum_t sg) -> resolve_enum_field sg field
-      | Some tau -> type_error lpos (sprintf "Type `%s' is not an enum" (typ_to_string tau))
-      | None -> unbound_error lpos ~bound:(keys types.enums) "enum" nm)
-  | UEnum { name = None; field } ->
+  | UEnum { name = ""; field } ->
      (* LATER allow enums to share an enumerator and flag ambiguities *)
      (match StringMap.find_opt field types.enum_fields with
       | Some sg -> resolve_enum_field sg field
       | None -> unbound_error lpos ~bound:(keys types.enum_fields) "enumerator" field)
+  | UEnum { name; field } ->
+     (match StringMap.find_opt name types.all with
+      | Some (Enum_t sg) -> resolve_enum_field sg field
+      | Some tau -> type_error lpos (sprintf "Type `%s' is not an enum" (typ_to_string tau))
+      | None -> unbound_error lpos ~bound:(keys types.enums) "enum" name)
 
 let try_resolve_bits_fn loc name args =
   let bits_fn nm = SGALib.SGA.UPrimFn (SGALib.SGA.UBitsFn nm) in
