@@ -28,12 +28,6 @@ end
 
 type nonrec 'a locd = (Pos.t, 'a) locd
 
-let locd_make lpos lcnt =
-  { lpos; lcnt }
-
-let locd_of_pair (pos, x) =
-  locd_make pos x
-
 type unresolved_enum = {
     name: string;
     field: string
@@ -199,6 +193,66 @@ let add_or_raise k v m errf =
 let gensym, gensym_reset =
   make_gensym ()
 
+(* Must not start with __ to not clash w/ our gensym *)
+let name_re_str = "[a-z][a-zA-Z0-9_]*"
+let ident_re = Str.regexp (sprintf "^%s$" name_re_str)
+
+let try_variable var =
+  if Str.string_match ident_re var 0 then Some var else None
+
+let bits_const_re = Str.regexp "^\\([0-9]+\\)'\\(b[01]*\\|h[0-9a-fA-F]*\\|[0-9]+\\)$"
+let underscore_re = Str.regexp "_"
+let leading_h_re = Str.regexp "^h"
+
+let try_number' loc a =
+  let a = Str.global_replace underscore_re "" a in
+  if Str.string_match bits_const_re a 0 then
+    let sizestr = Str.matched_group 1 a in
+    let size = try int_of_string sizestr
+               with Failure _ ->
+                 parse_error loc (sprintf "Unparsable size annotation: `%s'" sizestr) in
+    let numstr = Str.matched_group 2 a in
+    let num = Z.of_string ("0" ^ (Str.replace_first leading_h_re "x" numstr)) in
+    let bits = if size = 0 && num = Z.zero then ""
+               else Z.format "%b" num in
+    let nbits = String.length bits in
+    if nbits > size then
+      parse_error loc (sprintf "Number `%s' (%d'b%s) does not fit in %d bit(s)"
+                         numstr nbits bits size)
+    else
+      let padding = list_const (size - nbits) false in
+      let char2bool = function '0' -> false | '1' -> true | _ -> assert false in
+      let bits = List.of_seq (String.to_seq bits) in
+      let bools = List.append (List.rev_map char2bool bits) padding in
+      Some (`Const (Array.of_list bools))
+  else match int_of_string_opt a with
+       | Some n -> Some (`Num n)
+       | None -> None
+
+let try_number loc = function
+  | "true" -> Some (`Const [|true|])
+  | "false" -> Some (`Const [|false|])
+  | a -> try_number' loc a
+
+let keyword_re = Str.regexp (sprintf "^:\\(%s\\)$" name_re_str)
+
+let try_keyword nm =
+  if Str.string_match keyword_re nm 0 then Some (Str.matched_group 1 nm)
+  else None
+
+let enumerator_re = Str.regexp (sprintf "^\\(\\|%s\\)::\\(%s\\)$" name_re_str name_re_str)
+
+let try_enumerator nm =
+  if Str.string_match enumerator_re nm 0 then
+    Some { name = Str.matched_group 1 nm; field = Str.matched_group 2 nm }
+  else None
+
+let symbol_re = Str.regexp (sprintf "^'\\(%s\\)$" name_re_str)
+
+let try_symbol nm =
+  if Str.string_match symbol_re nm 0 then Some (Str.matched_group 1 nm)
+  else None
+
 let parse fname sexps =
   Printf.printf "Parsing %s\n%!" fname;
   let expect_single loc kind where = function
@@ -247,59 +301,6 @@ let parse fname sexps =
     match List.assoc_opt s csts with
     | None -> parse_error loc (sprintf "Expecting %s, got `%s'" msg s)
     | Some x -> loc, x in
-  let bits_const_re =
-    Str.regexp "^\\([0-9]+\\)'\\(b[01]*\\|h[0-9a-fA-F]*\\|[0-9]+\\)$" in
-  let name_re_str =
-    (* Must not start with __ to not clash w/ our gensym *)
-    "[a-z][a-zA-Z0-9_]*" in
-  let ident_re = Str.regexp (sprintf "^%s$" name_re_str) in
-  let underscore_re = Str.regexp "_" in
-  let leading_h_re = Str.regexp "^h" in
-  let try_variable var =
-    if Str.string_match ident_re var 0 then Some var else None in
-  let try_number' loc a =
-    let a = Str.global_replace underscore_re "" a in
-    if Str.string_match bits_const_re a 0 then
-      let sizestr = Str.matched_group 1 a in
-      let size = try int_of_string sizestr
-                 with Failure _ ->
-                   parse_error loc (sprintf "Unparsable size annotation: `%s'" sizestr) in
-      let numstr = Str.matched_group 2 a in
-      let num = Z.of_string ("0" ^ (Str.replace_first leading_h_re "x" numstr)) in
-      let bits = if size = 0 && num = Z.zero then ""
-                 else Z.format "%b" num in
-      let nbits = String.length bits in
-      if nbits > size then
-        parse_error loc (sprintf "Number `%s' (%d'b%s) does not fit in %d bit(s)"
-                           numstr nbits bits size)
-      else
-        let padding = list_const (size - nbits) false in
-        let char2bool = function '0' -> false | '1' -> true | _ -> assert false in
-        let bits = List.of_seq (String.to_seq bits) in
-        let bools = List.append (List.rev_map char2bool bits) padding in
-        Some (`Const (Array.of_list bools))
-    else match int_of_string_opt a with
-         | Some n -> Some (`Num n)
-         | None -> None in
-  let try_number loc = function
-    | "true" -> Some (`Const [|true|])
-    | "false" -> Some (`Const [|false|])
-    | a -> try_number' loc a in
-  let keyword_re = Str.regexp (sprintf "^:\\(%s\\)$" name_re_str) in
-  let try_keyword nm =
-    if Str.string_match keyword_re nm 0 then Some (Str.matched_group 1 nm)
-    else None in
-  let enumerator_re = Str.regexp (sprintf "^\\(%s\\)::\\(%s\\)$" name_re_str name_re_str) in
-  let try_enumerator nm =
-    if Str.string_match enumerator_re nm 0 then
-      Some (Some (Str.matched_group 1 nm), Str.matched_group 2 nm)
-    else match try_keyword nm with
-         | Some k -> Some (None, k)
-         | None -> None in
-  let symbol_re = Str.regexp (sprintf "^'\\(%s\\)$" name_re_str) in
-  let try_symbol nm =
-    if Str.string_match symbol_re nm 0 then Some (Str.matched_group 1 nm)
-    else None in
   let expect_literal loc a =
     match try_enumerator a with
     | Some { name; field } -> Enumerator { name; field }
@@ -633,7 +634,6 @@ let core_primitives =
   let struct_fn f = UPrimFn (UStructFn f) in
   [("eq", (`Fn (conv_fn UEq), 2));
    ("=", (`Fn (conv_fn UEq), 2));
-   ("new", (`TypeFn (fun tau -> conv_fn (UInit tau)), 0));
    ("pack", (`Fn (conv_fn UPack), 1));
    ("unpack", (`TypeFn (fun tau -> conv_fn (UUnpack tau)), 1));
    ("get", (`FieldFn (fun f -> struct_fn (UDo (GetField, f))) , 1));
@@ -699,7 +699,7 @@ let resolve_value types { lpos; lcnt } =
       | Some tau -> type_error lpos (sprintf "Type `%s' is not an enum" (typ_to_string tau))
       | None -> unbound_error lpos ~bound:(keys types.enums) "enum" name)
 
-let try_resolve_bits_fn loc name args =
+let try_resolve_bits_fn { lpos; lcnt = name } args =
   let bits_fn nm = SGALib.SGA.UPrimFn (SGALib.SGA.UBitsFn nm) in
   match StringMap.find_opt name bits_primitives with
   | Some (fn, nargs) ->
@@ -707,56 +707,77 @@ let try_resolve_bits_fn loc name args =
            | `Prim0 fn ->
               bits_fn fn, nargs, args
            | `Prim1 fn ->
-              let (_, n), args = rexpect_arg rexpect_num loc args in
+              let (_, n), args = rexpect_arg rexpect_num lpos args in
               bits_fn (fn n), nargs, args
            | `Prim2 fn ->
-              let (_, n), args = rexpect_arg rexpect_num loc args in
-              let (_, n'), args = rexpect_arg rexpect_num loc args in
+              let (_, n), args = rexpect_arg rexpect_num lpos args in
+              let (_, n'), args = rexpect_arg rexpect_num lpos args in
               bits_fn (fn n n'), nargs, args)
   | None -> None
 
-let try_resolve_primitive types loc name args =
+let rec rexpect_pairs msg fn = function
+  | [] -> []
+  | h1 :: h2 :: tl -> fn h1 h2 :: rexpect_pairs msg fn tl
+  | [x] -> parse_error x.lpos (sprintf "Missing %s after this element" msg)
+
+let rexpect_type loc types args =
+  let (loc, t), args = rexpect_arg (rexpect_symbol "a type name") loc args in
+  let tau = resolve_type types (locd_make loc (Unknown_u t)) in
+  loc, t, tau, args
+
+let try_resolve_primitive types name args =
   let must_struct_t loc nm = function
     | Struct_t sg -> SGALib.Util.sga_struct_sig_of_struct_sig sg
     | tau -> type_error loc (sprintf "Expecting a struct name, but `%s' is `%s'"
                                nm (kind_to_str ~pre:true tau)) in
-  let rexpect_type args =
-    let (loc, t), args = rexpect_arg (rexpect_symbol "a type name") loc args in
-    let tau = resolve_type types (locd_make loc (Unknown_u t)) in
-    loc, t, tau, args in
   let rexpect_field args =
-    let (_, f), args = rexpect_arg (rexpect_keyword "a struct field") loc args in
+    let (_, f), args = rexpect_arg (rexpect_keyword "a struct field") name.lpos args in
     SGALib.Util.coq_string_of_string f, args in
-  match StringMap.find_opt name core_primitives with
+  match StringMap.find_opt name.lcnt core_primitives with
   | Some (fn, nargs) ->
      Some (match fn with
            | `Fn fn ->
               fn, nargs, args
            | `TypeFn fn ->
-              let _, _, t, args = rexpect_type args in
-              (fn (SGALib.Util.sga_type_of_typ t)), nargs, args
+              let _, _, t, args = rexpect_type name.lpos types args in
+              fn (SGALib.Util.sga_type_of_typ t), nargs, args
            | `FieldFn fn ->
               let f, args = rexpect_field args in
-              (fn f), nargs, args
+              fn f, nargs, args
            | `StructFn fn ->
-              let loc, nm, t, args = rexpect_type args in
+              let loc, nm, t, args = rexpect_type name.lpos types args in
               let f, args = rexpect_field args in
-              (fn (must_struct_t loc nm t) f), nargs, args)
-  | None -> try_resolve_bits_fn loc name args
+              fn (must_struct_t loc nm t) f, nargs, args)
+  | None -> try_resolve_bits_fn name args
 
 let try_resolve_extfun extfuns name args =
-  match StringMap.find_opt name extfuns with
+  match StringMap.find_opt name.lcnt extfuns with
   | Some (nargs, fn) -> Some (SGALib.SGA.UCustomFn fn, nargs, args)
   | None -> None
 
-let resolve_function types extfuns { lpos; lcnt = name } args =
-  let fn, nargs, args =
-    match try_resolve_primitive types lpos name args with
-    | Some r -> r
-    | None -> match try_resolve_extfun extfuns name args with
-              | Some r -> r
-              | None -> let bound = List.concat [keys core_primitives; keys bits_primitives; keys extfuns] in
-                        unbound_error lpos ~bound "function" name in
+let try_resolve_special_function types name args =
+  match name.lcnt with
+  | "new" ->
+     let loc, nm, tau, args = rexpect_type name.lpos types args in
+     let sga_tau = SGALib.Util.sga_type_of_typ tau in
+     let uinit = SGALib.SGA.(UPrimFn (UConvFn (UInit sga_tau))) in
+     (match tau with
+      | Bits_t sz ->
+         resolution_error loc
+           (sprintf "Use %d'0 instead of (new '%s ...) to create a bits value" sz nm)
+      | Enum_t { enum_name; enum_bitsize; _ } ->
+         resolution_error loc
+           (sprintf "Use (unpack '%s %d'0) instead of (new '%s ...) to create an enum value"
+              enum_name enum_bitsize nm)
+      | Struct_t sg ->
+         let expect_field nm v =
+           (locd_of_pair (rexpect_keyword "a field name" nm), v) in
+         Some (match rexpect_pairs "value" expect_field args with
+               | [] -> `Call (locd_make loc uinit, [])
+               | fields -> `StructInit (sg, fields)))
+  | _ -> None
+
+let pad_function_call lpos name fn nargs args =
   assert (nargs <= 2);
   if List.length args <> nargs then
     type_error lpos (sprintf "Function `%s' takes %d arguments" name nargs)
@@ -764,12 +785,28 @@ let resolve_function types extfuns { lpos; lcnt = name } args =
     let padding = list_const (2 - nargs) { lpos; lcnt = Const (UBits [||]) } in
     { lpos; lcnt = fn }, List.append args padding
 
+let resolve_function types extfuns name (args: unresolved_action locd list) =
+  match try_resolve_special_function types name args with
+  | Some ast -> ast
+  | None ->
+     let (fn, nargs, args) =
+       match try_resolve_primitive types name args with
+       | Some r -> r
+       | None -> match try_resolve_extfun extfuns name args with
+                 | Some r -> r
+                 | None -> let bound = List.concat [keys core_primitives; keys bits_primitives; keys extfuns] in
+                           unbound_error name.lpos ~bound "function" name.lcnt in
+     let fn, args = pad_function_call name.lpos name.lcnt fn nargs args in
+     `Call (fn, args)
+
 let resolve_rule types extfuns registers ((nm, action): unresolved_rule) =
   let find_register { lpos; lcnt = name } =
     match List.find_opt (fun rsig -> rsig.reg_name = name) registers with
     | Some rsig -> { lpos; lcnt = rsig }
     | None -> unbound_error lpos "register" name in
-  let rec resolve_action ({ lpos; lcnt }: (Pos.t, unresolved_value, string, string) action locd) =
+  let rec resolve_struct_fields fields =
+    List.map (fun (nm, v) -> nm, resolve_action v) fields
+  and resolve_action ({ lpos; lcnt }: unresolved_action locd) =
     { lpos;
       lcnt = match lcnt with
              | Skip -> Skip
@@ -778,9 +815,13 @@ let resolve_rule types extfuns registers ((nm, action): unresolved_rule) =
              | Num n -> untyped_number_error lpos n
              | Symbol s -> symbol_error lpos s
              | Keyword k ->
-                let v = UEnum { name = None; field = k } in
+                parse_error lpos (sprintf "Unexpected keyword: `%s'" k)
+             | Enumerator { name; field } ->
+                let v = UEnum { name; field } in
                 Const (resolve_value types (locd_make lpos v))
              | Const v -> Const (resolve_value types (locd_make lpos v))
+             | StructInit (sg, fields) ->
+                StructInit (sg, resolve_struct_fields fields)
              | Progn rs -> Progn (List.map resolve_action rs)
              | Let (bs, body) ->
                 Let (List.map (fun (var, expr) -> (var, resolve_action expr)) bs,
@@ -802,9 +843,12 @@ let resolve_rule types extfuns registers ((nm, action): unresolved_rule) =
              | Write (port, r, v) ->
                 Write (port, find_register r, resolve_action v)
              | Call (fn, args) ->
-                let fn, args = resolve_function types extfuns fn args in
-                Call (fn, List.map resolve_action args) } in
+                (match resolve_function types extfuns fn args with
+                 | `Call (fn, args) -> Call (fn, List.map resolve_action args)
+                 | `StructInit (sg, fields) ->
+                    StructInit (sg, resolve_struct_fields fields)) } in
   (nm.lcnt, resolve_action action)
+
 
 let resolve_register types (name, init) =
   { reg_name = name.lcnt;

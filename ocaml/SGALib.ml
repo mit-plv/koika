@@ -222,10 +222,14 @@ module Compilation = struct
        | Var v -> SGA.UVar v
        | Num _ | Symbol _ | Keyword _ | Enumerator _ -> assert false
        | Const v -> let tau, v = Util.sga_value_of_value v in SGA.UConst (tau, v)
+       | StructInit (sg, fields) ->
+          SGA.uInitStruct (Util.sga_struct_sig_of_struct_sig sg)
+            (List.map (fun (nm, v) -> Util.coq_string_of_string nm.lcnt, translate_action v) fields)
        | Progn rs -> translate_seq rs
        | Let (bs, body) -> translate_bindings bs body
        | If (e, r, rs) -> SGA.UIf (translate_action e, translate_action r, translate_seq rs)
-       | When (e, rs) -> SGA.UIf (translate_action e, translate_seq rs, SGA.UFail (SGA.Bits_t 0)) (* FIXME syntax for when in typechecker? *)
+       (* FIXME syntax for when in typechecker? *)
+       | When (e, rs) -> SGA.UIf (translate_action e, translate_seq rs, SGA.UFail (SGA.Bits_t 0))
        | Switch { operand; default; branches } ->
           let opname = (* gensym *) "switch_operand" in
           let opvar = locd_make operand.lpos (Var opname) in

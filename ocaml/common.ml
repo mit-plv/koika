@@ -80,6 +80,12 @@ type ('loc_t, 'content_t) locd = {
     lcnt: 'content_t
   }
 
+let locd_make lpos lcnt =
+  { lpos; lcnt }
+
+let locd_of_pair (pos, x) =
+  locd_make pos x
+
 type ('f, 'cst_t, 'reg_t, 'fn_t) action =
   | Skip
   | Fail of size_t
@@ -89,6 +95,7 @@ type ('f, 'cst_t, 'reg_t, 'fn_t) action =
   | Keyword of string
   | Enumerator of { name: string; field: string }
   | Const of 'cst_t
+  | StructInit of (struct_sig * (('f, string) locd * ('f, 'cst_t, 'reg_t, 'fn_t) action_locd) list)
   | Progn of ('f, 'cst_t, 'reg_t, 'fn_t) action_locd list
   | Let of (('f, var_t) locd * ('f, 'cst_t, 'reg_t, 'fn_t) action_locd) list
            * ('f, 'cst_t, 'reg_t, 'fn_t) action_locd list
