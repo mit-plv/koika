@@ -12,15 +12,15 @@
  (flags (:standard -w -39)))
 
 (library
- (name backends)
- (modules verilog dot cpp)
- (libraries common SGALib zarith)
- (preprocess (pps ppx_jane ppx_deriving.show)))
-
-(library
  (name lv)
  (modules lv)
  (libraries parsexp common SGALib zarith)
+ (preprocess (pps ppx_jane ppx_deriving.show)))
+
+(library
+ (name backends)
+ (modules verilog dot cpp coq)
+ (libraries common SGALib lv zarith)
  (preprocess (pps ppx_jane ppx_deriving.show)))
 
 (executable

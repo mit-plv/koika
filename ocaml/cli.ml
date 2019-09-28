@@ -1,15 +1,19 @@
 open Common
 open Lv
 
+type backend =
+  [`Coq | `Verilog | `Dot | `Hpp | `Cpp | `Exe | `All]
+
 type cli_opts = {
     cli_in_fname: string;
     cli_out_fname: string;
     cli_frontend: [`Sexps | `Annotated];
-    cli_backend: [`All | `Dot | `Verilog | `Cpp | `Hpp | `Exe]
+    cli_backend: backend
   }
 
-let exts_to_backends =
-  [("v", `Verilog);
+let exts_to_backends : (string * backend) list =
+  [("coq.v", `Coq);
+   ("verilog.v", `Verilog);
    ("dot", `Dot);
    ("hpp", `Hpp);
    ("cpp", `Cpp);
@@ -21,7 +25,7 @@ let backends_to_exts =
 
 let all_backends =
   (* Exe implies Hpp and Cpp *)
-  [`Verilog; `Dot; `Exe]
+  [`Coq; `Verilog; `Dot; `Exe]
 
 let exts, ext_re =
   let exts = List.map fst exts_to_backends in
