@@ -587,7 +587,7 @@ let compile (type name_t var_t reg_t)
             | VarTarget { declared = true; name; _ } -> Assigned name
             | VarTarget { tau; _ } ->
                PureExpr (sprintf "prims::unreachable<%s>()" (cpp_type_of_type tau)))
-        | SGA.Var (_, v, _, _m) ->
+        | SGA.Var (_, v, _tau, _m) ->
            PureExpr (hpp.cpp_var_names v) (* FIXME fail if reference isn't to latest binding of v *)
         | SGA.Const (_, tau, cst) ->
            let res = PureExpr (sp_value (SGALib.Util.value_of_sga_value tau cst)) in
@@ -596,6 +596,11 @@ let compile (type name_t var_t reg_t)
              let e = must_expr (p_assign_pure ~prefix:"static const" ctarget res) in
              PureExpr e
            else res
+        | SGA.Assign (_, v, tau, _m, ex) -> (* FIXME fail if reference isn't to latest binding of v *)
+           let vtarget = VarTarget { tau = SGALib.Util.typ_of_sga_type tau;
+                                     declared = true; name = hpp.cpp_var_names v } in
+           ignore (p_assign_pure vtarget (p_action vtarget ex));
+           p_assign_pure target (PureExpr "prims::tt")
         | SGA.Seq (_, _, a1, a2) ->
            ignore (p_action NoTarget a1);
            p_action target a2
@@ -791,6 +796,8 @@ let action_footprint a =
   let rec action_footprint = function
     | SGA.Fail _ -> ()
     | SGA.Var _ | SGA.Const _ -> ()
+    | SGA.Assign (_, _, _, _, ex) ->
+       action_footprint ex
     | SGA.If (_, _, _, r1, r2)
       | SGA.Seq (_, _, r1, r2) ->
        action_footprint r1;
