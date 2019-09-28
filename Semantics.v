@@ -119,17 +119,6 @@ Section Interp.
   Definition vcontext (sig: tsig var_t) :=
     context (fun '(k, tau) => type_denote tau) sig.
 
-  Lemma prune_binded_venv:
-    forall {sig : tsig var_t} {tau : type} {var : var_t} {l : list (var_t * type)}
-      {p1 : var_t * type},
-      vcontext l -> p1 :: l = (var, tau) :: sig -> vcontext sig.
-  Proof.
-    intros sig tau var l p1 GammaPruned eq.
-    inversion eq.
-    rewrite <- H1.
-    exact GammaPruned.
-  Defined.
-
   Section Action.
 
     Fixpoint interp_action
