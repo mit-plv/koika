@@ -545,6 +545,14 @@ Section CompilerCorrectness.
   Notation compile_action := (compile_action lco).
   Notation compile_scheduler := (compile_scheduler lco).
 
+  Ltac circuit_compile_destruct_t :=
+    repeat lazymatch goal with
+           | [ IH: context[Circuits.compile_action ?lco ?rc _ ?a _] |-
+               context[Circuits.compile_action ?lco ?rc ?gamma ?a ?rwc] ] =>
+             specialize (IH gamma rwc);
+             destruct (Circuits.compile_action lco rc gamma a rwc); cbn
+           end.
+
   Theorem rwset_circuit_lt_compile_action_correct {sig tau} :
     forall (gamma : ccontext sig) (a : action sig tau) (rwc : rwcircuit),
       let (circ, gamma_new) := (compile_action rc gamma a rwc) in
@@ -552,46 +560,16 @@ Section CompilerCorrectness.
       forall idx, rwset_circuit_lt_invariant (rwc.(regs)) (circ.(erwc).(regs)) idx.
   Proof.
     induction a; cbn; intros;
+      circuit_compile_destruct_t;
       try solve [split; circuit_lt_f_equal; eauto using rwset_circuit_lt_invariant_refl].
+
     - (* Assign *)
-      destruct (compile_action rc gamma a rwc) as [circuit Gamma_new] eqn:HeqC1.
-      simpl in *.
-      specialize (IHa gamma rwc).
-      rewrite HeqC1 in IHa.
       intuition eauto using circuit_lt_trans, rwset_circuit_lt_invariant_trans.
     - (* Seq *)
-      destruct (compile_action rc gamma a1 rwc) as [circuit Gamma_new] eqn:HeqC1.
-      destruct (compile_action rc Gamma_new a2 (erwc circuit)) as [circuit2 Gamma_new2] eqn:HeqC2.
-      simpl in HeqC2.
-      rewrite HeqC2.
-      specialize (IHa1 gamma rwc).
-      rewrite HeqC1 in IHa1.
-      specialize (IHa2 Gamma_new (circuit).(erwc)).
-      simpl in IHa2.
-      rewrite HeqC2 in IHa2.
       intuition eauto using circuit_lt_trans, rwset_circuit_lt_invariant_trans.
     - (* Bind *)
-      destruct (compile_action rc gamma a1 rwc) as [circuit Gamma_new] eqn:HeqC1.
-      destruct (compile_action rc (CtxCons (var, tau) (retVal circuit) Gamma_new) a2 (erwc circuit)) as  [circuit2 Gamma_new2] eqn:HeqC2.
-      specialize (IHa1 gamma rwc).
-      specialize (IHa2 (CtxCons (var, tau) (retVal circuit) Gamma_new)
-                       (erwc circuit)).
-      rewrite HeqC1 in IHa1.
-      rewrite HeqC2 in IHa2.
       intuition eauto using circuit_lt_trans, rwset_circuit_lt_invariant_trans.
     - (* If *)
-      destruct (compile_action rc gamma a1 rwc) as [circuit Gamma_new] eqn:HeqC1.
-      destruct (compile_action rc Gamma_new a2 (erwc circuit)) as [circuit2 Gamma_new2] eqn:HeqC2.
-      simpl in *.
-      rewrite HeqC2.
-      destruct (compile_action rc Gamma_new a3 (erwc circuit)) as [circuit3 Gamma_new3] eqn:HeqC3.
-      simpl in *.
-      pose proof (IHa1 gamma rwc).
-      specialize (IHa2 Gamma_new (erwc circuit)).
-      specialize (IHa3 Gamma_new (erwc circuit)).
-      rewrite HeqC1 in *.
-      rewrite HeqC2 in IHa2.
-      rewrite HeqC3 in IHa3.
       split.
       + circuit_lt_f_equal.
         apply circuit_lt_CMux_l;
@@ -614,34 +592,15 @@ Section CompilerCorrectness.
           -- eauto using rwset_circuit_lt_invariant_refl.
           -- red; cbn; eauto using circuit_lt_true, circuit_lt_refl, circuit_lt_opt_r.
     - (* Write *)
-      specialize (IHa gamma rwc).
-      destruct (compile_action rc gamma a rwc) as [circuit Gamma_new] eqn:HeqC.
-      destruct IHa  as (Hpr & Hpr').
-      destruct port; cbn;rewrite HeqC.
-      + split.
-        * circuit_lt_f_equal;
-            apply circuit_lt_CAnd_l;
-            intuition.
-        * intros;
-            (apply rwset_circuit_lt_invariant_putenv;
-             [ | specialize (Hpr' idx); red in Hpr' |- *; red in Hpr'; cbn;
-                 repeat cleanup_step ];
-             intuition eauto using circuit_lt_true, circuit_lt_opt_r).
-      + split.
-        * circuit_lt_f_equal;
-            apply circuit_lt_CAnd_l;
-            intuition.
-        * intros;
-            (apply rwset_circuit_lt_invariant_putenv;
-             [ | specialize (Hpr' idx); red in Hpr' |- *; red in Hpr'; cbn;
-                 repeat cleanup_step ];
-             intuition eauto using circuit_lt_true, circuit_lt_opt_r).
+      destruct port; cbn;
+      circuit_compile_destruct_t;
+      destruct IHa as (Hpr & Hpr'); split.
+      all: circuit_lt_f_equal; eauto using circuit_lt_CAnd_l.
+      all: intros; apply rwset_circuit_lt_invariant_putenv; eauto.
+      all: specialize (Hpr' idx); repeat (red || red in Hpr'); cbn;
+        intuition eauto using circuit_lt_true, circuit_lt_opt_r.
     - (* Call *)
-      specialize (IHa1 gamma rwc);
-      destruct (compile_action rc gamma a1 rwc) as [circuit Gamma_new] eqn:HeqC1;
-      specialize (IHa2 Gamma_new (erwc circuit));
-      destruct (compile_action rc Gamma_new a2 (erwc circuit)) as [circuit2 Gamma_new2] eqn:HeqC2;
-      simpl in *.
+      circuit_compile_destruct_t.
       intuition eauto using circuit_lt_trans, rwset_circuit_lt_invariant_trans.
   Qed.
 
