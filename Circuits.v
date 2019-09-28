@@ -324,13 +324,12 @@ Section CircuitCompilation.
     REnv.(map2) (fun k treg freg => mux_rwdata an cond treg freg)
                 tRegs fRegs.
 
-  Fixpoint mux_ccontext {sig} (cond: circuit 1) (ctxT: ccontext sig) (ctxF: ccontext sig) : ccontext sig :=
-    match sig return ccontext sig -> ccontext sig -> ccontext sig with
-    | nil => fun ctxT ctxF => CtxEmpty
-    | cons (k, tau) sig => fun ctxT ctxF =>
-                          CtxCons (k, tau) (CMux cond (chd ctxT) (chd ctxF))
-                                  (mux_ccontext cond (ctl ctxT) (ctl ctxF))
-    end ctxT ctxF.
+  Fixpoint mux_ccontext {sig} (cond: circuit 1) (ctxT: ccontext sig) (ctxF: ccontext sig) : ccontext sig.
+    destruct sig as [ | (k, tau)]; cbn.
+    - exact CtxEmpty.
+    - apply (CtxCons (k, tau) (CMux cond (chd ctxT) (chd ctxF))
+                     (mux_ccontext _ cond (ctl ctxT) (ctl ctxF))).
+  Defined.
 
   Section Action.
     Fixpoint compile_action

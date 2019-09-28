@@ -993,127 +993,106 @@ Section CompilerCorrectness.
              specialize (H idx); cbv zeta in *; repeat cleanup_step
            end.
 
-
-  Lemma bind_gamma_equiv:
+  Lemma circuit_gamma_equiv_CtxCons_rev:
     forall (sig : tsig var_t) (tau : type) (var : var_t) (t : tau)
       (c2 : vcontext sig) (c0 : circuit tau)
       (c1 : ccontext sig),
       circuit_gamma_equiv (CtxCons (var, tau) t c2) (CtxCons (var, tau) c0 c1) ->
       circuit_gamma_equiv c2 c1.
   Proof.
-    intros.
     unfold circuit_gamma_equiv.
-    intros.
-    specialize (H k tau0).
-    specialize (H (MemberTl (k,tau0) (var,tau) sig m)) .
-    t.
+    intros * Heq **; apply (Heq _ _ (MemberTl (k, tau0) (var, tau) sig m)).
   Qed.
 
-  Lemma assign_gamma_equiv:
-    forall (sig : list (var_t * type)) (k : var_t) (tau : type) (m : member (k, tau) sig) (vGamma : vcontext sig)
+  Lemma circuit_gamma_equiv_creplace:
+    forall (sig : list (var_t * type)) (k : var_t) (tau : type)
+      (m : member (k, tau) sig) (vGamma : vcontext sig)
       (a : action_circuit R Sigma REnv tau) (cGamma : ccontext sig) t,
       interp_circuit (retVal a) = bits_of_value t ->
       circuit_gamma_equiv vGamma cGamma -> circuit_gamma_equiv (creplace m t vGamma) (creplace m (retVal a) cGamma).
   Proof.
-      induction sig.
-      -
-        intros.
-        unfold circuit_gamma_equiv in *.
-        intros.
-        pose (mdestruct m).
-        contradiction.
-      -
-        intros.
-        unfold circuit_gamma_equiv in *.
-        intros.
-        destruct (eq_dec k0 k).
-        +
-          destruct (eq_dec tau0 tau); subst.
-          destruct (eq_dec m m0); subst.
-          rewrite !cassoc_creplace_eq; trivial.
-          rewrite !cassoc_creplace_neq_members; intuition.
-          rewrite !cassoc_creplace_neq; trivial; intro member_type; inversion member_type; congruence.
-        +
-          rewrite !cassoc_creplace_neq; trivial; congruence.
+    unfold circuit_gamma_equiv; induction sig; intros.
+    - destruct (mdestruct m).
+    - destruct (eq_dec k0 k), (eq_dec tau0 tau); subst;
+        try destruct (eq_dec m m0); subst.
+      all: rewrite ?cassoc_creplace_eq, ?cassoc_creplace_neq,
+           ?cassoc_creplace_neq_members by congruence;
+        eauto.
   Qed.
 
+  Definition ccontext_equiv {sig} (c0 c1 : ccontext sig) :=
+    forall (k: var_t) (tau: type) (m: member (k, tau) sig),
+      interp_circuit (cassoc m c0) = interp_circuit (cassoc m c1).
+
+  Lemma ccontext_equiv_sym {sig}:
+    forall (c0 c1: ccontext sig), ccontext_equiv c0 c1 <-> ccontext_equiv c1 c0.
+  Proof. firstorder. Qed.
+
+  Lemma ccontext_equiv_refl {sig}:
+    forall (c: ccontext sig), ccontext_equiv c c.
+  Proof. firstorder. Qed.
+
+  Lemma ccontext_equiv_cons {sig}:
+    forall k tau (c0 c1: circuit _) (ctx0 ctx1: ccontext sig),
+      ccontext_equiv ctx0 ctx1 ->
+      interp_circuit c0 = interp_circuit c1 ->
+      ccontext_equiv (CtxCons (k, tau) c0 ctx0) (CtxCons (k, tau) c1 ctx1).
+  Proof.
+    unfold ccontext_equiv; intros.
+    destruct (mdestruct m) as [(Heq & ->) | (m' & ->)]; cbn.
+    inversion Heq; subst; rewrite <- Eqdep_dec.eq_rect_eq_dec by apply eq_dec; cbn.
+    all: eauto.
+  Qed.
+
+  Lemma circuit_gamma_equiv_ccontext_equiv {sig}:
+    forall (c0 c1: ccontext sig) (v: vcontext sig),
+      ccontext_equiv c0 c1 ->
+      circuit_gamma_equiv v c0 ->
+      circuit_gamma_equiv v c1.
+  Proof.
+    unfold circuit_gamma_equiv, ccontext_equiv; intros * Hcceq Hgammaeq **.
+    rewrite <- Hcceq, <- Hgammaeq; reflexivity.
+  Qed.
+
+  Lemma ccontext_equiv_mux_ccontext {sig}:
+    forall (cond: circuit 1) (c0 c1: ccontext sig),
+      ccontext_equiv (if Bits.single (interp_circuit cond) then c0 else c1)
+                     (mux_ccontext cond c0 c1).
+  Proof.
+    induction sig as [ | (k, tau) sig ]; cbn; intros;
+      rewrite (ceqn c0), (ceqn c1).
+    - destruct Bits.single; apply ccontext_equiv_refl.
+    - specialize (IHsig cond (ctl c0) (ctl c1)).
+      destruct Bits.single eqn:Heq; cbn;
+        apply ccontext_equiv_cons; cbn; try rewrite Heq.
+      all: eauto.
+  Qed.
 
   Lemma mux_gamma_equiv_t:
-    forall (sig : tsig var_t)
-      (a : action_circuit R Sigma REnv 1),
-      interp_circuit (retVal a) = Ob~1 ->
-      forall (v0 : vcontext sig) (c0 : ccontext sig),
+    forall (sig : tsig var_t) (cond: circuit 1),
+      Bits.single (interp_circuit cond) = true ->
+      forall (v0 : vcontext sig) (c0 c1 : ccontext sig),
         circuit_gamma_equiv v0 c0 ->
-        forall c1 : ccontext sig,
-          circuit_gamma_equiv v0
-                              (mux_ccontext (retVal a) c0 c1).
+        circuit_gamma_equiv v0 (mux_ccontext cond c0 c1).
   Proof.
-    induction sig.
-    -
-      intros.
-      unfold circuit_gamma_equiv in *.
-      intros.
-      pose (mdestruct m).
-      contradiction.
-    -
-      intros.
-      unfold circuit_gamma_equiv in *.
-      intros.
-      destruct (mdestruct m) as [(eqn_type & eqn_member) | (eqn_type & eqn_member)].
-      +
-        specialize (H0 k tau m).
-        destruct eqn_type eqn: eqn_generator.
-        repeat (rewrite (ceqn c0), (ceqn c1), (ceqn v0), eqn_member in *; cbn in * ).
-        rewrite H.
-        trivial.
-      +
-        subst.
-        rewrite (ceqn c0), (ceqn c1), (ceqn v0) in *.
-        destruct a; cbn; apply IHsig; trivial; intros.
-        specialize (H0 _ _ (MemberTl (k0,tau0) _ sig m)).
-        simpl in H0.
-        rewrite (ceqn c0), (ceqn v0) in *; cbn in *.
-        exact H0.
+    intros * Heq **.
+    eapply circuit_gamma_equiv_ccontext_equiv;
+      [ apply ccontext_equiv_mux_ccontext | ].
+    rewrite Heq; assumption.
   Qed.
 
   Lemma mux_gamma_equiv_f:
-    forall (sig : tsig var_t)
-      (a : action_circuit R Sigma REnv 1),
-      interp_circuit (retVal a) = Ob~0 ->
-      forall (v0 : vcontext sig) (c1 : ccontext sig),
+    forall (sig : tsig var_t) (cond: circuit 1),
+      Bits.single (interp_circuit cond) = false ->
+      forall (v0 : vcontext sig) (c0 c1 : ccontext sig),
         circuit_gamma_equiv v0 c1 ->
-        forall c0 : ccontext sig,
-          circuit_gamma_equiv v0
-                              (mux_ccontext (retVal a) c0 c1).
+        circuit_gamma_equiv v0 (mux_ccontext cond c0 c1).
   Proof.
-    induction sig.
-    -
-      intros.
-      unfold circuit_gamma_equiv in *.
-      intros.
-      pose (mdestruct m).
-      contradiction.
-    -
-      intros.
-      unfold circuit_gamma_equiv in *.
-      intros.
-      destruct (mdestruct m) as [(eqn_type & eqn_member) | (eqn_type & eqn_member)].
-      +
-        specialize (H0 k tau m).
-        destruct eqn_type eqn: eqn_generator.
-        repeat (rewrite (ceqn c0), (ceqn c1), (ceqn v0), eqn_member in *; cbn in * ).
-        rewrite H.
-        trivial.
-      +
-        subst.
-        rewrite (ceqn c0), (ceqn c1), (ceqn v0) in *.
-        destruct a; cbn; apply IHsig; trivial; intros.
-        specialize (H0 _ _ (MemberTl (k0,tau0) _ sig m)).
-        simpl in H0.
-        rewrite (ceqn c1), (ceqn v0) in *; cbn in *.
-        exact H0.
+    intros * Heq **.
+    eapply circuit_gamma_equiv_ccontext_equiv;
+      [ apply ccontext_equiv_mux_ccontext | ].
+    rewrite Heq; assumption.
   Qed.
-
 
   Theorem action_compiler_correct {sig tau} Log cLog:
     forall (ex: action sig tau) (clog: rwcircuit)
@@ -1143,7 +1122,7 @@ Section CompilerCorrectness.
     - (* Var *) cbn; rewrite lco_proof; eauto 6.
     - (* Const *) cbn; rewrite lco_proof; eauto 6.
     - (* Assign *)
-      t; interp_willFire_cleanup; t; eauto using  assign_gamma_equiv.
+      t; interp_willFire_cleanup; t; eauto using  circuit_gamma_equiv_creplace.
     - (* Seq *)
       t;
         [ interp_willFire_cleanup; eauto|
@@ -1152,7 +1131,7 @@ Section CompilerCorrectness.
     - (* Bind *)
       t. interp_willFire_cleanup; eauto.
       rewrite (ceqn c0), (ceqn v0) in H17.
-      specialize (bind_gamma_equiv _ _ _ _ _ _ _ H17). trivial.
+      specialize (circuit_gamma_equiv_CtxCons_rev _ _ _ _ _ _ _ H17). trivial.
       eapply interp_circuit_circuit_lt_helper_false;
         eauto 5 using action_compile_willFire_of_canFire_decreasing.
     - (* If *)
@@ -1166,7 +1145,7 @@ Section CompilerCorrectness.
             eauto with circuits.
         * unfold mux_rwsets; interp_willFire_cleanup; t.
           rewrite (interp_circuit_willFire_of_canFire'_mux_rwdata idx); t.
-        * eapply mux_gamma_equiv_t; t ; intuition.
+        * eauto using mux_gamma_equiv_t.
       + unfold mux_rwsets; interp_willFire_cleanup; t.
         right. exists x; t.
         rewrite (interp_circuit_willFire_of_canFire'_mux_rwdata x); t.
@@ -1179,7 +1158,7 @@ Section CompilerCorrectness.
             eauto with circuits.
         * unfold mux_rwsets; interp_willFire_cleanup; t.
           rewrite (interp_circuit_willFire_of_canFire'_mux_rwdata idx); t.
-        * eapply mux_gamma_equiv_f; t ; intuition.
+        * eauto using mux_gamma_equiv_f.
       + unfold mux_rwsets; interp_willFire_cleanup; t.
         right; exists x; t.
         rewrite (interp_circuit_willFire_of_canFire'_mux_rwdata x); t.
