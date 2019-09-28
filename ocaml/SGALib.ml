@@ -171,37 +171,6 @@ module Util = struct
 end
 
 module Compilation = struct
-  module DebugPrinter = struct
-    open SGA
-    open Printf
-
-    let pp_port = function
-      | P0 -> "P0"
-      | P1 -> "P1"
-
-    let rec pp_action = function
-      | UFail tau -> (sprintf "Fail (%s)" (Util.sga_type_to_string tau))
-      | UVar v -> sprintf "var %s" v
-      | UConst (tau, v) ->
-         sprintf "%s"
-           (Util.string_of_value (Util.value_of_sga_value tau v))
-      | UConstEnum (sg, nm) ->
-         sprintf "%s::%s" (Util.string_of_coq_string sg.enum_name) (Util.string_of_coq_string nm)
-      | USeq (r1, r2) -> sprintf "Seq (%s) (%s)" (pp_action r1) (pp_action r2)
-      | UBind (v, e, r) -> sprintf "Bind (%s <- %s) (%s)" v (pp_action e) (pp_action r)
-      | UIf (c, r1, r2) -> sprintf "If %s Then %s Else %s EndIf" (pp_action c) (pp_action r1) (pp_action r2)
-      | URead (p, r) -> sprintf "%s.read#%s" r.reg_name (pp_port p)
-      | UWrite (p, r, v) -> sprintf "%s.write#%s(%s)" r.reg_name (pp_port p) (pp_action v)
-      | UCall (_, e1, e2) -> (sprintf "UCall (__, %s, %s)" (pp_action e1) (pp_action e2))
-      | UAPos (_, x) -> pp_action x
-
-    let rec pp_scheduler = function
-      | UDone -> "Done"
-      | UCons (r, s) -> sprintf "Cons (%s) (%s)" (pp_action r) (pp_scheduler s)
-      | UTry (r, s1, s2) -> sprintf "Try (%s) (%s) (%s)" (pp_action r) (pp_scheduler s1) (pp_scheduler s2)
-      | USPos (_, x) -> pp_scheduler x
-  end
-
   let translate_port = function
     | 0 -> SGA.P0
     | 1 -> SGA.P1
@@ -303,7 +272,6 @@ module Compilation = struct
 
   let typecheck_rule (raw_ast: 'f raw_action) : (typechecked_action, 'f err_contents) result =
     let ast = translate_action raw_ast in
-    (* Printf.printf "AST: %s\n%!" (DebugPrinter.pp_action ast); *)
     match SGA.type_action Util.string_eq_dec _R interop_Sigma interop_uSigma raw_ast.lpos [] ast with
     | Success (SGA.ExistT (tau, r)) ->
        if tau = Bits_t 0 then Ok r
