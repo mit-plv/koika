@@ -100,12 +100,17 @@ Section TypeInference.
       match e with
       | UFail n => Success (EX (Fail (bits_t n)))
       | UVar var =>
-        let/res ktau_m := opt_result (assoc var sig) (mkerror pos (UnboundVariable var)) in
-        Success (EX (Var ``ktau_m))
+        let/res tau_m := opt_result (assoc var sig) (mkerror pos (UnboundVariable var)) in
+        Success (EX (Var ``tau_m))
       | UConst cst => Success (EX (Const cst))
       | UConstEnum sig name =>
         let/res idx := opt_result (vect_index name sig.(enum_members)) (mkerror pos (UnboundEnumMember name sig)) in
         Success (EX (Const (tau := enum_t sig) (vect_nth sig.(enum_bitpatterns) idx)))
+      | UAssign var ex =>
+        let/res tau_m := opt_result (assoc var sig) (mkerror pos (UnboundVariable var)) in
+        let/res ex' := type_action pos sig ex in
+        let/res ex' := cast_action (actpos pos ex) sig `tau_m (``ex') in
+        Success (EX (Assign (k := var) (tau := `tau_m) ``tau_m ex'))
       | USeq r1 r2 =>
         let/res r1' := type_action pos sig r1 in
         let/res r1' := cast_action (actpos pos r1) sig unit_t (``r1') in
