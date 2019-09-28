@@ -91,10 +91,20 @@ type unresolved_unit = {
     mods: unresolved_module locd list;
   }
 
+type resolved_extfun =
+  int * string ffi_signature
+
 type resolved_module = {
+    name: string;
     registers: reg_signature list;
     rules: (string * Pos.t SGALib.Compilation.raw_action) list;
-    scheduler: Pos.t SGALib.Compilation.raw_scheduler
+    schedulers: (string * Pos.t SGALib.Compilation.raw_scheduler) list
+  }
+
+type resolved_unit = {
+    r_types: typedecls;
+    r_extfuns: resolved_extfun StringMap.t;
+    r_mods: resolved_module list;
   }
 
 exception Error of Pos.t err_contents
@@ -547,12 +557,11 @@ let parse fname sexps =
     check_no_duplicates "register" (fun (nm, _) -> nm.lcnt) m.m_registers;
     check_no_duplicates "rule" (fun (nm, _) -> nm.lcnt) m.m_rules;
     check_no_duplicates "scheduler" (fun (nm, _) -> nm.lcnt) m.m_schedulers;
-    let m_scheduler = expect_single loc "scheduler"
-                        (sprintf "module `%s'" m_name.lcnt) m.m_schedulers in
+    ignore (expect_cons loc "scheduler" m.m_schedulers);
     locd_make loc
       { m with m_registers = List.rev m.m_registers;
                m_rules = List.rev m.m_rules;
-               m_schedulers = [m_scheduler] } in
+               m_schedulers = List.rev m.m_schedulers } in
   let expected_toplevel =
     [("enum", `Enum); ("struct", `Struct); ("extfun", `Extfun); ("module", `Module)] in
   let { types; extfuns; mods } =
@@ -580,7 +589,7 @@ let rexpect_symbol msg = function
   | { lpos; lcnt = Lit (Symbol s) } -> lpos, s
   | { lpos; _ } -> parse_error lpos (sprintf "Expecting a symbol (%s)" msg)
 
-let rexpect_arg k loc args =
+let rexpect_arg k loc (args: unresolved_action locd list) =
   let a, args = expect_cons loc "argument" args in
   k a, args
 
@@ -730,7 +739,7 @@ let rec rexpect_pairs msg fn = function
   | h1 :: h2 :: tl -> fn h1 h2 :: rexpect_pairs msg fn tl
   | [x] -> parse_error x.lpos (sprintf "Missing %s after this element" msg)
 
-let rexpect_type loc types args =
+let rexpect_type loc types (args: unresolved_action locd list) =
   let (loc, t), args = rexpect_arg (rexpect_symbol "a type name") loc args in
   let tau = resolve_type types (locd_make loc (Unknown_u t)) in
   loc, t, tau, args
@@ -765,7 +774,7 @@ let try_resolve_extfun extfuns name args =
   | Some (nargs, fn) -> Some (SGALib.SGA.UCustomFn fn, nargs, args)
   | None -> None
 
-let try_resolve_special_function types name args =
+let try_resolve_special_function types name (args: unresolved_action locd list) =
   match name.lcnt with
   | "new" ->
      let loc, nm, tau, args = rexpect_type name.lpos types args in
@@ -787,7 +796,7 @@ let try_resolve_special_function types name args =
                | fields -> `StructInit (sg, fields)))
   | _ -> None
 
-let pad_function_call lpos name fn nargs args =
+let pad_function_call lpos name fn nargs (args: unresolved_action locd list) =
   assert (nargs <= 2);
   if List.length args <> nargs then
     type_error lpos (sprintf "Function `%s' takes %d arguments" name nargs)
@@ -859,12 +868,11 @@ let resolve_rule types extfuns registers ((nm, action): unresolved_rule) =
                     StructInit (sg, resolve_struct_fields fields)) } in
   (nm.lcnt, resolve_action action)
 
-
 let resolve_register types (name, init) =
   { reg_name = name.lcnt;
     reg_init = resolve_value types init }
 
-let resolve_scheduler rules (s: Pos.t scheduler locd) =
+let resolve_scheduler rules ((nm, s): unresolved_scheduler) =
   let check_rule { lpos; lcnt = name } =
     if not (List.mem_assoc name rules) then
       unbound_error lpos "rule" name in
@@ -877,23 +885,27 @@ let resolve_scheduler rules (s: Pos.t scheduler locd) =
        check_rule r;
        check_scheduler s1;
        check_scheduler s2 in
-  check_scheduler s; s
+  check_scheduler s; (nm.lcnt, s)
 
 let resolve_module types (extfuns: (int * string ffi_signature) StringMap.t)
-      { lcnt = { m_registers; m_rules; m_schedulers; _ }; _ } =
+      { lcnt = { m_name; m_registers; m_rules; m_schedulers; _ }; _ } =
   let registers = List.map (resolve_register types) m_registers in
   let rules = List.map (resolve_rule types extfuns registers) m_rules in
-  let scheduler = resolve_scheduler rules (List.hd m_schedulers |> snd) in
-  { registers; rules; scheduler }
+  let schedulers = List.map (resolve_scheduler rules) m_schedulers in
+  { name = m_name.lcnt; registers; rules; schedulers }
 
 let resolve { types; extfuns; mods } =
-  let types = resolve_typedecls types in
-  let extfuns = extfuns |> List.to_seq |> Seq.map (resolve_extfun_decl types) |> StringMap.of_seq in
-  List.map (resolve_module types extfuns) mods
+  let r_types = resolve_typedecls types in
+  let r_extfuns = extfuns |> List.to_seq |> Seq.map (resolve_extfun_decl r_types) |> StringMap.of_seq in
+  let r_mods = List.map (resolve_module r_types r_extfuns) mods in
+  { r_types; r_extfuns; r_mods }
 
-let typecheck { registers; rules; scheduler } =
+let typecheck_module { registers; rules; schedulers; _ } =
   let open SGALib.Compilation in
   let tc_rule (nm, r) = (nm, check_result (typecheck_rule r)) in
   let c_rules = List.map tc_rule rules in
-  let c_scheduler = SGALib.Compilation.typecheck_scheduler scheduler in
+  let c_scheduler = List.map (typecheck_scheduler << snd) schedulers |> List.hd in
   { c_registers = registers; c_rules; c_scheduler }
+
+let typecheck resolved =
+  List.map typecheck_module resolved.r_mods
