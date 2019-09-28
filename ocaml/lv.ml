@@ -79,10 +79,10 @@ type unresolved_extfun = {
   }
 
 type typedecls = {
-    enums: enum_sig StringMap.t;
-    structs: struct_sig StringMap.t;
-    enum_fields: enum_sig StringMap.t;
-    all: typ StringMap.t
+    td_enums: enum_sig StringMap.t;
+    td_structs: struct_sig StringMap.t;
+    td_enum_fields: enum_sig StringMap.t;
+    td_all: typ StringMap.t
   }
 
 type unresolved_unit = {
@@ -585,10 +585,10 @@ let rexpect_arg k loc args =
   k a, args
 
 let types_empty =
-  { enums = StringMap.empty;
-    enum_fields = StringMap.empty;
-    structs = StringMap.empty;
-    all = StringMap.empty }
+  { td_enums = StringMap.empty;
+    td_enum_fields = StringMap.empty;
+    td_structs = StringMap.empty;
+    td_all = StringMap.empty }
 
 let types_add loc tau_r types =
   let err k kd1 kd2 =
@@ -598,28 +598,28 @@ let types_add loc tau_r types =
     | `Enum sg ->
        let name = sg.enum_name in
        name, Enum_t sg,
-       { types with enums = add_or_raise name sg types.enums
-                              (fun k _ _ -> err k "enum" "enum");
-                    enum_fields = List.fold_left (fun fields field ->
-                                      add_or_raise field sg fields
-                                        (fun k _ _ -> err k "enumerator" "enumerator"))
-                                    types.enum_fields (List.map fst sg.enum_members) }
+       { types with td_enums = add_or_raise name sg types.td_enums
+                                 (fun k _ _ -> err k "enum" "enum");
+                    td_enum_fields = List.fold_left (fun fields field ->
+                                         add_or_raise field sg fields
+                                           (fun k _ _ -> err k "enumerator" "enumerator"))
+                                       types.td_enum_fields (List.map fst sg.enum_members) }
     | `Struct sg ->
        let name = sg.struct_name in
        name, Struct_t sg,
-       { types with structs = add_or_raise name sg types.structs
-                                (fun k _ _ -> err k "struct" "struct") } in
-  { types with all = add_or_raise name tau types.all
-                       (fun k v v' -> err k (kind_to_str v) (kind_to_str v')) }
+       { types with td_structs = add_or_raise name sg types.td_structs
+                                   (fun k _ _ -> err k "struct" "struct") } in
+  { types with td_all = add_or_raise name tau types.td_all
+                          (fun k v v' -> err k (kind_to_str v) (kind_to_str v')) }
 
 let resolve_type types { lpos; lcnt: unresolved_type } =
   match lcnt with
   | Bits_u sz -> Bits_t sz
   | Unknown_u nm ->
-     match StringMap.find_opt nm types.all with
+     match StringMap.find_opt nm types.td_all with
      | Some tau -> tau
      | None ->
-        unbound_error lpos ~bound:(keys types.all) "type" nm
+        unbound_error lpos ~bound:(keys types.td_all) "type" nm
 
 let resolve_typedecl types (typ: unresolved_typedecl locd) =
   let resolve_struct_field_type (nm, tau) =
@@ -700,14 +700,14 @@ let resolve_value types { lpos; lcnt } =
   | UBits bs -> Bits bs
   | UEnum { name = ""; field } ->
      (* LATER allow enums to share an enumerator and flag ambiguities *)
-     (match StringMap.find_opt field types.enum_fields with
+     (match StringMap.find_opt field types.td_enum_fields with
       | Some sg -> resolve_enum_field sg field
-      | None -> unbound_error lpos ~bound:(keys types.enum_fields) "enumerator" field)
+      | None -> unbound_error lpos ~bound:(keys types.td_enum_fields) "enumerator" field)
   | UEnum { name; field } ->
-     (match StringMap.find_opt name types.all with
+     (match StringMap.find_opt name types.td_all with
       | Some (Enum_t sg) -> resolve_enum_field sg field
       | Some tau -> type_error lpos (sprintf "Type `%s' is not an enum" (typ_to_string tau))
-      | None -> unbound_error lpos ~bound:(keys types.enums) "enum" name)
+      | None -> unbound_error lpos ~bound:(keys types.td_enums) "enum" name)
 
 let try_resolve_bits_fn { lpos; lcnt = name } args =
   let bits_fn nm = SGALib.SGA.UPrimFn (SGALib.SGA.UBitsFn nm) in
