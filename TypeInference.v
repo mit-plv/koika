@@ -162,6 +162,9 @@ End TypeInference.
 
 (* Coq bug: the name must_typecheck is not resolved at notation definition time *)
 
+Class DummyPos pos_t := { dummy_pos: pos_t }.
+Instance DummyPos_unit : DummyPos unit := {| dummy_pos := tt |}.
+
 Ltac __must_typecheck_cbn R Sigma tcres :=
   let tcres := (eval hnf in tcres) in
   let tcterm := (eval cbn in (must_typecheck R Sigma tcres)) in
@@ -179,7 +182,7 @@ Notation _must_typecheck R Sigma tcres :=
   ltac:(__must_typecheck R Sigma tcres) (only parsing).
 
 Notation tc_action R Sigma uSigma action :=
-  (ltac:(let typed := constr:(type_action R Sigma uSigma tt List.nil action) in
+  (ltac:(let typed := constr:(type_action R Sigma uSigma dummy_pos List.nil action) in
          let typed := eval cbn in (projT2 (_must_typecheck R%function Sigma%function typed)) in
          exact typed))
     (only parsing).
@@ -199,7 +202,7 @@ Notation tc_rules R Sigma uSigma actions :=
     (only parsing).
 
 Notation tc_scheduler uscheduler :=
-  (type_scheduler tt uscheduler)
+  (type_scheduler dummy_pos uscheduler)
     (only parsing).
 
 (*   Hint Resolve (@env_related_putenv _ _ _ GammaEnv): types. *)
