@@ -320,6 +320,11 @@ let parse fname sexps =
                 | None ->
                    let msg = sprintf "Cannot parse `%s' as a literal (number, variable, symbol or keyword)" a in
                    parse_error loc msg in
+  let expect_identifier v =
+    let loc, v = expect_atom "an identifier" v in
+    match try_variable v with
+    | Some v -> loc, v
+    | None -> parse_error loc (sprintf "Cannot parse `%s' as an identifier" v) in
   let try_bits loc v =
     match try_number loc v with
     | Some (`Const c) -> Some c
@@ -438,13 +443,10 @@ let parse fname sexps =
   and expect_let_binding b =
     let loc, b = expect_list "a let binding" b in
     let var, values = expect_cons loc "identifier" b in
-    let loc_v, var = expect_atom "an identifier" var in
-    match try_variable var with
-    | None -> parse_error loc_v (sprintf "Cannot parse `%s' as an identifier" var)
-    | Some var ->
-       let value = expect_single loc "value" "let binding" values in
-       let value = expect_action value in
-       (locd_make loc_v var, value)
+    let loc_v, var = expect_identifier var in
+    let value = expect_single loc "value" "let binding" values in
+    let value = expect_action value in
+    (locd_make loc_v var, value)
   and expect_let_bindings bs =
     let _, bs = expect_list "let bindings" bs in
     List.map expect_let_binding bs in
@@ -506,7 +508,7 @@ let parse fname sexps =
     let kind, name_body = expect_cons d_loc skind d in
     let _, kind = expect_constant expected kind in
     let name, body = expect_cons d_loc "name" name_body in
-    let name = locd_of_pair (expect_atom "a name" name) in
+    let name = locd_of_pair (expect_identifier name) in
     Printf.printf "Processing decl %s\n%!" name.lcnt;
     (d_loc,
      match kind with

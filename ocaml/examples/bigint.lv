@@ -7,5 +7,5 @@
     (let ((r (read.0 r)))
       (write.0 r (+ (<< r 7'1) (+ 128'15 (zextl 128 (sel r 7'127)))))))
 
-  (scheduler _
+  (scheduler main
     (sequence rotate1)))

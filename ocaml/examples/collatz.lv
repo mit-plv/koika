@@ -1,5 +1,5 @@
 ;; (progn (load "lv.el") (emacs-lisp-mode))
-(module Collatz
+(module collatz
   (register r0 32'hff)
 
   (rule test
