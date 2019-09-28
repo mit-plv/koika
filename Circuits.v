@@ -324,24 +324,15 @@ Section CircuitCompilation.
     REnv.(map2) (fun k treg freg => mux_rwdata an cond treg freg)
                 tRegs fRegs.
 
-  Fixpoint mux_ccontext {sig} (cond: circuit 1) (ctxT:ccontext sig) (ctxF:ccontext sig) : ccontext sig.
-    induction sig.
-    -
-      exact CtxEmpty.
-    -
-      destruct a.
-      inversion ctxT as [ impossible | previous_sig_t next_binder_t next_value_t previous_ctx_t eq_binder_t].
-      inversion ctxF as [ impossible | previous_sig_f next_binder_f next_value_f previous_ctx_f eq_binder_f].
-      econstructor.
-      exact (CMux cond (next_value_t) (next_value_f)).
-      apply mux_ccontext.
-      apply cond.
-      apply previous_ctx_t.
-      apply previous_ctx_f.
-  Defined.
+  Fixpoint mux_ccontext {sig} (cond: circuit 1) (ctxT: ccontext sig) (ctxF: ccontext sig) : ccontext sig :=
+    match sig return ccontext sig -> ccontext sig -> ccontext sig with
+    | nil => fun ctxT ctxF => CtxEmpty
+    | cons (k, tau) sig => fun ctxT ctxF =>
+                          CtxCons (k, tau) (CMux cond (chd ctxT) (chd ctxF))
+                                  (mux_ccontext cond (ctl ctxT) (ctl ctxF))
+    end ctxT ctxF.
 
   Section Action.
-
     Fixpoint compile_action
              {sig: tsig var_t}
              {tau}
