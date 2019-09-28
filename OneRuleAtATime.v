@@ -194,7 +194,7 @@ Section Proof.
     - (* Bind *)
       t.
       erewrite IHa1 by eauto; cbn.
-      erewrite IHa2 by eauto; rewrite <- HSome; reflexivity.
+      erewrite IHa2 by eauto; reflexivity.
     - (* if *)
       t;
         erewrite IHa1 by eauto; cbn;
