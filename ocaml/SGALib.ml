@@ -190,6 +190,7 @@ module Compilation = struct
        | Fail tau -> SGA.UFail (Util.sga_type_of_typ tau)
        | Lit (Var v) -> SGA.UVar v
        | Lit (Const v) -> let tau, v = Util.sga_value_of_value v in SGA.UConst (tau, v)
+       | Assign (v, expr) -> SGA.UAssign (v.lcnt, translate_action expr)
        | StructInit (sg, fields) ->
           SGA.uStructInit (Util.sga_struct_sig_of_struct_sig sg)
             (List.map (fun (nm, v) -> Util.coq_string_of_string nm.lcnt, translate_action v) fields)

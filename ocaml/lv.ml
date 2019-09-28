@@ -339,11 +339,11 @@ let parse fname sexps =
                 | None ->
                    let msg = sprintf "Cannot parse `%s' as a literal (number, variable, symbol or keyword)" a in
                    parse_error loc msg in
-  let expect_identifier v =
-    let loc, v = expect_atom "an identifier" v in
+  let expect_identifier msg v =
+    let loc, v = expect_atom msg v in
     match try_variable v with
     | Some v -> loc, v
-    | None -> parse_error loc (sprintf "Cannot parse `%s' as an identifier" v) in
+    | None -> parse_error loc (sprintf "Cannot parse `%s' as %s" v msg) in
   let try_bits loc v =
     match try_number loc v with
     | Some (`Const c) -> Some c
@@ -406,6 +406,10 @@ let parse fname sexps =
               | [] -> Common.Fail (Bits_t 0)
               | [arg] -> Lit (Fail (expect_type ~bits_raw:true arg |> snd))
               | _ -> parse_error loc (sprintf "Fail takes 1 argument"))
+          | "setq" ->
+             let var, body = expect_cons loc "variable name" args in
+             let value = expect_action (expect_single loc "value" "write expression" body) in
+             Assign (locd_of_pair (expect_identifier "an variable name" var), value)
           | "progn" ->
              Progn (List.map expect_action args)
           | "let" ->
@@ -422,12 +426,12 @@ let parse fname sexps =
           | "write.0" | "write.1" ->
              let reg, body = expect_cons loc "register name" args in
              let port = int_of_string (String.sub hd (String.length hd - 1) 1) in
-             Write (port, locd_of_pair (expect_atom "a register name" reg),
+             Write (port, locd_of_pair (expect_identifier "a register name" reg),
                     expect_action (expect_single loc "value" "write expression" body))
           | "read.0" | "read.1" ->
              let reg = expect_single loc "register name" "read expression" args in
              let port = int_of_string (String.sub hd (String.length hd - 1) 1) in
-             Read (port, locd_of_pair (expect_atom "a register name" reg))
+             Read (port, locd_of_pair (expect_identifier "a register name" reg))
           | "switch" ->
              let operand, branches = expect_cons loc "switch operand" args in
              let branches = List.map expect_switch_branch branches in
@@ -461,7 +465,7 @@ let parse fname sexps =
   and expect_let_binding b =
     let loc, b = expect_list "a let binding" b in
     let var, values = expect_cons loc "identifier" b in
-    let loc_v, var = expect_identifier var in
+    let loc_v, var = expect_identifier "an identifier" var in
     let value = expect_single loc "value" "let binding" values in
     let value = expect_action value in
     (locd_make loc_v var, value)
@@ -480,11 +484,11 @@ let parse fname sexps =
        locd_make loc
          (match hd with
           | "sequence" ->
-             Sequence (List.map (locd_of_pair << (expect_atom "a rule name")) args)
+             Sequence (List.map (locd_of_pair << (expect_identifier "a rule name")) args)
           | "try" ->
              let rname, args = expect_cons loc "rule name" args in
              let s1, s2 = expect_pair loc "subscheduler 1" "subscheduler 2" args in
-             Try (locd_of_pair (expect_atom "a rule name" rname),
+             Try (locd_of_pair (expect_identifier "a rule name" rname),
                   expect_scheduler s1,
                   expect_scheduler s2)
           | _ ->
@@ -526,7 +530,7 @@ let parse fname sexps =
     let kind, name_body = expect_cons d_loc skind d in
     let _, kind = expect_constant expected kind in
     let name, body = expect_cons d_loc "name" name_body in
-    let name = locd_of_pair (expect_identifier name) in
+    let name = locd_of_pair (expect_identifier "an identifier" name) in
     Printf.printf "Processing decl %s\n%!" name.lcnt;
     (d_loc,
      match kind with
@@ -839,6 +843,7 @@ let resolve_rule types extfuns registers ((nm, action): unresolved_rule) =
                 let v = UEnum { name; field } in
                 Lit (Common.Const (resolve_value types (locd_make lpos v)))
              | Lit (Const v) -> Lit (Common.Const (resolve_value types (locd_make lpos v)))
+             | Assign (v, a) -> Assign (v, resolve_action a)
              | StructInit (sg, fields) ->
                 StructInit (sg, resolve_struct_fields fields)
              | Progn rs -> Progn (List.map resolve_action rs)
