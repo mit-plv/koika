@@ -37,8 +37,24 @@ type unresolved_value =
   | UBits of bool array
   | UEnum of unresolved_enum
 
+type unresolved_typedecl =
+  | Enum_u of { name: string locd; bitsize: int locd; members: (string locd * bits_value locd) list }
+  | Struct_u of { name: string locd; fields: (string locd * unresolved_type locd) list }
+and unresolved_type =
+  | Bits_u of int
+  | Unknown_u of string
+
+type unresolved_literal =
+  | Var of var_t
+  | Fail of unresolved_type
+  | Num of int
+  | Symbol of string
+  | Keyword of string
+  | Enumerator of { name: string; field: string }
+  | Const of unresolved_value
+
 type unresolved_action =
-  (Pos.t, unresolved_value, string, string) action
+  (Pos.t, unresolved_literal, string, string) action
 
 type unresolved_rule =
   string locd * unresolved_action locd
@@ -55,13 +71,6 @@ type unresolved_module = {
     m_rules: unresolved_rule list;
     m_schedulers: unresolved_scheduler list;
   }
-
-type unresolved_typedecl =
-  | Enum_u of { name: string locd; bitsize: int locd; members: (string locd * bits_value locd) list }
-  | Struct_u of { name: string locd; fields: (string locd * unresolved_type locd) list }
-and unresolved_type =
-  | Bits_u of int
-  | Unknown_u of string
 
 type unresolved_extfun = {
     name: string locd;
@@ -352,11 +361,14 @@ let parse fname sexps =
     match try_enumerator nm with
     | Some ev -> ev
     | None -> parse_error loc (sprintf "Expecting an enumerator (format: abc::xyz or ::xyz), got `%s'" nm) in
-  let expect_type = function (* (bit 16), 'typename *)
+  let expect_type ?(bits_raw=false) = function (* (bit 16), 'typename *)
     | Atom { loc; atom } ->
        (match try_symbol atom with
         | Some s -> (loc, Unknown_u s)
-        | None -> parse_error loc (sprintf "Type names must be quoted (try '%s)" atom))
+        | None ->
+           match try_number loc atom with
+           | Some (`Num n) when bits_raw -> (loc, Bits_u n)
+           | _ -> parse_error loc (sprintf "Expecting a quoted type name, got `%s'" atom))
     | List { loc; elements } ->
        let hd, sizes = expect_cons loc "a type" elements in
        let _ = expect_constant [("bits", ())] hd in
@@ -368,26 +380,22 @@ let parse fname sexps =
     let hd, args = expect_cons loc kind elements in
     let loc_hd, hd = expect_atom (sprintf "a %s name" kind) hd in
     loc_hd, hd, args in
-  let fail_num_re =
-    Str.regexp "\\([^ \t]+\\)'fail" in
   let rec expect_action = function
     | Atom { loc; atom } ->
        locd_make loc
          (match atom with
           | "skip" -> Skip
-          | "fail" -> Fail 0
-          | atom ->
-             if Str.string_match fail_num_re atom 0 then
-               let numstr = Str.matched_group 1 atom in
-               (match int_of_string_opt numstr with
-                | Some sz -> Fail sz
-                | None -> parse_error loc (sprintf "Cannot parse %s as a number" numstr))
-             else
-               expect_literal loc atom)
+          | "fail" -> Fail (Bits_t 0)
+          | atom -> Lit (expect_literal loc atom))
     | List { loc; elements } ->
        let loc_hd, hd, args = expect_funapp loc "constructor or function" (elements) in
        locd_make loc
          (match hd with
+          | "fail" ->
+             (match args with
+              | [] -> Common.Fail (Bits_t 0)
+              | [arg] -> Lit (Fail (expect_type ~bits_raw:true arg |> snd))
+              | _ -> parse_error loc (sprintf "Fail takes 1 argument"))
           | "progn" ->
              Progn (List.map expect_action args)
           | "let" ->
@@ -426,7 +434,7 @@ let parse fname sexps =
     let lbl = match lbl with
       | Atom { loc; atom = "_" } -> `AnyLabel loc
       | _ -> let loc, cst = expect_const "a case label" lbl in
-             `SomeLabel (locd_make loc (Const cst)) in
+             `SomeLabel (locd_make loc (Lit (Const cst))) in
     (lbl, locd_make loc (Progn (List.map expect_action body)))
   and build_switch_body branches =
     List.fold_right (fun (lbl, (branch: _ action locd)) acc ->
@@ -561,15 +569,15 @@ let parse fname sexps =
     mods = List.rev mods }
 
 let rexpect_num = function
-  | { lpos; lcnt = Num n; _} -> lpos, n
+  | { lpos; lcnt = Lit (Num n); _} -> lpos, n
   | { lpos; _ } -> parse_error lpos "Expecting a type level constant"
 
 let rexpect_keyword msg = function
-  | { lpos; lcnt = Keyword s ; _} -> lpos, s
+  | { lpos; lcnt = Lit (Keyword s); _} -> lpos, s
   | { lpos; _ } -> parse_error lpos (sprintf "Expecting a keyword (%s)" msg)
 
 let rexpect_symbol msg = function
-  | { lpos; lcnt = Symbol s } -> lpos, s
+  | { lpos; lcnt = Lit (Symbol s) } -> lpos, s
   | { lpos; _ } -> parse_error lpos (sprintf "Expecting a symbol (%s)" msg)
 
 let rexpect_arg k loc args =
@@ -784,7 +792,7 @@ let pad_function_call lpos name fn nargs args =
   if List.length args <> nargs then
     type_error lpos (sprintf "Function `%s' takes %d arguments" name nargs)
   else
-    let padding = list_const (2 - nargs) { lpos; lcnt = Const (UBits [||]) } in
+    let padding = list_const (2 - nargs) { lpos; lcnt = Lit (Const (UBits [||])) } in
     { lpos; lcnt = fn }, List.append args padding
 
 let resolve_function types extfuns name (args: unresolved_action locd list) =
@@ -813,15 +821,15 @@ let resolve_rule types extfuns registers ((nm, action): unresolved_rule) =
       lcnt = match lcnt with
              | Skip -> Skip
              | Fail sz -> Fail sz
-             | Var v -> Var v
-             | Num n -> untyped_number_error lpos n
-             | Symbol s -> symbol_error lpos s
-             | Keyword k ->
-                parse_error lpos (sprintf "Unexpected keyword: `%s'" k)
-             | Enumerator { name; field } ->
+             | Lit (Fail tau) -> Fail (resolve_type types (locd_make lpos tau))
+             | Lit (Var v) -> Lit (Common.Var v)
+             | Lit (Num n) -> untyped_number_error lpos n
+             | Lit (Symbol s) -> symbol_error lpos s
+             | Lit (Keyword k) -> parse_error lpos (sprintf "Unexpected keyword: `%s'" k)
+             | Lit (Enumerator { name; field }) ->
                 let v = UEnum { name; field } in
-                Const (resolve_value types (locd_make lpos v))
-             | Const v -> Const (resolve_value types (locd_make lpos v))
+                Lit (Common.Const (resolve_value types (locd_make lpos v)))
+             | Lit (Const v) -> Lit (Common.Const (resolve_value types (locd_make lpos v)))
              | StructInit (sg, fields) ->
                 StructInit (sg, resolve_struct_fields fields)
              | Progn rs -> Progn (List.map resolve_action rs)

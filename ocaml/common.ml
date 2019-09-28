@@ -86,37 +86,36 @@ let locd_make lpos lcnt =
 let locd_of_pair (pos, x) =
   locd_make pos x
 
-type ('f, 'cst_t, 'reg_t, 'fn_t) action =
-  | Skip
-  | Fail of size_t
+type 'cst_t literal =
   | Var of var_t
-  | Num of int
-  | Symbol of string
-  | Keyword of string
-  | Enumerator of { name: string; field: string }
   | Const of 'cst_t
-  | StructInit of (struct_sig * (('f, string) locd * ('f, 'cst_t, 'reg_t, 'fn_t) action_locd) list)
-  | Progn of ('f, 'cst_t, 'reg_t, 'fn_t) action_locd list
-  | Let of (('f, var_t) locd * ('f, 'cst_t, 'reg_t, 'fn_t) action_locd) list
-           * ('f, 'cst_t, 'reg_t, 'fn_t) action_locd list
-  | If of ('f, 'cst_t, 'reg_t, 'fn_t) action_locd
-          * ('f, 'cst_t, 'reg_t, 'fn_t) action_locd
-          * ('f, 'cst_t, 'reg_t, 'fn_t) action_locd list
-  | When of ('f, 'cst_t, 'reg_t, 'fn_t) action_locd
-            * ('f, 'cst_t, 'reg_t, 'fn_t) action_locd list
-  | Switch of { operand: ('f, 'cst_t, 'reg_t, 'fn_t) action_locd;
-                default: ('f, 'cst_t, 'reg_t, 'fn_t) action_locd;
-                branches: (('f, 'cst_t, 'reg_t, 'fn_t) action_locd
-                           * ('f, 'cst_t, 'reg_t, 'fn_t) action_locd) list } (* branches *)
+
+type ('f, 'lit_t, 'reg_t, 'fn_t) action =
+  | Skip
+  | Fail of typ
+  | Lit of 'lit_t
+  | StructInit of (struct_sig * (('f, string) locd * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd) list)
+  | Progn of ('f, 'lit_t, 'reg_t, 'fn_t) action_locd list
+  | Let of (('f, var_t) locd * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd) list
+           * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd list
+  | If of ('f, 'lit_t, 'reg_t, 'fn_t) action_locd
+          * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd
+          * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd list
+  | When of ('f, 'lit_t, 'reg_t, 'fn_t) action_locd
+            * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd list
+  | Switch of { operand: ('f, 'lit_t, 'reg_t, 'fn_t) action_locd;
+                default: ('f, 'lit_t, 'reg_t, 'fn_t) action_locd;
+                branches: (('f, 'lit_t, 'reg_t, 'fn_t) action_locd
+                           * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd) list } (* branches *)
   | Read of port_t
             * ('f, 'reg_t) locd
   | Write of port_t
              * ('f, 'reg_t) locd
-             * ('f, 'cst_t, 'reg_t, 'fn_t) action_locd
+             * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd
   | Call of ('f, 'fn_t) locd
-            * ('f, 'cst_t, 'reg_t, 'fn_t) action_locd list
-and ('f, 'cst_t, 'reg_t, 'fn_t) action_locd =
-  ('f, ('f, 'cst_t, 'reg_t, 'fn_t) action) locd
+            * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd list
+and ('f, 'lit_t, 'reg_t, 'fn_t) action_locd =
+  ('f, ('f, 'lit_t, 'reg_t, 'fn_t) action) locd
 
 type 'f scheduler =
   | Done

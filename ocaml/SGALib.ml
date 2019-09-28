@@ -211,17 +211,16 @@ module Compilation = struct
     SGA.UConst (SGA.Bits_t 0, Obj.magic (SGA.Bits.zero 0))
 
   type 'f raw_action =
-    ('f, ('f, value, reg_signature, (string ffi_signature) SGA.interop_ufn_t) action) locd
+    ('f, ('f, value literal, reg_signature, (string ffi_signature) SGA.interop_ufn_t) action) locd
 
   let rec translate_action ({ lpos; lcnt }: _ raw_action) =
     SGA.UAPos
       (lpos,
        match lcnt with
-       | Skip -> uskip
-       | Fail sz -> SGA.UFail (SGA.Bits_t sz)
-       | Var v -> SGA.UVar v
-       | Num _ | Symbol _ | Keyword _ | Enumerator _ -> assert false
-       | Const v -> let tau, v = Util.sga_value_of_value v in SGA.UConst (tau, v)
+       | Skip -> SGA.uSkip
+       | Fail tau -> SGA.UFail (Util.sga_type_of_typ tau)
+       | Lit (Var v) -> SGA.UVar v
+       | Lit (Const v) -> let tau, v = Util.sga_value_of_value v in SGA.UConst (tau, v)
        | StructInit (sg, fields) ->
           SGA.uInitStruct (Util.sga_struct_sig_of_struct_sig sg)
             (List.map (fun (nm, v) -> Util.coq_string_of_string nm.lcnt, translate_action v) fields)
@@ -232,7 +231,7 @@ module Compilation = struct
        | When (e, rs) -> SGA.UIf (translate_action e, translate_seq rs, SGA.UFail (SGA.Bits_t 0))
        | Switch { operand; default; branches } ->
           let opname = (* gensym *) "switch_operand" in
-          let opvar = locd_make operand.lpos (Var opname) in
+          let opvar = locd_make operand.lpos (Lit (Var opname)) in
           let switch = SGA.uSwitch (translate_action opvar)
                         (translate_action default)
                         (List.map (fun (lbl, br) ->
