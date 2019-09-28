@@ -350,7 +350,7 @@ let compile (type name_t var_t reg_t)
           p "std::ostringstream stream;";
           p "stream << \"%s { \";" v_tau;
           List.iter (fun (fname, ftau) ->
-              p "stream << \".%s = \" << %s(%s.%s) << \"; \";"
+              p "stream << \"  .%s = \" << %s(%s.%s) << \"; \";"
                 fname (sp_value_printer ftau) v_arg fname)
             sg.struct_fields;
           p "stream << \"}\";";
