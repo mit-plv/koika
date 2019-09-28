@@ -210,7 +210,10 @@ module Compilation = struct
   type 'f raw_action =
     ('f, ('f, value literal, reg_signature, (string ffi_signature) SGA.interop_ufn_t) action) locd
 
-  let rec translate_action ({ lpos; lcnt }: _ raw_action) =
+  type 'f translated_action =
+    ('f, var_t, reg_signature, string ffi_signature SGA.interop_ufn_t) SGA.uaction
+
+  let rec translate_action ({ lpos; lcnt }: 'f raw_action) : 'f translated_action =
     SGA.UAPos
       (lpos,
        match lcnt with
