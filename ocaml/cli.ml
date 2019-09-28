@@ -23,15 +23,22 @@ let all_backends =
   (* Exe implies Hpp and Cpp *)
   [`Verilog; `Dot; `Exe]
 
-let backend_of_fname fname =
+let exts, ext_re =
+  let exts = List.map fst exts_to_backends in
+  let cases = String.concat "\\|" exts in
+  exts, Str.regexp (sprintf "^\\(.*\\)\\.\\(%s\\)$" cases)
+
+let split_extension fname =
   let fail () =
-    failwith "Output file must have extension .v, .dot, .hpp, .cpp, .exe, or .all" in
-  match Core.Filename.split_extension fname with
-  | _, None -> fail ()
-  | _, Some ext ->
-     match List.assoc_opt ext exts_to_backends with
-     | None -> fail ()
-     | Some backend -> backend
+    let exts = String.concat ", " exts in
+    failwith (sprintf "Output file must have one of the following extensions: %s" exts) in
+  if Str.string_match ext_re fname 0 then
+    (Str.matched_group 1 fname, Str.matched_group 2 fname)
+  else fail ()
+
+let backend_of_fname fname =
+  let _, ext = split_extension fname in
+  List.assoc ext exts_to_backends
 
 let ext_of_backend backend =
   List.assoc backend backends_to_exts
