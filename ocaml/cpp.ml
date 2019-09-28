@@ -191,6 +191,7 @@ let compile (type name_t var_t reg_t)
   let p fmt = pk nl fmt in
   let pr fmt = pk ignore fmt in
   let p_buffer b = Buffer.add_buffer !buffer b in
+  let set_buffer b = let b' = !buffer in buffer := b; b' in
 
   let needs_multiprecision = ref false in
   let user_types = ref [] in
@@ -721,12 +722,9 @@ let compile (type name_t var_t reg_t)
         nl ()) in
 
   let with_output_to_buffer (pbody: unit -> unit) =
-    let buf = !buffer in
-    let temp = Buffer.create 4096 in
-    buffer := temp;
+    let buf = set_buffer (Buffer.create 4096) in
     pbody ();
-    buffer := buf;
-    temp in
+    set_buffer buf in
 
   let p_hpp () =
     let impl = with_output_to_buffer p_impl in
