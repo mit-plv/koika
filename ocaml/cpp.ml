@@ -263,9 +263,9 @@ let compile (type name_t var_t reg_t)
     let fmt = sprintf "%%0#%dx" (w + 2) in
     cpp_const_init bs_size (Z.format fmt (bits_to_Z bs))
   and sp_enum_value sg v =
-    match List.find_opt (fun (_nm, bs) -> bs = v) sg.enum_members with
+    match enum_find_field_opt sg v with
     | None -> sprintf "static_cast<%s>(%s)" (cpp_enum_name sg) (sp_bits_value v)
-    | Some (nm, _) -> sprintf "%s::%s" (cpp_enum_name sg) nm
+    | Some nm -> sprintf "%s::%s" (cpp_enum_name sg) nm
   and sp_struct_value sg fields =
     let fields = String.concat ", " (List.map sp_value fields) in
     sprintf "%s{ %s }" (cpp_struct_name sg) fields in
@@ -429,38 +429,9 @@ let compile (type name_t var_t reg_t)
     | Enum_t sg -> p_enum_eq sg; p_enum_pack sg; nl (); p_enum_unpack sg
     | Struct_t sg -> p_struct_eq sg; nl (); p_struct_pack sg; nl (); p_struct_unpack sg in
 
-  let compare_type tau1 tau2 =
-    match tau1, tau2 with
-    | Bits_t sz1, Bits_t sz2 -> compare sz1 sz2
-    | Bits_t _, _ -> -1
-    | _, Bits_t _ -> 1
-    | Enum_t sg1, Enum_t sg2 -> compare sg1.enum_name sg2.enum_name
-    | Enum_t _, _ -> -1
-    | _, Enum_t _ -> 1
-    | Struct_t sg1, Struct_t sg2 -> compare sg1.struct_name sg2.struct_name in
-
-  let topo_sort_types types =
-    let add (seen, ordered) nm = function
-      | Bits_t _ -> (seen, ordered)
-      | (Struct_t _ | Enum_t _) as tau -> (StringSet.add nm seen, tau :: ordered) in
-    let rec loop ((seen, _) as acc) (nm, tau) =
-      if StringSet.mem nm seen then acc
-      else let acc = match tau with
-             | Struct_t sg -> List.fold_left loop acc sg.struct_fields
-             | _ -> acc in
-           add acc nm tau in
-    List.rev (snd (List.fold_left loop (StringSet.empty, []) types)) in
-
   let p_type_declarations types =
-    let types = List.sort (fun (_, t) (_, t') -> compare_type t t') types in
-    let types = topo_sort_types types in
-    let enums, structs =
-      List.fold_right (fun tau (enums, structs) ->
-          match tau with
-          | Enum_t sg -> (sg :: enums, structs)
-          | Struct_t sg -> (enums, sg :: structs)
-          | _ -> (enums, structs))
-        types ([], []) in
+    let types = topo_sort_types (sort_types types) in
+    let enums, structs = partition_types types in
     List.iter p_enum_decl enums;
     nl ();
     iter_sep nl p_struct_decl structs;

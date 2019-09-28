@@ -1,6 +1,13 @@
 type size_t = int
 type ptr_t = int
 
+module OrderedString = struct
+  type t = string
+  let compare = compare
+end
+module StringSet = Set.Make (OrderedString)
+module StringMap = Map.Make (OrderedString)
+
 type bits_value = bool array
 
 type typ =
@@ -14,6 +21,11 @@ and enum_sig =
   { enum_name: string;
     enum_bitsize: int;
     enum_members: (string * bits_value) list }
+
+let enum_find_field_opt sg v =
+  match List.find_opt (fun (_nm, bs) -> bs = v) sg.enum_members with
+  | Some (nm, _) -> Some nm
+  | None -> None
 
 let rec typ_sz = function
   | Bits_t sz -> sz
@@ -51,6 +63,39 @@ and struct_field_to_string (nm, typ) =
 and struct_sig_to_string { struct_name; struct_fields } =
   let fields = List.map struct_field_to_string struct_fields in
   Printf.sprintf "struct %s { %s }" struct_name (String.concat "; " fields)
+
+let compare_types tau1 tau2 =
+  match tau1, tau2 with
+  | Bits_t sz1, Bits_t sz2 -> compare sz1 sz2
+  | Bits_t _, _ -> -1
+  | _, Bits_t _ -> 1
+  | Enum_t sg1, Enum_t sg2 -> compare sg1.enum_name sg2.enum_name
+  | Enum_t _, _ -> -1
+  | _, Enum_t _ -> 1
+  | Struct_t sg1, Struct_t sg2 -> compare sg1.struct_name sg2.struct_name
+
+let sort_types types =
+  List.sort (fun (_, t) (_, t') -> compare_types t t') types
+
+let topo_sort_types types =
+  let add (seen, ordered) nm = function
+    | Bits_t _ -> (seen, ordered)
+    | (Struct_t _ | Enum_t _) as tau -> (StringSet.add nm seen, tau :: ordered) in
+  let rec loop ((seen, _) as acc) (nm, tau) =
+    if StringSet.mem nm seen then acc
+    else let acc = match tau with
+           | Struct_t sg -> List.fold_left loop acc sg.struct_fields
+           | _ -> acc in
+         add acc nm tau in
+  List.rev (snd (List.fold_left loop (StringSet.empty, []) types))
+
+let partition_types types =
+  List.fold_right (fun tau (enums, structs) ->
+      match tau with
+      | Bits_t _ -> (enums, structs)
+      | Enum_t sg -> (sg :: enums, structs)
+      | Struct_t sg -> (enums, sg :: structs))
+    types ([], [])
 
 type ('prim, 'custom) fun_id_t =
   | CustomFn of 'custom
@@ -189,10 +234,3 @@ let make_gensym () =
   (next, reset)
 
 let (<<) f g x = f (g x)
-
-module OrderedString = struct
-  type t = string
-  let compare = compare
-end
-module StringSet = Set.Make (OrderedString)
-module StringMap = Map.Make (OrderedString)
