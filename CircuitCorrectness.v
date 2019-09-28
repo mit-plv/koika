@@ -547,25 +547,51 @@ Section CompilerCorrectness.
 
   Theorem rwset_circuit_lt_compile_action_correct {sig tau} :
     forall (gamma : ccontext sig) (a : action sig tau) (rwc : rwcircuit),
-      circuit_lt (canFire (erwc (compile_action rc gamma a rwc))) (canFire rwc) /\
-      forall idx, rwset_circuit_lt_invariant (rwc.(regs)) ((compile_action rc gamma a rwc).(erwc).(regs)) idx.
+      let (circ, gamma_new) := (compile_action rc gamma a rwc) in
+      circuit_lt (canFire (erwc circ)) (canFire rwc) /\
+      forall idx, rwset_circuit_lt_invariant (rwc.(regs)) (circ.(erwc).(regs)) idx.
   Proof.
     induction a; cbn; intros;
       try solve [split; circuit_lt_f_equal; eauto using rwset_circuit_lt_invariant_refl].
-
+    - (* Assign *)
+      destruct (compile_action rc gamma a rwc) as [circuit Gamma_new] eqn:HeqC1.
+      simpl in *.
+      specialize (IHa gamma rwc).
+      rewrite HeqC1 in IHa.
+      intuition eauto using circuit_lt_trans, rwset_circuit_lt_invariant_trans.
     - (* Seq *)
-      specialize (IHa1 gamma rwc);
-        specialize (IHa2 gamma (compile_action rc gamma a1 rwc).(erwc)).
+      destruct (compile_action rc gamma a1 rwc) as [circuit Gamma_new] eqn:HeqC1.
+      destruct (compile_action rc Gamma_new a2 (erwc circuit)) as [circuit2 Gamma_new2] eqn:HeqC2.
+      simpl in HeqC2.
+      rewrite HeqC2.
+      specialize (IHa1 gamma rwc).
+      rewrite HeqC1 in IHa1.
+      specialize (IHa2 Gamma_new (circuit).(erwc)).
+      simpl in IHa2.
+      rewrite HeqC2 in IHa2.
       intuition eauto using circuit_lt_trans, rwset_circuit_lt_invariant_trans.
     - (* Bind *)
+      destruct (compile_action rc gamma a1 rwc) as [circuit Gamma_new] eqn:HeqC1.
+      destruct (compile_action rc (CtxCons (var, tau) (retVal circuit) Gamma_new) a2 (erwc circuit)) as  [circuit2 Gamma_new2] eqn:HeqC2.
       specialize (IHa1 gamma rwc).
-      specialize (IHa2 (CtxCons (var, tau) (retVal (compile_action rc gamma a1 rwc)) gamma)
-                       (erwc (compile_action rc gamma a1 rwc))).
+      specialize (IHa2 (CtxCons (var, tau) (retVal circuit) Gamma_new)
+                       (erwc circuit)).
+      rewrite HeqC1 in IHa1.
+      rewrite HeqC2 in IHa2.
       intuition eauto using circuit_lt_trans, rwset_circuit_lt_invariant_trans.
     - (* If *)
+      destruct (compile_action rc gamma a1 rwc) as [circuit Gamma_new] eqn:HeqC1.
+      destruct (compile_action rc Gamma_new a2 (erwc circuit)) as [circuit2 Gamma_new2] eqn:HeqC2.
+      simpl in *.
+      rewrite HeqC2.
+      destruct (compile_action rc Gamma_new a3 (erwc circuit)) as [circuit3 Gamma_new3] eqn:HeqC3.
+      simpl in *.
       pose proof (IHa1 gamma rwc).
-      specialize (IHa2 gamma (erwc (compile_action rc gamma a1 rwc))).
-      specialize (IHa3 gamma (erwc (compile_action rc gamma a1 rwc))).
+      specialize (IHa2 Gamma_new (erwc circuit)).
+      specialize (IHa3 Gamma_new (erwc circuit)).
+      rewrite HeqC1 in *.
+      rewrite HeqC2 in IHa2.
+      rewrite HeqC3 in IHa3.
       split.
       + circuit_lt_f_equal.
         apply circuit_lt_CMux_l;
@@ -588,21 +614,34 @@ Section CompilerCorrectness.
           -- eauto using rwset_circuit_lt_invariant_refl.
           -- red; cbn; eauto using circuit_lt_true, circuit_lt_refl, circuit_lt_opt_r.
     - (* Write *)
-      specialize (IHa gamma rwc) as (Hpr & Hpr').
-      (* destruct port; cbn. *)
+      specialize (IHa gamma rwc).
+      destruct (compile_action rc gamma a rwc) as [circuit Gamma_new] eqn:HeqC.
+      destruct IHa  as (Hpr & Hpr').
+      destruct port; cbn;rewrite HeqC.
       + split.
-        * destruct port;
-            circuit_lt_f_equal;
+        * circuit_lt_f_equal;
             apply circuit_lt_CAnd_l;
             intuition.
-        * intros; destruct port;
+        * intros;
+            (apply rwset_circuit_lt_invariant_putenv;
+             [ | specialize (Hpr' idx); red in Hpr' |- *; red in Hpr'; cbn;
+                 repeat cleanup_step ];
+             intuition eauto using circuit_lt_true, circuit_lt_opt_r).
+      + split.
+        * circuit_lt_f_equal;
+            apply circuit_lt_CAnd_l;
+            intuition.
+        * intros;
             (apply rwset_circuit_lt_invariant_putenv;
              [ | specialize (Hpr' idx); red in Hpr' |- *; red in Hpr'; cbn;
                  repeat cleanup_step ];
              intuition eauto using circuit_lt_true, circuit_lt_opt_r).
     - (* Call *)
       specialize (IHa1 gamma rwc);
-        specialize (IHa2 gamma (erwc (compile_action rc gamma a1 rwc))).
+      destruct (compile_action rc gamma a1 rwc) as [circuit Gamma_new] eqn:HeqC1;
+      specialize (IHa2 Gamma_new (erwc circuit));
+      destruct (compile_action rc Gamma_new a2 (erwc circuit)) as [circuit2 Gamma_new2] eqn:HeqC2;
+      simpl in *.
       intuition eauto using circuit_lt_trans, rwset_circuit_lt_invariant_trans.
   Qed.
 
@@ -632,22 +671,27 @@ Section CompilerCorrectness.
   Qed.
 
   Lemma action_compile_willFire_of_canFire'_decreasing {sig}:
-    forall t (ex : action sig t) (gamma : ccontext sig) (rwc : rwcircuit) idx rwd,
-      circuit_lt (willFire_of_canFire' (getenv REnv (regs (erwc (compile_action rc gamma ex rwc))) idx) rwd)
+    forall t (ex : action sig t) (gamma : ccontext sig) (rwc : rwcircuit) idx rwd action unused,
+      (compile_action rc gamma ex rwc) = (action,unused) ->
+      circuit_lt (willFire_of_canFire' (getenv REnv (regs (erwc action)) idx) rwd)
                  (willFire_of_canFire' (getenv REnv (regs rwc) idx) rwd).
   Proof.
     intros; apply circuit_lt_willFire_of_canFire';
-      pose proof (rwset_circuit_lt_compile_action_correct gamma ex rwc) as (H & H'); red in H'; intuition.
+      pose proof (rwset_circuit_lt_compile_action_correct gamma ex rwc) as lemma.
+    rewrite H in lemma. 
+    destruct lemma as (H0 & H0'); red in H0'; intuition.
   Qed.
 
   Theorem action_compile_willFire_of_canFire_decreasing {sig}:
     forall t (ex : action sig t) (cLog : scheduler_circuit R Sigma REnv)
-      (gamma : ccontext sig) (rwc : rwcircuit),
-      circuit_lt (willFire_of_canFire (erwc (compile_action rc gamma ex rwc)) cLog)
+      (gamma : ccontext sig) (rwc : rwcircuit) action unused,
+      (compile_action rc gamma ex rwc) = (action,unused) ->
+      circuit_lt (willFire_of_canFire (erwc action) cLog)
                  (willFire_of_canFire rwc cLog).
   Proof.
     intros; apply circuit_lt_willFire_of_canFire;
-      pose proof (rwset_circuit_lt_compile_action_correct gamma ex rwc); intuition.
+      pose proof (rwset_circuit_lt_compile_action_correct gamma ex rwc);
+      rewrite H in H0; intuition.
   Qed.
 
   Lemma willFire_of_canFire_decreasing :
@@ -669,6 +713,13 @@ Section CompilerCorrectness.
   Definition circuit_gamma_equiv {sig} (Gamma : vcontext sig) (gamma : ccontext sig) :=
     forall (k: var_t) tau (m : member (k, tau) sig),
       interp_circuit (cassoc m gamma) = bits_of_value (cassoc m Gamma).
+
+
+  Lemma circuit_gamma_equiv_empty :
+    circuit_gamma_equiv CtxEmpty CtxEmpty.
+  Proof.
+    red; intros; elim (mdestruct m).
+  Qed.
 
   Lemma circuit_gamma_equiv_CtxCons {sig}:
     forall Gamma gamma,
@@ -907,6 +958,7 @@ Section CompilerCorrectness.
     | _ => progress cbn in *
     | [ H: context[lco_fn] |- _ ] => rewrite lco_proof in H
     | [  |- context[lco_fn] ] => rewrite lco_proof
+    | [ H: _ * _ |- _ ] => destruct H
     | [ H: _ \/ _ |- _ ] => destruct H
     | [ H: exists _, _ |- _ ] => destruct H
     | [  |- Ob~_ = Ob~_ ] => f_equal
@@ -918,7 +970,9 @@ Section CompilerCorrectness.
       rewrite Heq
     | [ |- match (if ?x then _ else _) with _ => _ end ] =>
       destruct x eqn:?; cbn
-    | [ IH: context[interp_action _ _ _ _ _ ?ex] |-
+    | [ |- context[Circuits.compile_action ?lco ?rc ?gamma ?ex ?clog] ] =>
+      destruct (Circuits.compile_action lco rc gamma ex clog) eqn:?; cbn
+    | [ IH: context[interp_action _ _ _ _ _ ?ex]  |-
         context[interp_action _ _ ?Gamma ?Log ?log ?ex] ] =>
       specialize (IH _ Gamma _ log ltac:(ceauto) ltac:(ceauto) ltac:(ceauto)
                      ltac:(ceauto) ltac:(eauto using circuit_gamma_equiv_CtxCons with circuits)
@@ -929,6 +983,7 @@ Section CompilerCorrectness.
       rewrite H
     | [  |- context[REnv.(getenv) (REnv.(map2) _ _ _)] ] =>
       rewrite getenv_map2
+    | [ Heq: Circuits.compile_action ?lco ?rc ?gamma ?ex ?clog = _  |- _ ] => progress rewrite Heq in *
     end.
 
   (* Create HintDb circuits discriminated. *)
@@ -979,6 +1034,128 @@ Section CompilerCorrectness.
              specialize (H idx); cbv zeta in *; repeat cleanup_step
            end.
 
+
+  Lemma bind_gamma_equiv:
+    forall (sig : tsig var_t) (tau : type) (var : var_t) (t : tau)
+      (c2 : vcontext sig) (c0 : circuit tau)
+      (c1 : ccontext sig),
+      circuit_gamma_equiv (CtxCons (var, tau) t c2) (CtxCons (var, tau) c0 c1) ->
+      circuit_gamma_equiv c2 c1.
+  Proof.
+    intros.
+    unfold circuit_gamma_equiv.
+    intros.
+    specialize (H k tau0).
+    specialize (H (MemberTl (k,tau0) (var,tau) sig m)) .
+    t.
+  Qed.
+
+  Lemma assign_gamma_equiv:
+    forall (sig : list (var_t * type)) (k : var_t) (tau : type) (m : member (k, tau) sig) (vGamma : vcontext sig)
+      (a : action_circuit R Sigma REnv tau) (cGamma : ccontext sig) t,
+      interp_circuit (retVal a) = bits_of_value t ->
+      circuit_gamma_equiv vGamma cGamma -> circuit_gamma_equiv (creplace m t vGamma) (creplace m (retVal a) cGamma).
+  Proof.
+      induction sig.
+      -
+        intros.
+        unfold circuit_gamma_equiv in *.
+        intros.
+        pose (mdestruct m).
+        contradiction.
+      -
+        intros.
+        unfold circuit_gamma_equiv in *.
+        intros.
+        destruct (eq_dec k0 k).
+        +
+          destruct (eq_dec tau0 tau); subst.
+          destruct (eq_dec m m0); subst.
+          rewrite !cassoc_creplace_eq; trivial.
+          rewrite !cassoc_creplace_neq_members; intuition.
+          rewrite !cassoc_creplace_neq; trivial; intro member_type; inversion member_type; congruence.
+        +
+          rewrite !cassoc_creplace_neq; trivial; congruence.
+  Qed.
+
+
+  Lemma mux_gamma_equiv_t:
+    forall (sig : tsig var_t)
+      (a : action_circuit R Sigma REnv 1),
+      interp_circuit (retVal a) = Ob~1 ->
+      forall (v0 : vcontext sig) (c0 : ccontext sig),
+        circuit_gamma_equiv v0 c0 ->
+        forall c1 : ccontext sig,
+          circuit_gamma_equiv v0
+                              (mux_ccontext (retVal a) c0 c1).
+  Proof.
+    induction sig.
+    -
+      intros.
+      unfold circuit_gamma_equiv in *.
+      intros.
+      pose (mdestruct m).
+      contradiction.
+    -
+      intros.
+      unfold circuit_gamma_equiv in *.
+      intros.
+      destruct (mdestruct m) as [(eqn_type & eqn_member) | (eqn_type & eqn_member)].
+      +
+        specialize (H0 k tau m).
+        destruct eqn_type eqn: eqn_generator.
+        repeat (rewrite (ceqn c0), (ceqn c1), (ceqn v0), eqn_member in *; cbn in * ).
+        rewrite H.
+        trivial.
+      +
+        subst.
+        rewrite (ceqn c0), (ceqn c1), (ceqn v0) in *.
+        destruct a; cbn; apply IHsig; trivial; intros.
+        specialize (H0 _ _ (MemberTl (k0,tau0) _ sig m)).
+        simpl in H0.
+        rewrite (ceqn c0), (ceqn v0) in *; cbn in *.
+        exact H0.
+  Qed.
+
+  Lemma mux_gamma_equiv_f:
+    forall (sig : tsig var_t)
+      (a : action_circuit R Sigma REnv 1),
+      interp_circuit (retVal a) = Ob~0 ->
+      forall (v0 : vcontext sig) (c1 : ccontext sig),
+        circuit_gamma_equiv v0 c1 ->
+        forall c0 : ccontext sig,
+          circuit_gamma_equiv v0
+                              (mux_ccontext (retVal a) c0 c1).
+  Proof.
+    induction sig.
+    -
+      intros.
+      unfold circuit_gamma_equiv in *.
+      intros.
+      pose (mdestruct m).
+      contradiction.
+    -
+      intros.
+      unfold circuit_gamma_equiv in *.
+      intros.
+      destruct (mdestruct m) as [(eqn_type & eqn_member) | (eqn_type & eqn_member)].
+      +
+        specialize (H0 k tau m).
+        destruct eqn_type eqn: eqn_generator.
+        repeat (rewrite (ceqn c0), (ceqn c1), (ceqn v0), eqn_member in *; cbn in * ).
+        rewrite H.
+        trivial.
+      +
+        subst.
+        rewrite (ceqn c0), (ceqn c1), (ceqn v0) in *.
+        destruct a; cbn; apply IHsig; trivial; intros.
+        specialize (H0 _ _ (MemberTl (k0,tau0) _ sig m)).
+        simpl in H0.
+        rewrite (ceqn c1), (ceqn v0) in *; cbn in *.
+        exact H0.
+  Qed.
+
+
   Theorem action_compiler_correct {sig tau} Log cLog:
     forall (ex: action sig tau) (clog: rwcircuit)
       (Gamma: vcontext sig) (gamma: ccontext sig) log,
@@ -989,30 +1166,36 @@ Section CompilerCorrectness.
       circuit_gamma_equiv Gamma gamma ->
       circuit_env_equiv ->
       interp_circuit (willFire_of_canFire clog cLog) = Ob~1 ->
-      let cExpr := compile_action rc gamma ex clog in
+      let (cExpr, gamma_new) := compile_action rc gamma ex clog in
       match interp_action r sigma Gamma Log log ex with
-      | Some (l', v) =>
+      | Some (l', v, Gamma_new) =>
         interp_circuit cExpr.(retVal) = bits_of_value v /\
         log_rwdata_consistent l' cExpr.(erwc).(regs) /\
         log_data0_consistent l' Log cExpr.(erwc).(regs) /\
         log_data1_consistent l' Log cExpr.(erwc).(regs) /\
-        interp_circuit (willFire_of_canFire cExpr.(erwc) cLog) = Ob~1
+        interp_circuit (willFire_of_canFire cExpr.(erwc) cLog) = Ob~1 /\
+        circuit_gamma_equiv Gamma_new gamma_new (* 6 > 5 :( for eauto *)
       | None =>
         interp_circuit (willFire_of_canFire cExpr.(erwc) cLog) = Ob~0
       end.
   Proof.
     induction ex; intros.
     - (* Fail *) t; interp_willFire_cleanup; t.
-    - (* Var *) cbn; rewrite lco_proof; eauto.
-    - (* Const *) cbn; rewrite lco_proof; eauto.
+    - (* Var *) cbn; rewrite lco_proof; eauto 6.
+    - (* Const *) cbn; rewrite lco_proof; eauto 6.
+    - (* Assign *)
+      t; interp_willFire_cleanup; t; eauto using  assign_gamma_equiv.
     - (* Seq *)
-      t.
-      eapply interp_circuit_circuit_lt_helper_false;
-        eauto using action_compile_willFire_of_canFire_decreasing.
+      t;
+        [ interp_willFire_cleanup; eauto|
+       eapply interp_circuit_circuit_lt_helper_false;
+         eauto 5 using action_compile_willFire_of_canFire_decreasing].
     - (* Bind *)
-      t.
+      t. interp_willFire_cleanup; eauto.
+      rewrite (ceqn c0), (ceqn v0) in H17.
+      specialize (bind_gamma_equiv _ _ _ _ _ _ _ H17). trivial.
       eapply interp_circuit_circuit_lt_helper_false;
-        eauto using action_compile_willFire_of_canFire_decreasing.
+        eauto 5 using action_compile_willFire_of_canFire_decreasing.
     - (* If *)
       t.
       + repeat apply conj; try reflexivity.
@@ -1024,6 +1207,7 @@ Section CompilerCorrectness.
             eauto with circuits.
         * unfold mux_rwsets; interp_willFire_cleanup; t.
           rewrite (interp_circuit_willFire_of_canFire'_mux_rwdata idx); t.
+        * eapply mux_gamma_equiv_t; t ; intuition.
       + unfold mux_rwsets; interp_willFire_cleanup; t.
         right. exists x; t.
         rewrite (interp_circuit_willFire_of_canFire'_mux_rwdata x); t.
@@ -1036,20 +1220,46 @@ Section CompilerCorrectness.
             eauto with circuits.
         * unfold mux_rwsets; interp_willFire_cleanup; t.
           rewrite (interp_circuit_willFire_of_canFire'_mux_rwdata idx); t.
+        * eapply mux_gamma_equiv_f; t ; intuition.
       + unfold mux_rwsets; interp_willFire_cleanup; t.
         right; exists x; t.
         rewrite (interp_circuit_willFire_of_canFire'_mux_rwdata x); t.
+
       + unfold mux_rwsets; interp_willFire_cleanup; t.
         * left.
-          destruct Bits.single;
-            (eapply interp_circuit_circuit_lt_helper_false;
-             [ apply rwset_circuit_lt_compile_action_correct | ]; eauto).
+          destruct Bits.single.
+          -- eapply interp_circuit_circuit_lt_helper_false;
+               pose (rwset_circuit_lt_compile_action_correct  c ex2 (erwc a));
+               t;
+               intuition.
+          -- eapply interp_circuit_circuit_lt_helper_false;
+               pose (rwset_circuit_lt_compile_action_correct  c ex3 (erwc a));
+               t;
+               intuition.
         * right.
           exists x; t.
           rewrite (interp_circuit_willFire_of_canFire'_mux_rwdata x); t.
           destruct Bits.single; t;
             eapply interp_circuit_circuit_lt_helper_false;
-            eauto using action_compile_willFire_of_canFire'_decreasing.
+            eauto 6 using action_compile_willFire_of_canFire'_decreasing.
+          (* Following is not properly automatized *)
+          apply eq_sym in Heqp0.
+            rewrite surjective_pairing in Heqp0.
+            inversion Heqp0.
+          eapply action_compile_willFire_of_canFire'_decreasing.
+          rewrite <- H9.
+          rewrite <- surjective_pairing in Heqp0.
+          rewrite Heqp0.
+          reflexivity.
+
+          apply eq_sym in Heqp1.
+            rewrite surjective_pairing in Heqp1.
+            inversion Heqp1.
+          eapply action_compile_willFire_of_canFire'_decreasing.
+          rewrite <- H9.
+          rewrite <- surjective_pairing in Heqp1.
+          rewrite Heqp1.
+          reflexivity.
     - (* Read *)
       destruct port.
       + cbn.
@@ -1062,6 +1272,7 @@ Section CompilerCorrectness.
           -- apply log_data1_consistent_putenv_read_write0; eauto.
           -- interp_willFire_cleanup;
                may_read_write_t.
+          -- intuition.
         * interp_willFire_cleanup.
           may_read_write_t.
           right; exists idx;
@@ -1081,31 +1292,27 @@ Section CompilerCorrectness.
           -- apply log_data1_consistent_putenv_read_write0; eauto.
           -- interp_willFire_cleanup;
                may_read_write_t.
+          -- intuition.
         * interp_willFire_cleanup.
           right.
           eexists.
           interp_willFire_cleanup.
           may_read_write_t.
     - (* Write *)
+      destruct port;
       t.
       + repeat apply conj.
-        * destruct port;
-            interp_willFire_cleanup;
+        * interp_willFire_cleanup;
             may_read_write_t.
-        * destruct port;
-            (apply log_rwdata_consistent_log_cons_putenv;
+        * (apply log_rwdata_consistent_log_cons_putenv;
              [ eauto | red ]; cbn; rewrite ?Bits.single_cons, lco_proof; eauto).
-        * destruct port; cbn.
-          -- apply log_data0_consistent_putenv_write0; eauto.
-          -- apply log_data0_consistent_putenv_read_write1; eauto.
-        * destruct port.
-          -- apply log_data1_consistent_putenv_read_write0; eauto.
-          -- apply log_data1_consistent_putenv_write1; eauto.
-        * destruct port;
-            interp_willFire_cleanup;
-            may_read_write_t.
-      + destruct port.
+        *  apply log_data0_consistent_putenv_write0; eauto.
+        * apply log_data1_consistent_putenv_read_write0; eauto.
         * interp_willFire_cleanup;
+              may_read_write_t.
+        * trivial.
+
+      + interp_willFire_cleanup;
             may_read_write_t; eauto.
           -- right; exists idx; interp_willFire_cleanup;
                may_read_write_t.
@@ -1113,14 +1320,29 @@ Section CompilerCorrectness.
                may_read_write_t.
           -- right; exists idx; interp_willFire_cleanup;
                may_read_write_t.
-        * interp_willFire_cleanup;
-            may_read_write_t; eauto.
-          -- right; exists idx; interp_willFire_cleanup;
-               may_read_write_t.
-      + destruct port;
-          eapply interp_circuit_circuit_lt_helper_false; eauto;
+      + eapply interp_circuit_circuit_lt_helper_false; eauto;
             intros; apply circuit_lt_willFire_of_canFire; cbn;
               eauto 4 with circuits.
+        all: intros;
+          apply rwset_circuit_lt_invariant_putenv;
+          eauto 8 with circuits.
+      + repeat apply conj.
+        * interp_willFire_cleanup;
+            may_read_write_t.
+        * (apply log_rwdata_consistent_log_cons_putenv;
+             [ eauto | red ]; cbn; rewrite ?Bits.single_cons, lco_proof; eauto).
+        * apply log_data0_consistent_putenv_read_write1; eauto.
+        * apply log_data1_consistent_putenv_write1; eauto.
+        * interp_willFire_cleanup;
+              may_read_write_t.
+        * trivial.
+      + interp_willFire_cleanup;
+          may_read_write_t; eauto.
+        right; exists idx; interp_willFire_cleanup;
+               may_read_write_t.
+      + eapply interp_circuit_circuit_lt_helper_false; eauto;
+          intros; apply circuit_lt_willFire_of_canFire; cbn;
+            eauto 4 with circuits.
         all: intros;
           apply rwset_circuit_lt_invariant_putenv;
           eauto 8 with circuits.
@@ -1180,15 +1402,9 @@ Section CompilerCorrectness.
            end; eauto.
   Qed.
 
-  Lemma circuit_gamma_equiv_empty :
-    circuit_gamma_equiv CtxEmpty CtxEmpty.
-  Proof.
-    red; intros; elim (mdestruct m).
-  Qed.
-
   Notation adapter := (adapter lco).
 
-  Lemma log_rwdata_consistent_empty_adapter cLog:
+  Lemma log_rwdata_consistent_empty_adapter cLog :
     log_rwdata_consistent log_empty (regs (adapter cLog)).
   Proof.
     red; intros; cbn.
@@ -1277,25 +1493,26 @@ Section CompilerCorrectness.
                                   ltac:(ceauto) ltac:(ceauto)
                                   ltac:(ceauto)).
       destruct (interp_action r sigma CtxEmpty Log log_empty (rules r0)) as [(? & ?) | ] eqn:?; cbn; t.
-      + repeat apply conj.
-        * apply log_data1_consistent'_mux_l; eauto.
+      repeat split; try (apply log_rwdata_consistent_mux_l; eauto;
+          apply IHs1; eauto using log_rwdata_consistent_update_accumulated_rwset,
+            log_data0_consistent'_update_accumulated,
+            log_data1_consistent'_update_accumulated).
+      +
+        apply log_data1_consistent'_mux_l; eauto.
           apply IHs1;
             ceauto.
-        * apply log_data0_consistent'_mux_l; eauto.
+      +
+        apply log_data0_consistent'_mux_l; eauto.
           apply IHs1;
             eauto using log_rwdata_consistent_update_accumulated_rwset,
             log_data0_consistent'_update_accumulated,
             log_data1_consistent'_update_accumulated.
-        * apply log_rwdata_consistent_mux_l; eauto.
-          apply IHs1; eauto using log_rwdata_consistent_update_accumulated_rwset,
-            log_data0_consistent'_update_accumulated,
-            log_data1_consistent'_update_accumulated.
-      + repeat apply conj.
-        * apply log_data1_consistent'_mux_r; eauto.
+      +
+        repeat split; try (apply log_rwdata_consistent_mux_r; eauto;
+          apply IHs2; eauto).
+        * apply log_data1_consistent'_mux_r; eauto;
           apply IHs2; eauto.
         * apply log_data0_consistent'_mux_r; eauto.
-          apply IHs2; eauto.
-        * apply log_rwdata_consistent_mux_r; eauto.
           apply IHs2; eauto.
   Qed.
 
@@ -1343,7 +1560,7 @@ Section CompilerCorrectness.
     forall sig tau a ctx Log log idx,
       log_writes_ordered (log_app log Log) idx ->
       match @interp_action var_t reg_t fn_t R Sigma REnv r sigma sig tau ctx Log log a with
-      | Some (l', _) => log_writes_ordered (log_app l' Log) idx
+      | Some (l', _, _) => log_writes_ordered (log_app l' Log) idx
       | None => True
       end.
   Proof.
@@ -1353,11 +1570,10 @@ Section CompilerCorrectness.
              | [ IH: context[interp_action _ _ _ _ _ ?a]
                  |- context[interp_action ?r ?sigma ?ctx ?Log ?log ?a] ] =>
                specialize (IH ctx Log log _ ltac:(ceauto));
-                 destruct (interp_action r sigma ctx Log log a) as [(? & ?) | ] eqn:?
+                 destruct (interp_action r sigma ctx Log log a) as [((? & ?) & ?) | ] eqn:?
              | [  |- match (if ?x then _ else _) with _ => _ end ] => destruct x eqn:?
              | _ => solve [eauto]
              end.
-
     - destruct port;
         [ destruct may_read0 | destruct may_read1 ]; cbn; eauto;
         unfold log_writes_ordered, log_cons in *;
@@ -1399,7 +1615,7 @@ Section CompilerCorrectness.
     all: lazymatch goal with
          | [ |- context[interp_action ?r ?sigma ?ctx ?Log ?log ?rl] ] =>
            pose proof (action_log_writes_ordered _ _ rl ctx Log log _ ltac:(rewrite log_app_empty_r; ceauto));
-             destruct (interp_action r sigma ctx Log log rl) as [(? & ?) | ] eqn:?
+             destruct (interp_action r sigma ctx Log log rl) as [((? & ?) & ?) | ] eqn:?
          end; eauto.
   Qed.
 

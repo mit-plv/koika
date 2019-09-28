@@ -1,6 +1,5 @@
 Require Import Coq.Lists.List Coq.Bool.Bool.
-Require Export SGA.Common SGA.Environments SGA.Syntax SGA.TypedSyntax.
-
+Require Export SGA.Common SGA.Environments SGA.Vect SGA.Syntax SGA.TypedSyntax.
 Import ListNotations.
 
 Section Logs.
@@ -120,6 +119,17 @@ Section Interp.
   Definition vcontext (sig: tsig var_t) :=
     context (fun '(k, tau) => type_denote tau) sig.
 
+  Lemma prune_binded_venv:
+    forall {sig : tsig var_t} {tau : type} {var : var_t} {l : list (var_t * type)}
+      {p1 : var_t * type},
+      vcontext l -> p1 :: l = (var, tau) :: sig -> vcontext sig.
+  Proof.
+    intros sig tau var l p1 GammaPruned eq.
+    inversion eq.
+    rewrite <- H1.
+    exact GammaPruned.
+  Defined.
+
   Section Action.
 
     Fixpoint interp_action
@@ -129,47 +139,52 @@ Section Interp.
              (sched_log: Log)
              (action_log: Log)
              (a: action sig tau)
-      : option (Log * tau) :=
-      match a in TypedSyntax.action _ _ _ ts tau return (vcontext ts -> option (Log * tau))  with
+    : option (Log * tau * (vcontext sig)) :=
+      match a in TypedSyntax.action _ _ _ ts tau return (vcontext ts -> option (Log * tau * (vcontext ts)))  with
       | Fail tau => fun _ =>
         None
       | Var m => fun Gamma =>
-        Some (action_log, cassoc m Gamma)
-      | Const cst => fun _ =>
-        Some (action_log, cst)
+        Some (action_log, cassoc m Gamma, Gamma)
+      | Const cst => fun Gamma =>
+        Some (action_log, cst, Gamma)
       | Seq r1 r2 => fun Gamma =>
-        let/opt2 action_log, _ := interp_action Gamma sched_log action_log r1 in
+        let/opt3 action_log, _, Gamma := interp_action Gamma sched_log action_log r1 in
         interp_action Gamma sched_log action_log r2
-      | @Bind _ _ _ _ _ _ tau tau' var ex body => fun Gamma =>
-        let/opt2 action_log, v := interp_action Gamma sched_log action_log ex in
-        interp_action (CtxCons (var, tau) v Gamma) sched_log action_log body
+      | @Assign _ _ _ _ _ _ k tau m ex => fun Gamma =>
+        let/opt3 action_log, v, Gamma := interp_action Gamma sched_log action_log ex in
+        Some (action_log, Ob, creplace m v Gamma)
+      | @Bind _ _ _ _ _ sig tau tau' var ex body => fun (Gamma : vcontext sig) =>
+        let/opt3 action_log1, v, Gamma := interp_action Gamma sched_log action_log ex in
+        let/opt3 action_log2, v, Gamma := interp_action (CtxCons (var, tau) v Gamma) sched_log action_log1 body in
+        Some (action_log2, v, ctl Gamma)
       | If cond tbranch fbranch => fun Gamma =>
-        let/opt2 action_log, cond := interp_action Gamma sched_log action_log cond in
+        let/opt3 action_log, cond, Gamma := interp_action Gamma sched_log action_log cond in
         if Bits.single cond then
           interp_action Gamma sched_log action_log tbranch
         else
           interp_action Gamma sched_log action_log fbranch
-      | Read P0 idx => fun _ =>
+      | Read P0 idx => fun Gamma =>
         if may_read0 sched_log action_log idx then
-          Some (log_cons idx (LE LogRead P0 tt) action_log, REnv.(getenv) r idx)
+          Some (log_cons idx (LE LogRead P0 tt) action_log, REnv.(getenv) r idx, Gamma)
         else None
-      | Read P1 idx => fun _ =>
+      | Read P1 idx => fun Gamma =>
         if may_read1 sched_log idx then
           Some (log_cons idx (LE LogRead P1 tt) action_log,
                 match latest_write0 (log_app action_log sched_log) idx with
                 | Some v => v
                 | None => REnv.(getenv) r idx
-                end)
+                end,
+               Gamma)
         else None
       | Write prt idx val => fun Gamma =>
-        let/opt2 action_log, val := interp_action Gamma sched_log action_log val in
+        let/opt3 action_log, val, Gamma_new := interp_action Gamma sched_log action_log val in
         if may_write sched_log action_log prt idx then
-          Some (log_cons idx (LE LogWrite prt val) action_log, Bits.nil)
+          Some (log_cons idx (LE LogWrite prt val) action_log, Bits.nil, Gamma_new)
         else None
       | Call fn arg1 arg2 => fun Gamma =>
-        let/opt2 action_log, arg1 := interp_action Gamma sched_log action_log arg1 in
-        let/opt2 action_log, arg2 := interp_action Gamma sched_log action_log arg2 in
-        Some (action_log, (sigma fn) arg1 arg2)
+        let/opt3 action_log, arg1, Gamma := interp_action Gamma sched_log action_log arg1 in
+        let/opt3 action_log, arg2, Gamma := interp_action Gamma sched_log action_log arg2 in
+        Some (action_log, (sigma fn) arg1 arg2, Gamma)
       end Gamma.
   End Action.
 
@@ -182,7 +197,7 @@ Section Interp.
              {struct s} :=
       let interp_try r s1 s2 :=
           match interp_action CtxEmpty sched_log log_empty (rules r) with
-          | Some (l, _) => interp_scheduler' (log_app l sched_log) s1
+          | Some (l, _, _) => interp_scheduler' (log_app l sched_log) s1
           | CannotRun => interp_scheduler' sched_log s2
           end in
       match s with

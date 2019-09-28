@@ -324,40 +324,68 @@ Section CircuitCompilation.
     REnv.(map2) (fun k treg freg => mux_rwdata an cond treg freg)
                 tRegs fRegs.
 
+  Fixpoint mux_ccontext {sig} (cond: circuit 1) (ctxT:ccontext sig) (ctxF:ccontext sig) : ccontext sig.
+    induction sig.
+    -
+      exact CtxEmpty.
+    -
+      destruct a.
+      inversion ctxT as [ impossible | previous_sig_t next_binder_t next_value_t previous_ctx_t eq_binder_t].
+      inversion ctxF as [ impossible | previous_sig_f next_binder_f next_value_f previous_ctx_f eq_binder_f].
+      econstructor.
+      exact (CMux cond (next_value_t) (next_value_f)).
+      apply mux_ccontext.
+      apply cond.
+      apply previous_ctx_t.
+      apply previous_ctx_f.
+  Defined.
+
   Section Action.
+
     Fixpoint compile_action
              {sig: tsig var_t}
              {tau}
              (Gamma: ccontext sig)
              (a: action var_t R Sigma sig tau)
              (clog: rwcircuit):
-      @action_circuit (type_sz tau) :=
-      match a in action _ _ _ ts tau return ccontext ts -> @action_circuit (type_sz tau) with
-      | Fail tau => fun _ =>
-        {| retVal := $`"fail"`Bits.zero (type_sz tau); (* LATER: Question mark here *)
-           erwc := {| canFire := $`"fail_cF"` Ob~0;
-                     regs := clog.(regs) |} |}
+      @action_circuit tau * (ccontext sig) :=
+      match a in action _ _ _ ts tau return ccontext ts -> @action_circuit tau * ccontext ts with
+      | Fail tau => fun Gamma =>
+                     ({| retVal := $`"fail"`Bits.zero (type_sz tau); (* LATER: Question mark here *)
+                         erwc := {| canFire := $`"fail_cF"` Ob~0;
+                                    regs := clog.(regs) |} |},
+                      Gamma)
       | Var m => fun Gamma =>
-        {| retVal := CAnnotOpt "var_reference" (cassoc m Gamma);
-           erwc := clog |}
-      | Const cst => fun _ =>
-        {| retVal := CAnnotOpt "constant_value_from_source" (CConst (bits_of_value cst));
-           erwc := clog |}
+        ({| retVal := CAnnotOpt "var_reference" (cassoc m Gamma);
+            erwc := clog |},
+         Gamma)
+      | Const cst => fun Gamma =>
+        ({| retVal := CAnnotOpt "constant_value_from_source" (CConst (bits_of_value cst));
+           erwc := clog |},
+         Gamma)
       | Seq r1 r2 => fun Gamma =>
-        compile_action Gamma r2 (compile_action Gamma r1 clog).(erwc)
-      | @Bind _ _ _ _ _ _ tau tau' var ex body => fun Gamma =>
-        let ex := compile_action Gamma ex clog in
-        compile_action (CtxCons (var, tau) ex.(retVal) Gamma) body ex.(erwc)
+        let (cex, Gamma) := (compile_action Gamma r1 clog) in
+        compile_action Gamma r2 cex.(erwc)
+      | @Assign _ _ _ _ _ _ k tau m ex => fun Gamma =>
+        let (cex, Gamma) := compile_action Gamma ex clog in
+        ({| retVal := $`"assign_retVal"`Bits.nil;
+            erwc := cex.(erwc) |},
+         creplace m cex.(retVal) Gamma)                 (* Change the Gamma here *)
+      | @Bind _ _ _ _ _ sig tau tau' var ex body =>
+        fun Gamma =>
+          let (ex, Gamma) := compile_action Gamma ex clog in
+          let (ex, Gamma) := compile_action (CtxCons (var, tau) ex.(retVal) Gamma) body ex.(erwc) in
+          (ex, ctl Gamma)
       | If cond tbranch fbranch => fun Gamma =>
-        let cond := compile_action Gamma cond clog in
-        let tbranch := compile_action Gamma tbranch cond.(erwc) in
-        let fbranch := compile_action Gamma fbranch cond.(erwc) in
-        {| retVal := CAnnotOpt "if_retVal" (CMux cond.(retVal) tbranch.(retVal) fbranch.(retVal));
+        let (cond, Gamma) := compile_action Gamma cond clog in
+        let (tbranch, Gamma_t) := compile_action Gamma tbranch cond.(erwc) in
+        let (fbranch, Gamma_f) := compile_action Gamma fbranch cond.(erwc) in
+        ({| retVal := CAnnotOpt "if_retVal" (CMux cond.(retVal) tbranch.(retVal) fbranch.(retVal));
            erwc := {| canFire := CAnnotOpt "if_cF" (CMux cond.(retVal) tbranch.(erwc).(canFire) fbranch.(erwc).(canFire));
-                     regs := mux_rwsets "if_mux" cond.(retVal) tbranch.(erwc).(regs) fbranch.(erwc).(regs) |} |}
-      | Read P0 idx => fun _ =>
+                     regs := mux_rwsets "if_mux" cond.(retVal) tbranch.(erwc).(regs) fbranch.(erwc).(regs) |} |}, mux_ccontext cond.(retVal) Gamma_t Gamma_f)
+      | Read P0 idx => fun Gamma =>
         let reg := REnv.(getenv) clog.(regs) idx in
-        {| retVal := CAnnotOpt "read0" (REnv.(getenv) r idx);
+        ({| retVal := CAnnotOpt "read0" (REnv.(getenv) r idx);
            erwc := {| canFire := (clog.(canFire) &&`"read0_cF"`
                                 (!`"no_write1"` reg.(write1)));
                      regs := REnv.(putenv) clog.(regs) idx {| read0 := $`"read0"` Ob~1;
@@ -366,10 +394,11 @@ Section CircuitCompilation.
                                                              write0 := reg.(write0);
                                                              write1 := reg.(write1);
                                                              data0 := reg.(data0);
-                                                             data1 := reg.(data1) |} |} |}
-      | Read P1 idx => fun _ =>
+                                                             data1 := reg.(data1) |} |} |},
+         Gamma)
+      | Read P1 idx => fun Gamma =>
         let reg := REnv.(getenv) clog.(regs) idx in
-        {| retVal := reg.(data0);
+        ({| retVal := reg.(data0);
            erwc := {| canFire := clog.(canFire);
                      regs := REnv.(putenv) clog.(regs) idx {| read1 := $`"read1"` Ob~1;
                                                              (* Unchanged *)
@@ -377,40 +406,46 @@ Section CircuitCompilation.
                                                              write0 := reg.(write0);
                                                              write1 := reg.(write1);
                                                              data0 := reg.(data0);
-                                                             data1 := reg.(data1) |} |} |}
-      | Write P0 idx val => fun Gamma =>
-        let val := compile_action Gamma val clog in
-        let reg := REnv.(getenv) val.(erwc).(regs) idx in
-        {| retVal := $`"write_retVal"`Bits.nil;
-           erwc := {| canFire := (val.(erwc).(canFire) &&`"write0_cF"`
-                                (!`"no_read1"` reg.(read1) &&`"write0_cF"`
-                                 !`"no_write0"` reg.(write0) &&`"write0_cF"`
-                                 !`"no_write1"` reg.(write1)));
-                     regs := REnv.(putenv) val.(erwc).(regs) idx {| write0 := $`"write0"` Ob~1;
-                                                                   data0 := val.(retVal);
-                                                                   (* Unchanged *)
-                                                                   read0 := reg.(read0);
-                                                                   read1 := reg.(read1);
-                                                                   write1 := reg.(write1);
-                                                                   data1 := reg.(data1) |} |} |}
-      | Write P1 idx val => fun Gamma =>
-        let val := compile_action Gamma val clog in
-        let reg := REnv.(getenv) val.(erwc).(regs) idx in
-        {| retVal := $`"write_retVal"`Bits.nil;
-           erwc := {| canFire := val.(erwc).(canFire) &&`"write1_cF"` !`"no_write1"` reg.(write1);
-                     regs := REnv.(putenv) val.(erwc).(regs) idx {| write1 := $`"write1"` Ob~1;
-                                                            data1 := val.(retVal);
-                                                            (* Unchanged *)
-                                                            read0 := reg.(read0);
-                                                            read1 := reg.(read1);
-                                                            write0 := reg.(write0);
-                                                            data0 := reg.(data0) |} |} |}
+                                                             data1 := reg.(data1) |} |} |},
+         Gamma)
+      | Write P0 idx val =>
+        fun Gamma =>
+          let (val, Gamma) := compile_action Gamma val clog in
+          let reg := REnv.(getenv) val.(erwc).(regs) idx in
+          (
+            {| retVal := $`"write_retVal"`Bits.nil;
+               erwc := {| canFire := (val.(erwc).(canFire) &&`"write0_cF"` (!`"no_read1"` reg.(read1) &&`"write0_cF"` !`"no_write0"` reg.(write0) &&`"write0_cF"` !`"no_write1"` reg.(write1)));
+                          regs := REnv.(putenv) val.(erwc).(regs) idx {| write0 := $`"write0"` (Ob~1);
+                                                                         data0 := val.(retVal);
+                                                                         (* Unchanged *)
+                                                                         read0 := reg.(read0);
+                                                                         read1 := reg.(read1);
+                                                                         write1 := reg.(write1);
+                                                                         data1 := reg.(data1) |} |} |},
+            Gamma)
+      | Write P1 idx val =>
+        fun Gamma =>
+          let (val, Gamma) := compile_action Gamma val clog in
+          let reg := REnv.(getenv) val.(erwc).(regs) idx in
+          (
+            {| retVal := $`"write_retVal"`Bits.nil;
+               erwc := {| canFire := val.(erwc).(canFire) &&`"write1_cF"` !`"no_write1"` reg.(write1);
+                          regs := REnv.(putenv) val.(erwc).(regs) idx {| write1 := $`"write1"` (Ob~1);
+                                                                         data1 := val.(retVal);
+                                                                         (* Unchanged *)
+                                                                         read0 := reg.(read0);
+                                                                         read1 := reg.(read1);
+                                                                         write0 := reg.(write0);
+                                                                         data0 := reg.(data0) |} |} |},
+            Gamma)
       | Call fn a1 a2 => fun Gamma =>
-        let a1 := compile_action Gamma a1 clog in
-        let a2 := compile_action Gamma a2 a1.(erwc) in
-        {| retVal := fn [a1.(retVal), a2.(retVal)]`"Call_from_source"`;
-           erwc := a2.(erwc) |}
-      end Gamma.
+                          let (a1, Gamma) := compile_action  Gamma a1 clog in
+                          let (a2, Gamma) := compile_action Gamma a2 a1.(erwc) in
+                          (
+                            {| retVal := fn [a1.(retVal), a2.(retVal)]`"Call_from_source"`;
+                                            erwc := a2.(erwc) |},
+                            Gamma)
+        end Gamma.
   End Action.
 
   Definition adapter (cs: scheduler_circuit) : rwcircuit :=
@@ -470,13 +505,13 @@ Section CircuitCompilation.
     | Done =>
       input
     | Cons rl s =>
-      let rl := compile_action CtxEmpty (rules rl) (adapter input) in
+      let (rl, Gamma) := compile_action CtxEmpty (rules rl) (adapter input) in
       let acc := update_accumulated_rwset rl.(erwc).(regs) input in
       let will_fire := willFire_of_canFire rl.(erwc) input in
       let input := mux_rwsets "mux_input" will_fire acc input in
       compile_scheduler' s input
     | Try rl st sf =>
-      let rl := compile_action CtxEmpty (rules rl) (adapter input) in
+      let (rl, Gamma) := compile_action CtxEmpty (rules rl) (adapter input) in
       let acc := update_accumulated_rwset rl.(erwc).(regs) input in
       let st := compile_scheduler' st acc in
       let sf := compile_scheduler' sf input in

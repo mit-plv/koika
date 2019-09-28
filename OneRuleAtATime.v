@@ -29,7 +29,7 @@ Section Proof.
            {struct s} :=
     let interp_try rl s1 s2 :=
         match interp_action r sigma CtxEmpty sched_log log_empty (rules rl) with
-        | Some (l, _) => match interp_scheduler'_trace (log_app l sched_log) s1 with
+        | Some (l, _, _ ) => match interp_scheduler'_trace (log_app l sched_log) s1 with
                         | Some (rs, log) => Some (rl :: rs, log)
                         | None => None
                         end
@@ -184,7 +184,9 @@ Section Proof.
       interp_action (commit_update r sl') sigma Gamma sl action_log a = Some lv.
   Proof.
     induction a; cbn; intros Gamma sl sl' action_log lv HSome; try congruence.
-
+    - (* Assign *)
+      t.
+      erewrite IHa by eauto; reflexivity.
     - (* Seq *)
       t.
       erewrite IHa1 by eauto; cbn.
@@ -192,8 +194,8 @@ Section Proof.
     - (* Bind *)
       t.
       erewrite IHa1 by eauto; cbn.
-      erewrite IHa2 by eauto; reflexivity.
-    - (* If *)
+      erewrite IHa2 by eauto; rewrite <- HSome; reflexivity.
+    - (* if *)
       t;
         erewrite IHa1 by eauto; cbn;
           [ erewrite IHa2 by eauto; cbn |
@@ -205,7 +207,6 @@ Section Proof.
         erewrite getenv_commit_update by eassumption.
         erewrite may_read0_no_writes by eauto.
         reflexivity.
-
       + (* Read1 *)
         t.
         rewrite log_app_assoc.
@@ -265,12 +266,12 @@ Section Proof.
     induction s; cbn.
     - inversion 1; subst; eauto.
     - intros * Heq. destruct interp_action as [(log' & ?) | ] eqn:?.
-      + destruct (IHs _ _ Heq) as (rs & Heq').
+      + destruct log'. destruct (IHs _ _ Heq) as (rs & Heq').
         rewrite Heq'; eauto.
       + destruct (IHs _ _ Heq) as (rs & Heq').
         rewrite Heq'; eauto.
     - intros * Heq. destruct interp_action as [(log' & ?) | ] eqn:?.
-      + destruct (IHs1 _ _ Heq) as (rs & Heq').
+      + destruct log'. destruct (IHs1 _ _ Heq) as (rs & Heq').
         rewrite Heq'; eauto.
       + destruct (IHs2 _ _ Heq) as (rs & Heq').
         rewrite Heq'; eauto.

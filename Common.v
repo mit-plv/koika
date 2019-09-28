@@ -120,6 +120,10 @@ Notation "'let/opt' var ':=' expr 'in' body" :=
 Notation "'let/opt2' v1 ',' v2 ':=' expr 'in' body" :=
   (opt_bind expr (fun '(v1, v2) => body)) (at level 200).
 
+Notation "'let/opt3' v1 ',' v2 ',' v3 ':=' expr 'in' body" :=
+  (opt_bind expr (fun '(v1, v2, v3) => body)) (at level 200).
+
+
 Definition must {A} (o: option A) : if o then A else unit :=
   match o with
   | Some a => a

@@ -116,7 +116,7 @@ Section Contexts.
       + cbn. rewrite IHm; eauto.
   Qed.
 
-  Instance EqDec_member {K} sig (k: K) {EQ: EqDec K} : EqDec (member k sig).
+  Global Instance EqDec_member sig (k: K) {EQ: EqDec K} : EqDec (member k sig).
   Proof.
     econstructor.
     induction sig; intros m1 m2.
@@ -135,6 +135,24 @@ Section Contexts.
           apply Eqdep_dec.inj_pair2_eq_dec in H'; try apply eq_dec.
           eauto.
   Defined.
+
+  Lemma cassoc_creplace_neq_members {sig} {EQ:EqDec K} :
+    forall (ctx: context sig) {k } (m: member k sig) (m': member k sig) (v: V k),
+      m <> m' ->
+      cassoc m' (creplace m v ctx) = cassoc m' ctx.
+  Proof.
+    induction m; cbn; intros; rewrite (ceqn ctx).
+    -
+      destruct (mdestruct m') as [ (eqn & Heq) | (m'' & Heq)]; rewrite Heq in *.
+      + rewrite <- Eqdep_dec.eq_rect_eq_dec in H by apply eq_dec.
+        congruence.
+      + reflexivity.
+    -
+      destruct (mdestruct m') as [ (eqn & Heq) | (m'' & Heq)]; subst; cbn in *; subst; cbn.
+      + rewrite Heq in *. destruct eqn. reflexivity.
+      + rewrite IHm; intuition congruence.
+  Qed.
+
 End Contexts.
 Arguments context {_}.
 

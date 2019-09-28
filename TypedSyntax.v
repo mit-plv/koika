@@ -17,6 +17,8 @@ Section TypedSyntax.
         (m: member (k, tau) sig) : action sig tau
   | Const {sig} {tau: type}
           (cst: type_denote tau) : action sig tau
+  | Assign {sig} {k:var_t} {tau:type}
+           (m: member (k,tau) sig) (ex: action sig tau) : action sig unit_t
   | Seq {sig tau}
         (r1: action sig unit_t)
         (r2: action sig tau) : action sig tau
