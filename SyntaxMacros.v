@@ -16,6 +16,9 @@ Section SyntaxMacros.
   Context {custom_fn_t: Type}.
   Notation uaction := (uaction pos_t var_t reg_t (interop_ufn_t custom_fn_t)).
 
+  Definition USkip : uaction :=
+    UConstBits Ob.
+
   Definition if_eq a1 a2 (tbranch fbranch: uaction) :=
     UIf (UCall (UPrimFn (UConvFn UEq)) a1 a2)
         tbranch
@@ -51,7 +54,7 @@ Section SyntaxMacros.
                (vect_map2 (fun n a => (Bits.of_nat sz (index_to_nat n), a))
                           (all_indices (S bound)) branches).
 
-  Definition UInitStruct
+  Definition UStructInit
              (sig: struct_sig)
              (fields: list (string * uaction)) :=
     let uinit := UPrimFn (UConvFn (UInit (struct_t sig))) in

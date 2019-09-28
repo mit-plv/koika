@@ -207,9 +207,6 @@ module Compilation = struct
     | 1 -> SGA.P1
     | _ -> assert false
 
-  let uskip =
-    SGA.UConst (SGA.Bits_t 0, Obj.magic (SGA.Bits.zero 0))
-
   type 'f raw_action =
     ('f, ('f, value literal, reg_signature, (string ffi_signature) SGA.interop_ufn_t) action) locd
 
@@ -222,7 +219,7 @@ module Compilation = struct
        | Lit (Var v) -> SGA.UVar v
        | Lit (Const v) -> let tau, v = Util.sga_value_of_value v in SGA.UConst (tau, v)
        | StructInit (sg, fields) ->
-          SGA.uInitStruct (Util.sga_struct_sig_of_struct_sig sg)
+          SGA.uStructInit (Util.sga_struct_sig_of_struct_sig sg)
             (List.map (fun (nm, v) -> Util.coq_string_of_string nm.lcnt, translate_action v) fields)
        | Progn rs -> translate_seq rs
        | Let (bs, body) -> translate_bindings bs body
@@ -249,7 +246,7 @@ module Compilation = struct
     | (v, e) :: bs -> SGA.UBind (v.lcnt, translate_action e, translate_bindings bs body)
   and translate_seq rs =
     match rs with
-    | [] -> uskip
+    | [] -> SGA.uSkip
     | [r] -> translate_action r
     | r :: rs -> SGA.USeq (translate_action r, translate_seq rs)
 
