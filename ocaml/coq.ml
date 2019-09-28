@@ -217,6 +217,8 @@ let rec pp_action print_positions ppf (a: Lv.Pos.t SGALib.Compilation.translated
          pp_app "UConst" "(tau := %a)@ %a" pp_sga_type tau pp_value v)
   | UConstEnum (sg, enumerator) ->
      pp_app "UConstEnum" "%a@ %a" pp_sig sg.enum_name pp_coq_quoted enumerator
+  | UAssign (v, a) ->
+     pp_app "UAssign" "%a@ %a" pp_quoted v pp_action a
   | USeq (a, b) ->
      pp_app "USeq" "%a@ %a" pp_action a pp_action b
   | UBind (k, v, body) ->
