@@ -547,20 +547,20 @@ Section CompilerCorrectness.
 
   Ltac circuit_compile_destruct_t :=
     repeat lazymatch goal with
-           | [ IH: context[Circuits.compile_action ?lco ?rc _ ?a _] |-
-               context[Circuits.compile_action ?lco ?rc ?gamma ?a ?rwc] ] =>
-             specialize (IH gamma rwc);
+           | [ IH: context[Circuits.compile_action ?lco ?rc _ ?a _],
+                   H: context[Circuits.compile_action ?lco ?rc ?gamma ?a ?rwc] |- _ ] =>
+             specialize (IH gamma rwc _ _ (surjective_pairing _));
              destruct (Circuits.compile_action lco rc gamma a rwc); cbn
+           | [ H: (_, _) = (_, _) |- _ ] => inversion H; subst; clear H
            end.
 
   Theorem rwset_circuit_lt_compile_action_correct {sig tau} :
-    forall (gamma : ccontext sig) (a : action sig tau) (rwc : rwcircuit),
-      let (circ, gamma_new) := (compile_action rc gamma a rwc) in
-      circuit_lt (canFire (erwc circ)) (canFire rwc) /\
-      forall idx, rwset_circuit_lt_invariant (rwc.(regs)) (circ.(erwc).(regs)) idx.
+    forall (gamma: ccontext sig) (a: action sig tau) (rwc: rwcircuit) c gamma',
+      compile_action rc gamma a rwc = (c, gamma') ->
+      circuit_lt (canFire (erwc c)) (canFire rwc) /\
+      forall idx, rwset_circuit_lt_invariant (rwc.(regs)) (c.(erwc).(regs)) idx.
   Proof.
-    induction a; cbn; intros;
-      circuit_compile_destruct_t;
+    induction a; cbn; intros; circuit_compile_destruct_t; cbn in *;
       try solve [split; circuit_lt_f_equal; eauto using rwset_circuit_lt_invariant_refl].
 
     - (* Assign *)
@@ -578,7 +578,7 @@ Section CompilerCorrectness.
         rewrite getenv_map2.
         apply rwdata_circuit_lt_invariant_mux_rwdata_r;
           intros; eapply rwset_circuit_lt_invariant_trans; intuition eauto.
-    - destruct port; cbn.
+    - destruct port; cbn; circuit_compile_destruct_t.
       (* Read0 *)
       + split.
         * apply circuit_lt_CAnnot_l, circuit_lt_opt_l, circuit_lt_CAnd_l, circuit_lt_refl.
@@ -630,27 +630,24 @@ Section CompilerCorrectness.
   Qed.
 
   Lemma action_compile_willFire_of_canFire'_decreasing {sig}:
-    forall t (ex : action sig t) (gamma : ccontext sig) (rwc : rwcircuit) idx rwd action unused,
-      (compile_action rc gamma ex rwc) = (action,unused) ->
-      circuit_lt (willFire_of_canFire' (getenv REnv (regs (erwc action)) idx) rwd)
+    forall t (ex : action sig t) (gamma : ccontext sig) (rwc : rwcircuit) idx rwd c gamma',
+      compile_action rc gamma ex rwc = (c, gamma') ->
+      circuit_lt (willFire_of_canFire' (getenv REnv (regs (erwc c)) idx) rwd)
                  (willFire_of_canFire' (getenv REnv (regs rwc) idx) rwd).
   Proof.
-    intros; apply circuit_lt_willFire_of_canFire';
-      pose proof (rwset_circuit_lt_compile_action_correct gamma ex rwc) as lemma.
-    rewrite H in lemma. 
-    destruct lemma as (H0 & H0'); red in H0'; intuition.
+    intros. eapply circuit_lt_willFire_of_canFire', rwset_circuit_lt_compile_action_correct. eauto.
   Qed.
 
   Theorem action_compile_willFire_of_canFire_decreasing {sig}:
     forall t (ex : action sig t) (cLog : scheduler_circuit R Sigma REnv)
-      (gamma : ccontext sig) (rwc : rwcircuit) action unused,
-      (compile_action rc gamma ex rwc) = (action,unused) ->
-      circuit_lt (willFire_of_canFire (erwc action) cLog)
+      (gamma : ccontext sig) (rwc : rwcircuit) c gamma',
+      compile_action rc gamma ex rwc = (c, gamma') ->
+      circuit_lt (willFire_of_canFire (erwc c) cLog)
                  (willFire_of_canFire rwc cLog).
   Proof.
-    intros; apply circuit_lt_willFire_of_canFire;
-      pose proof (rwset_circuit_lt_compile_action_correct gamma ex rwc);
-      rewrite H in H0; intuition.
+    intros;
+      eapply circuit_lt_willFire_of_canFire;
+      eapply rwset_circuit_lt_compile_action_correct; eauto.
   Qed.
 
   Lemma willFire_of_canFire_decreasing :
@@ -946,7 +943,7 @@ Section CompilerCorrectness.
     end.
 
   (* Create HintDb circuits discriminated. *)
-  Ltac t := repeat t_step; eauto.  (* with circuits. *)
+  Ltac t := repeat t_step; eauto 6.  (* with circuits. *)
 
   Ltac interp_willFire_cleanup :=
     repeat match goal with
@@ -993,15 +990,22 @@ Section CompilerCorrectness.
              specialize (H idx); cbv zeta in *; repeat cleanup_step
            end.
 
-  Lemma circuit_gamma_equiv_CtxCons_rev:
-    forall (sig : tsig var_t) (tau : type) (var : var_t) (t : tau)
-      (c2 : vcontext sig) (c0 : circuit tau)
-      (c1 : ccontext sig),
-      circuit_gamma_equiv (CtxCons (var, tau) t c2) (CtxCons (var, tau) c0 c1) ->
-      circuit_gamma_equiv c2 c1.
+  Lemma circuit_gamma_equiv_CtxCons_rev {sig}:
+    forall (k: var_t) (tau: type) (Gamma: vcontext sig) (gamma: ccontext sig) v (c: circuit tau),
+      circuit_gamma_equiv (CtxCons (k, tau) v Gamma) (CtxCons (k, tau) c gamma) ->
+      circuit_gamma_equiv Gamma gamma.
   Proof.
     unfold circuit_gamma_equiv.
-    intros * Heq **; apply (Heq _ _ (MemberTl (k, tau0) (var, tau) sig m)).
+    intros * Heq **; apply (Heq _ _ (MemberTl (k0, tau0) (k, tau) sig m)).
+  Qed.
+
+  Lemma circuit_gamma_equiv_ctl {sig}:
+    forall (k: var_t) (tau: type) (Gamma: vcontext ((k, tau) :: sig)) (gamma: ccontext ((k, tau) :: sig)),
+      circuit_gamma_equiv Gamma gamma ->
+      circuit_gamma_equiv (ctl Gamma) (ctl gamma).
+  Proof.
+    intros * Heq; eapply circuit_gamma_equiv_CtxCons_rev.
+    rewrite (ceqn Gamma), (ceqn gamma) in Heq; eassumption.
   Qed.
 
   Lemma circuit_gamma_equiv_creplace:
@@ -1122,18 +1126,15 @@ Section CompilerCorrectness.
     - (* Var *) cbn; rewrite lco_proof; eauto 6.
     - (* Const *) cbn; rewrite lco_proof; eauto 6.
     - (* Assign *)
-      t; interp_willFire_cleanup; t; eauto using  circuit_gamma_equiv_creplace.
+      t; interp_willFire_cleanup; t; eauto using circuit_gamma_equiv_creplace.
     - (* Seq *)
-      t;
-        [ interp_willFire_cleanup; eauto|
-       eapply interp_circuit_circuit_lt_helper_false;
-         eauto 5 using action_compile_willFire_of_canFire_decreasing].
-    - (* Bind *)
-      t. interp_willFire_cleanup; eauto.
-      rewrite (ceqn c0), (ceqn v0) in H17.
-      specialize (circuit_gamma_equiv_CtxCons_rev _ _ _ _ _ _ _ H17). trivial.
+      t.
       eapply interp_circuit_circuit_lt_helper_false;
-        eauto 5 using action_compile_willFire_of_canFire_decreasing.
+        eauto using action_compile_willFire_of_canFire_decreasing.
+    - (* Bind *)
+      t. eauto 7 using circuit_gamma_equiv_ctl.
+      eapply interp_circuit_circuit_lt_helper_false;
+        eauto using action_compile_willFire_of_canFire_decreasing.
     - (* If *)
       t.
       + repeat apply conj; try reflexivity.
@@ -1162,42 +1163,19 @@ Section CompilerCorrectness.
       + unfold mux_rwsets; interp_willFire_cleanup; t.
         right; exists x; t.
         rewrite (interp_circuit_willFire_of_canFire'_mux_rwdata x); t.
-
       + unfold mux_rwsets; interp_willFire_cleanup; t.
         * left.
-          destruct Bits.single.
-          -- eapply interp_circuit_circuit_lt_helper_false;
-               pose (rwset_circuit_lt_compile_action_correct  c ex2 (erwc a));
-               t;
-               intuition.
-          -- eapply interp_circuit_circuit_lt_helper_false;
-               pose (rwset_circuit_lt_compile_action_correct  c ex3 (erwc a));
-               t;
-               intuition.
+          destruct Bits.single;
+            eapply interp_circuit_circuit_lt_helper_false;
+            try eapply rwset_circuit_lt_compile_action_correct;
+            eauto.
         * right.
           exists x; t.
           rewrite (interp_circuit_willFire_of_canFire'_mux_rwdata x); t.
           destruct Bits.single; t;
             eapply interp_circuit_circuit_lt_helper_false;
-            eauto 6 using action_compile_willFire_of_canFire'_decreasing.
-          (* Following is not properly automatized *)
-          apply eq_sym in Heqp0.
-            rewrite surjective_pairing in Heqp0.
-            inversion Heqp0.
-          eapply action_compile_willFire_of_canFire'_decreasing.
-          rewrite <- H9.
-          rewrite <- surjective_pairing in Heqp0.
-          rewrite Heqp0.
-          reflexivity.
-
-          apply eq_sym in Heqp1.
-            rewrite surjective_pairing in Heqp1.
-            inversion Heqp1.
-          eapply action_compile_willFire_of_canFire'_decreasing.
-          rewrite <- H9.
-          rewrite <- surjective_pairing in Heqp1.
-          rewrite Heqp1.
-          reflexivity.
+            try eapply action_compile_willFire_of_canFire'_decreasing;
+            eauto.
     - (* Read *)
       destruct port.
       + cbn.
