@@ -34,6 +34,62 @@ let register_type (user_types: (string * typ) list ref) nm tau =
                    nm (typ_to_string tau) (typ_to_string tau'))
   | None -> user_types := (nm, tau) :: !user_types
 
+module Mangling = struct
+  let specials =
+    StringSet.of_list
+      ["alignas"; "alignof"; "and"; "and_eq"; "asm"; "atomic_cancel";
+       "atomic_commit"; "atomic_noexcept"; "auto"; "bitand"; "bitor"; "bool";
+       "break"; "case"; "catch"; "char"; "char8_t"; "char16_t"; "char32_t";
+       "class"; "compl"; "concept"; "const"; "consteval"; "constexpr";
+       "constinit"; "const_cast"; "continue"; "co_await"; "co_return";
+       "co_yield"; "decltype"; "default"; "delete"; "do"; "double";
+       "dynamic_cast"; "else"; "enum"; "explicit"; "export"; "extern"; "false";
+       "float"; "for"; "friend"; "goto"; "if"; "inline"; "int"; "long";
+       "mutable"; "namespace"; "new"; "noexcept"; "not"; "not_eq"; "nullptr";
+       "operator"; "or"; "or_eq"; "private"; "protected"; "public"; "reflexpr";
+       "register"; "reinterpret_cast"; "requires"; "return"; "short"; "signed";
+       "sizeof"; "static"; "static_assert"; "static_cast"; "struct"; "switch";
+       "synchronized"; "template"; "this"; "thread_local"; "throw"; "true";
+       "try"; "typedef"; "typeid"; "typename"; "union"; "unsigned"; "using";
+       "virtual"; "void"; "volatile"; "wchar_t"; "while"; "xor"; "xor_eq"]
+
+  let special_prefix_re = Str.regexp "_[A-Z]"
+  let dunder_re = Str.regexp "__"
+  let dunder_escape_re = Str.regexp "_\\(xxx+\\)_"
+
+  let needs_mangling name =
+    StringSet.mem name specials
+    || Str.string_match special_prefix_re name 0
+    || Str.string_match dunder_re name 0
+
+  let escape_dunders name =
+    let name = ref name in
+    while Str.string_match dunder_re !name 0 do
+      name := Str.global_replace dunder_escape_re "_\\1x_" !name
+    done;
+    !name
+
+  let mangle_name name =
+    if needs_mangling name then
+      "_mangled_" ^ escape_dunders name
+    else name
+
+  let mangle_register_sig r =
+    { r with reg_name = mangle_name r.reg_name }
+
+  let mangle_function_sig f =
+    { f with ffi_name = match f.ffi_name with
+                        | CustomFn f -> CustomFn (mangle_name f)
+                        | PrimFn f -> PrimFn f }
+
+  let mangle_unit u =
+    { u with
+      cpp_classname = mangle_name u.cpp_classname;
+      cpp_rule_names = (fun rl -> rl |> u.cpp_rule_names |> mangle_name);
+      cpp_register_sigs = (fun r -> r |> u.cpp_register_sigs |> mangle_register_sig);
+      cpp_function_sigs = (fun f -> f |> u.cpp_function_sigs |> mangle_function_sig) }
+end
+
 let cpp_type_of_type
       (user_types: (string * typ) list ref)
       (needs_multiprecision: bool ref)
@@ -184,6 +240,7 @@ type assignment_result =
 let compile (type name_t var_t reg_t)
       (hpp: (_, name_t, var_t, reg_t, _) cpp_input_t) =
   let buffer = ref (Buffer.create 0) in
+  let hpp = Mangling.mangle_unit hpp in
 
   let nl _ = Buffer.add_string !buffer "\n" in
   let pk k fmt = Printf.kbprintf k !buffer fmt in
