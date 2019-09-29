@@ -265,13 +265,13 @@ Section Proof.
   Proof.
     induction s; cbn.
     - inversion 1; subst; eauto.
-    - intros * Heq. destruct interp_action as [(log' & ?) | ] eqn:?.
-      + destruct log'. destruct (IHs _ _ Heq) as (rs & Heq').
+    - intros * Heq. destruct interp_action as [((log' & ?) & ?) | ] eqn:?.
+      + destruct (IHs _ _ Heq) as (rs & Heq').
         rewrite Heq'; eauto.
       + destruct (IHs _ _ Heq) as (rs & Heq').
         rewrite Heq'; eauto.
-    - intros * Heq. destruct interp_action as [(log' & ?) | ] eqn:?.
-      + destruct log'. destruct (IHs1 _ _ Heq) as (rs & Heq').
+    - intros * Heq. destruct interp_action as [((log' & ?) & ?) | ] eqn:?.
+      + destruct (IHs1 _ _ Heq) as (rs & Heq').
         rewrite Heq'; eauto.
       + destruct (IHs2 _ _ Heq) as (rs & Heq').
         rewrite Heq'; eauto.
