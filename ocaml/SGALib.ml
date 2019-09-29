@@ -167,6 +167,12 @@ module Util = struct
       let name, fn = custom_fn_names fn, pkg.sga_custom_fn_types fn in
       ffi_sig_of_sga_external_sig name fn in
     fun fn -> ffi_sig_of_interop_fn ~custom_fn_info fn
+
+  let rec member_references_shadowed_binding (m: ('a * 'b) SGA.member) =
+    match m with
+    | MemberHd _ -> false
+    | MemberTl ((k, _), (k', _), _, m') ->
+       k = k' || member_references_shadowed_binding m'
 end
 
 module Compilation = struct
