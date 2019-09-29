@@ -10,8 +10,6 @@ Require SGA.Common
         SGA.CircuitElaboration
         SGA.Demo.
 
-Extract Inductive list => "list" [ "[]" "(::)" ].
-
 (* This prevents an assertion error: *)
 Extraction Inline Circuits.retVal.
 (*

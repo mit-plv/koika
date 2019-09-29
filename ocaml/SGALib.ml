@@ -104,7 +104,6 @@ module Util = struct
                         (sga_type_to_string actual) (type_kind_to_string expected))
     in { epos; ekind; emsg }
 
-  (*  *)
   let ffi_sig_of_interop_fn ~custom_fn_info (fn: 'a SGA.interop_fn_t) =
     match fn with
     | SGA.PrimFn fn ->
@@ -269,7 +268,7 @@ module Compilation = struct
   let result_of_type_result = function
     | SGA.Success s -> Ok s
     | SGA.Failure ({ epos; emsg }: _ SGA.error) ->
-       Result.Error (Util.type_error_to_error epos emsg)
+       Error (Util.type_error_to_error epos emsg)
 
   let typecheck_rule (raw_ast: 'f raw_action) : (typechecked_action, 'f err_contents) result =
     let ast = translate_action raw_ast in

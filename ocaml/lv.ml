@@ -272,8 +272,7 @@ let try_symbol nm =
   if Str.string_match symbol_re nm 0 then Some (Str.matched_group 1 nm)
   else None
 
-let parse fname sexps =
-  Printf.printf "Parsing %s\n%!" fname;
+let parse sexps =
   let expect_single loc kind where = function
     | [] ->
        parse_error loc
@@ -531,7 +530,6 @@ let parse fname sexps =
     let _, kind = expect_constant expected kind in
     let name, body = expect_cons d_loc "name" name_body in
     let name = locd_of_pair (expect_identifier "an identifier" name) in
-    Printf.printf "Processing decl %s\n%!" name.lcnt;
     (d_loc,
      match kind with
      | `Enum ->

@@ -78,7 +78,7 @@ let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
       match cli_frontend with
       | `Annotated -> read_annotated_sexps cli_in_fname
       | `Sexps -> read_cst_sexps cli_in_fname in
-    let resolved = resolve (parse cli_in_fname sexps) in
+    let resolved = resolve (parse sexps) in
     let c_unit = lazy (first_compile_unit cli_in_fname (typecheck resolved)) in
     run_backend cli_backend cli_out_fname resolved c_unit
   with Error { epos; ekind; emsg } ->
