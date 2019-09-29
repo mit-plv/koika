@@ -165,14 +165,14 @@ let assert_bits (tau: typ) =
   | Bits_t sz -> sz
   | _ -> failwith "Expecting bits, not struct or enum"
 
-let cpp_custom_fn_name f =
+let cpp_funcall f a1 a2 =
   (* The current implementation of external functions requires the client to
      pass a class implementing those functions as a template argument.  An
      other approach would have made custom functions virtual methods, but
-     then they couldn't have taken template arguments. *)
+     then they couldn't have been templated functions. *)
   (* The ‘.template’ part ensures that ‘extfuns.xyz<p>()’ is not parsed as a
      comparison. *)
-  sprintf "extfuns.template %s" f
+  sprintf "extfuns.template %s(%s, %s)" f a1 a2
 
 let cpp_bits_fn_name f tau1 tau2 =
   let sz1 = assert_bits tau1 in
@@ -612,7 +612,7 @@ let compile (type name_t var_t reg_t)
         match ffi_name with
         | CustomFn f ->
            Hashtbl.replace custom_funcalls f fn;
-           PureExpr (sprintf "%s(%s, %s)" (cpp_custom_fn_name f) a1 a2)
+           PureExpr (cpp_funcall f a1 a2)
         | PrimFn (SGA.ConvFn (tau, fn)) ->
            let ns = "prims::" in
            let tau = SGALib.Util.typ_of_sga_type tau in
