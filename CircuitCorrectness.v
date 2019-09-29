@@ -1215,30 +1215,27 @@ Section CompilerCorrectness.
           interp_willFire_cleanup.
           may_read_write_t.
     - (* Write *)
-      destruct port;
-      t.
+      destruct port; t.
       + repeat apply conj.
-        * interp_willFire_cleanup;
-            may_read_write_t.
+        * interp_willFire_cleanup; may_read_write_t.
         * (apply log_rwdata_consistent_log_cons_putenv;
              [ eauto | red ]; cbn; rewrite ?Bits.single_cons, lco_proof; eauto).
-        *  apply log_data0_consistent_putenv_write0; eauto.
+        * apply log_data0_consistent_putenv_write0; eauto.
         * apply log_data1_consistent_putenv_read_write0; eauto.
         * interp_willFire_cleanup;
               may_read_write_t.
         * trivial.
-
       + interp_willFire_cleanup;
             may_read_write_t; eauto.
-          -- right; exists idx; interp_willFire_cleanup;
-               may_read_write_t.
-          -- right; exists idx; interp_willFire_cleanup;
-               may_read_write_t.
-          -- right; exists idx; interp_willFire_cleanup;
-               may_read_write_t.
+        * right; exists idx; interp_willFire_cleanup;
+            may_read_write_t.
+        * right; exists idx; interp_willFire_cleanup;
+            may_read_write_t.
+        * right; exists idx; interp_willFire_cleanup;
+            may_read_write_t.
       + eapply interp_circuit_circuit_lt_helper_false; eauto;
-            intros; apply circuit_lt_willFire_of_canFire; cbn;
-              eauto 4 with circuits.
+          intros; apply circuit_lt_willFire_of_canFire; cbn;
+            eauto 4 with circuits.
         all: intros;
           apply rwset_circuit_lt_invariant_putenv;
           eauto 8 with circuits.
@@ -1250,12 +1247,12 @@ Section CompilerCorrectness.
         * apply log_data0_consistent_putenv_read_write1; eauto.
         * apply log_data1_consistent_putenv_write1; eauto.
         * interp_willFire_cleanup;
-              may_read_write_t.
+            may_read_write_t.
         * trivial.
       + interp_willFire_cleanup;
           may_read_write_t; eauto.
         right; exists idx; interp_willFire_cleanup;
-               may_read_write_t.
+          may_read_write_t.
       + eapply interp_circuit_circuit_lt_helper_false; eauto;
           intros; apply circuit_lt_willFire_of_canFire; cbn;
             eauto 4 with circuits.
@@ -1270,7 +1267,6 @@ Section CompilerCorrectness.
   Qed.
 
   Arguments update_accumulated_rwset : simpl never.
-
   Notation update_accumulated_rwset := (update_accumulated_rwset lco).
 
   Lemma log_rwdata_consistent_update_accumulated_rwset:
