@@ -413,7 +413,9 @@ let parse sexps =
              Progn (List.map expect_action args)
           | "let" ->
              let bindings, body = expect_cons loc "let bindings" args in
-             Let (expect_let_bindings bindings, List.map expect_action body)
+             let bindings = expect_let_bindings bindings in
+             let body = List.map expect_action body in
+             Let (bindings, body)
           | "if" ->
              let cond, body = expect_cons loc "if condition" args in
              let tbranch, fbranches = expect_cons loc "if branch" body in
