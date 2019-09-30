@@ -14,9 +14,6 @@ let pp_raw ppf s =
 let rec brk n ppf =
   if n = 0 then () else (fprintf ppf "@,"; brk (n - 1) ppf)
 
-let pp_cnt pp ppf x =
-  pp ppf x.lcnt
-
 let pp_nat ppf n =
   fprintf ppf "%d" n
 
@@ -201,10 +198,11 @@ and pp_prim_struct_uop ppf (f: SGALib.SGA.prim_struct_uop) = match f with
 let pp_pos ppf pos =
   pp_quoted ppf (Lv.Pos.to_string pos)
 
-let rec pp_action print_positions ppf (a: Lv.Pos.t SGALib.Compilation.translated_action) =
+let rec pp_action (position_printer: (Format.formatter -> 'f -> unit) option)
+          ppf (a: 'f SGALib.Compilation.translated_action) =
   let open SGALib.Util in
   let pp_app fn fmt = pp_app ppf fn fmt in
-  let pp_action = pp_action print_positions in
+  let pp_action = pp_action position_printer in
   match a with
   | UFail tau -> pp_app "UFail" "%a" pp_sga_type tau
   | UVar v -> pp_app "UVar" "%a" pp_quoted v
@@ -232,15 +230,16 @@ let rec pp_action print_positions ppf (a: Lv.Pos.t SGALib.Compilation.translated
   | UCall (fn, a1, a2) ->
      pp_app "UCall" "%a@ %a@ %a" pp_fn fn pp_action a1 pp_action a2
   | UAPos (pos, v) ->
-     if print_positions then pp_app "UAPos" "%a@ %a" pp_pos pos pp_action v
-     else pp_action ppf v
+     match position_printer with
+     | Some pp_pos -> pp_app "UAPos" "%a@ %a" pp_pos pos pp_action v
+     | None -> pp_action ppf v
 
-let pp_rule print_positions ppf (name, r) =
+let pp_rule position_printer ppf (name, r) =
   let action = SGALib.Compilation.translate_action r in
   fprintf ppf "@[<2>Definition %s_body : uaction pos_t var_t reg_t ufn_t :=@ %a@]."
-    name (pp_action print_positions) action
+    name (pp_action position_printer) action
 
-let pp_scheduler print_positions ppf (name, s) =
+let pp_scheduler position_printer ppf (name, s) =
   let scheduler = SGALib.Compilation.translate_scheduler s in
   let rec loop ppf (s: _ SGALib.SGA.uscheduler) = match s with
     | UDone ->
@@ -251,8 +250,9 @@ let pp_scheduler print_positions ppf (name, s) =
        pp_app ppf "UTry" "%a@ @[<v>%a@ %a@]"
          pp_raw r loop s1 loop s2
     | USPos (pos, s) ->
-     if print_positions then pp_app ppf "USPos" "%a@ %a" pp_pos pos loop s
-     else loop ppf s in
+       match position_printer with
+       | Some pp_pos -> pp_app ppf "USPos" "%a@ %a" pp_pos pos loop s
+       | None -> loop ppf s in
   fprintf ppf "@[<2>Definition %s : scheduler rule_name_t :=@ tc_scheduler @[%a@]@]."
     name loop scheduler;
   brk 2 ppf;
@@ -272,14 +272,15 @@ let pp_reg_init_vals ppf (registers: reg_signature list) =
     (pp_match pp_reg_name (pp_value <<< reg_init)) ("idx", registers)
 
 let pp_mod ~print_positions ppf ({ name; registers; rules; schedulers }: resolved_module) =
+  let position_printer = if print_positions then Some pp_pos else None in
   fprintf ppf "@[<v>@[<v 2>Module %s.@ " name;
   pp_reg_t ppf registers; brk 2 ppf;
   pp_rule_name_t ppf rules; brk 2 ppf;
   pp_reg_types ppf registers; brk 2 ppf;
   pp_reg_init_vals ppf registers; brk 2 ppf;
-  pp_seq (brk 2) (pp_rule print_positions) ppf rules; brk 2 ppf;
+  pp_seq (brk 2) (pp_rule position_printer) ppf rules; brk 2 ppf;
   pp_tc_rules ppf rules; brk 2 ppf;
-  pp_seq (brk 2) (pp_scheduler print_positions) ppf schedulers;
+  pp_seq (brk 2) (pp_scheduler position_printer) ppf schedulers;
   fprintf ppf "@]@ End %s.@]" name
 
 let pp_preamble ppf =
@@ -289,6 +290,11 @@ let pp_preamble ppf =
   fprintf ppf "Definition pos_t := string.@ ";
   fprintf ppf "Definition var_t := string.@ @ ";
   fprintf ppf "Instance DummyPos_pos_t : DummyPos pos_t := {| dummy_pos := \"\" |}."
+
+let _ =
+  SGALib.Compilation.debug_printer :=
+    { debug_print = (fun a ->
+        fprintf (formatter_of_out_channel stderr) "%a@." (pp_action None) a) }
 
 let main out ({ r_types; r_extfuns; r_mods }: Lv.resolved_unit) =
   let types = topo_sort_types (StringMap.bindings r_types.td_all) in

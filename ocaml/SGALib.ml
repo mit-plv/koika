@@ -187,6 +187,10 @@ module Compilation = struct
   type 'f translated_action =
     ('f, var_t, reg_signature, string ffi_signature SGA.interop_ufn_t) SGA.uaction
 
+  type debug_printer = { debug_print: 'f. 'f translated_action -> unit }
+  let debug_printer : debug_printer ref =
+    ref { debug_print = (fun _ -> Printf.eprintf "No printer installed\n%!") }
+
   let rec translate_action ({ lpos; lcnt }: 'f raw_action) : 'f translated_action =
     SGA.UAPos
       (lpos,
@@ -217,7 +221,7 @@ module Compilation = struct
        | Read (port, reg) -> SGA.URead (translate_port port, reg.lcnt)
        | Write (port, reg, v) -> SGA.UWrite (translate_port port, reg.lcnt, translate_action v)
        | Call (fn, a1 :: a2 :: []) -> SGA.UCall (fn.lcnt, translate_action a1, translate_action a2)
-       | Call (_, _) -> assert false)
+       | Call (_, _) -> failwith "Attempting to translate a call with n != 2 arguments.")
   and translate_bindings bs body =
     match bs with
     | [] -> translate_seq body
