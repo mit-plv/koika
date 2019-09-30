@@ -683,7 +683,7 @@ let parse sexps =
 
 let rexpect_num = function
   | { lpos; lcnt = Lit (Num n); _} -> lpos, n
-  | { lpos; _ } -> parse_error lpos "Expecting a type level constant"
+  | { lpos; _ } -> parse_error lpos "Expecting a type-level integer"
 
 let rexpect_keyword msg = function
   | { lpos; lcnt = Lit (Keyword s); _} -> lpos, s
