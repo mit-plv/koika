@@ -8,6 +8,7 @@ Section ErrorReporting.
           {Sigma: fn_t -> ExternalSignature}.
 
   Inductive error_message :=
+  | ExplicitErrorInAst
   | UnboundVariable (var: var_t)
   | UnboundField (f: string) (sig: struct_sig)
   | UnboundEnumMember (f: string) (sig: enum_sig)
@@ -98,6 +99,7 @@ Section TypeInference.
     Fixpoint type_action (pos: pos_t) (sig: tsig var_t) (e: uaction)
       : result ({ tau: type & action sig tau }) :=
       match e with
+      | UError => Failure (mkerror pos ExplicitErrorInAst)
       | UFail n => Success (EX (Fail (bits_t n)))
       | UVar var =>
         let/res tau_m := opt_result (assoc var sig) (mkerror pos (UnboundVariable var)) in

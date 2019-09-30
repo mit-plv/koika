@@ -4,6 +4,7 @@ Section Syntax.
   Context {pos_t name_t var_t reg_t fn_t: Type}.
 
   Inductive uaction :=
+  | UError
   | UFail (tau: type)
   | UVar (var: var_t)
   | UConst {tau: type} (cst: type_denote tau)

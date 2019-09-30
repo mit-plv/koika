@@ -88,6 +88,8 @@ module Util = struct
 
   let type_error_to_error (epos: 'f) (err: _ SGA.error_message) =
     let ekind, emsg = match err with
+      | SGA.ExplicitErrorInAst ->
+         (`TypeError, "Untypeable term (likely due to an ill-typed subterm)")
       | SGA.UnboundVariable var ->
          (`NameError, Printf.sprintf "Unbound variable `%s'" var)
       | SGA.UnboundField (field, sg) ->
@@ -196,6 +198,7 @@ module Compilation = struct
       (lpos,
        match lcnt with
        | Skip -> SGA.uSkip
+       | Invalid -> SGA.UError
        | Fail tau -> SGA.UFail (Util.sga_type_of_typ tau)
        | Lit (Var v) -> SGA.UVar v
        | Lit (Const v) -> let tau, v = Util.sga_value_of_value v in SGA.UConst (tau, v)

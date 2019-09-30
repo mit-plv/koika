@@ -137,6 +137,7 @@ type 'cst_t literal =
 
 type ('f, 'lit_t, 'reg_t, 'fn_t) action =
   | Skip
+  | Invalid
   | Fail of typ
   | Lit of 'lit_t
   | Assign of (('f, var_t) locd * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd)

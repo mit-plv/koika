@@ -548,7 +548,7 @@ let parse sexps =
              let args = List.map expect_action args in
              Call (locd_make loc_hd hd, args))
   and expect_action s =
-    Delay.apply1_default { lpos = sexp_pos s; lcnt = Skip } expect_action_nodelay s
+    Delay.apply1_default { lpos = sexp_pos s; lcnt = Invalid } expect_action_nodelay s
   and expect_switch_branch branch =
     let loc, lst = expect_list "switch case" branch in
     let lbl, body = expect_cons loc "case label" lst in
@@ -946,6 +946,7 @@ let resolve_rule types extfuns registers ((nm, action): unresolved_rule) =
     { lpos;
       lcnt = match lcnt with
              | Skip -> Skip
+             | Invalid -> Invalid
              | Fail sz -> Fail sz
              | Lit (Fail tau) -> Fail (resolve_type types (locd_make lpos tau))
              | Lit (Var v) -> Lit (Common.Var v)
@@ -986,7 +987,7 @@ let resolve_rule types extfuns registers ((nm, action): unresolved_rule) =
                  | `StructInit (sg, fields) ->
                     StructInit (sg, resolve_struct_fields fields)) }
   and resolve_action l =
-    Delay.apply1_default { l with lcnt = Skip } resolve_action_nodelay l in
+    Delay.apply1_default { l with lcnt = Invalid } resolve_action_nodelay l in
   (nm.lcnt, resolve_action action)
 
 let resolve_register types (name, init) =

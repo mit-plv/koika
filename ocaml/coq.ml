@@ -204,6 +204,7 @@ let rec pp_action (position_printer: (Format.formatter -> 'f -> unit) option)
   let pp_app fn fmt = pp_app ppf fn fmt in
   let pp_action = pp_action position_printer in
   match a with
+  | UError -> pp_raw ppf "UError"
   | UFail tau -> pp_app "UFail" "%a" pp_sga_type tau
   | UVar v -> pp_app "UVar" "%a" pp_quoted v
   | UConst (tau, v) ->
