@@ -782,6 +782,8 @@ let try_resolve_extfun extfuns name args =
   | Some (nargs, fn) -> Some (SGALib.SGA.UCustomFn fn, nargs, args)
   | None -> None
 
+let literal_tt = Lit (Const (UBits [||]))
+
 let try_resolve_special_function types name (args: unresolved_action locd list) =
   match name.lcnt with
   | "new" ->
@@ -799,8 +801,9 @@ let try_resolve_special_function types name (args: unresolved_action locd list) 
       | Struct_t sg ->
          let expect_field nm v =
            (locd_of_pair (rexpect_keyword "a field name" nm), v) in
+         let tt = { lpos = loc; lcnt = literal_tt } in
          Some (match rexpect_pairs "value" expect_field args with
-               | [] -> `Call (locd_make loc uinit, [])
+               | [] -> `Call (locd_make loc uinit, tt, tt)
                | fields -> `StructInit (sg, fields)))
   | _ -> None
 
@@ -809,8 +812,13 @@ let pad_function_call lpos name fn nargs (args: unresolved_action locd list) =
   if List.length args <> nargs then
     type_error lpos (sprintf "Function `%s' takes %d arguments" name nargs)
   else
-    let padding = list_const (2 - nargs) { lpos; lcnt = Lit (Const (UBits [||])) } in
-    { lpos; lcnt = fn }, List.append args padding
+    let tt = { lpos; lcnt = literal_tt } in
+    let a1, a2 = match args with
+      | [] -> tt, tt
+      | [a1] -> a1, tt
+      | [a1; a2] -> a1, a2
+      | _ -> assert false in
+    `Call ({ lpos; lcnt = fn }, a1, a2)
 
 let resolve_function types extfuns name (args: unresolved_action locd list) =
   match try_resolve_special_function types name args with
@@ -823,8 +831,7 @@ let resolve_function types extfuns name (args: unresolved_action locd list) =
                  | Some r -> r
                  | None -> let bound = List.concat [keys core_primitives; keys bits_primitives; keys extfuns] in
                            unbound_error name.lpos ~bound "function" name.lcnt in
-     let fn, args = pad_function_call name.lpos name.lcnt fn nargs args in
-     `Call (fn, args)
+     pad_function_call name.lpos name.lcnt fn nargs args
 
 let resolve_rule types extfuns registers ((nm, action): unresolved_rule) =
   let find_register { lpos; lcnt = name } =
@@ -872,7 +879,8 @@ let resolve_rule types extfuns registers ((nm, action): unresolved_rule) =
                 Write (port, find_register r, resolve_action v)
              | Call (fn, args) ->
                 (match resolve_function types extfuns fn args with
-                 | `Call (fn, args) -> Call (fn, List.map resolve_action args)
+                 | `Call (fn, a1, a2) ->
+                    Call (fn, [resolve_action a1; resolve_action a2])
                  | `StructInit (sg, fields) ->
                     StructInit (sg, resolve_struct_fields fields)) } in
   (nm.lcnt, resolve_action action)
