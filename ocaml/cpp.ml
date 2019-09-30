@@ -194,7 +194,7 @@ let cpp_bits_fn_name f tau1 tau2 =
      | SGA.ZExtR (_sz, width) -> sprintf "zextr<%d, %d>" sz1 width
      | SGA.UIntPlus _sz -> sprintf "plus<%d>" sz1)
 
-let cpp_preamble =
+let cpp_get_preamble () =
   let inc = open_in "preamble.hpp" in
   let preamble = really_input_string inc (in_channel_length inc) in
   close_in inc;
@@ -507,7 +507,7 @@ let compile (type name_t var_t reg_t)
     if !needs_multiprecision then (
       p "#define NEEDS_BOOST_MULTIPRECISION";
       nl ());
-    p "%s" cpp_preamble;
+    p "%s" (cpp_get_preamble ());
     nl ();
     let reg_typ (_, t) = register_subtypes user_types needs_multiprecision t in
     List.iter reg_typ !user_types;
