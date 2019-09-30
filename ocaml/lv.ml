@@ -240,6 +240,9 @@ type 'f sexp =
   | Atom of { loc: 'f; atom: string }
   | List of { loc: 'f; elements: 'f sexp list }
 
+let sexp_pos = function
+  | Atom { loc; _ } | List { loc; _ } -> loc
+
 let read_all fname =
   if fname = "-" then Stdio.In_channel.input_all Stdio.stdin
   else Stdio.In_channel.read_all fname
@@ -485,7 +488,7 @@ let parse sexps =
     let hd, args = expect_cons loc kind elements in
     let loc_hd, hd = expect_atom (sprintf "a %s name" kind) hd in
     loc_hd, hd, args in
-  let rec expect_action = function
+  let rec expect_action_nodelay = function
     | Atom { loc; atom } ->
        locd_make loc
          (match atom with
@@ -539,6 +542,8 @@ let parse sexps =
           | _ ->
              let args = List.map expect_action args in
              Call (locd_make loc_hd hd, args))
+  and expect_action s =
+    Delay.apply1_default { lpos = sexp_pos s; lcnt = Skip } expect_action_nodelay s
   and expect_switch_branch branch =
     let loc, lst = expect_list "switch case" branch in
     let lbl, body = expect_cons loc "case label" lst in
@@ -932,7 +937,7 @@ let resolve_rule types extfuns registers ((nm, action): unresolved_rule) =
     | None -> unbound_error lpos "register" name in
   let rec resolve_struct_fields fields =
     List.map (fun (nm, v) -> nm, resolve_action v) fields
-  and resolve_action ({ lpos; lcnt }: unresolved_action locd) =
+  and resolve_action_nodelay ({ lpos; lcnt }: unresolved_action locd) =
     { lpos;
       lcnt = match lcnt with
              | Skip -> Skip
@@ -974,7 +979,9 @@ let resolve_rule types extfuns registers ((nm, action): unresolved_rule) =
                  | `Call (fn, a1, a2) ->
                     Call (fn, [resolve_action a1; resolve_action a2])
                  | `StructInit (sg, fields) ->
-                    StructInit (sg, resolve_struct_fields fields)) } in
+                    StructInit (sg, resolve_struct_fields fields)) }
+  and resolve_action l =
+    Delay.apply1_default { l with lcnt = Skip } resolve_action_nodelay l in
   (nm.lcnt, resolve_action action)
 
 let resolve_register types (name, init) =
