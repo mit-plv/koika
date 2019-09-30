@@ -273,6 +273,7 @@ let pp_reg_init_vals ppf (registers: reg_signature list) =
 
 let pp_mod ~print_positions ppf ({ name; registers; rules; schedulers }: resolved_module) =
   let position_printer = if print_positions then Some pp_pos else None in
+  let name = name.lcnt in
   fprintf ppf "@[<v>@[<v 2>Module %s.@ " name;
   pp_reg_t ppf registers; brk 2 ppf;
   pp_rule_name_t ppf rules; brk 2 ppf;

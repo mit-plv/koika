@@ -95,7 +95,7 @@ type resolved_extfun =
   int * string ffi_signature
 
 type resolved_module = {
-    name: string;
+    name: string locd;
     registers: reg_signature list;
     rules: (string * Pos.t SGALib.Compilation.raw_action) list;
     schedulers: (string * Pos.t SGALib.Compilation.raw_scheduler) list
@@ -240,6 +240,7 @@ type 'f sexp =
   | Atom of { loc: 'f; atom: string }
   | List of { loc: 'f; elements: 'f sexp list }
 
+(* FIXME *)
 let sexp_pos = function
   | Atom { loc; _ } | List { loc; _ } -> loc
 
@@ -553,7 +554,7 @@ let parse sexps =
              `SomeLabel (locd_make loc (Lit (Const cst))) in
     (lbl, locd_make loc (Progn (List.map expect_action body)))
   and build_switch_body branches =
-    List.fold_right (fun (lbl, (branch: _ action locd)) acc ->
+    Delay.fold_right (fun (lbl, (branch: _ action locd)) acc ->
         match acc, lbl with
         | None, `AnyLabel _ ->
            Some (branch, [])
@@ -573,7 +574,7 @@ let parse sexps =
     (locd_make loc_v var, value)
   and expect_let_bindings bs =
     let _, bs = expect_list "let bindings" bs in
-    List.map expect_let_binding bs in
+    Delay.map expect_let_binding bs in
   let expect_register name init_val =
     (name, locd_of_pair (expect_const "an initial value" init_val)) in
   let expect_actions loc body =
@@ -586,7 +587,7 @@ let parse sexps =
        locd_make loc
          (match hd with
           | "sequence" ->
-             Sequence (List.map (locd_of_pair << (expect_identifier "a rule name")) args)
+             Sequence (Delay.map (locd_of_pair << (expect_identifier "a rule name")) args)
           | "try" ->
              let rname, args = expect_cons loc "rule name" args in
              let s1, s2 = expect_pair loc "subscheduler 1" "subscheduler 2" args in
@@ -611,7 +612,7 @@ let parse sexps =
     let members = expect_pairs "enumerator value" expect_enum_field body in
     let (_, eval), _ = expect_cons loc "enumerator (empty enums are not supported)" members in
     let bitsize = Array.length eval.lcnt in
-    List.iter ((check_size bitsize) << snd) members;
+    Delay.iter ((check_size bitsize) << snd) members;
     locd_make loc (Enum_u { name; bitsize = locd_make eval.lpos bitsize; members }) in
   let expect_struct_field name typ = (* (:label, typename) *)
     let loc, name = expect_atom "a field name" name in
@@ -624,7 +625,7 @@ let parse sexps =
   let expect_extfun name loc body =
     let args, rettype = expect_pair loc "argument declarations" "return type" body in
     let _, args = expect_list "argument declarations" args in
-    let argtypes = List.map (locd_of_pair << expect_type) args in
+    let argtypes = Delay.map (locd_of_pair << expect_type) args in
     let rettype = locd_of_pair (expect_type rettype) in
     { name; argtypes; rettype } in
   let rec expect_decl d skind expected =
@@ -651,26 +652,24 @@ let parse sexps =
         `Scheduler (name, expect_scheduler (expect_single d_loc "body" "scheduler declaration" body)))
   and expect_module m_name loc body =
     let expected = [("register", `Register); ("rule", `Rule); ("scheduler", `Scheduler)] in
-    let m =
-      List.fold_left (fun m decl ->
+    let { m_name; m_registers; m_rules; m_schedulers } =
+      Delay.fold_left (fun m decl ->
           match expect_decl decl "register, rule, or scheduler declaration" expected |> snd with
           | `Register r -> { m with m_registers = r :: m.m_registers }
           | `Rule r -> { m with m_rules = r :: m.m_rules }
           | `Scheduler s -> { m with m_schedulers = s :: m.m_schedulers }
           | _ -> assert false)
         { m_name; m_registers = []; m_rules = []; m_schedulers = [] } body in
-    check_no_duplicates "register" (fun (nm, _) -> nm.lcnt) m.m_registers;
-    check_no_duplicates "rule" (fun (nm, _) -> nm.lcnt) m.m_rules;
-    check_no_duplicates "scheduler" (fun (nm, _) -> nm.lcnt) m.m_schedulers;
-    ignore (expect_cons loc "scheduler" m.m_schedulers);
-    locd_make loc
-      { m with m_registers = List.rev m.m_registers;
-               m_rules = List.rev m.m_rules;
-               m_schedulers = List.rev m.m_schedulers } in
+    let m_registers, m_rules, m_schedulers =
+      List.rev m_registers, List.rev m_rules, List.rev m_schedulers in
+    Delay.apply3 check_no_duplicates "register" (fun (nm, _) -> nm.lcnt) m_registers;
+    Delay.apply3 check_no_duplicates "rule" (fun (nm, _) -> nm.lcnt) m_rules;
+    Delay.apply3 check_no_duplicates "scheduler" (fun (nm, _) -> nm.lcnt) m_schedulers;
+    locd_make loc { m_name; m_registers; m_rules; m_schedulers } in
   let expected_toplevel =
     [("enum", `Enum); ("struct", `Struct); ("extfun", `Extfun); ("module", `Module)] in
   let { types; extfuns; mods } =
-    List.fold_left (fun u sexp ->
+    Delay.fold_left (fun u sexp ->
         match expect_decl sexp "module, type, or extfun declaration" expected_toplevel |> snd with
         | `Enum e -> { u with types = e :: u.types }
         | `Struct s -> { u with types = s :: u.types }
@@ -714,7 +713,7 @@ let types_add loc tau_r types =
        name, Enum_t sg,
        { types with td_enums = add_or_raise name sg types.td_enums
                                  (fun k _ _ -> err k "enum" "enum");
-                    td_enum_fields = List.fold_left (fun fields field ->
+                    td_enum_fields = Delay.fold_left (fun fields field ->
                                          add_or_raise field sg fields
                                            (fun k _ _ -> err k "enumerator" "enumerator"))
                                        types.td_enum_fields (List.map fst sg.enum_members) }
@@ -743,11 +742,11 @@ let resolve_typedecl types (typ: unresolved_typedecl locd) =
      `Enum { enum_name = name.lcnt; enum_bitsize = bitsize.lcnt;
              enum_members = List.map (fun (n, t) -> n.lcnt, t.lcnt) members }
   | Struct_u { name; fields } ->
-     let struct_fields = List.map resolve_struct_field_type fields in
+     let struct_fields = Delay.map resolve_struct_field_type fields in
      `Struct { struct_name = name.lcnt; struct_fields }
 
 let resolve_typedecls types =
-  List.fold_left (fun types t ->
+  Delay.fold_left (fun types t ->
       let typ = resolve_typedecl types t in
       types_add t.lpos typ types)
     types_empty types
@@ -996,11 +995,11 @@ let resolve_scheduler rules ((nm, s): unresolved_scheduler) =
     match lcnt with
     | Done -> ()
     | Sequence rs ->
-       List.iter check_rule rs
+       Delay.iter check_rule rs
     | Try (r, s1, s2) ->
-       check_rule r;
-       check_scheduler s1;
-       check_scheduler s2 in
+       Delay.apply1 check_rule r;
+       Delay.apply1 check_scheduler s1;
+       Delay.apply1 check_scheduler s2 in
   check_scheduler s; (nm.lcnt, s)
 
 let resolve_module types (extfuns: (int * string ffi_signature) StringMap.t)
@@ -1020,8 +1019,9 @@ let typecheck_module { name; registers; rules; schedulers } =
   let open SGALib.Compilation in
   let tc_rule (nm, r) = (nm, check_result (typecheck_rule r)) in
   let c_rules = Delay.map tc_rule rules in
-  let c_scheduler = Delay.map (typecheck_scheduler << snd) schedulers |> List.hd in
-  { c_registers = registers; c_rules; c_scheduler }
+  let schedulers = Delay.map (typecheck_scheduler << snd) schedulers in
+  if schedulers = [] then resolution_error name.lpos (sprintf "Missing scheduler in module `%s'" name.lcnt);
+  { c_registers = registers; c_rules; c_scheduler = List.hd schedulers }
 
 let typecheck resolved =
   Delay.map typecheck_module resolved.r_mods
