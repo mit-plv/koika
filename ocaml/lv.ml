@@ -148,6 +148,10 @@ type 'f sexp =
   | Atom of { loc: 'f; atom: string }
   | List of { loc: 'f; elements: 'f sexp list }
 
+let read_all fname =
+  if fname = "-" then Stdio.In_channel.input_all Stdio.stdin
+  else Stdio.In_channel.read_all fname
+
 let read_cst_sexps fname =
   let wrap_loc loc =
     Pos.SexpRange (fname, loc) in
@@ -159,7 +163,7 @@ let read_cst_sexps fname =
        Some (List { loc = wrap_loc loc;
                     elements = Base.List.filter_map ~f:drop_comments elements })
     | Parsexp.Cst.Comment _ -> None in
-  match Parsexp.Many_cst.parse_string (Stdio.In_channel.read_all fname) with
+  match Parsexp.Many_cst.parse_string (read_all fname) with
   | Ok sexps ->
      Base.List.filter_map ~f:drop_comments sexps
   | Error err ->
@@ -179,7 +183,7 @@ let read_annotated_sexps fname =
        parse_error (Pos.Filename fname) msg
     | List elements ->
        List { loc; elements = List.map (commit_annots loc) elements } in
-  match Parsexp.Many.parse_string (Stdio.In_channel.read_all fname) with
+  match Parsexp.Many.parse_string (read_all fname) with
   | Ok sexps ->
      List.map (commit_annots (Pos.Filename fname)) sexps
   | Error err ->
