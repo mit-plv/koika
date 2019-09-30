@@ -214,10 +214,14 @@ let resolution_error (epos: Pos.t) emsg =
 let name_error epos ?(extra="") msg =
   error { epos; ekind = `NameError; emsg = msg ^ extra }
 
+let quote x = "`" ^ x ^ "'"
+
 let unbound_error (epos: Pos.t) ?(bound=[]) kind name =
   let msg = sprintf "Unbound %s: `%s'" kind name in
-  let lst = String.concat ", " (List.sort compare bound) in
-  let extra = if bound = [] then "" else sprintf " (expecting one of %s)" lst in
+  let lst = String.concat ", " (List.map quote (List.sort compare bound)) in
+  let extra = match bound with
+    | [] -> "" | [x] -> sprintf " (expecting `%s')" x
+    | _ -> sprintf " (expecting one of %s)" lst in
   name_error epos ~extra msg
 
 let type_error (epos: Pos.t) emsg =
@@ -240,7 +244,6 @@ type 'f sexp =
   | Atom of { loc: 'f; atom: string }
   | List of { loc: 'f; elements: 'f sexp list }
 
-(* FIXME *)
 let sexp_pos = function
   | Atom { loc; _ } | List { loc; _ } -> loc
 
@@ -323,6 +326,9 @@ let bits_const_re = Str.regexp "^\\([0-9]+\\)'\\(b[01]*\\|h[0-9a-fA-F]*\\|[0-9]+
 let underscore_re = Str.regexp "_"
 let leading_h_re = Str.regexp "^h"
 
+let try_plain_int n =
+  int_of_string_opt n
+
 let try_number' loc a =
   let a = Str.global_replace underscore_re "" a in
   if Str.string_match bits_const_re a 0 then
@@ -344,7 +350,7 @@ let try_number' loc a =
       let bits = List.of_seq (String.to_seq bits) in
       let bools = List.append (List.rev_map char2bool bits) padding in
       Some (`Const (Array.of_list bools))
-  else match int_of_string_opt a with
+  else match try_plain_int a with
        | Some n -> Some (`Num n)
        | None -> None
 
@@ -404,13 +410,11 @@ let parse sexps =
     let x2, lst = expect_cons loc msg2 lst in
     expect_nil lst;
     (x1, x2) in
-  let rec expect_pairs msg fn = function
+  let rec expect_pairs msg f1 f2 = function
     | [] -> []
-    | h1 :: h2 :: tl -> fn h1 h2 :: expect_pairs msg fn tl
-    | [(Atom { loc; _ } | List { loc; _ } )] ->
-       parse_error loc (sprintf "Missing %s after this element" msg) in
+    | h1 :: h2 :: tl -> (f1 h1, f2 h2) :: expect_pairs msg f1 f2 tl
+    | [h1] -> ignore (f1 h1); parse_error (sexp_pos h1) (sprintf "Missing %s after this element" msg) in
   let expect_constant csts c =
-    let quote x = "`" ^ x ^ "'" in
     let optstrs = List.map (quote << fst) csts in
     let msg = match optstrs with
       | [c] -> c
@@ -473,18 +477,18 @@ let parse sexps =
   let expect_type ?(bits_raw=false) = function (* (bit 16), 'typename *)
     | Atom { loc; atom } ->
        (match try_symbol atom with
-        | Some s -> (loc, Unknown_u s)
+        | Some s -> locd_make loc (Unknown_u s)
         | None ->
-           match try_number loc atom with
-           | Some (`Num n) when bits_raw -> (loc, Bits_u n)
+           match try_plain_int atom with
+           | Some n when bits_raw -> locd_make loc (Bits_u n)
            | _ -> parse_error loc (sprintf "Expecting a quoted type name, got `%s'" atom))
     | List { loc; elements } ->
        let hd, sizes = expect_cons loc "a type" elements in
        let _ = expect_constant [("bits", ())] hd in
        let loc, szstr = expect_atom "a size" (expect_single loc "size" "bit type" sizes) in
-       match try_number loc szstr with
-       | Some (`Num size) -> (loc, Bits_u size)
-       | _ -> parse_error loc (sprintf "Expecting a bit size, got `%s'" szstr) in
+       match try_plain_int szstr with
+       | Some size -> locd_make loc (Bits_u size)
+       | _ -> parse_error loc (sprintf "Expecting a type-level integer (e.g. 32), got `%s'" szstr) in
   let expect_funapp loc kind elements =
     let hd, args = expect_cons loc kind elements in
     let loc_hd, hd = expect_atom (sprintf "a %s name" kind) hd in
@@ -503,7 +507,7 @@ let parse sexps =
           | "fail" ->
              (match args with
               | [] -> Common.Fail (Bits_t 0)
-              | [arg] -> Lit (Fail (expect_type ~bits_raw:true arg |> snd))
+              | [arg] -> Lit (Fail (expect_type ~bits_raw:true arg).lcnt)
               | _ -> parse_error loc (sprintf "Fail takes 1 argument"))
           | "setq" ->
              let var, body = expect_cons loc "variable name" args in
@@ -596,37 +600,37 @@ let parse sexps =
                   expect_scheduler s2)
           | _ ->
              parse_error loc_hd (sprintf "Unexpected in scheduler: `%s'" hd)) in
-  let expect_enum_field enumerator value = (* (:a 2'b00) *)
+  let expect_unqualified_enumerator enumerator = (* :a *)
     let loc, enumerator = expect_atom "an enumerator" enumerator in
     let { name; field } = expect_enumerator loc enumerator in
     if name <> "" then
       parse_error loc (sprintf "Expecting an unqualified enumerator (format: ::xyz), got `%s'" enumerator);
-    (field |> locd_make loc,
-     expect_bits "an enumerator value" value |> locd_of_pair) in
+    locd_make loc field in
+  let expect_enumerator_value value =
+    expect_bits "an enumerator value" value |> locd_of_pair in
   let check_size sz { lpos; lcnt } =
     let sz' = Array.length lcnt in
     if sz' <> sz then
       parse_error lpos
         (sprintf "Inconsistent sizes in enum: expecting `bits %d', got `bits %d'" sz sz') in
   let expect_enum name loc body = (* ((:true 1'b1) (:false 1'b0) …) *)
-    let members = expect_pairs "enumerator value" expect_enum_field body in
+    let members = expect_pairs "enumerator value" expect_unqualified_enumerator expect_enumerator_value body in
     let (_, eval), _ = expect_cons loc "enumerator (empty enums are not supported)" members in
     let bitsize = Array.length eval.lcnt in
     Delay.iter ((check_size bitsize) << snd) members;
     locd_make loc (Enum_u { name; bitsize = locd_make eval.lpos bitsize; members }) in
-  let expect_struct_field name typ = (* (:label, typename) *)
+  let expect_struct_field_name name = (* :label *)
     let loc, name = expect_atom "a field name" name in
-    (expect_keyword loc "a field name" name |> locd_make loc,
-     expect_type typ |> locd_of_pair) in
+    locd_make loc (expect_keyword loc "a field name" name) in
   let expect_struct name loc body = (* ((:kind kind) (:imm (bits 12) …) *)
-    let fields = expect_pairs "field type" expect_struct_field body in
+    let fields = expect_pairs "field type" expect_struct_field_name expect_type body in
     check_no_duplicates "field in struct" (fun (nm, _) -> nm.lcnt) fields;
     locd_make loc (Struct_u { name; fields }) in
   let expect_extfun name loc body =
     let args, rettype = expect_pair loc "argument declarations" "return type" body in
     let _, args = expect_list "argument declarations" args in
-    let argtypes = Delay.map (locd_of_pair << expect_type) args in
-    let rettype = locd_of_pair (expect_type rettype) in
+    let argtypes = Delay.map expect_type args in
+    let rettype = expect_type rettype in
     { name; argtypes; rettype } in
   let rec expect_decl d skind expected =
     let d_loc, d = expect_list ("a " ^ skind) d in
@@ -838,10 +842,10 @@ let try_resolve_bits_fn { lpos; lcnt = name } args =
               bits_fn (fn n n'), nargs, args)
   | None -> None
 
-let rec rexpect_pairs msg fn = function
+let rec rexpect_pairs msg f1 f2 = function
   | [] -> []
-  | h1 :: h2 :: tl -> fn h1 h2 :: rexpect_pairs msg fn tl
-  | [x] -> parse_error x.lpos (sprintf "Missing %s after this element" msg)
+  | h1 :: h2 :: tl -> (f1 h1, f2 h2) :: rexpect_pairs msg f1 f2 tl
+  | [h1] -> ignore (f1 h1); parse_error h1.lpos (sprintf "Missing %s after this element" msg)
 
 let rexpect_type loc types (args: unresolved_action locd list) =
   let (loc, t), args = rexpect_arg (rexpect_symbol "a type name") loc args in
@@ -895,10 +899,11 @@ let try_resolve_special_function types name (args: unresolved_action locd list) 
            (sprintf "Use (unpack '%s %d'0) instead of (new '%s ...) to create an enum value"
               enum_name enum_bitsize nm)
       | Struct_t sg ->
-         let expect_field nm v =
-           (locd_of_pair (rexpect_keyword "a field name" nm), v) in
+         let expect_field_name nm =
+           locd_of_pair (rexpect_keyword "a field name" nm) in
+         let expect_field_val x = x in
          let tt = { lpos = loc; lcnt = literal_tt } in
-         Some (match rexpect_pairs "value" expect_field args with
+         Some (match rexpect_pairs "value" expect_field_name expect_field_val args with
                | [] -> `Call (locd_make loc uinit, tt, tt)
                | fields -> `StructInit (sg, fields)))
   | _ -> None
