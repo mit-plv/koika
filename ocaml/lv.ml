@@ -73,9 +73,9 @@ type unresolved_module = {
   }
 
 type unresolved_extfun = {
-    name: string locd;
-    argtypes: unresolved_type locd list;
-    rettype: unresolved_type locd
+    ext_name: string locd;
+    ext_argtypes: unresolved_type locd list;
+    ext_rettype: unresolved_type locd
   }
 
 type typedecls = {
@@ -303,8 +303,8 @@ let first_duplicate keyfn ls =
   loop StringSet.empty ls
 
 let check_no_duplicates msg keyfn ls =
-  (match first_duplicate keyfn ls with
-   | Some (nm, _) -> parse_error nm.lpos (sprintf "Duplicate %s: `%s'" msg nm.lcnt)
+  (match first_duplicate (fun x -> (keyfn x).lcnt) ls with
+   | Some x -> parse_error (keyfn x).lpos (sprintf "Duplicate %s: `%s'" msg (keyfn x).lcnt)
    | None -> ())
 
 let add_or_raise k v m errf =
@@ -483,7 +483,7 @@ let parse sexps =
            | Some n when bits_raw -> locd_make loc (Bits_u n)
            | _ -> parse_error loc (sprintf "Expecting a quoted type name, got `%s'" atom))
     | List { loc; elements } ->
-       let hd, sizes = expect_cons loc "a type" elements in
+       let hd, sizes = expect_cons loc "type" elements in
        let _ = expect_constant [("bits", ())] hd in
        let loc, szstr = expect_atom "a size" (expect_single loc "size" "bit type" sizes) in
        match try_plain_int szstr with
@@ -624,14 +624,14 @@ let parse sexps =
     locd_make loc (expect_keyword loc "a field name" name) in
   let expect_struct name loc body = (* ((:kind kind) (:imm (bits 12) …) *)
     let fields = expect_pairs "field type" expect_struct_field_name expect_type body in
-    check_no_duplicates "field in struct" (fun (nm, _) -> nm.lcnt) fields;
+    Delay.apply3 check_no_duplicates "field in struct" fst fields;
     locd_make loc (Struct_u { name; fields }) in
-  let expect_extfun name loc body =
+  let expect_extfun ext_name loc body =
     let args, rettype = expect_pair loc "argument declarations" "return type" body in
     let _, args = expect_list "argument declarations" args in
-    let argtypes = Delay.map expect_type args in
-    let rettype = expect_type rettype in
-    { name; argtypes; rettype } in
+    let ext_argtypes = Delay.map expect_type args in
+    let ext_rettype = expect_type rettype in
+    { ext_name; ext_argtypes; ext_rettype } in
   let rec expect_decl d skind expected =
     let d_loc, d = expect_list ("a " ^ skind) d in
     let kind, name_body = expect_cons d_loc skind d in
@@ -666,9 +666,9 @@ let parse sexps =
         { m_name; m_registers = []; m_rules = []; m_schedulers = [] } body in
     let m_registers, m_rules, m_schedulers =
       List.rev m_registers, List.rev m_rules, List.rev m_schedulers in
-    Delay.apply3 check_no_duplicates "register" (fun (nm, _) -> nm.lcnt) m_registers;
-    Delay.apply3 check_no_duplicates "rule" (fun (nm, _) -> nm.lcnt) m_rules;
-    Delay.apply3 check_no_duplicates "scheduler" (fun (nm, _) -> nm.lcnt) m_schedulers;
+    Delay.apply3 check_no_duplicates "register" fst m_registers;
+    Delay.apply3 check_no_duplicates "rule" fst m_rules;
+    Delay.apply3 check_no_duplicates "scheduler" fst m_schedulers;
     locd_make loc { m_name; m_registers; m_rules; m_schedulers } in
   let expected_toplevel =
     [("enum", `Enum); ("struct", `Struct); ("extfun", `Extfun); ("module", `Module)] in
@@ -681,9 +681,10 @@ let parse sexps =
         | `Module m -> { u with mods = m :: u.mods }
         | _ -> assert false)
       { types = []; extfuns = []; mods = [] } sexps in
-  { types = List.rev types;
-    extfuns = List.rev extfuns;
-    mods = List.rev mods }
+  let types, extfuns, mods = List.rev types, List.rev extfuns, List.rev mods in
+  Delay.apply3 check_no_duplicates "module" (fun m -> m.lcnt.m_name) mods;
+  Delay.apply3 check_no_duplicates "external function" (fun fn -> fn.ext_name) extfuns;
+  { types; extfuns; mods }
 
 let rexpect_num = function
   | { lpos; lcnt = Lit (Num n); _} -> lpos, n
@@ -792,20 +793,20 @@ let bits_primitives =
    ("part-subst", (`Prim2 (fun n n' -> UPart (n, n')), 2))]
   |> List.to_seq |> StringMap.of_seq
 
-let resolve_extfun_decl types { name; argtypes; rettype } =
-  let unit_u = locd_make name.lpos (Bits_u 0) in
-  if StringMap.mem name.lcnt bits_primitives then
-    name_error name.lpos "External function name `%s' conflicts with existing primitive.";
-  let nargs, a1, a2 = match argtypes with
+let resolve_extfun_decl types { ext_name; ext_argtypes; ext_rettype } =
+  let unit_u = locd_make ext_name.lpos (Bits_u 0) in
+  if StringMap.mem ext_name.lcnt bits_primitives then
+    name_error ext_name.lpos "External function name `%s' conflicts with existing primitive.";
+  let nargs, a1, a2 = match ext_argtypes with
     | [] -> 0, unit_u, unit_u
     | [t] -> 1, t, unit_u
     | [x; y] -> 2, x, y
-    | _ -> parse_error name.lpos ("External functions with more than 2 arguments are not supported" ^
-                                    " (consider using a struct to pass more arguments)") in
-  name.lcnt, (nargs, { ffi_name = name.lcnt;
-                       ffi_arg1type = resolve_type types a1;
-                       ffi_arg2type = resolve_type types a2;
-                       ffi_rettype = resolve_type types rettype })
+    | _ -> parse_error ext_name.lpos ("External functions with more than 2 arguments are not supported" ^
+                                        " (consider using a struct to pass more arguments)") in
+  ext_name.lcnt, (nargs, { ffi_name = ext_name.lcnt;
+                           ffi_arg1type = resolve_type types a1;
+                           ffi_arg2type = resolve_type types a2;
+                           ffi_rettype = resolve_type types ext_rettype })
 
 let resolve_value types { lpos; lcnt } =
   let resolve_enum_field sg field =
@@ -1008,11 +1009,11 @@ let resolve_scheduler rules ((nm, s): unresolved_scheduler) =
   check_scheduler s; (nm.lcnt, s)
 
 let resolve_module types (extfuns: (int * string ffi_signature) StringMap.t)
-      { lcnt = { m_name; m_registers; m_rules; m_schedulers; _ }; _ } =
+      { lpos; lcnt = { m_name; m_registers; m_rules; m_schedulers; _ } } =
   let registers = Delay.map (resolve_register types) m_registers in
   let rules = Delay.map (resolve_rule types extfuns registers) m_rules in
   let schedulers = Delay.map (resolve_scheduler rules) m_schedulers in
-  { name = m_name; registers; rules; schedulers }
+  { name = { m_name with lpos }; registers; rules; schedulers }
 
 let resolve { types; extfuns; mods } =
   let r_types = resolve_typedecls types in
