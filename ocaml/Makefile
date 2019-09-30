@@ -18,10 +18,10 @@ coq-bear: build dirs
 	${BEAR} ${COQ_EXAMPLES}
 
 lv: build dirs
-	for f in examples/*.lv; do ${CLI} "$$f" "examples/lv/$$(basename "$${f%.*}.all")"; done
+	set -x; for f in examples/*.lv; do ${CLI} "$$f" "examples/lv/$$(basename "$${f%.*}.all")"; done
 
 dot: lv
-	for f in examples/lv/*.dot; do dot "$$f" -Tpng -o "$${f%.*}.png"; done
+	set -x; for f in examples/lv/*.dot; do dot "$$f" -Tpng -o "$${f%.*}.png"; done
 
 sim-lint: coq-bear
 	clang-tidy -checks=*,-llvm-header-guard,-cppcoreguidelines-pro-bounds-pointer-arithmetic,-cppcoreguidelines-pro-bounds-constant-array-index,-google-runtime-int,-google-readability-todo,-hicpp-use-auto,-modernize-use-auto,-fuchsia-default-arguments,-hicpp-member-init,-cppcoreguidelines-pro-type-member-init -header-filter=.* examples/coq/*.cpp
