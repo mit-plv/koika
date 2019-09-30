@@ -98,7 +98,7 @@ let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
     match cli_backend with
     | Some backend -> run_backend backend cli_out_fname resolved c_unit
     | None -> ()
-  with Error errs ->
+  with Errors errs ->
     List.iter print_error errs;
     exit 1
 
