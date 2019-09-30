@@ -1,5 +1,5 @@
 open Common
-open Lv
+open Printf
 
 type backend =
   [`Coq | `Verilog | `Dot | `Hpp | `Cpp | `Exe | `All]
@@ -8,7 +8,7 @@ type cli_opts = {
     cli_in_fname: string;
     cli_out_fname: string;
     cli_frontend: [`Sexps | `Annotated];
-    cli_backend: backend
+    cli_backend: backend option
   }
 
 let exts_to_backends : (string * backend) list =
@@ -41,8 +41,9 @@ let split_extension fname =
   else fail ()
 
 let backend_of_fname fname =
-  let _, ext = split_extension fname in
-  List.assoc ext exts_to_backends
+  if fname = "-" then None
+  else let _, ext = split_extension fname in
+       Some (List.assoc ext exts_to_backends)
 
 let ext_of_backend backend =
   List.assoc backend backends_to_exts
@@ -59,9 +60,9 @@ let rec run_backend backend out_fname resolved c_unit =
          Backends.Coq.main out resolved)
   | (`Hpp | `Cpp | `Exe) as kd ->
      let cls = Core.Filename.basename fname_noext in
-     Backends.Cpp.main fname_noext kd (Backends.Cpp.input_of_compile_unit cls (Lazy.force c_unit))
+     Backends.Cpp.main fname_noext kd (Backends.Cpp.input_of_compile_unit cls c_unit)
   | (`Verilog | `Dot) as backend ->
-     let graph = SGALib.Graphs.graph_of_compile_unit (Lazy.force c_unit) in
+     let graph = SGALib.Graphs.graph_of_compile_unit c_unit in
      Stdio.Out_channel.with_file out_fname ~f:(fun out ->
          (match backend with
           | `Dot -> Backends.Dot.main
@@ -69,27 +70,36 @@ let rec run_backend backend out_fname resolved c_unit =
 
 let first_compile_unit in_fname mods =
   match mods with
-  | [] -> parse_error (Pos.Filename in_fname) "No modules declared"
+  | [] -> Lv.parse_error (Lv.Pos.Filename in_fname) "No modules declared"
   | md :: _ -> md
 
+let print_error { epos; ekind; emsg } =
+  Printf.eprintf "%s: %s: %s\n"
+    (Lv.Pos.to_string epos)
+    (match ekind with
+     | `ParseError -> "Parse error"
+     | `NameError -> "Name error"
+     | `ResolutionError -> "Resolution error"
+     | `TypeError -> "Type error")
+    emsg
+
 let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
+  let open Lv in
   try
     let sexps =
       match cli_frontend with
       | `Annotated -> read_annotated_sexps cli_in_fname
       | `Sexps -> read_cst_sexps cli_in_fname in
-    let resolved = resolve (parse sexps) in
-    let c_unit = lazy (first_compile_unit cli_in_fname (typecheck resolved)) in
-    run_backend cli_backend cli_out_fname resolved c_unit
-  with Error { epos; ekind; emsg } ->
-    Printf.eprintf "%s: %s: %s\n"
-      (Pos.to_string epos)
-      (match ekind with
-       | `ParseError -> "Parse error"
-       | `NameError -> "Name error"
-       | `ResolutionError -> "Resolution error"
-       | `TypeError -> "Type error")
-      emsg;
+    let resolved, typechecked =
+      Delay.with_delayed_errors (fun () ->
+          let resolved = resolve (parse sexps) in
+          resolved, typecheck resolved) in
+    let c_unit = first_compile_unit cli_in_fname typechecked in
+    match cli_backend with
+    | Some backend -> run_backend backend cli_out_fname resolved c_unit
+    | None -> ()
+  with Error errs ->
+    List.iter print_error errs;
     exit 1
 
 let cli =

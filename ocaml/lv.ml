@@ -107,20 +107,112 @@ type resolved_unit = {
     r_mods: resolved_module list;
   }
 
-exception Error of Pos.t err_contents
+exception Errors of Pos.t err_contents list
+
+module Delay = struct
+  let buffer = ref []
+  let delay_errors = ref 0
+
+  let buffer_errors errs =
+    buffer := errs :: !buffer
+
+  let reset_buffered_errors () =
+    let buffered = List.flatten (List.rev !buffer) in
+    buffer := [];
+    buffered
+
+  let raise_buffered_errors () =
+    let buffered = reset_buffered_errors () in
+    if buffered <> [] then raise (Errors buffered)
+
+  let with_delayed_errors f =
+    incr delay_errors;
+    Base.Exn.protect ~f:(fun () ->
+        try let result = f () in
+            raise_buffered_errors ();
+            result
+        with Errors errs ->
+              buffer_errors errs;
+              raise (Errors (reset_buffered_errors ())))
+      ~finally:(fun () -> decr delay_errors)
+
+  let with_delayed_errors_1 f x = with_delayed_errors (fun () -> f x)
+  let with_delayed_errors_2 f x y = with_delayed_errors (fun () -> f x y)
+  let with_delayed_errors_3 f x y z = with_delayed_errors (fun () -> f x y z)
+
+  let apply1_default default f x1 = try f x1 with Errors errs -> buffer_errors errs; default
+  let apply2_default default f x1 x2 = try f x1 x2 with Errors errs -> buffer_errors errs; default
+  let apply3_default default f x1 x2 x3 = try f x1 x2 x3 with Errors errs -> buffer_errors errs; default
+  let apply4_default default f x1 x2 x3 x4 = try f x1 x2 x3 x4 with Errors errs -> buffer_errors errs; default
+  let apply1 f x1 = apply1_default () f x1
+  let apply2 f x1 x2 = apply2_default () f x1 x2
+  let apply3 f x1 x2 x3 = apply3_default () f x1 x2 x3
+  let apply4 f x1 x2 x3 x4 = apply4_default () f x1 x2 x3 x4
+
+  let rec iter f = function
+    | [] -> ()
+    | x :: l -> apply1 f x; iter f l
+
+  let rec map f = function
+    | [] -> []
+    | x :: xs ->
+       let fx = try [f x] with Errors errs -> buffer_errors errs; [] in
+       fx @ (map f xs)
+
+  let rec fold_left f acc l =
+    match l with
+    | [] -> acc
+    | x :: l ->
+       let acc = try f acc x with Errors errs -> buffer_errors errs; acc in
+       fold_left f acc l
+
+  let rec fold_right f l acc =
+    match l with
+    | [] -> acc
+    | x :: l ->
+       let acc = fold_right f l acc in
+       try f x acc with Errors errs -> buffer_errors errs; acc
+
+  let maybe_delay fdelay fnodelay =
+    if !delay_errors > 0 then fdelay else fnodelay
+
+  let apply1_default default f x1 =
+    maybe_delay apply1_default (fun _ f x1 -> f x1) default f x1
+  let apply2_default default f x1 x2 =
+    maybe_delay apply2_default (fun _ f x1 x2 -> f x1 x2) default f x1 x2
+  let apply3_default default f x1 x2 x3 =
+    maybe_delay apply3_default (fun _ f x1 x2 x3 -> f x1 x2 x3) default f x1 x2 x3
+  let apply4_default default f x1 x2 x3 x4 =
+    maybe_delay apply4_default (fun _ f x1 x2 x3 x4 -> f x1 x2 x3 x4) default f x1 x2 x3 x4
+  let apply1 f x1 =
+    maybe_delay apply1 (fun f x1 -> f x1) f x1
+  let apply2 f x1 x2 =
+    maybe_delay apply2 (fun f x1 x2 -> f x1 x2) f x1 x2
+  let apply3 f x1 x2 x3 =
+    maybe_delay apply3 (fun f x1 x2 x3 -> f x1 x2 x3) f x1 x2 x3
+  let apply4 f x1 x2 x3 x4 =
+    maybe_delay apply4 (fun f x1 x2 x3 x4 -> f x1 x2 x3 x4) f x1 x2 x3 x4
+
+  let iter f xs = maybe_delay iter List.iter f xs
+  let map f xs = maybe_delay map List.map f xs
+  let fold_left f acc l = maybe_delay fold_left List.fold_left f acc l
+  let fold_right f l acc = maybe_delay fold_right List.fold_right f l acc
+end
+
+let error err = raise (Errors [err])
 
 let check_result = function
   | Ok cs -> cs
-  | Error err -> raise (Error err)
+  | Error err -> error err
 
 let parse_error (epos: Pos.t) emsg =
-  raise (Error { epos; ekind = `ParseError; emsg })
+  error { epos; ekind = `ParseError; emsg }
 
 let resolution_error (epos: Pos.t) emsg =
-  raise (Error { epos; ekind = `ResolutionError; emsg = emsg })
+  error { epos; ekind = `ResolutionError; emsg = emsg }
 
 let name_error epos ?(extra="") msg =
-  raise (Error { epos; ekind = `NameError; emsg = msg ^ extra })
+  error { epos; ekind = `NameError; emsg = msg ^ extra }
 
 let unbound_error (epos: Pos.t) ?(bound=[]) kind name =
   let msg = sprintf "Unbound %s: `%s'" kind name in
@@ -129,7 +221,7 @@ let unbound_error (epos: Pos.t) ?(bound=[]) kind name =
   name_error epos ~extra msg
 
 let type_error (epos: Pos.t) emsg =
-  raise (Error { epos; ekind = `TypeError; emsg })
+  error { epos; ekind = `TypeError; emsg }
 
 let untyped_number_error (pos: Pos.t) n =
   type_error pos (sprintf "Missing size annotation on number `%d'" n)
@@ -906,23 +998,23 @@ let resolve_scheduler rules ((nm, s): unresolved_scheduler) =
 
 let resolve_module types (extfuns: (int * string ffi_signature) StringMap.t)
       { lcnt = { m_name; m_registers; m_rules; m_schedulers; _ }; _ } =
-  let registers = List.map (resolve_register types) m_registers in
-  let rules = List.map (resolve_rule types extfuns registers) m_rules in
-  let schedulers = List.map (resolve_scheduler rules) m_schedulers in
-  { name = m_name.lcnt; registers; rules; schedulers }
+  let registers = Delay.map (resolve_register types) m_registers in
+  let rules = Delay.map (resolve_rule types extfuns registers) m_rules in
+  let schedulers = Delay.map (resolve_scheduler rules) m_schedulers in
+  { name = m_name; registers; rules; schedulers }
 
 let resolve { types; extfuns; mods } =
   let r_types = resolve_typedecls types in
-  let r_extfuns = extfuns |> List.to_seq |> Seq.map (resolve_extfun_decl r_types) |> StringMap.of_seq in
-  let r_mods = List.map (resolve_module r_types r_extfuns) mods in
+  let r_extfuns = extfuns |> Delay.map (resolve_extfun_decl r_types) |> List.to_seq |> StringMap.of_seq in
+  let r_mods = Delay.map (resolve_module r_types r_extfuns) mods in
   { r_types; r_extfuns; r_mods }
 
-let typecheck_module { registers; rules; schedulers; _ } =
+let typecheck_module { name; registers; rules; schedulers } =
   let open SGALib.Compilation in
   let tc_rule (nm, r) = (nm, check_result (typecheck_rule r)) in
-  let c_rules = List.map tc_rule rules in
-  let c_scheduler = List.map (typecheck_scheduler << snd) schedulers |> List.hd in
+  let c_rules = Delay.map tc_rule rules in
+  let c_scheduler = Delay.map (typecheck_scheduler << snd) schedulers |> List.hd in
   { c_registers = registers; c_rules; c_scheduler }
 
 let typecheck resolved =
-  List.map typecheck_module resolved.r_mods
+  Delay.map typecheck_module resolved.r_mods
