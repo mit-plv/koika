@@ -298,19 +298,21 @@ let read_annotated_sexps fname =
 let keys s =
   StringMap.fold (fun k _ acc -> k :: acc) s []
 
-let first_duplicate keyfn ls =
-  let rec loop acc = function
-    | [] -> None
-    | x :: xs ->
-       let key = keyfn x in
-       if StringSet.mem key acc then Some x
-       else loop (StringSet.add key acc) xs in
-  loop StringSet.empty ls
+let multimap_add k v m =
+  let vs = match StringMap.find_opt k m with Some vs -> vs | None -> [] in
+  StringMap.add k (v :: vs) m
+
+let multimap_of_locds keyfn xs =
+  List.fold_left (fun map x ->
+      let { lcnt = k; lpos = v } = keyfn x in multimap_add k v map)
+    StringMap.empty xs
 
 let check_no_duplicates msg keyfn ls =
-  (match first_duplicate (fun x -> (keyfn x).lcnt) ls with
-   | Some x -> parse_error (keyfn x).lpos (sprintf "Duplicate %s: `%s'" msg (keyfn x).lcnt)
-   | None -> ())
+  StringMap.iter (fun k positions ->
+      Delay.iter (fun lpos ->
+          parse_error lpos (sprintf "Duplicate %s: `%s'" msg k))
+        (List.tl (List.rev positions)))
+    (multimap_of_locds keyfn ls)
 
 let add_or_raise k v m errf =
   match StringMap.find_opt k m with
