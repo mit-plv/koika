@@ -17,7 +17,7 @@ module Pos = struct
   let to_string = function
     | StrPos s -> s
     | Filename f ->
-       sprintf "%s:?:?" f
+       sprintf "%s:0:1" f
     | SexpPos (fname, { line; col; _ }) ->
        sprintf "%s:%d:%d" fname line (col + 1)
     | SexpRange (fname, { start_pos; end_pos }) ->
