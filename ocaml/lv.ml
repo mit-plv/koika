@@ -314,15 +314,21 @@ let check_no_duplicates msg keyfn ls =
         (List.tl (List.rev positions)))
     (multimap_of_locds keyfn ls)
 
-let gensym, gensym_reset =
-  make_gensym ()
+let gensym_prefix = "_lvs_"
+let gensym, gensym_reset = make_gensym gensym_prefix
 
-(* Must not start with __ to not clash w/ our gensym *)
-let name_re_str = "[a-z][a-zA-Z0-9_]*"
+let mangling_prefix = "_lv_"
+let needs_mangling_re = Str.regexp (sprintf "^\\(%s\\|%s\\)" gensym_prefix mangling_prefix)
+let mangle name =
+  if Str.string_match needs_mangling_re name 0 then
+    mangling_prefix ^ name
+  else name
+
+let name_re_str = "_\\|_?[a-zA-Z][a-zA-Z0-9_]*"
 let ident_re = Str.regexp (sprintf "^%s$" name_re_str)
 
 let try_variable var =
-  if Str.string_match ident_re var 0 then Some var else None
+  if Str.string_match ident_re var 0 then Some (mangle var) else None
 
 let bits_const_re = Str.regexp "^\\([0-9]+\\)'\\(b[01]*\\|h[0-9a-fA-F]*\\|[0-9]+\\)$"
 let underscore_re = Str.regexp "_"
@@ -479,12 +485,13 @@ let parse sexps =
     | None -> parse_error loc (sprintf "Expecting an enumerator (format: abc::xyz or ::xyz), got `%s'" nm) in
   let expect_type ?(bits_raw=false) = function (* (bit 16), 'typename *)
     | Atom { loc; atom } ->
-       (match try_symbol atom with
-        | Some s -> locd_make loc (Unknown_u s)
-        | None ->
-           match try_plain_int atom with
-           | Some n when bits_raw -> locd_make loc (Bits_u n)
-           | _ -> parse_error loc (sprintf "Expecting a quoted type name, got `%s'" atom))
+       locd_make loc
+         (match try_symbol atom with
+          | Some s -> Unknown_u s
+          | None ->
+             match try_plain_int atom with
+             | Some n when bits_raw -> Bits_u n
+             | _ -> parse_error loc (sprintf "Expecting a quoted type name, got `%s'" atom))
     | List { loc; elements } ->
        let hd, sizes = expect_cons loc "type" elements in
        let _ = expect_constant [("bits", ())] hd in
@@ -544,8 +551,10 @@ let parse sexps =
              let operand, branches = expect_cons loc "switch operand" args in
              let branches = List.map expect_switch_branch branches in
              let operand = expect_action operand in
+             let binder = gensym "switch_operand" in
              (match build_switch_body branches with
-              | Some (default, branches) -> Switch { operand; default; branches }
+              | Some (default, branches) ->
+                 Switch { binder; operand; default; branches }
               | None -> parse_error loc "Empty switch")
           | _ ->
              let args = List.map expect_action args in
@@ -983,8 +992,9 @@ let resolve_rule types extfuns registers ((nm, action): unresolved_rule) =
                     List.map resolve_action rs)
              | When (c, rs) ->
                 When (resolve_action c, List.map resolve_action rs)
-             | Switch { operand; default; branches } ->
-                Switch { operand = resolve_action operand;
+             | Switch { binder; operand; default; branches } ->
+                Switch { binder;
+                         operand = resolve_action operand;
                          default = resolve_action default;
                          branches = List.map (fun (lbl, br) ->
                                         resolve_action lbl, resolve_action br)

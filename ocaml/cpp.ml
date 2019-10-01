@@ -9,6 +9,7 @@ type ('name_t, 'var_t, 'reg_t, 'fn_t) cpp_rule_t = {
 
 type ('prim, 'name_t, 'var_t, 'reg_t, 'fn_t) cpp_input_t = {
     cpp_classname: string;
+    cpp_header_name: string;
     cpp_scheduler: 'name_t SGA.scheduler;
 
     cpp_var_names: 'var_t -> string;
@@ -34,8 +35,12 @@ let register_type (user_types: (string * typ) list ref) nm tau =
                    nm (typ_to_string tau) (typ_to_string tau'))
   | None -> user_types := (nm, tau) :: !user_types
 
+let gensym_prefix = "_cs_"
+let gensym, gensym_reset = make_gensym gensym_prefix
+(* Mangling takes care of collisions with the gensym *)
+
 module Mangling = struct
-  let specials =
+  let reserved =
     StringSet.of_list
       ["alignas"; "alignof"; "and"; "and_eq"; "asm"; "atomic_cancel";
        "atomic_commit"; "atomic_noexcept"; "auto"; "bitand"; "bitor"; "bool";
@@ -53,26 +58,33 @@ module Mangling = struct
        "try"; "typedef"; "typeid"; "typename"; "union"; "unsigned"; "using";
        "virtual"; "void"; "volatile"; "wchar_t"; "while"; "xor"; "xor_eq"]
 
-  let special_prefix_re = Str.regexp "_[A-Z]"
-  let dunder_re = Str.regexp "__"
-  let dunder_escape_re = Str.regexp "_\\(xxx+\\)_"
+  let mangling_prefix = "_cpp_"
+  let specials_re = Str.regexp (sprintf "^\\(_[A-Z]\\|%s\\|%s\\)" mangling_prefix gensym_prefix)
+  let dunder_re = Str.regexp "__+"
+  let dunder_anchored_re = Str.regexp "^.*__"
+  let dunder_target_re = Str.regexp "_\\(dx\\)\\([0-9]\\)_"
+  let valid_name_re = Str.regexp "^[A-Za-z_][A-Za-z0-9_]*"
 
   let needs_mangling name =
-    StringSet.mem name specials
-    || Str.string_match special_prefix_re name 0
-    || Str.string_match dunder_re name 0
+    StringSet.mem name reserved
+    || Str.string_match specials_re name 0
+    || Str.string_match dunder_anchored_re name 0
 
   let escape_dunders name =
-    let name = ref name in
-    while Str.string_match dunder_re !name 0 do
-      name := Str.global_replace dunder_escape_re "_\\1x_" !name
-    done;
-    !name
+    let name = Str.global_replace dunder_target_re "_\\10\\2_" name in
+    let subst _ = sprintf "_dx%d_" (Str.match_end () - Str.match_beginning ()) in
+    Str.global_substitute dunder_re subst name
 
-  let mangle_name name =
-    if needs_mangling name then
-      "_mangled_" ^ escape_dunders name
-    else name
+  let check_valid name =
+    if not @@ Str.string_match valid_name_re name 0 then
+      failwith (sprintf "Invalid name: `%s'" name)
+
+  let mangle_name ?(prefix="") name =
+    check_valid name;
+    let unmangled = if prefix = "" then name else prefix ^ "_" ^ name in
+    if needs_mangling unmangled then
+      escape_dunders (prefix ^ mangling_prefix ^ name)
+    else unmangled
 
   let mangle_register_sig r =
     { r with reg_name = mangle_name r.reg_name }
@@ -83,12 +95,20 @@ module Mangling = struct
                         | PrimFn f -> PrimFn f }
 
   let mangle_unit u =
-    { u with
-      cpp_classname = mangle_name u.cpp_classname;
-      cpp_rule_names = (fun rl -> rl |> u.cpp_rule_names |> mangle_name);
+    { u with (* The prefixes are needed to prevent collisions with ‘prims::’ *)
+      cpp_classname = mangle_name ~prefix:"module" u.cpp_classname;
+      cpp_rule_names = (fun rl -> rl |> u.cpp_rule_names |> mangle_name ~prefix:"rule");
       cpp_register_sigs = (fun r -> r |> u.cpp_register_sigs |> mangle_register_sig);
       cpp_function_sigs = (fun f -> f |> u.cpp_function_sigs |> mangle_function_sig) }
 end
+
+let cpp_enum_name user_types sg =
+  let name = Mangling.mangle_name ~prefix:"enum" sg.enum_name in
+  register_type user_types name (Enum_t sg); name
+
+let cpp_struct_name user_types sg =
+  let name = Mangling.mangle_name ~prefix:"struct" sg.struct_name in
+  register_type user_types sg.struct_name (Struct_t sg); name
 
 let cpp_type_of_type
       (user_types: (string * typ) list ref)
@@ -105,12 +125,17 @@ let cpp_type_of_type
        sprintf "uint_t<%d>" sz
      else
        failwith (sprintf "Unsupported size: %d" sz)
-  | Enum_t sg ->
-     register_type user_types sg.enum_name tau;
-     sprintf "enum_%s" sg.enum_name
-  | Struct_t sg ->
-     register_type user_types sg.struct_name tau;
-     sprintf "struct_%s" sg.struct_name
+  | Enum_t sg -> cpp_enum_name user_types sg
+  | Struct_t sg -> cpp_struct_name user_types sg
+
+let cpp_enumerator_name user_types ?(enum=None) nm =
+  let nm = Mangling.mangle_name nm in
+  match enum with
+  | None -> nm
+  | Some sg -> sprintf "%s::%s" (cpp_enum_name user_types sg) nm
+
+let cpp_field_name nm =
+  Mangling.mangle_name nm
 
 let register_subtypes
       (user_types: (string * typ) list ref)
@@ -119,18 +144,10 @@ let register_subtypes
   let rec loop tau = match tau with
     | Bits_t sz ->
        if sz > 64 then needs_multiprecision := true;
-    | Enum_t sg ->
-       register_type user_types sg.enum_name tau;
-    | Struct_t sg ->
-       register_type user_types sg.struct_name tau;
-       List.iter (loop << snd) sg.struct_fields in
+    | Enum_t sg -> ignore (cpp_enum_name user_types sg)
+    | Struct_t sg -> ignore (cpp_struct_name user_types sg);
+                     List.iter (loop << snd) sg.struct_fields in
   loop tau
-
-let cpp_struct_name user_types needs_multiprecision sg =
-  cpp_type_of_type user_types needs_multiprecision (Struct_t sg)
-
-let cpp_enum_name user_types needs_multiprecision sg =
-  cpp_type_of_type user_types needs_multiprecision (Enum_t sg)
 
 let cpp_const_init (needs_multiprecision: bool ref) sz cst =
   assert (sz >= 0);
@@ -222,9 +239,6 @@ let reconstruct_switch sigs action =
   | Some (_, _, [_]) | None -> None
   | res -> res
 
-let gensym, gensym_reset =
-  make_gensym ()
-
 type target_info =
   { tau: typ; declared: bool; name: var_t }
 
@@ -253,17 +267,11 @@ let compile (type name_t var_t reg_t)
   let user_types = ref [] in
   let custom_funcalls = Hashtbl.create 50 in
 
-  let cpp_type_of_type =
-    cpp_type_of_type user_types needs_multiprecision in
-  let cpp_enum_name =
-    cpp_enum_name user_types needs_multiprecision in
-  let cpp_struct_name =
-    cpp_struct_name user_types needs_multiprecision in
-  let cpp_const_init =
-    cpp_const_init needs_multiprecision in
-
-  let classname =
-    sprintf "sim_%s" hpp.cpp_classname in
+  let cpp_type_of_type = cpp_type_of_type user_types needs_multiprecision in
+  let cpp_enum_name = cpp_enum_name user_types in
+  let cpp_struct_name = cpp_struct_name user_types in
+  let cpp_enumerator_name = cpp_enumerator_name user_types in
+  let cpp_const_init = cpp_const_init needs_multiprecision in
 
   let rec iter_sep sep body = function
     | [] -> ()
@@ -288,7 +296,7 @@ let compile (type name_t var_t reg_t)
     p_scoped (sprintf "%s %s(%s)%s" typ name args annot) pbody in
 
   let p_includeguard pbody =
-    let cpp_define = sprintf "%s_HPP" (String.uppercase_ascii classname) in
+    let cpp_define = sprintf "%s_HPP" (String.uppercase_ascii hpp.cpp_classname) in
     p "#ifndef %s" cpp_define;
     p "#define %s" cpp_define;
     nl ();
@@ -322,7 +330,7 @@ let compile (type name_t var_t reg_t)
   and sp_enum_value sg v =
     match enum_find_field_opt sg v with
     | None -> sprintf "static_cast<%s>(%s)" (cpp_enum_name sg) (sp_bits_value v)
-    | Some nm -> sprintf "%s::%s" (cpp_enum_name sg) nm
+    | Some nm -> cpp_enumerator_name ~enum:(Some sg) nm
   and sp_struct_value sg fields =
     let fields = String.concat ", " (List.map sp_value fields) in
     sprintf "%s{ %s }" (cpp_struct_name sg) fields in
@@ -364,17 +372,17 @@ let compile (type name_t var_t reg_t)
   let p_enum_decl sg =
     let esz = enum_sz sg in
     let nm = cpp_enum_name sg in
-    if esz = 0 then failwith (sprintf "Enum %s is empty" nm);
-    if esz > 64 then failwith (sprintf "Enum %s is too large (%d > 64)" nm esz);
+    if esz = 0 then failwith (sprintf "Enum %s is empty (its members are zero-bits wide)" nm);
+    if esz > 64 then failwith (sprintf "Enum %s is too large (its members are %d-bits wide; the limit is 64)" nm esz);
     let decl = sprintf "enum class %s : %s" nm (cpp_type_of_type (Bits_t esz)) in
     p_scoped decl ~terminator:";" (fun () ->
         iter_sep (fun () -> p ", ")
-          (fun (name, v) -> p "%s = %s" name (sp_bits_value v)) sg.enum_members) in
+          (fun (name, v) -> p "%s = %s" (cpp_enumerator_name name) (sp_bits_value v)) sg.enum_members) in
 
   let p_struct_decl sg =
     let decl = sprintf "struct %s" (cpp_struct_name sg) in
     p_scoped decl ~terminator:";" (fun () ->
-        List.iter (fun (name, tau) -> p_decl tau name) sg.struct_fields) in
+        List.iter (fun (name, tau) -> p_decl tau (cpp_field_name name)) sg.struct_fields) in
 
   let attr_unused =
     "__attribute__((unused))" in
@@ -392,7 +400,7 @@ let compile (type name_t var_t reg_t)
       p_printer (fun () ->
           p_scoped (sprintf "switch (%s)" v_arg) (fun () ->
               List.iter (fun (nm, _v) ->
-                  let lbl = (cpp_enum_name sg) ^ "::" ^ nm in
+                  let lbl = cpp_enumerator_name ~enum:(Some sg) nm in
                   p "case %s: return \"%s\";" lbl lbl)
                 sg.enum_members;
               let v_sz = typ_sz tau in
@@ -406,6 +414,7 @@ let compile (type name_t var_t reg_t)
           p "std::ostringstream stream;";
           p "stream << \"%s { \";" v_tau;
           List.iter (fun (fname, ftau) ->
+              let fname = cpp_field_name fname in
               p "stream << \"  .%s = \" << %s(%s.%s) << \"; \";"
                 fname (sp_value_printer ftau) v_arg fname)
             sg.struct_fields;
@@ -447,6 +456,7 @@ let compile (type name_t var_t reg_t)
       p_eq (fun () -> pr "%s == %s" v1 v2) in
 
     let sp_field_eq v1 v2 tau field =
+      let field = cpp_field_name field in
       sp_comparison tau (v1 ^ "." ^ field) (v2 ^ "." ^ field) in
 
     let p_struct_eq sg =
@@ -460,6 +470,7 @@ let compile (type name_t var_t reg_t)
           p_decl (Bits_t v_sz) var ~init:(Some (cpp_const_init v_sz "0"));
           List.iteri (fun idx (fname, ftau) ->
               let sz = typ_sz ftau in
+              let fname = cpp_field_name fname in
               let fval = sprintf "%s.%s" v_arg fname in
               let fpacked = sp_packer ftau ~arg:fval in
               if idx <> 0 then p "%s <<= %d;" var sz;
@@ -473,6 +484,7 @@ let compile (type name_t var_t reg_t)
           p_decl tau var ~init:(Some "{}");
           List.fold_right (fun (fname, ftau) offset ->
               let sz = typ_sz ftau in
+              let fname = cpp_field_name fname in
               let fval = sprintf "prims::truncate<%d, %d>(%s >> %du)"
                            sz v_sz bits_arg offset in
               let unpacked = sp_unpacker ~arg:fval ftau in
@@ -528,7 +540,7 @@ let compile (type name_t var_t reg_t)
     nl ();
 
     let p_sim_class pbody =
-      p_scoped (sprintf "template <typename extfuns_t> class %s" classname)
+      p_scoped (sprintf "template <typename extfuns_t> class %s" hpp.cpp_classname)
         ~terminator:";" pbody in
 
     let p_state_register r =
@@ -578,12 +590,15 @@ let compile (type name_t var_t reg_t)
            VarTarget { tau; declared = true; name }
         | t -> t in
 
+      let gensym_target_info tau prefix =
+        { tau; declared = false; name = gensym prefix } in
+
       let gensym_target tau prefix =
-        VarTarget { tau; declared = false; name = gensym prefix } in
+        VarTarget (gensym_target_info tau prefix) in
 
       let ensure_target tau t =
         match t with
-        | NoTarget -> { declared = false; name = gensym "ignored"; tau }
+        | NoTarget -> gensym_target_info tau "ignored"
         | VarTarget info -> info in
 
       let p_ensure_declared tinfo =
@@ -626,13 +641,14 @@ let compile (type name_t var_t reg_t)
            PureExpr (sprintf "%s(%s, %s)" (cpp_bits_fn_name f tau1 tau2) a1 a2)
         | PrimFn (SGA.StructFn (sg, ac, idx)) ->
            let sg = SGALib.Util.struct_sig_of_sga_struct_sig sg in
-           let field, _tau = SGALib.Util.list_nth sg.struct_fields idx in
+           let fname, _tau = SGALib.Util.list_nth sg.struct_fields idx in
+           let fname = cpp_field_name fname in
            match ac with
-           | SGA.GetField -> PureExpr (sprintf "%s.%s" a1 field)
+           | SGA.GetField -> PureExpr (sprintf "%s.%s" a1 fname)
            | SGA.SubstField ->
               let tinfo = ensure_target (Struct_t sg) target in
               let res = p_assign_pure (VarTarget tinfo) (PureExpr a1) in
-              p "%s.%s = %s;" tinfo.name field a2;
+              p "%s.%s = %s;" tinfo.name fname a2;
               res in
 
       let assert_no_shadowing v v_to_string m =
@@ -723,7 +739,7 @@ let compile (type name_t var_t reg_t)
         p_scoped (sprintf "switch (%s)" (hpp.cpp_var_names var)) (fun () ->
             loop branches) in
 
-      p_fn ~typ:"bool" ~name:("rule_" ^ hpp.cpp_rule_names rule.rl_name) (fun () ->
+      p_fn ~typ:"bool" ~name:(hpp.cpp_rule_names rule.rl_name) (fun () ->
           p_reset ();
           nl ();
           ignore (p_action NoTarget rule.rl_body);
@@ -733,17 +749,17 @@ let compile (type name_t var_t reg_t)
     let p_constructor () =
       let p_init_data0 { reg_name = nm; _ } =
         p "Log.%s.data0 = state.%s;" nm nm in
-      p_fn ~typ:"explicit" ~name:classname
+      p_fn ~typ:"explicit" ~name:hpp.cpp_classname
         ~args:"const state_t init" ~annot:" : state(init)"
         (fun () -> iter_all_registers p_init_data0) in
 
     let rec p_scheduler = function
       | SGA.Done -> ()
       | SGA.Cons (rl_name, s) ->
-         p "rule_%s();" (hpp.cpp_rule_names rl_name);
+         p "%s();" (hpp.cpp_rule_names rl_name);
          p_scheduler s
       | SGA.Try (rl_name, s1, s2) ->
-         p_scoped (sprintf "if (rule_%s())" (hpp.cpp_rule_names rl_name)) (fun () -> p_scheduler s1);
+         p_scoped (sprintf "if (%s())" (hpp.cpp_rule_names rl_name)) (fun () -> p_scheduler s1);
          p_scoped "else" (fun () -> p_scheduler s2) in
 
     let p_cycle () =
@@ -754,7 +770,7 @@ let compile (type name_t var_t reg_t)
           iter_all_registers p_commit_register) in
 
     let p_run () =
-      let typ = sprintf "template<typename T> %s&" classname in
+      let typ = sprintf "template<typename T> %s&" hpp.cpp_classname in
       p_fn ~typ ~name:"run" ~args:"T ncycles" (fun () ->
           p_scoped "for (T cycle_id = 0; cycle_id < ncycles; cycle_id++)"
             (fun () -> p "cycle();");
@@ -809,7 +825,7 @@ let compile (type name_t var_t reg_t)
     p_comment "%s %s(%s);" typ name args in
 
   let p_cpp () =
-    p "#include \"%s.hpp\"" hpp.cpp_classname;
+    p "#include \"%s.hpp\"" hpp.cpp_header_name;
     nl ();
 
     (match hpp.cpp_extfuns with
@@ -825,7 +841,7 @@ let compile (type name_t var_t reg_t)
     nl ();
 
     let classtype =
-      sprintf "%s<extfuns>" classname in
+      sprintf "%s<extfuns>" hpp.cpp_classname in
 
     let ull = "unsigned long long int" in
     let state_t = sprintf "%s::state_t" classtype in
@@ -884,6 +900,7 @@ let cpp_rule_of_action (rl_name, rl_body) =
 
 let input_of_compile_unit classname ({ c_registers; c_scheduler; c_rules }: SGALib.Compilation.compile_unit) =
   { cpp_classname = classname;
+    cpp_header_name = classname;
     cpp_rule_names = (fun rl -> rl);
     cpp_rules = List.map cpp_rule_of_action c_rules;
     cpp_scheduler = c_scheduler;
@@ -907,8 +924,10 @@ let input_of_sim_package (sp: _ SGALib.SGA.sim_package_t)
     : (SGA.prim_fn_t, Obj.t, Obj.t, Obj.t, string SGA.interop_fn_t) cpp_input_t =
   let sga = sp.sp_pkg in
   let rules = collect_rules sga.sga_scheduler in
+  let classname = SGALib.Util.string_of_coq_string sga.sga_module_name in
   let custom_fn_names f = SGALib.Util.string_of_coq_string (sp.sp_custom_fn_names f) in
-  { cpp_classname = SGALib.Util.string_of_coq_string sga.sga_module_name;
+  { cpp_classname = classname;
+    cpp_header_name = classname;
     cpp_rule_names = (fun rn -> SGALib.Util.string_of_coq_string (sp.sp_rule_names rn));
     cpp_rules = List.map (cpp_rule_of_sga_package_rule sga) rules;
     cpp_scheduler = sga.sga_scheduler;

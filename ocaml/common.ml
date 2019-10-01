@@ -150,7 +150,8 @@ type ('f, 'lit_t, 'reg_t, 'fn_t) action =
           * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd list
   | When of ('f, 'lit_t, 'reg_t, 'fn_t) action_locd
             * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd list
-  | Switch of { operand: ('f, 'lit_t, 'reg_t, 'fn_t) action_locd;
+  | Switch of { binder: var_t;
+                operand: ('f, 'lit_t, 'reg_t, 'fn_t) action_locd;
                 default: ('f, 'lit_t, 'reg_t, 'fn_t) action_locd;
                 branches: (('f, 'lit_t, 'reg_t, 'fn_t) action_locd
                            * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd) list } (* branches *)
@@ -221,7 +222,7 @@ type 'f err_contents =
     ekind: [`ParseError | `NameError | `ResolutionError | `TypeError];
     emsg: string }
 
-let make_gensym () =
+let make_gensym gensym_prefix =
   let state = Hashtbl.create 8 in
   let reset () =
     Hashtbl.clear state in
@@ -232,7 +233,7 @@ let make_gensym () =
       | Some n -> n in
     if counter = max_int then failwith "gensym";
     Hashtbl.replace state prefix (succ counter);
-    Printf.sprintf "_%s%d" prefix counter in
+    Printf.sprintf "%s%s%d" gensym_prefix prefix counter in
   (next, reset)
 
 let (<<) f g x = f (g x)

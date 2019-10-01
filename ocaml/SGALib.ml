@@ -211,16 +211,15 @@ module Compilation = struct
        | If (e, r, rs) -> SGA.UIf (translate_action e, translate_action r, translate_seq rs)
        (* FIXME syntax for when in typechecker? *)
        | When (e, rs) -> SGA.UIf (translate_action e, translate_seq rs, SGA.UFail (SGA.Bits_t 0))
-       | Switch { operand; default; branches } ->
-          let opname = (* gensym *) "switch_operand" in
-          let opvar = locd_make operand.lpos (Lit (Var opname)) in
-          let switch = SGA.uSwitch (translate_action opvar)
+       | Switch { binder; operand; default; branches } ->
+          let bound_var = locd_make operand.lpos (Lit (Var binder)) in
+          let switch = SGA.uSwitch (translate_action bound_var)
                         (translate_action default)
                         (List.map (fun (lbl, br) ->
                              translate_action lbl,
                              translate_action br)
                            branches) in
-          SGA.UBind (opname, (translate_action operand), switch)
+          SGA.UBind (binder, (translate_action operand), switch)
        | Read (port, reg) -> SGA.URead (translate_port port, reg.lcnt)
        | Write (port, reg, v) -> SGA.UWrite (translate_port port, reg.lcnt, translate_action v)
        | Call (fn, a1 :: a2 :: []) -> SGA.UCall (fn.lcnt, translate_action a1, translate_action a2)
@@ -274,7 +273,7 @@ module Compilation = struct
   type 'k compiled_circuit =
     (reg_signature, 'k SGA.interop_fn_t) SGA.circuit
 
-  let typecheck_scheduler (raw_ast: 'f raw_scheduler) : var_t SGA.scheduler =
+  let typecheck_scheduler (raw_ast: 'f raw_scheduler) : name_t SGA.scheduler =
     let ast = translate_scheduler raw_ast in
     SGA.type_scheduler raw_ast.lpos ast
 
