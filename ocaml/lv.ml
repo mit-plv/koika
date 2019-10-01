@@ -81,7 +81,7 @@ type unresolved_extfun = {
 type typedecls = {
     td_enums: enum_sig StringMap.t;
     td_structs: struct_sig StringMap.t;
-    td_enum_fields: enum_sig StringMap.t;
+    td_enumerators: enum_sig StringMap.t;
     td_all: typ StringMap.t
   }
 
@@ -310,14 +310,9 @@ let multimap_of_locds keyfn xs =
 let check_no_duplicates msg keyfn ls =
   StringMap.iter (fun k positions ->
       Delay.iter (fun lpos ->
-          parse_error lpos (sprintf "Duplicate %s: `%s'" msg k))
+          name_error lpos (sprintf "Duplicate %s: `%s'" msg k))
         (List.tl (List.rev positions)))
     (multimap_of_locds keyfn ls)
-
-let add_or_raise k v m errf =
-  match StringMap.find_opt k m with
-  | Some v' -> errf k v v'
-  | None -> StringMap.add k v m
 
 let gensym, gensym_reset =
   make_gensym ()
@@ -626,6 +621,7 @@ let parse sexps =
     let (_, eval), _ = expect_cons loc "enumerator (empty enums are not supported)" members in
     let bitsize = Array.length eval.lcnt in
     Delay.iter ((check_size bitsize) << snd) members;
+    Delay.apply3 check_no_duplicates "enumerator name in struct" fst members;
     locd_make loc (Enum_u { name; bitsize = locd_make eval.lpos bitsize; members }) in
   let expect_struct_field_name name = (* :label *)
     let loc, name = expect_atom "a field name" name in
@@ -712,31 +708,23 @@ let rexpect_arg k loc (args: unresolved_action locd list) =
 
 let types_empty =
   { td_enums = StringMap.empty;
-    td_enum_fields = StringMap.empty;
+    td_enumerators = StringMap.empty;
     td_structs = StringMap.empty;
     td_all = StringMap.empty }
 
-let types_add loc tau_r types =
-  let err k kd1 kd2 =
-    resolution_error loc
-      (sprintf "Duplicate name: %s `%s' previously declared as %s" kd1 k kd2) in
-  let name, tau, types = match tau_r with
-    | `Enum sg ->
-       let name = sg.enum_name in
-       name, Enum_t sg,
-       { types with td_enums = add_or_raise name sg types.td_enums
-                                 (fun k _ _ -> err k "enum" "enum");
-                    td_enum_fields = Delay.fold_left (fun fields field ->
-                                         add_or_raise field sg fields
-                                           (fun k _ _ -> err k "enumerator" "enumerator"))
-                                       types.td_enum_fields (List.map fst sg.enum_members) }
-    | `Struct sg ->
-       let name = sg.struct_name in
-       name, Struct_t sg,
-       { types with td_structs = add_or_raise name sg types.td_structs
-                                   (fun k _ _ -> err k "struct" "struct") } in
-  { types with td_all = add_or_raise name tau types.td_all
-                          (fun k v v' -> err k (kind_to_str v) (kind_to_str v')) }
+let types_add tau_r types =
+  match tau_r with
+  | Bits_t _ -> types
+  | Enum_t sg ->
+     { types with td_all = StringMap.add sg.enum_name tau_r types.td_all;
+                  td_enums = StringMap.add sg.enum_name sg types.td_enums;
+                  td_enumerators = List.fold_left (fun acc (field, _) ->
+                                       StringMap.add field sg acc)
+                                     types.td_enumerators sg.enum_members }
+  | Struct_t sg ->
+     { types with td_all = StringMap.add sg.struct_name tau_r types.td_all;
+                  td_structs = StringMap.add sg.struct_name sg types.td_structs }
+
 
 let resolve_type types { lpos; lcnt: unresolved_type } =
   match lcnt with
@@ -747,21 +735,31 @@ let resolve_type types { lpos; lcnt: unresolved_type } =
      | None ->
         unbound_error lpos ~bound:(keys types.td_all) "type" nm
 
+let assert_unique_type types nm kind =
+  match StringMap.find_opt nm.lcnt types.td_all with
+  | Some tau ->
+     name_error nm.lpos
+       (sprintf "Duplicate type name: %s `%s' previously declared (as %s)" kind nm.lcnt (kind_to_str tau))
+  | None -> ()
+
 let resolve_typedecl types (typ: unresolved_typedecl locd) =
-  let resolve_struct_field_type (nm, tau) =
-    (nm.lcnt, resolve_type types tau) in
+  (* Struct fields and enumerators don't have to be globally unique *)
+  let resolve_struct_field_type (nm, tau) = (nm.lcnt, resolve_type types tau) in
+  let resolve_enum_member (nm, v) = (nm.lcnt, v.lcnt) in
   match typ.lcnt with
   | Enum_u { name; bitsize; members } ->
-     `Enum { enum_name = name.lcnt; enum_bitsize = bitsize.lcnt;
-             enum_members = List.map (fun (n, t) -> n.lcnt, t.lcnt) members }
+     assert_unique_type types name "enum";
+     Enum_t { enum_name = name.lcnt; enum_bitsize = bitsize.lcnt;
+              enum_members = Delay.map resolve_enum_member members }
   | Struct_u { name; fields } ->
+     assert_unique_type types name "struct";
      let struct_fields = Delay.map resolve_struct_field_type fields in
-     `Struct { struct_name = name.lcnt; struct_fields }
+     Struct_t { struct_name = name.lcnt; struct_fields }
 
 let resolve_typedecls types =
   Delay.fold_left (fun types t ->
       let typ = resolve_typedecl types t in
-      types_add t.lpos typ types)
+      types_add typ types)
     types_empty types
 
 let core_primitives =
@@ -831,10 +829,9 @@ let resolve_value types { lpos; lcnt } =
   match lcnt with
   | UBits bs -> Bits bs
   | UEnum { name = ""; field } ->
-     (* LATER allow enums to share an enumerator and flag ambiguities *)
-     (match StringMap.find_opt field types.td_enum_fields with
+     (match StringMap.find_opt field types.td_enumerators with
       | Some sg -> resolve_enum_field sg field
-      | None -> unbound_error lpos ~bound:(keys types.td_enum_fields) "enumerator" field)
+      | None -> unbound_error lpos ~bound:(keys types.td_enumerators) "enumerator" field)
   | UEnum { name; field } ->
      (match StringMap.find_opt name types.td_all with
       | Some (Enum_t sg) -> resolve_enum_field sg field
