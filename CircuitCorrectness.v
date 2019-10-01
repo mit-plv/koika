@@ -439,35 +439,6 @@ Section CompilerCorrectness.
 
   Transparent Circuits.willFire_of_canFire'.
 
-  (* Lemma interp_willFire_of_canFire_willFire'_false : *)
-  (*   forall clog (cLog: scheduler_circuit R Sigma REnv) idx, *)
-  (*     interp_circuit (willFire_of_canFire' (REnv.(getenv) clog.(regs) idx) (REnv.(getenv) cLog idx)) = Ob~0 -> *)
-  (*     interp_circuit (willFire_of_canFire clog cLog) = Ob~0. *)
-  (* Proof. *)
-  (*   intros. *)
-  (*   unfold willFire_of_canFire, Environments.fold_right; cbn. *)
-  (*   destruct (in_split idx finite_elements (member_In _ _ (@finite_index _ (finite_keys REnv) idx))) *)
-  (*     as (l1 & l2 & ->). *)
-  (*   rewrite fold_right_app; cbn. *)
-  (*   rewrite !getenv_zip; cbn. *)
-  (*   apply circuit_lt_fold_right. *)
-  (*   - apply circuit_lt_refl. *)
-  (*   - intros idx' ** ; *)
-  (*       rewrite getenv_zip; *)
-  (*       destruct (eq_dec idx' idx); subst. *)
-  (*     + lazymatch goal with *)
-  (*       | [ H: circuit_lt ?x ?y |- circuit_lt ?c1 (?f ?idx ?y) ] => *)
-  (*         let cc := (eval pattern idx, x in c1) in *)
-  (*         let cchd := constr_hd cc in *)
-  (*         unify (f idx y) (cchd idx y); *)
-  (*           cbn *)
-  (*       end. *)
-  (*       circuit_lt_f_equal; eassumption. *)
-  (*     + cbn. *)
-  (*       circuit_lt_f_equal; eassumption. *)
-  (*   -  *)
-  (* Qed. *)
-
   Definition rwdata_circuit_lt_invariant {idx} (rwd1 rwd2: rwdata R Sigma (R idx)) :=
       circuit_lt (rwd1.(read0)) (rwd2.(read0)) /\
       circuit_lt (rwd1.(write0)) (rwd2.(write0)) /\
@@ -1378,23 +1349,9 @@ Section CompilerCorrectness.
   Notation scheduler := (scheduler name_t).
   Context (rules: name_t -> rule).
 
-
   Notation compile_scheduler' := (compile_scheduler' lco).
 
-  (*   Lemma interp_circuit_willFire_of_canFire'_bundle_rule: *)
-  (*   forall (idx : reg_t) s (rwd1 rwd2 : rwdata R Sigma (R idx)) (rwdL : rwdata R Sigma (R idx)), *)
-  (*     interp_circuit (willFire_of_canFire' (mux_rwdata s cCond rwd1 rwd2) rwdL) = *)
-  (*       interp_circuit (willFire_of_canFire' rwd1 rwdL). *)
-  (* Proof. *)
-  (*   intros *; *)
-  (*     unfold willFire_of_canFire'; cbn. *)
-  (*   repeat (rewrite !opt1_correct; cbn). *)
-  (*   destruct (interp_circuit cCond) as [ [ | ] [ ] ]; *)
-  (*     cbn; eauto. *)
-  (* Qed. *)
-  Arguments CBundleRef {_ _ _ _ _ _ _ _} _ _ .
-
-  Lemma interp_circuit_willFire_of_canFire_remove_bundle : forall {sz} (cLog: rwset) (c: action_circuit R Sigma REnv sz) annot,
+  Lemma interp_circuit_willFire_of_canFire_remove_bundle' : forall {sz} (cLog: rwset) (c: action_circuit R Sigma REnv sz) annot,
         interp_circuit
           (Circuits.willFire_of_canFire lco (annotate_bundle annot c) cLog) =
         interp_circuit
@@ -1419,6 +1376,27 @@ Section CompilerCorrectness.
       reflexivity.
   Qed.
 
+  Lemma interp_circuit_willFire_of_canFire_remove_bundle : forall {sz} (cLog: rwset) (c: action_circuit R Sigma REnv sz) annot res,
+        interp_circuit
+          (Circuits.willFire_of_canFire lco (c.(erwc)) cLog) = res ->
+                interp_circuit
+          (Circuits.willFire_of_canFire lco (annotate_bundle annot c) cLog) = res .
+  intros;
+    rewrite interp_circuit_willFire_of_canFire_remove_bundle'; trivial.
+  Qed.
+
+  Ltac bundle_t := repeat match goal with
+    | [ H: context[(getenv ?REnv (map2 ?REnv ?f2 ?f3 ?cLog) ?idx)] |- _ ] =>
+      rewrite @getenv_map2 in H
+    | [ H: context[(getenv ?REnv (map ?REnv ?f2 ?cLog) ?idx)] |- _ ] =>
+      rewrite @getenv_map in H
+    | [ |- context[(getenv ?REnv (map2 ?REnv ?f2 ?f3 ?cLog) ?idx)] ] =>
+      rewrite @getenv_map2
+    | [ |- context[(getenv ?REnv (map ?REnv ?f2 ?cLog) ?idx)] ] =>
+      rewrite @getenv_map
+    | [ |- context[match (?ind) with _ => _ end] ] => destruct ind
+                          end; eauto.
+
   Lemma log_data1_consistent'_bundle_equiv : forall Log cLog regs annot,
       log_data1_consistent'
         Log
@@ -1433,15 +1411,12 @@ Section CompilerCorrectness.
            (annotate_registers
               annot regs)
            cLog).
-  Proof.                        (* Tried to compact the proof but lost in readability *)
+  Proof.
     split;
       unfold log_data1_consistent', annotate_registers, update_accumulated_rwset;
       intros H idx;
       specialize (H idx);
-      destruct latest_write1;
-      intuition;
-      rewrite @getenv_map2, @getenv_map in *;
-      intuition.
+    bundle_t.
   Qed.
 
 
@@ -1459,15 +1434,12 @@ Section CompilerCorrectness.
            (annotate_registers
               annot regs)
            cLog).
-  Proof.                        (* Lot of sharing with previous proofs *)
+  Proof.
     split;
       unfold log_data0_consistent', annotate_registers, update_accumulated_rwset;
       intros H idx;
       specialize (H idx);
-      destruct latest_write0;
-      intuition;
-      rewrite @getenv_map2, @getenv_map in *;
-      intuition.
+      bundle_t.
   Qed.
 
   Lemma log_rwdata_consistent_bundle_equiv : forall Log regs annot,
@@ -1483,9 +1455,61 @@ Section CompilerCorrectness.
       unfold log_rwdata_consistent, annotate_registers;
       intros H idx;
       specialize (H idx);
-      rewrite @getenv_map in *;
-      intuition.
+      bundle_t.
   Qed.
+
+  Lemma log_data1_consistent'_bundle_elim : forall Log cLog regs annot,
+      log_data1_consistent'
+        Log
+        (Circuits.update_accumulated_rwset
+           lco
+           regs
+           cLog) ->
+      log_data1_consistent'
+        Log
+        (Circuits.update_accumulated_rwset
+           lco
+           (annotate_registers
+              annot regs)
+           cLog).
+  Proof.
+    apply log_data1_consistent'_bundle_equiv.
+  Qed.
+
+  Lemma log_data0_consistent'_bundle_elim : forall Log cLog regs annot,
+      log_data0_consistent'
+        Log
+        (Circuits.update_accumulated_rwset
+           lco
+           regs
+           cLog) ->
+      log_data0_consistent'
+        Log
+        (Circuits.update_accumulated_rwset
+           lco
+           (annotate_registers
+              annot regs)
+           cLog).
+  Proof.
+    apply log_data0_consistent'_bundle_equiv.
+  Qed.
+
+  Lemma log_rwdata_consistent_bundle_elim : forall Log regs annot,
+      log_rwdata_consistent
+        Log
+        regs ->
+      log_rwdata_consistent
+        Log
+        (annotate_registers
+              annot regs) .
+  Proof.
+    apply log_rwdata_consistent_bundle_equiv.
+  Qed.
+
+  Hint Resolve log_data1_consistent'_bundle_elim : circuits.
+  Hint Resolve log_data0_consistent'_bundle_elim : circuits.
+  Hint Resolve log_rwdata_consistent_bundle_elim : circuits.
+  Hint Resolve interp_circuit_willFire_of_canFire_remove_bundle : circuits.
 
   Theorem scheduler_compiler'_correct':
     forall (s: scheduler) Log cLog,
@@ -1505,44 +1529,17 @@ Section CompilerCorrectness.
                                   ltac:(ceauto) ltac:(ceauto)
                                   ltac:(ceauto) ltac:(ceauto)
                                                        ltac:(ceauto)).
-      destruct (interp_action r sigma CtxEmpty Log log_empty (rules r0)) as [(? & ?) | ] eqn:?.  (* do 5 (progress t_step; idtac "yo"). cbn; t. *)
-      destruct p.
-      destruct compile_action.
-      apply IHs.
-      apply log_data1_consistent'_mux_l.
-      rewrite interp_circuit_willFire_of_canFire_remove_bundle.
-      intuition.
-      apply log_data1_consistent'_bundle_equiv.
-      intuition.
-      apply log_data0_consistent'_mux_l.
-      rewrite interp_circuit_willFire_of_canFire_remove_bundle.
-      intuition.
-      apply log_data0_consistent'_bundle_equiv.
-      intuition.
-      apply log_rwdata_consistent_mux_l.
-      rewrite interp_circuit_willFire_of_canFire_remove_bundle.
-      intuition.
-      apply log_rwdata_consistent_update_accumulated_rwset.
-      trivial.
-      apply log_rwdata_consistent_bundle_equiv.
-      intuition.
-      intuition.
-      destruct compile_action.
-      apply IHs.
-      apply log_data1_consistent'_mux_r.
-      rewrite interp_circuit_willFire_of_canFire_remove_bundle.
-      trivial.
-      trivial.
-      apply log_data0_consistent'_mux_r.
-      rewrite interp_circuit_willFire_of_canFire_remove_bundle.
-      trivial.
-      trivial.
-      apply log_rwdata_consistent_mux_r.
-            rewrite interp_circuit_willFire_of_canFire_remove_bundle.
-      trivial.
-      trivial.
-      trivial.
-
+      destruct (interp_action r sigma CtxEmpty Log log_empty (rules r0)) as [(? & ?) | ] eqn:?.
+      +
+        destruct p.
+        destruct compile_action.
+        repeat destruct Hrc as [? Hrc].
+        apply IHs;
+          eauto 6 with circuits.
+      +
+        destruct compile_action.
+        apply IHs;
+          eauto 6 with circuits.
     - pose proof (@action_compiler_correct nil _ Log cLog (rules r0)) as Hrc.
       unshelve eassert (Hrc := Hrc (adapter cLog) CtxEmpty CtxEmpty log_empty
                                   ltac:(ceauto) ltac:(ceauto)
