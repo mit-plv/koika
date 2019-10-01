@@ -85,16 +85,14 @@ Section Circuits.
   Context {name_t var_t reg_t fn_t: Type}.
 
   Context {R: reg_t -> type}.
-  Definition circuit_R := (fun reg => type_sz (R reg)).
-  Notation cR := circuit_R.
+  Notation cR := (CR R).
 
   Context {Sigma: fn_t -> ExternalSignature}.
-  Definition circuit_Sigma := (fun fn => CExternalSignature_of_ExternalSignature (Sigma fn)).
-  Notation cSigma := circuit_Sigma.
+  Notation cSigma := (CSigma Sigma).
 
   Context {REnv: Env reg_t}.
   Context (r: REnv.(env_t) R).
-  Definition circuit_r := REnv.(map) (fun idx v => bits_of_value v) r.
+  Definition circuit_r : REnv.(env_t) (fun idx => bits ((CR R) idx)) := REnv.(map) (fun idx v => bits_of_value v) r.
   Notation cr := circuit_r.
 
   Context (sigma: forall f, ExternalSignature_denote (Sigma f)).
@@ -105,16 +103,17 @@ Section Circuits.
       bits_of_value (sigma fn v1 v2).
 
   Context (csigma: forall f, CExternalSignature_denote (cSigma f)).
-  Context (lco: local_circuit_optimizer cr csigma).
+  Context (lco: (@local_circuit_optimizer reg_t fn_t cR cSigma (rwdata R Sigma) REnv  cr csigma)).
 
-  Notation circuit := (circuit cR cSigma).
+  Notation circuit := (circuit cR cSigma (rwdata R Sigma )).
   Notation interp_circuit := (interp_circuit cr csigma).
+
 
   Definition circuit_fn_of_fn {sig} (fn: ExternalSignature_denote sig)
     : CExternalSignature_denote (CExternalSignature_of_ExternalSignature sig) :=
     fun bs1 bs2 => bits_of_value (fn (value_of_bits bs1) (value_of_bits bs2)).
 
-  Definition circuit_sigma : forall f, CExternalSignature_denote (circuit_Sigma f) :=
+  Definition circuit_sigma : forall f, CExternalSignature_denote (cSigma f) :=
     fun f => circuit_fn_of_fn (sigma f).
 
   Lemma circuit_sigma_spec_circuit_sigma :
@@ -166,6 +165,24 @@ Section Circuits.
     forall s c1 c2,
       circuit_lt c1 c2 ->
       circuit_lt c1 (CAnnot s c2).
+  Proof. firstorder. Qed.
+
+  Lemma circuit_lt_CBundleRef :
+    forall {T1 T2} b1 b2 (a1:T1) (a2:T2) c1 c2,
+      circuit_lt c1 c2 ->
+      circuit_lt (CBundleRef b1 a1 c1) (CBundleRef  b2 a2 c2).
+  Proof. firstorder. Qed.
+
+  Lemma circuit_lt_CBundleRef_l :
+    forall {T1 } b1 (a1:T1) c1 c2,
+      circuit_lt c1 c2 ->
+      circuit_lt (CBundleRef b1 a1 c1) c2.
+  Proof. firstorder. Qed.
+
+  Lemma circuit_lt_CBundleRef_r :
+    forall {T2} b2 (a2:T2) c1 c2,
+      circuit_lt c1 c2 ->
+      circuit_lt c1 (CBundleRef  b2 a2 c2).
   Proof. firstorder. Qed.
 
   Lemma circuit_lt_CAnd :
@@ -297,9 +314,7 @@ Section Circuits.
   Qed.
 End Circuits.
 
-Arguments circuit_R {reg_t} R.
 Arguments circuit_r {reg_t} {R} {REnv} r.
-Arguments circuit_Sigma {fn_t} Sigma.
 Arguments circuit_sigma_spec {fn_t} {Sigma} sigma.
 (* Arguments csigma {fn_t} {Sigma} sigma. *)
 

@@ -12,24 +12,25 @@ Section CompilerCorrectness.
   Context {name_t var_t reg_t fn_t: Type}.
 
   Context {R: reg_t -> type}.
-  Definition cR := (circuit_R R).
+  Notation cR := (CR R).
 
   Context {Sigma: fn_t -> ExternalSignature}.
-  Notation cSigma := (circuit_Sigma Sigma).
+  Notation cSigma := (CSigma Sigma).
 
   Context {REnv: Env reg_t}.
 
   Context (r: REnv.(env_t) R).
+
   Notation cr := (circuit_r r).
 
-  Context (rc: REnv.(env_t) (fun reg => circuit cR cSigma (cR reg))).
+  Context (rc: REnv.(env_t) (fun reg => circuit cR cSigma (rwdata R Sigma) (cR reg))).
 
   Instance reg_t_eq_dec : EqDec reg_t := @EqDec_FiniteType _ (REnv.(finite_keys)).
 
   Context (sigma: forall f, ExternalSignature_denote (Sigma f)).
   Context (csigma: forall f, CExternalSignature_denote (cSigma f)).
   Context {csigma_correct: circuit_sigma_spec sigma csigma}.
-  Context (lco: local_circuit_optimizer cr csigma).
+  Context (lco: local_circuit_optimizer (Rwdata := rwdata R Sigma) cr csigma).
 
   Open Scope bool_scope.
 
@@ -37,7 +38,7 @@ Section CompilerCorrectness.
     forall idx, interp_circuit cr csigma (REnv.(getenv) rc idx) = bits_of_value (REnv.(getenv) r idx).
 
   Notation Log := (Log R REnv).
-  Notation circuit := (circuit cR cSigma).
+  Notation circuit := (circuit cR cSigma (rwdata R Sigma)).
   Notation action := (action var_t R Sigma).
   Notation rule := (rule var_t R Sigma).
   Notation interp_circuit := (interp_circuit cr csigma).
@@ -889,6 +890,8 @@ Section CompilerCorrectness.
   Hint Resolve
        circuit_lt_CAnnot_l
        circuit_lt_CAnnot_r
+       circuit_lt_CBundleRef_l
+       circuit_lt_CBundleRef_r
        circuit_lt_CAnd
        circuit_lt_CAnd_l
        circuit_lt_CAnd_r
@@ -1235,7 +1238,7 @@ Section CompilerCorrectness.
             may_read_write_t.
       + eapply interp_circuit_circuit_lt_helper_false; eauto;
           intros; apply circuit_lt_willFire_of_canFire; cbn;
-            eauto 4 with circuits.
+            eauto 6 with circuits.
         all: intros;
           apply rwset_circuit_lt_invariant_putenv;
           eauto 8 with circuits.
@@ -1375,7 +1378,114 @@ Section CompilerCorrectness.
   Notation scheduler := (scheduler name_t).
   Context (rules: name_t -> rule).
 
+
   Notation compile_scheduler' := (compile_scheduler' lco).
+
+  (*   Lemma interp_circuit_willFire_of_canFire'_bundle_rule: *)
+  (*   forall (idx : reg_t) s (rwd1 rwd2 : rwdata R Sigma (R idx)) (rwdL : rwdata R Sigma (R idx)), *)
+  (*     interp_circuit (willFire_of_canFire' (mux_rwdata s cCond rwd1 rwd2) rwdL) = *)
+  (*       interp_circuit (willFire_of_canFire' rwd1 rwdL). *)
+  (* Proof. *)
+  (*   intros *; *)
+  (*     unfold willFire_of_canFire'; cbn. *)
+  (*   repeat (rewrite !opt1_correct; cbn). *)
+  (*   destruct (interp_circuit cCond) as [ [ | ] [ ] ]; *)
+  (*     cbn; eauto. *)
+  (* Qed. *)
+  Arguments CBundleRef {_ _ _ _ _ _ _ _} _ _ .
+
+  Lemma interp_circuit_willFire_of_canFire_remove_bundle : forall {sz} (cLog: rwset) (c: action_circuit R Sigma REnv sz) annot,
+        interp_circuit
+          (Circuits.willFire_of_canFire lco (annotate_bundle annot c) cLog) =
+        interp_circuit
+          (Circuits.willFire_of_canFire lco (c.(erwc)) cLog) .
+  Proof.
+    unfold annotate_bundle.
+    intros.
+    rewrite !interp_willFire_of_canFire_eqn.
+    cbn.
+    do 2 f_equal.
+    induction finite_elements.
+    -
+      reflexivity.
+    -
+      cbn.
+      rewrite IHl.
+      f_equal.
+      unfold willFire_of_canFire'.
+      unfold annotate_registers.
+      rewrite getenv_map.
+      repeat (cbn; rewrite !lco_proof).
+      reflexivity.
+  Qed.
+
+  Lemma log_data1_consistent'_bundle_equiv : forall Log cLog regs annot,
+      log_data1_consistent'
+        Log
+        (Circuits.update_accumulated_rwset
+           lco
+           regs
+           cLog) <->
+      log_data1_consistent'
+        Log
+        (Circuits.update_accumulated_rwset
+           lco
+           (annotate_registers
+              annot regs)
+           cLog).
+  Proof.                        (* Tried to compact the proof but lost in readability *)
+    split;
+      unfold log_data1_consistent', annotate_registers, update_accumulated_rwset;
+      intros H idx;
+      specialize (H idx);
+      destruct latest_write1;
+      intuition;
+      rewrite @getenv_map2, @getenv_map in *;
+      intuition.
+  Qed.
+
+
+  Lemma log_data0_consistent'_bundle_equiv : forall Log cLog regs annot,
+      log_data0_consistent'
+        Log
+        (Circuits.update_accumulated_rwset
+           lco
+           regs
+           cLog) <->
+      log_data0_consistent'
+        Log
+        (Circuits.update_accumulated_rwset
+           lco
+           (annotate_registers
+              annot regs)
+           cLog).
+  Proof.                        (* Lot of sharing with previous proofs *)
+    split;
+      unfold log_data0_consistent', annotate_registers, update_accumulated_rwset;
+      intros H idx;
+      specialize (H idx);
+      destruct latest_write0;
+      intuition;
+      rewrite @getenv_map2, @getenv_map in *;
+      intuition.
+  Qed.
+
+  Lemma log_rwdata_consistent_bundle_equiv : forall Log regs annot,
+      log_rwdata_consistent
+        Log
+        regs <->
+      log_rwdata_consistent
+        Log
+        (annotate_registers
+              annot regs) .
+  Proof.                        (* Lot of sharing with previous proofs *)
+    split;
+      unfold log_rwdata_consistent, annotate_registers;
+      intros H idx;
+      specialize (H idx);
+      rewrite @getenv_map in *;
+      intuition.
+  Qed.
 
   Theorem scheduler_compiler'_correct':
     forall (s: scheduler) Log cLog,
@@ -1394,10 +1504,45 @@ Section CompilerCorrectness.
                                   ltac:(ceauto) ltac:(ceauto)
                                   ltac:(ceauto) ltac:(ceauto)
                                   ltac:(ceauto) ltac:(ceauto)
-                                  ltac:(ceauto)).
-      destruct (interp_action r sigma CtxEmpty Log log_empty (rules r0)) as [(? & ?) | ] eqn:?; cbn; t;
-        apply IHs;
-        eauto with circuits.
+                                                       ltac:(ceauto)).
+      destruct (interp_action r sigma CtxEmpty Log log_empty (rules r0)) as [(? & ?) | ] eqn:?.  (* do 5 (progress t_step; idtac "yo"). cbn; t. *)
+      destruct p.
+      destruct compile_action.
+      apply IHs.
+      apply log_data1_consistent'_mux_l.
+      rewrite interp_circuit_willFire_of_canFire_remove_bundle.
+      intuition.
+      apply log_data1_consistent'_bundle_equiv.
+      intuition.
+      apply log_data0_consistent'_mux_l.
+      rewrite interp_circuit_willFire_of_canFire_remove_bundle.
+      intuition.
+      apply log_data0_consistent'_bundle_equiv.
+      intuition.
+      apply log_rwdata_consistent_mux_l.
+      rewrite interp_circuit_willFire_of_canFire_remove_bundle.
+      intuition.
+      apply log_rwdata_consistent_update_accumulated_rwset.
+      trivial.
+      apply log_rwdata_consistent_bundle_equiv.
+      intuition.
+      intuition.
+      destruct compile_action.
+      apply IHs.
+      apply log_data1_consistent'_mux_r.
+      rewrite interp_circuit_willFire_of_canFire_remove_bundle.
+      trivial.
+      trivial.
+      apply log_data0_consistent'_mux_r.
+      rewrite interp_circuit_willFire_of_canFire_remove_bundle.
+      trivial.
+      trivial.
+      apply log_rwdata_consistent_mux_r.
+            rewrite interp_circuit_willFire_of_canFire_remove_bundle.
+      trivial.
+      trivial.
+      trivial.
+
     - pose proof (@action_compiler_correct nil _ Log cLog (rules r0)) as Hrc.
       unshelve eassert (Hrc := Hrc (adapter cLog) CtxEmpty CtxEmpty log_empty
                                   ltac:(ceauto) ltac:(ceauto)
@@ -1578,7 +1723,7 @@ Section CircuitInit.
   Context (sigma: forall f, Sigma f).
 
   Lemma circuit_env_equiv_CReadRegister :
-    forall (csigma: forall f, CExternalSignature_denote (circuit_Sigma Sigma f)),
+    forall (csigma: forall f, CExternalSignature_denote (CSigma Sigma f)),
       circuit_sigma_spec sigma csigma ->
       circuit_env_equiv r (REnv.(create) CReadRegister) csigma.
   Proof.
@@ -1625,11 +1770,12 @@ Section Thm.
     Definition interop_lco :=
       lco_compose
         (bool_simpl_lco (r := circuit_r r))
-        (external_elaboration_lco (Sigma := Sigma) (custom_sigma := sigma) (custom_fn_t := fn_t)).
+        (external_elaboration_lco (custom_Sigma := Sigma) (custom_sigma := sigma) (custom_fn_t := fn_t) r)
+        (Rwdata := rwdata R (interop_Sigma Sigma)).
 
     Theorem scheduler_compiler_correct_interop:
       let spec_results := commit_update r (interp_scheduler r (interop_sigma sigma) rules s) in
-      let circuits := compile_scheduler interop_lco (REnv.(create) CReadRegister) rules s in
+      let circuits := compile_scheduler (fun sz => interop_lco.(lco_fn)) (REnv.(create) CReadRegister) rules s in
       forall reg,
         interp_circuit (circuit_r r) (circuit_sigma (interop_sigma sigma)) (REnv.(getenv) circuits reg) =
         bits_of_value (REnv.(getenv) spec_results reg).

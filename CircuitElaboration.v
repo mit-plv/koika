@@ -14,18 +14,22 @@ Section Elaboration.
   Context {name_t var_t reg_t custom_fn_t: Type}.
 
   Context {R: reg_t -> type}.
-  Definition cR := (circuit_R R).
+  Notation cR := (CR R).
 
-  Context {Sigma: custom_fn_t -> ExternalSignature}.
-  Notation cSigma := (circuit_Sigma (interop_Sigma Sigma)).
+  Context {custom_Sigma: custom_fn_t -> ExternalSignature}.
+  Notation Sigma := (interop_Sigma custom_Sigma).
+  Notation cSigma := (CSigma Sigma).
 
-  Context (custom_sigma: forall f, ExternalSignature_denote (Sigma f)).
+  Context (custom_sigma: forall f, ExternalSignature_denote (custom_Sigma f)).
   Notation csigma := (circuit_sigma (interop_sigma custom_sigma)).
+
+  Context {Rwdata : nat -> Type}.
+  Notation circuit cR cSigma n := (circuit cR cSigma Rwdata n).
 
   Definition elaborate_externals_1 {n} (c: circuit cR cSigma n) : circuit cR cSigma n.
   Proof.
     pose proof c as c0.
-    destruct c; [ exact c0.. | | exact c0 ].
+    destruct c;  [ exact c0.. | (* CExternal *)  | exact c0 | exact c0 | exact c0 ].
     destruct idx; [ | exact c0 ].
     destruct fn.
     - (* Conv *)
@@ -206,7 +210,7 @@ Section Elaboration.
        lco_proof := @elaborate_externals_1_correct |}.
 End Elaboration.
 
-Arguments elaborate_externals_1 {_ _ _ _} [_] _.
+Arguments elaborate_externals_1 {_ _ _ _ _} [_] _.
 Arguments external_elaboration_lco {_ _ _ _ _ _ _}.
 
 Section Interop.
@@ -215,8 +219,9 @@ Section Interop.
   Definition interop_opt
              {R : reg_t -> type}
              {Sigma : custom_fn_t -> ExternalSignature}
-    : forall sz : nat, circuit (@cR _ R) (circuit_Sigma (interop_Sigma Sigma)) sz ->
-                circuit (@cR _ R) (circuit_Sigma (interop_Sigma Sigma)) sz :=
+             {Rwdata: nat -> Type}
+    : forall sz : nat, circuit (CR R) (CSigma (interop_Sigma Sigma)) Rwdata sz ->
+                circuit (CR R) (CSigma (interop_Sigma Sigma)) Rwdata sz :=
     (lco_opt_compose simplify_bool_1 elaborate_externals_1).
 
   Definition compile_sga_package
