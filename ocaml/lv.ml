@@ -237,6 +237,11 @@ let expect_cons loc msg = function
   | [] -> parse_error loc (Printf.sprintf "Missing %s" msg)
   | hd :: tl -> hd, tl
 
+let rec gather_pairs = function
+  | [] -> []
+  | [x1] -> [`Single x1]
+  | x1 :: x2 :: tl -> `Pair (x1, x2) :: gather_pairs tl
+
 let rec list_const n x =
   if n = 0 then [] else x :: list_const (n - 1) x
 
@@ -410,10 +415,11 @@ let parse sexps =
     let x2, lst = expect_cons loc msg2 lst in
     expect_nil lst;
     (x1, x2) in
-  let rec expect_pairs msg f1 f2 = function
-    | [] -> []
-    | h1 :: h2 :: tl -> (f1 h1, f2 h2) :: expect_pairs msg f1 f2 tl
-    | [h1] -> ignore (f1 h1); parse_error (sexp_pos h1) (sprintf "Missing %s after this element" msg) in
+  let expect_pairs msg f1 f2 xs =
+    Delay.map (function
+        | `Pair (x1, x2) -> (f1 x1, f2 x2)
+        | `Single x1 -> ignore (f1 x1); parse_error (sexp_pos x1) (sprintf "Missing %s after this element" msg))
+      (gather_pairs xs) in
   let expect_constant csts c =
     let optstrs = List.map (quote << fst) csts in
     let msg = match optstrs with
@@ -843,10 +849,11 @@ let try_resolve_bits_fn { lpos; lcnt = name } args =
               bits_fn (fn n n'), nargs, args)
   | None -> None
 
-let rec rexpect_pairs msg f1 f2 = function
-  | [] -> []
-  | h1 :: h2 :: tl -> (f1 h1, f2 h2) :: rexpect_pairs msg f1 f2 tl
-  | [h1] -> ignore (f1 h1); parse_error h1.lpos (sprintf "Missing %s after this element" msg)
+let rexpect_pairs msg f1 f2 xs =
+  Delay.map (function
+      | `Pair (h1, h2) -> (f1 h1, f2 h2)
+      | `Single h1 -> ignore (f1 h1); parse_error h1.lpos (sprintf "Missing %s after this element" msg))
+    (gather_pairs xs)
 
 let rexpect_type loc types (args: unresolved_action locd list) =
   let (loc, t), args = rexpect_arg (rexpect_symbol "a type name") loc args in
