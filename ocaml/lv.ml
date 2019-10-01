@@ -47,7 +47,7 @@ and unresolved_type =
 type unresolved_literal =
   | Var of var_t
   | Fail of unresolved_type
-  | Num of int
+  | Num of (string * int)
   | Symbol of string
   | Keyword of string
   | Enumerator of { name: string; field: string }
@@ -227,8 +227,8 @@ let unbound_error (epos: Pos.t) ?(bound=[]) kind name =
 let type_error (epos: Pos.t) emsg =
   error { epos; ekind = `TypeError; emsg }
 
-let untyped_number_error (pos: Pos.t) n =
-  type_error pos (sprintf "Missing size annotation on number `%d'" n)
+let untyped_number_error (pos: Pos.t) s =
+  type_error pos (sprintf "Missing size annotation on number `%s'" s)
 
 let symbol_error (pos: Pos.t) s =
   type_error pos (sprintf "Unexpected symbol `%s'" s)
@@ -434,7 +434,7 @@ let parse sexps =
           | Some name -> Symbol name
           | None ->
              match try_number loc a with
-             | Some (`Num n) -> Num n
+             | Some (`Num n) -> Num (a, n)
              | Some (`Const bs) -> Const (UBits bs)
              | None ->
                 match try_variable a with
@@ -450,12 +450,12 @@ let parse sexps =
   let try_bits loc v =
     match try_number loc v with
     | Some (`Const c) -> Some c
-    | Some (`Num n) -> untyped_number_error loc n
     | _ -> None in
   let expect_bits msg v =
     let loc, sbits = expect_atom msg v in
-    match try_bits loc sbits with
-    | Some c -> loc, c
+    match try_number loc sbits with
+    | Some (`Const c) -> loc, c
+    | Some (`Num _) -> untyped_number_error loc sbits
     | _ -> parse_error loc (sprintf "Expecting a bits constant (e.g. 2'b01), got `%s' %s" sbits num_fmt) in
   let expect_const msg v =
     let loc, scst = expect_atom msg v in
@@ -835,11 +835,11 @@ let try_resolve_bits_fn { lpos; lcnt = name } args =
            | `Prim0 fn ->
               bits_fn fn, nargs, args
            | `Prim1 fn ->
-              let (_, n), args = rexpect_arg rexpect_num lpos args in
+              let (_, (_, n)), args = rexpect_arg rexpect_num lpos args in
               bits_fn (fn n), nargs, args
            | `Prim2 fn ->
-              let (_, n), args = rexpect_arg rexpect_num lpos args in
-              let (_, n'), args = rexpect_arg rexpect_num lpos args in
+              let (_, (_, n)), args = rexpect_arg rexpect_num lpos args in
+              let (_, (_, n')), args = rexpect_arg rexpect_num lpos args in
               bits_fn (fn n n'), nargs, args)
   | None -> None
 
@@ -950,7 +950,7 @@ let resolve_rule types extfuns registers ((nm, action): unresolved_rule) =
              | Fail sz -> Fail sz
              | Lit (Fail tau) -> Fail (resolve_type types (locd_make lpos tau))
              | Lit (Var v) -> Lit (Common.Var v)
-             | Lit (Num n) -> untyped_number_error lpos n
+             | Lit (Num (s, _)) -> untyped_number_error lpos s
              | Lit (Symbol s) -> symbol_error lpos s
              | Lit (Keyword k) -> parse_error lpos (sprintf "Unexpected keyword: `%s'" k)
              | Lit (Enumerator { name; field }) ->
