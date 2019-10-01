@@ -799,10 +799,16 @@ let bits_primitives =
    ("part-subst", (`Prim2 (fun n n' -> UPart (n, n')), 2))]
   |> List.to_seq |> StringMap.of_seq
 
+let all_primitives =
+  let names m = List.to_seq (keys m) in
+  StringSet.empty
+  |> StringSet.add_seq (names core_primitives)
+  |> StringSet.add_seq (names bits_primitives)
+
 let resolve_extfun_decl types { ext_name; ext_argtypes; ext_rettype } =
   let unit_u = locd_make ext_name.lpos (Bits_u 0) in
-  if StringMap.mem ext_name.lcnt bits_primitives then
-    name_error ext_name.lpos "External function name `%s' conflicts with existing primitive.";
+  if StringSet.mem ext_name.lcnt all_primitives then
+    name_error ext_name.lpos (sprintf "External function name `%s' conflicts with existing primitive." ext_name.lcnt);
   let nargs, a1, a2 = match ext_argtypes with
     | [] -> 0, unit_u, unit_u
     | [t] -> 1, t, unit_u
