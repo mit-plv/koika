@@ -19,7 +19,8 @@ Inductive prim_uconverter :=
 | UEq
 | UInit (tau: type)
 | UPack
-| UUnpack (tau: type).
+| UUnpack (tau: type)
+| UIgnore.
 
 Inductive prim_struct_accessor := GetField | SubstField.
 
@@ -48,7 +49,7 @@ Inductive prim_bits_fn_t :=
 | ZExtL (sz: nat) (width: nat)
 | ZExtR (sz: nat) (width: nat).
 
-Inductive prim_converter := Eq | Init | Pack | Unpack.
+Inductive prim_converter := Eq | Init | Pack | Unpack | Ignore.
 
 Inductive prim_fn_t :=
 | ConvFn (tau: type) (op: prim_converter)
@@ -83,6 +84,7 @@ Definition prim_uSigma (fn: prim_ufn_t) (tau1 tau2: type): result prim_fn_t fn_t
              | UPack => ConvFn tau1 Pack
              | UInit tau => ConvFn tau Init
              | UUnpack tau => ConvFn tau Unpack
+             | UIgnore => ConvFn tau1 Ignore
              end)
   | UBitsFn fn =>
     let/res sz1 := assert_bits_t Arg1 tau1 in
@@ -127,6 +129,7 @@ Definition prim_Sigma (fn: prim_fn_t) : ExternalSignature :=
     | Init => {{ unit_t ~> unit_t ~> tau }}
     | Pack => {{ tau ~> unit_t ~> bits_t (type_sz tau) }}
     | Unpack => {{ bits_t (type_sz tau) ~> unit_t ~> tau }}
+    | Ignore => {{ tau ~> unit_t ~> unit_t }}
     end
   | BitsFn fn =>
     match fn with
@@ -232,6 +235,7 @@ Definition prim_sigma (fn: prim_fn_t) : prim_Sigma fn :=
     | Init => fun _ _ => value_of_bits (Bits.zeroes (type_sz tau))
     | Pack => fun v _ => bits_of_value v
     | Unpack => fun bs _ => value_of_bits bs
+    | Ignore => fun _ _ => Ob
     end
   | BitsFn fn =>
     match fn with

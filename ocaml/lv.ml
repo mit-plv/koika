@@ -770,6 +770,7 @@ let core_primitives =
    ("=", (`Fn (conv_fn UEq), 2));
    ("pack", (`Fn (conv_fn UPack), 1));
    ("unpack", (`TypeFn (fun tau -> conv_fn (UUnpack tau)), 1));
+   ("ignore", (`Fn (conv_fn UIgnore), 1));
    ("get", (`FieldFn (fun f -> struct_fn (UDo (GetField, f))) , 1));
    ("update", (`FieldFn (fun f -> struct_fn (UDo (SubstField, f))), 2));
    ("get-bits", (`StructFn (fun sg f -> struct_fn (UDoBits (sg, GetField, f))), 1));

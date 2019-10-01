@@ -168,6 +168,7 @@ and pp_prim_uconverter ppf (f: SGALib.SGA.prim_uconverter) = match f with
   | UInit tau -> pp_app ppf "UInit" "%a" pp_sga_type tau
   | UPack -> pp_raw ppf "UPack"
   | UUnpack tau -> pp_app ppf "UUnpack" "%a" pp_sga_type tau
+  | UIgnore -> pp_raw ppf "UIgnore"
 and pp_prim_bits_ufn_t ppf (f: SGALib.SGA.prim_bits_ufn_t) =
   let pp_raw = pp_raw ppf in
   let pp_app fmt = pp_app ppf fmt in

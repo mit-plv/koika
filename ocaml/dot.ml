@@ -34,7 +34,8 @@ let rec label_ptrs tag_to_parents = function
              | Eq -> "eq"
              | Init -> "init"
              | Pack -> "pack"
-             | Unpack -> "unpack" in
+             | Unpack -> "unpack"
+             | Ignore -> "ignore" in
            ((match tau with
              | Bits_t sz -> sprintf "bits_%s<%d>" op_name sz
              | Enum_t sg -> sprintf "enum_%s<%s>" op_name (SGALib.Util.string_of_coq_string sg.enum_name)

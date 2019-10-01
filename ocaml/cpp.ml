@@ -620,7 +620,8 @@ let compile (type name_t var_t reg_t)
                      | SGA.Eq -> sp_comparison ~ns tau a1 a2
                      | SGA.Init -> sp_initializer tau
                      | SGA.Pack -> sp_packer ~ns ~arg:a1 tau
-                     | SGA.Unpack -> sp_unpacker ~ns ~arg:a1 tau)
+                     | SGA.Unpack -> sp_unpacker ~ns ~arg:a1 tau
+                     | SGA.Ignore -> ns ^ "tt")
         | PrimFn (SGA.BitsFn f) ->
            PureExpr (sprintf "%s(%s, %s)" (cpp_bits_fn_name f tau1 tau2) a1 a2)
         | PrimFn (SGA.StructFn (sg, ac, idx)) ->
