@@ -56,14 +56,14 @@ let rec run_backend backend out_fname resolved c_unit =
      let run_one backend = run_backend backend (new_fname backend) resolved c_unit in
      List.iter run_one all_backends
   | `Coq ->
-     Stdio.Out_channel.with_file out_fname ~f:(fun out ->
+     with_output_to_file out_fname (fun out ->
          Backends.Coq.main out resolved)
   | (`Hpp | `Cpp | `Exe) as kd ->
      let cls = Core.Filename.basename fname_noext in
      Backends.Cpp.main fname_noext kd (Backends.Cpp.input_of_compile_unit cls c_unit)
   | (`Verilog | `Dot) as backend ->
      let graph = SGALib.Graphs.graph_of_compile_unit c_unit in
-     Stdio.Out_channel.with_file out_fname ~f:(fun out ->
+     with_output_to_file out_fname (fun out ->
          (match backend with
           | `Dot -> Backends.Dot.main
           | `Verilog -> Backends.Verilog.main) out graph)
