@@ -78,6 +78,7 @@ let print_error { epos; ekind; emsg } =
     (Lv.Pos.to_string epos)
     (match ekind with
      | `ParseError -> "Parse error"
+     | `SyntaxError -> "Syntax error"
      | `NameError -> "Name error"
      | `ResolutionError -> "Resolution error"
      | `TypeError -> "Type error")

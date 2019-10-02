@@ -226,7 +226,7 @@ let with_output_to_file fname (f: out_channel -> unit) =
 
 type 'f err_contents =
   { epos: 'f;
-    ekind: [`ParseError | `NameError | `ResolutionError | `TypeError];
+    ekind: [`ParseError | `SyntaxError | `NameError | `ResolutionError | `TypeError];
     emsg: string }
 
 let make_gensym gensym_prefix =

@@ -208,6 +208,9 @@ let check_result = function
 let parse_error (epos: Pos.t) emsg =
   error { epos; ekind = `ParseError; emsg }
 
+let syntax_error (epos: Pos.t) emsg =
+  error { epos; ekind = `SyntaxError; emsg }
+
 let resolution_error (epos: Pos.t) emsg =
   error { epos; ekind = `ResolutionError; emsg = emsg }
 
@@ -234,7 +237,7 @@ let symbol_error (pos: Pos.t) s =
   type_error pos (sprintf "Unexpected symbol `%s'" s)
 
 let expect_cons loc msg = function
-  | [] -> parse_error loc (Printf.sprintf "Missing %s" msg)
+  | [] -> syntax_error loc (Printf.sprintf "Missing %s" msg)
   | hd :: tl -> hd, tl
 
 let rec gather_pairs = function
@@ -386,33 +389,33 @@ let try_symbol nm =
   if Str.string_match symbol_re nm 0 then Some (Str.matched_group 1 nm)
   else None
 
-let parse sexps =
+let parse (sexps: Pos.t sexp list) =
   let expect_single loc kind where = function
     | [] ->
-       parse_error loc
+       syntax_error loc
          (sprintf "No %s found in %s" kind where)
     | _ :: _ :: _ ->
-       parse_error loc
+       syntax_error loc
          (sprintf "More than one %s found in %s" kind where)
     | [x] -> x in
   let num_fmt =
     "(number format: size'number)" in
   let expect_atom msg = function
     | List { loc; _ } ->
-       parse_error loc
+       syntax_error loc
          (sprintf "Expecting %s, but got a list" msg)
     | Atom { loc; atom } ->
        (loc, atom) in
   let expect_list msg = function
     | Atom { loc; atom } ->
-       parse_error loc
+       syntax_error loc
          (sprintf "Expecting %s, but got `%s'" msg atom)
     | List { loc; elements } ->
        (loc, elements) in
   let expect_nil = function
     | [] -> ()
-    | List { loc; _ } :: _ -> parse_error loc "Unexpected list"
-    | Atom { loc; _ } :: _ -> parse_error loc "Unexpected atom" in
+    | List { loc; _ } :: _ -> syntax_error loc "Unexpected list"
+    | Atom { loc; _ } :: _ -> syntax_error loc "Unexpected atom" in
   let expect_pair loc msg1 msg2 lst =
     let x1, lst = expect_cons loc msg1 lst in
     let x2, lst = expect_cons loc msg2 lst in
@@ -421,7 +424,7 @@ let parse sexps =
   let expect_pairs msg f1 f2 xs =
     Delay.map (function
         | `Pair (x1, x2) -> (f1 x1, f2 x2)
-        | `Single x1 -> ignore (f1 x1); parse_error (sexp_pos x1) (sprintf "Missing %s after this element" msg))
+        | `Single x1 -> ignore (f1 x1); syntax_error (sexp_pos x1) (sprintf "Missing %s after this element" msg))
       (gather_pairs xs) in
   let expect_constant csts c =
     let optstrs = List.map (quote << fst) csts in
@@ -430,7 +433,7 @@ let parse sexps =
       | _ -> sprintf "one of %s" (String.concat ", " optstrs) in
     let loc, s = expect_atom msg c in
     match List.assoc_opt s csts with
-    | None -> parse_error loc (sprintf "Expecting %s, got `%s'" msg s)
+    | None -> syntax_error loc (sprintf "Expecting %s, got `%s'" msg s)
     | Some x -> loc, x in
   let expect_literal loc a =
     match try_enumerator a with
@@ -465,7 +468,7 @@ let parse sexps =
     match try_number loc sbits with
     | Some (`Const c) -> loc, c
     | Some (`Num _) -> untyped_number_error loc sbits
-    | _ -> parse_error loc (sprintf "Expecting a bits constant (e.g. 2'b01), got `%s' %s" sbits num_fmt) in
+    | _ -> syntax_error loc (sprintf "Expecting a bits constant (e.g. 2'b01), got `%s' %s" sbits num_fmt) in
   let expect_const msg v =
     let loc, scst = expect_atom msg v in
     (loc,
@@ -474,15 +477,15 @@ let parse sexps =
      | None ->
         match try_enumerator scst with
         | Some { name; field } -> UEnum { name; field }
-        | None -> parse_error loc "Expecting a bits constant (e.g. 16'hffff) or an enumerator (eg proto::ipv4)") in
+        | None -> syntax_error loc "Expecting a bits constant (e.g. 16'hffff) or an enumerator (eg proto::ipv4)") in
   let expect_keyword loc msg nm =
     match try_keyword nm with
     | Some k -> k
-    | None -> parse_error loc (sprintf "Expecting %s starting with a colon (:), got `%s'" msg nm) in
+    | None -> syntax_error loc (sprintf "Expecting %s starting with a colon (:), got `%s'" msg nm) in
   let expect_enumerator loc nm =
     match try_enumerator nm with
     | Some ev -> ev
-    | None -> parse_error loc (sprintf "Expecting an enumerator (format: abc::xyz or ::xyz), got `%s'" nm) in
+    | None -> syntax_error loc (sprintf "Expecting an enumerator (format: abc::xyz or ::xyz), got `%s'" nm) in
   let expect_type ?(bits_raw=false) = function (* (bit 16), 'typename *)
     | Atom { loc; atom } ->
        locd_make loc
@@ -491,14 +494,14 @@ let parse sexps =
           | None ->
              match try_plain_int atom with
              | Some n when bits_raw -> Bits_u n
-             | _ -> parse_error loc (sprintf "Expecting a quoted type name, got `%s'" atom))
+             | _ -> syntax_error loc (sprintf "Expecting a quoted type name, got `%s'" atom))
     | List { loc; elements } ->
        let hd, sizes = expect_cons loc "type" elements in
        let _ = expect_constant [("bits", ())] hd in
        let loc, szstr = expect_atom "a size" (expect_single loc "size" "bit type" sizes) in
        match try_plain_int szstr with
        | Some size -> locd_make loc (Bits_u size)
-       | _ -> parse_error loc (sprintf "Expecting a type-level integer (e.g. 32), got `%s'" szstr) in
+       | _ -> syntax_error loc (sprintf "Expecting a type-level integer (e.g. 32), got `%s'" szstr) in
   let expect_funapp loc kind elements =
     let hd, args = expect_cons loc kind elements in
     let loc_hd, hd = expect_atom (sprintf "a %s name" kind) hd in
@@ -518,7 +521,7 @@ let parse sexps =
              (match args with
               | [] -> Common.Fail (Bits_t 0)
               | [arg] -> Lit (Fail (expect_type ~bits_raw:true arg).lcnt)
-              | _ -> parse_error loc (sprintf "Fail takes 1 argument"))
+              | _ -> syntax_error loc (sprintf "Fail takes 1 argument"))
           | "setq" ->
              let var, body = expect_cons loc "variable name" args in
              let value = expect_action (expect_single loc "value" "write expression" body) in
@@ -555,7 +558,7 @@ let parse sexps =
              (match build_switch_body branches with
               | Some (default, branches) ->
                  Switch { binder; operand; default; branches }
-              | None -> parse_error loc "Empty switch")
+              | None -> syntax_error loc "Empty switch")
           | _ ->
              let args = List.map expect_action args in
              Call (locd_make loc_hd hd, args))
@@ -575,9 +578,9 @@ let parse sexps =
         | None, `AnyLabel _ ->
            Some (branch, [])
         | None, `SomeLabel l ->
-           parse_error l.lpos "Last case of switch must be default (_)"
+           syntax_error l.lpos "Last case of switch must be default (_)"
         | Some _, `AnyLabel loc  ->
-           parse_error loc "Duplicated default case in switch"
+           syntax_error loc "Duplicated default case in switch"
         | Some (default, branches), `SomeLabel l ->
            Some (default, (l, branch) :: branches))
       branches None
@@ -611,19 +614,19 @@ let parse sexps =
                   expect_scheduler s1,
                   expect_scheduler s2)
           | _ ->
-             parse_error loc_hd (sprintf "Unexpected in scheduler: `%s'" hd)) in
+             syntax_error loc_hd (sprintf "Unexpected in scheduler: `%s'" hd)) in
   let expect_unqualified_enumerator enumerator = (* :a *)
     let loc, enumerator = expect_atom "an enumerator" enumerator in
     let { name; field } = expect_enumerator loc enumerator in
     if name <> "" then
-      parse_error loc (sprintf "Expecting an unqualified enumerator (format: ::xyz), got `%s'" enumerator);
+      syntax_error loc (sprintf "Expecting an unqualified enumerator (format: ::xyz), got `%s'" enumerator);
     locd_make loc field in
   let expect_enumerator_value value =
     expect_bits "an enumerator value" value |> locd_of_pair in
   let check_size sz { lpos; lcnt } =
     let sz' = Array.length lcnt in
     if sz' <> sz then
-      parse_error lpos
+      syntax_error lpos
         (sprintf "Inconsistent sizes in enum: expecting `bits %d', got `bits %d'" sz sz') in
   let expect_enum name loc body = (* ((:true 1'b1) (:false 1'b0) …) *)
     let members = expect_pairs "enumerator value" expect_unqualified_enumerator expect_enumerator_value body in
@@ -701,15 +704,15 @@ let parse sexps =
 
 let rexpect_num = function
   | { lpos; lcnt = Lit (Num n); _} -> lpos, n
-  | { lpos; _ } -> parse_error lpos "Expecting a type-level integer"
+  | { lpos; _ } -> syntax_error lpos "Expecting a type-level integer"
 
 let rexpect_keyword msg = function
   | { lpos; lcnt = Lit (Keyword s); _} -> lpos, s
-  | { lpos; _ } -> parse_error lpos (sprintf "Expecting a keyword (%s)" msg)
+  | { lpos; _ } -> syntax_error lpos (sprintf "Expecting a keyword (%s)" msg)
 
 let rexpect_symbol msg = function
   | { lpos; lcnt = Lit (Symbol s) } -> lpos, s
-  | { lpos; _ } -> parse_error lpos (sprintf "Expecting a symbol (%s)" msg)
+  | { lpos; _ } -> syntax_error lpos (sprintf "Expecting a symbol (%s)" msg)
 
 let rexpect_arg k loc (args: unresolved_action locd list) =
   let a, args = expect_cons loc "argument" args in
@@ -823,7 +826,7 @@ let resolve_extfun_decl types { ext_name; ext_argtypes; ext_rettype } =
     | [] -> 0, unit_u, unit_u
     | [t] -> 1, t, unit_u
     | [x; y] -> 2, x, y
-    | _ -> parse_error ext_name.lpos ("External functions with more than 2 arguments are not supported" ^
+    | _ -> syntax_error ext_name.lpos ("External functions with more than 2 arguments are not supported" ^
                                         " (consider using a struct to pass more arguments)") in
   ext_name.lcnt, (nargs, { ffi_name = ext_name.lcnt;
                            ffi_arg1type = resolve_type types a1;
@@ -867,7 +870,7 @@ let try_resolve_bits_fn { lpos; lcnt = name } args =
 let rexpect_pairs msg f1 f2 xs =
   Delay.map (function
       | `Pair (h1, h2) -> (f1 h1, f2 h2)
-      | `Single h1 -> ignore (f1 h1); parse_error h1.lpos (sprintf "Missing %s after this element" msg))
+      | `Single h1 -> ignore (f1 h1); syntax_error h1.lpos (sprintf "Missing %s after this element" msg))
     (gather_pairs xs)
 
 let rexpect_type loc types (args: unresolved_action locd list) =
@@ -974,7 +977,7 @@ let resolve_rule types extfuns registers ((nm, action): unresolved_rule) =
              | Lit (Var v) -> Lit (Common.Var v)
              | Lit (Num (s, _)) -> untyped_number_error lpos s
              | Lit (Symbol s) -> symbol_error lpos s
-             | Lit (Keyword k) -> parse_error lpos (sprintf "Unexpected keyword: `%s'" k)
+             | Lit (Keyword k) -> syntax_error lpos (sprintf "Unexpected keyword: `%s'" k)
              | Lit (Enumerator { name; field }) ->
                 let v = UEnum { name; field } in
                 Lit (Common.Const (resolve_value types (locd_make lpos v)))
