@@ -267,6 +267,7 @@ Module Collatz.
                                  end;
                sp_extfuns := None |};
        vp := {| vp_pkg := sga_package;
+               vp_external_rules := List.nil;
                vp_custom_fn_names := interop_empty_fn_names |} |}.
 End Collatz.
 
@@ -375,6 +376,7 @@ Module Decoder (P: Unpacker) (F: Fetcher).
 using extfuns = decoder_extfuns;" |} in
     let verilog :=
         {| vp_pkg := sga_package;
+           vp_external_rules := List.nil;
            vp_custom_fn_names := F.custom_fn_names |} in
     {| sga := sga_package; sp := sim; vp := verilog |}.
 End Decoder.
@@ -613,6 +615,7 @@ Module Pipeline.
                sp_extfuns := Some "#include ""../extfuns.hpp""
 using extfuns = pipeline_extfuns;" |};
        vp := {| vp_pkg := sga_package;
+               vp_external_rules := List.nil;
                vp_custom_fn_names := fn_names |} |}.
 End Pipeline.
 
@@ -696,6 +699,7 @@ Module RegisterFile_Ordered.
                                  end;
                sp_extfuns := None |};
        vp := {| vp_pkg := sga_package;
+               vp_external_rules := List.nil;
                vp_custom_fn_names := interop_empty_fn_names |} |}.
 End RegisterFile_Ordered.
 
@@ -781,6 +785,7 @@ Module Enums.
                                  end;
                sp_extfuns := None |};
        vp := {| vp_pkg := sga_package;
+               vp_external_rules := List.nil;
                vp_custom_fn_names := interop_empty_fn_names |} |}.
 End Enums.
 

@@ -133,7 +133,11 @@ Section Packages.
 
       (** [vp_custom_fn_names]: A map from custom functions to Verilog
           implementations. *)
-      vp_custom_fn_names: forall fn: custom_fn_t, string
+      vp_custom_fn_names: forall fn: custom_fn_t, string;
+
+      (** [vp_external_rules]: A list of rule names to be replaced with
+          Verilog implementations *)
+      vp_external_rules: list rule_name_t
     }.
 
   Record sim_package_t :=
