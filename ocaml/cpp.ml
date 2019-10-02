@@ -401,22 +401,21 @@ let compile (type name_t var_t reg_t)
           p_scoped (sprintf "switch (%s)" v_arg) (fun () ->
               List.iter (fun (nm, _v) ->
                   let lbl = cpp_enumerator_name ~enum:(Some sg) nm in
-                  p "case %s: return \"%s\";" lbl lbl)
+                  p "case %s: return \"%s::%s\";" lbl sg.enum_name nm) (* unmangled *)
                 sg.enum_members;
               let v_sz = typ_sz tau in
               let bits_sz_tau = cpp_type_of_type (Bits_t v_sz) in
               let v_cast = sprintf "static_cast<%s>(%s)" bits_sz_tau v_arg in
               p "default: return \"%s{\" + repr<%d>(%s) + \"}\";"
-                (cpp_enum_name sg) v_sz v_cast)) in
+                sg.enum_name v_sz v_cast)) in (* unmangled *)
 
     let p_struct_printer sg =
       p_printer (fun () ->
           p "std::ostringstream stream;";
-          p "stream << \"%s { \";" v_tau;
+          p "stream << \"%s { \";" sg.struct_name; (* unmangled *)
           List.iter (fun (fname, ftau) ->
-              let fname = cpp_field_name fname in
-              p "stream << \"  .%s = \" << %s(%s.%s) << \"; \";"
-                fname (sp_value_printer ftau) v_arg fname)
+              p "stream << \"  .%s = \" << %s(%s.%s) << \"; \";" (* unmangled *)
+                fname (sp_value_printer ftau) v_arg (cpp_field_name fname))
             sg.struct_fields;
           p "stream << \"}\";";
           p "return stream.str();") in
