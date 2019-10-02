@@ -283,6 +283,33 @@ let read_all fname =
   if fname = "-" then Stdio.In_channel.input_all Stdio.stdin
   else Stdio.In_channel.read_all fname
 
+
+module DelayedReader (P: Parsexp.Eager_parser) = struct
+  exception GotSexp of P.parsed_value * Parsexp.Positions.pos
+
+  let parse_string fname source =
+    let got_sexp state parsed_value =
+      raise_notrace (GotSexp (parsed_value, P.State.Read_only.position state)) in
+    let state =
+      P.State.create ~no_sexp_is_error:false got_sexp in
+    let feed pos =
+      try
+        let len = String.length source - pos in
+        P.feed_substring state ~pos ~len source P.Stack.empty |> P.feed_eoi state
+      with Parsexp.Parse_error err ->
+        let pos = Parsexp.Parse_error.position err in
+        let msg = Parsexp.Parse_error.message err in
+        parse_error (Pos.SexpPos (fname, pos)) msg in
+    let rec read_sexps pos =
+      P.State.reset ~pos state;
+      try Delay.apply1 feed pos.offset; []
+      with GotSexp (sexp, last_pos) -> sexp :: read_sexps last_pos in
+    read_sexps (P.State.position state)
+end
+
+module DelayedReader_plain = DelayedReader (Parsexp.Eager)
+module DelayedReader_cst = DelayedReader (Parsexp.Eager_cst)
+
 let read_cst_sexps fname =
   let wrap_loc loc =
     Pos.SexpRange (fname, loc) in
@@ -294,13 +321,8 @@ let read_cst_sexps fname =
        Some (List { loc = wrap_loc loc;
                     elements = Base.List.filter_map ~f:drop_comments elements })
     | Parsexp.Cst.Comment _ -> None in
-  match Parsexp.Many_cst.parse_string (read_all fname) with
-  | Ok sexps ->
-     Base.List.filter_map ~f:drop_comments sexps
-  | Error err ->
-     let pos = Parsexp.Parse_error.position err in
-     let msg = Parsexp.Parse_error.message err in
-     parse_error (Pos.SexpPos (fname, pos)) msg
+  DelayedReader_cst.parse_string fname (read_all fname)
+  |> Base.List.filter_map ~f:drop_comments
 
 let read_annotated_sexps fname =
   let rec commit_annots loc (s: Base.Sexp.t) =
@@ -314,13 +336,8 @@ let read_annotated_sexps fname =
        parse_error (Pos.Filename fname) msg
     | List elements ->
        List { loc; elements = List.map (commit_annots loc) elements } in
-  match Parsexp.Many.parse_string (read_all fname) with
-  | Ok sexps ->
-     List.map (commit_annots (Pos.Filename fname)) sexps
-  | Error err ->
-     let pos = Parsexp.Parse_error.position err in
-     let msg = Parsexp.Parse_error.message err in
-     parse_error (Pos.SexpPos (fname, pos)) msg
+  DelayedReader_plain.parse_string fname (read_all fname)
+  |> List.map (commit_annots (Pos.Filename fname))
 
 let keys s =
   StringMap.fold (fun k _ acc -> k :: acc) s []

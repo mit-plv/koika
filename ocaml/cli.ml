@@ -87,13 +87,13 @@ let print_error { epos; ekind; emsg } =
 let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
   let open Lv in
   try
-    let sexps =
+    let read =
       match cli_frontend with
-      | `Annotated -> read_annotated_sexps cli_in_fname
-      | `Sexps -> read_cst_sexps cli_in_fname in
+      | `Annotated -> read_annotated_sexps
+      | `Sexps -> read_cst_sexps in
     let resolved, typechecked =
       Delay.with_delayed_errors (fun () ->
-          let resolved = resolve (parse sexps) in
+          let resolved =  resolve (parse (read cli_in_fname)) in
           resolved, typecheck resolved) in
     let c_unit = first_compile_unit cli_in_fname typechecked in
     match cli_backend with
