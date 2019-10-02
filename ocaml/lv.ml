@@ -114,8 +114,9 @@ module Delay = struct
   let buffer = ref []
   let delay_errors = ref 0
 
-  let buffer_errors errs =
-    buffer := errs :: !buffer
+  let handle_exn = function
+    | Errors errs when !delay_errors > 0 -> buffer := errs :: !buffer
+    | exn -> raise exn
 
   let reset_buffered_errors () =
     let buffered = List.flatten (List.rev !buffer) in
@@ -132,19 +133,18 @@ module Delay = struct
         try let result = f () in
             raise_buffered_errors ();
             result
-        with Errors errs ->
-              buffer_errors errs;
-              raise (Errors (reset_buffered_errors ())))
+        with (Errors _) as exn ->
+          handle_exn exn;
+          raise (Errors (reset_buffered_errors ())))
       ~finally:(fun () -> decr delay_errors)
 
-  let with_delayed_errors_1 f x = with_delayed_errors (fun () -> f x)
-  let with_delayed_errors_2 f x y = with_delayed_errors (fun () -> f x y)
-  let with_delayed_errors_3 f x y z = with_delayed_errors (fun () -> f x y z)
+  let with_exn_handler f x =
+    try f x with exn -> handle_exn exn
 
-  let apply1_default default f x1 = try f x1 with Errors errs -> buffer_errors errs; default
-  let apply2_default default f x1 x2 = try f x1 x2 with Errors errs -> buffer_errors errs; default
-  let apply3_default default f x1 x2 x3 = try f x1 x2 x3 with Errors errs -> buffer_errors errs; default
-  let apply4_default default f x1 x2 x3 x4 = try f x1 x2 x3 x4 with Errors errs -> buffer_errors errs; default
+  let apply1_default default f x1 = try f x1 with exn -> handle_exn exn; default
+  let apply2_default default f x1 x2 = try f x1 x2 with exn -> handle_exn exn; default
+  let apply3_default default f x1 x2 x3 = try f x1 x2 x3 with exn -> handle_exn exn; default
+  let apply4_default default f x1 x2 x3 x4 = try f x1 x2 x3 x4 with exn -> handle_exn exn; default
   let apply1 f x1 = apply1_default () f x1
   let apply2 f x1 x2 = apply2_default () f x1 x2
   let apply3 f x1 x2 x3 = apply3_default () f x1 x2 x3
@@ -157,14 +157,14 @@ module Delay = struct
   let rec map f = function
     | [] -> []
     | x :: xs ->
-       let fx = try [f x] with Errors errs -> buffer_errors errs; [] in
+       let fx = try [f x] with exn -> handle_exn exn; [] in
        fx @ (map f xs)
 
   let rec fold_left f acc l =
     match l with
     | [] -> acc
     | x :: l ->
-       let acc = try f acc x with Errors errs -> buffer_errors errs; acc in
+       let acc = try f acc x with exn -> handle_exn exn; acc in
        fold_left f acc l
 
   let rec fold_right f l acc =
@@ -172,32 +172,10 @@ module Delay = struct
     | [] -> acc
     | x :: l ->
        let acc = fold_right f l acc in
-       try f x acc with Errors errs -> buffer_errors errs; acc
+       try f x acc with exn -> handle_exn exn; acc
 
-  let maybe_delay fdelay fnodelay =
-    if !delay_errors > 0 then fdelay else fnodelay
-
-  let apply1_default default f x1 =
-    maybe_delay apply1_default (fun _ f x1 -> f x1) default f x1
-  let apply2_default default f x1 x2 =
-    maybe_delay apply2_default (fun _ f x1 x2 -> f x1 x2) default f x1 x2
-  let apply3_default default f x1 x2 x3 =
-    maybe_delay apply3_default (fun _ f x1 x2 x3 -> f x1 x2 x3) default f x1 x2 x3
-  let apply4_default default f x1 x2 x3 x4 =
-    maybe_delay apply4_default (fun _ f x1 x2 x3 x4 -> f x1 x2 x3 x4) default f x1 x2 x3 x4
-  let apply1 f x1 =
-    maybe_delay apply1 (fun f x1 -> f x1) f x1
-  let apply2 f x1 x2 =
-    maybe_delay apply2 (fun f x1 x2 -> f x1 x2) f x1 x2
-  let apply3 f x1 x2 x3 =
-    maybe_delay apply3 (fun f x1 x2 x3 -> f x1 x2 x3) f x1 x2 x3
-  let apply4 f x1 x2 x3 x4 =
-    maybe_delay apply4 (fun f x1 x2 x3 x4 -> f x1 x2 x3 x4) f x1 x2 x3 x4
-
-  let iter f xs = maybe_delay iter List.iter f xs
-  let map f xs = maybe_delay map List.map f xs
-  let fold_left f acc l = maybe_delay fold_left List.fold_left f acc l
-  let fold_right f l acc = maybe_delay fold_right List.fold_right f l acc
+  let maybe f x =
+    apply1_default None (fun x -> Some (f x)) x
 end
 
 let error err = raise (Errors [err])
