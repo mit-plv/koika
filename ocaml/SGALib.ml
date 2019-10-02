@@ -4,6 +4,9 @@ let __ = let rec f _ = Obj.repr f in Obj.repr f
 open Common
 module SGA = SGA
 
+type ('reg_t, 'fn_t) sga_circuit =
+  ('reg_t, 'fn_t, ('reg_t, 'fn_t) SGA.rwdata) SGA.circuit
+
 module Util = struct
   let list_nth (l: 'a list) (n: SGA.index) =
     SGA.list_nth l n
@@ -270,8 +273,9 @@ module Compilation = struct
       c_scheduler: string SGA.scheduler;
       c_rules: (name_t * typechecked_action) list }
 
-  type 'k compiled_circuit =
-    (reg_signature, 'k SGA.interop_fn_t) SGA.circuit
+
+  type compiled_circuit =
+    (reg_signature, string ffi_signature SGA.interop_fn_t) sga_circuit
 
   let typecheck_scheduler (raw_ast: 'f raw_scheduler) : name_t SGA.scheduler =
     let ast = translate_scheduler raw_ast in
@@ -295,7 +299,7 @@ module Compilation = struct
     | Failure { epos; emsg } ->
        Error (Util.type_error_to_error epos emsg)
 
-  let compile (cu: compile_unit) : (reg_signature -> 'k compiled_circuit) =
+  let compile (cu: compile_unit) : (reg_signature -> compiled_circuit) =
     let rEnv = rEnv_of_register_list cu.c_registers in
     let r0: _ SGA.env_t = SGA.create rEnv (fun r -> SGA.CReadRegister r) in
     let rules r = List.assoc r cu.c_rules in
@@ -305,23 +309,26 @@ module Compilation = struct
 end
 
 module Graphs = struct
-  type ('p, 'k) circuit_graph = {
-      graph_roots: ('p, 'k) fun_id_t circuit_root list;
-      graph_nodes: ('p, 'k) fun_id_t circuit list
+  type 'fn_name_t circuit_graph = {
+      graph_roots: 'fn_name_t circuit_root list;
+      graph_nodes: 'fn_name_t circuit list
     }
 
-  type ('prim, 'custom, 'reg_t, 'fn_t) dedup_input_t = {
+  type verilog_ready_circuit_graph =
+    (SGA.prim_fn_t, string) fun_id_t circuit_graph
+
+  type ('reg_t, 'fn_t, 'fn_name_t) dedup_input_t = {
       di_regs: 'reg_t list;
       di_reg_sigs: 'reg_t -> reg_signature;
-      di_fn_sigs: 'fn_t -> ('prim, 'custom) fun_id_t ffi_signature;
-      di_circuits : 'reg_t -> ('reg_t, 'fn_t) SGA.circuit
+      di_fn_sigs: 'fn_t -> 'fn_name_t ffi_signature;
+      di_circuits : 'reg_t -> ('reg_t, 'fn_t) sga_circuit
     }
 
-  let dedup_circuit (type prim custom reg_t fn_t)
-        (pkg: (prim, custom, reg_t, fn_t) dedup_input_t) : (prim, custom) circuit_graph =
+  let dedup_circuit (type reg_t fn_t fn_name_t)
+        (pkg: (reg_t, fn_t, fn_name_t) dedup_input_t) : fn_name_t circuit_graph =
     let module CircuitHash = struct
-        type t = (prim, custom) fun_id_t circuit'
-        let equal (c: (prim, custom) fun_id_t circuit') (c': (prim, custom) fun_id_t circuit') =
+        type t = fn_name_t circuit'
+        let equal (c: fn_name_t circuit') (c': fn_name_t circuit') =
           match c, c' with
           | CNot c1, CNot c1' ->
              c1 == c1'
@@ -344,12 +351,12 @@ module Graphs = struct
           Hashtbl.hash c
       end in
     let module SGACircuitHash = struct
-        type t = (reg_t, fn_t) SGA.circuit
+        type t = (reg_t, fn_t) sga_circuit
         let equal o1 o2 = o1 == o2
         let hash o = Hashtbl.hash o
       end in
     let module HasconsedOrder = struct
-        type t = (prim, custom) fun_id_t circuit
+        type t = fn_name_t circuit
         let compare x y = compare x.Hashcons.tag y.Hashcons.tag
       end in
     let module CircuitBag = Set.Make(HasconsedOrder) in
@@ -360,30 +367,33 @@ module Graphs = struct
     let unique_tagged = CircuitHashcons.create 50 in
     let tagged_circuits = ref CircuitBag.empty in
 
-    let rec aux (c: _ SGA.circuit) =
+    let rec aux' (c: (reg_t, fn_t) sga_circuit) =
+      match c with
+      | SGA.CNot c ->
+         CNot (aux c)
+      | SGA.CAnd (c1, c2) ->
+         CAnd (aux c1, aux c2)
+      | SGA.COr (c1, c2) ->
+         COr (aux c1, aux c2)
+      | SGA.CMux (sz, s, c1, c2) ->
+         CMux (sz, aux s, aux c1, aux c2)
+      | SGA.CConst (sz, bs) ->
+         CConst (Util.bits_const_of_sga_bits sz bs)
+      | SGA.CExternal (fn, c1, c2) ->
+         CExternal (pkg.di_fn_sigs fn, aux c1, aux c2)
+      | SGA.CReadRegister r ->
+         CReadRegister (pkg.di_reg_sigs r)
+      | SGA.CBundle (_, _) ->
+         assert false (* Only in a CBundle, which we drop *)
+      | SGA.CBundleRef (_sz, _bundle, _field, circuit) ->
+         aux' circuit
+      | SGA.CAnnot (sz, annot, c) ->
+         CAnnot (sz, Util.string_of_coq_string annot, aux c)
+    and aux (c: (reg_t, fn_t) sga_circuit) =
       match SGACircuitHashtbl.find_opt circuit_to_tagged c with
-      | Some c' ->
-         c'
+      | Some c' -> c'
       | None ->
-         let circuit' =
-           match c with
-           | SGA.CNot c ->
-              CNot (aux c)
-           | SGA.CAnd (c1, c2) ->
-              CAnd (aux c1, aux c2)
-           | SGA.COr (c1, c2) ->
-              COr (aux c1, aux c2)
-           | SGA.CMux (sz, s, c1, c2) ->
-              CMux (sz, aux s, aux c1, aux c2)
-           | SGA.CConst (sz, bs) ->
-              CConst (Util.bits_const_of_sga_bits sz bs)
-           | SGA.CExternal (fn, c1, c2) ->
-              CExternal (pkg.di_fn_sigs fn, aux c1, aux c2)
-           | SGA.CReadRegister r ->
-              CReadRegister (pkg.di_reg_sigs r)
-           | SGA.CAnnot (sz, annot, c) ->
-              CAnnot (sz, Util.string_of_coq_string annot, aux c) in
-         let circuit = CircuitHashcons.hashcons unique_tagged circuit' in
+         let circuit = CircuitHashcons.hashcons unique_tagged (aux' c) in
          tagged_circuits := CircuitBag.add circuit !tagged_circuits;
          SGACircuitHashtbl.add circuit_to_tagged c circuit;
          circuit in
@@ -395,14 +405,17 @@ module Graphs = struct
     let graph_nodes = List.of_seq (CircuitBag.to_seq !tagged_circuits) in
     { graph_roots; graph_nodes }
 
-  let graph_of_compile_unit (cu: Compilation.compile_unit) : (SGA.prim_fn_t, string) circuit_graph =
+  let graph_of_compile_unit (cu: Compilation.compile_unit)
+      : verilog_ready_circuit_graph =
     dedup_circuit
       { di_regs = cu.c_registers;
         di_reg_sigs = (fun r -> r);
         di_fn_sigs = (fun fn -> Util.ffi_sig_of_interop_fn ~custom_fn_info:(fun f -> f) fn);
         di_circuits = Compilation.compile cu }
 
-  let graph_of_verilog_package (vp: _ SGA.verilog_package_t) =
+  let graph_of_verilog_package (type rule_name_t var_t reg_t custom_fn_t)
+        (vp: (rule_name_t, var_t, reg_t, custom_fn_t) SGA.verilog_package_t)
+      : verilog_ready_circuit_graph =
     let sga = vp.vp_pkg in
     let di_regs =
       sga.sga_reg_finite.finite_elements in

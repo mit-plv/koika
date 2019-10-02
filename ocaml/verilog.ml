@@ -265,7 +265,7 @@ let statements
       Update (reg_name, reg_init, reg_wire_update))
     (circuit.graph_roots)
 
-let main out (circuit: (SGALib.SGA.prim_fn_t, _) circuit_graph) =
+let main out (circuit: verilog_ready_circuit_graph) =
   let environment = Hashtbl.create 50 in
   let instance_external_gensym = ref 0 in
   let io_decls = io_declarations circuit in
