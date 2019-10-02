@@ -384,16 +384,13 @@ let compile (type name_t var_t reg_t)
     p_scoped decl ~terminator:";" (fun () ->
         List.iter (fun (name, tau) -> p_decl tau (cpp_field_name name)) sg.struct_fields) in
 
-  let attr_unused =
-    "__attribute__((unused))" in
-
   let p_printer tau =
     let v_arg = "val" in
     let v_tau = cpp_type_of_type tau in
     let v_argdecl = sprintf "const %s %s" v_tau v_arg in
 
     let p_printer pbody =
-      p_fn ~typ:("static std::string " ^ attr_unused)
+      p_fn ~typ:"static _unused std::string "
         ~name:"repr" ~args:v_argdecl pbody in
 
     let p_enum_printer sg =
@@ -435,14 +432,14 @@ let compile (type name_t var_t reg_t)
     let bits_argdecl = sprintf "const %s %s" bits_tau bits_arg in
 
     let p_eq prbody =
-      p_fn ~typ:("static bool " ^ attr_unused)
+      p_fn ~typ:"static _unused bool "
         ~args:(sprintf "%s, %s" (v_argdecl v1) (v_argdecl v2))
         ~name:"eq" (fun () -> pr "return ("; prbody (); p ");") in
     let p_pack pbody =
-      p_fn ~typ:("static " ^ bits_tau ^ " " ^ attr_unused)
+      p_fn ~typ:("static _unused " ^ bits_tau)
         ~args:(v_argdecl v_arg) ~name:(sp_packer tau) pbody in
     let p_unpack pbody =
-      p_fn ~typ:("template <> " ^ v_tau ^ " " ^ attr_unused)
+      p_fn ~typ:("template <> _unused " ^ v_tau)
         ~args:bits_argdecl ~name:(sp_unpacker tau) pbody in
 
     let p_enum_pack _ =

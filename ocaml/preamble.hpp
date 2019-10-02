@@ -12,7 +12,8 @@
 #endif // #ifndef SIM_MINIMAL
 
 #ifdef SIM_DEBUG
-inline void _SIM_ASSERT(const char* repr,
+#include <iostream>
+static inline void _sim_assert_fn(const char* repr,
                         bool expr,
                         const char* file,
                         const int line,
@@ -24,12 +25,12 @@ inline void _SIM_ASSERT(const char* repr,
     abort();
   }
 }
-
-#define SIM_ASSERT(expr, msg) \
-  _SIM_ASSERT(#expr, expr, __FILE__, __LINE__, msg)
+#define _sim_assert(expr, msg) _sim_assert_fn(#expr, expr, __FILE__, __LINE__, msg)
 #else
-#define SIM_ASSERT(expr, msg) ;
+#define _sim_assert(expr, msg) ;
 #endif // #ifdef SIM_DEBUG
+
+#define _unused __attribute__((unused))
 
 #ifdef NEEDS_BOOST_MULTIPRECISION
 #include <boost/multiprecision/cpp_int.hpp>
@@ -169,7 +170,7 @@ namespace prims {
   }
 
   // Forward-declared; our compiler defines one instance per structure type
-  template<typename T, std::size_t sz> static T unpack(bits<sz> /*bits*/);
+  template<typename T, std::size_t sz> _unused T unpack(bits<sz> /*bits*/);
 } // namespace prims
 
 #ifndef SIM_MINIMAL
