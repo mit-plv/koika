@@ -103,11 +103,10 @@ Section Circuits.
       bits_of_value (sigma fn v1 v2).
 
   Context (csigma: forall f, CExternalSignature_denote (cSigma f)).
-  Context (lco: (@local_circuit_optimizer reg_t fn_t cR cSigma (rwdata R Sigma) REnv  cr csigma)).
+  Context (lco: (@local_circuit_optimizer name_t reg_t fn_t cR cSigma (rwdata (name_t := name_t) R Sigma) REnv cr csigma)).
 
-  Notation circuit := (circuit cR cSigma (rwdata R Sigma )).
+  Notation circuit := (circuit (name_t := name_t) (rwdata := rwdata (name_t := name_t) R Sigma) cR cSigma).
   Notation interp_circuit := (interp_circuit cr csigma).
-
 
   Definition circuit_fn_of_fn {sig} (fn: ExternalSignature_denote sig)
     : CExternalSignature_denote (CExternalSignature_of_ExternalSignature sig) :=
@@ -168,21 +167,21 @@ Section Circuits.
   Proof. firstorder. Qed.
 
   Lemma circuit_lt_CBundleRef :
-    forall {T1 T2} b1 b2 (a1:T1) (a2:T2) c1 c2,
+    forall b1 b2 field1 field2 c1 c2,
       circuit_lt c1 c2 ->
-      circuit_lt (CBundleRef b1 a1 c1) (CBundleRef  b2 a2 c2).
+      circuit_lt (CBundleRef b1 field1 c1) (CBundleRef b2 field2 c2).
   Proof. firstorder. Qed.
 
   Lemma circuit_lt_CBundleRef_l :
-    forall {T1 } b1 (a1:T1) c1 c2,
+    forall b1 field1 c1 c2,
       circuit_lt c1 c2 ->
-      circuit_lt (CBundleRef b1 a1 c1) c2.
+      circuit_lt (CBundleRef b1 field1 c1) c2.
   Proof. firstorder. Qed.
 
   Lemma circuit_lt_CBundleRef_r :
-    forall {T2} b2 (a2:T2) c1 c2,
+    forall b2 field2 c1 c2,
       circuit_lt c1 c2 ->
-      circuit_lt c1 (CBundleRef b2 a2 c2).
+      circuit_lt c1 (CBundleRef b2 field2 c2).
   Proof. firstorder. Qed.
 
   Lemma circuit_lt_CAnd :
@@ -296,7 +295,7 @@ Section Circuits.
   Qed.
 
   Lemma circuit_lt_willFire_of_canFire_canFire :
-    forall c1 (cLog: scheduler_circuit R Sigma REnv) rws,
+    forall c1 (cLog: scheduler_circuit (name_t := name_t) R Sigma REnv) rws,
       circuit_lt (willFire_of_canFire lco {| canFire := c1; regs := rws |} cLog) c1.
   Proof.
     unfold willFire_of_canFire; intros.
@@ -323,6 +322,8 @@ Ltac circuit_lt_f_equal :=
           apply circuit_lt_CAnnot_r ||
           apply circuit_lt_opt_l ||
           apply circuit_lt_opt_r ||
+          apply circuit_lt_CBundleRef_l ||
+          apply circuit_lt_CBundleRef_r ||
           apply circuit_lt_CAnd ||
           apply circuit_lt_COr ||
           apply circuit_lt_CNot ||

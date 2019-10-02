@@ -23,8 +23,8 @@ Section Elaboration.
   Context (custom_sigma: forall f, ExternalSignature_denote (custom_Sigma f)).
   Notation csigma := (circuit_sigma (interop_sigma custom_sigma)).
 
-  Context {Rwdata : nat -> Type}.
-  Notation circuit cR cSigma n := (circuit cR cSigma Rwdata n).
+  Context {rwdata : nat -> Type}.
+  Notation circuit cR cSigma n := (circuit (name_t := name_t) (rwdata := rwdata) cR cSigma n).
 
   Definition elaborate_externals_1 {n} (c: circuit cR cSigma n) : circuit cR cSigma n.
   Proof.
@@ -210,8 +210,8 @@ Section Elaboration.
        lco_proof := @elaborate_externals_1_correct |}.
 End Elaboration.
 
-Arguments elaborate_externals_1 {_ _ _ _ _} [_] _.
-Arguments external_elaboration_lco {_ _ _ _ _ _ _}.
+Arguments elaborate_externals_1 {_ _ _ _ _ _} [_] _.
+Arguments external_elaboration_lco {_ _ _ _ _ _ _ _}.
 
 Section Interop.
   Context {name_t var_t reg_t custom_fn_t: Type}.
@@ -219,9 +219,9 @@ Section Interop.
   Definition interop_opt
              {R : reg_t -> type}
              {Sigma : custom_fn_t -> ExternalSignature}
-             {Rwdata: nat -> Type}
-    : forall sz : nat, circuit (CR R) (CSigma (interop_Sigma Sigma)) Rwdata sz ->
-                circuit (CR R) (CSigma (interop_Sigma Sigma)) Rwdata sz :=
+             {rwdata: nat -> Type}
+    : forall sz : nat, circuit (name_t := name_t) (rwdata := rwdata) (CR R) (CSigma (interop_Sigma Sigma)) sz ->
+                circuit (name_t := name_t) (rwdata := rwdata) (CR R) (CSigma (interop_Sigma Sigma)) sz :=
     (lco_opt_compose simplify_bool_1 elaborate_externals_1).
 
   Definition compile_sga_package

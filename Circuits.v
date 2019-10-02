@@ -15,11 +15,16 @@ Definition CExternalSignature_of_ExternalSignature (c: ExternalSignature) :=
      retSize := type_sz c.(retType) |}.
 
 Section Circuit.
-  Context {reg_t fn_t: Type}.
+  Context {name_t reg_t fn_t: Type}.
+  Context {rwdata: nat -> Type}. (* Forward declaration *)
   Context {R: reg_t -> nat}.
   Context {Sigma: fn_t -> CExternalSignature}.
 
-  Inductive circuit {Rwdata} : nat -> Type :=
+  Inductive rwdata_field :=
+    | rwdata_r0 | rwdata_r1 | rwdata_w0 | rwdata_w1
+    | rwdata_data0 | rwdata_data1 | rwdata_canfire.
+
+  Inductive circuit: nat -> Type :=
   | CNot (c: circuit 1): circuit 1
   | CAnd (c1 c2: circuit 1): circuit 1
   | COr (c1 c2: circuit 1): circuit 1
@@ -30,27 +35,27 @@ Section Circuit.
               (a1: circuit (Sigma idx).(arg1Size))
               (a2: circuit (Sigma idx).(arg2Size))
     : circuit (Sigma idx).(retSize)
-  | CBundle {T} (s: T) (bundle: forall (r:reg_t), Rwdata (R r)) : circuit 0
-  | CBundleRef {T sz} (source_bundle: circuit 0) (field:T) (c: circuit sz) : circuit sz
-  | CAnnot {sz} (annot: string) (c: circuit sz) : circuit sz.
+  | CBundle (name: name_t) (bundle: forall (r: reg_t), rwdata (R r)): circuit 0
+  | CBundleRef {sz} (source_bundle: circuit 0) (field: rwdata_field) (c: circuit sz): circuit sz
+  | CAnnot {sz} (annot: string) (c: circuit sz): circuit sz.
 End Circuit.
 
-Arguments circuit {reg_t fn_t} R Sigma Rwdata sz.
+Arguments circuit {name_t reg_t fn_t rwdata} R Sigma sz.
 
 Section Interpretation.
-  Context {reg_t fn_t: Type}.
+  Context {name_t reg_t fn_t: Type}.
 
   Context {R: reg_t -> nat}.
   Context {Sigma: fn_t -> CExternalSignature}.
   Context {REnv: Env reg_t}.
 
   Context (r: REnv.(env_t) (fun idx => bits (R (idx)))).
-
   Context (sigma: forall f, CExternalSignature_denote (Sigma f)).
 
-  Context {Rwdata: nat -> Type}.
+  Context {rwdata: nat -> Type}.
+  Notation circuit := (circuit (name_t := name_t) (rwdata := rwdata) R Sigma).
 
-  Fixpoint interp_circuit {n} (c: circuit R Sigma Rwdata n) : bits n :=
+  Fixpoint interp_circuit {n} (c: circuit n) : bits n :=
     match c with
     | CNot c =>
       Ob~(negb (Bits.single (interp_circuit c)))
@@ -77,16 +82,15 @@ Section Interpretation.
 End Interpretation.
 
 Section CircuitOptimizer.
-  Context {reg_t fn_t: Type}.
+  Context {name_t reg_t fn_t: Type}.
 
   Context {R: reg_t -> nat}.
   Context {Sigma: fn_t -> CExternalSignature}.
 
-
-  Context {Rwdata: nat -> Type}.
+  Context {rwdata: nat -> Type}.
 
   Notation Circuit := circuit.
-  Notation circuit := (circuit R Sigma Rwdata).
+  Notation circuit := (circuit (name_t := name_t) (rwdata := rwdata) R Sigma).
 
   Context {REnv: Env reg_t}.
 
@@ -118,7 +122,7 @@ Section CircuitOptimizer.
     match c return option (list bool) with
     | CAnnot annot c =>
       asconst c
-    | @CConst _ _ _ _ _ sz cst =>
+    | CConst cst =>
       Some (vect_to_list cst)
     | c => None
     end.
@@ -128,9 +132,8 @@ Section CircuitOptimizer.
 
   Instance EqDec_ListBool : EqDec (list bool) := _.
 
-
   Definition simplify_bool_1' {sz} (c: circuit sz): circuit sz :=
-    match c in Circuit _ _ _ sz return circuit sz with
+    match c in Circuit _ _ sz return circuit sz with
     | (CNot c) as c0 =>
       match asconst c with
       | Some ltrue => CConst Ob~0
@@ -239,11 +242,11 @@ Section CircuitOptimizer.
     {| lco_fn := @simplify_bool_1; lco_proof := @simplify_bool_1_correct |}.
 End CircuitOptimizer.
 
-Arguments simplify_bool_1 {_ _ _ _ _} [_] _.
-Arguments lco_fn {_ _ _ _ _ _ _ _} _ {_}.
-Arguments lco_proof {_ _ _ _ _ _ _ _} _ {_}.
-Arguments lco_compose {_ _ _ _ _ _ _ _} _ _.
-Arguments bool_simpl_lco {_ _ _ _ _ _ _ _}.
+Arguments simplify_bool_1 {_ _ _ _ _ _} [_] _.
+Arguments lco_fn {_ _ _ _ _ _ _ _ _} _ {_}.
+Arguments lco_proof {_ _ _ _ _ _ _ _ _} _ {_}.
+Arguments lco_compose {_ _ _ _ _ _ _ _ _} _ _.
+Arguments bool_simpl_lco {_ _ _ _ _ _ _ _ _}.
 
 Section CircuitCompilation.
   Context {name_t var_t reg_t fn_t: Type}.
@@ -258,7 +261,7 @@ Section CircuitCompilation.
 
   Definition CSigma fn := CExternalSignature_of_ExternalSignature (Sigma fn).
 
-  Notation circuit' := (circuit CR CSigma).
+  Notation circuit' rwdata := (circuit (name_t := name_t) (rwdata := rwdata) CR CSigma).
 
   Inductive rwdata {sz: nat} :=
     { read0: circuit' (@rwdata) 1;
@@ -498,30 +501,27 @@ Section CircuitCompilation.
 
   Context (rules: name_t -> rule var_t R Sigma).
 
-  Inductive Field := R0 | R1 | W0 | W1 | Data0 | Data1 | CanFire.
+  Definition bundleref_wrap_rwdata bundle (r: reg_t) (ruleReg: @rwdata (CR r))
+    : @rwdata (CR r) :=
+    {| read0 := CBundleRef bundle rwdata_r0 (ruleReg.(read0));
+       read1 := CBundleRef bundle rwdata_r1 (ruleReg.(read1));
+       write0 := CBundleRef bundle rwdata_w0 (ruleReg.(write0));
+       write1 := CBundleRef bundle rwdata_w1 (ruleReg.(write1));
+       data0 := CBundleRef bundle rwdata_data0 (ruleReg.(data0));
+       data1 := CBundleRef bundle rwdata_data1 (ruleReg.(data1)) |}.
 
-  Definition annotate_registers :=
-    (fun bundle_ref =>
-       REnv.(map) (fun r ruleReg =>
-                     {|
-                       read0 := CBundleRef bundle_ref R0 (ruleReg.(read0));
-                       read1 := CBundleRef bundle_ref R1 (ruleReg.(read1));
-                       write0 := CBundleRef bundle_ref W0 (ruleReg.(write0));
-                       write1 := CBundleRef bundle_ref W1 (ruleReg.(write1));
-                       data0 := CBundleRef bundle_ref Data0 (ruleReg.(data0));
-                       data1 := CBundleRef bundle_ref Data1 (ruleReg.(data1))
-                     |} : @rwdata (CR r))).
+  Definition bundleref_wrap_rwset bundle (rws: rwset) :=
+    REnv.(map) (bundleref_wrap_rwdata bundle) rws.
 
-  Definition annotate_bundle := (fun {sz} bundle_ref (rl: @action_circuit sz)  =>
-    {| canFire := CBundleRef bundle_ref CanFire rl.(erwc).(canFire);
-       regs := annotate_registers bundle_ref ((rl.(erwc)).(regs));
-    |}).
+  Definition bundleref_wrap_erwc bundle erwc :=
+    {| canFire := CBundleRef bundle rwdata_canfire erwc.(canFire);
+       regs := bundleref_wrap_rwset bundle erwc.(regs) |}.
 
-  Definition bundle_rule {tau} (input: rwcircuit) (rl: @action_circuit tau) (rl_name: name_t) :
-    @action_circuit tau :=
-    let bundle_ref := CBundle rl_name (REnv.(getenv) (input.(regs))) in
-    {| erwc:= annotate_bundle bundle_ref rl;
-          retVal:= rl.(retVal) |}.
+  Definition bundleref_wrap_action_circuit {tau} (input: rwset) (rl: @action_circuit tau) (rl_name: name_t)
+    : @action_circuit tau :=
+    let bundle := CBundle rl_name (REnv.(getenv) input) in
+    {| erwc := bundleref_wrap_erwc bundle rl.(erwc);
+       retVal := rl.(retVal) |}.
 
   Fixpoint compile_scheduler'
            (s: scheduler name_t)
@@ -532,7 +532,7 @@ Section CircuitCompilation.
       input
     | Cons rl_name s =>
       let (rl, Gamma) := compile_action CtxEmpty (rules rl_name) (adapter input) in
-      let rl := bundle_rule (adapter input) rl rl_name in
+      let rl := bundleref_wrap_action_circuit input rl rl_name in
       let acc := update_accumulated_rwset rl.(erwc).(regs) input in
       let will_fire := willFire_of_canFire rl.(erwc) input in
       let input := mux_rwsets "mux_input" will_fire acc input in
@@ -577,8 +577,8 @@ End CircuitCompilation.
 Arguments CR {_} R idx.
 Arguments CSigma {_} Sigma fn.
 
-Arguments readRegisters {_ _}.
-Arguments rwdata {_ _}.
-Arguments action_circuit {_ _}.
-Arguments scheduler_circuit {_ _}.
-Arguments state_transition_circuit {_ _}.
+Arguments readRegisters {_ _ _} R Sigma idx.
+Arguments rwdata {_ _ _} R Sigma sz.
+Arguments action_circuit {_ _ _} R Sigma REnv sz.
+Arguments scheduler_circuit {_ _ _} R Sigma REnv.
+Arguments state_transition_circuit name_t {_ _} R Sigma REnv.

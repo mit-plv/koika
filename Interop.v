@@ -122,7 +122,7 @@ Section Packages.
         [interop_fn_Sigma sga_custom_fn_types] as the environment of
         signatures). *)
       cp_circuit: @state_transition_circuit
-                    reg_t (@interop_fn_t custom_fn_t)
+                    rule_name_t reg_t (@interop_fn_t custom_fn_t)
                     (cp_pkg.(sga_reg_types)) (interop_Sigma cp_pkg.(sga_custom_fn_types))
                     cp_reg_Env;
     }.

@@ -4,8 +4,8 @@ let __ = let rec f _ = Obj.repr f in Obj.repr f
 open Common
 module SGA = SGA
 
-type ('reg_t, 'fn_t) sga_circuit =
-  ('reg_t, 'fn_t, ('reg_t, 'fn_t) SGA.rwdata) SGA.circuit
+type ('name_t, 'reg_t, 'fn_t) sga_circuit =
+  ('name_t, 'reg_t, 'fn_t, ('name_t, 'reg_t, 'fn_t) SGA.rwdata) SGA.circuit
 
 module Util = struct
   let list_nth (l: 'a list) (n: SGA.index) =
@@ -275,7 +275,7 @@ module Compilation = struct
 
 
   type compiled_circuit =
-    (reg_signature, string ffi_signature SGA.interop_fn_t) sga_circuit
+    (string, reg_signature, string ffi_signature SGA.interop_fn_t) sga_circuit
 
   let typecheck_scheduler (raw_ast: 'f raw_scheduler) : name_t SGA.scheduler =
     let ast = translate_scheduler raw_ast in
@@ -317,15 +317,15 @@ module Graphs = struct
   type verilog_ready_circuit_graph =
     (SGA.prim_fn_t, string) fun_id_t circuit_graph
 
-  type ('reg_t, 'fn_t, 'fn_name_t) dedup_input_t = {
+  type ('rule_name_t, 'reg_t, 'fn_t, 'fn_name_t) dedup_input_t = {
       di_regs: 'reg_t list;
       di_reg_sigs: 'reg_t -> reg_signature;
       di_fn_sigs: 'fn_t -> 'fn_name_t ffi_signature;
-      di_circuits : 'reg_t -> ('reg_t, 'fn_t) sga_circuit
+      di_circuits : 'reg_t -> ('rule_name_t, 'reg_t, 'fn_t) sga_circuit
     }
 
-  let dedup_circuit (type reg_t fn_t fn_name_t)
-        (pkg: (reg_t, fn_t, fn_name_t) dedup_input_t) : fn_name_t circuit_graph =
+  let dedup_circuit (type rule_name_t reg_t fn_t fn_name_t)
+        (pkg: (rule_name_t, reg_t, fn_t, fn_name_t) dedup_input_t) : fn_name_t circuit_graph =
     let module CircuitHash = struct
         type t = fn_name_t circuit'
         let equal (c: fn_name_t circuit') (c': fn_name_t circuit') =
@@ -351,7 +351,7 @@ module Graphs = struct
           Hashtbl.hash c
       end in
     let module SGACircuitHash = struct
-        type t = (reg_t, fn_t) sga_circuit
+        type t = (rule_name_t, reg_t, fn_t) sga_circuit
         let equal o1 o2 = o1 == o2
         let hash o = Hashtbl.hash o
       end in
@@ -367,7 +367,7 @@ module Graphs = struct
     let unique_tagged = CircuitHashcons.create 50 in
     let tagged_circuits = ref CircuitBag.empty in
 
-    let rec aux' (c: (reg_t, fn_t) sga_circuit) =
+    let rec aux' (c: (rule_name_t, reg_t, fn_t) sga_circuit) =
       match c with
       | SGA.CNot c ->
          CNot (aux c)
@@ -389,7 +389,7 @@ module Graphs = struct
          aux' circuit
       | SGA.CAnnot (sz, annot, c) ->
          CAnnot (sz, Util.string_of_coq_string annot, aux c)
-    and aux (c: (reg_t, fn_t) sga_circuit) =
+    and aux (c: (rule_name_t, reg_t, fn_t) sga_circuit) =
       match SGACircuitHashtbl.find_opt circuit_to_tagged c with
       | Some c' -> c'
       | None ->
