@@ -1,5 +1,6 @@
 open Common
 
+let lcnt x = x.lcnt
 let sprintf = Printf.sprintf
 
 module Pos = struct
@@ -236,6 +237,29 @@ let untyped_number_error (pos: Pos.t) s =
 let symbol_error (pos: Pos.t) s =
   type_error pos (sprintf "Unexpected symbol `%s'" s)
 
+module Dups(OT: Map.OrderedType) = struct
+  module M = Map.Make(OT)
+
+  let multimap_add k v m =
+    let vs = match M.find_opt k m with Some vs -> vs | None -> [] in
+    M.add k (v :: vs) m
+
+  let multimap_of_locds keyfn xs =
+    List.fold_left (fun map x ->
+        let { lcnt = k; lpos } = keyfn x in multimap_add k (x, lpos) map)
+      M.empty xs
+
+  let check msg (keyfn: 'a -> OT.t locd) strfn xs =
+    M.iter (fun _ positions ->
+        Delay.iter (fun (x, lpos) ->
+            name_error lpos (sprintf "Duplicate %s: `%s'" msg (strfn x)))
+          (List.tl (List.rev positions)))
+      (multimap_of_locds keyfn xs)
+end
+
+module StringDuplicates = Dups(OrderedString)
+module BitsDuplicates = Dups(struct type t = bool array let compare = compare end)
+
 let expect_cons loc msg = function
   | [] -> syntax_error loc (Printf.sprintf "Missing %s" msg)
   | hd :: tl -> hd, tl
@@ -300,22 +324,6 @@ let read_annotated_sexps fname =
 
 let keys s =
   StringMap.fold (fun k _ acc -> k :: acc) s []
-
-let multimap_add k v m =
-  let vs = match StringMap.find_opt k m with Some vs -> vs | None -> [] in
-  StringMap.add k (v :: vs) m
-
-let multimap_of_locds keyfn xs =
-  List.fold_left (fun map x ->
-      let { lcnt = k; lpos = v } = keyfn x in multimap_add k v map)
-    StringMap.empty xs
-
-let check_no_duplicates msg keyfn ls =
-  StringMap.iter (fun k positions ->
-      Delay.iter (fun lpos ->
-          name_error lpos (sprintf "Duplicate %s: `%s'" msg k))
-        (List.tl (List.rev positions)))
-    (multimap_of_locds keyfn ls)
 
 let gensym_prefix = "_lvs_"
 let gensym, gensym_reset = make_gensym gensym_prefix
@@ -466,7 +474,7 @@ let parse (sexps: Pos.t sexp list) =
   let expect_bits msg v =
     let loc, sbits = expect_atom msg v in
     match try_number loc sbits with
-    | Some (`Const c) -> loc, c
+    | Some (`Const c) -> loc, (sbits, c)
     | Some (`Num _) -> untyped_number_error loc sbits
     | _ -> syntax_error loc (sprintf "Expecting a bits constant (e.g. 2'b01), got `%s' %s" sbits num_fmt) in
   let expect_const msg v =
@@ -622,7 +630,8 @@ let parse (sexps: Pos.t sexp list) =
       syntax_error loc (sprintf "Expecting an unqualified enumerator (format: ::xyz), got `%s'" enumerator);
     locd_make loc field in
   let expect_enumerator_value value =
-    expect_bits "an enumerator value" value |> locd_of_pair in
+    let (loc, (s, bs)) = expect_bits "an enumerator value" value in
+    (s, locd_make loc bs) in
   let check_size sz { lpos; lcnt } =
     let sz' = Array.length lcnt in
     if sz' <> sz then
@@ -630,17 +639,19 @@ let parse (sexps: Pos.t sexp list) =
         (sprintf "Inconsistent sizes in enum: expecting `bits %d', got `bits %d'" sz sz') in
   let expect_enum name loc body = (* ((:true 1'b1) (:false 1'b0) …) *)
     let members = expect_pairs "enumerator value" expect_unqualified_enumerator expect_enumerator_value body in
-    let (_, eval), _ = expect_cons loc "enumerator (empty enums are not supported)" members in
-    let bitsize = Array.length eval.lcnt in
-    Delay.iter ((check_size bitsize) << snd) members;
-    Delay.apply3 check_no_duplicates "enumerator name in struct" fst members;
-    locd_make loc (Enum_u { name; bitsize = locd_make eval.lpos bitsize; members }) in
+    let (_, (_, first)), _ = expect_cons loc "enumerator (empty enums are not supported)" members in
+    let bitsize = Array.length first.lcnt in
+    Delay.iter ((check_size bitsize) << snd << snd) members;
+    Delay.apply4 StringDuplicates.check "enumerator name in enum" fst (lcnt << fst) members;
+    Delay.apply4 BitsDuplicates.check "value in enum" (snd << snd) (fst << snd) members;
+    let members = List.map (fun (nm, (_, bs)) -> (nm, bs)) members in
+    locd_make loc (Enum_u { name; bitsize = locd_make first.lpos bitsize; members }) in
   let expect_struct_field_name name = (* :label *)
     let loc, name = expect_atom "a field name" name in
     locd_make loc (expect_keyword loc "a field name" name) in
   let expect_struct name loc body = (* ((:kind kind) (:imm (bits 12) …) *)
     let fields = expect_pairs "field type" expect_struct_field_name expect_type body in
-    Delay.apply3 check_no_duplicates "field in struct" fst fields;
+    Delay.apply4 StringDuplicates.check "field in struct" fst (lcnt << fst) fields;
     locd_make loc (Struct_u { name; fields }) in
   let expect_extfun ext_name loc body =
     let args, rettype = expect_pair loc "argument declarations" "return type" body in
@@ -682,9 +693,9 @@ let parse (sexps: Pos.t sexp list) =
         { m_name; m_registers = []; m_rules = []; m_schedulers = [] } body in
     let m_registers, m_rules, m_schedulers =
       List.rev m_registers, List.rev m_rules, List.rev m_schedulers in
-    Delay.apply3 check_no_duplicates "register" fst m_registers;
-    Delay.apply3 check_no_duplicates "rule" fst m_rules;
-    Delay.apply3 check_no_duplicates "scheduler" fst m_schedulers;
+    Delay.apply4 StringDuplicates.check "register" fst (lcnt << fst) m_registers;
+    Delay.apply4 StringDuplicates.check "rule" fst (lcnt << fst) m_rules;
+    Delay.apply4 StringDuplicates.check "scheduler" fst (lcnt << fst) m_schedulers;
     locd_make loc { m_name; m_registers; m_rules; m_schedulers } in
   let expected_toplevel =
     [("enum", `Enum); ("struct", `Struct); ("extfun", `Extfun); ("module", `Module)] in
@@ -698,8 +709,8 @@ let parse (sexps: Pos.t sexp list) =
         | _ -> assert false)
       { types = []; extfuns = []; mods = [] } sexps in
   let types, extfuns, mods = List.rev types, List.rev extfuns, List.rev mods in
-  Delay.apply3 check_no_duplicates "module" (fun m -> m.lcnt.m_name) mods;
-  Delay.apply3 check_no_duplicates "external function" (fun fn -> fn.ext_name) extfuns;
+  Delay.apply4 StringDuplicates.check "module" (fun m -> m.lcnt.m_name) (fun m -> m.lcnt.m_name.lcnt) mods;
+  Delay.apply4 StringDuplicates.check "external function" (fun fn -> fn.ext_name) (fun fn -> fn.ext_name.lcnt) extfuns;
   { types; extfuns; mods }
 
 let rexpect_num = function
