@@ -674,21 +674,6 @@ Section CompilerCorrectness.
            | _ => destruct (Bits.single _)
            end.
 
-  Ltac t_interp_circuit_willFire_of_canFire_impl :=
-    repeat match goal with
-           | _ => reflexivity
-           | [ H: context[lco_fn] |- _ ] => rewrite lco_proof in H
-           | [  |- context[lco_fn] ] => rewrite lco_proof
-           | _ => cleanup_step
-           | _ => progress (unfold willFire_of_canFire'; cbn; intros)
-           | [ H: Ob~_ = Ob~_ |- _ ] => apply (f_equal Bits.single) in H; cbn in H
-           | [  |- Ob~_ = Ob~_ ] => f_equal
-           | [ H: _ && _ = true |- _ ] => rewrite andb_true_iff in H
-           | [ H: _ = _ |- _ ] => rewrite H in *
-           | _ => rewrite !orb_true_r
-           | _ => progress cbn in *
-           end.
-
   Lemma interp_circuit_willFire_of_canFire_read0:
     forall {tau} (rwd : rwdata R Sigma tau) cLog
       cOne (cdata0 cdata1 : circuit tau),
@@ -764,81 +749,6 @@ Section CompilerCorrectness.
     t_interp_circuit_willFire_of_canFire.
   Qed.
 
-  Lemma interp_circuit_willFire_of_canFire_read0_impl:
-    forall {tau} (rwd : rwdata R Sigma tau) cLog
-      cOne (cdata0 cdata1 : circuit tau),
-      interp_circuit cLog.(write0) = Ob~0 ->
-      interp_circuit cLog.(write1) = Ob~0 ->
-      interp_circuit cOne = Ob~1 ->
-      interp_circuit (willFire_of_canFire' rwd cLog) = Ob~1 ->
-      interp_circuit
-        (willFire_of_canFire'
-           {| read0 := cOne;
-              read1 := read1 rwd;
-              write0 := write0 rwd;
-              write1 := write1 rwd;
-              data0 := cdata0;
-              data1 := cdata1 |} cLog) = Ob~1.
-  Proof.
-    t_interp_circuit_willFire_of_canFire_impl.
-  Qed.
-
-  Lemma interp_circuit_willFire_of_canFire_read1_impl:
-    forall {tau} (rwd : rwdata R Sigma tau) cLog
-      cOne (cdata0 cdata1 : circuit tau),
-      interp_circuit (write1 cLog) = Ob~0 ->
-      interp_circuit cOne = Ob~1 ->
-      interp_circuit (willFire_of_canFire' rwd cLog) = Ob~1 ->
-      interp_circuit
-        (willFire_of_canFire'
-           {| read0 := read0 rwd;
-              read1 := cOne;
-              write0 := write0 rwd;
-              write1 := write1 rwd;
-              data0 := cdata0;
-              data1 := cdata1 |} cLog) = Ob~1.
-  Proof.
-    t_interp_circuit_willFire_of_canFire_impl.
-  Qed.
-
-  Lemma interp_circuit_willFire_of_canFire_write0_impl:
-    forall {tau} (rwd : rwdata R Sigma tau) cLog
-      cOne (cdata0 cdata1 : circuit tau),
-      interp_circuit cLog.(write0) = Ob~0 ->
-      interp_circuit cLog.(write1) = Ob~0 ->
-      interp_circuit cLog.(read1) = Ob~0 ->
-      interp_circuit cOne = Ob~1 ->
-      interp_circuit (willFire_of_canFire' rwd cLog) = Ob~1 ->
-      interp_circuit
-        (willFire_of_canFire'
-           {| read0 := read0 rwd;
-              read1 := read1 rwd;
-              write0 := cOne;
-              write1 := write1 rwd;
-              data0 := cdata0;
-              data1 := cdata1 |} cLog) = Ob~1.
-  Proof.
-    t_interp_circuit_willFire_of_canFire_impl.
-  Qed.
-
-  Lemma interp_circuit_willFire_of_canFire_write1_impl:
-    forall {tau} (rwd : rwdata R Sigma tau) cLog
-      cOne (cdata0 cdata1 : circuit tau),
-      interp_circuit (write1 cLog) = Ob~0 ->
-      interp_circuit cOne = Ob~1 ->
-      interp_circuit (willFire_of_canFire' rwd cLog) = Ob~1 ->
-      interp_circuit
-        (willFire_of_canFire'
-           {| read0 := read0 rwd;
-              read1 := read1 rwd;
-              write0 := write0 rwd;
-              write1 := cOne;
-              data0 := cdata0;
-              data1 := cdata1 |} cLog) = Ob~1.
-  Proof.
-    t_interp_circuit_willFire_of_canFire_impl.
-  Qed.
-
   Arguments Circuits.willFire_of_canFire' : simpl never.
 
   Lemma interp_circuit_willFire_of_canFire'_mux_rwdata:
@@ -896,8 +806,6 @@ Section CompilerCorrectness.
     | [ H: ?x = false |- context[?x] ] => rewrite H
     | [ H: interp_circuit ?c = Ob~_ |- context[interp_circuit ?c] ] =>
       rewrite H
-    | [ Heq: interp_circuit ?x = Some _ |- context[interp_circuit ?x] ] =>
-      rewrite Heq
     | [ |- match (if ?x then _ else _) with _ => _ end ] =>
       destruct x eqn:?; cbn
     | [ |- context[Circuits.compile_action ?lco ?rc ?gamma ?ex ?clog] ] =>

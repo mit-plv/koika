@@ -182,7 +182,7 @@ Section Circuits.
   Lemma circuit_lt_CBundleRef_r :
     forall {T2} b2 (a2:T2) c1 c2,
       circuit_lt c1 c2 ->
-      circuit_lt c1 (CBundleRef  b2 a2 c2).
+      circuit_lt c1 (CBundleRef b2 a2 c2).
   Proof. firstorder. Qed.
 
   Lemma circuit_lt_CAnd :
