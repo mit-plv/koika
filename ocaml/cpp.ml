@@ -499,7 +499,7 @@ let compile (type name_t var_t reg_t)
     | Struct_t sg -> p_struct_eq sg; nl (); p_struct_pack sg; nl (); p_struct_unpack sg in
 
   let p_type_declarations types =
-    let types = topo_sort_types (sort_types types) in
+    let types = topo_sort_types (sort_types (List.map snd types)) in
     let enums, structs = partition_types types in
     List.iter p_enum_decl enums;
     nl ();

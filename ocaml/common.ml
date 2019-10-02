@@ -75,19 +75,26 @@ let compare_types tau1 tau2 =
   | Struct_t sg1, Struct_t sg2 -> compare sg1.struct_name sg2.struct_name
 
 let sort_types types =
-  List.sort (fun (_, t) (_, t') -> compare_types t t') types
+  List.sort compare_types types
+
+module OrderedTypByName = struct
+  type t = typ
+  let compare = compare_types
+end
+
+module TypNameSet = Set.Make(OrderedTypByName)
 
 let topo_sort_types types =
-  let add (seen, ordered) nm = function
+  let add (seen, ordered) = function
     | Bits_t _ -> (seen, ordered)
-    | (Struct_t _ | Enum_t _) as tau -> (StringSet.add nm seen, tau :: ordered) in
-  let rec loop ((seen, _) as acc) (nm, tau) =
-    if StringSet.mem nm seen then acc
+    | (Struct_t _ | Enum_t _) as tau -> (TypNameSet.add tau seen, tau :: ordered) in
+  let rec loop ((seen, _) as acc) tau =
+    if TypNameSet.mem tau seen then acc
     else let acc = match tau with
-           | Struct_t sg -> List.fold_left loop acc sg.struct_fields
+           | Struct_t sg -> List.fold_left (fun acc (_, tau) -> loop acc tau) acc sg.struct_fields
            | _ -> acc in
-         add acc nm tau in
-  List.rev (snd (List.fold_left loop (StringSet.empty, []) types))
+         add acc tau in
+  List.rev (snd (List.fold_left loop (TypNameSet.empty, []) types))
 
 let partition_types types =
   List.fold_right (fun tau (enums, structs) ->

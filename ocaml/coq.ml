@@ -300,7 +300,7 @@ let _ =
         fprintf (formatter_of_out_channel stderr) "%a@." (pp_action None) a) }
 
 let main out ({ r_types; r_extfuns; r_mods }: Lv.resolved_unit) =
-  let types = topo_sort_types (StringMap.bindings r_types.td_all) in
+  let types = topo_sort_types (List.map snd (StringMap.bindings r_types.td_all)) in
   let enums, structs = partition_types types in
   let extfuns = List.map (snd << snd) (StringMap.bindings r_extfuns) in
   let ppf = formatter_of_out_channel out in
