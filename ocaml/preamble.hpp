@@ -34,25 +34,25 @@ inline void _SIM_ASSERT(const char* repr,
 #ifdef NEEDS_BOOST_MULTIPRECISION
 #include <boost/multiprecision/cpp_int.hpp>
 template<std::size_t size>
-using big_uint_t = std::conditional_t<size <= 128, boost::multiprecision::uint128_t,
-                   std::conditional_t<size <= 256, boost::multiprecision::uint256_t,
-                   std::conditional_t<size <= 512, boost::multiprecision::uint512_t,
-                   std::conditional_t<size <= 1024, boost::multiprecision::uint1024_t,
-                                      void>>>>;
+using wbits = std::conditional_t<size <= 128, boost::multiprecision::uint128_t,
+              std::conditional_t<size <= 256, boost::multiprecision::uint256_t,
+              std::conditional_t<size <= 512, boost::multiprecision::uint512_t,
+              std::conditional_t<size <= 1024, boost::multiprecision::uint1024_t,
+                                 void>>>>;
 #else
 template<std::size_t size>
-using big_uint_t = void;
+using wbits = void;
 #endif // #ifdef NEEDS_BOOST_MULTIPRECISION
 
-struct unit_t {};
+struct unit {};
 
 template<std::size_t size>
-using uint_t = std::conditional_t<size ==  0, unit_t,
-               std::conditional_t<size <=  8, std::uint8_t,
-               std::conditional_t<size <= 16, std::uint16_t,
-               std::conditional_t<size <= 32, std::uint32_t,
-               std::conditional_t<size <= 64, std::uint64_t,
-                                  big_uint_t<size>>>>>>;
+using bits = std::conditional_t<size ==  0, unit,
+             std::conditional_t<size <=  8, std::uint8_t,
+             std::conditional_t<size <= 16, std::uint16_t,
+             std::conditional_t<size <= 32, std::uint32_t,
+             std::conditional_t<size <= 64, std::uint64_t,
+                                wbits<size>>>>>>;
 
 // https://stackoverflow.com/questions/57417154/
 #define UINT8(c) static_cast<uint8_t>(UINT8_C(c))
@@ -68,7 +68,7 @@ using namespace boost::multiprecision::literals;
 #endif
 
 namespace prims {
-  const unit_t __attribute__((unused)) tt = {};
+  const unit __attribute__((unused)) tt = {};
 
   template<typename T>
   T __attribute__((noreturn)) unreachable() {
@@ -76,105 +76,105 @@ namespace prims {
   }
 
   template<std::size_t sz>
-  uint_t<sz> ones() {
+  bits<sz> ones() {
     // GCC and Clang are smart enough to elide this when shift_amount == 0
-    constexpr uint8_t shift_amount = std::numeric_limits<uint_t<sz>>::digits - sz;
-    return std::numeric_limits<uint_t<sz>>::max() >> shift_amount;
+    constexpr uint8_t shift_amount = std::numeric_limits<bits<sz>>::digits - sz;
+    return std::numeric_limits<bits<sz>>::max() >> shift_amount;
   }
 
   template<std::size_t sz>
-  uint_t<sz> mask(const uint_t<sz> arg) {
+  bits<sz> mask(const bits<sz> arg) {
     return arg & ones<sz>();
   }
 
   template<std::size_t sz, typename T>
-  uint_t<sz> widen(const T arg) {
-    return static_cast<uint_t<sz>>(arg);
+  bits<sz> widen(const T arg) {
+    return static_cast<bits<sz>>(arg);
   }
 
   template<std::size_t ret_sz, std::size_t arg_sz>
-  uint_t<ret_sz> truncate(const uint_t<arg_sz> arg) {
+  bits<ret_sz> truncate(const bits<arg_sz> arg) {
     return mask<ret_sz>(widen<ret_sz>(arg));
   }
 
   template<std::size_t sz1, std::size_t sz2>
-  uint_t<1> sel(const uint_t<sz1> data, const uint_t<sz2> idx) {
+  bits<1> sel(const bits<sz1> data, const bits<sz2> idx) {
     return truncate<1,sz1>(data >> idx);
   }
 
   template<std::size_t sz1, std::size_t idx, std::size_t width>
-  uint_t<width> part(const uint_t<sz1> data, const unit_t /*unused*/) {
+  bits<width> part(const bits<sz1> data, const unit /*unused*/) {
     return truncate<width, sz1>(data >> idx);
   }
 
   template<std::size_t sz1, std::size_t idx, std::size_t width>
-  uint_t<sz1> part_subst(const uint_t<sz1> data, const uint_t<width> repl) {
-    const uint_t<sz1> mask = ~(widen<sz1>(ones<width>()) << idx);
+  bits<sz1> part_subst(const bits<sz1> data, const bits<width> repl) {
+    const bits<sz1> mask = ~(widen<sz1>(ones<width>()) << idx);
     return (data & mask) | (widen<sz1>(repl) << idx);
   }
 
   template<std::size_t sz1, std::size_t sz2, std::size_t width>
-  uint_t<width> indexed_part(const uint_t<sz1> data, const uint_t<sz2> idx) {
+  bits<width> indexed_part(const bits<sz1> data, const bits<sz2> idx) {
     return truncate<width, sz1>(data >> idx);
   }
 
   template<std::size_t sz>
-  uint_t<sz> lnot(const uint_t<sz> data, const unit_t /*unused*/) {
+  bits<sz> lnot(const bits<sz> data, const unit /*unused*/) {
     return mask<sz>(~data);
   }
 
   template<std::size_t sz>
-  uint_t<sz> land(const uint_t<sz> data1, const uint_t<sz> data2) {
+  bits<sz> land(const bits<sz> data1, const bits<sz> data2) {
     return data1 & data2;
   }
 
   template<std::size_t sz>
-  uint_t<sz> lor(const uint_t<sz> data1, const uint_t<sz> data2) {
+  bits<sz> lor(const bits<sz> data1, const bits<sz> data2) {
     return data1 | data2;
   }
 
   template<std::size_t sz1, std::size_t sz2>
-  uint_t<sz1> lsr(const uint_t<sz1> data, const uint_t<sz2> shift) {
+  bits<sz1> lsr(const bits<sz1> data, const bits<sz2> shift) {
     return data >> shift;
   }
 
   template<std::size_t sz1, std::size_t sz2>
-  uint_t<sz1> lsl(const uint_t<sz1> data, const uint_t<sz2> shift) {
+  bits<sz1> lsl(const bits<sz1> data, const bits<sz2> shift) {
     return mask<sz1>(data << shift);
   }
 
   template<std::size_t sz>
-  uint_t<sz> eq(const uint_t<sz> x, const uint_t<sz> y) {
+  bits<sz> eq(const bits<sz> x, const bits<sz> y) {
     return x == y;
   }
 
   template<std::size_t sz>
-  uint_t<sz> plus(const uint_t<sz> x, const uint_t<sz> y) {
+  bits<sz> plus(const bits<sz> x, const bits<sz> y) {
     return mask<sz>(x + y);
   }
 
   template<std::size_t sz1, std::size_t sz2>
-  uint_t<sz1 + sz2> concat(const uint_t<sz1> x, const uint_t<sz2> y) {
+  bits<sz1 + sz2> concat(const bits<sz1> x, const bits<sz2> y) {
     return widen<sz1 + sz2>(x) << sz2 | y;
   }
 
   template<std::size_t sz, std::size_t width>
-  uint_t<std::max(sz, width)> zextl(const uint_t<sz> x, const unit_t /*unused*/) {
+  bits<std::max(sz, width)> zextl(const bits<sz> x, const unit /*unused*/) {
     return widen<std::max(sz, width)>(x);
   }
 
   template<std::size_t sz, std::size_t width>
-  uint_t<std::max(sz, width)> zextr(const uint_t<sz> x, const unit_t /*unused*/) {
+  bits<std::max(sz, width)> zextr(const bits<sz> x, const unit /*unused*/) {
     return widen<std::max(sz, width)>(x) << (std::max(width, sz) - sz);
   }
 
   // Forward-declared; our compiler defines one instance per structure type
-  template<typename T, std::size_t sz> static T unpack(uint_t<sz> /*bits*/);
+  template<typename T, std::size_t sz> static T unpack(bits<sz> /*bits*/);
 } // namespace prims
 
 #ifndef SIM_MINIMAL
 template<std::size_t sz>
-std::string repr(const uint_t<sz> val) {
+std::string repr(const bits<sz> val) {
   std::ostringstream stream;
   stream << sz << "'";
   if (sz <= 64) {

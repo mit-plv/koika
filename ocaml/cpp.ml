@@ -120,9 +120,9 @@ let cpp_type_of_type
      if sz > 64 then
        needs_multiprecision := true;
      if sz = 0 then
-       "unit_t"
+       "unit"
      else if sz <= 1024 then
-       sprintf "uint_t<%d>" sz
+       sprintf "bits<%d>" sz
      else
        failwith (sprintf "Unsupported size: %d" sz)
   | Enum_t sg -> cpp_enum_name user_types sg
