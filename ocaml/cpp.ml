@@ -35,7 +35,7 @@ let register_type (user_types: (string * typ) list ref) nm tau =
                    nm (typ_to_string tau) (typ_to_string tau'))
   | None -> user_types := (nm, tau) :: !user_types
 
-let gensym_prefix = "_cs_"
+let gensym_prefix = "_"
 let gensym, gensym_reset = make_gensym gensym_prefix
 (* Mangling takes care of collisions with the gensym *)
 
@@ -58,7 +58,7 @@ module Mangling = struct
        "try"; "typedef"; "typeid"; "typename"; "union"; "unsigned"; "using";
        "virtual"; "void"; "volatile"; "wchar_t"; "while"; "xor"; "xor_eq"]
 
-  let mangling_prefix = "_cpp_"
+  let mangling_prefix = "_renamed"
   let specials_re = Str.regexp (sprintf "^\\(_[A-Z]\\|%s\\|%s\\)" mangling_prefix gensym_prefix)
   let dunder_re = Str.regexp "__+"
   let dunder_anchored_re = Str.regexp "^.*__"
