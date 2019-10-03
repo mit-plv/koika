@@ -29,14 +29,14 @@ end
 
 type nonrec 'a locd = (Pos.t, 'a) locd
 
-type unresolved_enum = {
-    name: string;
-    field: string
+type unresolved_enumerator = {
+    enum: string;
+    constructor: string
   }
 
 type unresolved_value =
   | UBits of bool array
-  | UEnum of unresolved_enum
+  | UEnum of unresolved_enumerator
 
 type unresolved_typedecl =
   | Enum_u of { name: string locd; bitsize: int locd; members: (string locd * bits_value locd) list }
@@ -51,7 +51,7 @@ type unresolved_literal =
   | Num of (string * int)
   | Symbol of string
   | Keyword of string
-  | Enumerator of { name: string; field: string }
+  | Enumerator of { enum: string; constructor: string }
   | Const of unresolved_value
 
 type unresolved_action =
@@ -108,7 +108,257 @@ type resolved_unit = {
     r_mods: resolved_module list;
   }
 
-exception Errors of Pos.t err_contents list
+let quote x = "`" ^ x ^ "'"
+
+let one_of_str candidates =
+  match candidates with
+  | [] -> "" | [x] -> quote x
+  | _ -> let candidates = List.sort compare candidates |> List.map quote |> String.concat ", " in
+         sprintf "one of %s" candidates
+
+module Errors = struct
+  let fquote () = quote
+
+  module ParseErrors = struct
+    type t =
+      | SexpError of { msg: string }
+      | BadPosAnnot of { sexp: Base.Sexp.t }
+      | BadBitsSize of { size: string }
+      | Overflow of { numstr: string; bits: string; size: int }
+
+    let to_string = function
+      | SexpError { msg } -> String.capitalize_ascii msg
+      | BadPosAnnot { sexp } ->
+         sprintf "Bad use of <>: %s" (Base.Sexp.to_string sexp)
+      | BadBitsSize { size } ->
+         sprintf "Unparseable size annotation: %s" (quote size)
+      | Overflow { numstr; bits; size } ->
+         sprintf "Number %a (%d'b%s) does not fit in %d bit(s)"
+           fquote numstr (String.length bits) bits size
+  end
+
+  module SyntaxErrors = struct
+    type t =
+      | MissingSize of { number: string }
+      | MissingElement of { kind: string }
+      | MissingElementIn of { kind: string; where: string }
+      | MissingPairElement of { kind2: string }
+      | TooManyElementsIn of { kind: string; where: string }
+      | ExpectingNil of { kind: string }
+      | UnexpectedList of { expected: string }
+      | UnexpectedAtom of { expected: string; atom: string }
+      | UnexpectedSymbol of { symbol: string }
+      | UnexpectedKeyword of { keyword: string }
+      | BadChoice of { atom: string; expected: string list }
+      | BadLiteral of { atom: string }
+      | BadBitsLiteral of { atom: string }
+      | BadIdentifier of { kind: string; atom: string }
+      | BadConst of { atom: string }
+      | BadKeyword of { kind: string; atom: string }
+      | BadEnumerator of { atom: string }
+      | BadType of { atom: string }
+      | BadBitsSizeInType of { atom: string }
+      | BadIntParam of { obj: string }
+      | BadKeywordParam of { obj: string; kind: string }
+      | BadSymbolParam of { obj: string; kind: string }
+      | EmptySwitch
+      | MissingDefaultInSwitch
+      | DuplicateDefaultInSwitch
+      | QualifiedEnumeratorInDecl of { enum: string; constructor: string }
+      | TooManyArgumentsInExtfunDecl
+
+    let to_string = function
+      | MissingSize { number } ->
+         sprintf "Missing size annotation on number %s" (quote number)
+      | MissingElement { kind } ->
+         sprintf "Missing %s" kind
+      | MissingElementIn { kind; where } ->
+         sprintf "No %s found in %s" kind where
+      | MissingPairElement { kind2 } ->
+         sprintf "Missing %s after this element" kind2
+      | TooManyElementsIn { kind; where } ->
+         sprintf "More than one %s found in %s" kind where
+      | ExpectingNil { kind } ->
+         sprintf "Unexpected %s" kind
+      | UnexpectedList { expected } ->
+         sprintf "Expecting %s, but got a list" expected
+      | UnexpectedAtom { expected; atom } ->
+         sprintf "Expecting a list (%s), got %a" expected fquote atom
+      | UnexpectedSymbol { symbol } ->
+         sprintf "Unexpected symbol %s" (quote symbol)
+      | UnexpectedKeyword { keyword } ->
+         sprintf "Unexpected keyword %s" (quote keyword)
+      | BadChoice { atom; expected } ->
+         sprintf "Expecting %s, got %a" (one_of_str expected) fquote atom
+      | BadLiteral { atom } ->
+         sprintf "Cannot parse %a as a literal (number, variable, symbol or keyword)" fquote atom
+      | BadBitsLiteral { atom } ->
+         sprintf "Expecting a sized literal (e.g. 2'b01 or 8'42), got %a" fquote atom
+      | BadIdentifier { kind; atom } ->
+         sprintf "Cannot parse %a as an identifier (expecting %s)" fquote atom kind
+      | BadConst { atom } ->
+         sprintf "Expecting a sized literal (e.g. 8'hff) or an enumerator (eg proto::ipv4), got %a" fquote atom
+      | BadKeyword { kind; atom } ->
+         sprintf "Expecting a keyword (%s, starting with a colon), got %a" kind fquote atom
+      | BadEnumerator { atom } ->
+         sprintf "Expecting an enumerator (format: abc::xyz or ::xyz), got %a" fquote atom
+      | BadType { atom } ->
+         sprintf "Expecting a type name (e.g. (bits 16) or 'xyz) got %a" fquote atom
+      | BadBitsSizeInType { atom } ->
+         sprintf "Expecting a bit size (e.g. 32), got %a" fquote atom
+      | BadIntParam { obj } ->
+         sprintf "This %s should be an integer" obj
+      | BadKeywordParam { obj; kind } ->
+         sprintf "This %s should be a keyword (a %s, starting with a colon)" obj kind
+      | BadSymbolParam { obj; kind } ->
+         sprintf "This %s should be a symbol (a %s, starting with a quote)" obj kind
+      | EmptySwitch ->
+         "Empty switch: not sure what to return"
+      | MissingDefaultInSwitch ->
+         "Missing default case (_) in switch"
+      | DuplicateDefaultInSwitch ->
+         "Duplicated default case (_) in switch"
+      | QualifiedEnumeratorInDecl { enum; constructor } ->
+         sprintf "Enumerator declarations should not be qualified: try %a instead of %a"
+           fquote ("::" ^ constructor) fquote (enum ^ "::" ^ constructor)
+      | TooManyArgumentsInExtfunDecl ->
+         "External functions with more than 2 arguments are not supported" ^
+           " (consider using a struct to pass more arguments)"
+  end
+
+  module NameErrors = struct
+    type t =
+      | Unbound of { kind: string; name: string; candidates: string list }
+      | Duplicate of { kind: string; name: string }
+      | DuplicateTypeName of { name: string; kind: string; previous: typ }
+      | ExtfunShadowsPrimitive of { ext_name: string }
+      | MissingScheduler of { modname: string }
+      | MissingModule
+
+    let to_string = function
+      | Unbound { kind; name; candidates } ->
+         let candidates =
+           if candidates = [] then ""
+           else sprintf " (expecting %s)" (one_of_str candidates) in
+         sprintf "Unbound %s: `%s'%s" kind name candidates
+      | Duplicate { kind; name } ->
+         sprintf "Duplicate %s: %a" kind fquote name
+      | DuplicateTypeName { name; kind; previous } ->
+         sprintf "Duplicate type name: %s %a previously declared (as %s)" kind fquote name (kind_to_str previous)
+      | ExtfunShadowsPrimitive { ext_name } ->
+         sprintf "External function name %a conflicts with existing primitive." fquote ext_name
+      | MissingScheduler { modname } ->
+         sprintf "Missing scheduler in module %a" fquote modname
+      | MissingModule ->
+         "No modules declared"
+  end
+
+  module ResolutionErrors = struct
+    type t =
+      | BadInitBits of { init: string; size: int }
+      | BadInitEnum of { init: string; name: string; bitsize: int }
+
+    let to_string = function
+      | BadInitBits { init; size } ->
+         sprintf "Use %d'0 instead of (new '%s ...) to create a bits value" size init
+      | BadInitEnum { init; name; bitsize } ->
+         sprintf "Use (unpack '%s %d'0) instead of (new '%s ...) to create an enum value" name bitsize init
+  end
+
+  module TypeErrors = struct
+    type t =
+      | BadArgumentCount of { fn: string; expected: int; given: int }
+      | InconsistentEnumeratorSizes of { expected: int; actual: int }
+      | BadKind of { name: string; expected: string; actual_type: typ }
+
+    let to_string = function
+      | BadArgumentCount { fn; expected; given } ->
+         sprintf "Function %s takes %d arguments (%d given)" fn expected given
+      | InconsistentEnumeratorSizes { expected; actual } ->
+         sprintf "Inconsistent sizes in enum: expecting %a, got %a"
+           fquote (sprintf "bits %d" expected) fquote (sprintf "bits %d" actual)
+      | BadKind { name; expected: string; actual_type } ->
+         sprintf "Type %a is %s, not %s" fquote name (kind_to_str actual_type) expected
+  end
+
+  module TypeInferenceErrors = struct
+    type t = string SGALib.Util.sga_error_message
+
+    let classify (msg: t) =
+      match msg with
+      | ExplicitErrorInAst -> `TypeError
+      | UnboundVariable _ -> `NameError
+      | UnboundField _ -> `NameError
+      | UnboundEnumMember _ -> `NameError
+      | TypeMismatch _ -> `TypeError
+      | KindMismatch _ -> `TypeError
+
+    let to_string (msg: t) =
+      match msg with
+      | ExplicitErrorInAst ->
+         "Untypeable term (likely due to an ill-typed subterm)"
+      | UnboundVariable { var } ->
+         sprintf "Unbound variable %a" fquote var
+      | UnboundField { field; sg } ->
+         sprintf "Unbound field %a in %s" fquote field (struct_sig_to_string sg)
+      | UnboundEnumMember { name; sg } ->
+         sprintf "Enumerator %a is not a member of %s" fquote name (enum_sig_to_string sg)
+      | TypeMismatch { expected; actual } ->
+         sprintf "This term has type %a, but %a was expected"
+           fquote (typ_to_string actual) fquote (typ_to_string expected)
+      | KindMismatch { actual; expected } ->
+         sprintf "This term has type %a, but kind %a was expected"
+           fquote (typ_to_string actual) fquote expected
+  end
+
+  type err =
+    | EParse of ParseErrors.t
+    | ESyntax of SyntaxErrors.t
+    | EName of NameErrors.t
+    | EResolution of ResolutionErrors.t
+    | EType of TypeErrors.t
+    | ETypeInference of TypeInferenceErrors.t
+
+  let classify = function
+    | EParse _ -> `ParseError
+    | ESyntax _ -> `SyntaxError
+    | EName _ -> `NameError
+    | EResolution _ -> `ResolutionError
+    | EType _ -> `TypeError
+    | ETypeInference err -> TypeInferenceErrors.classify err
+
+  let err_to_string = function
+    | EParse err -> ParseErrors.to_string err
+    | ESyntax err -> SyntaxErrors.to_string err
+    | EName err -> NameErrors.to_string err
+    | EResolution err -> ResolutionErrors.to_string err
+    | EType err -> TypeErrors.to_string err
+    | ETypeInference err -> TypeInferenceErrors.to_string err
+
+  type error = { epos: Pos.t; emsg: err }
+
+  let to_string { epos; emsg } =
+    sprintf "%s: %s: %s"
+      (Pos.to_string epos)
+      (match classify emsg with
+       | `ParseError -> "Parse error"
+       | `SyntaxError -> "Syntax error"
+       | `NameError -> "Name error"
+       | `ResolutionError -> "Resolution error"
+       | `TypeError -> "Type error")
+      (err_to_string emsg)
+
+  exception Errors of error list
+  let error epos emsg = raise (Errors [{ epos; emsg }])
+  let parse_error epos emsg = error epos (EParse emsg)
+  let syntax_error epos emsg = error epos (ESyntax emsg)
+  let resolution_error epos emsg = error epos (EResolution emsg)
+  let name_error epos msg = error epos (EName msg)
+  let type_error epos msg = error epos (EType msg)
+  let type_inference_error epos emsg = error epos (ETypeInference emsg)
+end
+
+open Errors
 
 module Delay = struct
   let buffer = ref []
@@ -178,42 +428,11 @@ module Delay = struct
     apply1_default None (fun x -> Some (f x)) x
 end
 
-let error err = raise (Errors [err])
+let unbound_error epos ?(candidates=[]) kind name =
+  name_error epos @@ Unbound { kind; name; candidates }
 
-let check_result = function
-  | Ok cs -> cs
-  | Error err -> error err
-
-let parse_error (epos: Pos.t) emsg =
-  error { epos; ekind = `ParseError; emsg }
-
-let syntax_error (epos: Pos.t) emsg =
-  error { epos; ekind = `SyntaxError; emsg }
-
-let resolution_error (epos: Pos.t) emsg =
-  error { epos; ekind = `ResolutionError; emsg = emsg }
-
-let name_error epos ?(extra="") msg =
-  error { epos; ekind = `NameError; emsg = msg ^ extra }
-
-let quote x = "`" ^ x ^ "'"
-
-let unbound_error (epos: Pos.t) ?(bound=[]) kind name =
-  let msg = sprintf "Unbound %s: `%s'" kind name in
-  let lst = String.concat ", " (List.map quote (List.sort compare bound)) in
-  let extra = match bound with
-    | [] -> "" | [x] -> sprintf " (expecting `%s')" x
-    | _ -> sprintf " (expecting one of %s)" lst in
-  name_error epos ~extra msg
-
-let type_error (epos: Pos.t) emsg =
-  error { epos; ekind = `TypeError; emsg }
-
-let untyped_number_error (pos: Pos.t) s =
-  type_error pos (sprintf "Missing size annotation on number `%s'" s)
-
-let symbol_error (pos: Pos.t) s =
-  type_error pos (sprintf "Unexpected symbol `%s'" s)
+let missing_size_error epos number =
+  syntax_error epos @@ MissingSize { number }
 
 module Dups(OT: Map.OrderedType) = struct
   module M = Map.Make(OT)
@@ -227,10 +446,10 @@ module Dups(OT: Map.OrderedType) = struct
         let { lcnt = k; lpos } = keyfn x in multimap_add k (x, lpos) map)
       M.empty xs
 
-  let check msg (keyfn: 'a -> OT.t locd) strfn xs =
+  let check kind (keyfn: 'a -> OT.t locd) strfn xs =
     M.iter (fun _ positions ->
         Delay.iter (fun (x, lpos) ->
-            name_error lpos (sprintf "Duplicate %s: `%s'" msg (strfn x)))
+            name_error lpos @@ Duplicate { kind; name = (strfn x) })
           (List.tl (List.rev positions)))
       (multimap_of_locds keyfn xs)
 end
@@ -238,8 +457,8 @@ end
 module StringDuplicates = Dups(OrderedString)
 module BitsDuplicates = Dups(struct type t = bool array let compare = compare end)
 
-let expect_cons loc msg = function
-  | [] -> syntax_error loc (Printf.sprintf "Missing %s" msg)
+let expect_cons loc kind = function
+  | [] -> syntax_error loc @@ MissingElement { kind }
   | hd :: tl -> hd, tl
 
 let rec gather_pairs = function
@@ -261,7 +480,6 @@ let read_all fname =
   if fname = "-" then Stdio.In_channel.input_all Stdio.stdin
   else Stdio.In_channel.read_all fname
 
-
 module DelayedReader (P: Parsexp.Eager_parser) = struct
   exception GotSexp of P.parsed_value * Parsexp.Positions.pos
 
@@ -277,7 +495,7 @@ module DelayedReader (P: Parsexp.Eager_parser) = struct
       with Parsexp.Parse_error err ->
         let pos = Parsexp.Parse_error.position err in
         let msg = Parsexp.Parse_error.message err in
-        parse_error (Pos.SexpPos (fname, pos)) msg in
+        parse_error (Pos.SexpPos (fname, pos)) @@ SexpError { msg } in
     let rec read_sexps pos =
       P.State.reset ~pos state;
       try Delay.apply1 feed pos.offset; []
@@ -294,7 +512,7 @@ let read_cst_sexps fname =
   let rec drop_comments (s: Parsexp.Cst.t_or_comment) =
     match s with
     | Parsexp.Cst.Sexp (Parsexp.Cst.Atom { loc; atom; _ }) ->
-       Some (Atom  { loc = wrap_loc loc; atom })
+       Some (Atom { loc = wrap_loc loc; atom })
     | Parsexp.Cst.Sexp (Parsexp.Cst.List { loc; elements }) ->
        Some (List { loc = wrap_loc loc;
                     elements = Base.List.filter_map ~f:drop_comments elements })
@@ -303,19 +521,18 @@ let read_cst_sexps fname =
   |> Base.List.filter_map ~f:drop_comments
 
 let read_annotated_sexps fname =
-  let rec commit_annots loc (s: Base.Sexp.t) =
-    match s with
+  let rec commit_annots loc (sexp: Base.Sexp.t) =
+    match sexp with
     | Atom atom ->
        Atom { loc; atom }
     | List [Atom "<>"; Atom annot; body] ->
        commit_annots (Pos.StrPos annot) body
     | List (Atom "<>" :: _) ->
-       let msg = sprintf "Bad use of <>: %s" (Base.Sexp.to_string s) in
-       parse_error (Pos.Filename fname) msg
+       parse_error (Pos.Filename fname) @@ BadPosAnnot { sexp }
     | List elements ->
        List { loc; elements = List.map (commit_annots loc) elements } in
   DelayedReader_plain.parse_string fname (read_all fname)
-  |> List.map (commit_annots (Pos.Filename fname))
+  |> Delay.map (commit_annots (Pos.Filename fname))
 
 let keys s =
   StringMap.fold (fun k _ acc -> k :: acc) s []
@@ -346,18 +563,17 @@ let try_plain_int n =
 let try_number' loc a =
   let a = Str.global_replace underscore_re "" a in
   if Str.string_match bits_const_re a 0 then
-    let sizestr = Str.matched_group 1 a in
-    let size = try int_of_string sizestr
+    let size = Str.matched_group 1 a in
+    let size = try int_of_string size
                with Failure _ ->
-                 parse_error loc (sprintf "Unparsable size annotation: `%s'" sizestr) in
+                 parse_error loc @@ BadBitsSize { size } in
     let numstr = Str.matched_group 2 a in
     let num = Z.of_string ("0" ^ (Str.replace_first leading_h_re "x" numstr)) in
     let bits = if size = 0 && num = Z.zero then ""
                else Z.format "%b" num in
     let nbits = String.length bits in
     if nbits > size then
-      parse_error loc (sprintf "Number `%s' (%d'b%s) does not fit in %d bit(s)"
-                         numstr nbits bits size)
+      parse_error loc @@ Overflow { numstr; bits; size }
     else
       let padding = list_const (size - nbits) false in
       let char2bool = function '0' -> false | '1' -> true | _ -> assert false in
@@ -383,7 +599,7 @@ let enumerator_re = Str.regexp (sprintf "^\\(\\|%s\\)::\\(%s\\)$" name_re_str na
 
 let try_enumerator nm =
   if Str.string_match enumerator_re nm 0 then
-    Some { name = Str.matched_group 1 nm; field = Str.matched_group 2 nm }
+    Some { enum = Str.matched_group 1 nm; constructor = Str.matched_group 2 nm }
   else None
 
 let symbol_re = Str.regexp (sprintf "^'\\(%s\\)$" name_re_str)
@@ -396,51 +612,46 @@ let parse (sexps: Pos.t sexp list) =
   let expect_single loc kind where = function
     | [] ->
        syntax_error loc
-         (sprintf "No %s found in %s" kind where)
+         (MissingElementIn { kind; where })
     | _ :: _ :: _ ->
        syntax_error loc
-         (sprintf "More than one %s found in %s" kind where)
+         (TooManyElementsIn { kind; where })
     | [x] -> x in
-  let num_fmt =
-    "(number format: size'number)" in
-  let expect_atom msg = function
+  let expect_atom expected = function
     | List { loc; _ } ->
-       syntax_error loc
-         (sprintf "Expecting %s, but got a list" msg)
+       syntax_error loc @@ UnexpectedList { expected }
     | Atom { loc; atom } ->
        (loc, atom) in
-  let expect_list msg = function
+  let expect_list expected = function
     | Atom { loc; atom } ->
-       syntax_error loc
-         (sprintf "Expecting %s, but got `%s'" msg atom)
+       syntax_error loc @@ UnexpectedAtom { atom; expected }
     | List { loc; elements } ->
        (loc, elements) in
   let expect_nil = function
     | [] -> ()
-    | List { loc; _ } :: _ -> syntax_error loc "Unexpected list"
-    | Atom { loc; _ } :: _ -> syntax_error loc "Unexpected atom" in
+    | List { loc; _ } :: _ -> syntax_error loc @@ ExpectingNil { kind = "list" }
+    | Atom { loc; _ } :: _ -> syntax_error loc @@ ExpectingNil { kind = "atom" } in
   let expect_pair loc msg1 msg2 lst =
     let x1, lst = expect_cons loc msg1 lst in
     let x2, lst = expect_cons loc msg2 lst in
     expect_nil lst;
     (x1, x2) in
-  let expect_pairs msg f1 f2 xs =
+  let expect_pairs kind2 f1 f2 xs =
     Delay.map (function
         | `Pair (x1, x2) -> (f1 x1, f2 x2)
-        | `Single x1 -> ignore (f1 x1); syntax_error (sexp_pos x1) (sprintf "Missing %s after this element" msg))
+        | `Single x1 -> ignore (f1 x1); syntax_error (sexp_pos x1) @@ MissingPairElement { kind2 })
       (gather_pairs xs) in
-  let expect_constant csts c =
-    let optstrs = List.map (quote << fst) csts in
-    let msg = match optstrs with
-      | [c] -> c
-      | _ -> sprintf "one of %s" (String.concat ", " optstrs) in
-    let loc, s = expect_atom msg c in
-    match List.assoc_opt s csts with
-    | None -> syntax_error loc (sprintf "Expecting %s, got `%s'" msg s)
-    | Some x -> loc, x in
+  let expect_constant loc csts atom =
+    match List.assoc_opt atom csts with
+    | None -> syntax_error loc @@ BadChoice { atom; expected = List.map fst csts }
+    | Some x -> x in
+  let expect_constant_atom csts c =
+    let candidates = List.map fst csts in
+    let loc, s = expect_atom (one_of_str candidates) c in
+    loc, expect_constant loc csts s in
   let expect_literal loc a =
     match try_enumerator a with
-    | Some { name; field } -> Enumerator { name; field }
+    | Some { enum; constructor } -> Enumerator { enum; constructor }
     | None ->
        match try_keyword a with
        | Some name -> Keyword name
@@ -454,41 +665,39 @@ let parse (sexps: Pos.t sexp list) =
              | None ->
                 match try_variable a with
                 | Some var -> Var var
-                | None ->
-                   let msg = sprintf "Cannot parse `%s' as a literal (number, variable, symbol or keyword)" a in
-                   parse_error loc msg in
-  let expect_identifier msg v =
-    let loc, v = expect_atom msg v in
-    match try_variable v with
+                | None -> syntax_error loc @@ BadLiteral { atom = a } in
+  let expect_identifier kind v =
+    let loc, atom = expect_atom kind v in
+    match try_variable atom with
     | Some v -> loc, v
-    | None -> parse_error loc (sprintf "Cannot parse `%s' as %s" v msg) in
+    | None -> syntax_error loc @@ BadIdentifier { kind; atom } in
   let try_bits loc v =
     match try_number loc v with
     | Some (`Const c) -> Some c
     | _ -> None in
   let expect_bits msg v =
-    let loc, sbits = expect_atom msg v in
-    match try_number loc sbits with
-    | Some (`Const c) -> loc, (sbits, c)
-    | Some (`Num _) -> untyped_number_error loc sbits
-    | _ -> syntax_error loc (sprintf "Expecting a bits constant (e.g. 2'b01), got `%s' %s" sbits num_fmt) in
+    let loc, atom = expect_atom msg v in
+    match try_number loc atom with
+    | Some (`Const c) -> loc, (atom, c)
+    | Some (`Num _) -> missing_size_error loc atom
+    | _ -> syntax_error loc @@ BadBitsLiteral { atom } in
   let expect_const msg v =
-    let loc, scst = expect_atom msg v in
+    let loc, atom = expect_atom msg v in
     (loc,
-     match try_bits loc scst with
+     match try_bits loc atom with
      | Some c -> UBits c
      | None ->
-        match try_enumerator scst with
-        | Some { name; field } -> UEnum { name; field }
-        | None -> syntax_error loc "Expecting a bits constant (e.g. 16'hffff) or an enumerator (eg proto::ipv4)") in
-  let expect_keyword loc msg nm =
-    match try_keyword nm with
+        match try_enumerator atom with
+        | Some { enum; constructor } -> UEnum { enum; constructor }
+        | None -> syntax_error loc @@ BadConst { atom }) in
+  let expect_keyword loc kind atom =
+    match try_keyword atom with
     | Some k -> k
-    | None -> syntax_error loc (sprintf "Expecting %s starting with a colon (:), got `%s'" msg nm) in
-  let expect_enumerator loc nm =
-    match try_enumerator nm with
+    | None -> syntax_error loc @@ BadKeyword { kind; atom } in
+  let expect_enumerator loc atom =
+    match try_enumerator atom with
     | Some ev -> ev
-    | None -> syntax_error loc (sprintf "Expecting an enumerator (format: abc::xyz or ::xyz), got `%s'" nm) in
+    | None -> syntax_error loc @@ BadEnumerator { atom } in
   let expect_type ?(bits_raw=false) = function (* (bit 16), 'typename *)
     | Atom { loc; atom } ->
        locd_make loc
@@ -497,14 +706,14 @@ let parse (sexps: Pos.t sexp list) =
           | None ->
              match try_plain_int atom with
              | Some n when bits_raw -> Bits_u n
-             | _ -> syntax_error loc (sprintf "Expecting a quoted type name, got `%s'" atom))
+             | _ -> syntax_error loc @@ BadType { atom })
     | List { loc; elements } ->
        let hd, sizes = expect_cons loc "type" elements in
-       let _ = expect_constant [("bits", ())] hd in
+       let _ = expect_constant_atom [("bits", ())] hd in
        let loc, szstr = expect_atom "a size" (expect_single loc "size" "bit type" sizes) in
        match try_plain_int szstr with
        | Some size -> locd_make loc (Bits_u size)
-       | _ -> syntax_error loc (sprintf "Expecting a type-level integer (e.g. 32), got `%s'" szstr) in
+       | _ -> syntax_error loc @@ BadBitsSizeInType { atom = szstr } in
   let expect_funapp loc kind elements =
     let hd, args = expect_cons loc kind elements in
     let loc_hd, hd = expect_atom (sprintf "a %s name" kind) hd in
@@ -524,7 +733,7 @@ let parse (sexps: Pos.t sexp list) =
              (match args with
               | [] -> Common.Fail (Bits_t 0)
               | [arg] -> Lit (Fail (expect_type ~bits_raw:true arg).lcnt)
-              | _ -> syntax_error loc (sprintf "Fail takes 1 argument"))
+              | _ -> type_error loc @@ BadArgumentCount { fn = "fail"; expected = 1; given = List.length args })
           | "setq" ->
              let var, body = expect_cons loc "variable name" args in
              let value = expect_action (expect_single loc "value" "write expression" body) in
@@ -561,7 +770,7 @@ let parse (sexps: Pos.t sexp list) =
              (match build_switch_body branches with
               | Some (default, branches) ->
                  Switch { binder; operand; default; branches }
-              | None -> syntax_error loc "Empty switch")
+              | None -> syntax_error loc @@ EmptySwitch)
           | _ ->
              let args = List.map expect_action args in
              Call (locd_make loc_hd hd, args))
@@ -581,9 +790,9 @@ let parse (sexps: Pos.t sexp list) =
         | None, `AnyLabel _ ->
            Some (branch, [])
         | None, `SomeLabel l ->
-           syntax_error l.lpos "Last case of switch must be default (_)"
+           syntax_error l.lpos @@ MissingDefaultInSwitch
         | Some _, `AnyLabel loc  ->
-           syntax_error loc "Duplicated default case in switch"
+           syntax_error loc @@ DuplicateDefaultInSwitch
         | Some (default, branches), `SomeLabel l ->
            Some (default, (l, branch) :: branches))
       branches None
@@ -602,36 +811,34 @@ let parse (sexps: Pos.t sexp list) =
   let expect_actions loc body =
     locd_make loc (Progn (List.map expect_action body)) in
   let rec expect_scheduler : Pos.t sexp -> Pos.t scheduler locd = function
-    | (Atom _) as a ->
-       locd_of_pair (expect_constant [("done", Done)] a)
+    | Atom { loc; atom } ->
+       locd_make loc (expect_constant loc [("done", Done)] atom)
     | List { loc; elements } ->
        let loc_hd, hd, args = expect_funapp loc "constructor" (elements) in
+       let hd = expect_constant loc_hd [("sequence", `Sequence); ("try", `Try)] hd in
        locd_make loc
          (match hd with
-          | "sequence" ->
+          | `Sequence ->
              Sequence (Delay.map (locd_of_pair << (expect_identifier "a rule name")) args)
-          | "try" ->
+          | `Try ->
              let rname, args = expect_cons loc "rule name" args in
              let s1, s2 = expect_pair loc "subscheduler 1" "subscheduler 2" args in
              Try (locd_of_pair (expect_identifier "a rule name" rname),
                   expect_scheduler s1,
-                  expect_scheduler s2)
-          | _ ->
-             syntax_error loc_hd (sprintf "Unexpected in scheduler: `%s'" hd)) in
-  let expect_unqualified_enumerator enumerator = (* :a *)
+                  expect_scheduler s2)) in
+  let expect_unqualified_enumerator enumerator = (* ::a *)
     let loc, enumerator = expect_atom "an enumerator" enumerator in
-    let { name; field } = expect_enumerator loc enumerator in
-    if name <> "" then
-      syntax_error loc (sprintf "Expecting an unqualified enumerator (format: ::xyz), got `%s'" enumerator);
-    locd_make loc field in
+    let { enum; constructor } = expect_enumerator loc enumerator in
+    if enum <> "" then
+      syntax_error loc @@ QualifiedEnumeratorInDecl { enum = enum; constructor };
+    locd_make loc constructor in
   let expect_enumerator_value value =
     let (loc, (s, bs)) = expect_bits "an enumerator value" value in
     (s, locd_make loc bs) in
   let check_size sz { lpos; lcnt } =
     let sz' = Array.length lcnt in
     if sz' <> sz then
-      syntax_error lpos
-        (sprintf "Inconsistent sizes in enum: expecting `bits %d', got `bits %d'" sz sz') in
+      type_error lpos @@ InconsistentEnumeratorSizes { expected = sz; actual = sz' } in
   let expect_enum name loc body = (* ((:true 1'b1) (:false 1'b0) …) *)
     let members = expect_pairs "enumerator value" expect_unqualified_enumerator expect_enumerator_value body in
     let (_, (_, first)), _ = expect_cons loc "enumerator (empty enums are not supported)" members in
@@ -657,7 +864,7 @@ let parse (sexps: Pos.t sexp list) =
   let rec expect_decl d skind expected =
     let d_loc, d = expect_list ("a " ^ skind) d in
     let kind, name_body = expect_cons d_loc skind d in
-    let _, kind = expect_constant expected kind in
+    let _, kind = expect_constant_atom expected kind in
     let name, body = expect_cons d_loc "name" name_body in
     let name = locd_of_pair (expect_identifier "an identifier" name) in
     (d_loc,
@@ -708,21 +915,23 @@ let parse (sexps: Pos.t sexp list) =
   Delay.apply4 StringDuplicates.check "external function" (fun fn -> fn.ext_name) (fun fn -> fn.ext_name.lcnt) extfuns;
   { types; extfuns; mods }
 
-let rexpect_num = function
+let rexpect_num obj =
+  function
   | { lpos; lcnt = Lit (Num n); _} -> lpos, n
-  | { lpos; _ } -> syntax_error lpos "Expecting a type-level integer"
+  | { lpos; _ } -> syntax_error lpos @@ BadIntParam { obj }
 
-let rexpect_keyword msg = function
+let rexpect_keyword obj kind = function
   | { lpos; lcnt = Lit (Keyword s); _} -> lpos, s
-  | { lpos; _ } -> syntax_error lpos (sprintf "Expecting a keyword (%s)" msg)
+  | { lpos; _ } -> syntax_error lpos @@ BadKeywordParam { obj; kind }
 
-let rexpect_symbol msg = function
+let rexpect_symbol obj kind = function
   | { lpos; lcnt = Lit (Symbol s) } -> lpos, s
-  | { lpos; _ } -> syntax_error lpos (sprintf "Expecting a symbol (%s)" msg)
+  | { lpos; _ } -> syntax_error lpos @@ BadSymbolParam { obj; kind }
 
-let rexpect_arg k loc (args: unresolved_action locd list) =
-  let a, args = expect_cons loc "argument" args in
-  k a, args
+let rexpect_param k loc (args: unresolved_action locd list) =
+  let obj = "compile-time parameter" in
+  let a, args = expect_cons loc obj args in
+  k obj a, args
 
 let types_empty =
   { td_enums = StringMap.empty;
@@ -751,13 +960,11 @@ let resolve_type types { lpos; lcnt: unresolved_type } =
      match StringMap.find_opt nm types.td_all with
      | Some tau -> tau
      | None ->
-        unbound_error lpos ~bound:(keys types.td_all) "type" nm
+        unbound_error lpos ~candidates:(keys types.td_all) "type" nm
 
-let assert_unique_type types nm kind =
-  match StringMap.find_opt nm.lcnt types.td_all with
-  | Some tau ->
-     name_error nm.lpos
-       (sprintf "Duplicate type name: %s `%s' previously declared (as %s)" kind nm.lcnt (kind_to_str tau))
+let assert_unique_type types { lpos; lcnt = name } kind =
+  match StringMap.find_opt name types.td_all with
+  | Some tau -> name_error lpos @@ DuplicateTypeName { kind; name; previous = tau }
   | None -> ()
 
 let resolve_typedecl types (typ: unresolved_typedecl locd) =
@@ -827,35 +1034,34 @@ let all_primitives =
 let resolve_extfun_decl types { ext_name; ext_argtypes; ext_rettype } =
   let unit_u = locd_make ext_name.lpos (Bits_u 0) in
   if StringSet.mem ext_name.lcnt all_primitives then
-    name_error ext_name.lpos (sprintf "External function name `%s' conflicts with existing primitive." ext_name.lcnt);
+    name_error ext_name.lpos @@ ExtfunShadowsPrimitive { ext_name = ext_name.lcnt };
   let nargs, a1, a2 = match ext_argtypes with
     | [] -> 0, unit_u, unit_u
     | [t] -> 1, t, unit_u
     | [x; y] -> 2, x, y
-    | _ -> syntax_error ext_name.lpos ("External functions with more than 2 arguments are not supported" ^
-                                        " (consider using a struct to pass more arguments)") in
+    | _ -> syntax_error ext_name.lpos @@ TooManyArgumentsInExtfunDecl in
   ext_name.lcnt, (nargs, { ffi_name = ext_name.lcnt;
                            ffi_arg1type = resolve_type types a1;
                            ffi_arg2type = resolve_type types a2;
                            ffi_rettype = resolve_type types ext_rettype })
 
 let resolve_value types { lpos; lcnt } =
-  let resolve_enum_field sg field =
+  let resolve_enum_constructor sg field =
     match List.assoc_opt field sg.enum_members with
     | Some bs -> Enum (sg, bs)
-    | None -> unbound_error lpos ~bound:(List.map fst sg.enum_members)
+    | None -> unbound_error lpos ~candidates:(List.map fst sg.enum_members)
                 (sprintf "enumerator in type `%s'" sg.enum_name) field in
   match lcnt with
   | UBits bs -> Bits bs
-  | UEnum { name = ""; field } ->
-     (match StringMap.find_opt field types.td_enumerators with
-      | Some sg -> resolve_enum_field sg field
-      | None -> unbound_error lpos ~bound:(keys types.td_enumerators) "enumerator" field)
-  | UEnum { name; field } ->
-     (match StringMap.find_opt name types.td_all with
-      | Some (Enum_t sg) -> resolve_enum_field sg field
-      | Some tau -> type_error lpos (sprintf "Type `%s' is not an enum" (typ_to_string tau))
-      | None -> unbound_error lpos ~bound:(keys types.td_enums) "enum" name)
+  | UEnum { enum = ""; constructor } ->
+     (match StringMap.find_opt constructor types.td_enumerators with
+      | Some sg -> resolve_enum_constructor sg constructor
+      | None -> unbound_error lpos ~candidates:(keys types.td_enumerators) "enumerator" constructor)
+  | UEnum { enum; constructor } ->
+     (match StringMap.find_opt enum types.td_all with
+      | Some (Enum_t sg) -> resolve_enum_constructor sg constructor
+      | Some tau -> type_error lpos @@ BadKind { name = enum; actual_type = tau; expected = "an enum" }
+      | None -> unbound_error lpos ~candidates:(keys types.td_enums) "enum" constructor)
 
 let try_resolve_bits_fn { lpos; lcnt = name } args =
   let bits_fn nm = SGALib.SGA.UPrimFn (SGALib.SGA.UBitsFn nm) in
@@ -865,32 +1071,31 @@ let try_resolve_bits_fn { lpos; lcnt = name } args =
            | `Prim0 fn ->
               bits_fn fn, nargs, args
            | `Prim1 fn ->
-              let (_, (_, n)), args = rexpect_arg rexpect_num lpos args in
+              let (_, (_, n)), args = rexpect_param rexpect_num lpos args in
               bits_fn (fn n), nargs, args
            | `Prim2 fn ->
-              let (_, (_, n)), args = rexpect_arg rexpect_num lpos args in
-              let (_, (_, n')), args = rexpect_arg rexpect_num lpos args in
+              let (_, (_, n)), args = rexpect_param rexpect_num lpos args in
+              let (_, (_, n')), args = rexpect_param rexpect_num lpos args in
               bits_fn (fn n n'), nargs, args)
   | None -> None
 
-let rexpect_pairs msg f1 f2 xs =
+let rexpect_pairs kind2 f1 f2 xs =
   Delay.map (function
       | `Pair (h1, h2) -> (f1 h1, f2 h2)
-      | `Single h1 -> ignore (f1 h1); syntax_error h1.lpos (sprintf "Missing %s after this element" msg))
+      | `Single h1 -> ignore (f1 h1); syntax_error h1.lpos @@ MissingPairElement { kind2 })
     (gather_pairs xs)
 
 let rexpect_type loc types (args: unresolved_action locd list) =
-  let (loc, t), args = rexpect_arg (rexpect_symbol "a type name") loc args in
+  let (loc, t), args = rexpect_param (rexpect_symbol "a type name") loc args in
   let tau = resolve_type types (locd_make loc (Unknown_u t)) in
   loc, t, tau, args
 
 let try_resolve_primitive types name args =
-  let must_struct_t loc nm = function
+  let must_struct_t loc name = function
     | Struct_t sg -> SGALib.Util.sga_struct_sig_of_struct_sig sg
-    | tau -> type_error loc (sprintf "Expecting a struct name, but `%s' is `%s'"
-                               nm (kind_to_str ~pre:true tau)) in
+    | tau -> type_error loc @@ BadKind { name; actual_type = tau; expected = "a struct" } in
   let rexpect_field args =
-    let (_, f), args = rexpect_arg (rexpect_keyword "a struct field") name.lpos args in
+    let (_, f), args = rexpect_param (rexpect_keyword "a struct field") name.lpos args in
     SGALib.Util.coq_string_of_string f, args in
   match StringMap.find_opt name.lcnt core_primitives with
   | Some (fn, nargs) ->
@@ -924,15 +1129,12 @@ let try_resolve_special_function types name (args: unresolved_action locd list) 
      let uinit = SGALib.SGA.(UPrimFn (UConvFn (UInit sga_tau))) in
      (match tau with
       | Bits_t sz ->
-         resolution_error loc
-           (sprintf "Use %d'0 instead of (new '%s ...) to create a bits value" sz nm)
+         resolution_error loc @@ BadInitBits { init = nm; size = sz }
       | Enum_t { enum_name; enum_bitsize; _ } ->
-         resolution_error loc
-           (sprintf "Use (unpack '%s %d'0) instead of (new '%s ...) to create an enum value"
-              enum_name enum_bitsize nm)
+         resolution_error loc @@ BadInitEnum { init = nm; name = enum_name; bitsize = enum_bitsize }
       | Struct_t sg ->
          let expect_field_name nm =
-           locd_of_pair (rexpect_keyword "a field name" nm) in
+           locd_of_pair (rexpect_keyword "initializer parameter" "a field name" nm) in
          let expect_field_val x = x in
          let tt = { lpos = loc; lcnt = literal_tt } in
          Some (match rexpect_pairs "value" expect_field_name expect_field_val args with
@@ -942,8 +1144,9 @@ let try_resolve_special_function types name (args: unresolved_action locd list) 
 
 let pad_function_call lpos name fn nargs (args: unresolved_action locd list) =
   assert (nargs <= 2);
-  if List.length args <> nargs then
-    type_error lpos (sprintf "Function `%s' takes %d arguments" name nargs)
+  let given = List.length args in
+  if given <> nargs then
+    type_error lpos @@ BadArgumentCount { fn = name; expected = nargs; given }
   else
     let tt = { lpos; lcnt = literal_tt } in
     let a1, a2 = match args with
@@ -962,8 +1165,8 @@ let resolve_function types extfuns name (args: unresolved_action locd list) =
        | Some r -> r
        | None -> match try_resolve_extfun extfuns name args with
                  | Some r -> r
-                 | None -> let bound = List.concat [keys core_primitives; keys bits_primitives; keys extfuns] in
-                           unbound_error name.lpos ~bound "function" name.lcnt in
+                 | None -> let candidates = List.concat [keys core_primitives; keys bits_primitives; keys extfuns] in
+                           unbound_error name.lpos ~candidates "function" name.lcnt in
      pad_function_call name.lpos name.lcnt fn nargs args
 
 let resolve_rule types extfuns registers ((nm, action): unresolved_rule) =
@@ -981,11 +1184,11 @@ let resolve_rule types extfuns registers ((nm, action): unresolved_rule) =
              | Fail sz -> Fail sz
              | Lit (Fail tau) -> Fail (resolve_type types (locd_make lpos tau))
              | Lit (Var v) -> Lit (Common.Var v)
-             | Lit (Num (s, _)) -> untyped_number_error lpos s
-             | Lit (Symbol s) -> symbol_error lpos s
-             | Lit (Keyword k) -> syntax_error lpos (sprintf "Unexpected keyword: `%s'" k)
-             | Lit (Enumerator { name; field }) ->
-                let v = UEnum { name; field } in
+             | Lit (Num (s, _)) -> missing_size_error lpos s
+             | Lit (Symbol symbol) -> syntax_error lpos @@ UnexpectedSymbol { symbol }
+             | Lit (Keyword keyword) -> syntax_error lpos @@ UnexpectedKeyword { keyword }
+             | Lit (Enumerator { enum; constructor }) ->
+                let v = UEnum { enum; constructor } in
                 Lit (Common.Const (resolve_value types (locd_make lpos v)))
              | Lit (Const v) -> Lit (Common.Const (resolve_value types (locd_make lpos v)))
              | Assign (v, a) -> Assign (v, resolve_action a)
@@ -1054,12 +1257,16 @@ let resolve { types; extfuns; mods } =
   let r_mods = Delay.map (resolve_module r_types r_extfuns) mods in
   { r_types; r_extfuns; r_mods }
 
+let check_result = function
+  | Ok cs -> cs
+  | Error (epos, emsg) -> type_inference_error epos emsg
+
 let typecheck_module { name; registers; rules; schedulers } =
   let open SGALib.Compilation in
   let tc_rule (nm, r) = (nm, check_result (typecheck_rule r)) in
   let c_rules = Delay.map tc_rule rules in
   let schedulers = Delay.map (typecheck_scheduler << snd) schedulers in
-  if schedulers = [] then resolution_error name.lpos (sprintf "Missing scheduler in module `%s'" name.lcnt);
+  if schedulers = [] then name_error name.lpos @@ MissingScheduler { modname = name.lcnt };
   { c_registers = registers; c_rules; c_scheduler = List.hd schedulers }
 
 let typecheck resolved =

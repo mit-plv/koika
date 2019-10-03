@@ -70,19 +70,8 @@ let rec run_backend backend out_fname resolved c_unit =
 
 let first_compile_unit in_fname mods =
   match mods with
-  | [] -> Lv.parse_error (Lv.Pos.Filename in_fname) "No modules declared"
+  | [] -> Lv.Errors.name_error (Lv.Pos.Filename in_fname) @@ MissingModule
   | md :: _ -> md
-
-let print_error { epos; ekind; emsg } =
-  Printf.eprintf "%s: %s: %s\n"
-    (Lv.Pos.to_string epos)
-    (match ekind with
-     | `ParseError -> "Parse error"
-     | `SyntaxError -> "Syntax error"
-     | `NameError -> "Name error"
-     | `ResolutionError -> "Resolution error"
-     | `TypeError -> "Type error")
-    emsg
 
 let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
   let open Lv in
@@ -99,8 +88,8 @@ let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
     match cli_backend with
     | Some backend -> run_backend backend cli_out_fname resolved c_unit
     | None -> ()
-  with Errors errs ->
-    List.iter print_error errs;
+  with Lv.Errors.Errors errs ->
+    List.iter (Printf.eprintf "%s\n" << Lv.Errors.to_string) errs;
     exit 1
 
 let cli =

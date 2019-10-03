@@ -224,11 +224,6 @@ let with_output_to_file fname (f: out_channel -> unit) =
   try f out; close_out_noerr out
   with e -> (close_out_noerr out; raise e)
 
-type 'f err_contents =
-  { epos: 'f;
-    ekind: [`ParseError | `SyntaxError | `NameError | `ResolutionError | `TypeError];
-    emsg: string }
-
 let make_gensym gensym_prefix =
   let state = Hashtbl.create 8 in
   let reset () =

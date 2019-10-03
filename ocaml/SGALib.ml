@@ -89,25 +89,31 @@ module Util = struct
   let string_eq_dec =
     { SGA.eq_dec = fun (s1: string) (s2: string) -> s1 = s2 }
 
-  let type_error_to_error (epos: 'f) (err: _ SGA.error_message) =
-    let ekind, emsg = match err with
-      | SGA.ExplicitErrorInAst ->
-         (`TypeError, "Untypeable term (likely due to an ill-typed subterm)")
-      | SGA.UnboundVariable var ->
-         (`NameError, Printf.sprintf "Unbound variable `%s'" var)
-      | SGA.UnboundField (field, sg) ->
-         (`NameError, Printf.sprintf "Unbound field `%s' in structure `%s'"
-                        (string_of_coq_string field) (sga_struct_sig_to_string sg))
-      | SGA.UnboundEnumMember (name, sg) ->
-         (`NameError, Printf.sprintf "Constant `%s' is not a member of enum `%s'"
-                        (string_of_coq_string name) (sga_enum_sig_to_string sg))
-      | SGA.TypeMismatch (_tsig, actual, _expr, expected) ->
-         (`TypeError, Printf.sprintf "This term has type `%s', but `%s' was expected"
-                        (sga_type_to_string actual) (sga_type_to_string expected))
-      | SGA.KindMismatch (_tsig, actual, _expr, expected) ->
-         (`TypeError, Printf.sprintf "This term has type `%s', but kind `%s' was expected"
-                        (sga_type_to_string actual) (type_kind_to_string expected))
-    in { epos; ekind; emsg }
+  type 'var_t sga_error_message =
+    | ExplicitErrorInAst
+    | UnboundVariable of { var: 'var_t }
+    | UnboundField of { field: string; sg: struct_sig }
+    | UnboundEnumMember of { name: string; sg: enum_sig }
+    | TypeMismatch of { expected: typ; actual: typ }
+    | KindMismatch of { actual: typ; expected: string }
+
+  let translate_sga_error_message = function
+    | SGA.ExplicitErrorInAst ->
+       ExplicitErrorInAst
+    | SGA.UnboundVariable var ->
+       UnboundVariable { var }
+    | SGA.UnboundField (field, sg) ->
+       UnboundField { field = string_of_coq_string field;
+                      sg = struct_sig_of_sga_struct_sig sg }
+    | SGA.UnboundEnumMember (name, sg) ->
+       UnboundEnumMember { name = string_of_coq_string name;
+                           sg = enum_sig_of_sga_enum_sig sg }
+    | SGA.TypeMismatch (_tsig, actual, _expr, expected) ->
+       TypeMismatch { actual = typ_of_sga_type actual;
+                      expected = typ_of_sga_type expected }
+    | SGA.KindMismatch (_tsig, actual, _expr, expected) ->
+       KindMismatch { actual = typ_of_sga_type actual;
+                      expected = type_kind_to_string expected }
 
   let ffi_sig_of_interop_fn ~custom_fn_info (fn: 'a SGA.interop_fn_t) =
     match fn with
@@ -273,7 +279,6 @@ module Compilation = struct
       c_scheduler: string SGA.scheduler;
       c_rules: (name_t * typechecked_action) list }
 
-
   type compiled_circuit =
     (string, reg_signature, string ffi_signature SGA.interop_fn_t) sga_circuit
 
@@ -283,10 +288,10 @@ module Compilation = struct
 
   let result_of_type_result = function
     | SGA.Success s -> Ok s
-    | SGA.Failure ({ epos; emsg }: _ SGA.error) ->
-       Error (Util.type_error_to_error epos emsg)
+    | SGA.Failure (err: _ SGA.error) -> Error (err.epos, Util.translate_sga_error_message err.emsg)
 
-  let typecheck_rule (raw_ast: 'f raw_action) : (typechecked_action, 'f err_contents) result =
+  let typecheck_rule (raw_ast: 'pos_t raw_action)
+      : (typechecked_action, ('pos_t * _)) result =
     let ast = translate_action raw_ast in
     SGA.type_rule Util.string_eq_dec _R interop_Sigma interop_uSigma raw_ast.lpos ast
     |> result_of_type_result
