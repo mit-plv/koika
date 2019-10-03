@@ -288,16 +288,8 @@ module Compilation = struct
 
   let typecheck_rule (raw_ast: 'f raw_action) : (typechecked_action, 'f err_contents) result =
     let ast = translate_action raw_ast in
-    match SGA.type_action Util.string_eq_dec _R interop_Sigma interop_uSigma raw_ast.lpos [] ast with
-    | Success (SGA.ExistT (tau, r)) ->
-       if tau = Bits_t 0 then Ok r
-       else
-         let msg =
-           Printf.sprintf "This expression has type %s, but rules are expected to have type %s."
-             (Util.sga_type_to_string tau) (Util.sga_type_to_string (Bits_t 0)) in
-         Error { epos = raw_ast.lpos; ekind = `TypeError; emsg = msg }
-    | Failure { epos; emsg } ->
-       Error (Util.type_error_to_error epos emsg)
+    SGA.type_rule Util.string_eq_dec _R interop_Sigma interop_uSigma raw_ast.lpos ast
+    |> result_of_type_result
 
   let compile (cu: compile_unit) : (reg_signature -> compiled_circuit) =
     let rEnv = rEnv_of_register_list cu.c_registers in

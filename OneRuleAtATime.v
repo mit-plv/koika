@@ -30,10 +30,10 @@ Section Proof.
     let interp_try rl s1 s2 :=
         match interp_action r sigma CtxEmpty sched_log log_empty (rules rl) with
         | Some (l, _, _ ) => match interp_scheduler'_trace (log_app l sched_log) s1 with
-                        | Some (rs, log) => Some (rl :: rs, log)
-                        | None => None
-                        end
-        | CannotRun => interp_scheduler'_trace sched_log s2
+                            | Some (rs, log) => Some (rl :: rs, log)
+                            | None => None
+                            end
+        | None => interp_scheduler'_trace sched_log s2
         end in
     match s with
     | Done => Some ([], sched_log)

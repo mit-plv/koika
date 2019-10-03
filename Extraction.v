@@ -29,7 +29,7 @@ Extraction "SGA.ml"
            Environments.ContextEnv Environments.to_list
            Vect.vect_to_list Vect.vect_of_list Vect.Bits.to_nat Vect.index_to_nat Vect.vect_zip
            Syntax.uscheduler SyntaxMacros.USkip SyntaxMacros.UConstBits SyntaxMacros.USwitch SyntaxMacros.UStructInit
-           TypeInference.type_action TypeInference.type_scheduler
+           TypeInference.type_action TypeInference.type_rule TypeInference.type_scheduler
            Circuits.compile_scheduler
            Primitives.prim_uSigma Primitives.prim_Sigma
            Interop.interop_fn_t Interop.interop_uSigma Interop.interop_Sigma

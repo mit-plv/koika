@@ -56,6 +56,7 @@ Section TypeInference.
   Open Scope bool_scope.
 
   Notation action := (action var_t R Sigma).
+  Notation rule := (rule var_t R Sigma).
   Notation scheduler := (scheduler name_t).
   Notation schedule := (schedule name_t var_t R Sigma).
   Notation error := (error pos_t var_t R Sigma).
@@ -145,6 +146,11 @@ Section TypeInference.
         Success (EX (Call fn arg1' arg2'))
       | UAPos pos e => type_action pos sig e
       end.
+
+    Definition type_rule (pos: pos_t) (e: uaction)
+      : result (rule ) :=
+      let/res rl := type_action pos [] e in
+      cast_action pos [] (bits_t 0) (``rl).
   End Action.
 
   Section Scheduler.

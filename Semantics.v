@@ -187,7 +187,7 @@ Section Interp.
       let interp_try r s1 s2 :=
           match interp_action CtxEmpty sched_log log_empty (rules r) with
           | Some (l, _, _) => interp_scheduler' (log_app l sched_log) s1
-          | CannotRun => interp_scheduler' sched_log s2
+          | None => interp_scheduler' sched_log s2
           end in
       match s with
       | Done => sched_log
