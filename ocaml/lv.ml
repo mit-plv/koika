@@ -432,12 +432,6 @@ module Delay = struct
     apply1_default None (fun x -> Some (f x)) x
 end
 
-let unbound_error epos ?(candidates=[]) kind name =
-  name_error epos @@ Unbound { kind; name; candidates }
-
-let missing_size_error epos number =
-  syntax_error epos @@ MissingSize { number }
-
 module Dups(OT: Map.OrderedType) = struct
   module M = Map.Make(OT)
 
@@ -683,7 +677,7 @@ let parse (sexps: Pos.t sexp list) =
     let loc, atom = expect_atom msg v in
     match try_number loc atom with
     | Some (`Const c) -> loc, (atom, c)
-    | Some (`Num _) -> missing_size_error loc atom
+    | Some (`Num _) -> syntax_error loc @@ MissingSize { number = atom }
     | _ -> syntax_error loc @@ BadBitsLiteral { atom } in
   let expect_const msg v =
     let loc, atom = expect_atom msg v in
@@ -960,11 +954,10 @@ let types_add tau_r types =
 let resolve_type types { lpos; lcnt: unresolved_type } =
   match lcnt with
   | Bits_u sz -> Bits_t sz
-  | Unknown_u nm ->
-     match StringMap.find_opt nm types.td_all with
+  | Unknown_u name ->
+     match StringMap.find_opt name types.td_all with
      | Some tau -> tau
-     | None ->
-        unbound_error lpos ~candidates:(keys types.td_all) "type" nm
+     | None -> name_error lpos @@ Unbound { kind = "type"; name; candidates = keys types.td_all }
 
 let assert_unique_type types { lpos; lcnt = name } kind =
   match StringMap.find_opt name types.td_all with
@@ -1053,19 +1046,19 @@ let resolve_value types { lpos; lcnt } =
   let resolve_enum_constructor sg field =
     match List.assoc_opt field sg.enum_members with
     | Some bs -> Enum (sg, bs)
-    | None -> unbound_error lpos ~candidates:(List.map fst sg.enum_members)
-                (sprintf "enumerator in type `%s'" sg.enum_name) field in
+    | None -> let kind = sprintf "enumerator in type `%s'" sg.enum_name in
+              name_error lpos @@ Unbound { kind; name = field; candidates = List.map fst sg.enum_members } in
   match lcnt with
   | UBits bs -> Bits bs
   | UEnum { enum = ""; constructor } ->
      (match StringMap.find_opt constructor types.td_enumerators with
       | Some sg -> resolve_enum_constructor sg constructor
-      | None -> unbound_error lpos ~candidates:(keys types.td_enumerators) "enumerator" constructor)
+      | None -> name_error lpos @@ Unbound { kind = "enumerator"; name = constructor; candidates = keys types.td_enumerators })
   | UEnum { enum; constructor } ->
      (match StringMap.find_opt enum types.td_all with
       | Some (Enum_t sg) -> resolve_enum_constructor sg constructor
       | Some tau -> type_error lpos @@ BadKind { name = enum; actual_type = tau; expected = "an enum" }
-      | None -> unbound_error lpos ~candidates:(keys types.td_enums) "enum" constructor)
+      | None -> name_error lpos @@ Unbound { kind = "enum"; name = enum; candidates = keys types.td_enums })
 
 let try_resolve_bits_fn { lpos; lcnt = name } args =
   let bits_fn nm = SGALib.SGA.UPrimFn (SGALib.SGA.UBitsFn nm) in
@@ -1170,14 +1163,14 @@ let resolve_function types extfuns name (args: unresolved_action locd list) =
        | None -> match try_resolve_extfun extfuns name args with
                  | Some r -> r
                  | None -> let candidates = List.concat [keys core_primitives; keys bits_primitives; keys extfuns] in
-                           unbound_error name.lpos ~candidates "function" name.lcnt in
+                           name_error name.lpos @@ Unbound { kind = "function"; name = name.lcnt; candidates } in
      pad_function_call name.lpos name.lcnt fn nargs args
 
 let resolve_rule types extfuns registers ((nm, action): unresolved_rule) =
   let find_register { lpos; lcnt = name } =
     match List.find_opt (fun rsig -> rsig.reg_name = name) registers with
     | Some rsig -> { lpos; lcnt = rsig }
-    | None -> unbound_error lpos "register" name in
+    | None -> name_error lpos @@ Unbound { kind = "register"; name; candidates = [] } in
   let rec resolve_struct_fields fields =
     List.map (fun (nm, v) -> nm, resolve_action v) fields
   and resolve_action_nodelay ({ lpos; lcnt }: unresolved_action locd) =
@@ -1188,7 +1181,7 @@ let resolve_rule types extfuns registers ((nm, action): unresolved_rule) =
              | Fail sz -> Fail sz
              | Lit (Fail tau) -> Fail (resolve_type types (locd_make lpos tau))
              | Lit (Var v) -> Lit (Common.Var v)
-             | Lit (Num (s, _)) -> missing_size_error lpos s
+             | Lit (Num (s, _)) -> syntax_error lpos @@ MissingSize { number = s }
              | Lit (Symbol symbol) -> syntax_error lpos @@ UnexpectedSymbol { symbol }
              | Lit (Keyword keyword) -> syntax_error lpos @@ UnexpectedKeyword { keyword }
              | Lit (Enumerator { enum; constructor }) ->
@@ -1236,7 +1229,7 @@ let resolve_register types (name, init) =
 let resolve_scheduler rules ((nm, s): unresolved_scheduler) =
   let check_rule { lpos; lcnt = name } =
     if not (List.mem_assoc name rules) then
-      unbound_error lpos "rule" name in
+      name_error lpos @@ Unbound { kind = "rule"; name; candidates = [] } in
   let rec check_scheduler ({ lcnt; _ }: Pos.t scheduler locd) =
     match lcnt with
     | Done -> ()
