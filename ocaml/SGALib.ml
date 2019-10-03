@@ -376,54 +376,55 @@ module Graphs = struct
         let equal o1 o2 = o1 == o2
         let hash o = Hashtbl.hash o
       end in
-    let module HasconsedOrder = struct
-        type t = fn_name_t circuit
-        let compare x y = compare x.Hashcons.tag y.Hashcons.tag
-      end in
-    let module CircuitBag = Set.Make(HasconsedOrder) in
+
+    (* CircuitHashcons is used to find duplicate subcircuits *)
     let module CircuitHashcons = Hashcons.Make(CircuitHash) in
+    (* SGACircuitHashtbl is used to detect and leverage existing physical sharing *)
     let module SGACircuitHashtbl = Hashtbl.Make(SGACircuitHash) in
 
-    let circuit_to_tagged = SGACircuitHashtbl.create 50 in
-    let unique_tagged = CircuitHashcons.create 50 in
-    let tagged_circuits = ref CircuitBag.empty in
+    let list_of_hashcons hc =
+      let acc = ref [] in
+      CircuitHashcons.iter (fun e -> acc := e :: !acc) hc;
+      !acc in
 
-    let rec aux' (c: (rule_name_t, reg_t, fn_t) sga_circuit) =
+    let circuit_to_deduplicated = SGACircuitHashtbl.create 50 in
+    let deduplicated_circuits = CircuitHashcons.create 50 in
+
+    let rec rebuild_for_deduplication (c: (rule_name_t, reg_t, fn_t) sga_circuit) =
       match c with
       | SGA.CNot c ->
-         CNot (aux c)
+         CNot (dedup c)
       | SGA.CAnd (c1, c2) ->
-         CAnd (aux c1, aux c2)
+         CAnd (dedup c1, dedup c2)
       | SGA.COr (c1, c2) ->
-         COr (aux c1, aux c2)
+         COr (dedup c1, dedup c2)
       | SGA.CMux (sz, s, c1, c2) ->
-         CMux (sz, aux s, aux c1, aux c2)
+         CMux (sz, dedup s, dedup c1, dedup c2)
       | SGA.CConst (sz, bs) ->
          CConst (Util.bits_const_of_sga_bits sz bs)
       | SGA.CExternal (fn, c1, c2) ->
-         CExternal (pkg.di_fn_sigs fn, aux c1, aux c2)
+         CExternal (pkg.di_fn_sigs fn, dedup c1, dedup c2)
       | SGA.CReadRegister r ->
          CReadRegister (pkg.di_reg_sigs r)
       | SGA.CBundle (_, _) ->
          assert false (* Only in a CBundle, which we drop *)
       | SGA.CBundleRef (_sz, _bundle, _field, circuit) ->
-         aux' circuit
+         rebuild_for_deduplication circuit
       | SGA.CAnnot (sz, annot, c) ->
-         CAnnot (sz, Util.string_of_coq_string annot, aux c)
-    and aux (c: (rule_name_t, reg_t, fn_t) sga_circuit) =
-      match SGACircuitHashtbl.find_opt circuit_to_tagged c with
+         CAnnot (sz, Util.string_of_coq_string annot, dedup c)
+    and dedup (c: (rule_name_t, reg_t, fn_t) sga_circuit) =
+      match SGACircuitHashtbl.find_opt circuit_to_deduplicated c with
       | Some c' -> c'
       | None ->
-         let circuit = CircuitHashcons.hashcons unique_tagged (aux' c) in
-         tagged_circuits := CircuitBag.add circuit !tagged_circuits;
-         SGACircuitHashtbl.add circuit_to_tagged c circuit;
+         let circuit = CircuitHashcons.hashcons deduplicated_circuits (rebuild_for_deduplication c) in
+         SGACircuitHashtbl.add circuit_to_deduplicated c circuit;
          circuit in
     let graph_roots = List.map (fun reg ->
                           let c = pkg.di_circuits reg in
                           { root_reg = pkg.di_reg_sigs reg;
-                            root_circuit = aux c })
+                            root_circuit = dedup c })
                         pkg.di_regs in
-    let graph_nodes = List.of_seq (CircuitBag.to_seq !tagged_circuits) in
+    let graph_nodes = list_of_hashcons deduplicated_circuits in
     { graph_roots; graph_nodes }
 
   let graph_of_compile_unit (cu: Compilation.compile_unit)
