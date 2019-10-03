@@ -73,6 +73,11 @@ let first_compile_unit in_fname mods =
   | [] -> Lv.Errors.name_error (Lv.Pos.Filename in_fname) @@ MissingModule
   | md :: _ -> md
 
+let print_errors_and_warnings errs =
+  let errs_with_warnings = List.rev_append (Lv.Errors.fetch_warnings ()) errs in
+  List.iter (Printf.eprintf "%s\n" << Lv.Errors.to_string)
+    (List.sort Lv.Errors.compare errs_with_warnings)
+
 let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
   let open Lv in
   try
@@ -85,11 +90,12 @@ let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
           let resolved =  resolve (parse (read cli_in_fname)) in
           resolved, typecheck resolved) in
     let c_unit = first_compile_unit cli_in_fname typechecked in
-    match cli_backend with
-    | Some backend -> run_backend backend cli_out_fname resolved c_unit
-    | None -> ()
+    print_errors_and_warnings [];
+    (match cli_backend with
+     | Some backend -> run_backend backend cli_out_fname resolved c_unit
+     | None -> ());
   with Lv.Errors.Errors errs ->
-    List.iter (Printf.eprintf "%s\n" << Lv.Errors.to_string) errs;
+    print_errors_and_warnings errs;
     exit 1
 
 let cli =

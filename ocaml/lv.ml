@@ -253,18 +253,6 @@ module Errors = struct
          "No modules declared"
   end
 
-  module ResolutionErrors = struct
-    type t =
-      | BadInitBits of { init: string; size: int }
-      | BadInitEnum of { init: string; name: string; bitsize: int }
-
-    let to_string = function
-      | BadInitBits { init; size } ->
-         sprintf "Use %d'0 instead of (new '%s ...) to create a bits value" size init
-      | BadInitEnum { init; name; bitsize } ->
-         sprintf "Use (unpack '%s %d'0) instead of (new '%s ...) to create an enum value" name bitsize init
-  end
-
   module TypeErrors = struct
     type t =
       | BadArgumentCount of { fn: string; expected: int; given: int }
@@ -315,54 +303,78 @@ module Errors = struct
            fquote (typ_to_string actual) fquote expected
   end
 
+  module Warnings = struct
+    type t =
+      | BadInitBits of { init: string; size: int }
+      | BadInitEnum of { init: string; name: string; bitsize: int }
+
+    let to_string = function
+      | BadInitBits { init; size } ->
+         sprintf "Use %d'0 instead of (new '%s ...) to create a 0-initialized bits" size init
+      | BadInitEnum { init; name; bitsize } ->
+         sprintf "Use unpack (e.g. (unpack '%s %d'0)) or an enumerator literal (e.g. ::xyz) instead of (new '%s ...) to create an enum value" name bitsize init
+  end
+
   type err =
     | EParse of ParseErrors.t
     | ESyntax of SyntaxErrors.t
     | EName of NameErrors.t
-    | EResolution of ResolutionErrors.t
     | EType of TypeErrors.t
     | ETypeInference of TypeInferenceErrors.t
+    | EWarn of Warnings.t
 
   let classify = function
     | EParse _ -> `ParseError
     | ESyntax _ -> `SyntaxError
     | EName _ -> `NameError
-    | EResolution _ -> `ResolutionError
     | EType _ -> `TypeError
     | ETypeInference err -> TypeInferenceErrors.classify err
+    | EWarn _ -> `Warning
 
   let err_to_string = function
     | EParse err -> ParseErrors.to_string err
     | ESyntax err -> SyntaxErrors.to_string err
     | EName err -> NameErrors.to_string err
-    | EResolution err -> ResolutionErrors.to_string err
     | EType err -> TypeErrors.to_string err
     | ETypeInference err -> TypeInferenceErrors.to_string err
+    | EWarn wrn -> Warnings.to_string wrn
 
   type error = { epos: Pos.t; emsg: err }
+
+  let compare e1 e2 =
+    match compare e1.epos e2.epos with
+    | 0 -> compare e1.emsg e2.emsg
+    | n -> n
 
   let to_string { epos; emsg } =
     sprintf "%s: %s: %s"
       (Pos.to_string epos)
-      (match classify emsg with
+      (match (classify emsg) with
+       | `Warning -> "Warning"
        | `ParseError -> "Parse error"
        | `SyntaxError -> "Syntax error"
        | `NameError -> "Name error"
-       | `ResolutionError -> "Resolution error"
        | `TypeError -> "Type error")
       (err_to_string emsg)
+
+  let collected_warnings : error list ref = ref []
+  let fetch_warnings () =
+    let warnings = !collected_warnings in
+    collected_warnings := [];
+    warnings
 
   exception Errors of error list
   let error epos emsg = raise (Errors [{ epos; emsg }])
   let parse_error epos emsg = error epos (EParse emsg)
   let syntax_error epos emsg = error epos (ESyntax emsg)
-  let resolution_error epos emsg = error epos (EResolution emsg)
   let name_error epos msg = error epos (EName msg)
   let type_error epos msg = error epos (EType msg)
   let type_inference_error epos emsg = error epos (ETypeInference emsg)
+  let warning epos emsg = collected_warnings := { epos; emsg = EWarn emsg } :: !collected_warnings
 end
 
 open Errors
+open Warnings
 
 module Delay = struct
   let buffer = ref []
@@ -453,7 +465,7 @@ module Dups(OT: Map.OrderedType) = struct
 end
 
 module StringDuplicates = Dups(OrderedString)
-module BitsDuplicates = Dups(struct type t = bool array let compare = compare end)
+module BitsDuplicates = Dups(struct type t = bool array let compare = Pervasives.compare end)
 
 let expect_cons loc kind = function
   | [] -> syntax_error loc @@ MissingElement { kind }
@@ -918,11 +930,11 @@ let rexpect_num obj =
   | { lpos; lcnt = Lit (Num n); _} -> lpos, n
   | { lpos; _ } -> syntax_error lpos @@ BadIntParam { obj }
 
-let rexpect_keyword obj kind = function
+let rexpect_keyword kind obj = function
   | { lpos; lcnt = Lit (Keyword s); _} -> lpos, s
   | { lpos; _ } -> syntax_error lpos @@ BadKeywordParam { obj; kind }
 
-let rexpect_symbol obj kind = function
+let rexpect_symbol kind obj = function
   | { lpos; lcnt = Lit (Symbol s) } -> lpos, s
   | { lpos; _ } -> syntax_error lpos @@ BadSymbolParam { obj; kind }
 
@@ -1124,18 +1136,21 @@ let try_resolve_special_function types name (args: unresolved_action locd list) 
      let loc, nm, tau, args = rexpect_type name.lpos types args in
      let sga_tau = SGALib.Util.sga_type_of_typ tau in
      let uinit = SGALib.SGA.(UPrimFn (UConvFn (UInit sga_tau))) in
+     let tt = { lpos = loc; lcnt = literal_tt } in
+     let uinit_call = `Call (locd_make loc uinit, tt, tt) in
      (match tau with
       | Bits_t sz ->
-         resolution_error loc @@ BadInitBits { init = nm; size = sz }
+         warning name.lpos @@ BadInitBits { init = nm; size = sz };
+         Some uinit_call
       | Enum_t { enum_name; enum_bitsize; _ } ->
-         resolution_error loc @@ BadInitEnum { init = nm; name = enum_name; bitsize = enum_bitsize }
+         warning name.lpos @@ BadInitEnum { init = nm; name = enum_name; bitsize = enum_bitsize };
+         Some uinit_call
       | Struct_t sg ->
          let expect_field_name nm =
            locd_of_pair (rexpect_keyword "initializer parameter" "a field name" nm) in
          let expect_field_val x = x in
-         let tt = { lpos = loc; lcnt = literal_tt } in
          Some (match rexpect_pairs "value" expect_field_name expect_field_val args with
-               | [] -> `Call (locd_make loc uinit, tt, tt)
+               | [] -> uinit_call
                | fields -> `StructInit (sg, fields)))
   | _ -> None
 
