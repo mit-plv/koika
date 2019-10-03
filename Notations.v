@@ -75,7 +75,7 @@ Notation "r '|>' s" :=
 Notation "'done'" :=
   UDone (at level 99) : sga_scope.
 
-Arguments Var {_ _ _ _ _ _} k {tau} {_}.
+Arguments Var {var_t reg_t fn_t R Sigma sig} k {tau} {m} : assert.
 
 Notation "'[[read0]]'" := (LE LogRead P0 tt) (only printing).
 Notation "'[[read1]]'" := (LE LogRead P1 tt) (only printing).

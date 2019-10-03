@@ -41,10 +41,10 @@ Section Logs.
     List.existsb (fun '(LE _ kind prt _) => f kind prt) (REnv.(getenv) log reg).
 End Logs.
 
-Arguments LE {_}.
+Arguments LE {T} kind port val : assert.
 Arguments LogEntry: clear implicits.
 Arguments RLog: clear implicits.
-Arguments Log {reg_t} R REnv.
+Arguments Log {reg_t} R REnv : assert.
 
 Section Interp.
   Context {name_t var_t reg_t fn_t: Type}.

@@ -53,9 +53,9 @@ Section TypedSyntax.
 End TypedSyntax.
 
 Arguments tsig : clear implicits.
-Arguments rule var_t {reg_t fn_t} R Sigma.
-Arguments action var_t {reg_t fn_t} R Sigma.
+Arguments rule var_t {reg_t fn_t} R Sigma : assert.
+Arguments action var_t {reg_t fn_t} R Sigma sig tau : assert.
 Arguments scheduler : clear implicits.
-Arguments schedule name_t var_t {reg_t fn_t} R Sigma.
+Arguments schedule name_t var_t {reg_t fn_t} R Sigma : assert.
 
 Hint Extern 10 => eapply @ExternalSignature_injRet : types.

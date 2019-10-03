@@ -40,7 +40,7 @@ Section Circuit.
   | CAnnot {sz} (annot: string) (c: circuit sz): circuit sz.
 End Circuit.
 
-Arguments circuit {name_t reg_t fn_t rwdata} R Sigma sz.
+Arguments circuit {name_t reg_t fn_t rwdata} R Sigma sz : assert.
 
 Section Interpretation.
   Context {name_t reg_t fn_t: Type}.
@@ -190,7 +190,7 @@ Section CircuitOptimizer.
     apply IHc; eassumption.
   Qed.
 
-  Arguments simplify_bool_1 sz !c.
+  Arguments simplify_bool_1 sz !c : assert.
 
   Lemma vect_to_list_inj T :
     forall sz (v1 v2: vect T sz),
@@ -242,11 +242,11 @@ Section CircuitOptimizer.
     {| lco_fn := @simplify_bool_1; lco_proof := @simplify_bool_1_correct |}.
 End CircuitOptimizer.
 
-Arguments simplify_bool_1 {_ _ _ _ _ _} [_] _.
-Arguments lco_fn {_ _ _ _ _ _ _ _ _} _ {_}.
-Arguments lco_proof {_ _ _ _ _ _ _ _ _} _ {_}.
-Arguments lco_compose {_ _ _ _ _ _ _ _ _} _ _.
-Arguments bool_simpl_lco {_ _ _ _ _ _ _ _ _}.
+Arguments simplify_bool_1 {name_t reg_t fn_t R Sigma rwdata} [sz] c : assert.
+Arguments lco_fn {name_t reg_t fn_t R Sigma rwdata REnv r sigma} l {sz} c : assert.
+Arguments lco_proof {name_t reg_t fn_t R Sigma rwdata REnv r sigma} l {sz} c : assert.
+Arguments lco_compose {name_t reg_t fn_t R Sigma rwdata REnv r sigma} l1 l2 : assert.
+Arguments bool_simpl_lco {name_t reg_t fn_t R Sigma rwdata REnv r sigma} : assert.
 
 Section CircuitCompilation.
   Context {name_t var_t reg_t fn_t: Type}.
@@ -574,11 +574,11 @@ Section CircuitCompilation.
     REnv.(map2) (fun k r1 r2 => commit_rwdata r1 r2) s r.
 End CircuitCompilation.
 
-Arguments CR {_} R idx.
-Arguments CSigma {_} Sigma fn.
+Arguments CR {reg_t} R idx : assert.
+Arguments CSigma {fn_t} Sigma fn : assert.
 
-Arguments readRegisters {_ _ _} R Sigma idx.
-Arguments rwdata {_ _ _} R Sigma sz.
-Arguments action_circuit {_ _ _} R Sigma REnv sz.
-Arguments scheduler_circuit {_ _ _} R Sigma REnv.
-Arguments state_transition_circuit name_t {_ _} R Sigma REnv.
+Arguments readRegisters {name_t reg_t fn_t} R Sigma idx : assert.
+Arguments rwdata {name_t reg_t fn_t} R Sigma sz : assert.
+Arguments action_circuit {name_t reg_t fn_t} R Sigma REnv sz : assert.
+Arguments scheduler_circuit {name_t reg_t fn_t} R Sigma REnv : assert.
+Arguments state_transition_circuit name_t {reg_t fn_t} R Sigma REnv : assert.

@@ -152,9 +152,9 @@ Section Contexts.
       + rewrite Heq in *. destruct eqn. reflexivity.
       + rewrite IHm; intuition congruence.
   Qed.
-
 End Contexts.
-Arguments context {_}.
+
+Arguments context {K} V sig : assert.
 
 Notation esig K := (forall k: K, Type).
 

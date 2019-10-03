@@ -313,9 +313,9 @@ Section Circuits.
   Qed.
 End Circuits.
 
-Arguments circuit_r {reg_t} {R} {REnv} r.
-Arguments circuit_sigma_spec {fn_t} {Sigma} sigma.
-(* Arguments csigma {fn_t} {Sigma} sigma. *)
+Arguments circuit_r {reg_t} {R} {REnv} r : assert.
+Arguments circuit_sigma_spec {fn_t} {Sigma} sigma csigma : assert.
+Arguments circuit_sigma {fn_t} {Sigma} sigma f arg1 arg2 : assert.
 
 Ltac circuit_lt_f_equal :=
   repeat (apply circuit_lt_CAnnot_l ||

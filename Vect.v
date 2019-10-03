@@ -91,7 +91,7 @@ Inductive vect_nil_t {T: Type} := _vect_nil.
 Record vect_cons_t {A B: Type} := _vect_cons { vhd: A; vtl: B }.
 Arguments vect_nil_t : clear implicits.
 Arguments vect_cons_t : clear implicits.
-Arguments _vect_cons {A B} _ _.
+Arguments _vect_cons {A B} vhd vtl : assert.
 
 Fixpoint vect T n : Type :=
   match n with

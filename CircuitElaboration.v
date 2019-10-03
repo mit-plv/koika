@@ -210,8 +210,8 @@ Section Elaboration.
        lco_proof := @elaborate_externals_1_correct |}.
 End Elaboration.
 
-Arguments elaborate_externals_1 {_ _ _ _ _ _} [_] _.
-Arguments external_elaboration_lco {_ _ _ _ _ _ _ _}.
+Arguments elaborate_externals_1 {name_t reg_t custom_fn_t R custom_Sigma rwdata} [n] c : assert.
+Arguments external_elaboration_lco {name_t reg_t custom_fn_t R custom_Sigma custom_sigma rwdata REnv} r : assert.
 
 Section Interop.
   Context {name_t var_t reg_t custom_fn_t: Type}.

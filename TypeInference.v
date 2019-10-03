@@ -40,8 +40,8 @@ Section ErrorReporting.
                           end) r.
 End ErrorReporting.
 
-Arguments error_message _ {_ _} _ _.
-Arguments error _ _ {_ _} _ _.
+Arguments error_message var_t {reg_t fn_t} R Sigma : assert.
+Arguments error pos_t var_t {reg_t fn_t} R Sigma : assert.
 
 Section TypeInference.
   Context {pos_t name_t var_t reg_t ufn_t fn_t: Type}.
