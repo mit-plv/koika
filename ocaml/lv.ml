@@ -533,7 +533,7 @@ let read_annotated_sexps fname =
   |> Delay.map (commit_annots (Pos.Filename fname))
 
 let keys s =
-  StringMap.fold (fun k _ acc -> k :: acc) s []
+  StringMap.fold (fun k _ acc -> k :: acc) s [] |> List.rev
 
 let gensym_prefix = "_lvs_"
 let gensym, gensym_reset = make_gensym gensym_prefix
