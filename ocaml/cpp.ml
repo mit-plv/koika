@@ -603,15 +603,14 @@ let compile (type name_t var_t reg_t)
         tinfo.name in
 
       let p_assign_pure ?(prefix = "") target result =
-        (match target, result with
-         | VarTarget { declared = true; name; _ }, PureExpr e ->
-            p "%s = %s;" name e;
-            Assigned name
-         | VarTarget { tau; name; _ }, PureExpr e ->
-            p_decl ~prefix ~init:(Some e) tau name;
-            Assigned name
-         | _, _ ->
-            result) in
+        match target, result with
+        | VarTarget { declared = true; name; _ }, PureExpr e ->
+           p "%s = %s;" name e;
+           Assigned name
+        | VarTarget { tau; name; _ }, PureExpr e ->
+           p_decl ~prefix ~init:(Some e) tau name;
+           Assigned name
+        | _ -> result in
 
       let must_expr = function
         | PureExpr e -> e
@@ -679,12 +678,10 @@ let compile (type name_t var_t reg_t)
         | SGA.Seq (_, _, a1, a2) ->
            ignore (p_action NoTarget a1);
            p_action target a2
-        | SGA.Bind (_, tau, _, v, ex, rl) ->
+        | SGA.Bind (expr_sig, tau, _, v, expr, rl) ->
            let target = p_declare_target target in
            p_scoped "/* bind */" (fun () ->
-               let vtarget = VarTarget { tau = SGALib.Util.typ_of_sga_type tau;
-                                         declared = false; name = hpp.cpp_var_names v } in
-               ignore (p_assign_pure vtarget (p_action vtarget ex));
+               p_bound_var_assign expr_sig tau v expr;
                p_assign_pure target (p_action target rl))
         | SGA.If (_, _, cond, tbr, fbr) ->
            let target = p_declare_target target in
@@ -733,7 +730,19 @@ let compile (type name_t var_t reg_t)
              p "break;";
              loop branches in
         p_scoped (sprintf "switch (%s)" (hpp.cpp_var_names var)) (fun () ->
-            loop branches) in
+            loop branches)
+      and p_bound_var_assign expr_sig tau v expr =
+        let tau = SGALib.Util.typ_of_sga_type tau in
+        let needs_tmp = List.mem_assoc v expr_sig in
+        let vtarget = VarTarget { tau; declared = false; name = hpp.cpp_var_names v } in
+        let expr =
+          if needs_tmp then
+            (* ‘int x = x + 1;’ doesn't work in C++ (basic.scope.pdecl), so if
+               the rhs uses a variable with name ‘v’ we need a temp variable. *)
+            let vtmp = gensym_target tau "tmp" in
+            PureExpr (must_expr (p_assign_pure vtmp (p_action vtmp expr)))
+          else p_action vtarget expr in
+        ignore (p_assign_pure vtarget expr) in
 
       p_fn ~typ:"bool" ~name:(hpp.cpp_rule_names rule.rl_name) (fun () ->
           p_reset ();
