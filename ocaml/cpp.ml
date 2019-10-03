@@ -646,8 +646,8 @@ let compile (type name_t var_t reg_t)
               p "%s.%s = %s;" tinfo.name fname a2;
               res in
 
-      let assert_no_shadowing v v_to_string m =
-        if SGALib.Util.member_references_shadowed_binding m then
+      let assert_no_shadowing sg v tau v_to_string m =
+        if SGALib.Util.member_mentions_shadowed_binding sg v tau m then
           failwith (sprintf "Variable %s is shadowed by a later binding, but the program references the original binding." (v_to_string v)) in
 
       let rec p_action (target: assignment_target) (rl: (var_t, reg_t, _) SGA.action) =
@@ -659,8 +659,8 @@ let compile (type name_t var_t reg_t)
             | VarTarget { declared = true; name; _ } -> Assigned name
             | VarTarget { tau; _ } ->
                PureExpr (sprintf "prims::unreachable<%s>()" (cpp_type_of_type tau)))
-        | SGA.Var (_, v, _tau, m) ->
-           assert_no_shadowing v hpp.cpp_var_names m;
+        | SGA.Var (sg, v, tau, m) ->
+           assert_no_shadowing sg v tau hpp.cpp_var_names m;
            PureExpr (hpp.cpp_var_names v)
         | SGA.Const (_, tau, cst) ->
            let res = PureExpr (sp_value (SGALib.Util.value_of_sga_value tau cst)) in
@@ -669,8 +669,8 @@ let compile (type name_t var_t reg_t)
              let e = must_expr (p_assign_pure ~prefix:"static const" ctarget res) in
              PureExpr e
            else res
-        | SGA.Assign (_, v, tau, m, ex) ->
-           assert_no_shadowing v hpp.cpp_var_names m;
+        | SGA.Assign (sg, v, tau, m, ex) ->
+           assert_no_shadowing sg v tau hpp.cpp_var_names m;
            let vtarget = VarTarget { tau = SGALib.Util.typ_of_sga_type tau;
                                      declared = true; name = hpp.cpp_var_names v } in
            ignore (p_assign_pure vtarget (p_action vtarget ex));
@@ -678,10 +678,10 @@ let compile (type name_t var_t reg_t)
         | SGA.Seq (_, _, a1, a2) ->
            ignore (p_action NoTarget a1);
            p_action target a2
-        | SGA.Bind (expr_sig, tau, _, v, expr, rl) ->
+        | SGA.Bind (_, tau, _, v, expr, rl) ->
            let target = p_declare_target target in
            p_scoped "/* bind */" (fun () ->
-               p_bound_var_assign expr_sig tau v expr;
+               p_bound_var_assign tau v expr;
                p_assign_pure target (p_action target rl))
         | SGA.If (_, _, cond, tbr, fbr) ->
            let target = p_declare_target target in
@@ -731,9 +731,9 @@ let compile (type name_t var_t reg_t)
              loop branches in
         p_scoped (sprintf "switch (%s)" (hpp.cpp_var_names var)) (fun () ->
             loop branches)
-      and p_bound_var_assign expr_sig tau v expr =
+      and p_bound_var_assign tau v expr =
+        let needs_tmp = SGALib.Util.action_mentions_var v expr in
         let tau = SGALib.Util.typ_of_sga_type tau in
-        let needs_tmp = List.mem_assoc v expr_sig in
         let vtarget = VarTarget { tau; declared = false; name = hpp.cpp_var_names v } in
         let expr =
           if needs_tmp then

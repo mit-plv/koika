@@ -89,6 +89,9 @@ module Util = struct
   let string_eq_dec =
     { SGA.eq_dec = fun (s1: string) (s2: string) -> s1 = s2 }
 
+  let any_eq_dec =
+    { SGA.eq_dec = fun (s1: 'a) (s2: 'a) -> s1 = s2 }
+
   type 'var_t sga_error_message =
     | ExplicitErrorInAst
     | UnboundVariable of { var: 'var_t }
@@ -182,11 +185,29 @@ module Util = struct
       ffi_sig_of_sga_external_sig name fn in
     fun fn -> ffi_sig_of_interop_fn ~custom_fn_info fn
 
-  let rec member_references_shadowed_binding (m: ('a * 'b) SGA.member) =
-    match m with
-    | MemberHd _ -> false
-    | MemberTl ((k, _), (k', _), _, m') ->
-       k = k' || member_references_shadowed_binding m'
+  (* Not implemented in Coq because Coq needs an R and a Sigma to iterate through an action *)
+  let rec exists_subterm (f: _ SGA.action -> bool) (a: _ SGA.action) =
+    f a ||
+      match a with
+       | Fail _
+       | Var _
+       | Const _ -> false
+       | Assign (_, _, _, _, ex) -> exists_subterm f ex
+       | Seq (_, _, a1, a2) -> exists_subterm f a1 || exists_subterm f a2
+       | Bind (_, _, _, _, ex, body) -> exists_subterm f ex || exists_subterm f body
+       | If (_, _, cond, tbranch, fbranch) ->
+          exists_subterm f cond || exists_subterm f tbranch || exists_subterm f fbranch
+       | Read (_, _, _) -> false
+       | Write (_, _, _, value) -> exists_subterm f value
+       | Call (_, _, arg1, arg2) -> exists_subterm f arg1 || exists_subterm f arg2
+
+  let action_mentions_var k a =
+    exists_subterm (function
+        | Var (_, k', _, _) -> k' = k
+        | _ -> false) a
+
+  let member_mentions_shadowed_binding sg k0 v0 (m: _ SGA.member) =
+    SGA.member_mentions_shadowed_binding any_eq_dec sg k0 v0 m
 end
 
 module Compilation = struct
