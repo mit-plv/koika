@@ -108,12 +108,12 @@ type resolved_unit = {
     r_mods: resolved_module list;
   }
 
-let quote x = "`" ^ x ^ "'"
+let quote x = "‘" ^ x ^ "’"
 
 let one_of_str candidates =
   match candidates with
   | [] -> "" | [x] -> quote x
-  | _ -> let candidates = List.sort compare candidates |> List.map quote |> String.concat ", " in
+  | _ -> let candidates = candidates |> List.map quote |> String.concat ", " in
          sprintf "one of %s" candidates
 
 module Errors = struct
@@ -240,7 +240,7 @@ module Errors = struct
          let candidates =
            if candidates = [] then ""
            else sprintf " (expecting %s)" (one_of_str candidates) in
-         sprintf "Unbound %s: `%s'%s" kind name candidates
+         sprintf "Unbound %s: %a%s" kind fquote name candidates
       | Duplicate { kind; name } ->
          sprintf "Duplicate %s: %a" kind fquote name
       | DuplicateTypeName { name; kind; previous } ->
@@ -1046,7 +1046,7 @@ let resolve_value types { lpos; lcnt } =
   let resolve_enum_constructor sg field =
     match List.assoc_opt field sg.enum_members with
     | Some bs -> Enum (sg, bs)
-    | None -> let kind = sprintf "enumerator in type `%s'" sg.enum_name in
+    | None -> let kind = sprintf "enumerator in type %a" fquote sg.enum_name in
               name_error lpos @@ Unbound { kind; name = field; candidates = List.map fst sg.enum_members } in
   match lcnt with
   | UBits bs -> Bits bs
