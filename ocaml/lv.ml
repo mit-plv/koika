@@ -1275,7 +1275,7 @@ let check_result = function
 
 let typecheck_module { name; registers; rules; schedulers } =
   let open SGALib.Compilation in
-  let tc_rule (nm, r) = (nm, check_result (typecheck_rule r)) in
+  let tc_rule (nm, r) = (nm, (`InternalRule, check_result (typecheck_rule r))) in
   let c_rules = Delay.map tc_rule rules in
   let schedulers = Delay.map (typecheck_scheduler << snd) schedulers in
   if schedulers = [] then name_error name.lpos @@ MissingScheduler { modname = name.lcnt };

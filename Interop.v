@@ -99,6 +99,8 @@ Section Packages.
       (** [sga_rules]: The rules of the program. **)
       sga_rules: forall _: rule_name_t,
           TypedSyntax.rule var_t sga_reg_types (interop_Sigma sga_custom_fn_types);
+      (** [sga_rule_names]: These names are used to generate readable code. **)
+      sga_rule_names: rule_name_t -> string;
 
       (** [sga_scheduler]: The scheduler. **)
       sga_scheduler: TypedSyntax.scheduler rule_name_t;
@@ -150,9 +152,6 @@ Section Packages.
       (** [sp_custom_fn_names]: A map from custom functions to C++
           implementations. *)
       sp_custom_fn_names: forall fn: custom_fn_t, string;
-
-      (** [sp_rule_names]: These names are used to generate readable code. **)
-      sp_rule_names: rule_name_t -> string;
 
       (** [sp_extfuns]: A piece of C++ code implementing the custom external
           functions used by the program.  This is only needed if [sp_pkg] has a

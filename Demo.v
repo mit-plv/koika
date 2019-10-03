@@ -252,6 +252,10 @@ Module Collatz.
                          end;
 
        sga_rules := rules;
+       sga_rule_names r := match r with
+                         | divide => "divide"
+                         | multiply => "multiply"
+                         end;
 
        sga_scheduler := collatz;
        sga_module_name := "collatz" |}.
@@ -261,10 +265,6 @@ Module Collatz.
        sp := {| sp_pkg := sga_package;
                sp_var_names x := x;
                sp_custom_fn_names := interop_empty_fn_names;
-               sp_rule_names r := match r with
-                                 | divide => "divide"
-                                 | multiply => "multiply"
-                                 end;
                sp_extfuns := None |};
        vp := {| vp_pkg := sga_package;
                vp_external_rules := List.nil;
@@ -360,6 +360,10 @@ Module Decoder (P: Unpacker) (F: Fetcher).
                              end;
 
            sga_rules := rules;
+           sga_rule_names r := match r with
+                             | decode => "decode"
+                             | fetch => "fetch"
+                             end;
 
            sga_scheduler := decoder;
            sga_module_name := modname |} in
@@ -367,10 +371,6 @@ Module Decoder (P: Unpacker) (F: Fetcher).
         {| sp_pkg := sga_package;
            sp_var_names := fun x => x;
            sp_custom_fn_names := F.custom_fn_names;
-           sp_rule_names r := match r with
-                             | decode => "decode"
-                             | fetch => "fetch"
-                             end;
 
            sp_extfuns := Some "#include ""../extfuns.hpp""
 using extfuns = decoder_extfuns;" |} in
@@ -598,6 +598,10 @@ Module Pipeline.
        sga_custom_fn_types := Sigma;
 
        sga_rules := rules;
+       sga_rule_names r := match r with
+                          | doF => "doF"
+                          | doG => "doG"
+                          end;
 
        sga_scheduler := Pipeline;
        sga_module_name := "pipeline"
@@ -608,10 +612,6 @@ Module Pipeline.
        sp := {| sp_pkg := sga_package;
                sp_var_names := fun x => x;
                sp_custom_fn_names := fn_names;
-               sp_rule_names r := match r with
-                                 | doF => "doF"
-                                 | doG => "doG"
-                                 end;
                sp_extfuns := Some "#include ""../extfuns.hpp""
 using extfuns = pipeline_extfuns;" |};
        vp := {| vp_pkg := sga_package;
@@ -684,6 +684,9 @@ Module RegisterFile_Ordered.
        sga_custom_fn_types := interop_empty_Sigma;
 
        sga_rules := rules;
+       sga_rule_names r := match r with
+                          | _ReadReg => "read_reg"
+                          end;
 
        sga_scheduler := regfile;
        sga_module_name := "regfile_ordered"
@@ -694,9 +697,6 @@ Module RegisterFile_Ordered.
        sp := {| sp_pkg := sga_package;
                sp_var_names := fun x => x;
                sp_custom_fn_names := interop_empty_fn_names;
-               sp_rule_names r := match r with
-                                 | _ReadReg => "read_reg"
-                                 end;
                sp_extfuns := None |};
        vp := {| vp_pkg := sga_package;
                vp_external_rules := List.nil;
@@ -770,6 +770,9 @@ Module Enums.
        sga_custom_fn_types := interop_empty_Sigma;
 
        sga_rules := rules;
+       sga_rule_names r := match r with
+                          | _Incr => "incr"
+                          end;
 
        sga_scheduler := enum_scheduler;
        sga_module_name := "enums"
@@ -780,9 +783,6 @@ Module Enums.
        sp := {| sp_pkg := sga_package;
                sp_var_names := fun x => x;
                sp_custom_fn_names := interop_empty_fn_names;
-               sp_rule_names r := match r with
-                                 | _Incr => "incr"
-                                 end;
                sp_extfuns := None |};
        vp := {| vp_pkg := sga_package;
                vp_external_rules := List.nil;

@@ -296,12 +296,13 @@ module Compilation = struct
   type 'f raw_scheduler = ('f, 'f scheduler) locd
 
   type typechecked_scheduler = var_t SGA.scheduler
+  type typechecked_rule = [ `ExternalRule | `InternalRule ] * typechecked_action
 
   (* FIXME hashmaps, not lists *)
   type compile_unit =
     { c_registers: reg_signature list;
       c_scheduler: string SGA.scheduler;
-      c_rules: (name_t * typechecked_action) list }
+      c_rules: (name_t * typechecked_rule) list }
 
   type compiled_circuit =
     (string, reg_signature, string ffi_signature SGA.interop_fn_t) sga_circuit
@@ -323,7 +324,7 @@ module Compilation = struct
   let compile (cu: compile_unit) : (reg_signature -> compiled_circuit) =
     let rEnv = rEnv_of_register_list cu.c_registers in
     let r0: _ SGA.env_t = SGA.create rEnv (fun r -> SGA.CReadRegister r) in
-    let rules r = List.assoc r cu.c_rules in
+    let rules r = List.assoc r cu.c_rules |> snd in
     let opt = SGA.interop_opt _R custom_Sigma in
     let env = SGA.compile_scheduler _R interop_Sigma rEnv opt r0 rules cu.c_scheduler in
     (fun r -> SGA.getenv rEnv env r)
@@ -342,6 +343,8 @@ module Graphs = struct
       di_regs: 'reg_t list;
       di_reg_sigs: 'reg_t -> reg_signature;
       di_fn_sigs: 'fn_t -> 'fn_name_t ffi_signature;
+      di_rule_names: 'rule_name_t -> string;
+      di_external_rules: 'rule_name_t list;
       di_circuits : 'reg_t -> ('rule_name_t, 'reg_t, 'fn_t) sga_circuit
     }
 
@@ -429,10 +432,13 @@ module Graphs = struct
 
   let graph_of_compile_unit (cu: Compilation.compile_unit)
       : verilog_ready_circuit_graph =
+    let external_rules = List.filter (fun (_, (kind, _)) -> kind = `ExternalRule) cu.c_rules in
     dedup_circuit
       { di_regs = cu.c_registers;
         di_reg_sigs = (fun r -> r);
         di_fn_sigs = (fun fn -> Util.ffi_sig_of_interop_fn ~custom_fn_info:(fun f -> f) fn);
+        di_rule_names = (fun rln -> rln);
+        di_external_rules = List.map fst external_rules;
         di_circuits = Compilation.compile cu }
 
   let graph_of_verilog_package (type rule_name_t var_t reg_t custom_fn_t)
@@ -449,5 +455,8 @@ module Graphs = struct
     dedup_circuit
       { di_regs;
         di_reg_sigs = Util.reg_sigs_of_sga_package sga;
-        di_fn_sigs = Util.fn_sigs_of_sga_package custom_fn_names sga; di_circuits }
+        di_rule_names = (fun rln -> Util.string_of_coq_string @@ vp.vp_pkg.sga_rule_names rln);
+        di_external_rules = vp.vp_external_rules;
+        di_fn_sigs = Util.fn_sigs_of_sga_package custom_fn_names sga;
+        di_circuits }
 end

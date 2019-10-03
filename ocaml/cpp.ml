@@ -900,7 +900,7 @@ let action_footprint a =
   action_footprint a;
   List.of_seq (Hashtbl.to_seq_keys m)
 
-let cpp_rule_of_action (rl_name, rl_body) =
+let cpp_rule_of_action (rl_name, (_kind, rl_body)) =
   { rl_name; rl_body; rl_footprint = action_footprint rl_body }
 
 let input_of_compile_unit classname ({ c_registers; c_scheduler; c_rules }: SGALib.Compilation.compile_unit) =
@@ -923,7 +923,7 @@ let collect_rules sched =
   in loop [] sched
 
 let cpp_rule_of_sga_package_rule (s: _ SGALib.SGA.sga_package_t) (rn: Obj.t) =
-  cpp_rule_of_action (rn, s.sga_rules rn)
+  cpp_rule_of_action (rn, (`Internal, s.sga_rules rn))
 
 let input_of_sim_package (sp: _ SGALib.SGA.sim_package_t)
     : (SGA.prim_fn_t, Obj.t, Obj.t, Obj.t, string SGA.interop_fn_t) cpp_input_t =
@@ -933,7 +933,7 @@ let input_of_sim_package (sp: _ SGALib.SGA.sim_package_t)
   let custom_fn_names f = SGALib.Util.string_of_coq_string (sp.sp_custom_fn_names f) in
   { cpp_classname = classname;
     cpp_header_name = classname;
-    cpp_rule_names = (fun rn -> SGALib.Util.string_of_coq_string (sp.sp_rule_names rn));
+    cpp_rule_names = (fun rn -> SGALib.Util.string_of_coq_string (sga.sga_rule_names rn));
     cpp_rules = List.map (cpp_rule_of_sga_package_rule sga) rules;
     cpp_scheduler = sga.sga_scheduler;
     cpp_registers = sga.sga_reg_finite.finite_elements;
