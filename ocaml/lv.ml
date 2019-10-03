@@ -290,6 +290,7 @@ module Errors = struct
       | UnboundVariable _ -> `NameError
       | UnboundField _ -> `NameError
       | UnboundEnumMember _ -> `NameError
+      | IncorrectRuleType _ -> `TypeError
       | TypeMismatch _ -> `TypeError
       | KindMismatch _ -> `TypeError
 
@@ -303,6 +304,9 @@ module Errors = struct
          sprintf "Unbound field %a in %s" fquote field (struct_sig_to_string sg)
       | UnboundEnumMember { name; sg } ->
          sprintf "Enumerator %a is not a member of %s" fquote name (enum_sig_to_string sg)
+      | IncorrectRuleType { actual } ->
+         sprintf "This expression has type %a, but rules are expected to have type unit (bits 0)."
+           fquote (typ_to_string actual)
       | TypeMismatch { expected; actual } ->
          sprintf "This term has type %a, but %a was expected"
            fquote (typ_to_string actual) fquote (typ_to_string expected)

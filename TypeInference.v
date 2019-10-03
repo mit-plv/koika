@@ -12,6 +12,7 @@ Section ErrorReporting.
   | UnboundVariable (var: var_t)
   | UnboundField (f: string) (sig: struct_sig)
   | UnboundEnumMember (f: string) (sig: enum_sig)
+  | IncorrectRuleType (tau: type)
   | TypeMismatch {sig tau} (e: action var_t R Sigma sig tau) (expected: type)
   | KindMismatch {sig tau} (e: action var_t R Sigma sig tau) (expected: type_kind).
 
@@ -76,15 +77,20 @@ Section TypeInference.
     end.
 
   Section Action.
-    Definition cast_action (pos: pos_t)
-               sig {tau1} tau2 (e: action sig tau1)
-      : result (action sig tau2).
+    Definition cast_action' (pos: pos_t)
+               {sig tau1} tau2 (e: action sig tau1) (emsg: error_message)
+    : result (action sig tau2).
     Proof.
       destruct (eq_dec tau1 tau2); subst.
       - exact (Success e).
-      - exact (Failure {| epos := pos;
-                          emsg := TypeMismatch e tau2 |}).
+      - exact (Failure {| epos := pos; emsg := emsg |}).
     Defined.
+
+    Definition cast_action pos {sig tau1} tau2 (e: action sig tau1) :=
+      cast_action' pos tau2 e (TypeMismatch e tau2).
+
+    Definition cast_rule (pos: pos_t) {tau} (e: action [] tau) :=
+      cast_action' pos (bits_t 0) e (IncorrectRuleType tau).
 
     Notation EX Px := (existT _ _ Px).
 
@@ -112,11 +118,11 @@ Section TypeInference.
       | UAssign var ex =>
         let/res tau_m := opt_result (assoc var sig) (mkerror pos (UnboundVariable var)) in
         let/res ex' := type_action pos sig ex in
-        let/res ex' := cast_action (actpos pos ex) sig `tau_m (``ex') in
+        let/res ex' := cast_action (actpos pos ex) `tau_m (``ex') in
         Success (EX (Assign (k := var) (tau := `tau_m) ``tau_m ex'))
       | USeq r1 r2 =>
         let/res r1' := type_action pos sig r1 in
-        let/res r1' := cast_action (actpos pos r1) sig unit_t (``r1') in
+        let/res r1' := cast_action (actpos pos r1) unit_t (``r1') in
         let/res r2' := type_action pos sig r2 in
         Success (EX (Seq r1' ``r2'))
       | UBind v ex body =>
@@ -125,15 +131,15 @@ Section TypeInference.
         Success (EX (Bind v ``ex ``body))
       | UIf cond tbranch fbranch =>
         let/res cond' := type_action pos sig cond in
-        let/res cond' := cast_action (actpos pos cond) sig (bits_t 1) (``cond') in
+        let/res cond' := cast_action (actpos pos cond) (bits_t 1) (``cond') in
         let/res tbranch' := type_action pos sig tbranch in
         let/res fbranch' := type_action pos sig fbranch in
-        let/res fbranch' := cast_action (actpos pos fbranch) sig (`tbranch') (``fbranch') in
+        let/res fbranch' := cast_action (actpos pos fbranch) (`tbranch') (``fbranch') in
         Success (EX (If cond' ``tbranch' fbranch'))
       | URead port idx => Success (EX (Read port idx))
       | UWrite port idx value =>
         let/res value' := type_action pos sig value in
-        let/res value' := cast_action (actpos pos value) sig (R idx) (``value') in
+        let/res value' := cast_action (actpos pos value) (R idx) (``value') in
         Success (EX (Write port idx value'))
       | UCall ufn arg1 arg2 =>
         let/res arg1' := type_action pos sig arg1 in
@@ -141,16 +147,15 @@ Section TypeInference.
         let pos1 := actpos pos arg1 in
         let pos2 := actpos pos arg2 in
         let/res fn := lift_fn_tc_result pos1 ``arg1' pos2 ``arg2' (uSigma ufn `arg1' `arg2') in
-        let/res arg1' := cast_action pos1 sig (Sigma fn).(arg1Type) (``arg1') in
-        let/res arg2' := cast_action pos2 sig (Sigma fn).(arg2Type) (``arg2') in
+        let/res arg1' := cast_action pos1 (Sigma fn).(arg1Type) (``arg1') in
+        let/res arg2' := cast_action pos2 (Sigma fn).(arg2Type) (``arg2') in
         Success (EX (Call fn arg1' arg2'))
       | UAPos pos e => type_action pos sig e
       end.
 
-    Definition type_rule (pos: pos_t) (e: uaction)
-      : result (rule ) :=
+    Definition type_rule (pos: pos_t) (e: uaction) : result rule :=
       let/res rl := type_action pos [] e in
-      cast_action pos [] (bits_t 0) (``rl).
+      cast_rule pos (``rl).
   End Action.
 
   Section Scheduler.

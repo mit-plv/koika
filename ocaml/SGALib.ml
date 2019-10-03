@@ -94,6 +94,7 @@ module Util = struct
     | UnboundVariable of { var: 'var_t }
     | UnboundField of { field: string; sg: struct_sig }
     | UnboundEnumMember of { name: string; sg: enum_sig }
+    | IncorrectRuleType of { actual: typ }
     | TypeMismatch of { expected: typ; actual: typ }
     | KindMismatch of { actual: typ; expected: string }
 
@@ -108,6 +109,8 @@ module Util = struct
     | SGA.UnboundEnumMember (name, sg) ->
        UnboundEnumMember { name = string_of_coq_string name;
                            sg = enum_sig_of_sga_enum_sig sg }
+    | SGA.IncorrectRuleType tau ->
+       IncorrectRuleType { actual = typ_of_sga_type tau }
     | SGA.TypeMismatch (_tsig, actual, _expr, expected) ->
        TypeMismatch { actual = typ_of_sga_type actual;
                       expected = typ_of_sga_type expected }
