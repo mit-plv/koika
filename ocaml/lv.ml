@@ -191,11 +191,11 @@ module Errors = struct
       | BadChoice { atom; expected } ->
          sprintf "Expecting %s, got %a" (one_of_str expected) fquote atom
       | BadLiteral { atom } ->
-         sprintf "Cannot parse %a as a literal (number, variable, symbol or keyword)" fquote atom
+         sprintf "Expecting a literal (a number, variable, symbol or keyword), got %a" fquote atom
       | BadBitsLiteral { atom } ->
          sprintf "Expecting a sized literal (e.g. 2'b01 or 8'42), got %a" fquote atom
       | BadIdentifier { kind; atom } ->
-         sprintf "Cannot parse %a as an identifier (expecting %s)" fquote atom kind
+         sprintf "Expecting an identifier (%s), got %a" kind fquote atom
       | BadConst { atom } ->
          sprintf "Expecting a sized literal (e.g. 8'hff) or an enumerator (eg proto::ipv4), got %a" fquote atom
       | BadKeyword { kind; atom } ->
@@ -747,7 +747,7 @@ let parse (sexps: Pos.t sexp list) =
           | "setq" ->
              let var, body = expect_cons loc "variable name" args in
              let value = expect_action (expect_single loc "value" "write expression" body) in
-             Assign (locd_of_pair (expect_identifier "an variable name" var), value)
+             Assign (locd_of_pair (expect_identifier "a variable name" var), value)
           | "progn" ->
              Progn (List.map expect_action args)
           | "let" ->
@@ -809,7 +809,7 @@ let parse (sexps: Pos.t sexp list) =
   and expect_let_binding b =
     let loc, b = expect_list "a let binding" b in
     let var, values = expect_cons loc "identifier" b in
-    let loc_v, var = expect_identifier "an identifier" var in
+    let loc_v, var = expect_identifier "a variable name" var in
     let value = expect_single loc "value" "let binding" values in
     let value = expect_action value in
     (locd_make loc_v var, value)
@@ -876,7 +876,7 @@ let parse (sexps: Pos.t sexp list) =
     let kind, name_body = expect_cons d_loc skind d in
     let _, kind = expect_constant_atom expected kind in
     let name, body = expect_cons d_loc "name" name_body in
-    let name = locd_of_pair (expect_identifier "an identifier" name) in
+    let name = locd_of_pair (expect_identifier "a name" name) in
     (d_loc,
      match kind with
      | `Enum ->
