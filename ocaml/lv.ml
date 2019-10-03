@@ -209,9 +209,9 @@ module Errors = struct
       | BadIntParam { obj } ->
          sprintf "This %s should be an integer" obj
       | BadKeywordParam { obj; kind } ->
-         sprintf "This %s should be a keyword (a %s, starting with a colon)" obj kind
+         sprintf "This %s should be a keyword (%s, starting with a colon)" obj kind
       | BadSymbolParam { obj; kind } ->
-         sprintf "This %s should be a symbol (a %s, starting with a quote)" obj kind
+         sprintf "This %s should be a symbol (%s, starting with a quote)" obj kind
       | EmptySwitch ->
          "Empty switch: not sure what to return"
       | MissingDefaultInSwitch ->
