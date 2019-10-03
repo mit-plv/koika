@@ -416,7 +416,7 @@ Fixpoint vect_find_index {T sz} (f: T -> bool) (v: vect T sz) : option (index sz
   end v.
 
 Definition vect_index {T sz} {EQ: EqDec T} (k: T) (v: vect T sz) : option (index sz) :=
-  vect_find_index (fun t => if eq_dec t k then true else false) v.
+  vect_find_index (fun t => beq_dec t k) v.
 
 Lemma vect_nth_index {T sz} {EQ: EqDec T}:
   forall (t: T) (v: vect T sz) (idx: index sz),
@@ -425,7 +425,7 @@ Lemma vect_nth_index {T sz} {EQ: EqDec T}:
 Proof.
   induction sz.
   - destruct idx.
-  - cbn; intros t v idx Heq;
+  - cbn; unfold beq_dec; intros t v idx Heq;
       destruct (eq_dec (vect_hd v) t); subst.
         inversion Heq; subst.
     + reflexivity.
@@ -439,7 +439,7 @@ Lemma vect_nth_index_None {T sz} {EQ: EqDec T}:
 Proof.
   induction sz.
   - destruct idx.
-  - cbn; intros t v Heq idx;
+  - cbn; unfold beq_dec; intros t v Heq idx;
       destruct (eq_dec (vect_hd v) t); subst; try discriminate;
         destruct idx.
     + assumption.
