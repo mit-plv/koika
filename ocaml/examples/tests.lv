@@ -1,0 +1,18 @@
+;; (load (expand-file-name "../lv-mode.el"))
+
+(module tests
+  (register r 32'0)
+
+  (rule shadowing
+    (let ((r 32'1)
+          (r (+ r 32'2)))
+      (let ((r (+ r 32'3))
+            (r (+ r 32'4)))
+        (let ((s (+ r 32'5))
+              (r (+ s 32'6)) ;; Not shadowed
+              (s (+ r 32'7))) ;; Not shadowed
+          (write.0 r (+ r s))))
+      (write.1 r r)))
+
+  (scheduler main
+    (sequence shadowing)))

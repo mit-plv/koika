@@ -1,0 +1,39 @@
+(enum ternary
+  ::false   2'b00
+  ::true    2'b01
+  ::unknown 2'b11)
+
+(enum kind
+  ::add 8'b01010000
+  ::lsr 8'b01100000)
+
+(struct instr
+  :kind 'kind
+  :imm1 (bits 12)
+  :imm2 (bits 12))
+
+(extfun getinstr ((bits 32)) (bits 32))
+
+(module run
+  (register raddr 32'0)
+  (register rinstr 32'0)
+  (register routput 32'0)
+
+  (rule readinstr
+    (write.0 raddr (+ (read.0 raddr) 32'1))
+    (write.0 rinstr (getinstr (read.0 raddr))))
+
+  (rule runinstr
+    (let ((x 5'b0)
+          (i (unpack 'instr (read.1 rinstr)))
+          (i2 (new 'instr :kind ::add :imm1 12'0 :imm2 12'b111111111111)))
+      (setq x (+ x 5'b00010))
+      (write.0 routput
+        (zextl 32
+          (switch (get :kind i)
+            (::add (+ (get :imm1 i) (get :imm2 i)))
+            (::lsr (>> (get :imm1 i) (get :imm2 i)))
+            (_     12'hfff))))))
+
+  (scheduler main
+    (sequence readinstr runinstr)))

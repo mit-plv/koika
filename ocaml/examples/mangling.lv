@@ -1,0 +1,37 @@
+;; (load (expand-file-name "../lv-mode.el"))
+
+(enum lv_gensym_collisions
+  ::_lvs_0 2'0
+  ::_lvs_1 2'1)
+
+(enum lv_mangling_collisions
+  ::_lv_ 2'0
+  ::_lv__lv_ 2'1)
+
+(enum cpp_specials
+  ::void 2'0
+  ::break 2'1
+  ::_Special 2'2
+  ::private__symbol 2'3)
+
+(enum cpp_gensym_collisions
+  ::_a0 2'1
+  ::_a1 2'2)
+
+(enum cpp_mangling_collisions
+  ::_renamed_ 2'0
+  ::_renamed__renamed_ 2'1)
+
+(module mangling
+  (register this 10'0)
+
+  (rule __)
+  (rule _dx0_)
+  (rule _dx0_dx1__dx2__
+    (write.0 this
+      (concat (pack (unpack 'lv_gensym_collisions 2'0))
+              (concat (pack (unpack 'lv_mangling_collisions 2'0))
+                      (concat (pack (unpack 'cpp_specials 2'0))
+                              (concat (pack (unpack 'cpp_gensym_collisions 2'0))
+                                      (pack (unpack 'cpp_mangling_collisions 2'0))))))))
+  (scheduler _ (sequence)))

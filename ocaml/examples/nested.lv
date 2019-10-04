@@ -1,0 +1,33 @@
+;; (load (expand-file-name "../lv-mode.el"))
+
+(struct instr)
+
+(struct nested
+  :instr 'instr
+  :a (bits 16))
+
+(struct nested
+  :instr 'instr
+  :a (bits 16))
+
+(struct nested2
+  :instr 'nested
+  :instr 'nested
+  :nested (bits 3))
+
+(extfun f ('nested2) 'nested)
+(extfun f ('nested2) 'nested)
+
+(module test
+  (rule placeholder
+    (let ((n2 (new 'nested2 :instr (new 'nested :a 16'b0) :nested 3'b0)))
+      fail))
+  (scheduler s
+    (sequence placeholder)))
+
+(module test
+  (rule placeholder
+    (let ((n2 (new 'nested2 :instr (new 'nested :a 16'b0) :nested 3'b0)))
+      fail))
+  (scheduler s
+    (sequence placeholder)))

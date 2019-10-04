@@ -1,0 +1,16 @@
+;; (load (expand-file-name "../lv-mode.el"))
+
+(enum e1
+  ::x 5'b0)
+
+(enum e2
+  ::x 5'b0)
+
+(module test
+  (rule test_resolution
+    (progn
+      (ignore (eq (unpack 'e1 5'0) e1::x))
+      (ignore (eq (unpack 'e2 5'0) e2::x))
+      (ignore (eq (unpack 'e2 5'0) ::x))))
+
+  (scheduler _ (sequence)))
