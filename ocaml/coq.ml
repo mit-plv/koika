@@ -250,7 +250,7 @@ let rec pp_action (position_printer: (Format.formatter -> 'f -> unit) option)
 
 let pp_rule position_printer ppf (name, r) =
   let action = SGALib.Compilation.translate_action r in
-  fprintf ppf "@[<2>Definition %s_body : uaction pos_t var_t reg_t ufn_t :=@ %a@]."
+  fprintf ppf "@[<2>Definition %s_body : uaction pos_t method_name_t var_t reg_t ufn_t :=@ %a@]."
     name (pp_action position_printer) action
 
 let pp_scheduler position_printer ppf (name, s) =
@@ -270,7 +270,7 @@ let pp_scheduler position_printer ppf (name, s) =
   fprintf ppf "@[<2>Definition %s : scheduler rule_name_t :=@ tc_scheduler @[%a@]@]."
     name loop scheduler;
   brk 2 ppf;
-  fprintf ppf "@[<2>Definition %s_circuit : state_transition_circuit R Sigma ContextEnv :=@ " name;
+  fprintf ppf "@[<2>Definition %s_circuit : state_transition_circuit rule_name_t R Sigma ContextEnv :=@ " name;
   fprintf ppf "@[<2>compile_scheduler@ interop_opt@ (@[ContextEnv.(create)@ (readRegisters R Sigma)@])@ rules@ %s@].@]" name;
   brk 2 ppf;
   fprintf ppf "@[<2>Definition %s_eval (custom_sigma: forall f, custom_Sigma f)@ : Log R ContextEnv :=@ " name;
@@ -303,6 +303,7 @@ let pp_preamble ppf =
   fprintf ppf "Require Coq.Lists.List.@ ";
   fprintf ppf "Export Coq.Lists.List.ListNotations.@ @ ";
   fprintf ppf "Definition pos_t := string.@ ";
+  fprintf ppf "Definition method_name_t := string.@ ";
   fprintf ppf "Definition var_t := string.@ @ ";
   fprintf ppf "Instance DummyPos_pos_t : DummyPos pos_t := {| dummy_pos := \"\" |}."
 
