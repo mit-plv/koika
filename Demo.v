@@ -14,6 +14,7 @@ Record demo_package_t :=
 
 Notation opt := simplify_bool_1.
 Notation interop_opt := (lco_opt_compose simplify_bool_1 elaborate_externals_1).
+Notation uaction := (uaction unit unit).
 
 Module Ex1.
   Notation var_t := string.
@@ -47,7 +48,7 @@ Module Ex1.
     | Odd => fun (bs: bits 3) _ => Ob~(Bits.lsb bs)
     end.
 
-  Example uactions r : uaction unit var_t reg_t fn_t :=
+  Example uactions r : uaction var_t reg_t fn_t :=
     match r with
     | r1 =>
       UBind "x" (URead P0 R0)
@@ -98,11 +99,11 @@ Module Ex2.
             | UNot => Not sz1
             end.
 
-  Example _negate : uaction unit var_t reg_t ufn_t  :=
+  Example _negate : uaction var_t reg_t ufn_t  :=
     UBind "x" (URead P1 R0)
           (UWrite P1 R0 (UVar "x")).
 
-  Example _swap_or_replace : uaction unit var_t reg_t ufn_t  :=
+  Example _swap_or_replace : uaction var_t reg_t ufn_t  :=
     UBind "should_swap" (URead P0 R2)
           (UIf (UVar "should_swap")
                (USeq (UWrite P0 R1 (URead P0 R0))
@@ -111,10 +112,10 @@ Module Ex2.
                                     (URead P0 R0)
                                     (URead P0 R1)))).
 
-  Example _ill_typed_write : uaction unit var_t reg_t ufn_t  :=
+  Example _ill_typed_write : uaction var_t reg_t ufn_t  :=
     UWrite P0 R2 (URead P0 R1).
 
-  Example _unbound_variable : uaction unit var_t reg_t ufn_t  :=
+  Example _unbound_variable : uaction var_t reg_t ufn_t  :=
     UWrite P0 R0 (UVar "y").
 
   Example tsched : scheduler name_t :=
@@ -184,7 +185,7 @@ Module Collatz.
 
   Open Scope sga.
 
-  Definition _divide : uaction unit var_t reg_t ufn_t :=
+  Definition _divide : uaction var_t reg_t ufn_t :=
     Let "v" <- R0#read0 in
     Let "odd" <- USel[[$"v", UConstBits (Bits.zero logsz)]] in
     If UNot[[$"odd"]] Then
@@ -193,10 +194,10 @@ Module Collatz.
        fail
     EndIf.
 
-  Definition TimesThree (ex: uaction unit var_t reg_t ufn_t) :=
+  Definition TimesThree (ex: uaction var_t reg_t ufn_t) :=
     UUIntPlus[[ULsl[[ex, UConstBits Ob~1]], ex]]%sga_expr.
 
-  Definition _multiply : uaction unit var_t reg_t ufn_t :=
+  Definition _multiply : uaction var_t reg_t ufn_t :=
     Let "v" <- R0#read1 in
     Let "odd" <- USel[[$"v", UConstBits (Bits.zero logsz)]] in
     If $"odd" Then
@@ -274,7 +275,7 @@ End Collatz.
 Require Import Coq.Lists.List.
 
 Module Type Unpacker.
-  Axiom unpack : forall reg_t custom_ufn_t (source: string), uaction unit string reg_t (interop_ufn_t custom_ufn_t).
+  Axiom unpack : forall reg_t custom_ufn_t (source: string), uaction string reg_t (interop_ufn_t custom_ufn_t).
 End Unpacker.
 
 Module Type Fetcher.
@@ -282,7 +283,7 @@ Module Type Fetcher.
   Axiom custom_Sigma : custom_fn_t -> ExternalSignature.
   Axiom custom_uSigma : custom_fn_t -> type -> type -> result custom_fn_t fn_tc_error.
   Axiom custom_fn_names : custom_fn_t -> string.
-  Axiom fetch_instr : forall reg_t (pc: string), uaction unit string reg_t (interop_ufn_t custom_fn_t).
+  Axiom fetch_instr : forall reg_t (pc: string), uaction string reg_t (interop_ufn_t custom_fn_t).
 End Fetcher.
 
 Definition decoded_sig :=
@@ -322,7 +323,7 @@ Module Decoder (P: Unpacker) (F: Fetcher).
 
   Open Scope sga.
 
-  Notation uaction := (uaction unit var_t reg_t ufn_t).
+  Notation uaction := (uaction var_t reg_t ufn_t).
 
   Definition _fetch : uaction :=
     Let "pc" <- Rpc#read0 in
@@ -385,7 +386,7 @@ Module ManualUnpacker <: Unpacker.
   Notation SCall fn a1 a2 :=
     (UCall (UPrimFn (UStructFn fn)) a1 a2).
 
-  Definition unpack reg_t custom_ufn_t encoded: uaction unit string reg_t (interop_ufn_t custom_ufn_t) :=
+  Definition unpack reg_t custom_ufn_t encoded: uaction string reg_t (interop_ufn_t custom_ufn_t) :=
     (Let "imm" <- SCall (UDoBits decoded_sig GetField "immediate") ($encoded) (UConstBits Ob) in
      Let "src" <- SCall (UDoBits decoded_sig GetField "src") ($encoded) (UConstBits Ob) in
      Let "dst" <- SCall (UDoBits decoded_sig GetField "dst") ($encoded) (UConstBits Ob) in
@@ -403,7 +404,7 @@ Module ManualUnpacker <: Unpacker.
 End ManualUnpacker.
 
 Module PrimitiveUnpacker <: Unpacker.
-  Definition unpack reg_t custom_ufn_t encoded: uaction unit string reg_t (interop_ufn_t custom_ufn_t) :=
+  Definition unpack reg_t custom_ufn_t encoded: uaction string reg_t (interop_ufn_t custom_ufn_t) :=
     (UCall (UPrimFn (UConvFn (UUnpack (struct_t decoded_sig))))
            (UVar encoded) (UConstBits Ob)).
 End PrimitiveUnpacker.
@@ -417,7 +418,7 @@ Module ManualFetcher <: Fetcher.
   Definition custom_uSigma := interop_empty_uSigma.
   Definition custom_fn_names := interop_empty_fn_names.
 
-  Notation uaction reg_t := (uaction unit string reg_t (interop_ufn_t custom_fn_t)).
+  Notation uaction reg_t := (uaction string reg_t (interop_ufn_t custom_fn_t)).
 
   Definition instructions {reg_t} : list (uaction reg_t) :=
     List.map UConstBits
@@ -460,7 +461,7 @@ Module PrimitiveFetcher <: Fetcher.
     | FetchInstr => "fetch_instr"
     end.
 
-  Notation uaction reg_t := (uaction unit string reg_t (interop_ufn_t custom_fn_t)).
+  Notation uaction reg_t := (uaction string reg_t (interop_ufn_t custom_fn_t)).
 
   Definition fetch_instr reg_t pc : uaction reg_t :=
     Eval compute in (UCall (UCustomFn FetchInstr) (UVar pc) (UConstBits Ob)).
@@ -530,7 +531,7 @@ Module Pipeline.
 
   Open Scope sga.
 
-  Definition _doF : uaction unit _ _ _ :=
+  Definition _doF : uaction _ _ _ :=
     Let "v" <- inputReg#read0 in
     ((inputReg#write0(Stream[$"v"]));;
      Let "invalid" <- invalid#read1 in
@@ -541,7 +542,7 @@ Module Pipeline.
        fail
      EndIf).
 
-  Definition _doG : uaction unit _ _ _ :=
+  Definition _doG : uaction _ _ _ :=
     Let "invalid" <- invalid#read0 in
     If UNot[[$"invalid"]] Then
       Let "data" <- r0#read0 in
@@ -647,7 +648,7 @@ Module RegisterFile_Ordered.
 
   Open Scope sga.
 
-  Definition _ReadReg : uaction unit _ _ interop_minimal_ufn_t :=
+  Definition _ReadReg : uaction _ _ interop_minimal_ufn_t :=
     Let "v" <- rIndex#read0 in
     ((rIndex#write0(UUIntPlus[[$"v", UConstBits (Bits.of_nat (log2 nregs) 1)]]));;
      (rOutput#write0(UCompleteSwitch (log2 nregs) (pred nregs) "v"
@@ -726,7 +727,7 @@ Module Enums.
 
   Open Scope sga.
 
-  Definition _Incr : uaction unit _ _ interop_minimal_ufn_t :=
+  Definition _Incr : uaction _ _ interop_minimal_ufn_t :=
     Let "bits_a" <- (UCall (UPrimFn (UConvFn UPack))
                           (rA#read0) (UConstBits Ob)) in
     Let "bits_b" <- (UCall (UPrimFn (UConvFn UPack))
@@ -789,8 +790,96 @@ Module Enums.
                vp_custom_fn_names := interop_empty_fn_names |} |}.
 End Enums.
 
+Module IntCall.
+  Definition var_t := string.
+  Inductive reg_t := rA.
+  Definition ufn_t := interop_minimal_ufn_t.
+  Inductive name_t := rl.
+
+  Definition R r :=
+    match r with
+    | rA => bits_t 16
+    end.
+
+  Definition Sigma := interop_minimal_Sigma.
+  Definition uSigma := interop_minimal_uSigma.
+  Notation uaction := (Syntax.uaction unit string).
+
+  Open Scope sga.
+
+  Record UInternalFunction {pos_t method_name_t var_t: Type} :=
+    { int_sig: InternalSignature method_name_t var_t;
+      int_body: Syntax.uaction pos_t method_name_t var_t reg_t ufn_t }.
+  Arguments UInternalFunction : clear implicits.
+
+  Definition nor (sz: nat) : @UInternalFunction unit _ _ :=
+    {| int_sig := {{{ ("nor<" ++ string_of_nat sz ++ ">")%string |
+                     "arg1" :: bits_t sz ~> "arg2" :: bits_t sz ~> bits_t sz }}};
+       int_body := UNot[[UOr[[$"arg1", $"arg2"]], UConstBits Ob]]%sga_expr |}.
+
+  Definition _rl : uaction _ _ interop_minimal_ufn_t :=
+    rA#write0(UInternalCall (int_sig (nor 16)) (int_body (nor 16))
+                            (List.cons (rA#read0)
+                                       (List.cons (UUIntPlus[[rA#read0, UConstBits (Bits.of_N 16 1%N)]])
+                                                  List.nil))).
+
+  (* Ltac __must_typecheck R Sigma tcres ::= *)
+  (*   __must_typecheck_cbn R Sigma tcres. *)
+
+  Definition rules :=
+    tc_rules R iSigma iuSigma
+             (fun rl => match rl with
+                     | rl => _rl
+                     end).
+
+  Definition sched : scheduler _ :=
+    tc_scheduler (rl |> done).
+
+  Instance FiniteType_reg_t : FiniteType reg_t := _.
+
+  Definition circuit :=
+    compile_scheduler interop_opt (ContextEnv.(create) (readRegisters R Sigma)) rules sched.
+
+  Definition r reg : R reg :=
+    match reg with
+    | rA => Bits.of_N _ 12
+    end.
+
+  Definition sched_result :=
+    Eval compute in interp_scheduler (ContextEnv.(create) r) interop_minimal_sigma rules sched.
+
+  Definition sga_package :=
+    {| sga_reg_types := R;
+       sga_reg_init := r;
+       sga_reg_finite := _;
+       sga_reg_names r := match r with
+                         | rA => "rA"
+                         end;
+
+       sga_custom_fn_types := interop_empty_Sigma;
+
+       sga_rules := rules;
+       sga_rule_names r := match r with
+                          | _rl => "rl"
+                          end;
+
+       sga_scheduler := sched;
+       sga_module_name := "intfn"
+    |}.
+
+  Definition package :=
+    {| sga := sga_package;
+       sp := {| sp_pkg := sga_package;
+               sp_var_names := fun x => x;
+               sp_custom_fn_names := interop_empty_fn_names;
+               sp_extfuns := None |};
+       vp := {| vp_pkg := sga_package;
+               vp_external_rules := List.nil;
+               vp_custom_fn_names := interop_empty_fn_names |} |}.
+End IntCall.
+
 Import ListNotations.
-Definition demo_packages :=
+Definition demo_packages : list demo_package_t :=
   [ Collatz.package;
     ManualDecoder.package; PrimitiveDecoder.package;
     Pipeline.package;

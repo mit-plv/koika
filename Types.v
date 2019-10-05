@@ -204,9 +204,8 @@ Qed.
 Record ExternalSignature :=
   FunSig { arg1Type: type; arg2Type: type; retType: type }.
 
-Notation "{{ a1 ~> a2 ~> ret }}" :=
-  {| arg1Type := a1; arg2Type := a2; retType := ret |}
-    (at level 200, no associativity).
+Notation "{{  a1 ~> a2 ~> ret  }}" :=
+  {| arg1Type := a1; arg2Type := a2; retType := ret |}.
 
 Coercion ExternalSignature_denote fn :=
   fn.(arg1Type) -> fn.(arg2Type) -> fn.(retType).
@@ -217,6 +216,32 @@ Lemma ExternalSignature_injRet :
     FunSig s1' s2' retType' ->
     retType = retType'.
 Proof. now inversion 1. Qed.
+
+Definition tsig var_t := list (var_t * type).
+
+Record InternalSignature {name_t var_t: Type} :=
+  { int_name: name_t;
+    int_args : tsig var_t;
+    int_retType : type }.
+Arguments InternalSignature : clear implicits.
+
+Record arg_sig {var_t} :=
+  { arg_name: var_t;
+    arg_type: type }.
+
+Definition prod_of_argsig {var_t} (a: @arg_sig var_t) :=
+  (a.(arg_name), a.(arg_type)).
+
+Notation "x :: y" := {| arg_name := x%string; arg_type := y |} : intarg_scope.
+Delimit Scope intarg_scope with intarg.
+
+(* FIXME improve this notation *)
+Notation "{{{  name | x ~> .. ~> z ~> ret  }}}" :=
+  {| int_name := name%string;
+     int_args := (cons (prod_of_argsig (x%intarg)) .. (cons (prod_of_argsig z%intarg) nil) ..);
+     int_retType := ret |} (at level 60).
+
+(* Check {{{ "A" | "x" :: unit_t ~> bits_t 5 }}}. *)
 
 Inductive type_kind :=
   kind_bits | kind_enum (sig: option enum_sig) | kind_struct (sig: option struct_sig).

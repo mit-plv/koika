@@ -123,7 +123,6 @@ Notation "'let/opt2' v1 ',' v2 ':=' expr 'in' body" :=
 Notation "'let/opt3' v1 ',' v2 ',' v3 ':=' expr 'in' body" :=
   (opt_bind expr (fun '(v1, v2, v3) => body)) (at level 200).
 
-
 Definition must {A} (o: option A) : if o then A else unit :=
   match o with
   | Some a => a
@@ -252,6 +251,20 @@ Notation "'let/res' var ':=' expr 'in' body" :=
    | Failure f => Failure f
    end)
     (at level 200).
+
+Section result_list_map.
+  Context {A B F: Type}.
+  Context (f: A -> result B F).
+
+  (* Written this way to allow use in fixpoints *)
+  Fixpoint result_list_map (la: list A): result (list B) F :=
+    match la with
+    | [] => Success []
+    | a :: la => let/res b := f a in
+               let/res la := result_list_map la in
+               Success (b :: la)
+    end.
+End result_list_map.
 
 Section string_of_nat.
   Lemma digit_lt_base m {n} : not (m + n < m).

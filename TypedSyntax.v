@@ -9,9 +9,7 @@ Section TypedSyntax.
   Context {R: reg_t -> type}
           {Sigma: fn_t -> ExternalSignature}.
 
-  Definition tsig := list (var_t * type).
-
-  Inductive action : tsig -> type -> Type :=
+  Inductive action : tsig var_t -> type -> Type :=
   | Fail {sig} tau : action sig tau
   | Var {sig} {k: var_t} {tau: type}
         (m: member (k, tau) sig) : action sig tau
@@ -52,7 +50,6 @@ Section TypedSyntax.
       s_actions : name_t -> rule }.
 End TypedSyntax.
 
-Arguments tsig : clear implicits.
 Arguments rule var_t {reg_t fn_t} R Sigma : assert.
 Arguments action var_t {reg_t fn_t} R Sigma sig tau : assert.
 Arguments scheduler : clear implicits.

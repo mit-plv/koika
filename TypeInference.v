@@ -1,9 +1,9 @@
-Require Import SGA.Common SGA.Environments SGA.Syntax SGA.TypedSyntax.
+Require Import SGA.Common SGA.Environments SGA.Syntax SGA.TypedSyntax SGA.SyntaxMacros.
 Require Import Coq.Lists.List.
 Import ListNotations.
 
 Section ErrorReporting.
-  Context {pos_t var_t reg_t fn_t: Type}.
+  Context {pos_t method_name_t var_t reg_t fn_t: Type}.
   Context {R: reg_t -> type}
           {Sigma: fn_t -> ExternalSignature}.
 
@@ -13,6 +13,8 @@ Section ErrorReporting.
   | UnboundField (f: string) (sig: struct_sig)
   | UnboundEnumMember (f: string) (sig: enum_sig)
   | IncorrectRuleType (tau: type)
+  | TooManyArguments (method_name: method_name_t) (nextra: nat)
+  | TooFewArguments (method_name: method_name_t) (nmissing: nat)
   | TypeMismatch {sig tau} (e: action var_t R Sigma sig tau) (expected: type)
   | KindMismatch {sig tau} (e: action var_t R Sigma sig tau) (expected: type_kind).
 
@@ -40,28 +42,28 @@ Section ErrorReporting.
                           end) r.
 End ErrorReporting.
 
-Arguments error_message var_t {reg_t fn_t} R Sigma : assert.
-Arguments error pos_t var_t {reg_t fn_t} R Sigma : assert.
+Arguments error_message method_name_t var_t {reg_t fn_t} R Sigma : assert.
+Arguments error pos_t method_name_t var_t {reg_t fn_t} R Sigma : assert.
 
 Section TypeInference.
-  Context {pos_t name_t var_t reg_t ufn_t fn_t: Type}.
+  Context {pos_t rule_name_t method_name_t var_t reg_t ufn_t fn_t: Type}.
   Context {var_t_eq_dec: EqDec var_t}.
 
   Context (R: reg_t -> type).
   Context (Sigma: fn_t -> ExternalSignature).
   Context (uSigma: forall (fn: ufn_t) (tau1 tau2: type), result fn_t fn_tc_error).
 
-  Notation uaction := (uaction pos_t var_t reg_t ufn_t).
-  Notation uscheduler := (uscheduler pos_t name_t).
+  Notation uaction := (uaction pos_t method_name_t var_t reg_t ufn_t).
+  Notation uscheduler := (uscheduler pos_t rule_name_t).
 
   Open Scope bool_scope.
 
   Notation action := (action var_t R Sigma).
   Notation rule := (rule var_t R Sigma).
-  Notation scheduler := (scheduler name_t).
-  Notation schedule := (schedule name_t var_t R Sigma).
-  Notation error := (error pos_t var_t R Sigma).
-  Notation error_message := (error_message var_t R Sigma).
+  Notation scheduler := (scheduler rule_name_t).
+  Notation schedule := (schedule rule_name_t var_t R Sigma).
+  Notation error := (error pos_t method_name_t var_t R Sigma).
+  Notation error_message := (error_message method_name_t var_t R Sigma).
   Notation result A := (result A error).
 
   Notation "` x" := (projT1 x) (at level 0).
@@ -103,7 +105,21 @@ Section TypeInference.
     Definition mkerror pos msg : error :=
       {| epos := pos; emsg := msg |}.
 
-    Fixpoint type_action (pos: pos_t) (sig: tsig var_t) (e: uaction)
+    Fixpoint assert_argtypes {sig} method_name pos
+             (args_desc: tsig var_t)
+             (args: list (pos_t * {tau : type & action sig tau}))
+      : result (context (K := (var_t * type)) (fun '(_, tau) => action sig tau) args_desc) :=
+      match args_desc, args with
+      | [], [] => Success CtxEmpty
+      | [], _ => Failure (mkerror pos (TooManyArguments method_name (List.length args)))
+      | _, [] => Failure (mkerror pos (TooFewArguments method_name (List.length args_desc)))
+      | (name1, tau1) :: fn_sig, (pos1, arg1) :: args =>
+        let/res arg1 := cast_action pos1 tau1 ``arg1  in
+        let/res ctx := assert_argtypes method_name pos fn_sig args in
+        Success (CtxCons (name1, tau1) arg1 ctx)
+      end.
+
+    Fixpoint type_action (pos: pos_t) (sig: tsig var_t) (e: uaction) {struct e}
       : result ({ tau: type & action sig tau }) :=
       match e with
       | UError => Failure (mkerror pos ExplicitErrorInAst)
@@ -141,6 +157,14 @@ Section TypeInference.
         let/res value' := type_action pos sig value in
         let/res value' := cast_action (actpos pos value) (R idx) (``value') in
         Success (EX (Write port idx value'))
+      | UInternalCall fn_sig fn_body args =>
+        let/res tc_args := result_list_map (type_action pos sig) args in
+        let arg_positions := List.map (actpos pos) args in
+        let tc_args_w_pos := List.combine arg_positions tc_args in
+        let/res arg_ctx := assert_argtypes fn_sig.(int_name) pos fn_sig.(int_args) tc_args_w_pos in
+        let/res fn_body' := type_action (actpos pos fn_body) fn_sig.(int_args) fn_body in
+        let/res fn_body' := cast_action (actpos pos fn_body) fn_sig.(int_retType) (``fn_body') in
+        Success (EX (InternalCall sig fn_sig.(int_args) fn_body' arg_ctx))
       | UCall ufn arg1 arg2 =>
         let/res arg1' := type_action pos sig arg1 in
         let/res arg2' := type_action pos sig arg2 in
@@ -207,8 +231,8 @@ Notation tc_action R Sigma uSigma action :=
 
 Notation tc_rules R Sigma uSigma actions :=
   (ltac:(match type of actions with
-         | (?name_t -> _) =>
-           let res := constr:(fun r: name_t =>
+         | (?rule_name_t -> _) =>
+           let res := constr:(fun r: rule_name_t =>
                                ltac:(destruct r eqn:? ;
                                        lazymatch goal with
                                        | [ H: _ = ?rr |- _ ] =>

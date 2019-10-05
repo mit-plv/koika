@@ -1,7 +1,7 @@
 Require Import SGA.Common SGA.TypedSyntax.
 
 Section Syntax.
-  Context {pos_t name_t var_t reg_t fn_t: Type}.
+  Context {pos_t rule_name_t method_name_t var_t reg_t fn_t: Type}.
 
   Inductive uaction :=
   | UError
@@ -16,12 +16,13 @@ Section Syntax.
   | URead (port: Port) (idx: reg_t)
   | UWrite (port: Port) (idx: reg_t) (value: uaction)
   | UCall (fn: fn_t) (arg1: uaction) (arg2: uaction)
+  | UInternalCall (sig: @InternalSignature method_name_t var_t) (body: uaction) (args: list uaction)
   | UAPos (p: pos_t) (e: uaction).
 
   Inductive uscheduler :=
   | UDone
-  | UTry (r: name_t) (s1 s2: uscheduler)
-  | UCons (r: name_t) (s: uscheduler)
+  | UTry (r: rule_name_t) (s1 s2: uscheduler)
+  | UCons (r: rule_name_t) (s: uscheduler)
   | USPos (p: pos_t) (s: uscheduler).
 End Syntax.
 

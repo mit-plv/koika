@@ -894,7 +894,7 @@ Section CompilerCorrectness.
   Qed.
 
   Lemma circuit_gamma_equiv_creplace:
-    forall (sig : list (var_t * type)) (k : var_t) (tau : type)
+    forall (sig : tsig var_t) (k : var_t) (tau : type)
       (m : member (k, tau) sig) (vGamma : vcontext sig)
       (a : action_circuit R Sigma REnv tau) (cGamma : ccontext sig) t,
       interp_circuit (retVal a) = bits_of_value t ->
