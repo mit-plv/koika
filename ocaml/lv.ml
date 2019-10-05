@@ -167,6 +167,7 @@ module Errors = struct
       | BadKeywordParam of { obj: string; kind: string }
       | BadSymbolParam of { obj: string; kind: string }
       | EmptySwitch
+      | EarlyDefaultInSwitch
       | MissingDefaultInSwitch
       | DuplicateDefaultInSwitch
       | QualifiedEnumeratorInDecl of { enum: string; constructor: string }
@@ -219,6 +220,8 @@ module Errors = struct
          sprintf "This %s should be a symbol (%s, starting with a quote)" obj kind
       | EmptySwitch ->
          "No valid branch in switch: not sure what to return"
+      | EarlyDefaultInSwitch ->
+         "Default case (_) in switch precedes other branches; move it to the end"
       | MissingDefaultInSwitch ->
          "Missing default case (_) in switch"
       | DuplicateDefaultInSwitch ->
@@ -791,9 +794,10 @@ let parse (sexps: Pos.t sexp list) =
              let operand = expect_action operand in
              let binder = gensym "switch_operand" in
              (match build_switch_body branches with
-              | Some (default, branches) ->
+              | (Some default, branches) ->
                  Switch { binder; operand; default; branches }
-              | None -> syntax_error loc @@ EmptySwitch)
+              | None, [] -> syntax_error loc @@ EmptySwitch
+              | None, _ -> syntax_error loc @@ MissingDefaultInSwitch)
           | _ ->
              let args = List.map expect_action args in
              Call (locd_make loc_hd hd, args))
@@ -808,17 +812,17 @@ let parse (sexps: Pos.t sexp list) =
              `SomeLabel (locd_make loc (Lit (Const cst))) in
     (lbl, locd_make loc (Progn (List.map expect_action body)))
   and build_switch_body branches =
-    Delay.fold_right (fun (lbl, (branch: _ action locd)) acc ->
-        match acc, lbl with
-        | None, `AnyLabel _ ->
-           Some (branch, [])
-        | None, `SomeLabel l ->
-           syntax_error l.lpos @@ MissingDefaultInSwitch
-        | Some _, `AnyLabel loc  ->
+    Delay.fold_right (fun (lbl, (branch: _ action locd)) (default, branches) ->
+        match default, branches, lbl with
+        | None, [], `AnyLabel _ ->
+           (Some branch, [])
+        | None, _, `AnyLabel loc ->
+           syntax_error loc @@ EarlyDefaultInSwitch
+        | Some _, _, `AnyLabel loc  ->
            syntax_error loc @@ DuplicateDefaultInSwitch
-        | Some (default, branches), `SomeLabel l ->
-           Some (default, (l, branch) :: branches))
-      branches None
+        | _, _, `SomeLabel l ->
+           (default, (l, branch) :: branches))
+      branches (None, [])
   and expect_let_binding b =
     let loc, b = expect_list "a let binding" b in
     let var, values = expect_cons loc "identifier" b in
