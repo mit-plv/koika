@@ -109,6 +109,7 @@ type resolved_unit = {
   }
 
 let quote x = "‘" ^ x ^ "’"
+let fquote () = quote
 
 let one_of_str candidates =
   match candidates with
@@ -116,9 +117,13 @@ let one_of_str candidates =
   | _ -> let candidates = candidates |> List.map quote |> String.concat ", " in
          sprintf "one of %s" candidates
 
-module Errors = struct
-  let fquote () = quote
+let in_scope_str candidates =
+  match candidates with
+  | [] -> "none in scope"
+  | _ -> let candidates = candidates |> List.map quote |> String.concat ", " in
+         sprintf "in scope: %s" candidates
 
+module Errors = struct
   module ParseErrors = struct
     type t =
       | SexpError of { msg: string }
@@ -228,7 +233,7 @@ module Errors = struct
 
   module NameErrors = struct
     type t =
-      | Unbound of { kind: string; name: string; candidates: string list }
+      | Unbound of { kind: string; prefix: string; name: string; candidates: string list }
       | Duplicate of { kind: string; name: string }
       | DuplicateTypeName of { name: string; kind: string; previous: typ }
       | ExtfunShadowsPrimitive of { ext_name: string }
@@ -236,11 +241,11 @@ module Errors = struct
       | MissingModule
 
     let to_string = function
-      | Unbound { kind; name; candidates } ->
+      | Unbound { kind; prefix; name; candidates } ->
          let candidates =
            if candidates = [] then ""
-           else sprintf " (expecting %s)" (one_of_str candidates) in
-         sprintf "Unbound %s: %a%s" kind fquote name candidates
+           else sprintf " (%s)" (in_scope_str (List.map (fun c -> prefix ^ c) candidates)) in
+         sprintf "Unbound %s: %a%s" kind fquote (prefix ^ name) candidates
       | Duplicate { kind; name } ->
          sprintf "Duplicate %s: %a" kind fquote name
       | DuplicateTypeName { name; kind; previous } ->
@@ -977,7 +982,7 @@ let resolve_type types { lpos; lcnt: unresolved_type } =
   | Unknown_u name ->
      match StringMap.find_opt name types.td_all with
      | Some tau -> tau
-     | None -> name_error lpos @@ Unbound { kind = "type"; name; candidates = keys types.td_all }
+     | None -> name_error lpos @@ Unbound { kind = "type"; prefix = "'"; name; candidates = keys types.td_all }
 
 let assert_unique_type types { lpos; lcnt = name } kind =
   match StringMap.find_opt name types.td_all with
@@ -1067,18 +1072,20 @@ let resolve_value types { lpos; lcnt } =
     match List.assoc_opt field sg.enum_members with
     | Some bs -> Enum (sg, bs)
     | None -> let kind = sprintf "enumerator in type %a" fquote sg.enum_name in
-              name_error lpos @@ Unbound { kind; name = field; candidates = List.map fst sg.enum_members } in
+              name_error lpos @@ Unbound { kind; prefix = "::"; name = field;
+                                           candidates = List.map fst sg.enum_members } in
   match lcnt with
   | UBits bs -> Bits bs
   | UEnum { enum = ""; constructor } ->
      (match StringMap.find_opt constructor types.td_enumerators with
       | Some sg -> resolve_enum_constructor sg constructor
-      | None -> name_error lpos @@ Unbound { kind = "enumerator"; name = constructor; candidates = keys types.td_enumerators })
+      | None -> name_error lpos @@ Unbound { kind = "enumerator"; prefix = "::";
+                                             name = constructor; candidates = keys types.td_enumerators })
   | UEnum { enum; constructor } ->
      (match StringMap.find_opt enum types.td_all with
       | Some (Enum_t sg) -> resolve_enum_constructor sg constructor
       | Some tau -> type_error lpos @@ BadKind { name = enum; actual_type = tau; expected = "an enum" }
-      | None -> name_error lpos @@ Unbound { kind = "enum"; name = enum; candidates = keys types.td_enums })
+      | None -> name_error lpos @@ Unbound { kind = "enum"; prefix = ""; name = enum; candidates = keys types.td_enums })
 
 let try_resolve_bits_fn { lpos; lcnt = name } args =
   let bits_fn nm = SGALib.SGA.UPrimFn (SGALib.SGA.UBitsFn nm) in
@@ -1186,14 +1193,14 @@ let resolve_function types extfuns name (args: unresolved_action locd list) =
        | None -> match try_resolve_extfun extfuns name args with
                  | Some r -> r
                  | None -> let candidates = List.concat [keys core_primitives; keys bits_primitives; keys extfuns] in
-                           name_error name.lpos @@ Unbound { kind = "function"; name = name.lcnt; candidates } in
+                           name_error name.lpos @@ Unbound { kind = "function"; prefix = ""; name = name.lcnt; candidates } in
      pad_function_call name.lpos name.lcnt fn nargs args
 
 let resolve_rule types extfuns registers ((nm, action): unresolved_rule) =
   let find_register { lpos; lcnt = name } =
     match List.find_opt (fun rsig -> rsig.reg_name = name) registers with
     | Some rsig -> { lpos; lcnt = rsig }
-    | None -> name_error lpos @@ Unbound { kind = "register"; name; candidates = [] } in
+    | None -> name_error lpos @@ Unbound { kind = "register"; prefix = ""; name; candidates = [] } in
   let rec resolve_struct_fields fields =
     List.map (fun (nm, v) -> nm, resolve_action v) fields
   and resolve_action_nodelay ({ lpos; lcnt }: unresolved_action locd) =
@@ -1252,7 +1259,7 @@ let resolve_register types (name, init) =
 let resolve_scheduler rules ((nm, s): unresolved_scheduler) =
   let check_rule { lpos; lcnt = name } =
     if not (List.mem_assoc name rules) then
-      name_error lpos @@ Unbound { kind = "rule"; name; candidates = [] } in
+      name_error lpos @@ Unbound { kind = "rule"; prefix = ""; name; candidates = [] } in
   let rec check_scheduler ({ lcnt; _ }: Pos.t scheduler locd) =
     match lcnt with
     | Done -> ()
