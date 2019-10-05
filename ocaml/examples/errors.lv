@@ -40,6 +40,11 @@
   (register r1 32'0)
   (register_ r2 32'0)
 
+  (rule rl0
+    (switch (get :imm1 (init 'instr))
+      (::add (+sss (get :imm1 i) (get :imm2 i)))
+      (::lsr (>>> (get :imm1 i) (get :imm2 i)))
+      (_ 1)))
   (rule rl1 (write.2))
   (rule rl2 (write.0 r1 (+ (read.1 r1) 31'0)))
   (rule rl3 (getinstr (read.0 r1)))
@@ -52,10 +57,11 @@
           (e (new 'bool2)))
       (setq x (+ x 5'b00010))
       (write.0 r1
-        (zextl a
+        (zextl 1
           (switch (get :kind i)
-            (::add (+ (get :imm1 i) (get :imm2 i)))
-            (::lsr (>> (get :imm1 i) (get :imm2 i))))))))
+            (xxx::add (+ (get :imm1 i) (get :imm2 i)))
+            (::lsr (>> (get :imm1 i) (get :imm2 i)))
+            (_ 1'b0))))))
 
   (scheduler s1 (sequence rl1 rl))
   (scheduler s2 (sequence rl2 rl2)))

@@ -964,7 +964,7 @@ let rexpect_symbol kind obj = function
   | { lpos; _ } -> syntax_error lpos @@ BadSymbolParam { obj; kind }
 
 let rexpect_param k loc (args: unresolved_action locd list) =
-  let obj = "compile-time parameter" in
+  let obj = "parameter" in
   let a, args = expect_cons loc obj args in
   k obj a, args
 
