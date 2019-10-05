@@ -7,8 +7,18 @@ module Pos = struct
   type t =
     | StrPos of string
     | Filename of string
-    | SexpPos of string * Parsexp.Positions.pos
     | SexpRange of string * Parsexp.Positions.range
+
+  let compare p1 p2 =
+    match p1, p2 with
+    | StrPos _, StrPos _ -> 0 (* Use reporting order *)
+    | StrPos _, _ -> -1 | _, StrPos _ -> 1
+    | Filename f1, Filename f2 -> compare f1 f2
+    | Filename _, _ -> -1 | _, Filename _ -> 1
+    | SexpRange (f1, rng1), SexpRange (f2, rng2) ->
+       match compare f1 f2 with
+       | 0 -> Parsexp.Positions.compare_range rng1 rng2
+       | n -> n
 
   let range_to_string begpos endpos =
     if begpos = endpos then sprintf "%d" begpos
@@ -19,8 +29,6 @@ module Pos = struct
     | StrPos s -> s
     | Filename f ->
        sprintf "%s:0:1" f
-    | SexpPos (fname, { line; col; _ }) ->
-       sprintf "%s:%d:%d" fname line (col + 1)
     | SexpRange (fname, { start_pos; end_pos }) ->
        let line = range_to_string start_pos.line end_pos.line in
        let col = range_to_string (start_pos.col + 1) (end_pos.col + 1) in
@@ -358,7 +366,7 @@ module Errors = struct
   type error = { epos: Pos.t; emsg: err }
 
   let compare e1 e2 =
-    match compare e1.epos e2.epos with
+    match Pos.compare e1.epos e2.epos with
     | 0 -> compare e1.emsg e2.emsg
     | n -> n
 
@@ -515,6 +523,7 @@ module DelayedReader (P: Parsexp.Eager_parser) = struct
   exception GotSexp of P.parsed_value * Parsexp.Positions.pos
 
   let parse_string fname source =
+    let open Parsexp in
     let got_sexp state parsed_value =
       raise_notrace (GotSexp (parsed_value, P.State.Read_only.position state)) in
     let state =
@@ -523,10 +532,11 @@ module DelayedReader (P: Parsexp.Eager_parser) = struct
       try
         let len = String.length source - pos in
         P.feed_substring state ~pos ~len source P.Stack.empty |> P.feed_eoi state
-      with Parsexp.Parse_error err ->
-        let pos = Parsexp.Parse_error.position err in
-        let msg = Parsexp.Parse_error.message err in
-        parse_error (Pos.SexpPos (fname, pos)) @@ SexpError { msg } in
+      with Parse_error err ->
+        let pos = Parse_error.position err in
+        let range = Positions.{ start_pos = pos; end_pos = pos } in
+        let msg = Parse_error.message err in
+        parse_error (Pos.SexpRange (fname, range)) @@ SexpError { msg } in
     let rec read_sexps pos =
       P.State.reset ~pos state;
       try Delay.apply1 feed pos.offset; []

@@ -76,7 +76,7 @@ let first_compile_unit in_fname mods =
 let print_errors_and_warnings errs =
   let errs_with_warnings = List.rev_append (Lv.Errors.fetch_warnings ()) errs in
   List.iter (Printf.eprintf "%s\n" << Lv.Errors.to_string)
-    (List.sort Lv.Errors.compare errs_with_warnings)
+    (List.stable_sort Lv.Errors.compare errs_with_warnings)
 
 let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
   let open Lv in
