@@ -250,6 +250,7 @@ type assignment_result =
   | NotAssigned
   | Assigned of var_t
   | PureExpr of string
+  | ImpureExpr of string
 
 let compile (type name_t var_t reg_t)
       (hpp: (_, name_t, var_t, reg_t, _) cpp_input_t) =
@@ -602,19 +603,27 @@ let compile (type name_t var_t reg_t)
           p_decl tinfo.tau tinfo.name;
         tinfo.name in
 
-      let p_assign_pure ?(prefix = "") target result =
+      let p_assign_expr ?(prefix = "") target result =
         match target, result with
-        | VarTarget { declared = true; name; _ }, PureExpr e ->
+        | VarTarget { declared = true; name; _ }, (PureExpr e | ImpureExpr e) ->
            p "%s = %s;" name e;
            Assigned name
-        | VarTarget { tau; name; _ }, PureExpr e ->
+        | VarTarget { tau; name; _ }, (PureExpr e | ImpureExpr e) ->
            p_decl ~prefix ~init:(Some e) tau name;
            Assigned name
-        | _ -> result in
+        | NoTarget, ImpureExpr e ->
+           p "%s;" e; (* Keep impure exprs like extfuns *)
+           NotAssigned
+        | _, _ -> result
+      in
 
       let must_expr = function
-        | PureExpr e -> e
-        | Assigned v -> v
+        | (PureExpr _ | ImpureExpr _) as expr -> expr
+        | Assigned v -> PureExpr v
+        | NotAssigned -> assert false in
+
+      let must_value = function
+        | Assigned e | PureExpr e | ImpureExpr e -> e
         | NotAssigned -> assert false in
 
       let p_funcall target fn a1 a2 =
@@ -622,7 +631,7 @@ let compile (type name_t var_t reg_t)
         match ffi_name with
         | CustomFn f ->
            Hashtbl.replace custom_funcalls f fn;
-           PureExpr (cpp_funcall f a1 a2)
+           ImpureExpr (cpp_funcall f a1 a2)
         | PrimFn (SGA.ConvFn (tau, fn)) ->
            let ns = "prims::" in
            let tau = SGALib.Util.typ_of_sga_type tau in
@@ -642,7 +651,7 @@ let compile (type name_t var_t reg_t)
            | SGA.GetField -> PureExpr (sprintf "%s.%s" a1 fname)
            | SGA.SubstField ->
               let tinfo = ensure_target (Struct_t sg) target in
-              let res = p_assign_pure (VarTarget tinfo) (PureExpr a1) in
+              let res = p_assign_expr (VarTarget tinfo) (PureExpr a1) in
               p "%s.%s = %s;" tinfo.name fname a2;
               res in
 
@@ -666,23 +675,22 @@ let compile (type name_t var_t reg_t)
            let res = PureExpr (sp_value (SGALib.Util.value_of_sga_value tau cst)) in
            if cpp_type_needs_allocation tau then
              let ctarget = gensym_target (SGALib.Util.typ_of_sga_type tau) "cst" in
-             let e = must_expr (p_assign_pure ~prefix:"static const" ctarget res) in
-             PureExpr e
+             must_expr (p_assign_expr ~prefix:"static const" ctarget res)
            else res
         | SGA.Assign (sg, v, tau, m, ex) ->
            assert_no_shadowing sg v tau hpp.cpp_var_names m;
            let vtarget = VarTarget { tau = SGALib.Util.typ_of_sga_type tau;
                                      declared = true; name = hpp.cpp_var_names v } in
-           ignore (p_assign_pure vtarget (p_action vtarget ex));
-           p_assign_pure target (PureExpr "prims::tt")
+           p_assign_and_ignore vtarget (p_action vtarget ex);
+           p_assign_expr target (PureExpr "prims::tt")
         | SGA.Seq (_, _, a1, a2) ->
-           ignore (p_action NoTarget a1);
+           p_assign_and_ignore NoTarget (p_action NoTarget a1);
            p_action target a2
         | SGA.Bind (_, tau, _, v, expr, rl) ->
            let target = p_declare_target target in
            p_scoped "/* bind */" (fun () ->
                p_bound_var_assign tau v expr;
-               p_assign_pure target (p_action target rl))
+               p_assign_expr target (p_action target rl))
         | SGA.If (_, _, cond, tbr, fbr) ->
            let target = p_declare_target target in
            (match reconstruct_switch hpp.cpp_function_sigs rl with
@@ -691,10 +699,10 @@ let compile (type name_t var_t reg_t)
             | None ->
                let ctarget = gensym_target (Bits_t 1) "c" in
                let cexpr = p_action ctarget cond in
-               ignore (p_scoped (sprintf "if (bool(%s))" (must_expr cexpr))
-                         (fun () -> p_assign_pure target (p_action target tbr)));
+               (p_scoped (sprintf "if (bool(%s))" (must_value cexpr))
+                  (fun () -> p_assign_and_ignore target (p_action target tbr)));
                p_scoped "else"
-                 (fun () -> p_assign_pure target (p_action target fbr)))
+                 (fun () -> p_assign_expr target (p_action target fbr)))
         | SGA.Read (_, port, reg) ->
            let r = hpp.cpp_register_sigs reg in
            let var = p_ensure_declared (ensure_target (reg_type r) target) in
@@ -706,27 +714,27 @@ let compile (type name_t var_t reg_t)
         | SGA.Write (_, port, reg, expr) ->
            let r = hpp.cpp_register_sigs reg in
            let vt = gensym_target (reg_type r) "v" in
-           let v = must_expr (p_action vt expr) in
+           let v = must_value (p_action vt expr) in
            let fn_name = match port with
              | P0 -> "write0"
              | P1 -> "write1" in
            p_checked (fun () ->
                pr "log.%s.%s(%s, Log.%s.rwset)"
                  r.reg_name fn_name v r.reg_name);
-           p_assign_pure target (PureExpr "prims::tt")
+           p_assign_expr target (PureExpr "prims::tt")
         | SGA.Call (_, fn, arg1, arg2) ->
            let f = hpp.cpp_function_sigs fn in
-           let a1 = must_expr (p_action (gensym_target f.ffi_arg1type "x") arg1) in
-           let a2 = must_expr (p_action (gensym_target f.ffi_arg2type "y") arg2) in
+           let a1 = must_value (p_action (gensym_target f.ffi_arg1type "x") arg1) in
+           let a2 = must_value (p_action (gensym_target f.ffi_arg2type "y") arg2) in
            p_funcall target f a1 a2
       and p_switch target var default branches =
         let rec loop = function
           | [] ->
              p "default:";
-             p_assign_pure target (p_action target default);
+             p_assign_expr target (p_action target default);
           | (const, action) :: branches ->
              p "case %s:" (sp_value const);
-             ignore (p_assign_pure target (p_action target action));
+             p_assign_and_ignore target (p_action target action);
              p "break;";
              loop branches in
         p_scoped (sprintf "switch (%s)" (hpp.cpp_var_names var)) (fun () ->
@@ -740,14 +748,17 @@ let compile (type name_t var_t reg_t)
             (* ‘int x = x + 1;’ doesn't work in C++ (basic.scope.pdecl), so if
                the rhs uses a variable with name ‘v’ we need a temp variable. *)
             let vtmp = gensym_target tau "tmp" in
-            PureExpr (must_expr (p_assign_pure vtmp (p_action vtmp expr)))
+            must_expr (p_assign_expr vtmp (p_action vtmp expr))
           else p_action vtarget expr in
-        ignore (p_assign_pure vtarget expr) in
+        p_assign_and_ignore vtarget expr
+      and p_assign_and_ignore target expr =
+        ignore (p_assign_expr target expr) in
+
 
       p_fn ~typ:"bool" ~name:(hpp.cpp_rule_names rule.rl_name) (fun () ->
           p_reset ();
           nl ();
-          ignore (p_action NoTarget rule.rl_body);
+          p_assign_and_ignore NoTarget (p_action NoTarget rule.rl_body);
           nl ();
           p_commit ()) in
 
