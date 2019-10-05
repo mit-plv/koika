@@ -262,7 +262,7 @@ module Errors = struct
       | DuplicateTypeName { name; kind; previous } ->
          sprintf "Duplicate type name: %s %a previously declared (as %s)" kind fquote name (kind_to_str previous)
       | ExtfunShadowsPrimitive { ext_name } ->
-         sprintf "External function name %a conflicts with existing primitive." fquote ext_name
+         sprintf "External function name %a conflicts with existing primitive" fquote ext_name
       | MissingScheduler { modname } ->
          sprintf "Missing scheduler in module %a" fquote modname
       | MissingModule ->
@@ -311,13 +311,13 @@ module Errors = struct
       | UnboundEnumMember { name; sg } ->
          sprintf "Enumerator %a is not a member of %s" fquote name (enum_sig_to_string sg)
       | IncorrectRuleType { actual } ->
-         sprintf "This expression has type %a, but rules are expected to have type unit (bits 0)."
+         sprintf "This expression has type %a, but rules are expected to have type unit (bits 0)"
            fquote (typ_to_string actual)
       | TooManyArguments { name; actual; expected } ->
-         sprintf "Too many arguments in call to %a: expected %d, got %d."
+         sprintf "Too many arguments in call to %a: expected %d, got %d"
            fquote name expected actual
       | TooFewArguments { name; actual; expected } ->
-         sprintf "Too few arguments in call to %a: expected %d, got %d."
+         sprintf "Too few arguments in call to %a: expected %d, got %d"
            fquote name expected actual
       | TypeMismatch { expected; actual } ->
          sprintf "This term has type %a, but %a was expected"
