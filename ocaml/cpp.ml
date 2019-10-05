@@ -781,8 +781,8 @@ let compile (type name_t var_t reg_t)
             (fun () -> p "cycle();");
           p "return *this;") in
 
-    let p_observe () =
-      p_fn ~typ:"state_t" ~name:"observe" (fun () -> p "return state;") in
+    let p_snapshot () =
+      p_fn ~typ:"state_t" ~name:"snapshot" (fun () -> p "return state;") in
 
     p_sim_class (fun () ->
         p "public:";
@@ -807,7 +807,7 @@ let compile (type name_t var_t reg_t)
         nl ();
         p_run ();
         nl ();
-        p_observe ();
+        p_snapshot ();
         nl ()) in
 
   let with_output_to_buffer (pbody: unit -> unit) =
@@ -845,20 +845,21 @@ let compile (type name_t var_t reg_t)
             List.iter p_extfun_decl (List.sort cmp fns)));
     nl ();
 
-    let classtype =
-      sprintf "%s<extfuns>" hpp.cpp_classname in
+    p "using sim_t = %s<extfuns>;" hpp.cpp_classname;
+    nl ();
 
     let ull = "unsigned long long int" in
-    let state_t = sprintf "%s::state_t" classtype in
+    let state_t = sprintf "sim_t::state_t" in
 
-    p_fn ~typ:state_t ~name:"run" ~args:(sprintf "%s ncycles" ull) (fun () ->
+    p_fn ~typ:state_t ~name:"init_and_run" ~args:(sprintf "%s ncycles" ull) (fun () ->
         p_scoped (sprintf "%s init = " state_t)
           ~terminator:";" (fun () ->
             iter_all_registers (fun rn ->
                 p ".%s = %s," rn.reg_name (sp_value rn.reg_init)));
         nl ();
-        p "%s simulator(init);" classtype;
-        p "return simulator.run(ncycles).observe();");
+        p "sim_t simulator(init);" ;
+        p "simulator.run(ncycles);";
+        p "return simulator.snapshot();");
     nl ();
 
     p_ifdef "ndef SIM_MINIMAL" (fun () ->
@@ -867,7 +868,8 @@ let compile (type name_t var_t reg_t)
             p_scoped "if (argc >= 2) " (fun () ->
                 p "ncycles = std::stoull(argv[1]);");
             nl ();
-            p "run(ncycles).dump();";
+            p "sim_t::state_t snapshot = init_and_run(ncycles);";
+            p "snapshot.dump();";
             p "return 0;")) in
 
   let buf_hpp = with_output_to_buffer p_hpp in
