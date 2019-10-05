@@ -70,7 +70,7 @@ let rec run_backend backend out_fname resolved c_unit =
 
 let first_compile_unit in_fname mods =
   match mods with
-  | [] -> Lv.Errors.name_error (Lv.Pos.Filename in_fname) @@ MissingModule
+  | [] -> Lv.name_error (Lv.Pos.Filename in_fname) @@ MissingModule
   | md :: _ -> md
 
 let print_errors_and_warnings errs =

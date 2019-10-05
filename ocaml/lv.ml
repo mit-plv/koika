@@ -380,12 +380,6 @@ module Errors = struct
     warnings
 
   exception Errors of error list
-  let error epos emsg = raise (Errors [{ epos; emsg }])
-  let parse_error epos emsg = error epos (EParse emsg)
-  let syntax_error epos emsg = error epos (ESyntax emsg)
-  let name_error epos msg = error epos (EName msg)
-  let type_error epos msg = error epos (EType msg)
-  let type_inference_error epos emsg = error epos (ETypeInference emsg)
   let warning epos emsg = collected_warnings := { epos; emsg = EWarn emsg } :: !collected_warnings
 end
 
@@ -459,6 +453,17 @@ module Delay = struct
   let maybe f x =
     apply1_default None (fun x -> Some (f x)) x
 end
+
+let error ?default epos emsg =
+  let exn = Errors [{ epos; emsg }] in
+  match default with
+  | Some v -> Delay.handle_exn exn; v
+  | None -> raise exn
+let parse_error ?default epos emsg = error ?default epos (EParse emsg)
+let syntax_error ?default epos emsg = error ?default epos (ESyntax emsg)
+let name_error ?default epos msg = error ?default epos (EName msg)
+let type_error ?default epos msg = error ?default epos (EType msg)
+let type_inference_error ?default epos emsg = error ?default epos (ETypeInference emsg)
 
 module Dups(OT: Map.OrderedType) = struct
   module M = Map.Make(OT)
@@ -797,7 +802,10 @@ let parse (sexps: Pos.t sexp list) =
               | (Some default, branches) ->
                  Switch { binder; operand; default; branches }
               | None, [] -> syntax_error loc @@ EmptySwitch
-              | None, _ -> syntax_error loc @@ MissingDefaultInSwitch)
+              | None, branches ->
+                 let default = { lpos = loc; lcnt = Invalid } in
+                 let default = syntax_error ~default loc MissingDefaultInSwitch in
+                 Switch { binder; operand; default; branches })
           | _ ->
              let args = List.map expect_action args in
              Call (locd_make loc_hd hd, args))
