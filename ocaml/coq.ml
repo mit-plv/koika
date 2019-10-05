@@ -38,7 +38,7 @@ let rec pp_seq pp_sep pp_elem ppf = function
   | x :: tl -> pp_elem ppf x; pp_sep ppf; pp_seq pp_sep pp_elem ppf tl
 
 let pp_list pp_elem ppf elems =
-  fprintf ppf "[@[%a@]]" (pp_seq (pp_sep ";") pp_elem) elems
+  fprintf ppf "[@[%a@]]" (pp_seq (pp_sep "; ") pp_elem) elems
 
 let pp_vector pp_elem ppf elems =
   fprintf ppf "@[<2>vect_of_list %a@]" (pp_list pp_elem) elems
@@ -114,6 +114,15 @@ let pp_external_sig ppf f =
     (pp_type ~wrap:false) f.ffi_arg1type
     (pp_type ~wrap:false) f.ffi_arg2type
     (pp_type ~wrap:false) f.ffi_rettype
+
+let pp_internal_sig_arg ppf (nm, tau) =
+  fprintf ppf "@[%a@ :: %a@]" pp_quoted nm (pp_type ~wrap:false) tau
+
+let pp_internal_sig ppf (f: _ internal_signature) =
+  fprintf ppf "{{{ %a | %a ~> %a }}}"
+    pp_quoted f.int_name
+    (pp_seq (pp_sep " ~> ") pp_internal_sig_arg) f.int_args
+    (pp_type ~wrap:false) f.int_rettype
 
 let pp_fn_types ppf (extfuns: string ffi_signature list) =
   fprintf ppf "@[<hv 2>Definition custom_Sigma (f: custom_fn_t): ExternalSignature :=@ ";
@@ -231,6 +240,9 @@ let rec pp_action (position_printer: (Format.formatter -> 'f -> unit) option)
      pp_app "UWrite" "%a@ %a@ %a" pp_port p pp_reg_name r pp_action v
   | UCall (fn, a1, a2) ->
      pp_app "UCall" "%a@ %a@ %a" pp_fn fn pp_action a1 pp_action a2
+  | UInternalCall (fsig, fbody, args) ->
+     let fsig = internal_sig_of_sga_internal_sig fsig in
+     pp_app "UInternalCall" "%a@ %a@ %a" pp_internal_sig fsig pp_action fbody (pp_list pp_action) args
   | UAPos (pos, v) ->
      match position_printer with
      | Some pp_pos -> pp_app "UAPos" "%a@ %a" pp_pos pos pp_action v

@@ -279,6 +279,8 @@ module Errors = struct
       | UnboundField _ -> `NameError
       | UnboundEnumMember _ -> `NameError
       | IncorrectRuleType _ -> `TypeError
+      | TooManyArguments _ -> `SyntaxError
+      | TooFewArguments _ -> `SyntaxError
       | TypeMismatch _ -> `TypeError
       | KindMismatch _ -> `TypeError
 
@@ -295,6 +297,12 @@ module Errors = struct
       | IncorrectRuleType { actual } ->
          sprintf "This expression has type %a, but rules are expected to have type unit (bits 0)."
            fquote (typ_to_string actual)
+      | TooManyArguments { name; actual; expected } ->
+         sprintf "Too many arguments in call to %a: expected %d, got %d."
+           fquote name expected actual
+      | TooFewArguments { name; actual; expected } ->
+         sprintf "Too few arguments in call to %a: expected %d, got %d."
+           fquote name expected actual
       | TypeMismatch { expected; actual } ->
          sprintf "This term has type %a, but %a was expected"
            fquote (typ_to_string actual) fquote (typ_to_string expected)

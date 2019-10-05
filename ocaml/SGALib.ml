@@ -69,6 +69,16 @@ module Util = struct
           arg2Type = sga_type_of_typ ffi_arg2type;
           retType = sga_type_of_typ ffi_rettype }
 
+  let internal_sig_of_sga_internal_sig fsig =
+    SGA.{ int_name = fsig.int_name;
+          int_args = List.map (fun (nm, tau) -> nm, typ_of_sga_type tau) fsig.int_args;
+          int_rettype = typ_of_sga_type fsig.int_retType }
+
+  let sga_internal_sig_of_internal_sig (fsig: _ Common.internal_signature) =
+    { SGA.int_name = coq_string_of_string fsig.int_name;
+      SGA.int_args = List.map (fun (nm, tau) -> coq_string_of_string nm, sga_type_of_typ tau) fsig.int_args;
+      SGA.int_retType = sga_type_of_typ fsig.int_rettype }
+
   let sga_type_to_string tau =
     typ_to_string (typ_of_sga_type tau)
 
@@ -98,6 +108,8 @@ module Util = struct
     | UnboundField of { field: string; sg: struct_sig }
     | UnboundEnumMember of { name: string; sg: enum_sig }
     | IncorrectRuleType of { actual: typ }
+    | TooManyArguments of { name: string; actual: int; expected: int }
+    | TooFewArguments of { name: string; actual: int; expected: int }
     | TypeMismatch of { expected: typ; actual: typ }
     | KindMismatch of { actual: typ; expected: string }
 
@@ -114,6 +126,10 @@ module Util = struct
                            sg = enum_sig_of_sga_enum_sig sg }
     | SGA.IncorrectRuleType tau ->
        IncorrectRuleType { actual = typ_of_sga_type tau }
+    | SGA.TooManyArguments (name, expected, nextras) ->
+       TooManyArguments { name; expected; actual = expected + nextras }
+    | SGA.TooFewArguments (name, expected, nmissing) ->
+       TooFewArguments { name; expected; actual = expected - nmissing }
     | SGA.TypeMismatch (_tsig, actual, _expr, expected) ->
        TypeMismatch { actual = typ_of_sga_type actual;
                       expected = typ_of_sga_type expected }
@@ -220,7 +236,7 @@ module Compilation = struct
     ('f, ('f, value literal, reg_signature, (string ffi_signature) SGA.interop_ufn_t) action) locd
 
   type 'f translated_action =
-    ('f, var_t, reg_signature, string ffi_signature SGA.interop_ufn_t) SGA.uaction
+    ('f, method_name_t, var_t, reg_signature, string ffi_signature SGA.interop_ufn_t) SGA.uaction
 
   type debug_printer = { debug_print: 'f. 'f translated_action -> unit }
   let debug_printer : debug_printer ref =

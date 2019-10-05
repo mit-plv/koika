@@ -115,6 +115,12 @@ type 'name_t ffi_signature = {
     ffi_rettype: typ
   }
 
+type ('name_t, 'var_t) internal_signature = {
+    int_name: 'name_t;
+    int_args: ('name_t * typ) list;
+    int_rettype: typ
+  }
+
 type reg_signature = {
     reg_name: string;
     reg_init: value;
@@ -124,6 +130,7 @@ let reg_type r =
   typ_of_value r.reg_init
 
 type name_t = string
+type method_name_t = string
 type var_t = string
 type port_t = int
 

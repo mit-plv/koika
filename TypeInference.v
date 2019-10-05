@@ -3,7 +3,7 @@ Require Import Coq.Lists.List.
 Import ListNotations.
 
 Section ErrorReporting.
-  Context {pos_t method_name_t var_t reg_t fn_t: Type}.
+  Context {pos_t fn_name_t var_t reg_t fn_t: Type}.
   Context {R: reg_t -> type}
           {Sigma: fn_t -> ExternalSignature}.
 
@@ -13,8 +13,8 @@ Section ErrorReporting.
   | UnboundField (f: string) (sig: struct_sig)
   | UnboundEnumMember (f: string) (sig: enum_sig)
   | IncorrectRuleType (tau: type)
-  | TooManyArguments (method_name: method_name_t) (nextra: nat)
-  | TooFewArguments (method_name: method_name_t) (nmissing: nat)
+  | TooManyArguments (fn_name: fn_name_t) (nexpected: nat) (nextra: nat)
+  | TooFewArguments (fn_name: fn_name_t) (nexpected: nat) (nmissing: nat)
   | TypeMismatch {sig tau} (e: action var_t R Sigma sig tau) (expected: type)
   | KindMismatch {sig tau} (e: action var_t R Sigma sig tau) (expected: type_kind).
 
@@ -42,18 +42,18 @@ Section ErrorReporting.
                           end) r.
 End ErrorReporting.
 
-Arguments error_message method_name_t var_t {reg_t fn_t} R Sigma : assert.
-Arguments error pos_t method_name_t var_t {reg_t fn_t} R Sigma : assert.
+Arguments error_message fn_name_t var_t {reg_t fn_t} R Sigma : assert.
+Arguments error pos_t fn_name_t var_t {reg_t fn_t} R Sigma : assert.
 
 Section TypeInference.
-  Context {pos_t rule_name_t method_name_t var_t reg_t ufn_t fn_t: Type}.
+  Context {pos_t rule_name_t fn_name_t var_t reg_t ufn_t fn_t: Type}.
   Context {var_t_eq_dec: EqDec var_t}.
 
   Context (R: reg_t -> type).
   Context (Sigma: fn_t -> ExternalSignature).
   Context (uSigma: forall (fn: ufn_t) (tau1 tau2: type), result fn_t fn_tc_error).
 
-  Notation uaction := (uaction pos_t method_name_t var_t reg_t ufn_t).
+  Notation uaction := (uaction pos_t fn_name_t var_t reg_t ufn_t).
   Notation uscheduler := (uscheduler pos_t rule_name_t).
 
   Open Scope bool_scope.
@@ -62,8 +62,8 @@ Section TypeInference.
   Notation rule := (rule var_t R Sigma).
   Notation scheduler := (scheduler rule_name_t).
   Notation schedule := (schedule rule_name_t var_t R Sigma).
-  Notation error := (error pos_t method_name_t var_t R Sigma).
-  Notation error_message := (error_message method_name_t var_t R Sigma).
+  Notation error := (error pos_t fn_name_t var_t R Sigma).
+  Notation error_message := (error_message fn_name_t var_t R Sigma).
   Notation result A := (result A error).
 
   Notation "` x" := (projT1 x) (at level 0).
@@ -105,19 +105,25 @@ Section TypeInference.
     Definition mkerror pos msg : error :=
       {| epos := pos; emsg := msg |}.
 
-    Fixpoint assert_argtypes {sig} method_name pos
+    Fixpoint assert_argtypes' {sig} nexpected fn_name pos
              (args_desc: tsig var_t)
              (args: list (pos_t * {tau : type & action sig tau}))
       : result (context (K := (var_t * type)) (fun '(_, tau) => action sig tau) args_desc) :=
       match args_desc, args with
       | [], [] => Success CtxEmpty
-      | [], _ => Failure (mkerror pos (TooManyArguments method_name (List.length args)))
-      | _, [] => Failure (mkerror pos (TooFewArguments method_name (List.length args_desc)))
+      | [], _ => Failure (mkerror pos (TooManyArguments fn_name nexpected (List.length args)))
+      | _, [] => Failure (mkerror pos (TooFewArguments fn_name nexpected (List.length args_desc)))
       | (name1, tau1) :: fn_sig, (pos1, arg1) :: args =>
         let/res arg1 := cast_action pos1 tau1 ``arg1  in
-        let/res ctx := assert_argtypes method_name pos fn_sig args in
+        let/res ctx := assert_argtypes' nexpected fn_name pos fn_sig args in
         Success (CtxCons (name1, tau1) arg1 ctx)
       end.
+
+    Definition assert_argtypes {sig} fn_name pos
+             (args_desc: tsig var_t)
+             (args: list (pos_t * {tau : type & action sig tau}))
+      : result (context (K := (var_t * type)) (fun '(_, tau) => action sig tau) args_desc) :=
+      assert_argtypes' (List.length args_desc) fn_name pos args_desc args.
 
     Fixpoint type_action (pos: pos_t) (sig: tsig var_t) (e: uaction) {struct e}
       : result ({ tau: type & action sig tau }) :=
