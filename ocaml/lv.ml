@@ -1009,6 +1009,10 @@ let resolve_typedecls types =
       types_add typ types)
     types_empty types
 
+let special_primitives =
+  [("init", `Init)]
+  |> List.to_seq |> StringMap.of_seq
+
 let core_primitives =
   let open SGALib.SGA in
   let conv_fn f = UPrimFn (UConvFn f) in
@@ -1050,6 +1054,7 @@ let bits_primitives =
 let all_primitives =
   let names m = List.to_seq (keys m) in
   StringSet.empty
+  |> StringSet.add_seq (names special_primitives)
   |> StringSet.add_seq (names core_primitives)
   |> StringSet.add_seq (names bits_primitives)
 
@@ -1145,9 +1150,9 @@ let try_resolve_extfun extfuns name args =
 
 let literal_tt = Lit (Const (UBits [||]))
 
-let try_resolve_special_function types name (args: unresolved_action locd list) =
-  match name.lcnt with
-  | "new" ->
+let try_resolve_special_primitive types name (args: unresolved_action locd list) =
+  match StringMap.find_opt name.lcnt special_primitives with
+  | Some `Init ->
      let loc, nm, tau, args = rexpect_type name.lpos types args in
      let sga_tau = SGALib.Util.sga_type_of_typ tau in
      let uinit = SGALib.SGA.(UPrimFn (UConvFn (UInit sga_tau))) in
@@ -1184,7 +1189,7 @@ let pad_function_call lpos name fn nargs (args: unresolved_action locd list) =
     `Call ({ lpos; lcnt = fn }, a1, a2)
 
 let resolve_function types extfuns name (args: unresolved_action locd list) =
-  match try_resolve_special_function types name args with
+  match try_resolve_special_primitive types name args with
   | Some ast -> ast
   | None ->
      let (fn, nargs, args) =
@@ -1192,7 +1197,8 @@ let resolve_function types extfuns name (args: unresolved_action locd list) =
        | Some r -> r
        | None -> match try_resolve_extfun extfuns name args with
                  | Some r -> r
-                 | None -> let candidates = List.concat [keys core_primitives; keys bits_primitives; keys extfuns] in
+                 | None -> let candidates = List.concat [keys special_primitives; keys core_primitives;
+                                                         keys bits_primitives; keys extfuns] in
                            name_error name.lpos @@ Unbound { kind = "function"; prefix = ""; name = name.lcnt; candidates } in
      pad_function_call name.lpos name.lcnt fn nargs args
 
