@@ -838,11 +838,12 @@ let compile (type name_t var_t reg_t)
      | None ->
         p_scoped "class extfuns" ~terminator:";" (fun () ->
             p "public:";
-            p_comment "External methods (if any) can be implemented here.";
-            p_comment "Approximate signatures are provided below for convenience.";
-            let fns = List.of_seq (Hashtbl.to_seq custom_funcalls) in
-            let cmp f1 f2 = compare (fst f1) (fst f2) in
-            List.iter p_extfun_decl (List.sort cmp fns)));
+            p_comment "External methods (if any) should be implemented here.";
+            if Hashtbl.length custom_funcalls > 0 then
+              (p_comment "Approximate signatures are provided below for convenience.";
+               let cmp f1 f2 = compare (fst f1) (fst f2) in
+               let fns = List.of_seq (Hashtbl.to_seq custom_funcalls) in
+               List.iter p_extfun_decl (List.sort cmp fns))));
     nl ();
 
     p "using sim_t = %s<extfuns>;" hpp.cpp_classname;
