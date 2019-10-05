@@ -213,7 +213,7 @@ module Errors = struct
       | BadSymbolParam { obj; kind } ->
          sprintf "This %s should be a symbol (%s, starting with a quote)" obj kind
       | EmptySwitch ->
-         "Empty switch: not sure what to return"
+         "No valid branch in switch: not sure what to return"
       | MissingDefaultInSwitch ->
          "Missing default case (_) in switch"
       | DuplicateDefaultInSwitch ->
