@@ -33,6 +33,7 @@
 (extfun getinstr ((bits 32)) (bits 32))
 (extfun pack ((bits 32)) (bits 32))
 (extfun lsr ((bits 32)) (bits 32))
+(extfun progn ((bits 32)) (bits 32))
 
 (module syntax
   (register r0 0)

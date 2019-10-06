@@ -649,6 +649,20 @@ let try_symbol nm =
   if Str.string_match symbol_re nm 0 then Some (Str.matched_group 1 nm)
   else None
 
+let language_constructs =
+  [("fail", `Fail);
+   ("setq", `Setq);
+   ("progn", `Progn);
+   ("let", `Let);
+   ("if", `If);
+   ("when", `When);
+   ("write.0" , `Write 0);
+   ("write.1", `Write 1);
+   ("read.0" , `Read 0);
+   ("read.1", `Read 1);
+   ("switch", `Switch)]
+  |> List.to_seq |> StringMap.of_seq
+
 let parse (sexps: Pos.t sexp list) =
   let expect_single loc kind where = function
     | [] ->
@@ -771,54 +785,54 @@ let parse (sexps: Pos.t sexp list) =
     | List { loc; elements } ->
        let loc_hd, hd, args = expect_funapp loc "constructor or function" (elements) in
        locd_make loc
-         (match hd with
-          | "fail" ->
-             (match args with
-              | [] -> Common.Fail (Bits_t 0)
-              | [arg] -> Lit (Fail (expect_type ~bits_raw:true arg).lcnt)
-              | _ -> type_error loc @@ BadArgumentCount { fn = "fail"; expected = 1; given = List.length args })
-          | "setq" ->
-             let var, body = expect_cons loc "variable name" args in
-             let value = expect_action (expect_single loc "value" "write expression" body) in
-             Assign (locd_of_pair (expect_identifier "a variable name" var), value)
-          | "progn" ->
-             Progn (List.map expect_action args)
-          | "let" ->
-             let bindings, body = expect_cons loc "let bindings" args in
-             let bindings = expect_let_bindings bindings in
-             let body = List.map expect_action body in
-             Let (bindings, body)
-          | "if" ->
-             let cond, body = expect_cons loc "if condition" args in
-             let tbranch, fbranches = expect_cons loc "if branch" body in
-             If (expect_action cond, expect_action tbranch,
-                 List.map expect_action fbranches)
-          | "when" ->
-             let cond, body = expect_cons loc "when condition" args in
-             When (expect_action cond, List.map expect_action body)
-          | "write.0" | "write.1" ->
-             let reg, body = expect_cons loc "register name" args in
-             let port = int_of_string (String.sub hd (String.length hd - 1) 1) in
-             Write (port, locd_of_pair (expect_identifier "a register name" reg),
-                    expect_action (expect_single loc "value" "write expression" body))
-          | "read.0" | "read.1" ->
-             let reg = expect_single loc "register name" "read expression" args in
-             let port = int_of_string (String.sub hd (String.length hd - 1) 1) in
-             Read (port, locd_of_pair (expect_identifier "a register name" reg))
-          | "switch" ->
-             let operand, branches = expect_cons loc "switch operand" args in
-             let branches = List.map expect_switch_branch branches in
-             let operand = expect_action operand in
-             let binder = gensym "switch_operand" in
-             (match build_switch_body branches with
-              | (Some default, branches) ->
-                 Switch { binder; operand; default; branches }
-              | None, [] -> syntax_error loc @@ EmptySwitch
-              | None, branches ->
-                 let default = { lpos = loc; lcnt = Invalid } in
-                 let default = syntax_error ~default loc MissingDefaultInSwitch in
-                 Switch { binder; operand; default; branches })
-          | _ ->
+         (match StringMap.find_opt hd language_constructs with
+          | Some fn ->
+             (match fn with
+              | `Fail ->
+                 (match args with
+                  | [] -> Common.Fail (Bits_t 0)
+                  | [arg] -> Lit (Fail (expect_type ~bits_raw:true arg).lcnt)
+                  | _ -> type_error loc @@ BadArgumentCount { fn = "fail"; expected = 1; given = List.length args })
+              | `Setq ->
+                 let var, body = expect_cons loc "variable name" args in
+                 let value = expect_action (expect_single loc "value" "assignment" body) in
+                 Assign (locd_of_pair (expect_identifier "a variable name" var), value)
+              | `Progn ->
+                 Progn (List.map expect_action args)
+              | `Let ->
+                 let bindings, body = expect_cons loc "let bindings" args in
+                 let bindings = expect_let_bindings bindings in
+                 let body = List.map expect_action body in
+                 Let (bindings, body)
+              | `If ->
+                 let cond, body = expect_cons loc "condition of conditional expression" args in
+                 let tbranch, fbranches = expect_cons loc "true branch of conditional expression" body in
+                 If (expect_action cond, expect_action tbranch,
+                     List.map expect_action fbranches)
+              | `When ->
+                 let cond, body = expect_cons loc "condition of conditional expression" args in
+                 When (expect_action cond, List.map expect_action body)
+              | `Write port ->
+                 let reg, body = expect_cons loc "register name" args in
+                 Write (port, locd_of_pair (expect_identifier "a register name" reg),
+                        expect_action (expect_single loc "value" "call to write" body))
+              | `Read port ->
+                 let reg = expect_single loc "register name" "call to write" args in
+                 Read (port, locd_of_pair (expect_identifier "a register name" reg))
+              | `Switch ->
+                 let operand, branches = expect_cons loc "switch operand" args in
+                 let branches = List.map expect_switch_branch branches in
+                 let operand = expect_action operand in
+                 let binder = gensym "switch_operand" in
+                 (match build_switch_body branches with
+                  | (Some default, branches) ->
+                     Switch { binder; operand; default; branches }
+                  | None, [] -> syntax_error loc @@ EmptySwitch
+                  | None, branches ->
+                     let default = { lpos = loc; lcnt = Invalid } in
+                     let default = syntax_error ~default loc MissingDefaultInSwitch in
+                     Switch { binder; operand; default; branches }))
+          | None ->
              let args = List.map expect_action args in
              Call (locd_make loc_hd hd, args))
   and expect_action s =
@@ -1075,12 +1089,12 @@ let bits_primitives =
    ("part-subst", (`Prim2 (fun n n' -> UPart (n, n')), 2))]
   |> List.to_seq |> StringMap.of_seq
 
+let all_primitive_names =
+  List.concat [keys language_constructs; keys special_primitives;
+               keys core_primitives; keys bits_primitives]
+
 let all_primitives =
-  let names m = List.to_seq (keys m) in
-  StringSet.empty
-  |> StringSet.add_seq (names special_primitives)
-  |> StringSet.add_seq (names core_primitives)
-  |> StringSet.add_seq (names bits_primitives)
+  StringSet.of_list all_primitive_names
 
 let resolve_extfun_decl types { ext_name; ext_argtypes; ext_rettype } =
   let unit_u = locd_make ext_name.lpos (Bits_u 0) in
@@ -1221,8 +1235,7 @@ let resolve_function types extfuns name (args: unresolved_action locd list) =
        | Some r -> r
        | None -> match try_resolve_extfun extfuns name args with
                  | Some r -> r
-                 | None -> let candidates = List.concat [keys special_primitives; keys core_primitives;
-                                                         keys bits_primitives; keys extfuns] in
+                 | None -> let candidates = all_primitive_names in
                            name_error name.lpos @@ Unbound { kind = "function"; prefix = ""; name = name.lcnt; candidates } in
      pad_function_call name.lpos name.lcnt fn nargs args
 
