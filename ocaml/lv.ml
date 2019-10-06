@@ -740,6 +740,8 @@ let parse (sexps: Pos.t sexp list) =
     | Some ev -> ev
     | None -> syntax_error loc @@ BadEnumerator { atom } in
   let expect_type ?(bits_raw=false) = function (* (bit 16), 'typename *)
+    | Atom { loc; atom = "unit" } ->
+       locd_make loc (Bits_u 0)
     | Atom { loc; atom } ->
        locd_make loc
          (match try_symbol atom with
