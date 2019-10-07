@@ -134,6 +134,7 @@ Section TypeInference.
         let/res tau_m := opt_result (assoc var sig) (mkerror pos (UnboundVariable var)) in
         Success (EX (Var ``tau_m))
       | UConst cst => Success (EX (Const cst))
+      | UConstString s => Success (EX (Const (tau := bits_t _) (bits_of_bytes s)))
       | UConstEnum sig name =>
         let/res idx := opt_result (vect_index name sig.(enum_members)) (mkerror pos (UnboundEnumMember name sig)) in
         Success (EX (Const (tau := enum_t sig) (vect_nth sig.(enum_bitpatterns) idx)))

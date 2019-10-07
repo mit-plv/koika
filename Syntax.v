@@ -8,6 +8,7 @@ Section Syntax.
   | UFail (tau: type)
   | UVar (var: var_t)
   | UConst {tau: type} (cst: type_denote tau)
+  | UConstString (s: string)
   | UConstEnum (sig: enum_sig) (cst: string)
   | UAssign (v: var_t) (ex: uaction)
   | USeq (r1 r2: uaction)

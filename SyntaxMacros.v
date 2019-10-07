@@ -61,6 +61,19 @@ Section SyntaxMacros.
     let usubst f := UPrimFn (UStructFn (UDo SubstField f)) in
     List.fold_left (fun acc '(f, a) => UCall (usubst f) acc a)
                    fields (UCall uinit (UConstBits Ob) (UConstBits Ob)).
+
+  Definition bits_of_ascii c : bits 8 :=
+    match c with
+    | Ascii.Ascii b0 b1 b2 b3 b4 b5 b6 b7 =>
+      Ob~b7~b6~b5~b4~b3~b2~b1~b0
+    end.
+
+  Fixpoint bits_of_bytes s : bits (String.length s * 8) :=
+    match s with
+    | EmptyString => Ob
+    | String c s =>
+      Bits.app (bits_of_ascii c) (bits_of_bytes s)
+    end.
 End SyntaxMacros.
 
 Section TypedSyntaxMacros.
