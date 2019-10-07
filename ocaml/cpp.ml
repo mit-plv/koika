@@ -388,7 +388,7 @@ let compile (type name_t var_t reg_t)
   let p_printer tau =
     let v_arg = "val" in
     let v_tau = cpp_type_of_type tau in
-    let v_argdecl = sprintf "const %s %s" v_tau v_arg in
+    let v_argdecl = sprintf "const %s %s, const repr_style style" v_tau v_arg in
 
     let p_printer pbody =
       p_fn ~typ:"static _unused std::string "
@@ -404,7 +404,7 @@ let compile (type name_t var_t reg_t)
               let v_sz = typ_sz tau in
               let bits_sz_tau = cpp_type_of_type (Bits_t v_sz) in
               let v_cast = sprintf "static_cast<%s>(%s)" bits_sz_tau v_arg in
-              p "default: return \"%s{\" + repr<%d>(%s) + \"}\";"
+              p "default: return \"%s{\" + repr<%d>(%s, style) + \"}\";"
                 sg.enum_name v_sz v_cast)) in (* unmangled *)
 
     let p_struct_printer sg =
@@ -412,7 +412,7 @@ let compile (type name_t var_t reg_t)
           p "std::ostringstream stream;";
           p "stream << \"%s { \";" sg.struct_name; (* unmangled *)
           List.iter (fun (fname, ftau) ->
-              p "stream << \"  .%s = \" << %s(%s.%s) << \"; \";" (* unmangled *)
+              p "stream << \"  .%s = \" << %s(%s.%s, style) << \"; \";" (* unmangled *)
                 fname (sp_value_printer ftau) v_arg (cpp_field_name fname))
             sg.struct_fields;
           p "stream << \"}\";";
@@ -632,6 +632,12 @@ let compile (type name_t var_t reg_t)
         | CustomFn f ->
            Hashtbl.replace custom_funcalls f fn;
            ImpureExpr (cpp_funcall f a1 a2)
+        | PrimFn (SGA.DisplayFn fn) ->
+           ImpureExpr
+             (sprintf "prims::display(%s(%s))" (sp_value_printer tau1)
+                (match fn with
+                 | SGA.DisplayUtf8 _ -> sprintf "%s, repr_style::utf8" a1
+                 | SGA.DisplayValue _ -> a1))
         | PrimFn (SGA.ConvFn (tau, fn)) ->
            let ns = "prims::" in
            let tau = SGALib.Util.typ_of_sga_type tau in
