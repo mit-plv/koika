@@ -81,11 +81,15 @@ type unresolved_module = {
     m_schedulers: unresolved_scheduler list;
   }
 
-type unresolved_extfun = {
-    ext_name: string locd;
-    ext_argtypes: unresolved_type locd list;
-    ext_rettype: unresolved_type locd
-  }
+type unresolved_fn_body =
+  | ExternalUfn
+  | InternalUfn of unresolved_action locd
+
+type unresolved_fn =
+  { ufn_name: string locd;
+    ufn_signature: (string locd * unresolved_type locd) list;
+    ufn_rettype: unresolved_type locd;
+    ufn_body: unresolved_fn_body }
 
 type typedecls = {
     td_enums: enum_sig StringMap.t;
@@ -96,12 +100,20 @@ type typedecls = {
 
 type unresolved_unit = {
     types: unresolved_typedecl locd list;
-    extfuns: unresolved_extfun list;
+    fns: unresolved_fn list;
     mods: unresolved_module locd list;
   }
 
+type resolved_defun =
+  { dfn_signature: (string, string) internal_signature;
+    dfn_body: Pos.t SGALib.Compilation.raw_action }
+
 type resolved_extfun =
-  int * string ffi_signature
+  { ext_nargs: int; ext_sig: string ffi_signature }
+
+type resolved_fn =
+  | ExternalFn of resolved_extfun
+  | InternalFn of resolved_defun
 
 type resolved_module = {
     name: string locd;
@@ -110,9 +122,14 @@ type resolved_module = {
     schedulers: (string * Pos.t SGALib.Compilation.raw_scheduler) list
   }
 
+type fndecls = {
+    fn_ordered: (string * resolved_fn) list;
+    fn_all: resolved_fn StringMap.t
+  }
+
 type resolved_unit = {
     r_types: typedecls;
-    r_extfuns: resolved_extfun StringMap.t;
+    r_fns: fndecls;
     r_mods: resolved_module list;
   }
 
@@ -157,7 +174,7 @@ module Errors = struct
       | MissingElementIn of { kind: string; where: string }
       | MissingPairElement of { kind2: string }
       | TooManyElementsIn of { kind: string; where: string }
-      | ExpectingNil of { kind: string }
+      | ExpectingNil of { kind: string; prev: string }
       | UnexpectedList of { expected: string }
       | UnexpectedAtom of { expected: string; atom: string }
       | UnexpectedSymbol of { symbol: string }
@@ -192,8 +209,8 @@ module Errors = struct
          sprintf "Missing %s after this element" kind2
       | TooManyElementsIn { kind; where } ->
          sprintf "More than one %s found in %s" kind where
-      | ExpectingNil { kind } ->
-         sprintf "Unexpected %s" kind
+      | ExpectingNil { kind; prev } ->
+         sprintf "Unexpected %s after %s" kind prev
       | UnexpectedList { expected } ->
          sprintf "Expecting %s, but got a list" expected
       | UnexpectedAtom { expected; atom } ->
@@ -238,7 +255,7 @@ module Errors = struct
          sprintf "Enumerator declarations should not be qualified: try %a instead of %a"
            fquote ("::" ^ constructor) fquote (enum ^ "::" ^ constructor)
       | TooManyArgumentsInExtfunDecl ->
-         "External functions with more than 2 arguments are not supported" ^
+         "External fns with more than 2 arguments are not supported" ^
            " (consider using a struct to pass more arguments)"
   end
 
@@ -247,7 +264,7 @@ module Errors = struct
       | Unbound of { kind: string; prefix: string; name: string; candidates: string list }
       | Duplicate of { kind: string; name: string }
       | DuplicateTypeName of { name: string; kind: string; previous: typ }
-      | ExtfunShadowsPrimitive of { ext_name: string }
+      | FnShadowsPrimitive of { ext_name: string }
       | MissingScheduler of { modname: string }
       | MissingModule
 
@@ -261,8 +278,8 @@ module Errors = struct
          sprintf "Duplicate %s: %a" kind fquote name
       | DuplicateTypeName { name; kind; previous } ->
          sprintf "Duplicate type name: %s %a previously declared (as %s)" kind fquote name (kind_to_str previous)
-      | ExtfunShadowsPrimitive { ext_name } ->
-         sprintf "External function name %a conflicts with existing primitive" fquote ext_name
+      | FnShadowsPrimitive { ext_name } ->
+         sprintf "Function name %a conflicts with existing primitive" fquote ext_name
       | MissingScheduler { modname } ->
          sprintf "Missing scheduler in module %a" fquote modname
       | MissingModule ->
@@ -661,7 +678,7 @@ let language_constructs =
    ("read.0" , `Read 0);
    ("read.1", `Read 1);
    ("switch", `Switch)]
-  |> List.to_seq |> StringMap.of_seq
+  |> StringMap.of_list
 
 let parse (sexps: Pos.t sexp list) =
   let expect_single loc kind where = function
@@ -682,14 +699,14 @@ let parse (sexps: Pos.t sexp list) =
        syntax_error loc @@ UnexpectedAtom { atom; expected }
     | List { loc; elements } ->
        (loc, elements) in
-  let expect_nil = function
+  let expect_nil prev = function
     | [] -> ()
-    | List { loc; _ } :: _ -> syntax_error loc @@ ExpectingNil { kind = "list" }
-    | Atom { loc; _ } :: _ -> syntax_error loc @@ ExpectingNil { kind = "atom" } in
-  let expect_pair loc msg1 msg2 lst =
-    let x1, lst = expect_cons loc msg1 lst in
-    let x2, lst = expect_cons loc msg2 lst in
-    expect_nil lst;
+    | List { loc; _ } :: _ -> syntax_error loc @@ ExpectingNil { prev; kind = "list" }
+    | Atom { loc; _ } :: _ -> syntax_error loc @@ ExpectingNil { prev; kind = "atom" } in
+  let expect_pair loc kind1 kind2 lst =
+    let x1, lst = expect_cons loc kind1 lst in
+    let x2, lst = expect_cons loc kind2 lst in
+    expect_nil (sprintf "%s and %s" kind1 kind2) lst;
     (x1, x2) in
   let expect_pairs kind2 f1 f2 xs =
     Delay.map (function
@@ -724,7 +741,7 @@ let parse (sexps: Pos.t sexp list) =
   let expect_identifier kind v =
     let loc, atom = expect_atom kind v in
     match try_variable atom with
-    | Some v -> loc, v
+    | Some v -> locd_make loc v
     | None -> syntax_error loc @@ BadIdentifier { kind; atom } in
   let try_bits loc v =
     match try_number loc v with
@@ -796,7 +813,7 @@ let parse (sexps: Pos.t sexp list) =
               | `Setq ->
                  let var, body = expect_cons loc "variable name" args in
                  let value = expect_action (expect_single loc "value" "assignment" body) in
-                 Assign (locd_of_pair (expect_identifier "a variable name" var), value)
+                 Assign (expect_identifier "a variable name" var, value)
               | `Progn ->
                  Progn (List.map expect_action args)
               | `Let ->
@@ -814,11 +831,11 @@ let parse (sexps: Pos.t sexp list) =
                  When (expect_action cond, List.map expect_action body)
               | `Write port ->
                  let reg, body = expect_cons loc "register name" args in
-                 Write (port, locd_of_pair (expect_identifier "a register name" reg),
+                 Write (port, expect_identifier "a register name" reg,
                         expect_action (expect_single loc "value" "call to write" body))
               | `Read port ->
                  let reg = expect_single loc "register name" "call to write" args in
-                 Read (port, locd_of_pair (expect_identifier "a register name" reg))
+                 Read (port, expect_identifier "a register name" reg)
               | `Switch ->
                  let operand, branches = expect_cons loc "switch operand" args in
                  let branches = List.map expect_switch_branch branches in
@@ -860,16 +877,16 @@ let parse (sexps: Pos.t sexp list) =
   and expect_let_binding b =
     let loc, b = expect_list "a let binding" b in
     let var, values = expect_cons loc "identifier" b in
-    let loc_v, var = expect_identifier "a variable name" var in
+    let var = expect_identifier "a variable name" var in
     let value = expect_single loc "value" "let binding" values in
     let value = expect_action value in
-    (locd_make loc_v var, value)
+    (var, value)
   and expect_let_bindings bs =
     let _, bs = expect_list "let bindings" bs in
     Delay.map expect_let_binding bs in
   let expect_register name init_val =
     (name, locd_of_pair (expect_const "an initial value" init_val)) in
-  let expect_actions loc body =
+  let expect_actions (loc: Pos.t) body =
     locd_make loc (Progn (List.map expect_action body)) in
   let rec expect_scheduler : Pos.t sexp -> Pos.t scheduler locd = function
     | Atom { loc; atom } ->
@@ -880,11 +897,11 @@ let parse (sexps: Pos.t sexp list) =
        locd_make loc
          (match hd with
           | `Sequence ->
-             Sequence (Delay.map (locd_of_pair << (expect_identifier "a rule name")) args)
+             Sequence (Delay.map (expect_identifier "a rule name") args)
           | `Try ->
              let rname, args = expect_cons loc "rule name" args in
              let s1, s2 = expect_pair loc "subscheduler 1" "subscheduler 2" args in
-             Try (locd_of_pair (expect_identifier "a rule name" rname),
+             Try (expect_identifier "a rule name" rname,
                   expect_scheduler s1,
                   expect_scheduler s2)) in
   let expect_unqualified_enumerator enumerator = (* ::a *)
@@ -916,26 +933,37 @@ let parse (sexps: Pos.t sexp list) =
     let fields = expect_pairs "field type" expect_struct_field_name expect_type body in
     Delay.apply4 StringDuplicates.check "field in struct" fst (lcnt << fst) fields;
     locd_make loc (Struct_u { name; fields }) in
-  let expect_extfun ext_name loc body =
-    let args, rettype = expect_pair loc "argument declarations" "return type" body in
-    let _, args = expect_list "argument declarations" args in
-    let ext_argtypes = Delay.map expect_type args in
-    let ext_rettype = expect_type rettype in
-    { ext_name; ext_argtypes; ext_rettype } in
+  let expect_argspec s =
+    let loc, s = expect_list "argument specification" s in
+    let nm, tau = expect_pair loc "argument name" "argument type" s in
+    (expect_identifier "argument name" nm ,
+     expect_type ~bits_raw:false tau) in
+  let expect_fn_decl needs_body ufn_name loc body =
+    let args, body = expect_cons loc "function signature" body in
+    let rettype, body = expect_cons loc "return type" body in
+    let _, args = expect_list "function signature" args in
+    let ufn_signature = Delay.map expect_argspec args in
+    let ufn_rettype = expect_type rettype in
+    let ufn_body =
+      if needs_body then InternalUfn (expect_actions loc body)
+      else (expect_nil "argument list" body; ExternalUfn) in
+    { ufn_name; ufn_signature; ufn_rettype; ufn_body } in
   let rec expect_decl d skind expected =
     let d_loc, d = expect_list ("a " ^ skind) d in
     let kind, name_body = expect_cons d_loc skind d in
     let _, kind = expect_constant_atom expected kind in
     let name, body = expect_cons d_loc "name" name_body in
-    let name = locd_of_pair (expect_identifier "a name" name) in
+    let name = expect_identifier "a name" name in
     (d_loc,
      match kind with
      | `Enum ->
         `Enum (expect_enum name d_loc body)
      | `Struct ->
         `Struct (expect_struct name d_loc body)
+     | `Defun ->
+        `Fn (expect_fn_decl true name d_loc body)
      | `Extfun ->
-        `Extfun (expect_extfun name d_loc body)
+        `Fn (expect_fn_decl false name d_loc body)
      | `Module ->
         `Module (expect_module name d_loc body)
      | `Register ->
@@ -961,20 +989,24 @@ let parse (sexps: Pos.t sexp list) =
     Delay.apply4 StringDuplicates.check "scheduler" fst (lcnt << fst) m_schedulers;
     locd_make loc { m_name; m_registers; m_rules; m_schedulers } in
   let expected_toplevel =
-    [("enum", `Enum); ("struct", `Struct); ("extfun", `Extfun); ("module", `Module)] in
-  let { types; extfuns; mods } =
+    [("enum", `Enum); ("struct", `Struct);
+     ("defun", `Defun); ("extfun", `Extfun);
+     ("module", `Module)] in
+  let { types; fns; mods } =
     Delay.fold_left (fun u sexp ->
         match expect_decl sexp "module, type, or extfun declaration" expected_toplevel |> snd with
         | `Enum e -> { u with types = e :: u.types }
         | `Struct s -> { u with types = s :: u.types }
-        | `Extfun fn -> { u with extfuns = fn :: u.extfuns }
+        | `Fn fn -> { u with fns = fn :: u.fns }
         | `Module m -> { u with mods = m :: u.mods }
         | _ -> assert false)
-      { types = []; extfuns = []; mods = [] } sexps in
-  let types, extfuns, mods = List.rev types, List.rev extfuns, List.rev mods in
-  Delay.apply4 StringDuplicates.check "module" (fun m -> m.lcnt.m_name) (fun m -> m.lcnt.m_name.lcnt) mods;
-  Delay.apply4 StringDuplicates.check "external function" (fun fn -> fn.ext_name) (fun fn -> fn.ext_name.lcnt) extfuns;
-  { types; extfuns; mods }
+      { types = []; fns = []; mods = [] } sexps in
+  let types, fns, mods = List.rev types, List.rev fns, List.rev mods in
+  Delay.apply4 StringDuplicates.check
+    "module" (fun m -> m.lcnt.m_name) (fun m -> m.lcnt.m_name.lcnt) mods;
+  Delay.apply4 StringDuplicates.check
+    "external function" (fun fn -> fn.ufn_name) (fun fn -> fn.ufn_name.lcnt) fns;
+  { types; fns; mods }
 
 let rexpect_num obj =
   function
@@ -1049,7 +1081,7 @@ let resolve_typedecls types =
 
 let special_primitives =
   [("init", `Init)]
-  |> List.to_seq |> StringMap.of_seq
+  |> StringMap.of_list
 
 let core_primitives =
   let open SGALib.SGA in
@@ -1064,7 +1096,7 @@ let core_primitives =
    ("update", (`FieldFn (fun f -> struct_fn (UDo (SubstField, f))), 2));
    ("get-bits", (`StructFn (fun sg f -> struct_fn (UDoBits (sg, GetField, f))), 1));
    ("update-bits", (`StructFn (fun sg f -> struct_fn (UDoBits (sg, SubstField, f))), 2))]
-  |> List.to_seq |> StringMap.of_seq
+  |> StringMap.of_list
 
 let bits_primitives =
   let open SGALib.SGA in
@@ -1087,7 +1119,7 @@ let bits_primitives =
    ("indexed-part", (`Prim1 (fun n -> UIndexedPart n), 2));
    ("part", (`Prim2 (fun n n' -> UPart (n, n')), 1));
    ("part-subst", (`Prim2 (fun n n' -> UPart (n, n')), 2))]
-  |> List.to_seq |> StringMap.of_seq
+  |> StringMap.of_list
 
 let all_primitive_names =
   List.concat [keys language_constructs; keys special_primitives;
@@ -1095,20 +1127,6 @@ let all_primitive_names =
 
 let all_primitives =
   StringSet.of_list all_primitive_names
-
-let resolve_extfun_decl types { ext_name; ext_argtypes; ext_rettype } =
-  let unit_u = locd_make ext_name.lpos (Bits_u 0) in
-  if StringSet.mem ext_name.lcnt all_primitives then
-    name_error ext_name.lpos @@ ExtfunShadowsPrimitive { ext_name = ext_name.lcnt };
-  let nargs, a1, a2 = match ext_argtypes with
-    | [] -> 0, unit_u, unit_u
-    | [t] -> 1, t, unit_u
-    | [x; y] -> 2, x, y
-    | _ -> syntax_error ext_name.lpos @@ TooManyArgumentsInExtfunDecl in
-  ext_name.lcnt, (nargs, { ffi_name = ext_name.lcnt;
-                           ffi_arg1type = resolve_type types a1;
-                           ffi_arg2type = resolve_type types a2;
-                           ffi_rettype = resolve_type types ext_rettype })
 
 let resolve_value types { lpos; lcnt } =
   let resolve_enum_constructor sg field =
@@ -1136,14 +1154,14 @@ let try_resolve_bits_fn { lpos; lcnt = name } args =
   | Some (fn, nargs) ->
      Some (match fn with
            | `Prim0 fn ->
-              bits_fn fn, nargs, args
+              (bits_fn fn, nargs, args)
            | `Prim1 fn ->
               let (_, (_, n)), args = rexpect_param rexpect_num lpos args in
-              bits_fn (fn n), nargs, args
+              (bits_fn (fn n), nargs, args)
            | `Prim2 fn ->
               let (_, (_, n)), args = rexpect_param rexpect_num lpos args in
               let (_, (_, n')), args = rexpect_param rexpect_num lpos args in
-              bits_fn (fn n n'), nargs, args)
+              (bits_fn (fn n n'), nargs, args))
   | None -> None
 
 let rexpect_pairs kind2 f1 f2 xs =
@@ -1168,25 +1186,27 @@ let try_resolve_primitive types name args =
   | Some (fn, nargs) ->
      Some (match fn with
            | `Fn fn ->
-              fn, nargs, args
+              (fn, nargs, args)
            | `TypeFn fn ->
               let _, _, t, args = rexpect_type name.lpos types args in
-              fn (SGALib.Util.sga_type_of_typ t), nargs, args
+              (fn (SGALib.Util.sga_type_of_typ t), nargs, args)
            | `FieldFn fn ->
               let f, args = rexpect_field args in
-              fn f, nargs, args
+              (fn f, nargs, args)
            | `StructFn fn ->
               let loc, nm, t, args = rexpect_type name.lpos types args in
               let f, args = rexpect_field args in
-              fn (must_struct_t loc nm t) f, nargs, args)
+              (fn (must_struct_t loc nm t) f, nargs, args))
   | None -> try_resolve_bits_fn name args
 
-let try_resolve_extfun extfuns name args =
-  match StringMap.find_opt name.lcnt extfuns with
-  | Some (nargs, fn) -> Some (SGALib.SGA.UCustomFn fn, nargs, args)
-  | None -> None
-
 let literal_tt = Lit (Const (UBits [||]))
+
+type partly_resolved_funcall =
+  | RStructInit of { sg: struct_sig; fields: (string locd * unresolved_action locd) list }
+  | RInternalCall of { fn: resolved_defun; args: unresolved_action locd list }
+  | RExternalCall of { fn: string ffi_signature SGALib.SGA.interop_ufn_t locd;
+                       a1: unresolved_action locd;
+                       a2: unresolved_action locd }
 
 let try_resolve_special_primitive types name (args: unresolved_action locd list) =
   match StringMap.find_opt name.lcnt special_primitives with
@@ -1195,7 +1215,7 @@ let try_resolve_special_primitive types name (args: unresolved_action locd list)
      let sga_tau = SGALib.Util.sga_type_of_typ tau in
      let uinit = SGALib.SGA.(UPrimFn (UConvFn (UInit sga_tau))) in
      let tt = { lpos = loc; lcnt = literal_tt } in
-     let uinit_call = `Call (locd_make loc uinit, tt, tt) in
+     let uinit_call = RExternalCall { fn = locd_make loc uinit; a1 = tt; a2 = tt } in
      (match tau with
       | Bits_t sz ->
          warning name.lpos @@ BadInitBits { init = nm; size = sz };
@@ -1209,91 +1229,130 @@ let try_resolve_special_primitive types name (args: unresolved_action locd list)
          let expect_field_val x = x in
          Some (match rexpect_pairs "value" expect_field_name expect_field_val args with
                | [] -> uinit_call
-               | fields -> `StructInit (sg, fields)))
+               | fields -> RStructInit { sg; fields }))
   | _ -> None
 
-let pad_function_call lpos name fn nargs (args: unresolved_action locd list) =
+let pad_function_call name fn nargs (args: unresolved_action locd list) =
   assert (nargs <= 2);
   let given = List.length args in
   if given <> nargs then
-    type_error lpos @@ BadArgumentCount { fn = name; expected = nargs; given }
+    type_error name.lpos @@ BadArgumentCount { fn = name.lcnt; expected = nargs; given }
   else
-    let tt = { lpos; lcnt = literal_tt } in
+    let tt = { lpos = name.lpos; lcnt = literal_tt } in
     let a1, a2 = match args with
       | [] -> tt, tt
       | [a1] -> a1, tt
       | [a1; a2] -> a1, a2
       | _ -> assert false in
-    `Call ({ lpos; lcnt = fn }, a1, a2)
+    RExternalCall { fn = { lpos = name.lpos; lcnt = fn }; a1; a2 }
 
-let resolve_function types extfuns name (args: unresolved_action locd list) =
+let resolve_function types fns name (args: unresolved_action locd list) =
   match try_resolve_special_primitive types name args with
-  | Some ast -> ast
+  | Some resolved -> resolved
   | None ->
-     let (fn, nargs, args) =
-       match try_resolve_primitive types name args with
-       | Some r -> r
-       | None -> match try_resolve_extfun extfuns name args with
-                 | Some r -> r
-                 | None -> let candidates = all_primitive_names in
-                           name_error name.lpos @@ Unbound { kind = "function"; prefix = ""; name = name.lcnt; candidates } in
-     pad_function_call name.lpos name.lcnt fn nargs args
+     match try_resolve_primitive types name args with
+     | Some (fn, nargs, args) -> pad_function_call name fn nargs args
+     | None ->
+        match StringMap.find_opt name.lcnt fns with
+        | Some (InternalFn fn) -> RInternalCall { fn; args }
+        | Some (ExternalFn ext) -> pad_function_call name (SGALib.SGA.UCustomFn ext.ext_sig) ext.ext_nargs args
+        | None -> let candidates = all_primitive_names in
+                  name_error name.lpos @@
+                    Unbound { kind = "function"; prefix = "";
+                              name = name.lcnt; candidates }
 
-let resolve_rule types extfuns registers ((nm, action): unresolved_rule) =
-  let find_register { lpos; lcnt = name } =
-    match List.find_opt (fun rsig -> rsig.reg_name = name) registers with
-    | Some rsig -> { lpos; lcnt = rsig }
-    | None -> name_error lpos @@ Unbound { kind = "register"; prefix = ""; name; candidates = [] } in
-  let rec resolve_struct_fields fields =
-    List.map (fun (nm, v) -> nm, resolve_action v) fields
-  and resolve_action_nodelay ({ lpos; lcnt }: unresolved_action locd) =
-    { lpos;
-      lcnt = match lcnt with
-             | Skip -> Skip
-             | Invalid -> Invalid
-             | Fail sz -> Fail sz
-             | Lit (Fail tau) -> Fail (resolve_type types (locd_make lpos tau))
-             | Lit (Var v) -> Lit (Common.Var v)
-             | Lit (Num (s, _)) -> syntax_error lpos @@ MissingSize { number = s }
-             | Lit (Symbol symbol) -> syntax_error lpos @@ UnexpectedSymbol { symbol }
-             | Lit (Keyword keyword) -> syntax_error lpos @@ UnexpectedKeyword { keyword }
-             | Lit (Enumerator { enum; constructor }) ->
-                let v = UEnum { enum; constructor } in
-                Lit (Common.Const (resolve_value types (locd_make lpos v)))
-             | Lit (Const v) -> Lit (Common.Const (resolve_value types (locd_make lpos v)))
-             | Assign (v, a) -> Assign (v, resolve_action a)
-             | StructInit (sg, fields) ->
-                StructInit (sg, resolve_struct_fields fields)
-             | Progn rs -> Progn (List.map resolve_action rs)
-             | Let (bs, body) ->
-                Let (List.map (fun (var, expr) -> (var, resolve_action expr)) bs,
-                     List.map resolve_action body)
-             | If (c, l, rs) ->
-                If (resolve_action c,
-                    resolve_action l,
-                    List.map resolve_action rs)
-             | When (c, rs) ->
-                When (resolve_action c, List.map resolve_action rs)
-             | Switch { binder; operand; default; branches } ->
-                Switch { binder;
-                         operand = resolve_action operand;
-                         default = resolve_action default;
-                         branches = List.map (fun (lbl, br) ->
-                                        resolve_action lbl, resolve_action br)
-                                      branches }
-             | Read (port, r) ->
-                Read (port, find_register r)
-             | Write (port, r, v) ->
-                Write (port, find_register r, resolve_action v)
-             | Call (fn, args) ->
-                (match resolve_function types extfuns fn args with
-                 | `Call (fn, a1, a2) ->
-                    Call (fn, [resolve_action a1; resolve_action a2])
-                 | `StructInit (sg, fields) ->
-                    StructInit (sg, resolve_struct_fields fields)) }
-  and resolve_action l =
-    Delay.apply1_default { l with lcnt = Invalid } resolve_action_nodelay l in
-  (nm.lcnt, resolve_action action)
+let resolve_register_reference registers { lpos; lcnt = name } =
+  match List.find_opt (fun rsig -> rsig.reg_name = name) registers with
+  | Some rsig -> { lpos; lcnt = rsig }
+  | None -> name_error lpos @@ Unbound { kind = "register"; prefix = ""; name; candidates = [] }
+
+let rec resolve_struct_fields types fns registers fields =
+  List.map (fun (nm, v) -> nm, resolve_action types fns registers v) fields
+and resolve_action_nodelay types fns registers ({ lpos; lcnt }: unresolved_action locd) =
+  let resolve_action = resolve_action types fns registers in
+  { lpos;
+    lcnt = match lcnt with
+           | Skip -> Skip
+           | Invalid -> Invalid
+           | Fail sz -> Fail sz
+           | Lit (Fail tau) -> Fail (resolve_type types (locd_make lpos tau))
+           | Lit (Var v) -> Lit (Common.Var v)
+           | Lit (Num (s, _)) -> syntax_error lpos @@ MissingSize { number = s }
+           | Lit (Symbol symbol) -> syntax_error lpos @@ UnexpectedSymbol { symbol }
+           | Lit (Keyword keyword) -> syntax_error lpos @@ UnexpectedKeyword { keyword }
+           | Lit (Enumerator { enum; constructor }) ->
+              let v = UEnum { enum; constructor } in
+              Lit (Common.Const (resolve_value types (locd_make lpos v)))
+           | Lit (Const v) -> Lit (Common.Const (resolve_value types (locd_make lpos v)))
+           | Assign (v, a) -> Assign (v, resolve_action a)
+           | StructInit (sg, fields) ->
+              StructInit (sg, resolve_struct_fields types fns registers fields)
+           | Progn rs -> Progn (List.map resolve_action rs)
+           | Let (bs, body) ->
+              Let (List.map (fun (var, expr) -> (var, resolve_action expr)) bs,
+                   List.map resolve_action body)
+           | If (c, l, rs) ->
+              If (resolve_action c,
+                  resolve_action l,
+                  List.map resolve_action rs)
+           | When (c, rs) ->
+              When (resolve_action c, List.map resolve_action rs)
+           | Switch { binder; operand; default; branches } ->
+              Switch { binder;
+                       operand = resolve_action operand;
+                       default = resolve_action default;
+                       branches = List.map (fun (lbl, br) ->
+                                      resolve_action lbl, resolve_action br)
+                                    branches }
+           | Read (port, r) ->
+              Read (port, resolve_register_reference registers r)
+           | Write (port, r, v) ->
+              Write (port, resolve_register_reference registers r, resolve_action v)
+           | InternalCall { signature; body; args } ->
+              InternalCall { signature; body = resolve_action body;
+                             args = List.map resolve_action args }
+           | Call (fn, args) ->
+              (match resolve_function types fns fn args with
+               | RExternalCall { fn; a1; a2 } ->
+                  Call (fn, [resolve_action a1; resolve_action a2])
+               | RStructInit { sg; fields } ->
+                  StructInit (sg, resolve_struct_fields types fns registers fields)
+               | RInternalCall { fn = { dfn_signature; dfn_body }; args } ->
+                  InternalCall { signature = dfn_signature;
+                                 body = dfn_body;
+                                 args = List.map resolve_action args }) }
+and resolve_action types fns registers l =
+  Delay.apply4_default { l with lcnt = Invalid }
+    resolve_action_nodelay types fns registers l
+
+let resolve_rule types fns registers ((nm, action): unresolved_rule) =
+  (nm.lcnt, resolve_action types fns registers action)
+
+let resolve_fn_decl types fns { ufn_name; ufn_signature; ufn_rettype; ufn_body }
+    : string * resolved_fn =
+  if StringSet.mem ufn_name.lcnt all_primitives then
+    name_error ufn_name.lpos @@ FnShadowsPrimitive { ext_name = ufn_name.lcnt };
+  let args = Delay.map (fun (nm, tau) -> nm.lcnt, resolve_type types tau) ufn_signature in
+  let rettype = resolve_type types ufn_rettype in
+  (ufn_name.lcnt,
+   match ufn_body with
+   | InternalUfn body ->
+      let body = resolve_action types fns [] body in
+      InternalFn { dfn_signature = { int_name = ufn_name.lcnt;
+                                     int_rettype = rettype;
+                                     int_args = args };
+                   dfn_body = body }
+   | ExternalUfn ->
+      let unit_t = Bits_t 0 in
+      let ffi_arg1type, ffi_arg2type = match List.map snd args with
+        | [] -> unit_t, unit_t
+        | [t] -> t, unit_t
+        | [x; y] -> x, y
+        | _ -> syntax_error ufn_name.lpos @@ TooManyArgumentsInExtfunDecl in
+      ExternalFn { ext_nargs = List.length args;
+                   ext_sig = { ffi_name = ufn_name.lcnt;
+                               ffi_arg1type; ffi_arg2type;
+                               ffi_rettype = rettype } })
 
 let resolve_register types (name, init) =
   { reg_name = name.lcnt;
@@ -1314,18 +1373,25 @@ let resolve_scheduler rules ((nm, s): unresolved_scheduler) =
        Delay.apply1 check_scheduler s2 in
   check_scheduler s; (nm.lcnt, s)
 
-let resolve_module types (extfuns: (int * string ffi_signature) StringMap.t)
+let resolve_module types (fns: resolved_fn StringMap.t)
       { lpos; lcnt = { m_name; m_registers; m_rules; m_schedulers; _ } } =
   let registers = Delay.map (resolve_register types) m_registers in
-  let rules = Delay.map (resolve_rule types extfuns registers) m_rules in
+  let rules = Delay.map (resolve_rule types fns registers) m_rules in
   let schedulers = Delay.map (resolve_scheduler rules) m_schedulers in
   { name = { m_name with lpos }; registers; rules; schedulers }
 
-let resolve { types; extfuns; mods } =
+let resolve_fndecls types fns =
+  Delay.fold_left (fun (fns: fndecls) ufn ->
+      let nm, fn = resolve_fn_decl types fns.fn_all ufn in
+      { fn_ordered = (nm, fn) :: fns.fn_ordered;
+        fn_all = StringMap.add nm fn fns.fn_all })
+    { fn_all = StringMap.empty; fn_ordered = [] } fns
+
+let resolve { types; fns; mods } =
   let r_types = resolve_typedecls types in
-  let r_extfuns = extfuns |> Delay.map (resolve_extfun_decl r_types) |> List.to_seq |> StringMap.of_seq in
-  let r_mods = Delay.map (resolve_module r_types r_extfuns) mods in
-  { r_types; r_extfuns; r_mods }
+  let r_fns = resolve_fndecls r_types fns in
+  let r_mods = Delay.map (resolve_module r_types r_fns.fn_all) mods in
+  { r_types; r_fns; r_mods }
 
 let check_result = function
   | Ok cs -> cs

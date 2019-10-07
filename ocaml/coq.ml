@@ -124,9 +124,9 @@ let pp_internal_sig ppf (f: _ internal_signature) =
     (pp_seq (pp_sep " ~> ") pp_internal_sig_arg) f.int_args
     (pp_type ~wrap:false) f.int_rettype
 
-let pp_fn_types ppf (extfuns: string ffi_signature list) =
+let pp_custom_fn_types ppf (extfuns: string ffi_signature list) =
   fprintf ppf "@[<hv 2>Definition custom_Sigma (f: custom_fn_t): ExternalSignature :=@ ";
-  pp_match (pp_raw <<< ffi_name) (pp_external_sig) ppf ("f", extfuns);
+  pp_match (pp_raw <<< ffi_name) pp_external_sig ppf ("f", extfuns);
   fprintf ppf "@].@ ";
   fprintf ppf "@[<2>Definition Sigma (fn: fn_t) :=@ interop_Sigma custom_Sigma fn.@]@ ";
   fprintf ppf "@[<2>Definition uSigma := interop_uSigma (fun (fn: custom_fn_t) _ _ => Success fn).@]"
@@ -318,10 +318,17 @@ let _ =
     { debug_print = (fun a ->
         fprintf (formatter_of_out_channel stderr) "%a@." (pp_action None) a) }
 
-let main out ({ r_types; r_extfuns; r_mods }: Lv.resolved_unit) =
+let partition_fns (fns: (string * resolved_fn) list) =
+  List.fold_right (fun (name, fn) (extf, intf) ->
+      match fn with
+      | ExternalFn fn -> (fn.ext_sig :: extf, intf)
+      | InternalFn fn -> (extf, (name, fn) :: intf))
+  fns ([], [])
+
+let main out ({ r_types; r_fns; r_mods }: Lv.resolved_unit) =
   let types = topo_sort_types (List.map snd (StringMap.bindings r_types.td_all)) in
   let enums, structs = partition_types types in
-  let extfuns = List.map (snd << snd) (StringMap.bindings r_extfuns) in
+  let extfuns, intfuns = partition_fns r_fns.fn_ordered in
   let ppf = formatter_of_out_channel out in
 
   fprintf ppf "@[<v>";
@@ -329,6 +336,6 @@ let main out ({ r_types; r_extfuns; r_mods }: Lv.resolved_unit) =
   pp_seq (brk 2) pp_enum ppf enums; brk 2 ppf;
   pp_seq (brk 2) pp_struct ppf structs; brk 2 ppf;
   pp_fn_t ppf extfuns; brk 2 ppf;
-  pp_fn_types ppf extfuns; brk 2 ppf;
+  pp_custom_fn_types ppf extfuns; brk 2 ppf;
   pp_seq (brk 2) (pp_mod ~print_positions:false) ppf r_mods;
   fprintf ppf "@]@.";

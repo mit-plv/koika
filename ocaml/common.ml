@@ -6,7 +6,10 @@ module OrderedString = struct
   let compare = compare
 end
 module StringSet = Set.Make (OrderedString)
-module StringMap = Map.Make (OrderedString)
+module StringMap = struct
+  include Map.Make (OrderedString)
+  let of_list s = of_seq (List.to_seq s)
+end
 
 type bits_value = bool array
 
@@ -115,12 +118,6 @@ type 'name_t ffi_signature = {
     ffi_rettype: typ
   }
 
-type ('name_t, 'var_t) internal_signature = {
-    int_name: 'name_t;
-    int_args: ('name_t * typ) list;
-    int_rettype: typ
-  }
-
 type reg_signature = {
     reg_name: string;
     reg_init: value;
@@ -149,6 +146,12 @@ type 'cst_t literal =
   | Var of var_t
   | Const of 'cst_t
 
+type ('name_t, 'var_t) internal_signature = {
+    int_name: 'name_t;
+    int_args: ('name_t * typ) list;
+    int_rettype: typ
+  }
+
 type ('f, 'lit_t, 'reg_t, 'fn_t) action =
   | Skip
   | Invalid
@@ -176,6 +179,10 @@ type ('f, 'lit_t, 'reg_t, 'fn_t) action =
              * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd
   | Call of ('f, 'fn_t) locd
             * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd list
+  | InternalCall of
+      { signature: (string, string) internal_signature;
+        body: ('f, 'lit_t, 'reg_t, 'fn_t) action_locd;
+        args: ('f, 'lit_t, 'reg_t, 'fn_t) action_locd list }
 and ('f, 'lit_t, 'reg_t, 'fn_t) action_locd =
   ('f, ('f, 'lit_t, 'reg_t, 'fn_t) action) locd
 

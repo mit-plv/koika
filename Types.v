@@ -220,7 +220,7 @@ Proof. now inversion 1. Qed.
 Definition tsig var_t := list (var_t * type).
 
 Record InternalSignature {name_t var_t: Type} :=
-  { int_name: name_t;
+  { int_name : name_t;
     int_args : tsig var_t;
     int_retType : type }.
 Arguments InternalSignature : clear implicits.

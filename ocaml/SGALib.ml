@@ -75,8 +75,8 @@ module Util = struct
           int_rettype = typ_of_sga_type fsig.int_retType }
 
   let sga_internal_sig_of_internal_sig (fsig: _ Common.internal_signature) =
-    { SGA.int_name = coq_string_of_string fsig.int_name;
-      SGA.int_args = List.map (fun (nm, tau) -> coq_string_of_string nm, sga_type_of_typ tau) fsig.int_args;
+    { SGA.int_name = fsig.int_name;
+      SGA.int_args = List.map (fun (nm, tau) -> nm, sga_type_of_typ tau) fsig.int_args;
       SGA.int_retType = sga_type_of_typ fsig.int_rettype }
 
   let sga_type_to_string tau =
@@ -271,6 +271,9 @@ module Compilation = struct
           SGA.UBind (binder, (translate_action operand), switch)
        | Read (port, reg) -> SGA.URead (translate_port port, reg.lcnt)
        | Write (port, reg, v) -> SGA.UWrite (translate_port port, reg.lcnt, translate_action v)
+       | InternalCall { signature; body; args } ->
+          SGA.UInternalCall (Util.sga_internal_sig_of_internal_sig signature,
+                             translate_action body, List.map translate_action args)
        | Call (fn, a1 :: a2 :: []) -> SGA.UCall (fn.lcnt, translate_action a1, translate_action a2)
        | Call (_, _) -> failwith "Attempting to translate a call with n != 2 arguments.")
   and translate_bindings bs body =
