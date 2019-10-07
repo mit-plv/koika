@@ -1,6 +1,17 @@
 Require Export SGA.Common SGA.Environments SGA.IndexUtils SGA.Types.
 
-Inductive prim_bits_ufn_t :=
+Inductive prim_display_ufn :=
+| UDisplayUtf8
+| UDisplayValue.
+
+Inductive prim_conv_ufn :=
+| UEq
+| UInit (tau: type)
+| UPack
+| UUnpack (tau: type)
+| UIgnore.
+
+Inductive prim_bits_ufn :=
 | USel
 | UPart (offset: nat) (width: nat)
 | UPartSubst (offset: nat) (width: nat)
@@ -15,25 +26,28 @@ Inductive prim_bits_ufn_t :=
 | UZExtL (width: nat)
 | UZExtR (width: nat).
 
-Inductive prim_uconverter :=
-| UEq
-| UInit (tau: type)
-| UPack
-| UUnpack (tau: type)
-| UIgnore.
+Inductive prim_struct_accessor :=
+| GetField
+| SubstField.
 
-Inductive prim_struct_accessor := GetField | SubstField.
-
-Inductive prim_struct_uop :=
+Inductive prim_struct_ufn :=
 | UDo (op: prim_struct_accessor) (f: string)
 | UDoBits (sig: struct_sig) (op: prim_struct_accessor) (f: string).
 
 Inductive prim_ufn_t :=
-| UConvFn (op: prim_uconverter)
-| UBitsFn (fn: prim_bits_ufn_t)
-| UStructFn (op: prim_struct_uop).
+| UDisplayFn (fn: prim_display_ufn)
+| UConvFn (op: prim_conv_ufn)
+| UBitsFn (fn: prim_bits_ufn)
+| UStructFn (op: prim_struct_ufn).
 
-Inductive prim_bits_fn_t :=
+Inductive prim_display_fn :=
+| DisplayUtf8 (len: nat)
+| DisplayValue (tau: type).
+
+Inductive prim_conv_fn :=
+  Eq | Init | Pack | Unpack | Ignore.
+
+Inductive prim_bits_fn :=
 | Sel (sz: nat)
 | Part (sz: nat) (offset: nat) (width: nat)
 | PartSubst (sz: nat) (offset: nat) (width: nat)
@@ -49,11 +63,10 @@ Inductive prim_bits_fn_t :=
 | ZExtL (sz: nat) (width: nat)
 | ZExtR (sz: nat) (width: nat).
 
-Inductive prim_converter := Eq | Init | Pack | Unpack | Ignore.
-
 Inductive prim_fn_t :=
-| ConvFn (tau: type) (op: prim_converter)
-| BitsFn (fn: prim_bits_fn_t)
+| DisplayFn (fn: prim_display_fn)
+| ConvFn (tau: type) (op: prim_conv_fn)
+| BitsFn (fn: prim_bits_fn)
 | StructFn (sig: struct_sig) (op: prim_struct_accessor) (f: struct_index sig).
 
 (* Like Nat.log2_iter, but switches to next power of two one number earlier
@@ -78,6 +91,14 @@ Definition SubstFieldBits (sig: struct_sig) (idx: struct_index sig) : prim_fn_t 
 
 Definition prim_uSigma (fn: prim_ufn_t) (tau1 tau2: type): result prim_fn_t fn_tc_error :=
   match fn with
+  | UDisplayFn fn =>
+    match fn with
+    | UDisplayUtf8 =>
+      let/res sz1 := assert_bits_t Arg1 tau1 in
+      Success (DisplayFn (DisplayUtf8 sz1))
+    | UDisplayValue =>
+      Success (DisplayFn (DisplayValue tau1))
+    end
   | UConvFn op =>
     Success (match op with
              | UEq => ConvFn tau1 Eq
@@ -123,6 +144,11 @@ Definition prim_uSigma (fn: prim_ufn_t) (tau1 tau2: type): result prim_fn_t fn_t
 
 Definition prim_Sigma (fn: prim_fn_t) : ExternalSignature :=
   match fn with
+  | DisplayFn fn =>
+    match fn with
+    | DisplayUtf8 sz => {{ bits_t sz ~> unit_t ~> unit_t }}
+    | DisplayValue tau => {{ tau ~> unit_t ~> unit_t }}
+    end
   | ConvFn tau op =>
     match op with
     | Eq => {{ tau ~> tau ~> bits_t 1 }}
@@ -229,6 +255,11 @@ Defined.
 
 Definition prim_sigma (fn: prim_fn_t) : prim_Sigma fn :=
   match fn with
+  | DisplayFn fn =>
+    match fn with
+    | DisplayUtf8 _ => fun _ _ => Ob
+    | DisplayValue _ => fun _ _ => Ob
+    end
   | ConvFn tau fn =>
     match fn with
     | Eq => fun v1 v2 => if eq_dec v1 v2 then Ob~1 else Ob~0

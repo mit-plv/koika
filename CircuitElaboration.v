@@ -32,6 +32,8 @@ Section Elaboration.
     destruct c;  [ exact c0.. | (* CExternal *)  | exact c0 | exact c0 | exact c0 ].
     destruct idx; [ | exact c0 ].
     destruct fn.
+    - (* Display *)
+      exact c0.
     - (* Conv *)
       destruct op; cbn in *.
       + (* Eq *) exact (CExternal (PrimFn (BitsFn (EqBits tau))) c1 c2).
