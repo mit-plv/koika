@@ -778,7 +778,7 @@ let parse (sexps: Pos.t sexp list) =
   let rec expect_action_nodelay = function
     | Atom { loc; atom } ->
        locd_make loc
-         (match atom with
+         (match atom with       (* FIXME disallow these var names *)
           | "skip" -> Skip
           | "fail" -> Fail (Bits_t 0)
           | atom -> Lit (expect_literal loc atom))
@@ -874,7 +874,7 @@ let parse (sexps: Pos.t sexp list) =
   let rec expect_scheduler : Pos.t sexp -> Pos.t scheduler locd = function
     | Atom { loc; atom } ->
        locd_make loc (expect_constant loc [("done", Done)] atom)
-    | List { loc; elements } ->
+    | List { loc; elements } -> (* FIXME put these in special list *)
        let loc_hd, hd, args = expect_funapp loc "constructor" (elements) in
        let hd = expect_constant loc_hd [("sequence", `Sequence); ("try", `Try)] hd in
        locd_make loc
@@ -1202,7 +1202,7 @@ let try_resolve_special_primitive types name (args: unresolved_action locd list)
          Some uinit_call
       | Enum_t { enum_name; enum_bitsize; _ } ->
          warning name.lpos @@ BadInitEnum { init = nm; name = enum_name; bitsize = enum_bitsize };
-         Some uinit_call
+         Some uinit_call (* FIXME try_enum_const *)
       | Struct_t sg ->
          let expect_field_name nm =
            locd_of_pair (rexpect_keyword "initializer parameter" "a field name" nm) in
@@ -1341,3 +1341,13 @@ let typecheck_module { name; registers; rules; schedulers } =
 
 let typecheck resolved =
   Delay.map typecheck_module resolved.r_mods
+
+let describe_language () =
+  let open List in
+  let atom x = Base.Sexp.Atom x in
+  let list xs = Base.Sexp.List xs in
+  let atomlist xs = list (map atom xs) in
+  let pair k v = list [atom k; atomlist (sort Pervasives.compare v)] in
+  list [pair "language-constructs" (keys language_constructs);
+        pair "core-primitives" (keys special_primitives @ keys core_primitives);
+        pair "bits-primitives" (keys bits_primitives)]

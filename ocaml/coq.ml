@@ -169,16 +169,20 @@ let rec pp_fn ppf (fn: string ffi_signature SGALib.SGA.interop_ufn_t) =
   | UPrimFn f -> pp_app ppf "UPrimFn" "%a" pp_uprimfn f
   | UCustomFn f -> pp_app ppf "UCustomFn" "%s" f.ffi_name
 and pp_uprimfn ppf (f: SGALib.SGA.prim_ufn_t) = match f with
-  | UConvFn f -> pp_app ppf "UConvFn" "%a" pp_prim_uconverter f
-  | UBitsFn f -> pp_app ppf "UBitsFn" "%a" pp_prim_bits_ufn_t f
-  | UStructFn f -> pp_app ppf "UStructFn" "%a" pp_prim_struct_uop f
-and pp_prim_uconverter ppf (f: SGALib.SGA.prim_uconverter) = match f with
+  | UDisplayFn f -> pp_app ppf "UDisplayFn" "%a" pp_prim_display_ufn f
+  | UConvFn f -> pp_app ppf "UConvFn" "%a" pp_prim_conv_ufn f
+  | UBitsFn f -> pp_app ppf "UBitsFn" "%a" pp_prim_bits_ufn f
+  | UStructFn f -> pp_app ppf "UStructFn" "%a" pp_prim_struct_ufn f
+and pp_prim_display_ufn ppf (f: SGALib.SGA.prim_display_ufn) = match f with
+  | UDisplayUtf8 -> pp_raw ppf "UDisplayUtf8"
+  | UDisplayValue -> pp_raw ppf "UDisplayValue"
+and pp_prim_conv_ufn ppf (f: SGALib.SGA.prim_conv_ufn) = match f with
   | UEq -> pp_raw ppf "UEq"
   | UInit tau -> pp_app ppf "UInit" "%a" pp_sga_type tau
   | UPack -> pp_raw ppf "UPack"
   | UUnpack tau -> pp_app ppf "UUnpack" "%a" pp_sga_type tau
   | UIgnore -> pp_raw ppf "UIgnore"
-and pp_prim_bits_ufn_t ppf (f: SGALib.SGA.prim_bits_ufn_t) =
+and pp_prim_bits_ufn ppf (f: SGALib.SGA.prim_bits_ufn) =
   let pp_raw = pp_raw ppf in
   let pp_app fmt = pp_app ppf fmt in
   match f with
@@ -198,7 +202,7 @@ and pp_prim_bits_ufn_t ppf (f: SGALib.SGA.prim_bits_ufn_t) =
 and pp_prim_struct_accessor ppf (op: SGALib.SGA.prim_struct_accessor) = match op with
   | GetField -> pp_raw ppf "GetField"
   | SubstField -> pp_raw ppf "SubstField"
-and pp_prim_struct_uop ppf (f: SGALib.SGA.prim_struct_uop) = match f with
+and pp_prim_struct_ufn ppf (f: SGALib.SGA.prim_struct_ufn) = match f with
   | UDo (op, f) ->
      pp_app ppf "UDo" "%a@ %a" pp_prim_struct_accessor op pp_coq_quoted f
   | UDoBits (sg, op, f) ->
@@ -224,6 +228,8 @@ let rec pp_action (position_printer: (Format.formatter -> 'f -> unit) option)
          pp_app "UConstEnum" "%s_sig@ %a" sg.enum_name pp_quoted enumerator
       | None ->
          pp_app "UConst" "(tau := %a)@ %a" pp_sga_type tau pp_value v)
+  | UConstString s ->
+     pp_app "UConstString" "%a" pp_coq_quoted s
   | UConstEnum (sg, enumerator) ->
      pp_app "UConstEnum" "%a@ %a" pp_sig sg.enum_name pp_coq_quoted enumerator
   | UAssign (v, a) ->

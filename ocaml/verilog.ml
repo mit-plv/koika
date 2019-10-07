@@ -164,6 +164,8 @@ let assignment_to_string (gensym: int ref) (assignment: assignment) =
                        gensym := !gensym + 1 ;
                        "\t"^ s ^ " " ^ (s ^ "__instance__" ^ string_of_int number_s) ^
                          "(" ^ arg1 ^ ", " ^ arg2 ^ "," ^ lhs ^ ")"
+       | PrimFn (DisplayFn _) ->
+          failwith "FIXME: unimplemented"
        | PrimFn (BitsFn typePrim) ->
           (match typePrim with
            | SGA.UIntPlus _ -> default_left ^ arg1 ^ " + " ^ arg2

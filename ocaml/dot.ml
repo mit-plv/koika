@@ -27,7 +27,13 @@ let rec label_ptrs tag_to_parents = function
      Some
        (match ffi.ffi_name with
         | CustomFn fn -> (fn, [c1; c2], [])
-        | PrimFn (SGA.BitsFn fn) -> (bits_primitive_name fn, [c1; c2], [])
+        | PrimFn (SGA.DisplayFn fn) ->
+           ((match fn with
+             | SGA.DisplayUtf8 _ -> "DisplayUtf8"
+             | SGA.DisplayValue _ -> "DisplayValue"),
+            [c1; c2], [])
+        | PrimFn (SGA.BitsFn fn) ->
+           (bits_primitive_name fn, [c1; c2], [])
         | PrimFn (SGA.ConvFn (tau, fn)) ->
            let open SGA in
            let op_name = match fn with
@@ -39,12 +45,13 @@ let rec label_ptrs tag_to_parents = function
            ((match tau with
              | Bits_t sz -> sprintf "bits_%s<%d>" op_name sz
              | Enum_t sg -> sprintf "enum_%s<%s>" op_name (SGALib.Util.string_of_coq_string sg.enum_name)
-             | Struct_t sg -> sprintf "srtuct_%s<%s>" op_name (SGALib.Util.string_of_coq_string sg.struct_name)), [], [])
+             | Struct_t sg -> sprintf "struct_%s<%s>" op_name (SGALib.Util.string_of_coq_string sg.struct_name)),
+            [c1; c2], [])
         | PrimFn (SGA.StructFn (sg, ac, idx)) ->
            let sg = SGALib.Util.struct_sig_of_sga_struct_sig sg in
            let field, _tau = SGALib.Util.list_nth sg.struct_fields idx in
            match ac with
-           | SGA.GetField -> (sprintf "%s.%s" sg.struct_name field, [c1], [])
+           | SGA.GetField -> (sprintf "%s.%s" sg.struct_name field, [c1; c2], [])
            | SGA.SubstField -> (sprintf "%s / %s <-" sg.struct_name field, [c1; c2], []))
   | CReadRegister r -> Some (sprintf "Reg %s" r.reg_name, [], [])
   | CAnnot (_sz, annot, c) ->
@@ -91,7 +98,7 @@ let print_dot_file out Graphs.{ graph_roots = roots; graph_nodes = circuits } =
       match label_ptrs tag_to_parents node with
       | None -> ()
       | Some (lbl, children, removed) ->
-         List.iter (fun c -> orphaned := c :: !orphaned) removed;
+         orphaned := List.rev_append removed !orphaned;
          Hashtbl.add tag_to_graph_data tag (lbl, children))
     circuits;
   List.iter (fun c -> Hashtbl.remove tag_to_graph_data c.Hashcons.tag) !orphaned;
