@@ -624,8 +624,17 @@ let compile (type name_t var_t reg_t)
 
       let must_value = function
         | Assigned e | PureExpr e | ImpureExpr e -> e
-        | NotAssigned -> assert false in
+        | NotAssigned -> assert false (* NotAssigned is only return when NoTarget is passed in *) in
 
+      let is_impure_expr = function
+        | ImpureExpr _ -> true
+        | _ -> false in
+
+      let taint (dependencies: assignment_result list) = function
+        | PureExpr s when List.exists is_impure_expr dependencies -> ImpureExpr s
+        | other -> other in
+
+      (* FIXME This code drops a1 and a2 (and their effects) when they aren't used by fn *)
       let p_funcall target fn a1 a2 =
         let { ffi_name; ffi_arg1type = tau1; ffi_arg2type = tau2; _ } = fn in
         match ffi_name with
@@ -646,7 +655,7 @@ let compile (type name_t var_t reg_t)
                      | SGA.Init -> sp_initializer tau
                      | SGA.Pack -> sp_packer ~ns ~arg:a1 tau
                      | SGA.Unpack -> sp_unpacker ~ns ~arg:a1 tau
-                     | SGA.Ignore -> ns ^ "tt")
+                     | SGA.Ignore -> sprintf "prims::ignore(%s)" a1)
         | PrimFn (SGA.BitsFn f) ->
            PureExpr (sprintf "%s(%s, %s)" (cpp_bits_fn_name f tau1 tau2) a1 a2)
         | PrimFn (SGA.StructFn (sg, ac, idx)) ->
@@ -730,9 +739,9 @@ let compile (type name_t var_t reg_t)
            p_assign_expr target (PureExpr "prims::tt")
         | SGA.Call (_, fn, arg1, arg2) ->
            let f = hpp.cpp_function_sigs fn in
-           let a1 = must_value (p_action (gensym_target f.ffi_arg1type "x") arg1) in
-           let a2 = must_value (p_action (gensym_target f.ffi_arg2type "y") arg2) in
-           p_funcall target f a1 a2
+           let a1 = p_action (gensym_target f.ffi_arg1type "x") arg1 in
+           let a2 = p_action (gensym_target f.ffi_arg2type "y") arg2 in
+           taint [a1; a2] (p_funcall target f (must_value a1) (must_value a2))
       and p_switch target var default branches =
         let rec loop = function
           | [] ->

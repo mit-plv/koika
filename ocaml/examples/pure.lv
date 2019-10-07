@@ -1,0 +1,11 @@
+(extfun impure () (bits 5))
+
+(module pure
+  (rule keep_ignores
+    (let ((x 5'0))
+      (ignore x)))
+
+  (rule keep_impure_exprs
+    (ignore (+ (impure) (impure))))
+
+  (scheduler s (sequence)))

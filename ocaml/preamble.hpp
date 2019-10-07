@@ -169,6 +169,11 @@ namespace prims {
     return widen<std::max(sz, width)>(x) << (std::max(width, sz) - sz);
   }
 
+  template<typename T>
+  unit ignore(const T /*unused*/) {
+    return tt;
+  }
+
   // Forward-declared; our compiler defines one instance per structure type
   template<typename T, std::size_t sz> _unused T unpack(bits<sz> /*bits*/);
 } // namespace prims
