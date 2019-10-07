@@ -648,7 +648,7 @@ Module Bits.
   Notation nil := (@vect_nil bool).
   Notation cons := (@vect_cons bool).
   Notation const := (@vect_const bool).
-  Notation app := (@vect_app bool).
+  Notation app x y := (@vect_app bool _ _ y x). (* !! *)
   Notation split := (@vect_split bool).
   Notation nth := (@vect_nth bool).
   Notation hd := (@vect_hd bool).

@@ -137,7 +137,7 @@ Fixpoint bits_of_value {tau: type} (x: type_denote tau) {struct tau} : bits (typ
        : bits (struct_fields_sz fields) :=
          match fields return struct_denote fields -> bits (struct_fields_sz fields) with
          | [] => fun _ => vect_nil
-         | (nm, tau) :: fields => fun '(x, xs) => Bits.app (bits_of_struct_value xs) (bits_of_value x)
+         | (nm, tau) :: fields => fun '(x, xs) => Bits.app (bits_of_value x) (bits_of_struct_value xs)
          end x) in
   match tau return type_denote tau -> bits (type_sz tau) with
   | bits_t sz => fun bs => bs

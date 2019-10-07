@@ -45,10 +45,10 @@ Section Elaboration.
       destruct fn; [ exact c0.. | | ]; cbn in *.
       + (* ZExtL *)
         rewrite <- vect_extend_end_cast;
-          exact (CExternal (PrimFn (BitsFn (Concat _ _))) c1 (CConst (Bits.zeroes _))).
+          exact (CExternal (PrimFn (BitsFn (Concat _ _))) (CConst (Bits.zeroes _)) c1).
       + (* ZExtR *)
         rewrite <- vect_extend_beginning_cast;
-          exact (CExternal (PrimFn (BitsFn (Concat _ _))) (CConst (Bits.zeroes _)) c1).
+          exact (CExternal (PrimFn (BitsFn (Concat _ _))) c1 (CConst (Bits.zeroes _))).
     - (* Struct *)
       destruct op; cbn in *.
       + (* GetField *)
@@ -110,7 +110,7 @@ Section Elaboration.
 
   Lemma prim_part_subst_end :
     forall sz0 sz (bs0: bits (sz0 + sz)) (bs: bits sz),
-      prim_part_subst bs0 sz0 sz bs = Bits.app (fst (Bits.split bs0)) bs.
+      prim_part_subst bs0 sz0 sz bs = Bits.app bs (fst (Bits.split bs0)).
   Proof.
     unfold Bits.split; intros; rewrite vect_split_firstn_skipn; cbn.
     apply vect_to_list_inj.
@@ -128,7 +128,7 @@ Section Elaboration.
     forall sz0 sz width (bs0: bits (sz0 + sz)) (bs: bits width) offset,
       offset + width <= sz0 ->
       prim_part_subst bs0 offset width bs =
-      Bits.app (prim_part_subst (vect_firstn_plus sz0 bs0) offset width bs) (vect_skipn_plus sz0 bs0).
+      Bits.app (vect_skipn_plus sz0 bs0) (prim_part_subst (vect_firstn_plus sz0 bs0) offset width bs).
   Proof.
     clear.
     intros.

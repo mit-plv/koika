@@ -72,7 +72,7 @@ Section SyntaxMacros.
     match s with
     | EmptyString => Ob
     | String c s =>
-      Bits.app (bits_of_ascii c) (bits_of_bytes s)
+      Bits.app (bits_of_bytes s) (bits_of_ascii c) (* FIXME: reversed *)
     end.
 End SyntaxMacros.
 
