@@ -12,7 +12,18 @@
   :imm1 (bits 12)
   :imm2 (bits 12))
 
-(extfun getinstr ((bits 32)) (bits 32))
+(extfun getinstr ((idx (bits 32))) (bits 32))
+
+(defun decode ((bs (bits 32)))
+  'instr
+  (unpack 'instr bs))
+
+(defun eval ((i 'instr))
+  (bits 12)
+  (switch (get :kind i)
+    (::add (+ (get :imm1 i) (get :imm2 i)))
+    (::lsr (>> (get :imm1 i) (get :imm2 i)))
+    (_     12'hfff)))
 
 (module run
   (register raddr 32'0)
@@ -25,15 +36,11 @@
 
   (rule runinstr
     (let ((x 5'b0)
-          (i (unpack 'instr (read.1 rinstr)))
+          (i (decode (read.1 rinstr)))
           (i2 (init 'instr :kind ::add :imm1 12'0 :imm2 12'b111111111111)))
       (setq x (+ x 5'b00010))
       (write.0 routput
-        (zextl 32
-          (switch (get :kind i)
-            (::add (+ (get :imm1 i) (get :imm2 i)))
-            (::lsr (>> (get :imm1 i) (get :imm2 i)))
-            (_     12'hfff))))))
+        (zextl 32 (eval i)))))
 
   (scheduler main
     (sequence readinstr runinstr)))
