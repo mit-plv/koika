@@ -791,11 +791,6 @@ Module Enums.
 End Enums.
 
 Module IntCall.
-  Record UInternalFunction {pos_t method_name_t var_t reg_t ufn_t: Type} :=
-    { int_sig: InternalSignature method_name_t var_t;
-      int_body: Syntax.uaction pos_t method_name_t var_t reg_t ufn_t }.
-  Arguments UInternalFunction pos_t {method_name_t} var_t reg_t ufn_t : assert.
-
   Module Delay.
     Inductive reg_t := buffer.
     Definition fn_t := interop_empty_t.
@@ -824,6 +819,7 @@ Module IntCall.
   Notation uaction := (Syntax.uaction unit string).
 
   Open Scope sga.
+  Open Scope sga_expr.
 
   Definition nor (sz: nat) : UInternalFunction unit var_t reg_t ufn_t :=
     {| int_sig := {{{ ("nor<" ++ string_of_nat sz ++ ">")%string |
@@ -831,20 +827,24 @@ Module IntCall.
        int_body := UNot[[UOr[[$"arg1", $"arg2"]], UConstBits Ob]]%sga_expr |}.
 
   Notation UCallFn fn args :=
-    (UInternalCall (int_sig fn) (int_body) args).
+    (UInternalCall (int_sig fn) (int_body fn) args).
   Notation UCallMethod fR fSigma fn args :=
     (UInternalCall (int_sig fn) (UCallModule fR fSigma (int_body fn)) args).
+
+  Definition display :=
+    (Display.Printer (custom_fn_t := interop_empty_t) (reg_t := reg_t) (pos_t := unit)).
 
   Definition fSigma (fn: interop_empty_t) : ufn_t := match fn with end.
   Definition swap8 := Delay.swap (bits_t 8).
   Definition swap16 := Delay.swap (bits_t 16).
 
-  Definition _rl : uaction _ _ interop_minimal_ufn_t :=
+  Definition _rl : uaction string _ interop_minimal_ufn_t :=
     Let "a" <- rA#read0 in
     Let "old_a" <- UCallMethod rDelay2 fSigma swap16 (($"a") :: nil) in
     Let "old_al" <- UCallMethod rDelay1 fSigma swap8 ((UPart 0 8)[[$"old_a", UConstBits Ob]] :: nil) in
-    (rA#write0(UInternalCall (int_sig (nor 16)) (int_body (nor 16))
-                             (rA#read0 :: ($"old_a") :: nil))).
+    ((rA#write0(UCallFn (nor 16) (rA#read0 :: ($"old_a") :: nil)));;
+     (UCallFn (display (Display.Str "rA: " :: Display.Value (bits_t 16) :: nil))
+              (($"a") :: nil))).
 
   (* Ltac __must_typecheck R Sigma tcres ::= *)
   (*   __must_typecheck_cbn R Sigma tcres. *)

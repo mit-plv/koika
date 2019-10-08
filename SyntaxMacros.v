@@ -77,6 +77,10 @@ Section SyntaxMacros.
                      fields (UCall uinit (UConstBits Ob) (UConstBits Ob)).
   End Interop.
 
+  Record UInternalFunction {ufn_t} :=
+    { int_sig: InternalSignature method_name_t var_t;
+      int_body: Syntax.uaction pos_t method_name_t var_t reg_t ufn_t }.
+
   Section InlineCalls.
     Context {module_reg_t: Type}.
     Context {fn_t module_fn_t: Type}.
@@ -104,6 +108,56 @@ Section SyntaxMacros.
       end.
   End InlineCalls.
 End SyntaxMacros.
+
+Arguments UInternalFunction pos_t {method_name_t} var_t reg_t ufn_t : assert.
+Arguments Build_UInternalFunction {pos_t method_name_t var_t reg_t ufn_t} int_sig int_body : assert.
+
+Module Display.
+  Section Display.
+    Context {pos_t method_name_t reg_t: Type}.
+
+    Context {custom_fn_t: Type}.
+    Notation uaction := (uaction pos_t method_name_t string reg_t (interop_ufn_t custom_fn_t)).
+
+    Inductive field : Type :=
+    | Str (s: string)
+    | Value (tau: type).
+
+    Open Scope string_scope.
+
+    Notation intfun := (UInternalFunction pos_t string reg_t (interop_ufn_t custom_fn_t)).
+
+    Definition empty_printer : intfun :=
+      {| int_sig := {| int_name := ""; int_args := []; int_retType := unit_t |};
+         int_body := USkip |}.
+
+    Fixpoint extend_printer f offset (printer: intfun) : intfun :=
+      let display_utf8 s := UCall (UPrimFn (UDisplayFn UDisplayUtf8)) (UConstString s) (UConstBits Ob) in
+      let display_value arg := UCall (UPrimFn (UDisplayFn UDisplayValue)) (UVar arg) (UConstBits Ob) in
+      let '(Build_UInternalFunction int_sig int_body) := printer in
+      match f with
+      | Str s =>
+        {| int_sig := int_sig;
+           int_body := (USeq (display_utf8 s) int_body) |}
+      | Value tau =>
+        let arg := "arg" ++ string_of_nat offset in
+        {| int_sig := {| int_name := ""; int_args := (arg, tau) :: int_sig.(int_args); int_retType := unit_t |};
+           int_body := (USeq (display_value arg) int_body) |}
+      end.
+
+    Fixpoint make_printer (offset: nat) (fstring: list field) : intfun :=
+      match fstring with
+      | [] => empty_printer
+      | f :: fstring => extend_printer f offset (make_printer (S offset) fstring)
+      end.
+
+    Definition Printer (fstring: list field) :=
+      make_printer 0 fstring.
+
+    Example example :=
+      Eval compute in Printer [Str "x: "; Value (bits_t 16); Str "y: "; Value (bits_t 32)].
+  End Display.
+End Display.
 
 Section TypedSyntaxMacros.
   Context {var_t reg_t fn_t: Type}.
