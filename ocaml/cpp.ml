@@ -388,7 +388,8 @@ let compile (type name_t var_t reg_t)
   let p_printer tau =
     let v_arg = "val" in
     let v_tau = cpp_type_of_type tau in
-    let v_argdecl = sprintf "const %s %s, const repr_style style" v_tau v_arg in
+    let v_style = "const repr_style style = repr_style::full" in
+    let v_argdecl = sprintf "const %s %s, %s" v_tau v_arg v_style in
 
     let p_printer pbody =
       p_fn ~typ:"static _unused std::string "

@@ -169,6 +169,13 @@ namespace prims {
     return widen<std::max(sz, width)>(x) << (std::max(width, sz) - sz);
   }
 
+  unit display(const std::string& msg) {
+#ifndef SIM_MINIMAL
+    std::cout << msg;
+#endif
+    return tt;
+  }
+
   template<typename T>
   unit ignore(const T /*unused*/) {
     return tt;
@@ -213,17 +220,18 @@ struct _repr {
       stream << std::dec << +r.val;
       break;
     case repr_style::utf8:
-      stream << '"'; // FIXME: endianness problems: use arrays
+      // FIXME: endianness problems: use arrays
+      // FIXME: Decode array of bytes before printing
       for (size_t printed = 0; printed < sz; printed += 8) {
-        stream << static_cast<unsigned char>(prims::truncate<8, sz>(r.val >> printed));
+        stream << static_cast<unsigned char>(
+            prims::truncate<8, sz>(r.val >> printed));
       }
-      stream << '"';
       break;
     case repr_style::full:
       if (sz <= 64) {
         stream << _repr<sz>(r.val, repr_style::bin);
-        stream << " ("; _repr<sz>(r.val, repr_style::hex);
-        stream << ", "; _repr<sz>(r.val, repr_style::dec);
+        stream << " (" << _repr<sz>(r.val, repr_style::hex);
+        stream << ", " << _repr<sz>(r.val, repr_style::dec);
         stream << ")";
       } else {
         stream << _repr<sz>(r.val, repr_style::hex, r.include_size);
