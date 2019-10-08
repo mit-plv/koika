@@ -53,7 +53,7 @@ Section TypeInference.
   Context (Sigma: fn_t -> ExternalSignature).
   Context (uSigma: forall (fn: ufn_t) (tau1 tau2: type), result fn_t fn_tc_error).
 
-  Notation uaction := (uaction pos_t fn_name_t var_t reg_t ufn_t).
+  Notation uaction := (uaction pos_t fn_name_t var_t).
   Notation uscheduler := (uscheduler pos_t rule_name_t).
 
   Open Scope bool_scope.
@@ -96,7 +96,7 @@ Section TypeInference.
 
     Notation EX Px := (existT _ _ Px).
 
-    Fixpoint actpos pos (e: uaction) :=
+    Fixpoint actpos {reg_t ufn_t} pos (e: uaction reg_t ufn_t) :=
       match e with
       | UAPos p _ => p
       | _ => pos
@@ -125,7 +125,10 @@ Section TypeInference.
       : result (context (K := (var_t * type)) (fun '(_, tau) => action sig tau) args_desc) :=
       assert_argtypes' (List.length args_desc) fn_name pos args_desc args.
 
-    Fixpoint type_action (pos: pos_t) (sig: tsig var_t) (e: uaction) {struct e}
+    Fixpoint type_action' {reg_t' ufn_t'}
+             (pos: pos_t) (sig: tsig var_t)
+             (fR: reg_t' -> reg_t) (fSigma: ufn_t' -> ufn_t)
+             (e: uaction reg_t' ufn_t') {struct e}
       : result ({ tau: type & action sig tau }) :=
       match e with
       | UError => Failure (mkerror pos ExplicitErrorInAst)
@@ -140,51 +143,59 @@ Section TypeInference.
         Success (EX (Const (tau := enum_t sig) (vect_nth sig.(enum_bitpatterns) idx)))
       | UAssign var ex =>
         let/res tau_m := opt_result (assoc var sig) (mkerror pos (UnboundVariable var)) in
-        let/res ex' := type_action pos sig ex in
+        let/res ex' := type_action' pos sig fR fSigma ex in
         let/res ex' := cast_action (actpos pos ex) `tau_m (``ex') in
         Success (EX (Assign (k := var) (tau := `tau_m) ``tau_m ex'))
       | USeq r1 r2 =>
-        let/res r1' := type_action pos sig r1 in
+        let/res r1' := type_action' pos sig fR fSigma r1 in
         let/res r1' := cast_action (actpos pos r1) unit_t (``r1') in
-        let/res r2' := type_action pos sig r2 in
+        let/res r2' := type_action' pos sig fR fSigma r2 in
         Success (EX (Seq r1' ``r2'))
       | UBind v ex body =>
-        let/res ex := type_action pos sig ex in
-        let/res body := type_action pos ((v, `ex) :: sig) body in
+        let/res ex := type_action' pos sig fR fSigma ex in
+        let/res body := type_action' pos ((v, `ex) :: sig) fR fSigma body in
         Success (EX (Bind v ``ex ``body))
       | UIf cond tbranch fbranch =>
-        let/res cond' := type_action pos sig cond in
+        let/res cond' := type_action' pos sig fR fSigma cond in
         let/res cond' := cast_action (actpos pos cond) (bits_t 1) (``cond') in
-        let/res tbranch' := type_action pos sig tbranch in
-        let/res fbranch' := type_action pos sig fbranch in
+        let/res tbranch' := type_action' pos sig fR fSigma tbranch in
+        let/res fbranch' := type_action' pos sig fR fSigma fbranch in
         let/res fbranch' := cast_action (actpos pos fbranch) (`tbranch') (``fbranch') in
         Success (EX (If cond' ``tbranch' fbranch'))
-      | URead port idx => Success (EX (Read port idx))
+      | URead port idx => Success (EX (Read port (fR idx)))
       | UWrite port idx value =>
-        let/res value' := type_action pos sig value in
-        let/res value' := cast_action (actpos pos value) (R idx) (``value') in
-        Success (EX (Write port idx value'))
+        let/res value' := type_action' pos sig fR fSigma value in
+        let/res value' := cast_action (actpos pos value) (R (fR idx)) (``value') in
+        Success (EX (Write port (fR idx) value'))
       | UInternalCall fn_sig fn_body args =>
-        let/res tc_args := result_list_map (type_action pos sig) args in
+        let/res tc_args := result_list_map (type_action' pos sig fR fSigma) args in
         let arg_positions := List.map (actpos pos) args in
         let tc_args_w_pos := List.combine arg_positions tc_args in
         let/res arg_ctx := assert_argtypes fn_sig.(int_name) pos fn_sig.(int_args) tc_args_w_pos in
-        let/res fn_body' := type_action (actpos pos fn_body) fn_sig.(int_args) fn_body in
+        let/res fn_body' := type_action' (actpos pos fn_body) fn_sig.(int_args) fR fSigma fn_body in
         let/res fn_body' := cast_action (actpos pos fn_body) fn_sig.(int_retType) (``fn_body') in
         Success (EX (InternalCall sig fn_sig.(int_args) fn_body' arg_ctx))
+      | UCallModule fR' fSigma' body =>
+        type_action' pos sig (fun r => fR (fR' r)) (fun fn => fSigma (fSigma' fn)) body
       | UCall ufn arg1 arg2 =>
-        let/res arg1' := type_action pos sig arg1 in
-        let/res arg2' := type_action pos sig arg2 in
+        let/res arg1' := type_action' pos sig fR fSigma arg1 in
+        let/res arg2' := type_action' pos sig fR fSigma arg2 in
         let pos1 := actpos pos arg1 in
         let pos2 := actpos pos arg2 in
-        let/res fn := lift_fn_tc_result pos1 ``arg1' pos2 ``arg2' (uSigma ufn `arg1' `arg2') in
+        let/res fn := lift_fn_tc_result pos1 ``arg1' pos2 ``arg2' (uSigma (fSigma ufn) `arg1' `arg2') in
         let/res arg1' := cast_action pos1 (Sigma fn).(arg1Type) (``arg1') in
         let/res arg2' := cast_action pos2 (Sigma fn).(arg2Type) (``arg2') in
         Success (EX (Call fn arg1' arg2'))
-      | UAPos pos e => type_action pos sig e
+      | UAPos pos e => type_action' pos sig fR fSigma e
       end.
 
-    Definition type_rule (pos: pos_t) (e: uaction) : result rule :=
+    Definition type_action
+               (pos: pos_t) (sig: tsig var_t)
+               (e: uaction reg_t ufn_t)
+      : result ({ tau: type & action sig tau }) :=
+      type_action' pos sig (fun r => r) (fun fn => fn) e.
+
+    Definition type_rule (pos: pos_t) (e: uaction reg_t ufn_t) : result rule :=
       let/res rl := type_action pos [] e in
       cast_rule pos (``rl).
   End Action.

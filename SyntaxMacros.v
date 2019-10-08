@@ -80,33 +80,6 @@ Section SyntaxMacros.
   Record UInternalFunction {ufn_t} :=
     { int_sig: InternalSignature method_name_t var_t;
       int_body: Syntax.uaction pos_t method_name_t var_t reg_t ufn_t }.
-
-  Section InlineCalls.
-    Context {module_reg_t: Type}.
-    Context {fn_t module_fn_t: Type}.
-    Context (fR: module_reg_t -> reg_t).
-    Context (fSigma: module_fn_t -> fn_t).
-
-    Fixpoint UCallModule (ua: uaction pos_t method_name_t var_t module_reg_t module_fn_t)
-      : uaction pos_t method_name_t var_t reg_t fn_t :=
-      match ua with
-      | UError => UError
-      | UFail tau => UFail tau
-      | UVar var => UVar var
-      | UConst cst => UConst cst
-      | UConstString s => UConstString s
-      | UConstEnum sig cst => UConstEnum sig cst
-      | UAssign v ex => UAssign v (UCallModule ex)
-      | USeq r1 r2 => USeq (UCallModule r1) (UCallModule r2)
-      | UBind v ex body => UBind v (UCallModule ex) (UCallModule body)
-      | UIf cond tbranch fbranch => UIf (UCallModule cond) (UCallModule tbranch) (UCallModule fbranch)
-      | URead port idx => URead port (fR idx)
-      | UWrite port idx value => UWrite port (fR idx) (UCallModule value)
-      | UCall fn arg1 arg2 => UCall (fSigma fn) (UCallModule arg1) (UCallModule arg2)
-      | UInternalCall sig body args => UInternalCall sig (UCallModule body) (List.map UCallModule args)
-      | UAPos p e => UAPos p (UCallModule e)
-      end.
-  End InlineCalls.
 End SyntaxMacros.
 
 Arguments UInternalFunction pos_t {method_name_t} var_t reg_t ufn_t : assert.

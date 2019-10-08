@@ -1,9 +1,9 @@
 Require Import SGA.Common SGA.TypedSyntax.
 
 Section Syntax.
-  Context {pos_t rule_name_t method_name_t var_t reg_t fn_t: Type}.
+  Context {pos_t rule_name_t method_name_t var_t: Type}.
 
-  Inductive uaction :=
+  Inductive uaction {reg_t fn_t} :=
   | UError
   | UFail (tau: type)
   | UVar (var: var_t)
@@ -17,6 +17,9 @@ Section Syntax.
   | URead (port: Port) (idx: reg_t)
   | UWrite (port: Port) (idx: reg_t) (value: uaction)
   | UCall (fn: fn_t) (arg1: uaction) (arg2: uaction)
+  | UCallModule {module_reg_t: Type} {module_fn_t: Type}
+                (fR: module_reg_t -> reg_t) (fSigma: module_fn_t -> fn_t)
+                (body: @uaction module_reg_t module_fn_t)
   | UInternalCall (sig: @InternalSignature method_name_t var_t) (body: uaction) (args: list uaction)
   | UAPos (p: pos_t) (e: uaction).
 
