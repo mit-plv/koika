@@ -66,14 +66,21 @@ Proof.
       eauto.
 Qed.
 
-Lemma nth_error_app_l :
-  forall {A} (l l' : list A) n x,
+Fixpoint nth_error_app_l {A} (l l' : list A):
+  forall n x,
     nth_error l n = Some x ->
     nth_error (l ++ l') n = Some x.
 Proof.
-  induction l; destruct n; cbn;
-    (solve [inversion 1] || eauto).
-Qed.
+  destruct l, n; cbn; (solve [inversion 1] || eauto).
+Defined.
+
+Fixpoint map_nth_error {A B} (l: list A) (f: A -> B) {struct l}:
+  forall n x,
+    nth_error l n = Some x ->
+    nth_error (map f l) n = Some (f x).
+Proof.
+  destruct l, n; cbn;inversion 1; eauto.
+Defined.
 
 Ltac list_length l :=
   lazymatch l with

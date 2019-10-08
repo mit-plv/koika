@@ -791,14 +791,32 @@ Module Enums.
 End Enums.
 
 Module IntCall.
+  Record UInternalFunction {pos_t method_name_t var_t reg_t ufn_t: Type} :=
+    { int_sig: InternalSignature method_name_t var_t;
+      int_body: Syntax.uaction pos_t method_name_t var_t reg_t ufn_t }.
+  Arguments UInternalFunction pos_t {method_name_t} var_t reg_t ufn_t : assert.
+
+  Module Delay.
+    Inductive reg_t := buffer.
+    Definition fn_t := interop_empty_t.
+
+    Definition swap tau: UInternalFunction unit string reg_t fn_t  :=
+      {| int_sig := {{{ "swap" | "arg1" :: tau ~> tau }}};
+         int_body := (USeq (buffer#write0($"arg1")) (URead P0 buffer))%sga |}.
+
+    Instance FiniteType_reg_t : FiniteType reg_t := _.
+  End Delay.
+
   Definition var_t := string.
-  Inductive reg_t := rA.
+  Inductive reg_t := rA | rDelay1 (d: Delay.reg_t) | rDelay2 (d: Delay.reg_t).
   Definition ufn_t := interop_minimal_ufn_t.
   Inductive name_t := rl.
 
   Definition R r :=
     match r with
     | rA => bits_t 16
+    | rDelay1 buffer => bits_t 8
+    | rDelay2 buffer => bits_t 16
     end.
 
   Definition Sigma := interop_minimal_Sigma.
@@ -807,21 +825,26 @@ Module IntCall.
 
   Open Scope sga.
 
-  Record UInternalFunction {pos_t method_name_t var_t: Type} :=
-    { int_sig: InternalSignature method_name_t var_t;
-      int_body: Syntax.uaction pos_t method_name_t var_t reg_t ufn_t }.
-  Arguments UInternalFunction : clear implicits.
-
-  Definition nor (sz: nat) : @UInternalFunction unit _ _ :=
+  Definition nor (sz: nat) : UInternalFunction unit var_t reg_t ufn_t :=
     {| int_sig := {{{ ("nor<" ++ string_of_nat sz ++ ">")%string |
                      "arg1" :: bits_t sz ~> "arg2" :: bits_t sz ~> bits_t sz }}};
        int_body := UNot[[UOr[[$"arg1", $"arg2"]], UConstBits Ob]]%sga_expr |}.
 
+  Notation UCallFn fn args :=
+    (UInternalCall (int_sig fn) (int_body) args).
+  Notation UCallMethod fR fSigma fn args :=
+    (UInternalCall (int_sig fn) (UCallModule fR fSigma (int_body fn)) args).
+
+  Definition fSigma (fn: interop_empty_t) : ufn_t := match fn with end.
+  Definition swap8 := Delay.swap (bits_t 8).
+  Definition swap16 := Delay.swap (bits_t 16).
+
   Definition _rl : uaction _ _ interop_minimal_ufn_t :=
-    rA#write0(UInternalCall (int_sig (nor 16)) (int_body (nor 16))
-                            (List.cons (rA#read0)
-                                       (List.cons (UUIntPlus[[rA#read0, UConstBits (Bits.of_N 16 1%N)]])
-                                                  List.nil))).
+    Let "a" <- rA#read0 in
+    Let "old_a" <- UCallMethod rDelay2 fSigma swap16 (($"a") :: nil) in
+    Let "old_al" <- UCallMethod rDelay1 fSigma swap8 ((UPart 0 8)[[$"old_a", UConstBits Ob]] :: nil) in
+    (rA#write0(UInternalCall (int_sig (nor 16)) (int_body (nor 16))
+                             (rA#read0 :: ($"old_a") :: nil))).
 
   (* Ltac __must_typecheck R Sigma tcres ::= *)
   (*   __must_typecheck_cbn R Sigma tcres. *)
@@ -843,6 +866,8 @@ Module IntCall.
   Definition r reg : R reg :=
     match reg with
     | rA => Bits.of_N _ 12
+    | rDelay1 buffer => Bits.zero _
+    | rDelay2 buffer => Bits.zero _
     end.
 
   Definition sched_result :=
@@ -854,6 +879,8 @@ Module IntCall.
        sga_reg_finite := _;
        sga_reg_names r := match r with
                          | rA => "rA"
+                         | rDelay1 buffer => "rd1_buffer"
+                         | rDelay2 buffer => "rd2_buffer"
                          end;
 
        sga_custom_fn_types := interop_empty_Sigma;
@@ -884,4 +911,5 @@ Definition demo_packages : list demo_package_t :=
     ManualDecoder.package; PrimitiveDecoder.package;
     Pipeline.package;
     RegisterFile_Ordered.package;
-    Enums.package ].
+    Enums.package;
+    IntCall.package ].
