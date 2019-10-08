@@ -1,5 +1,3 @@
-;; (load (expand-file-name "../lv-mode.el"))
-
 ;;; Parse errors
 
 (<>)
@@ -28,12 +26,12 @@
 
 (struct instr)
 
-(extfun getinstr ((bits 32)) (bits 32))
-(extfun getinstr ((bits 32)) (bits 32))
-(extfun getinstr ((bits 32)) (bits 32))
-(extfun pack ((bits 32)) (bits 32))
-(extfun lsr ((bits 32)) (bits 32))
-(extfun progn ((bits 32)) (bits 32))
+(extfun getinstr ((arg (bits 32))) (bits 32))
+(extfun getinstr ((arg (bits 32))) (bits 32))
+(extfun getinstr ((arg (bits 32))) (bits 32))
+(extfun pack ((arg (bits 32))) (bits 32))
+(extfun lsr ((arg (bits 32))) (bits 32))
+(extfun progn ((arg (bits 32))) (bits 32))
 
 (module syntax
   (register r0 0)
@@ -78,5 +76,33 @@
 
   (scheduler s1 (sequence rl1 rl))
   (scheduler s2 (sequence rl2 rl2)))
+
+(struct instrb)
+
+(struct nested
+  :instr 'instrb
+  :a (bits 16))
+
+(struct nested
+  :instr 'instrb
+  :a (bits 16))
+
+(struct nested2
+  :instr 'nested
+  :instr 'nested
+  :nested (bits 3))
+
+(extfun f ((arg 'nested2)) 'nested)
+(extfun f ((arg 'nested2)) 'nested)
+
+(module test
+  (rule placeholder
+    (let ((n2 (init 'nested2 :instr (init 'nested :a 16'b0) :nested 3'b0)))
+      fail))
+  (scheduler s
+    (sequence placeholder)))
+
+(module test
+  (scheduler s (sequence)))
 
 (module

@@ -41,10 +41,9 @@ using extfuns = datatypes_lv_extfuns;")
     (let ((x 5'b0)
           (i (decode (read.1 rinstr)))
           (i2 (init 'instr :kind ::add :imm1 12'0 :imm2 12'b111111111111)))
-      (ignore i2)
       (setq x (+ x 5'b00010))
       (write.0 routput
-        (zextl 32 (eval i)))))
+        (zextl 32 (+ (eval i) (eval i2))))))
 
   (scheduler main
     (sequence readinstr runinstr)))

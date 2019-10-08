@@ -1,5 +1,3 @@
-;; (progn (load (expand-file-name "../lv-mode.el")) (emacs-lisp-mode))
-
 (module uint128
   (register r 128'1)
 
