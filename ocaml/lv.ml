@@ -79,6 +79,7 @@ type unresolved_module = {
     m_registers: unresolved_register list;
     m_rules: unresolved_rule list;
     m_schedulers: unresolved_scheduler list;
+    m_cpp_preamble: string list;
   }
 
 type unresolved_fn_body =
@@ -119,7 +120,8 @@ type resolved_module = {
     name: string locd;
     registers: reg_signature list;
     rules: (string * Pos.t SGALib.Compilation.raw_action) list;
-    schedulers: (string * Pos.t SGALib.Compilation.raw_scheduler) list
+    schedulers: (string * Pos.t SGALib.Compilation.raw_scheduler) list;
+    cpp_preamble: string list
   }
 
 type fndecls = {
@@ -884,11 +886,16 @@ let parse (sexps: Pos.t sexp list) =
   and expect_let_bindings bs =
     let _, bs = expect_list "let bindings" bs in
     Delay.map expect_let_binding bs in
-  let expect_register name init_val =
+  let expect_decl_name loc body =
+    let name, body = expect_cons loc "name" body in
+    (expect_identifier "a name" name, body) in
+  let expect_register d_loc body =
+    let name, body = expect_decl_name d_loc body in
+    let init_val = expect_single d_loc "value" "register initialization" body in
     (name, locd_of_pair (expect_const "an initial value" init_val)) in
   let expect_actions (loc: Pos.t) body =
     locd_make loc (Progn (List.map expect_action body)) in
-  let rec expect_scheduler : Pos.t sexp -> Pos.t scheduler locd = function
+  let rec expect_scheduler_body : Pos.t sexp -> Pos.t scheduler locd = function
     | Atom { loc; atom } ->
        locd_make loc (expect_constant loc [("done", Done)] atom)
     | List { loc; elements } -> (* FIXME put these in special list *)
@@ -902,8 +909,11 @@ let parse (sexps: Pos.t sexp list) =
              let rname, args = expect_cons loc "rule name" args in
              let s1, s2 = expect_pair loc "subscheduler 1" "subscheduler 2" args in
              Try (expect_identifier "a rule name" rname,
-                  expect_scheduler s1,
-                  expect_scheduler s2)) in
+                  expect_scheduler_body s1,
+                  expect_scheduler_body s2)) in
+  let expect_scheduler loc body =
+    let name, body = expect_decl_name loc body in
+    name, expect_scheduler_body (expect_single loc "body" "scheduler declaration" body) in
   let expect_unqualified_enumerator enumerator = (* ::a *)
     let loc, enumerator = expect_atom "an enumerator" enumerator in
     let { enum; constructor } = expect_enumerator loc enumerator in
@@ -917,7 +927,8 @@ let parse (sexps: Pos.t sexp list) =
     let sz' = Array.length lcnt in
     if sz' <> sz then
       type_error lpos @@ InconsistentEnumeratorSizes { expected = sz; actual = sz' } in
-  let expect_enum name loc body = (* ((:true 1'b1) (:false 1'b0) …) *)
+  let expect_enum loc body = (* ((:true 1'b1) (:false 1'b0) …) *)
+    let name, body = expect_decl_name loc body in
     let members = expect_pairs "enumerator value" expect_unqualified_enumerator expect_enumerator_value body in
     let (_, (_, first)), _ = expect_cons loc "enumerator (empty enums are not supported)" members in
     let bitsize = Array.length first.lcnt in
@@ -929,7 +940,8 @@ let parse (sexps: Pos.t sexp list) =
   let expect_struct_field_name name = (* :label *)
     let loc, name = expect_atom "a field name" name in
     locd_make loc (expect_keyword loc "a field name" name) in
-  let expect_struct name loc body = (* ((:kind kind) (:imm (bits 12) …) *)
+  let expect_struct loc body = (* ((:kind kind) (:imm (bits 12) …) *)
+    let name, body = expect_decl_name loc body in
     let fields = expect_pairs "field type" expect_struct_field_name expect_type body in
     Delay.apply4 StringDuplicates.check "field in struct" fst (lcnt << fst) fields;
     locd_make loc (Struct_u { name; fields }) in
@@ -938,7 +950,8 @@ let parse (sexps: Pos.t sexp list) =
     let nm, tau = expect_pair loc "argument name" "argument type" s in
     (expect_identifier "argument name" nm ,
      expect_type ~bits_raw:false tau) in
-  let expect_fn_decl needs_body ufn_name loc body =
+  let expect_fn_decl needs_body loc body =
+    let ufn_name, body = expect_decl_name loc body in
     let args, body = expect_cons loc "function signature" body in
     let rettype, body = expect_cons loc "return type" body in
     let _, args = expect_list "function signature" args in
@@ -948,46 +961,56 @@ let parse (sexps: Pos.t sexp list) =
       if needs_body then InternalUfn (expect_actions loc body)
       else (expect_nil "argument list" body; ExternalUfn) in
     { ufn_name; ufn_signature; ufn_rettype; ufn_body } in
+  let expect_rule loc body =
+    let name, body = expect_decl_name loc body in
+    (name, expect_actions loc body) in
+  let expect_cpp_preamble loc body =
+    snd @@ expect_atom "preamble declaration"
+      (expect_single loc "string" "preamble declaration" body) in
   let rec expect_decl d skind expected =
     let d_loc, d = expect_list ("a " ^ skind) d in
-    let kind, name_body = expect_cons d_loc skind d in
+    let kind, decl_body = expect_cons d_loc skind d in
     let _, kind = expect_constant_atom expected kind in
-    let name, body = expect_cons d_loc "name" name_body in
-    let name = expect_identifier "a name" name in
     (d_loc,
      match kind with
      | `Enum ->
-        `Enum (expect_enum name d_loc body)
+        `Enum (expect_enum d_loc decl_body)
      | `Struct ->
-        `Struct (expect_struct name d_loc body)
+        `Struct (expect_struct d_loc decl_body)
      | `Defun ->
-        `Fn (expect_fn_decl true name d_loc body)
+        `Fn (expect_fn_decl true d_loc decl_body)
      | `Extfun ->
-        `Fn (expect_fn_decl false name d_loc body)
+        `Fn (expect_fn_decl false d_loc decl_body)
      | `Module ->
-        `Module (expect_module name d_loc body)
+        `Module (expect_module d_loc decl_body)
      | `Register ->
-        `Register (expect_register name (expect_single d_loc "value" "register initialization" body))
+        `Register (expect_register d_loc decl_body)
      | `Rule ->
-        `Rule (name, expect_actions d_loc body)
+        `Rule (expect_rule d_loc decl_body)
      | `Scheduler ->
-        `Scheduler (name, expect_scheduler (expect_single d_loc "body" "scheduler declaration" body)))
-  and expect_module m_name loc body =
-    let expected = [("register", `Register); ("rule", `Rule); ("scheduler", `Scheduler)] in
-    let { m_name; m_registers; m_rules; m_schedulers } =
+        `Scheduler (expect_scheduler d_loc decl_body)
+     | `CppPreamble ->
+        `CppPreamble (expect_cpp_preamble d_loc decl_body))
+  and expect_module loc body =
+    let m_name, body = expect_decl_name loc body in
+    let expected = [("register", `Register); ("rule", `Rule);
+                    ("scheduler", `Scheduler); ("cpp-preamble", `CppPreamble)] in
+    let { m_name; m_registers; m_rules; m_schedulers; m_cpp_preamble } =
       Delay.fold_left (fun m decl ->
           match expect_decl decl "register, rule, or scheduler declaration" expected |> snd with
           | `Register r -> { m with m_registers = r :: m.m_registers }
           | `Rule r -> { m with m_rules = r :: m.m_rules }
           | `Scheduler s -> { m with m_schedulers = s :: m.m_schedulers }
+          | `CppPreamble s -> { m with m_cpp_preamble = s :: m.m_cpp_preamble }
           | _ -> assert false)
-        { m_name; m_registers = []; m_rules = []; m_schedulers = [] } body in
-    let m_registers, m_rules, m_schedulers =
-      List.rev m_registers, List.rev m_rules, List.rev m_schedulers in
+        { m_name; m_registers = []; m_rules = []; m_schedulers = [];
+          m_cpp_preamble = [] } body in
+    let m_registers, m_rules, m_schedulers, m_cpp_preamble =
+      List.rev m_registers, List.rev m_rules, List.rev m_schedulers, List.rev m_cpp_preamble in
     Delay.apply4 StringDuplicates.check "register" fst (lcnt << fst) m_registers;
     Delay.apply4 StringDuplicates.check "rule" fst (lcnt << fst) m_rules;
     Delay.apply4 StringDuplicates.check "scheduler" fst (lcnt << fst) m_schedulers;
-    locd_make loc { m_name; m_registers; m_rules; m_schedulers } in
+    locd_make loc { m_name; m_registers; m_rules; m_schedulers; m_cpp_preamble } in
   let expected_toplevel =
     [("enum", `Enum); ("struct", `Struct);
      ("defun", `Defun); ("extfun", `Extfun);
@@ -1374,11 +1397,12 @@ let resolve_scheduler rules ((nm, s): unresolved_scheduler) =
   check_scheduler s; (nm.lcnt, s)
 
 let resolve_module types (fns: resolved_fn StringMap.t)
-      { lpos; lcnt = { m_name; m_registers; m_rules; m_schedulers; _ } } =
+      { lpos; lcnt = { m_name; m_registers; m_rules; m_schedulers; m_cpp_preamble } } =
   let registers = Delay.map (resolve_register types) m_registers in
   let rules = Delay.map (resolve_rule types fns registers) m_rules in
   let schedulers = Delay.map (resolve_scheduler rules) m_schedulers in
-  { name = { m_name with lpos }; registers; rules; schedulers }
+  { name = { m_name with lpos }; registers; rules; schedulers;
+    cpp_preamble = m_cpp_preamble }
 
 let resolve_fndecls types fns =
   Delay.fold_left (fun (fns: fndecls) ufn ->
@@ -1397,13 +1421,18 @@ let check_result = function
   | Ok cs -> cs
   | Error (epos, emsg) -> type_inference_error epos emsg
 
-let typecheck_module { name; registers; rules; schedulers } =
+let typecheck_module { name; cpp_preamble; registers; rules; schedulers } =
   let open SGALib.Compilation in
   let tc_rule (nm, r) = (nm, (`InternalRule, check_result (typecheck_rule r))) in
   let c_rules = Delay.map tc_rule rules in
   let schedulers = Delay.map (typecheck_scheduler << snd) schedulers in
   if schedulers = [] then name_error name.lpos @@ MissingScheduler { modname = name.lcnt };
-  { c_registers = registers; c_rules; c_scheduler = List.hd schedulers }
+  { c_registers = registers;
+    c_rules;
+    c_scheduler = List.hd schedulers;
+    c_cpp_preamble = match cpp_preamble with
+                     | [] -> None
+                     | strs -> Some (String.concat "\n" strs) }
 
 let typecheck resolved =
   Delay.map typecheck_module resolved.r_mods

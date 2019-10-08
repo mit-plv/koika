@@ -932,7 +932,7 @@ let action_footprint a =
 let cpp_rule_of_action (rl_name, (_kind, rl_body)) =
   { rl_name; rl_body; rl_footprint = action_footprint rl_body }
 
-let input_of_compile_unit classname ({ c_registers; c_scheduler; c_rules }: SGALib.Compilation.compile_unit) =
+let input_of_compile_unit classname ({ c_registers; c_scheduler; c_rules; c_cpp_preamble }: SGALib.Compilation.compile_unit) =
   { cpp_classname = classname;
     cpp_header_name = classname;
     cpp_rule_names = (fun rl -> rl);
@@ -942,7 +942,7 @@ let input_of_compile_unit classname ({ c_registers; c_scheduler; c_rules }: SGAL
     cpp_register_sigs = (fun r -> r);
     cpp_function_sigs = SGALib.Util.ffi_sig_of_interop_fn ~custom_fn_info:(fun f -> f);
     cpp_var_names = (fun x -> x);
-    cpp_extfuns = None; }
+    cpp_extfuns = c_cpp_preamble; }
 
 let collect_rules sched =
   let rec loop acc = function

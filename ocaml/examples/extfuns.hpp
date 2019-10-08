@@ -35,4 +35,11 @@ public:
     return 5u * ((x + 1u) >> 1u);
   }
 };
+
+class datatypes_lv_extfuns {
+public:
+  bits<32> getinstr(const bits<32> idx, const unit /*unused*/) {
+    return instructions[idx % 8];
+  }
+};
 #endif

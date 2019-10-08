@@ -321,7 +321,8 @@ module Compilation = struct
   type compile_unit =
     { c_registers: reg_signature list;
       c_scheduler: string SGA.scheduler;
-      c_rules: (name_t * typechecked_rule) list }
+      c_rules: (name_t * typechecked_rule) list;
+      c_cpp_preamble: string option }
 
   type compiled_circuit =
     (string, reg_signature, string ffi_signature SGA.interop_fn_t) sga_circuit
