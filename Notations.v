@@ -2,6 +2,7 @@ Require Export
         SGA.Common
         SGA.Syntax
         SGA.SyntaxMacros
+        SGA.Desugaring
         SGA.TypeInference
         SGA.Semantics
         SGA.Circuits
@@ -157,3 +158,58 @@ Module Tests.
   (* Definition test_28 : list (uaction reg_t) := {* "yoyo" *}. *)
   (* Definition test_29 : list (uaction reg_t) := {* "yoyo", if "var" then UError else UError;UError *}. *)
 End Tests.
+
+Notation "'[[read0]]'" := (LE LogRead P0 tt) (only printing).
+Notation "'[[read1]]'" := (LE LogRead P1 tt) (only printing).
+Notation "'[[write0'  v ']]'" := (LE LogWrite P0 v) (only printing).
+Notation "'[[write1'  v ']]'" := (LE LogWrite P1 v) (only printing).
+
+Class DummyPos pos_t := { dummy_pos: pos_t }.
+Instance DummyPos_unit : DummyPos unit := {| dummy_pos := tt |}.
+
+Ltac __must_typecheck_extract_result x :=
+  lazymatch x with
+  | Success ?tm => tm
+  | Failure {| epos := _; emsg := ?err |} => fail "Type error:" err
+  end.
+
+Ltac __must_typecheck_cbn tcres :=
+  let tcres := (eval hnf in tcres) in
+  __must_typecheck_extract_result tcres.
+
+(* This version is much faster, but it unfolds everything *)
+Ltac __must_typecheck_vmc tcres :=
+  let tcres := (eval vm_compute in tcres) in
+  __must_typecheck_extract_result tcres.
+
+Ltac __must_typecheck tcres :=
+  __must_typecheck_vmc tcres.
+
+Ltac _tc_action R Sigma uSigma action :=
+  let desugared := constr:(desugar_action dummy_pos action) in
+  let maybe_typed := constr:(type_action R Sigma uSigma dummy_pos List.nil desugared) in
+  let typed := __must_typecheck maybe_typed in
+  let typed := (eval cbn in (projT2 typed)) in
+  exact typed.
+
+Notation tc_action R Sigma uSigma action :=
+  (ltac:(_tc_action R Sigma uSigma action)) (only parsing).
+
+Ltac _tc_rules R Sigma uSigma actions :=
+  lazymatch type of actions with
+  | (?rule_name_t -> _) =>
+    let res := constr:(fun r: rule_name_t =>
+                        ltac:(destruct r eqn:? ;
+                              lazymatch goal with
+                              | [ H: _ = ?rr |- _ ] =>
+                                _tc_action R Sigma uSigma (actions rr)
+                              end)) in
+    let res := (eval cbn in res) in
+    exact res
+  end.
+
+Notation tc_rules R Sigma uSigma actions :=
+  (ltac:(_tc_rules R Sigma uSigma actions)) (only parsing).
+
+Notation tc_scheduler uscheduler :=
+  (type_scheduler dummy_pos uscheduler) (only parsing).

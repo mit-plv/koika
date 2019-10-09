@@ -187,51 +187,6 @@ Section TypeInference.
   End Scheduler.
 End TypeInference.
 
-(* Coq bug: the name must_typecheck is not resolved at notation definition time *)
-
-Class DummyPos pos_t := { dummy_pos: pos_t }.
-Instance DummyPos_unit : DummyPos unit := {| dummy_pos := tt |}.
-
-Ltac __must_typecheck_cbn R Sigma tcres :=
-  let tcres := (eval hnf in tcres) in
-  let tcterm := (eval cbn in (must_typecheck R Sigma tcres)) in
-  exact tcterm.
-
-(* This version is much faster, but it unfolds everything *)
-Ltac __must_typecheck_cbv R Sigma tcres :=
-  let tcterm := (eval cbv in (must_typecheck R Sigma tcres)) in
-  exact tcterm.
-
-Ltac __must_typecheck R Sigma tcres :=
-  __must_typecheck_cbv R Sigma tcres.
-
-Notation _must_typecheck R Sigma tcres :=
-  ltac:(__must_typecheck R Sigma tcres) (only parsing).
-
-Notation tc_action R Sigma uSigma action :=
-  (ltac:(let typed := constr:(type_action R Sigma uSigma dummy_pos List.nil action) in
-         let typed := eval cbn in (projT2 (_must_typecheck R%function Sigma%function typed)) in
-         exact typed))
-    (only parsing).
-
-Notation tc_rules R Sigma uSigma actions :=
-  (ltac:(match type of actions with
-         | (?rule_name_t -> _) =>
-           let res := constr:(fun r: rule_name_t =>
-                               ltac:(destruct r eqn:? ;
-                                       lazymatch goal with
-                                       | [ H: _ = ?rr |- _ ] =>
-                                         exact (tc_action R Sigma uSigma (actions rr))
-                                       end)) in
-           let res := (eval cbn in res) in
-           exact res
-         end))
-    (only parsing).
-
-Notation tc_scheduler uscheduler :=
-  (type_scheduler dummy_pos uscheduler)
-    (only parsing).
-
 (*   Hint Resolve (@env_related_putenv _ _ _ GammaEnv): types. *)
 (*   Hint Resolve fenv_related_putenv: types. *)
 (*   Hint Constructors HasType : types. *)
