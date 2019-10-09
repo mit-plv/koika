@@ -1,4 +1,7 @@
-Require Import SGA.Common SGA.Environments SGA.Syntax SGA.TypedSyntax SGA.SyntaxMacros.
+Require Import
+        SGA.Common SGA.Environments
+        SGA.Syntax SGA.TypedSyntax SGA.SyntaxMacros
+        SGA.Desugaring SGA.ErrorReporting.
 Require Import Coq.Lists.List.
 Import ListNotations.
 
@@ -7,43 +10,28 @@ Section ErrorReporting.
   Context {R: reg_t -> type}
           {Sigma: fn_t -> ExternalSignature}.
 
-  Inductive error_message :=
-  | ExplicitErrorInAst
-  | UnboundVariable (var: var_t)
-  | UnboundField (f: string) (sig: struct_sig)
-  | UnboundEnumMember (f: string) (sig: enum_sig)
-  | IncorrectRuleType (tau: type)
-  | TooManyArguments (fn_name: fn_name_t) (nexpected: nat) (nextra: nat)
-  | TooFewArguments (fn_name: fn_name_t) (nexpected: nat) (nmissing: nat)
-  | TypeMismatch {sig tau} (e: action var_t R Sigma sig tau) (expected: type)
-  | KindMismatch {sig tau} (e: action var_t R Sigma sig tau) (expected: type_kind).
-
-  Record error :=
-    { epos: pos_t;
-      emsg: error_message }.
-
-  Definition lift_fn_tc_error' {sig tau} pos (e: action var_t R Sigma sig tau) (err: fn_tc_error') :=
+  Definition lift_basic_error_message
+             (pos: pos_t) {sig tau} (e: action var_t R Sigma sig tau)
+             (err: basic_error_message) : error pos_t var_t fn_name_t :=
     {| epos := pos;
-       emsg := match err with
-              | FnKindMismatch expected => KindMismatch e expected
-              | FnUnboundField f sig => UnboundField f sig
-              end |}.
+       emsg := BasicError match err with
+                          | TypeMismatch _ actual expected => TypeMismatch e actual expected
+                          | KindMismatch _ actual expected => KindMismatch e actual expected
+                          | _ => err
+                          end |}.
 
   Definition lift_fn_tc_result
              {A sig1 tau1 sig2 tau2}
              pos1 (e1: action var_t R Sigma sig1 tau1)
              pos2 (e2: action var_t R Sigma sig2 tau2)
              (r: result A fn_tc_error)
-    : (result A error) :=
+    : (result A (error pos_t var_t fn_name_t)) :=
     result_map_failure (fun '(side, err) =>
                           match side with
-                          | Arg1 => lift_fn_tc_error' pos1 e1 err
-                          | Arg2 => lift_fn_tc_error' pos2 e2 err
+                          | Arg1 => lift_basic_error_message pos1 e1 err
+                          | Arg2 => lift_basic_error_message pos2 e2 err
                           end) r.
 End ErrorReporting.
-
-Arguments error_message fn_name_t var_t {reg_t fn_t} R Sigma : assert.
-Arguments error pos_t fn_name_t var_t {reg_t fn_t} R Sigma : assert.
 
 Section TypeInference.
   Context {pos_t rule_name_t fn_name_t var_t reg_t ufn_t fn_t: Type}.
@@ -53,32 +41,26 @@ Section TypeInference.
   Context (Sigma: fn_t -> ExternalSignature).
   Context (uSigma: forall (fn: ufn_t) (tau1 tau2: type), result fn_t fn_tc_error).
 
+  Notation usugar := (usugar pos_t fn_name_t var_t).
   Notation uaction := (uaction pos_t fn_name_t var_t).
   Notation uscheduler := (uscheduler pos_t rule_name_t).
-
-  Open Scope bool_scope.
 
   Notation action := (action var_t R Sigma).
   Notation rule := (rule var_t R Sigma).
   Notation scheduler := (scheduler rule_name_t).
   Notation schedule := (schedule rule_name_t var_t R Sigma).
-  Notation error := (error pos_t fn_name_t var_t R Sigma).
-  Notation error_message := (error_message fn_name_t var_t R Sigma).
-  Notation result A := (result A error).
-
-  Notation "` x" := (projT1 x) (at level 0).
-  Notation "`` x" := (projT2 x) (at level 0).
-
-  Definition must_typecheck {A} (r: result A) :=
-    match r return (match r with
-                    | Success tm => A
-                    | Failure err => error
-                    end) with
-    | Success tm => tm
-    | Failure err => err
-    end.
 
   Section Action.
+    Notation error := (error pos_t var_t fn_name_t).
+    Notation error_message := (error_message var_t fn_name_t).
+    Notation result A := (result A error).
+
+    Definition mkerror pos msg : error :=
+      {| epos := pos; emsg := msg |}.
+
+    Notation "` x" := (projT1 x) (at level 0).
+    Notation "`` x" := (projT2 x) (at level 0).
+
     Definition cast_action' (pos: pos_t)
                {sig tau1} tau2 (e: action sig tau1) (emsg: error_message)
     : result (action sig tau2).
@@ -89,7 +71,7 @@ Section TypeInference.
     Defined.
 
     Definition cast_action pos {sig tau1} tau2 (e: action sig tau1) :=
-      cast_action' pos tau2 e (TypeMismatch e tau2).
+      cast_action' pos tau2 e (BasicError (TypeMismatch e tau1 tau2)).
 
     Definition cast_rule (pos: pos_t) {tau} (e: action [] tau) :=
       cast_action' pos (bits_t 0) e (IncorrectRuleType tau).
@@ -102,10 +84,7 @@ Section TypeInference.
       | _ => pos
       end.
 
-    Definition mkerror pos msg : error :=
-      {| epos := pos; emsg := msg |}.
-
-    Fixpoint assert_argtypes' {sig} nexpected fn_name pos
+    Fixpoint assert_argtypes' {sig} nexpected (fn_name: fn_name_t) pos
              (args_desc: tsig var_t)
              (args: list (pos_t * {tau : type & action sig tau}))
       : result (context (K := (var_t * type)) (fun '(_, tau) => action sig tau) args_desc) :=
@@ -119,81 +98,69 @@ Section TypeInference.
         Success (CtxCons (name1, tau1) arg1 ctx)
       end.
 
-    Definition assert_argtypes {sig} fn_name pos
+    Definition assert_argtypes {sig} (fn_name: fn_name_t) pos
              (args_desc: tsig var_t)
              (args: list (pos_t * {tau : type & action sig tau}))
       : result (context (K := (var_t * type)) (fun '(_, tau) => action sig tau) args_desc) :=
       assert_argtypes' (List.length args_desc) fn_name pos args_desc args.
 
-    Fixpoint type_action' {reg_t' ufn_t'}
+    Fixpoint type_action
              (pos: pos_t) (sig: tsig var_t)
-             (fR: reg_t' -> reg_t) (fSigma: ufn_t' -> ufn_t)
-             (e: uaction reg_t' ufn_t') {struct e}
+             (e: uaction reg_t ufn_t) {struct e}
       : result ({ tau: type & action sig tau }) :=
       match e with
-      | UError => Failure (mkerror pos ExplicitErrorInAst)
+      | UError err => Failure err
+      | USugar _ => Failure (mkerror pos SugaredConstructorInAst)
       | UFail n => Success (EX (Fail (bits_t n)))
       | UVar var =>
         let/res tau_m := opt_result (assoc var sig) (mkerror pos (UnboundVariable var)) in
         Success (EX (Var ``tau_m))
       | UConst cst => Success (EX (Const cst))
-      | UConstString s => Success (EX (Const (tau := bits_t _) (bits_of_bytes s)))
-      | UConstEnum sig name =>
-        let/res idx := opt_result (vect_index name sig.(enum_members)) (mkerror pos (UnboundEnumMember name sig)) in
-        Success (EX (Const (tau := enum_t sig) (vect_nth sig.(enum_bitpatterns) idx)))
       | UAssign var ex =>
         let/res tau_m := opt_result (assoc var sig) (mkerror pos (UnboundVariable var)) in
-        let/res ex' := type_action' pos sig fR fSigma ex in
+        let/res ex' := type_action pos sig ex in
         let/res ex' := cast_action (actpos pos ex) `tau_m (``ex') in
         Success (EX (Assign (k := var) (tau := `tau_m) ``tau_m ex'))
       | USeq r1 r2 =>
-        let/res r1' := type_action' pos sig fR fSigma r1 in
+        let/res r1' := type_action pos sig r1 in
         let/res r1' := cast_action (actpos pos r1) unit_t (``r1') in
-        let/res r2' := type_action' pos sig fR fSigma r2 in
+        let/res r2' := type_action pos sig r2 in
         Success (EX (Seq r1' ``r2'))
       | UBind v ex body =>
-        let/res ex := type_action' pos sig fR fSigma ex in
-        let/res body := type_action' pos ((v, `ex) :: sig) fR fSigma body in
+        let/res ex := type_action pos sig ex in
+        let/res body := type_action pos ((v, `ex) :: sig) body in
         Success (EX (Bind v ``ex ``body))
       | UIf cond tbranch fbranch =>
-        let/res cond' := type_action' pos sig fR fSigma cond in
+        let/res cond' := type_action pos sig cond in
         let/res cond' := cast_action (actpos pos cond) (bits_t 1) (``cond') in
-        let/res tbranch' := type_action' pos sig fR fSigma tbranch in
-        let/res fbranch' := type_action' pos sig fR fSigma fbranch in
+        let/res tbranch' := type_action pos sig tbranch in
+        let/res fbranch' := type_action pos sig fbranch in
         let/res fbranch' := cast_action (actpos pos fbranch) (`tbranch') (``fbranch') in
         Success (EX (If cond' ``tbranch' fbranch'))
-      | URead port idx => Success (EX (Read port (fR idx)))
+      | URead port idx => Success (EX (Read port idx))
       | UWrite port idx value =>
-        let/res value' := type_action' pos sig fR fSigma value in
-        let/res value' := cast_action (actpos pos value) (R (fR idx)) (``value') in
-        Success (EX (Write port (fR idx) value'))
+        let/res value' := type_action pos sig value in
+        let/res value' := cast_action (actpos pos value) (R idx) (``value') in
+        Success (EX (Write port idx value'))
       | UInternalCall fn_sig fn_body args =>
-        let/res tc_args := result_list_map (type_action' pos sig fR fSigma) args in
+        let/res tc_args := result_list_map (type_action pos sig) args in
         let arg_positions := List.map (actpos pos) args in
         let tc_args_w_pos := List.combine arg_positions tc_args in
         let/res arg_ctx := assert_argtypes fn_sig.(int_name) pos fn_sig.(int_args) tc_args_w_pos in
-        let/res fn_body' := type_action' (actpos pos fn_body) fn_sig.(int_args) fR fSigma fn_body in
+        let/res fn_body' := type_action (actpos pos fn_body) fn_sig.(int_args) fn_body in
         let/res fn_body' := cast_action (actpos pos fn_body) fn_sig.(int_retType) (``fn_body') in
         Success (EX (InternalCall sig fn_sig.(int_args) fn_body' arg_ctx))
-      | UCallModule fR' fSigma' body =>
-        type_action' pos sig (fun r => fR (fR' r)) (fun fn => fSigma (fSigma' fn)) body
       | UCall ufn arg1 arg2 =>
-        let/res arg1' := type_action' pos sig fR fSigma arg1 in
-        let/res arg2' := type_action' pos sig fR fSigma arg2 in
+        let/res arg1' := type_action pos sig arg1 in
+        let/res arg2' := type_action pos sig arg2 in
         let pos1 := actpos pos arg1 in
         let pos2 := actpos pos arg2 in
-        let/res fn := lift_fn_tc_result pos1 ``arg1' pos2 ``arg2' (uSigma (fSigma ufn) `arg1' `arg2') in
+        let/res fn := lift_fn_tc_result pos1 ``arg1' pos2 ``arg2' (uSigma ufn `arg1' `arg2') in
         let/res arg1' := cast_action pos1 (Sigma fn).(arg1Type) (``arg1') in
         let/res arg2' := cast_action pos2 (Sigma fn).(arg2Type) (``arg2') in
         Success (EX (Call fn arg1' arg2'))
-      | UAPos pos e => type_action' pos sig fR fSigma e
+      | UAPos pos e => type_action pos sig e
       end.
-
-    Definition type_action
-               (pos: pos_t) (sig: tsig var_t)
-               (e: uaction reg_t ufn_t)
-      : result ({ tau: type & action sig tau }) :=
-      type_action' pos sig (fun r => r) (fun fn => fn) e.
 
     Definition type_rule (pos: pos_t) (e: uaction reg_t ufn_t) : result rule :=
       let/res rl := type_action pos [] e in

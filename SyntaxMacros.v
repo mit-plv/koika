@@ -3,7 +3,9 @@ Require Import SGA.Syntax SGA.TypedSyntax SGA.Primitives SGA.Interop.
 Import ListNotations.
 
 Section SyntaxMacros.
-  Context {pos_t method_name_t var_t reg_t: Type}.
+  Context {pos_t fn_name_t var_t reg_t ufn_t: Type}.
+
+  Notation uaction := (uaction pos_t fn_name_t var_t reg_t ufn_t).
 
   Definition bits_of_ascii c : bits 8 :=
     match c with
@@ -18,79 +20,38 @@ Section SyntaxMacros.
       Bits.app (bits_of_bytes s) (bits_of_ascii c) (* FIXME: reversed *)
     end.
 
-  Section ConstBits.
-    Context {fn_t: Type}.
-    Notation uaction := (uaction pos_t method_name_t var_t reg_t fn_t).
+  Fixpoint gen_switch {tau}
+           (var: var_t)
+           {nb} (branches: vect (type_denote tau * uaction) (S nb)) : uaction :=
+    let '(label, branch) := vect_hd branches in
+    match nb return vect _ (S nb) -> uaction with
+    | 0 => fun _ => branch
+    | S nb => fun branches => if_eq (UVar var) (UConst label)
+                                branch (gen_switch var (vect_tl branches))
+    end branches.
 
-    Definition UConstBits {sz} (bs: bits sz) : uaction :=
-      UConst (tau := bits_t sz) bs.
-
-    Definition USkip : uaction :=
-      UConstBits Ob.
-  End ConstBits.
-
-  Section Interop.
-    Context {custom_fn_t: Type}.
-    Notation uaction := (uaction pos_t method_name_t var_t reg_t (interop_ufn_t custom_fn_t)).
-
-    Definition if_eq a1 a2 (tbranch fbranch: uaction) :=
-      UIf (UCall (UPrimFn (UConvFn UEq)) a1 a2)
-          tbranch
-          fbranch.
-
-    Fixpoint USwitch
-             (var: uaction)
-             (default: uaction)
-             (branches: list (uaction * uaction))
-      : uaction :=
-      match branches with
-      | nil => default
-      | (val, action) :: branches =>
-        if_eq var val
-              action (USwitch var default branches)
-      end.
-
-    Fixpoint gen_switch {tau}
+  Definition UCompleteSwitch
+             sz bound
              (var: var_t)
-             {nb} (branches: vect (type_denote tau * uaction) (S nb)) : uaction :=
-      let '(label, branch) := vect_hd branches in
-      match nb return vect _ (S nb) -> uaction with
-      | 0 => fun _ => branch
-      | S nb => fun branches => if_eq (UVar var) (UConst label)
-                                  branch (gen_switch var (vect_tl branches))
-      end branches.
-
-    Definition UCompleteSwitch
-               sz bound
-               (var: var_t)
-               (branches: vect uaction (S bound)) :=
-      gen_switch (tau := bits_t sz) var
-                 (vect_map2 (fun n a => (Bits.of_nat sz (index_to_nat n), a))
-                            (all_indices (S bound)) branches).
-
-    Definition UStructInit
-               (sig: struct_sig)
-               (fields: list (string * uaction)) :=
-      let uinit := UPrimFn (UConvFn (UInit (struct_t sig))) in
-      let usubst f := UPrimFn (UStructFn (UDo SubstField f)) in
-      List.fold_left (fun acc '(f, a) => UCall (usubst f) acc a)
-                     fields (UCall uinit (UConstBits Ob) (UConstBits Ob)).
-  End Interop.
+             (branches: vect uaction (S bound)) :=
+    gen_switch (tau := bits_t sz) var
+               (vect_map2 (fun n a => (Bits.of_nat sz (index_to_nat n), a))
+                          (all_indices (S bound)) branches).
 
   Record UInternalFunction {ufn_t} :=
-    { int_sig: InternalSignature method_name_t var_t;
-      int_body: Syntax.uaction pos_t method_name_t var_t reg_t ufn_t }.
+    { int_sig: InternalSignature fn_name_t var_t;
+      int_body: Syntax.uaction pos_t fn_name_t var_t reg_t ufn_t }.
 End SyntaxMacros.
 
-Arguments UInternalFunction pos_t {method_name_t} var_t reg_t ufn_t : assert.
-Arguments Build_UInternalFunction {pos_t method_name_t var_t reg_t ufn_t} int_sig int_body : assert.
+Arguments UInternalFunction pos_t {fn_name_t} var_t reg_t ufn_t : assert.
+Arguments Build_UInternalFunction {pos_t fn_name_t var_t reg_t ufn_t} int_sig int_body : assert.
 
 Module Display.
   Section Display.
-    Context {pos_t method_name_t reg_t: Type}.
+    Context {pos_t fn_name_t reg_t: Type}.
 
-    Context {custom_fn_t: Type}.
-    Notation uaction := (uaction pos_t method_name_t string reg_t (interop_ufn_t custom_fn_t)).
+    Context {ufn_t: Type}.
+    Notation uaction := (uaction pos_t fn_name_t string reg_t ufn_t).
 
     Inductive field : Type :=
     | Str (s: string)
@@ -98,7 +59,7 @@ Module Display.
 
     Open Scope string_scope.
 
-    Notation intfun := (UInternalFunction pos_t string reg_t (interop_ufn_t custom_fn_t)).
+    Notation intfun := (UInternalFunction pos_t string reg_t (interop_ufn_t ufn_t)).
 
     Definition empty_printer : intfun :=
       {| int_sig := {| int_name := ""; int_args := []; int_retType := unit_t |};

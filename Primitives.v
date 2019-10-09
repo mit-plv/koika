@@ -1,4 +1,4 @@
-Require Export SGA.Common SGA.Environments SGA.IndexUtils SGA.Types.
+Require Export SGA.Common SGA.Environments SGA.IndexUtils SGA.Types SGA.ErrorReporting.
 
 Inductive prim_display_ufn :=
 | UDisplayUtf8
@@ -130,7 +130,7 @@ Definition prim_uSigma (fn: prim_ufn_t) (tau1 tau2: type): result prim_fn_t fn_t
                     end)
   | UStructFn fn =>
     let find_field sig f :=
-        opt_result (List_assoc f sig.(struct_fields)) (Arg1, FnUnboundField f sig) in
+        opt_result (List_assoc f sig.(struct_fields)) (Arg1, UnboundField f sig) in
     match fn with
       | UDo op f =>
         let/res sig := assert_struct_t Arg1 tau1 in

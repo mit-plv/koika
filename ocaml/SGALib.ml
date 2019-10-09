@@ -255,15 +255,15 @@ module Compilation = struct
     SGA.UAPos
       (lpos,
        match lcnt with
+       | Error -> SGA.UError
        | Skip -> SGA.uSkip
-       | Invalid -> SGA.UError
        | Fail tau -> SGA.UFail (Util.sga_type_of_typ tau)
        | Lit (Var v) -> SGA.UVar v
        | Lit (Const v) -> let tau, v = Util.sga_value_of_value v in SGA.UConst (tau, v)
-       | Assign (v, expr) -> SGA.UAssign (v.lcnt, translate_action expr)
        | StructInit (sg, fields) ->
           SGA.uStructInit (Util.sga_struct_sig_of_struct_sig sg)
             (List.map (fun (nm, v) -> Util.coq_string_of_string nm.lcnt, translate_action v) fields)
+       | Assign (v, expr) -> SGA.UAssign (v.lcnt, translate_action expr)
        | Progn rs -> translate_seq rs
        | Let (bs, body) -> translate_bindings bs body
        | If (e, r, rs) -> SGA.UIf (translate_action e, translate_action r, translate_seq rs)

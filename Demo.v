@@ -48,18 +48,18 @@ Module Ex1.
     | Odd => fun (bs: bits 3) _ => Ob~(Bits.lsb bs)
     end.
 
-  Example uactions r : uaction var_t reg_t fn_t :=
+  Example uactions r : uaction var_t reg_t (interop_ufn_t fn_t) :=
     match r with
     | r1 =>
       {$ let "x" := read0(R0) in
-         if (`UCall Even (UVar "x") (UConstBits Ob)`)
+         if (`UCall (UCustomFn Even) (UVar "x") (UConstBits Ob)`)
          then write0(R1,`UConstBits Ob~1`)
          else write0(R1,`UConstBits Ob~1`)
                        $}
     end.
 
   Definition rules :=
-    tc_rules R Sigma uSigma uactions.
+    tc_rules R (interop_Sigma Sigma) (interop_uSigma uSigma) uactions.
 
   Example us1 : uscheduler unit name_t :=
     UTry r1 UDone UDone.
@@ -68,10 +68,10 @@ Module Ex1.
     tc_scheduler us1.
 
   Definition s1_result :=
-    Eval compute in interp_scheduler (ContextEnv.(create) r) sigma rules s1.
+    Eval compute in interp_scheduler (ContextEnv.(create) r) (interop_sigma sigma) rules s1.
 
   Definition s1_circuit :=
-    compile_scheduler opt (ContextEnv.(create) (readRegisters R Sigma)) rules s1.
+    compile_scheduler opt (ContextEnv.(create) (readRegisters R (interop_Sigma Sigma))) rules s1.
 End Ex1.
 
 Module Ex2.
@@ -115,7 +115,7 @@ Module Ex2.
         write0(R1,read0(R0));
         write0(R0,read0(R1))
       else
-        write0(R0,`UCall UOr {$ read0(R0) $} {$  read0(R1) $} `)
+        write0(R0,`UCall (UCustomFn UOr) {$ read0(R0) $} {$  read0(R1) $} `)
                  $}.
 
 
@@ -147,17 +147,17 @@ Module Ex2.
     | Not n => fun bs _ => Bits.map negb bs
     end.
 
-  Definition rules : name_t -> rule var_t R Sigma :=
-    tc_rules R Sigma uSigma
+  Definition rules : name_t -> rule var_t R (interop_Sigma Sigma) :=
+    tc_rules R (interop_Sigma Sigma) (interop_uSigma uSigma)
              (fun r => match r with
                     | negate => _negate
                     | swap_or_replace => _swap_or_replace
                     end).
 
   Definition tsched_result :=
-    Eval compute in interp_scheduler (ContextEnv.(create) r) sigma rules tsched.
+    Eval compute in interp_scheduler (ContextEnv.(create) r) (interop_sigma sigma) rules tsched.
   Definition tsched_circuit :=
-    compile_scheduler opt (ContextEnv.(create) (readRegisters R Sigma)) rules tsched.
+    compile_scheduler opt (ContextEnv.(create) (readRegisters R (interop_Sigma Sigma))) rules tsched.
 End Ex2.
 
 Notation compute t :=
@@ -422,21 +422,22 @@ Module ManualFetcher <: Fetcher.
   Notation uaction reg_t := (uaction string reg_t (interop_ufn_t custom_fn_t)).
 
   Definition instructions {reg_t} : list (uaction reg_t) :=
-    List.map UConstBits
-      [Ob~1~1~0~1~1~0~0~0~0~0~1~0~1~1~0~0~0~0~0~0~0~1~1~1~1~1~0~0~1~1~0~1;
-       Ob~0~1~1~0~1~0~1~1~1~0~1~0~1~0~1~0~1~0~0~1~0~1~0~0~0~1~0~1~0~1~0~1;
-       Ob~1~0~0~0~0~0~1~0~1~1~1~0~0~0~1~0~1~1~1~0~0~1~1~0~0~1~1~0~0~0~1~0;
-       Ob~0~1~1~1~1~0~1~0~0~0~0~0~0~0~1~0~0~1~0~0~0~0~1~0~0~0~0~0~0~1~0~0;
-       Ob~1~1~1~0~1~0~0~0~0~1~1~1~1~0~1~0~0~0~0~1~0~1~1~0~0~0~0~1~0~0~1~1;
-       Ob~1~0~0~0~0~0~0~1~0~0~1~1~0~0~1~1~0~0~1~0~1~0~0~0~0~1~1~1~0~1~1~0;
-       Ob~0~1~0~0~1~0~0~0~0~0~1~0~0~1~1~0~1~0~0~0~0~1~1~0~0~1~1~1~0~0~1~1;
-       Ob~1~1~0~0~0~0~0~1~0~1~1~1~1~1~0~0~0~1~1~0~0~0~1~0~0~1~1~1~1~0~0~1].
+    List.map USugar
+      (List.map UConstBits
+        [Ob~1~1~0~1~1~0~0~0~0~0~1~0~1~1~0~0~0~0~0~0~0~1~1~1~1~1~0~0~1~1~0~1;
+         Ob~0~1~1~0~1~0~1~1~1~0~1~0~1~0~1~0~1~0~0~1~0~1~0~0~0~1~0~1~0~1~0~1;
+         Ob~1~0~0~0~0~0~1~0~1~1~1~0~0~0~1~0~1~1~1~0~0~1~1~0~0~1~1~0~0~0~1~0;
+         Ob~0~1~1~1~1~0~1~0~0~0~0~0~0~0~1~0~0~1~0~0~0~0~1~0~0~0~0~0~0~1~0~0;
+         Ob~1~1~1~0~1~0~0~0~0~1~1~1~1~0~1~0~0~0~0~1~0~1~1~0~0~0~0~1~0~0~1~1;
+         Ob~1~0~0~0~0~0~0~1~0~0~1~1~0~0~1~1~0~0~1~0~1~0~0~0~0~1~1~1~0~1~1~0;
+         Ob~0~1~0~0~1~0~0~0~0~0~1~0~0~1~1~0~1~0~0~0~0~1~1~0~0~1~1~1~0~0~1~1;
+         Ob~1~1~0~0~0~0~0~1~0~1~1~1~1~1~0~0~0~1~1~0~0~0~1~0~0~1~1~1~1~0~0~1]).
 
   Fixpoint all_branches {reg_t} sz (counter: N) actions : list (uaction reg_t * uaction reg_t) :=
     match actions with
     | nil => nil
     | action :: actions =>
-      (UConstBits (Bits.of_N sz counter), action)
+      (USugar (UConstBits (Bits.of_N sz counter)), action)
         :: (all_branches sz (N.add counter N.one) actions)
     end.
 

@@ -153,12 +153,12 @@ type ('name_t, 'var_t) internal_signature = {
   }
 
 type ('f, 'lit_t, 'reg_t, 'fn_t) action =
+  | Error
   | Skip
-  | Invalid
   | Fail of typ
   | Lit of 'lit_t
-  | Assign of (('f, var_t) locd * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd)
   | StructInit of (struct_sig * (('f, string) locd * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd) list)
+  | Assign of (('f, var_t) locd * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd)
   | Progn of ('f, 'lit_t, 'reg_t, 'fn_t) action_locd list
   | Let of (('f, var_t) locd * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd) list
            * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd list

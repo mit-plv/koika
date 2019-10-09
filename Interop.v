@@ -1,20 +1,21 @@
 Require Import Coq.Strings.String Coq.Lists.List.
-Require Import SGA.Environments SGA.Types SGA.Circuits SGA.Primitives.
+Require Import SGA.Environments SGA.Types SGA.TypedSyntax SGA.Circuits.
+Require Export SGA.Primitives.
 Import ListNotations.
 
 Section Interop.
-  Context {custom_ufn_t custom_fn_t: Type}.
+  Context {var_t ufn_t fn_t: Type}.
 
   Inductive interop_ufn_t :=
   | UPrimFn (fn: prim_ufn_t)
-  | UCustomFn (fn: custom_ufn_t).
+  | UCustomFn (fn: ufn_t).
 
   Inductive interop_fn_t :=
   | PrimFn (fn: prim_fn_t)
-  | CustomFn (fn: custom_fn_t).
+  | CustomFn (fn: fn_t).
 
   Definition interop_Sigma
-             (Sigma: custom_fn_t -> ExternalSignature)
+             (Sigma: fn_t -> ExternalSignature)
     : interop_fn_t -> ExternalSignature  :=
     fun fn => match fn with
            | PrimFn fn => prim_Sigma fn
@@ -22,7 +23,7 @@ Section Interop.
            end.
 
   Definition interop_uSigma
-             (uSigma: custom_ufn_t -> type -> type -> result custom_fn_t fn_tc_error)
+             (uSigma: ufn_t -> type -> type -> result fn_t fn_tc_error)
              (fn: interop_ufn_t)
              (tau1 tau2: type)
     : result interop_fn_t fn_tc_error :=
@@ -34,8 +35,8 @@ Section Interop.
     end.
 
   Definition interop_sigma
-             {Sigma: custom_fn_t -> ExternalSignature}
-             (sigma: forall fn: custom_fn_t, Sigma fn)
+             {Sigma: fn_t -> ExternalSignature}
+             (sigma: forall fn: fn_t, Sigma fn)
     : forall fn: interop_fn_t, interop_Sigma Sigma fn :=
     fun fn => match fn with
            | PrimFn fn => prim_sigma fn

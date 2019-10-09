@@ -3,6 +3,8 @@ Require Export SGA.Common SGA.Vect SGA.IndexUtils.
 Require Import Coq.Lists.List.
 Import ListNotations.
 
+(** * Definitions **)
+
 Record struct_sig' {A} :=
   { struct_name: string;
     struct_fields: list (string * A) }.
@@ -23,42 +25,17 @@ Inductive type : Type :=
 Notation unit_t := (bits_t 0).
 Notation struct_sig := (struct_sig' type).
 
-Ltac existT_dec :=
-  repeat match goal with
-         | [ H: existT _ _ ?x = existT _ _ ?y |- _ ] =>
-           apply Eqdep_dec.inj_pair2_eq_dec in H; [ | apply eq_dec ]
-         end.
+Inductive type_kind :=
+| kind_bits
+| kind_enum (sig: option enum_sig)
+| kind_struct (sig: option struct_sig).
 
-Ltac simple_eq :=
-  first [ left; solve[eauto] | right; inversion 1; existT_dec; subst; solve[congruence] ].
-
-Instance EqDec_type : EqDec type.
-Proof.
-  econstructor.
-  fix IHtau 1;
-    destruct t1 as [ sz1 | en1 | fs1 ];
-    destruct t2 as [ sz2 | en2 | fs2 ]; cbn;
-      try simple_eq.
-  - destruct (eq_dec sz1 sz2); subst;
-      simple_eq.
-  - destruct en1 as [en1 es1 ebsz1 em1 ebp1];
-      destruct en2 as [en2 es2 ebsz2 em2 ebp2].
-    destruct (eq_dec en1 en2); subst; try simple_eq.
-    destruct (eq_dec es1 es2); subst; try simple_eq.
-    destruct (eq_dec ebsz1 ebsz2); subst; try simple_eq.
-    destruct (eq_dec em1 em2); subst; try simple_eq.
-    destruct (eq_dec ebp1 ebp2); subst; try simple_eq.
-  - destruct fs1 as [ nm1 f1 ];
-      destruct fs2 as [ nm2 f2 ]; cbn.
-    destruct (eq_dec nm1 nm2); subst; try simple_eq.
-    destruct (eq_dec (EqDec := _) f1 f2); subst; try simple_eq.
-    (* revert f1 f2; fix IHf 1; *)
-    (*   destruct f1 as [ | (n1 & tau1) f1 ], f2 as [ | (n2 & tau2) f2 ]; try simple_eq. *)
-    (* destruct (eq_dec n1 n2); subst; try simple_eq. *)
-    (* destruct (IHtau tau1 tau2); subst; try simple_eq. *)
-    (* destruct (IHf f1 f2) as [ Heq | Hneq ]; subst; try inversion Heq; *)
-    (*   try simple_eq. *)
-Defined.
+Definition kind_of_type (tau: type) :=
+  match tau with
+  | bits_t sz => kind_bits
+  | enum_t sig => kind_enum (Some sig)
+  | struct_t sig => kind_struct (Some sig)
+  end.
 
 Definition struct_fields_sz' (type_sz: type -> nat) (fields: list (string * type)) :=
   list_sum (List.map (fun nm_tau => type_sz (snd nm_tau)) fields).
@@ -98,7 +75,10 @@ Notation struct_bits_t sig :=
 Notation field_bits_t sig idx :=
   (bits_t (field_sz sig idx)).
 
-Coercion type_sz : type >-> nat.
+Inductive Port :=
+  P0 | P1.
+
+(** * Denotations *)
 
 Definition struct_denote' (type_denote: type -> Type) (fields: list (string * type)) :=
   List.fold_right (fun '(_, tau) acc => type_denote tau * acc)%type unit fields.
@@ -112,22 +92,7 @@ Fixpoint type_denote tau : Type :=
 
 Notation struct_denote := (struct_denote' type_denote).
 
-Coercion type_denote : type >-> Sortclass.
-
-Instance EqDec_type_denote {tau: type} : EqDec (type_denote tau).
-Proof.
-  econstructor.
-  revert tau; fix eq_dec_td 1;
-    destruct tau as [ ? | ? | [? fields] ]; cbn.
-  - apply eq_dec.
-  - apply eq_dec.
-  - revert fields; fix eq_dec_struct 1.
-    destruct fields as [ | (nm, tau) fields ]; cbn.
-    + apply eq_dec.
-    + destruct t1 as [t1 tt1], t2 as [t2 tt2].
-      destruct (eq_dec_td _ t1 t2); subst; try simple_eq.
-      destruct (eq_dec_struct _ tt1 tt2); subst; try simple_eq.
-Defined.
+(** * Bit representations **)
 
 Fixpoint bits_of_value {tau: type} (x: type_denote tau) {struct tau} : bits (type_sz tau) :=
   let bits_of_struct_value :=
@@ -201,6 +166,13 @@ Proof.
       reflexivity.
 Qed.
 
+(** * Coercions **)
+
+Coercion type_sz : type >-> nat.
+Coercion type_denote : type >-> Sortclass.
+
+(** * Functions and function signatures **)
+
 Record ExternalSignature :=
   FunSig { arg1Type: type; arg2Type: type; retType: type }.
 
@@ -235,27 +207,50 @@ Definition prod_of_argsig {var_t} (a: @arg_sig var_t) :=
 
 (* Check {{{ "A" | "x" :: unit_t ~> bits_t 5 }}}. *)
 
-Inductive type_kind :=
-  kind_bits | kind_enum (sig: option enum_sig) | kind_struct (sig: option struct_sig).
+(** * Equalities **)
 
-Inductive fn_tc_error' :=
-| FnKindMismatch (expected: type_kind)
-| FnUnboundField (f: string) (sig: struct_sig).
+Ltac existT_dec :=
+  repeat match goal with
+         | [ H: existT _ _ ?x = existT _ _ ?y |- _ ] =>
+           apply Eqdep_dec.inj_pair2_eq_dec in H; [ | apply eq_dec ]
+         end.
 
-(* FIXME add ability to report error on meta arguments *)
-(* FIXME and use this to fix the location of unbound field errors *)
-Inductive fn_tc_error_loc := Arg1 | Arg2.
+Ltac simple_eq :=
+  first [ left; solve[eauto] | right; inversion 1; existT_dec; subst; solve[congruence] ].
 
-Definition fn_tc_error : Type := fn_tc_error_loc * fn_tc_error'.
+Instance EqDec_type : EqDec type.
+Proof.
+  econstructor.
+  fix IHtau 1;
+    destruct t1 as [ sz1 | en1 | fs1 ];
+    destruct t2 as [ sz2 | en2 | fs2 ]; cbn;
+      try simple_eq.
+  - destruct (eq_dec sz1 sz2); subst;
+      simple_eq.
+  - destruct en1 as [en1 es1 ebsz1 em1 ebp1];
+      destruct en2 as [en2 es2 ebsz2 em2 ebp2].
+    destruct (eq_dec en1 en2); subst; try simple_eq.
+    destruct (eq_dec es1 es2); subst; try simple_eq.
+    destruct (eq_dec ebsz1 ebsz2); subst; try simple_eq.
+    destruct (eq_dec em1 em2); subst; try simple_eq.
+    destruct (eq_dec ebp1 ebp2); subst; try simple_eq.
+  - destruct fs1 as [ nm1 f1 ];
+      destruct fs2 as [ nm2 f2 ]; cbn.
+    destruct (eq_dec nm1 nm2); subst; try simple_eq.
+    destruct (eq_dec (EqDec := _) f1 f2); subst; try simple_eq.
+Defined.
 
-Definition assert_bits_t arg (tau: type) : result nat fn_tc_error :=
-  match tau with
-  | bits_t sz => Success sz
-  | enum_t _ | struct_t _ => Failure (arg, FnKindMismatch kind_bits)
-  end.
-
-Definition assert_struct_t arg (tau: type) : result struct_sig fn_tc_error :=
-  match tau with
-  | struct_t sg => Success sg
-  | bits_t _ | enum_t _ => Failure (arg, FnKindMismatch (kind_struct None))
-  end.
+Instance EqDec_type_denote {tau: type} : EqDec (type_denote tau).
+Proof.
+  econstructor.
+  revert tau; fix eq_dec_td 1;
+    destruct tau as [ ? | ? | [? fields] ]; cbn.
+  - apply eq_dec.
+  - apply eq_dec.
+  - revert fields; fix eq_dec_struct 1.
+    destruct fields as [ | (nm, tau) fields ]; cbn.
+    + apply eq_dec.
+    + destruct t1 as [t1 tt1], t2 as [t2 tt2].
+      destruct (eq_dec_td _ t1 t2); subst; try simple_eq.
+      destruct (eq_dec_struct _ tt1 tt2); subst; try simple_eq.
+Defined.
