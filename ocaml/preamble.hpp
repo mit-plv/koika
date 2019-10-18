@@ -145,7 +145,7 @@ namespace prims {
   }
 
   template<std::size_t sz>
-  bits<sz> eq(const bits<sz> x, const bits<sz> y) {
+  bits<1> eq(const bits<sz> x, const bits<sz> y) {
     return x == y;
   }
 
