@@ -197,6 +197,7 @@ and pp_prim_bits_ufn ppf (f: SGALib.SGA.prim_bits_ufn) =
   | ULsr -> pp_raw "ULsr"
   | UConcat -> pp_raw "UConcat"
   | UUIntPlus -> pp_raw "UUIntPlus"
+  | UUIntLt -> pp_raw "UUIntLt"
   | UZExtL width -> pp_app "UZExtL" "%d" width
   | UZExtR width -> pp_app "UZExtR" "%d" width
 and pp_prim_struct_accessor ppf (op: SGALib.SGA.prim_struct_accessor) = match op with

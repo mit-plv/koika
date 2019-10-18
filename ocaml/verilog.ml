@@ -169,6 +169,7 @@ let assignment_to_string (gensym: int ref) (assignment: assignment) =
        | PrimFn (BitsFn typePrim) ->
           (match typePrim with
            | SGA.UIntPlus _ -> default_left ^ arg1 ^ " + " ^ arg2
+           | SGA.UIntLt _ -> default_left ^ arg1 ^ " < " ^ arg2
            | SGA.Sel _ -> default_left ^ arg1 ^ "[" ^ arg2 ^ "]"
            | SGA.Part (_, offset, slice_sz) -> default_left ^ arg1 ^ "[" ^ (string_of_int offset) ^ " +: " ^ string_of_int slice_sz ^ "]"
            | SGA.PartSubst (_, offset, slice_sz) ->

@@ -1137,6 +1137,7 @@ let bits_primitives =
    ("concat", (`Prim0 UConcat, 2));
    ("uintplus", (`Prim0 UUIntPlus, 2));
    ("+", (`Prim0 UUIntPlus, 2));
+   ("<", (`Prim0 UUIntLt, 2));
    ("zextl", (`Prim1 (fun n -> UZExtL n), 1));
    ("zextr", (`Prim1 (fun n -> UZExtR n), 1));
    ("indexed-part", (`Prim1 (fun n -> UIndexedPart n), 2));

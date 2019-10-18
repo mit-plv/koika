@@ -154,6 +154,11 @@ namespace prims {
     return mask<sz>(x + y);
   }
 
+  template<std::size_t sz>
+  bits<1> lt(const bits<sz> x, const bits<sz> y) {
+    return x < y;
+  }
+
   template<std::size_t sz1, std::size_t sz2>
   bits<sz1 + sz2> concat(const bits<sz1> x, const bits<sz2> y) {
     return widen<sz1 + sz2>(x) << sz2 | y;

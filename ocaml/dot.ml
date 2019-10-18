@@ -17,6 +17,7 @@ let bits_primitive_name = function
   | SGA.ZExtL (_sz, _width) -> "ZExtL"
   | SGA.ZExtR (_sz, _width) -> "ZExtR"
   | SGA.UIntPlus _sz -> "Plus"
+  | SGA.UIntLt _sz -> "Lt"
 
 let rec label_ptrs tag_to_parents = function
   | CNot c -> Some ("Not", [c], [])

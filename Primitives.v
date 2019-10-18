@@ -23,6 +23,7 @@ Inductive prim_bits_ufn :=
 | ULsr
 | UConcat
 | UUIntPlus
+| UUIntLt
 | UZExtL (width: nat)
 | UZExtR (width: nat).
 
@@ -60,6 +61,7 @@ Inductive prim_bits_fn :=
 | EqBits (sz: nat)
 | Concat (sz1 sz2 : nat)
 | UIntPlus (sz : nat)
+| UIntLt (sz : nat)
 | ZExtL (sz: nat) (width: nat)
 | ZExtR (sz: nat) (width: nat).
 
@@ -122,6 +124,7 @@ Definition prim_uSigma (fn: prim_ufn_t) (tau1 tau2: type): result prim_fn_t fn_t
                     | ULsr => Lsr sz1 sz2
                     | UConcat => Concat sz1 sz2
                     | UUIntPlus => UIntPlus sz1
+                    | UUIntLt => UIntLt sz1
                     | UZExtL width => ZExtL sz1 width
                     | UZExtR width => ZExtR sz1 width
                     end)
@@ -171,6 +174,7 @@ Definition prim_Sigma (fn: prim_fn_t) : ExternalSignature :=
     | EqBits sz => {{ bits_t sz ~> bits_t sz ~> bits_t 1 }}
     | Concat sz1 sz2 => {{ bits_t sz1 ~> bits_t sz2 ~> bits_t (sz2 + sz1) }}
     | UIntPlus sz => {{ bits_t sz ~> bits_t sz ~> bits_t sz }}
+    | UIntLt sz => {{ bits_t sz ~> bits_t sz ~> bits_t 1 }}
     | ZExtL sz width => {{ bits_t sz ~> unit_t ~> bits_t (Nat.max sz width) }}
     | ZExtR sz width => {{ bits_t sz ~> unit_t ~> bits_t (Nat.max sz width) }}
     end
@@ -189,6 +193,9 @@ Definition prim_sel {sz} (bs: bits sz) (idx: bits (log2 sz)) :=
 
 Definition prim_uint_plus {sz} (bs1 bs2: bits sz) :=
   Bits.of_N sz (Bits.to_N bs1 + Bits.to_N bs2)%N.
+
+Definition prim_uint_lt {sz} (bs1 bs2: bits sz) :=
+  Ob~(Bits.to_N bs1 <? Bits.to_N bs2)%N.
 
 (* Fixpoint type_accessor (tau: type) : Type := *)
 (*   match tau with *)
@@ -281,6 +288,7 @@ Definition prim_sigma (fn: prim_fn_t) : prim_Sigma fn :=
     | Lsr _ _ => fun bs places => Bits.lsr (Bits.to_nat places) bs
     | EqBits sz => fun bs1 bs2 => if eq_dec bs1 bs2 then Ob~1 else Ob~0
     | UIntPlus _ => fun bs1 bs2 => prim_uint_plus bs1 bs2
+    | UIntLt _ => fun bs1 bs2 => prim_uint_lt bs1 bs2
     | Concat _ _ => fun bs1 bs2 => Bits.app bs1 bs2
     | ZExtL sz width => fun bs _ => Bits.extend_end bs width false
     | ZExtR sz width => fun bs _ => Bits.extend_beginning bs width false
