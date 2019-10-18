@@ -185,32 +185,32 @@ Module Collatz.
     end.
   Notation uaction := (uaction var_t reg_t ufn_t).
   Notation InternalFunction := (UInternalFunction unit string reg_t ufn_t).
-  (* Example NESVD 2019 *)
+  Notation zero := (Bits.zero logsz).
+  Notation one := (Bits.zero logsz).
+
+  Definition times_three  : InternalFunction :=
+    function "times_three" ("arg1" : bits_t 16) : bits_t 16 :=
+     ("arg1" << #Ob~1)  + "arg1".
+
   Definition _divide : uaction :=
   {$
     let "v" := read0(R0) in
-    let "odd" := "v"[#(Bits.zero logsz)] in
-    if !"odd"
-    then
-       write0(R0,"v" >> #Ob~1)
+    let "odd" := "v"[#Ob~0~0~0~0] in
+    if !"odd" then
+      write0(R0,"v" >> #Ob~1)
     else
       fail
   $}.
 
-  Definition TimesThree  : InternalFunction :=
-    function "timeThree" ("arg1" : bits_t 16) : bits_t 16 :=
-     ("arg1" << #Ob~1)  + "arg1".
-
   Definition _multiply : uaction :=
-    {$
+  {$
     let "v" := read1(R0) in
-    let "odd" := "v"[#(Bits.zero logsz)] in
-    if "odd"
-    then
-       write1(R0, (funcall TimesThree "v") +  #(Bits.one sz))
+    let "odd" := "v"[#Ob~0~0~0~0] in
+    if "odd" then
+      write1(R0, (funcall times_three "v") + #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1)
     else
       fail
-        $}.
+  $}.
 
   Definition collatz : scheduler _ :=
     tc_scheduler (divide |> multiply |> done).
@@ -1070,6 +1070,160 @@ Module ExternallyCompiledRule.
            vp_custom_fn_names := interop_empty_fn_names |} .
   Definition package := {| sga := sga_package; sp := sim; vp := verilog |}.
 End ExternallyCompiledRule.
+
+Notation zero := (Bits.zeroes _).
+
+Module GcdMachine.
+  Open Scope string_scope.
+  Notation uaction := (Syntax.uaction unit string).
+  Definition var_t := string.
+  Definition method_name_t := unit.
+  Definition  custom_t:= interop_empty_t.
+  Definition ufn_t := (interop_ufn_t custom_t).
+  Definition pos_t := unit.
+
+  Inductive reg_t := input_data |  input_valid | gcd_busy | gcd_a | gcd_b | output_data.
+  Instance FiniteType_reg_t : FiniteType reg_t := _.
+
+  Definition pair_sig :=
+  {| struct_name := "pair";
+     struct_fields := ("a", bits_t 16)
+                        :: ("b", bits_t 16)
+                        :: nil |}.
+
+
+  Definition R r :=
+    match r with
+    | input_data => struct_t pair_sig
+    | input_valid => bits_t 1
+    | gcd_busy => bits_t 1
+    | gcd_a => bits_t 16
+    | gcd_b => bits_t 16
+    | output_data => bits_t 16
+    end.
+
+  Definition init_r idx : R idx :=
+    match idx with
+    | input_data => (zero, (zero, tt))
+    | input_valid => zero
+    | gcd_busy => zero
+    | gcd_a => zero
+    | gcd_b => zero
+    | output_data => zero
+    end.
+
+  Definition gcd_start : uaction string reg_t ufn_t  :=
+    {$
+       if (read0(input_valid) == `UConstBits Ob~1`
+            && !read0(gcd_busy)) then
+         let "data" := read0(input_data) in
+         write0(gcd_a, get("data", "a"));
+         write0(gcd_b, get("data", "b"));
+         write0(gcd_busy, `UConstBits Ob~1`);
+         write0(input_valid, `UConstBits Ob~0`)
+       else
+         fail
+           $}.
+
+  Definition sub  : UInternalFunction unit string reg_t ufn_t :=
+    function "sub" ("arg1" : bits_t 16, "arg2" : bits_t 16) : bits_t 16 :=
+      ("arg1" + !"arg2" + `UConstBits (Bits.of_nat 16 1)`).
+
+  Definition lt16 : UInternalFunction unit string reg_t ufn_t :=
+    function "lt" ("arg1" : bits_t 16, "arg2" : bits_t 16) : bits_t 1 :=
+      (funcall sub "arg1", "arg2")[`UConstBits (Bits.of_nat 4 15)`].
+
+  Fixpoint lt (sz: nat) : UInternalFunction unit var_t reg_t ufn_t :=
+    match sz with
+    | O => function "lt" ("arg1" : bits_t 0, "arg2" : bits_t 0) : bits_t 0 := `UConstBits Ob~1`
+    | S sz => function "lt" ("arg1" : bits_t sz, "arg2" : bits_t sz) : bits_t sz :=
+      let "subLt" := funcall (lt sz) "arg1"[`UConstBits (Bits.of_nat sz 0)` :+ sz], "arg2"[`UConstBits (Bits.of_nat sz 0)` :+ sz] in
+      "arg1"[`UConstBits (Bits.of_nat sz sz)`] || "arg2"[`UConstBits (Bits.of_nat sz sz)`]
+    end.
+
+  Definition gcd_compute  : uaction string reg_t ufn_t  :=
+    {$
+       let "a" := read0(gcd_a) in
+       let "b" := read0(gcd_b) in
+       if !("a" == `UConstBits (Bits.of_nat 16 0)`) then
+         if (funcall lt16 "a", "b") then
+           write0(gcd_b, "a");
+           write0(gcd_a, "b")
+         else
+           write0(gcd_a, funcall sub "a","b")
+       else
+         fail
+           $}.
+
+    Definition gcd_getresult  : uaction string reg_t ufn_t  :=
+      {$
+       if ( read1(gcd_a) == `UConstBits (Bits.of_nat 16 0)`
+          && read1(gcd_busy)) then
+         write0(gcd_busy, `UConstBits Ob~0`);
+         write0(output_data, read1(gcd_b))
+       else
+         fail
+           $}.
+
+  Inductive name_t := start | step_compute | get_result.
+
+  Definition cr := ContextEnv.(create) init_r.
+  Definition Sigma := interop_minimal_Sigma.
+  Definition uSigma := interop_minimal_uSigma.
+
+  Definition rules :=
+    tc_rules R Sigma uSigma
+             (fun rl => match rl with
+                     | start => gcd_start
+                     | step_compute => gcd_compute
+                     | get_result => gcd_getresult end).
+
+  Definition bring : scheduler _ :=
+    tc_scheduler (start |> step_compute |> get_result |> done).
+
+  Definition sga_package :=
+        {| sga_reg_types := R;
+           sga_reg_init := init_r;
+           sga_reg_finite := _;
+
+           sga_custom_fn_types := interop_empty_Sigma;
+
+           sga_reg_names r := match r with
+                              | input_data =>
+                                "input_data"
+                              | input_valid =>
+                                "input_valid"
+                              | gcd_busy =>
+                                "gcd_busy"
+                              | gcd_a =>
+                                "gcd_a"
+                              | gcd_b =>
+                                "gcd_b"
+                              | output_data =>
+                                "output_data"
+                             end;
+
+           sga_rules := rules;
+           sga_rule_names r := match r with
+                               | start => "start"
+                               | step_compute => "step"
+                               | get_result => "gcd_getresult" end;
+
+
+           sga_scheduler := bring;
+           sga_module_name := "externalMemory" |}.
+  Definition sim :=
+        {| sp_pkg := sga_package;
+           sp_var_names := fun x => x;
+           sp_custom_fn_names := interop_empty_fn_names;
+
+           sp_extfuns := None |}.
+  Definition verilog :=
+        {| vp_pkg := sga_package;
+           vp_external_rules := nil;
+           vp_custom_fn_names := interop_empty_fn_names |} .
+  Definition package := {| sga := sga_package; sp := sim; vp := verilog |}.
+End GcdMachine.
 
 Import ListNotations.
 Definition demo_packages : list demo_package_t :=
