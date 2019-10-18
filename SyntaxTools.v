@@ -2,9 +2,9 @@ Require Import SGA.Member SGA.TypedSyntax.
 Require Import Coq.Bool.Bool.
 
 Section SyntaxTools.
-  Context {name_t var_t reg_t fn_t: Type}.
+  Context {name_t var_t reg_t ext_fn_t: Type}.
   Context {R: reg_t -> type}
-          {Sigma: fn_t -> ExternalSignature}.
+          {Sigma: ext_fn_t -> ExternalSignature}.
 
   Fixpoint existsb_subterm (f: forall sig tau, action var_t R Sigma sig tau -> bool) {sig tau} (a: action var_t R Sigma sig tau) :=
     f _ _ a ||
@@ -18,7 +18,9 @@ Section SyntaxTools.
       | If cond tbranch fbranch => existsb_subterm f cond || existsb_subterm f tbranch || existsb_subterm f fbranch
       | Read port idx => false
       | Write port idx value => existsb_subterm f value
-      | Call fn arg1 arg2 => existsb_subterm f arg1 || existsb_subterm f arg2
+      | Unop fn a => existsb_subterm f a
+      | Binop fn a1 a2 => existsb_subterm f a1 || existsb_subterm f a2
+      | ExternalCall fn arg => existsb_subterm f arg
       end.
 
   Fixpoint member_mentions_shadowed_binding

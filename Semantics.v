@@ -47,15 +47,15 @@ Arguments RLog: clear implicits.
 Arguments Log {reg_t} R REnv : assert.
 
 Section Interp.
-  Context {name_t var_t reg_t fn_t: Type}.
+  Context {rule_name_t var_t reg_t ext_fn_t: Type}.
   Context {reg_t_eq_dec: EqDec reg_t}.
 
   Context {R: reg_t -> type}.
-  Context {Sigma: fn_t -> ExternalSignature}.
+  Context {Sigma: ext_fn_t -> ExternalSignature}.
+
   Context {REnv: Env reg_t}.
   Context (r: REnv.(env_t) R).
-  Context (sigma: forall f, Sigma f).
-  Open Scope bool_scope.
+  Context (sigma: forall f, Sig_denote (Sigma f)).
 
   Notation Log := (Log R REnv).
 
@@ -82,6 +82,8 @@ Section Interp.
     | LogWrite, P1 => true
     | _, _ => false
     end.
+
+  Open Scope bool_scope.
 
   Definition may_read0 (sched_log rule_log: Log) idx :=
     negb (log_existsb sched_log idx is_write0) &&
@@ -114,13 +116,12 @@ Section Interp.
 
   Notation rule := (rule var_t R Sigma).
   Notation action := (action var_t R Sigma).
-  Notation scheduler := (scheduler name_t).
+  Notation scheduler := (scheduler rule_name_t).
 
   Definition vcontext (sig: tsig var_t) :=
     context (fun '(k, tau) => type_denote tau) sig.
 
   Section Action.
-
     Fixpoint interp_action
              {sig: tsig var_t}
              {tau}
@@ -170,15 +171,21 @@ Section Interp.
         if may_write sched_log action_log prt idx then
           Some (log_cons idx (LE LogWrite prt val) action_log, Bits.nil, Gamma_new)
         else None
-      | Call fn arg1 arg2 => fun Gamma =>
+      | Unop fn arg1 => fun Gamma =>
+        let/opt3 action_log, arg1, Gamma := interp_action Gamma sched_log action_log arg1 in
+        Some (action_log, (PrimSpecs.sigma1 fn) arg1, Gamma)
+      | Binop fn arg1 arg2 => fun Gamma =>
         let/opt3 action_log, arg1, Gamma := interp_action Gamma sched_log action_log arg1 in
         let/opt3 action_log, arg2, Gamma := interp_action Gamma sched_log action_log arg2 in
-        Some (action_log, (sigma fn) arg1 arg2, Gamma)
+        Some (action_log, (PrimSpecs.sigma2 fn) arg1 arg2, Gamma)
+      | ExternalCall fn arg1 => fun Gamma =>
+        let/opt3 action_log, arg1, Gamma := interp_action Gamma sched_log action_log arg1 in
+        Some (action_log, sigma fn arg1, Gamma)
       end Gamma.
   End Action.
 
   Section Scheduler.
-    Context (rules: name_t -> rule).
+    Context (rules: rule_name_t -> rule).
 
     Fixpoint interp_scheduler'
              (sched_log: Log)

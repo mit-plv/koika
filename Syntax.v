@@ -1,9 +1,9 @@
-Require Export SGA.Common SGA.Types SGA.ErrorReporting.
+Require Export SGA.Common SGA.Primitives SGA.Types SGA.ErrorReporting.
 
 Section Syntax.
-  Context {pos_t rule_name_t fn_name_t var_t: Type}.
+  Context {pos_t var_t rule_name_t fn_name_t: Type}.
 
-  Inductive uaction {reg_t ufn_t} :=
+  Inductive uaction {reg_t ext_fn_t} :=
   | UError (err: error pos_t var_t fn_name_t)
   | UFail (tau: type)
   | UVar (var: var_t)
@@ -14,12 +14,13 @@ Section Syntax.
   | UIf (cond: uaction) (tbranch: uaction) (fbranch: uaction)
   | URead (port: Port) (idx: reg_t)
   | UWrite (port: Port) (idx: reg_t) (value: uaction)
-  | UCall (fn: ufn_t) (arg1: uaction) (arg2: uaction)
-  | UInternalCall (sig: @InternalSignature fn_name_t var_t)
-                  (body: uaction) (args: list uaction)
+  | UUnop (ufn1: PrimUntyped.ufn1) (arg1: uaction)
+  | UBinop (ufn2: PrimUntyped.ufn2) (arg1: uaction) (arg2: uaction)
+  | UExternalCall (ufn: ext_fn_t) (arg: uaction)
+  | UInternalCall (ufn: InternalFunction fn_name_t var_t uaction) (args: list uaction)
   | UAPos (p: pos_t) (e: uaction)
   | USugar (s: usugar)
-  with usugar {reg_t ufn_t} :=
+  with usugar {reg_t ext_fn_t} :=
   | USkip
   | UProgn (aa: list uaction)
   | UConstBits {sz} (bs: bits sz)
@@ -29,11 +30,10 @@ Section Syntax.
   | USwitch (var: uaction)
             (default: uaction)
             (branches: list (uaction * uaction))
-  | UCallModule {module_reg_t: Type} {module_ufn_t: Type}
+  | UCallModule {module_reg_t module_ext_fn_t: Type}
                 (fR: module_reg_t -> reg_t)
-                (fSigma: module_ufn_t -> ufn_t)
-                (sig: @InternalSignature fn_name_t var_t)
-                (body: @uaction module_reg_t module_ufn_t)
+                (fSigma: module_ext_fn_t -> ext_fn_t)
+                (fn: InternalFunction fn_name_t var_t (@uaction module_reg_t module_ext_fn_t))
                 (args: list uaction).
 
   Coercion USugar: usugar >-> uaction.

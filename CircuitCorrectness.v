@@ -6,7 +6,7 @@ Import ListNotations.
 Require Import
         SGA.Common SGA.Environments SGA.Syntax
         SGA.SemanticProperties SGA.CircuitProperties
-        SGA.CircuitElaboration SGA.Interop.
+        SGA.Interop.
 
 Section CompilerCorrectness.
   Context {name_t var_t reg_t fn_t: Type}.
@@ -27,7 +27,7 @@ Section CompilerCorrectness.
   Notation rwdata := (rwdata (name_t := name_t) R Sigma).
 
   Context (sigma: forall f, ExternalSignature_denote (Sigma f)).
-  Context (csigma: forall f, CExternalSignature_denote (cSigma f)).
+  Context (csigma: forall f, CSig_denote (cSigma f)).
   Context {csigma_correct: circuit_sigma_spec sigma csigma}.
   Context (lco: local_circuit_optimizer (name_t := name_t) (rwdata := rwdata) cr csigma).
 
@@ -1560,7 +1560,7 @@ Section CircuitInit.
   Context (sigma: forall f, Sigma f).
 
   Lemma circuit_env_equiv_CReadRegister :
-    forall (csigma: forall f, CExternalSignature_denote (CSigma Sigma f)),
+    forall (csigma: forall f, CSig_denote (CSigma Sigma f)),
       circuit_sigma_spec sigma csigma ->
       circuit_env_equiv (name_t := name_t) r csigma (REnv.(create) CReadRegister).
   Proof.

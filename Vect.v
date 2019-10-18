@@ -485,6 +485,16 @@ Section Conversions.
   Definition vect_to_list {T n} (v: vect T n) : list T :=
     vect_fold_left (fun acc t => List.cons t acc) List.nil v.
 
+  Lemma vect_to_list_inj T :
+    forall sz (v1 v2: vect T sz),
+      vect_to_list v1 = vect_to_list v2 ->
+      v1 = v2.
+  Proof.
+    induction sz; destruct v1, v2; cbn.
+    - reflexivity.
+    - inversion 1; subst; f_equal; apply IHsz; eassumption.
+  Qed.
+
   Lemma vect_to_list_In {T sz} :
     forall t (v: vect T sz),
       vect_In t v <-> List.In t (vect_to_list v).

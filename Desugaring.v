@@ -30,7 +30,7 @@ Section Desugaring.
     match branches with
     | nil => default
     | (val, action) :: branches =>
-      UIf (UBinOp UEq var val) action (desugar_USwitch var default branches)
+      UIf (UBinop UEq var val) action (desugar_USwitch var default branches)
     end.
 
   Definition map_int_fn_body {fn_name_t var_t action action': Type}
@@ -56,8 +56,8 @@ Section Desugaring.
     | UIf cond tbranch fbranch => UIf (d cond) (d tbranch) (d fbranch)
     | URead port idx => URead port (fR idx)
     | UWrite port idx value => UWrite port (fR idx) (d value)
-    | UUnOp fn arg => UUnOp fn (d arg)
-    | UBinOp fn arg1 arg2 => UBinOp fn (d arg1) (d arg2)
+    | UUnop fn arg => UUnop fn (d arg)
+    | UBinop fn arg1 arg2 => UBinop fn (d arg1) (d arg2)
     | UExternalCall fn arg => UExternalCall (fSigma fn) (d arg)
     | UInternalCall fn args => UInternalCall (map_int_fn_body d fn) (List.map d args)
     | UAPos p e => UAPos p (d e)
@@ -85,8 +85,8 @@ Section Desugaring.
                               esource := ErrSrc s |}
            end
          | UStructInit sig fields =>
-           let uinit := UUnOp (UConv (UUnpack (struct_t sig))) in
-           let usubst f := UBinOp (UStruct2 (USubstField f)) in
+           let uinit := UUnop (UConv (UUnpack (struct_t sig))) in
+           let usubst f := UBinop (UStruct2 (USubstField f)) in
            List.fold_left (fun acc '(f, a) => (usubst f) acc (d a))
                           fields (uinit (UConst (tau := bits_t _) (Bits.zero (struct_sz sig))))
          | USwitch var default branches =>

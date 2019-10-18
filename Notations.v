@@ -7,9 +7,13 @@ Require Export
         SGA.Semantics
         SGA.Circuits
         SGA.Primitives
-        SGA.Interop
-        SGA.CircuitElaboration.
+        SGA.Interop.
 
+Export SigNotations.
+Export PrimUntyped.
+
+Class DummyPos pos_t := { dummy_pos: pos_t }.
+Instance DummyPos_unit : DummyPos unit := {| dummy_pos := tt |}.
 
 Declare Custom Entry koika.
 
@@ -18,13 +22,13 @@ Notation "'fail'" :=
   (UFail (bits_t 0)) (in custom koika at level 20, format "'fail'").
 Notation "'fail' t" :=
   (UFail (bits_t t)) (in custom koika at level 20, t constr at level 0 ,format "'fail' t").
-Notation "'UError'" := (UError) (in custom koika at level 20).
+Notation "'UError'" := (UError {| emsg := ExplicitErrorInAst; epos := dummy_pos; esource := ErrSrc tt |}) (in custom koika at level 20).
 Notation "'let' a ':=' b 'in' c" := (UBind a b c) (in custom koika at level 99, a constr at level 0, right associativity, format "'[v' 'let'  a  ':='  b  'in' '/' c ']'").
 Notation "a ';' b" := (USeq a b) (in custom koika at level 30, format "'[v' a ';' '/' b ']'" ).
 Notation "'set' a ':=' b" := (UAssign a b) (in custom koika at level 29, a constr at level 0, format "'set'  a  ':='  b").
 
 
-Notation "'(' a ')'" := (a) (in custom koika at level 99, a custom koika at level 99, format "'[v' '(' a ')' ']'").
+Notation "'(' a ')'" := (a) (in custom koika at level 99, a custom koika at level 99, format "'[v' '(' a ')' ']'", only parsing).
 
 
 Notation "a" := (UVar a) (in custom koika at level 0, a constr at level 0, format "'[' a ']'").
@@ -41,17 +45,16 @@ Notation "'write1' '(' reg ',' value ')'" :=
 Notation "'if' a 'then' t 'else' f" := (UIf a t f) (in custom koika at level 30, right associativity, format "'[v' 'if'  a '/' 'then'  t '/' 'else'  f ']'").
 Notation "'when' a 'then' t " := (UIf a t (UFail (bits_t 0))) (in custom koika at level 30, right associativity, format "'[v' 'when'  a '/' 'then'  t '/' ']'").
 
-
-Notation "a '&&' b" :=  (UCall (UPrimFn (UBitsFn UAnd)) a b) (in custom koika at level 80,  right associativity, format "a  '&&'  b").
-Notation "'!' a" := (UCall (UPrimFn (UBitsFn UNot)) a (UConstBits Ob)) (in custom koika at level 75, a custom koika at level 99, format "'!' a").
-Notation "a '||' b" :=  (UCall (UPrimFn (UBitsFn UOr)) a b) (in custom koika at level 85, format "a  '||'  b").
-Notation "a '+' b" :=  (UCall (UPrimFn (UBitsFn UUIntPlus)) a b) (in custom koika at level 85, format "a  '+'  b").
-Notation "a '==' b" :=  (UCall (UPrimFn (UConvFn UEq)) a b) (in custom koika at level 79, format "a  '=='  b").
-Notation "a '>>' b" :=  (UCall (UPrimFn (UBitsFn ULsr)) a b) (in custom koika at level 79, format "a  '>>'  b").
-Notation "a '<<' b" :=  (UCall (UPrimFn (UBitsFn ULsl)) a b) (in custom koika at level 79, format "a  '<<'  b").
-Notation "'{' a ',' b '}'" := (UCall (UPrimFn (UBitsFn UConcat)) a b) (in custom koika at level 99, format "'{' a ',' b '}'").
-Notation "a '[' b ']'" := (UCall (UPrimFn (UBitsFn USel)) a b) (in custom koika at level 75, format "'[' a [ b ] ']'").
-Notation "a '[' b ':+' c ']'" := (UCall (UPrimFn (UBitsFn (UIndexedPart c))) a b) (in custom koika at level 75, c constr at level 0, format "'[' a [ b ':+' c ] ']'").
+Notation "a '&&' b" :=  (UBinop (UBits2 UAnd) a b) (in custom koika at level 80,  right associativity, format "a  '&&'  b").
+Notation "'!' a" := (UUnop (UBits1 UNot) a) (in custom koika at level 75, a custom koika at level 99, format "'!' a").
+Notation "a '||' b" :=  (UBinop (UBits2 UOr) a b) (in custom koika at level 85, format "a  '||'  b").
+Notation "a '+' b" :=  (UBinop (UBits2 UUIntPlus) a b) (in custom koika at level 85, format "a  '+'  b").
+Notation "a '==' b" :=  (UBinop UEq a b) (in custom koika at level 79, format "a  '=='  b").
+Notation "a '>>' b" :=  (UBinop (UBits2 ULsr) a b) (in custom koika at level 79, format "a  '>>'  b").
+Notation "a '<<' b" :=  (UBinop (UBits2 ULsl) a b) (in custom koika at level 79, format "a  '<<'  b").
+Notation "'{' a ',' b '}'" := (UBinop (UBits2 UConcat) a b) (in custom koika at level 99, format "'{' a ',' b '}'").
+Notation "a '[' b ']'" := (UBinop (UBits2 USel) a b) (in custom koika at level 75, format "'[' a [ b ] ']'").
+Notation "a '[' b ':+' c ']'" := (UBinop (UBits2 (UIndexedPart c)) a b) (in custom koika at level 75, c constr at level 0, format "'[' a [ b ':+' c ] ']'").
 Notation "'`' a '`'" := ( a) (in custom koika at level 50, a constr at level 99).
 
 Declare Custom Entry koika_types.
@@ -60,18 +63,18 @@ Notation " x ':' y " := (cons (prod_of_argsig {| arg_name := x%string; arg_type 
 Notation "a ',' b" := (app a b)  (in custom koika_types at level 95, a custom koika_types , b custom koika_types, right associativity).
 
 
-Notation "'function' name '(' args ')'  ':' ret ':=' body" :=
-  {| int_sig :=   {| int_name := name%string;
-                     int_args := args;
-                     int_retType := ret |};
-      int_body := body |}
+Notation "'function' name '(' args ')' ':' ret ':=' body" :=
+  {| int_name := name%string;
+     int_argspec := args;
+     int_retType := ret;
+     int_body := body |}
     (at level 99, name constr at level 0, args custom koika_types, ret constr at level 0, body custom koika at level 99, format "'[v' 'function'  name '(' args ')'  ':'  ret  ':=' '/' body ']'").
 
-Notation "'function' name  ':' ret ':=' body" :=
-  {| int_sig :=   {| int_name := name%string;
-                     int_args := nil;
-                     int_retType := ret |};
-      int_body := body |}
+Notation "'function' name ':' ret ':=' body" :=
+  {| int_name := name%string;
+     int_argspec := nil;
+     int_retType := ret;
+    int_body := body |}
     (at level 99, name constr at level 0,  ret constr at level 0, body custom koika at level 99,  format "'[v' 'function'  name  ':'  ret  ':=' '/' body ']'" ).
 
 
@@ -83,19 +86,19 @@ Notation "arg1 , arg2" := (app arg1 arg2) (in custom koika_args at level 13, arg
 
 
 Notation "'call' instance method args" :=
-    (UInternalCall (int_sig method) (UCallModule instance id (int_body method)) args)
+  (UCallModule instance id method args)
       (in custom koika at level 99, instance constr at level 0, method constr at level 0, args custom koika_args at level 0).
 Notation "'funcall' method args" :=
-    (UInternalCall (int_sig method) (int_body method) args)
+    (UInternalCall method args)
                                    (in custom koika at level 99, method constr at level 0, args custom koika_args at level 0).
 Notation "'call0' instance method " :=
-    (UInternalCall (int_sig method) (UCallModule instance id (int_body method)) nil)
+    (UCallModule instance id method nil)
                                    (in custom koika at level 98, instance constr at level 0, method constr at level 0).
 Notation "'funcall0' method " :=
-    (UInternalCall (int_sig method) (int_body method) nil)
+    (UInternalCall method nil)
                                    (in custom koika at level 98,  method constr at level 0).
 Notation "'get' '(' t ',' f ')'" :=
-  (UCall (UPrimFn (UStructFn (UDo GetField f))) t (UConstBits Ob))
+  (UUnop (UStruct1 (UGetField f)) t)
     (in custom koika at level 30, t custom koika at level 13, f constr at level 13, format "'get' '(' t ','  f ')'").
 
 Notation "'#' s" := (UConstBits s) (in custom koika at level 98, s constr at level 0 ).
@@ -107,12 +110,14 @@ Notation "r '|>' s" :=
 Notation "'done'" :=
   UDone (at level 99).
 
-Module Tests.
+Module Type Tests.
   Parameter pos_t : Type.
-  Parameter method_name_t : Type.
+  Parameter dp : DummyPos pos_t.
+  Existing Instance dp.
+  Parameter fn_name_t : Type.
   Parameter reg_t : Type.
   Parameter fn_t : Type.
-  Notation uaction reg :=  (uaction pos_t method_name_t string reg (interop_ufn_t fn_t)).
+  Notation uaction reg_t := (uaction pos_t string fn_name_t reg_t fn_t).
   Definition test_1 : uaction reg_t := {$ let "yoyo" := fail 2 in UError $}.
   Definition test_2 : uaction reg_t := {$ UError; UError $}.
   Definition test_3 : uaction reg_t := {$ set "yoyo" := UError ; UError $}.
@@ -140,10 +145,10 @@ Module Tests.
   (* Notation "'{&' a '&}'" := (a) (a custom koika_types at level 200). *)
   (* Definition test_21 := {& "yoyo" : bits_t 2 &}. *)
   (* Definition test_22 := {& "yoyo" : bits_t 2 , "yoyo" : bits_t 2  &}. *)
-  Definition test_23 : UInternalFunction pos_t string reg_t fn_t := function "foo" ("arg1" : (bits_t 3),  "arg2" : (bits_t 2) ) :  bits_t 4 := UError.
-  Definition test_24 : nat -> UInternalFunction pos_t string reg_t fn_t := (fun sz => function "uouo" ("arg1" : bits_t sz , "arg1" : bits_t sz ) : bits_t sz  := UError).
-  Definition test_25 : nat -> UInternalFunction pos_t string reg_t (interop_ufn_t fn_t) := (fun sz => function "uouo" ("arg1" : bits_t sz ) : bits_t sz  := let "oo" := UError >> UError in UError).
-  Definition test_26 : nat -> UInternalFunction pos_t string reg_t fn_t := (fun sz => function "uouo" : bits_t sz  := UError).
+  Definition test_23 : InternalFunction string string (uaction reg_t) := function "foo" ("arg1" : (bits_t 3),  "arg2" : (bits_t 2) ) :  bits_t 4 := UError.
+  Definition test_24 : nat -> InternalFunction string string (uaction reg_t) := (fun sz => function "uouo" ("arg1" : bits_t sz , "arg1" : bits_t sz ) : bits_t sz  := UError).
+  Definition test_25 : nat -> InternalFunction string string (uaction reg_t) := (fun sz => function "uouo" ("arg1" : bits_t sz ) : bits_t sz  := let "oo" := UError >> UError in UError).
+  Definition test_26 : nat -> InternalFunction string string (uaction reg_t) := (fun sz => function "uouo" : bits_t sz  := UError).
   Definition test_27 : uaction reg_t := {$
            (if (!read0(data0)) then
               write0(data0, `UConstBits Ob~1`);
@@ -164,13 +169,15 @@ Notation "'[[read1]]'" := (LE LogRead P1 tt) (only printing).
 Notation "'[[write0'  v ']]'" := (LE LogWrite P0 v) (only printing).
 Notation "'[[write1'  v ']]'" := (LE LogWrite P1 v) (only printing).
 
-Class DummyPos pos_t := { dummy_pos: pos_t }.
-Instance DummyPos_unit : DummyPos unit := {| dummy_pos := tt |}.
-
 Ltac __must_typecheck_extract_result x :=
   lazymatch x with
   | Success ?tm => tm
-  | Failure {| epos := _; emsg := ?err |} => fail "Type error:" err
+  | Failure {| epos := _; emsg := ?err; esource := ErrSrc ?src |} =>
+    let err := match err with
+              | BasicError ?err => err
+              | ?err => err
+              end in
+    fail "Type error:" err "in term" src
   end.
 
 Ltac __must_typecheck_cbn tcres :=
@@ -185,31 +192,31 @@ Ltac __must_typecheck_vmc tcres :=
 Ltac __must_typecheck tcres :=
   __must_typecheck_vmc tcres.
 
-Ltac _tc_action R Sigma uSigma action :=
+Ltac _tc_action R Sigma action :=
   let desugared := constr:(desugar_action dummy_pos action) in
-  let maybe_typed := constr:(type_action R Sigma uSigma dummy_pos List.nil desugared) in
+  let maybe_typed := constr:(type_action R Sigma dummy_pos List.nil desugared) in
   let typed := __must_typecheck maybe_typed in
   let typed := (eval cbn in (projT2 typed)) in
   exact typed.
 
-Notation tc_action R Sigma uSigma action :=
-  (ltac:(_tc_action R Sigma uSigma action)) (only parsing).
+Notation tc_action R Sigma action :=
+  (ltac:(_tc_action R Sigma action)) (only parsing).
 
-Ltac _tc_rules R Sigma uSigma actions :=
+Ltac _tc_rules R Sigma actions :=
   lazymatch type of actions with
   | (?rule_name_t -> _) =>
     let res := constr:(fun r: rule_name_t =>
                         ltac:(destruct r eqn:? ;
                               lazymatch goal with
                               | [ H: _ = ?rr |- _ ] =>
-                                _tc_action R Sigma uSigma (actions rr)
+                                _tc_action R Sigma (actions rr)
                               end)) in
     let res := (eval cbn in res) in
     exact res
   end.
 
-Notation tc_rules R Sigma uSigma actions :=
-  (ltac:(_tc_rules R Sigma uSigma actions)) (only parsing).
+Notation tc_rules R Sigma actions :=
+  (ltac:(_tc_rules R Sigma actions)) (only parsing).
 
 Notation tc_scheduler uscheduler :=
   (type_scheduler dummy_pos uscheduler) (only parsing).

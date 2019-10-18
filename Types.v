@@ -171,31 +171,89 @@ Qed.
 Coercion type_sz : type >-> nat.
 Coercion type_denote : type >-> Sortclass.
 
-(** * Functions and function signatures **)
+(** * Anonymous function signatures **)
 
-Record ExternalSignature :=
-  FunSig { arg1Type: type; arg2Type: type; retType: type }.
+(* Example ufn := {{{ "A" | "x" :: unit_t ~> bits_t 5 | tt }}}. *)
 
-Notation "{{  a1 ~> a2 ~> ret  }}" :=
-  {| arg1Type := a1; arg2Type := a2; retType := ret |}.
+Record CSig {n: nat} := { argSizes : vect nat n; retSize : nat }.
+Arguments CSig : clear implicits.
 
-Coercion ExternalSignature_denote fn :=
-  fn.(arg1Type) -> fn.(arg2Type) -> fn.(retType).
+Fixpoint CSig_denote' {n} (args: vect nat n) (ret: nat) :=
+  match n return vect nat n -> Type with
+  | 0 => fun _ => bits ret
+  | S n => fun arg => bits (vect_hd arg) -> CSig_denote' (vect_tl arg) ret
+  end args.
 
-Lemma ExternalSignature_injRet :
-  forall (s1 s2 s1' s2': type) (retType retType': type),
-    FunSig s1 s2 retType =
-    FunSig s1' s2' retType' ->
-    retType = retType'.
-Proof. now inversion 1. Qed.
+Definition CSig_denote {n} (sg: CSig n) :=
+  CSig_denote' sg.(argSizes) sg.(retSize).
+
+Coercion CSig_denote: CSig >-> Sortclass.
+
+Notation arg1Size fsig := (vect_hd fsig.(argSizes)).
+Notation arg2Size fsig := (vect_hd (vect_tl fsig.(argSizes))).
+
+Module CSigNotations.
+  Notation "{{  a1 ~> ret  }}" :=
+    {| argSizes := vect_cons a1 vect_nil;
+       retSize := ret |}.
+
+  Notation "{{  a1 ~> a2 ~> ret  }}" :=
+    {| argSizes := vect_cons a1 (vect_cons a2 vect_nil);
+       retSize := ret |}.
+End CSigNotations.
+
+Record Sig {n: nat} := { argTypes : vect type n; retType : type }.
+Arguments Sig : clear implicits.
+
+Definition CSig_of_Sig {n} (sig: Sig n) : CSig n :=
+  {| argSizes := vect_map type_sz sig.(argTypes);
+     retSize := type_sz sig.(retType) |}.
+
+Definition Sig_of_CSig {n} (sig: CSig n) : Sig n :=
+  {| argTypes := vect_map bits_t sig.(argSizes);
+     retType := bits_t sig.(retSize) |}.
+
+Fixpoint Sig_denote' {n} (args: vect type n) (ret: type) :=
+  match n return vect type n -> Type with
+  | 0 => fun _ => ret
+  | S n => fun arg => vect_hd arg -> Sig_denote' (vect_tl arg) ret
+  end args.
+
+Definition Sig_denote {n} (sg: Sig n) :=
+  Sig_denote' sg.(argTypes) sg.(retType).
+
+Coercion Sig_denote: Sig >-> Sortclass.
+
+Notation arg1Type fsig := (vect_hd fsig.(argTypes)).
+Notation arg2Type fsig := (vect_hd (vect_tl fsig.(argTypes))).
+
+Module SigNotations.
+  Notation "{{  a1 ~> ret  }}" :=
+    {| argTypes := vect_cons a1 vect_nil;
+       retType := ret |}.
+
+  Notation "{{  a1 ~> a2 ~> ret  }}" :=
+    {| argTypes := vect_cons a1 (vect_cons a2 vect_nil);
+       retType := ret |}.
+End SigNotations.
+
+(** * External functions **)
+
+Definition ExternalSignature := Sig 1.
+Definition CExternalSignature := CSig 1.
+
+(** * Internal functions **)
 
 Definition tsig var_t := list (var_t * type).
 
-Record InternalSignature {name_t var_t: Type} :=
-  { int_name : name_t;
-    int_args : tsig var_t;
-    int_retType : type }.
-Arguments InternalSignature : clear implicits.
+Record InternalFunction {fn_name_t var_t action: Type} :=
+  { int_name : fn_name_t;
+    int_argspec : tsig var_t;
+    int_retType : type;
+    int_body : action }.
+Arguments InternalFunction : clear implicits.
+Arguments Build_InternalFunction {fn_name_t var_t action}
+          int_name int_argspec int_retType int_body : assert.
 
 Record arg_sig {var_t} :=
   { arg_name: var_t;
@@ -203,9 +261,6 @@ Record arg_sig {var_t} :=
 
 Definition prod_of_argsig {var_t} (a: @arg_sig var_t) :=
   (a.(arg_name), a.(arg_type)).
-
-
-(* Check {{{ "A" | "x" :: unit_t ~> bits_t 5 }}}. *)
 
 (** * Equalities **)
 

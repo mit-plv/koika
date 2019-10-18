@@ -2,10 +2,12 @@ Require Import Coq.Lists.List.
 Require Import SGA.Syntax SGA.TypedSyntax SGA.Primitives SGA.Interop.
 Import ListNotations.
 
-Section SyntaxMacros.
-  Context {pos_t fn_name_t var_t reg_t ufn_t: Type}.
+Import PrimUntyped.
 
-  Notation uaction := (uaction pos_t fn_name_t var_t reg_t ufn_t).
+Section SyntaxMacros.
+  Context {pos_t var_t fn_name_t reg_t ext_fn_t: Type}.
+
+  Notation uaction := (uaction pos_t var_t fn_name_t reg_t ext_fn_t).
 
   Definition bits_of_ascii c : bits 8 :=
     match c with
@@ -26,8 +28,9 @@ Section SyntaxMacros.
     let '(label, branch) := vect_hd branches in
     match nb return vect _ (S nb) -> uaction with
     | 0 => fun _ => branch
-    | S nb => fun branches => if_eq (UVar var) (UConst label)
-                                branch (gen_switch var (vect_tl branches))
+    | S nb => fun branches =>
+      UIf (UBinop UEq (UVar var) (UConst label))
+          branch (gen_switch var (vect_tl branches))
     end branches.
 
   Definition UCompleteSwitch
@@ -37,21 +40,15 @@ Section SyntaxMacros.
     gen_switch (tau := bits_t sz) var
                (vect_map2 (fun n a => (Bits.of_nat sz (index_to_nat n), a))
                           (all_indices (S bound)) branches).
-
-  Record UInternalFunction {ufn_t} :=
-    { int_sig: InternalSignature fn_name_t var_t;
-      int_body: Syntax.uaction pos_t fn_name_t var_t reg_t ufn_t }.
 End SyntaxMacros.
-
-Arguments UInternalFunction pos_t {fn_name_t} var_t reg_t ufn_t : assert.
-Arguments Build_UInternalFunction {pos_t fn_name_t var_t reg_t ufn_t} int_sig int_body : assert.
 
 Module Display.
   Section Display.
-    Context {pos_t fn_name_t reg_t: Type}.
+    Notation var_t := string (only parsing).
+    Notation fn_name_t := string (only parsing).
+    Context {pos_t reg_t ext_fn_t: Type}.
 
-    Context {ufn_t: Type}.
-    Notation uaction := (uaction pos_t fn_name_t string reg_t ufn_t).
+    Notation uaction := (uaction pos_t var_t fn_name_t reg_t ext_fn_t).
 
     Inductive field : Type :=
     | Str (s: string)
@@ -59,23 +56,29 @@ Module Display.
 
     Open Scope string_scope.
 
-    Notation intfun := (UInternalFunction pos_t string reg_t (interop_ufn_t ufn_t)).
+    Notation intfun := (InternalFunction fn_name_t var_t uaction).
 
-    Definition empty_printer : intfun :=
-      {| int_sig := {| int_name := ""; int_args := []; int_retType := unit_t |};
-         int_body := USkip |}.
+    Definition empty_printer : InternalFunction fn_name_t var_t uaction :=
+      {| int_name := "";
+         int_argspec := [];
+         int_retType := unit_t;
+         int_body := USugar USkip |}.
 
     Fixpoint extend_printer f offset (printer: intfun) : intfun :=
-      let display_utf8 s := UCall (UPrimFn (UDisplayFn UDisplayUtf8)) (UConstString s) (UConstBits Ob) in
-      let display_value arg := UCall (UPrimFn (UDisplayFn UDisplayValue)) (UVar arg) (UConstBits Ob) in
-      let '(Build_UInternalFunction int_sig int_body) := printer in
+      let display_utf8 s := UUnop (UDisplay UDisplayUtf8) (UConstString s) in
+      let display_value arg := UUnop (UDisplay UDisplayValue) (UVar arg) in
+      let '(Build_InternalFunction int_name int_argspec int_retType int_body) := printer in
       match f with
       | Str s =>
-        {| int_sig := int_sig;
+        {| int_name := int_name;
+           int_argspec := int_argspec;
+           int_retType := int_retType;
            int_body := (USeq (display_utf8 s) int_body) |}
       | Value tau =>
         let arg := "arg" ++ string_of_nat offset in
-        {| int_sig := {| int_name := ""; int_args := (arg, tau) :: int_sig.(int_args); int_retType := unit_t |};
+        {| int_name := int_name;
+           int_argspec := (arg, tau) :: int_argspec;
+           int_retType := unit_t;
            int_body := (USeq (display_value arg) int_body) |}
       end.
 
@@ -130,7 +133,9 @@ Section TypedSyntaxMacros.
     - exact (If (infix_action infix _ _ _ a1) (infix_action infix _ _ _ a2) (infix_action infix _ _ _ a3)).
     - exact (Read port idx).
     - exact (Write port idx (infix_action infix _ _ _ a)).
-    - exact (Call fn (infix_action infix _ _ _ a1) (infix_action infix _ _ _ a2)).
+    - exact (Unop fn (infix_action infix _ _ _ a)).
+    - exact (Binop fn (infix_action infix _ _ _ a1) (infix_action infix _ _ _ a2)).
+    - exact (ExternalCall fn (infix_action infix _ _ _ a)).
   Defined.
 
   Definition prefix_action (prefix: tsig var_t) {sig: tsig var_t} {tau} (a: action sig tau)

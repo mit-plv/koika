@@ -8,7 +8,6 @@ Require SGA.Common
         SGA.SyntaxTools
         SGA.Circuits
         SGA.Interop
-        SGA.CircuitElaboration
         SGA.Demo.
 
 (* This prevents an assertion error: *)
@@ -33,9 +32,7 @@ Extraction "SGA.ml"
            TypeInference.type_action TypeInference.type_rule TypeInference.type_scheduler
            SyntaxTools.action_mentions_var SyntaxTools.member_mentions_shadowed_binding
            Circuits.compile_scheduler
-           Primitives.prim_uSigma Primitives.prim_Sigma
-           Interop.interop_fn_t Interop.interop_uSigma Interop.interop_Sigma
            Interop.sga_package_t Interop.circuit_package_t Interop.sim_package_t
            Interop.struct_of_list Interop.struct_to_list
-           CircuitElaboration.compile_sga_package
+           Interop.compile_sga_package
            Demo.demo_packages.

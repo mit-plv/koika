@@ -82,46 +82,41 @@ Section Bools.
 End Bools.
 
 Section Circuits.
-  Context {name_t var_t reg_t fn_t: Type}.
+  Context {rule_name_t var_t reg_t ext_fn_t: Type}.
 
   Context {R: reg_t -> type}.
-  Notation cR := (CR R).
+  Notation CR := (CR_of_R R).
 
-  Context {Sigma: fn_t -> ExternalSignature}.
-  Notation cSigma := (CSigma Sigma).
+  Context {Sigma: ext_fn_t -> ExternalSignature}.
+  Notation CSigma := (CSigma_of_Sigma Sigma).
 
   Context {REnv: Env reg_t}.
   Context (r: REnv.(env_t) R).
-  Definition circuit_r : REnv.(env_t) (fun idx => bits ((CR R) idx)) := REnv.(map) (fun idx v => bits_of_value v) r.
-  Notation cr := circuit_r.
+  Notation cr := (cr_of_r r).
 
-  Context (sigma: forall f, ExternalSignature_denote (Sigma f)).
+  Definition csigma_spec (sigma: forall f, Sig_denote (Sigma f)) csigma :=
+    forall fn (a: (Sigma fn).(arg1Type)),
+      csigma fn (bits_of_value a) = bits_of_value (sigma fn a).
 
-  Definition circuit_sigma_spec csigma :=
-    forall fn (v1: (Sigma fn).(arg1Type)) (v2: (Sigma fn).(arg2Type)),
-      csigma fn (bits_of_value v1) (bits_of_value v2) =
-      bits_of_value (sigma fn v1 v2).
-
-  Context (csigma: forall f, CExternalSignature_denote (cSigma f)).
-  Context (lco: (@local_circuit_optimizer name_t reg_t fn_t cR cSigma (rwdata (name_t := name_t) R Sigma) REnv cr csigma)).
-
-  Notation circuit := (circuit (name_t := name_t) (rwdata := rwdata (name_t := name_t) R Sigma) cR cSigma).
-  Notation interp_circuit := (interp_circuit cr csigma).
-
-  Definition circuit_fn_of_fn {sig} (fn: ExternalSignature_denote sig)
-    : CExternalSignature_denote (CExternalSignature_of_ExternalSignature sig) :=
-    fun bs1 bs2 => bits_of_value (fn (value_of_bits bs1) (value_of_bits bs2)).
-
-  Definition circuit_sigma : forall f, CExternalSignature_denote (cSigma f) :=
-    fun f => circuit_fn_of_fn (sigma f).
-
-  Lemma circuit_sigma_spec_circuit_sigma :
-    circuit_sigma_spec circuit_sigma.
+  Lemma csigma_spec_csigma_of_sigma :
+    forall (sigma: forall f, Sig_denote (Sigma f)),
+      csigma_spec sigma (csigma_of_sigma sigma).
   Proof.
-    unfold circuit_sigma_spec, circuit_sigma, circuit_fn_of_fn.
+    unfold csigma_spec, csigma_of_sigma.
     intros; rewrite !value_of_bits_of_value.
     reflexivity.
   Qed.
+
+  Context (csigma: forall f, CSig_denote (CSigma f)).
+  Context (lco: (@local_circuit_optimizer
+                   rule_name_t reg_t ext_fn_t CR CSigma
+                   (rwdata (rule_name_t := rule_name_t) R Sigma)
+                   REnv cr csigma)).
+
+  Notation circuit := (circuit (rule_name_t := rule_name_t)
+                              (rwdata := rwdata (rule_name_t := rule_name_t) R Sigma)
+                              CR CSigma).
+  Notation interp_circuit := (interp_circuit cr csigma).
 
   Definition circuit_lt (c1 c2: circuit 1) :=
     bool_lt (Bits.single (interp_circuit c1)) (Bits.single (interp_circuit c2)).
@@ -295,7 +290,7 @@ Section Circuits.
   Qed.
 
   Lemma circuit_lt_willFire_of_canFire_canFire :
-    forall c1 (cLog: scheduler_circuit (name_t := name_t) R Sigma REnv) rws,
+    forall c1 (cLog: scheduler_circuit (rule_name_t := rule_name_t) R Sigma REnv) rws,
       circuit_lt (willFire_of_canFire lco {| canFire := c1; regs := rws |} cLog) c1.
   Proof.
     unfold willFire_of_canFire; intros.
@@ -313,9 +308,7 @@ Section Circuits.
   Qed.
 End Circuits.
 
-Arguments circuit_r {reg_t} {R} {REnv} r : assert.
-Arguments circuit_sigma_spec {fn_t} {Sigma} sigma csigma : assert.
-Arguments circuit_sigma {fn_t} {Sigma} sigma f arg1 arg2 : assert.
+Arguments csigma_spec {ext_fn_t Sigma} sigma csigma : assert.
 
 Ltac circuit_lt_f_equal :=
   repeat (apply circuit_lt_CAnnot_l ||

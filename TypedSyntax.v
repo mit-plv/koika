@@ -1,10 +1,12 @@
 Require Import Coq.Lists.List.
-Require Export SGA.Common SGA.Environments SGA.Types.
+Require Export SGA.Common SGA.Environments SGA.Types SGA.Primitives.
+
+Import PrimTyped PrimSignatures.
 
 Section TypedSyntax.
-  Context {name_t var_t reg_t fn_t: Type}.
-  Context {R: reg_t -> type}
-          {Sigma: fn_t -> ExternalSignature}.
+  Context {rule_name_t var_t reg_t ext_fn_t: Type}.
+  Context {R: reg_t -> type}.
+  Context {Sigma: ext_fn_t -> ExternalSignature}.
 
   Inductive action : tsig var_t -> type -> Type :=
   | Fail {sig} tau : action sig tau
@@ -30,26 +32,28 @@ Section TypedSyntax.
   | Write {sig}
           (port: Port) (idx: reg_t)
           (value: action sig (R idx)) : action sig unit_t
-  | Call {sig}
-         (fn: fn_t)
-         (arg1: action sig (Sigma fn).(arg1Type))
-         (arg2: action sig (Sigma fn).(arg2Type)) : action sig (Sigma fn).(retType).
+  | Unop {sig}
+          (fn: fn1)
+          (arg1: action sig (Sigma1 fn).(arg1Type))
+    : action sig (Sigma1 fn).(retType)
+  | Binop {sig}
+          (fn: fn2)
+          (arg1: action sig (Sigma2 fn).(arg1Type))
+          (arg2: action sig (Sigma2 fn).(arg2Type))
+    : action sig (Sigma2 fn).(retType)
+  | ExternalCall {sig}
+                 (fn: ext_fn_t)
+                 (arg: action sig (Sigma fn).(arg1Type))
+    : action sig (Sigma fn).(retType).
 
   Inductive scheduler :=
   | Done
-  | Cons (r: name_t) (s: scheduler)
-  | Try (r: name_t) (s1 s2: scheduler).
+  | Cons (r: rule_name_t) (s: scheduler)
+  | Try (r: rule_name_t) (s1 s2: scheduler).
 
   Definition rule := action nil unit_t.
-
-  Record schedule :=
-    { s_sched : scheduler;
-      s_actions : name_t -> rule }.
 End TypedSyntax.
 
-Arguments rule var_t {reg_t fn_t} R Sigma : assert.
-Arguments action var_t {reg_t fn_t} R Sigma sig tau : assert.
+Arguments rule var_t {reg_t ext_fn_t} R Sigma : assert.
+Arguments action var_t {reg_t ext_fn_t} R Sigma sig tau : assert.
 Arguments scheduler : clear implicits.
-Arguments schedule name_t var_t {reg_t fn_t} R Sigma : assert.
-
-Hint Extern 10 => eapply @ExternalSignature_injRet : types.
