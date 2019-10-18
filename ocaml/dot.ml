@@ -55,6 +55,8 @@ let rec label_ptrs tag_to_parents = function
            | SGA.GetField -> (sprintf "%s.%s" sg.struct_name field, [c1; c2], [])
            | SGA.SubstField -> (sprintf "%s / %s <-" sg.struct_name field, [c1; c2], []))
   | CReadRegister r -> Some (sprintf "Reg %s" r.reg_name, [], [])
+  | CBundle (_, _) -> None (* FIXME *)
+  | CBundleRef (_, _, _) -> None (* FIXME *)
   | CAnnot (_sz, annot, c) ->
      let nparents = List.length (Hashtbl.find tag_to_parents c.tag) in
      if nparents = 0 then
@@ -77,8 +79,8 @@ type ptr_or_label =
 
 let field_label i pl =
   sprintf "<f%d> %s" i (match pl with
-                               | Label lbl -> lbl
-                               | Ptr _ -> "·")
+                        | Label lbl -> lbl
+                        | Ptr _ -> "·")
 
 let field_ptr_or_label (c: _ circuit) =
   match c.node with
@@ -90,6 +92,34 @@ let dot_record_label head args =
   let fields = List.mapi field_label args in
   let head = (if head = "constant_value_from_source" then "" else head) in
   String.concat "|" (sprintf "<hd> %s" head :: fields)
+
+let subcircuits = function
+  | CNot c -> [c]
+  | CAnd (c1, c2) -> [c1; c2]
+  | COr (c1, c2) -> [c1; c2]
+  | CMux (_sz, s, c1, c2) -> [s; c1; c2]
+  | CExternal (_fn, c1, c2) -> [c1; c2]
+  | CReadRegister _r -> []
+  | CBundle (_) -> [] (* FIXME *)
+  | CBundleRef (_, _, _) -> [] (* FIXME *)
+  | CAnnot (_sz, _annot, c) -> [c]
+  | CConst _ -> []
+
+let hashtbl_update tbl k v_dflt v_fn =
+  Hashtbl.replace tbl k
+    (v_fn (match Hashtbl.find_opt tbl k with
+           | Some v -> v
+           | None -> v_dflt))
+
+let compute_parents (circuits: 'fn circuit list) =
+  let tag_to_parents = Hashtbl.create 50 in
+  List.iter (fun c ->
+      List.iter (fun (child: _ circuit) ->
+          hashtbl_update tag_to_parents child.tag []
+            (fun children -> child :: children))
+        (subcircuits c.Hashcons.node))
+    circuits;
+  tag_to_parents
 
 let print_dot_file out Graphs.{ graph_roots = roots; graph_nodes = circuits } =
   let tag_to_parents = compute_parents circuits in

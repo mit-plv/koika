@@ -79,6 +79,15 @@ module Util = struct
       SGA.int_args = List.map (fun (nm, tau) -> nm, sga_type_of_typ tau) fsig.int_args;
       SGA.int_retType = sga_type_of_typ fsig.int_rettype }
 
+  let rec rwdata_of_sga_rwdata (reg_sigs: 'a -> reg_signature) = function
+    | SGA.Rwdata_r0 r -> Rwdata_r0 (reg_sigs r)
+    | SGA.Rwdata_r1 r -> Rwdata_r1 (reg_sigs r)
+    | SGA.Rwdata_w0 r -> Rwdata_w0 (reg_sigs r)
+    | SGA.Rwdata_w1 r -> Rwdata_w1 (reg_sigs r)
+    | SGA.Rwdata_data0 r -> Rwdata_data0 (reg_sigs r)
+    | SGA.Rwdata_data1 r -> Rwdata_data1 (reg_sigs r)
+    | SGA.Rwdata_canfire -> Rwdata_canfire
+
   let sga_type_to_string tau =
     typ_to_string (typ_of_sga_type tau)
 
@@ -372,7 +381,7 @@ module Graphs = struct
         (pkg: (rule_name_t, reg_t, fn_t, fn_name_t) dedup_input_t) : fn_name_t circuit_graph =
     let module CircuitHash = struct
         type t = fn_name_t circuit'
-        let equal (c: fn_name_t circuit') (c': fn_name_t circuit') =
+        let rec equal (c: fn_name_t circuit') (c': fn_name_t circuit') =
           match c, c' with
           | CNot c1, CNot c1' ->
              c1 == c1'
@@ -388,9 +397,25 @@ module Graphs = struct
              f = f' (* Not hashconsed *) && a1 == a1' && a2 == a2'
           | CReadRegister r, CReadRegister r' ->
              r = r' (* Not hashconsed *)
+          | CBundle (rule_name1, rwset1), CBundle (rule_name2, rwset2) ->
+             rule_name1 = rule_name2 && equal_rwsets rwset1 rwset2
+          | CBundleRef (_, bundle1, field1 ), CBundleRef (_, bundle2, field2) ->
+             bundle1 == bundle2 && field1 = field2
           | CAnnot (_, s, c), CAnnot (_, s', c') ->
              s = s' (* Not hashconsed *) && c == c'
           | _, _ -> false
+        and equal_rwsets rwset1 rwset2 =
+          List.length rwset1 = List.length rwset2
+          && List.for_all2 (fun (rs1, rwdata1) (rs2, rwdata2) ->
+                rs1 = rs2 && equal_rwdata rwdata1 rwdata2)
+              rwset1 rwset2
+        and equal_rwdata rwdata1 rwdata2 =
+          rwdata1.read0 == rwdata2.read0
+          && rwdata1.read1 == rwdata2.read1
+          && rwdata1.write0 == rwdata2.write0
+          && rwdata1.write1 == rwdata2.write1
+          && rwdata1.data0 == rwdata2.data0
+          && rwdata1.data1 == rwdata2.data1
         let hash c =
           Hashtbl.hash c
       end in
@@ -413,7 +438,7 @@ module Graphs = struct
     let circuit_to_deduplicated = SGACircuitHashtbl.create 50 in
     let deduplicated_circuits = CircuitHashcons.create 50 in
 
-    let rec rebuild_for_deduplication (c: (rule_name_t, reg_t, fn_t) sga_circuit) =
+    let rec rebuild_circuit_for_deduplication (c: (rule_name_t, reg_t, fn_t) sga_circuit) =
       match c with
       | SGA.CNot c ->
          CNot (dedup c)
@@ -429,17 +454,35 @@ module Graphs = struct
          CExternal (pkg.di_fn_sigs fn, dedup c1, dedup c2)
       | SGA.CReadRegister r ->
          CReadRegister (pkg.di_reg_sigs r)
-      | SGA.CBundle (_, _) ->
-         assert false (* Only in a CBundle, which we drop *)
-      | SGA.CBundleRef (_sz, _bundle, _field, circuit) ->
-         rebuild_for_deduplication circuit
+      | SGA.CBundle (rule_name, regs_map) ->
+         CBundle (pkg.di_rule_names rule_name,
+                  List.map (fun r ->
+                      let rwdata = regs_map r in
+                      (pkg.di_reg_sigs r,
+                       rebuild_rwdata_for_deduplication rwdata))
+                    pkg.di_regs)
+      | SGA.CBundleRef (sz, bundle, field, circuit) ->
+         (match bundle with
+          | SGA.CBundle (rule_name, _regs) ->
+             if List.mem rule_name pkg.di_external_rules then
+               CBundleRef(sz, dedup bundle, Util.rwdata_of_sga_rwdata pkg.di_reg_sigs field)
+             else
+               rebuild_circuit_for_deduplication circuit
+          | _ -> assert false)
       | SGA.CAnnot (sz, annot, c) ->
          CAnnot (sz, Util.string_of_coq_string annot, dedup c)
+    and rebuild_rwdata_for_deduplication (rw : (rule_name_t, reg_t, fn_t) SGA.rwdata) =
+      { read0 = dedup rw.read0;
+        read1 = dedup rw.read1;
+        write0 = dedup rw.write0;
+        write1 = dedup rw.write1;
+        data0 = dedup rw.data0;
+        data1 = dedup rw.data1; }
     and dedup (c: (rule_name_t, reg_t, fn_t) sga_circuit) =
       match SGACircuitHashtbl.find_opt circuit_to_deduplicated c with
       | Some c' -> c'
       | None ->
-         let circuit = CircuitHashcons.hashcons deduplicated_circuits (rebuild_for_deduplication c) in
+         let circuit = CircuitHashcons.hashcons deduplicated_circuits (rebuild_circuit_for_deduplication c) in
          SGACircuitHashtbl.add circuit_to_deduplicated c circuit;
          circuit in
     let graph_roots = List.map (fun reg ->

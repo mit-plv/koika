@@ -191,6 +191,7 @@ type 'f scheduler =
   | Sequence of ('f, string) locd list
   | Try of ('f, string) locd * ('f, 'f scheduler) locd * ('f, 'f scheduler) locd
 
+
 type 'fn circuit = 'fn circuit' Hashcons.hash_consed
 and 'fn circuit' =
   | CNot of 'fn circuit
@@ -199,39 +200,30 @@ and 'fn circuit' =
   | CMux of size_t * 'fn circuit * 'fn circuit * 'fn circuit
   | CConst of bits_value
   | CExternal of 'fn ffi_signature * 'fn circuit * 'fn circuit
+  | CBundle of string * ((reg_signature * 'fn rwdata) list)
+  | CBundleRef of int * 'fn circuit * 'fn field
   | CReadRegister of reg_signature
   | CAnnot of size_t * string * 'fn circuit
+and 'fn field =
+  | Rwdata_r0 of reg_signature
+  | Rwdata_r1 of reg_signature
+  | Rwdata_w0 of reg_signature
+  | Rwdata_w1 of reg_signature
+  | Rwdata_data0 of reg_signature
+  | Rwdata_data1 of reg_signature
+  | Rwdata_canfire
+and 'fn rwdata =
+  { read0 : 'fn circuit;
+    read1 : 'fn circuit;
+    write0 : 'fn circuit;
+    write1 : 'fn circuit;
+    data0 : 'fn circuit;
+    data1 : 'fn circuit }
 
 type 'fn circuit_root = {
     root_reg: reg_signature;
     root_circuit: 'fn circuit;
   }
-
-let subcircuits = function
-  | CNot c -> [c]
-  | CAnd (c1, c2) -> [c1; c2]
-  | COr (c1, c2) -> [c1; c2]
-  | CMux (_sz, s, c1, c2) -> [s; c1; c2]
-  | CExternal (_fn, c1, c2) -> [c1; c2]
-  | CReadRegister _r -> []
-  | CAnnot (_sz, _annot, c) -> [c]
-  | CConst _ -> []
-
-let hashtbl_update tbl k v_dflt v_fn =
-  Hashtbl.replace tbl k
-    (v_fn (match Hashtbl.find_opt tbl k with
-           | Some v -> v
-           | None -> v_dflt))
-
-let compute_parents (circuits: 'fn circuit list) =
-  let tag_to_parents = Hashtbl.create 50 in
-  List.iter (fun c ->
-      List.iter (fun (child: _ circuit) ->
-          hashtbl_update tag_to_parents child.tag []
-            (fun children -> child :: children))
-        (subcircuits c.Hashcons.node))
-    circuits;
-  tag_to_parents
 
 let with_output_to_file fname (f: out_channel -> unit) =
   let out = open_out fname in

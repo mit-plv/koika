@@ -232,14 +232,6 @@ Record arg_sig {var_t} :=
 Definition prod_of_argsig {var_t} (a: @arg_sig var_t) :=
   (a.(arg_name), a.(arg_type)).
 
-Notation "x :: y" := {| arg_name := x%string; arg_type := y |} : intarg_scope.
-Delimit Scope intarg_scope with intarg.
-
-(* FIXME improve this notation *)
-Notation "{{{  name | x ~> .. ~> z ~> ret  }}}" :=
-  {| int_name := name%string;
-     int_args := (cons (prod_of_argsig (x%intarg)) .. (cons (prod_of_argsig z%intarg) nil) ..);
-     int_retType := ret |} (at level 60).
 
 (* Check {{{ "A" | "x" :: unit_t ~> bits_t 5 }}}. *)
 

@@ -9,75 +9,151 @@ Require Export
         SGA.Interop
         SGA.CircuitElaboration.
 
-Delimit Scope sga_scope with sga.
-Delimit Scope sga_expr_scope with sga_expr.
 
-(* These are just for pattern-matching, since '~' doesn't work in matches *)
-Notation "'Ob'" := (vect_nil) (at level 7, left associativity, only parsing) : bitparsing.
-Notation "bs '~' 0" := {| vhd := false; vtl := bs |} (at level 7, left associativity, only parsing) : bitparsing.
-Notation "bs '~' 1" := {| vhd := true; vtl := bs |} (at level 7, left associativity, only parsing) : bitparsing.
-Notation "bs '~' b" := {| vhd := b; vtl := bs |} (at level 7, left associativity, only parsing) : bitparsing.
-Delimit Scope bitparsing with bitparsing.
-Notation "`` bs" := (bs%bitparsing) (only parsing, at level 6).
+Declare Custom Entry koika.
 
-Notation "'Ob'" := (@vect_nil bool) (at level 7, left associativity, only printing) : bits_printing.
-(* Notation "bs '~' b" := {| vhd := b; vtl := bs |} (at level 7, left associativity, only printing) : bits_printing. (* FIXME *) *)
-Notation "bs '~' 0" := {| vhd := false; vtl := bs |} (at level 7, left associativity, only printing) : bits_printing.
-Notation "bs '~' 1" := {| vhd := true; vtl := bs |} (at level 7, left associativity, only printing) : bits_printing.
-Global Open Scope bits_printing.
-
-Notation "$ var" :=
-  (UVar var)
-    (at level 75, format "$ var") : sga_expr_scope.
-Notation "reg '#read0'" :=
-  (URead P0 reg)
-    (at level 99, format "reg '#read0'") : sga_expr_scope.
-Notation "reg '#read1'" :=
-  (URead P1 reg)
-    (at level 99, format "reg '#read1'") : sga_expr_scope.
-Notation "f [ arg ]" :=
-  (UCall (UCustomFn f) arg (UConstBits Ob))
-    (at level 99, arg at level 99, format "f [ arg ]") : sga_expr_scope.
-Notation "f [ arg1 ',' arg2 ]" :=
-  (UCall (UCustomFn f) arg1 arg2)
-    (at level 99, arg1 at level 99, arg2 at level 99,
-    format "f [ arg1 ','  arg2 ]") : sga_expr_scope.
-Notation "f [[ arg ]]" :=
-  (UCall (UPrimFn (UBitsFn f)) arg (UConstBits Ob))
-    (at level 99, arg at level 99, format "f [[ arg ]]") : sga_expr_scope.
-Notation "f [[ arg1 ',' arg2 ]]" :=
-  (UCall (UPrimFn (UBitsFn f)) arg1 arg2)
-    (at level 99, arg1 at level 99, arg2 at level 99,
-    format "f [[ arg1 ','  arg2 ]]") : sga_expr_scope.
-
-Notation "'skip'" :=
-  (UConstBits Ob) (at level 99) : sga_scope.
+Notation "'{$' e '$}'" := e (e custom koika at level 200, format "'{$' '[v' '/' e '/' ']' '$}'").
 Notation "'fail'" :=
-  (UFail (bits_t 0)) (at level 99) : sga_scope.
-Notation "r1 ';;' r2" :=
-  (USeq r1 r2) (at level 99) : sga_scope.
-Notation "'Let' var '<-' expr 'in' body" :=
-  (UBind var expr%sga_expr body)
-    (at level 99, body at level 98,
-     format "'Let'  var  '<-'  expr  'in'  body") : sga_scope.
-Notation "'If' c 'Then' tbr 'Else' fbr 'EndIf'" :=
-  (UIf c%sga_expr tbr fbr) (at level 99) : sga_scope.
-Notation "reg '#write0' value" :=
-  (UWrite P0 reg value%sga_expr)
-    (at level 99, format "reg '#write0'  value") : sga_scope.
-Notation "reg '#write1' value" :=
-  (UWrite P1 reg value%sga_expr)
-    (at level 99, format "reg '#write1'  value") : sga_scope.
+  (UFail (bits_t 0)) (in custom koika at level 20, format "'fail'").
+Notation "'fail' t" :=
+  (UFail (bits_t t)) (in custom koika at level 20, t constr at level 0 ,format "'fail' t").
+Notation "'UError'" := (UError) (in custom koika at level 20).
+Notation "'let' a ':=' b 'in' c" := (UBind a b c) (in custom koika at level 99, a constr at level 0, right associativity, format "'[v' 'let'  a  ':='  b  'in' '/' c ']'").
+Notation "a ';' b" := (USeq a b) (in custom koika at level 30, format "'[v' a ';' '/' b ']'" ).
+Notation "'set' a ':=' b" := (UAssign a b) (in custom koika at level 29, a constr at level 0, format "'set'  a  ':='  b").
+
+
+Notation "'(' a ')'" := (a) (in custom koika at level 99, a custom koika at level 99, format "'[v' '(' a ')' ']'").
+
+
+Notation "a" := (UVar a) (in custom koika at level 0, a constr at level 0, format "'[' a ']'").
+
+Notation "'read0' '(' reg ')' " := (URead P0 reg) (in custom koika at level 30, reg constr, format "'read0' '(' reg ')'").
+Notation "'read1' '(' reg ')' " := (URead P1 reg) (in custom koika at level 30, reg constr, format "'read1' '(' reg ')'").
+Notation "'write0' '(' reg ',' value ')'" :=
+  (UWrite P0 reg value)
+    (in custom koika at level 30, reg constr at level 13, format "'write0' '(' reg ',' value ')'").
+Notation "'write1' '(' reg ',' value ')'" :=
+  (UWrite P1 reg value)
+    (in custom koika at level 30, reg constr at level 13, format "'write1' '(' reg ',' value ')'").
+
+Notation "'if' a 'then' t 'else' f" := (UIf a t f) (in custom koika at level 30, right associativity, format "'[v' 'if'  a '/' 'then'  t '/' 'else'  f ']'").
+Notation "'when' a 'then' t " := (UIf a t (UFail (bits_t 0))) (in custom koika at level 30, right associativity, format "'[v' 'when'  a '/' 'then'  t '/' ']'").
+
+
+Notation "a '&&' b" :=  (UCall (UPrimFn (UBitsFn UAnd)) a b) (in custom koika at level 80,  right associativity, format "a  '&&'  b").
+Notation "'!' a" := (UCall (UPrimFn (UBitsFn UNot)) a (UConstBits Ob)) (in custom koika at level 75, a custom koika at level 99, format "'!' a").
+Notation "a '||' b" :=  (UCall (UPrimFn (UBitsFn UOr)) a b) (in custom koika at level 85, format "a  '||'  b").
+Notation "a '+' b" :=  (UCall (UPrimFn (UBitsFn UUIntPlus)) a b) (in custom koika at level 85, format "a  '+'  b").
+Notation "a '==' b" :=  (UCall (UPrimFn (UConvFn UEq)) a b) (in custom koika at level 79, format "a  '=='  b").
+Notation "a '>>' b" :=  (UCall (UPrimFn (UBitsFn ULsr)) a b) (in custom koika at level 79, format "a  '>>'  b").
+Notation "a '<<' b" :=  (UCall (UPrimFn (UBitsFn ULsl)) a b) (in custom koika at level 79, format "a  '<<'  b").
+Notation "'{' a ',' b '}'" := (UCall (UPrimFn (UBitsFn UConcat)) a b) (in custom koika at level 99, format "'{' a ',' b '}'").
+Notation "a '[' b ']'" := (UCall (UPrimFn (UBitsFn USel)) a b) (in custom koika at level 75, format "'[' a [ b ] ']'").
+Notation "a '[' b ':+' c ']'" := (UCall (UPrimFn (UBitsFn (UIndexedPart c))) a b) (in custom koika at level 75, c constr at level 0, format "'[' a [ b ':+' c ] ']'").
+Notation "'`' a '`'" := ( a) (in custom koika at level 50, a constr at level 99).
+
+Declare Custom Entry koika_types.
+
+Notation " x ':' y " := (cons (prod_of_argsig {| arg_name := x%string; arg_type := y |}) nil) (in custom koika_types at level 60,x constr at level 12, y constr at level 12 ).
+Notation "a ',' b" := (app a b)  (in custom koika_types at level 95, a custom koika_types , b custom koika_types, right associativity).
+
+
+Notation "'function' name '(' args ')'  ':' ret ':=' body" :=
+  {| int_sig :=   {| int_name := name%string;
+                     int_args := args;
+                     int_retType := ret |};
+      int_body := body |}
+    (at level 99, name constr at level 0, args custom koika_types, ret constr at level 0, body custom koika at level 99, format "'[v' 'function'  name '(' args ')'  ':'  ret  ':=' '/' body ']'").
+
+Notation "'function' name  ':' ret ':=' body" :=
+  {| int_sig :=   {| int_name := name%string;
+                     int_args := nil;
+                     int_retType := ret |};
+      int_body := body |}
+    (at level 99, name constr at level 0,  ret constr at level 0, body custom koika at level 99,  format "'[v' 'function'  name  ':'  ret  ':=' '/' body ']'" ).
+
+
+
+Declare Custom Entry koika_args.
+
+Notation "x" := (cons x nil) (in custom koika_args at level 60, x custom koika at level 99).
+Notation "arg1 , arg2" := (app arg1 arg2) (in custom koika_args at level 13, arg1 custom koika_args, arg2 custom koika_args).
+
+
+Notation "'call' instance method args" :=
+    (UInternalCall (int_sig method) (UCallModule instance id (int_body method)) args)
+      (in custom koika at level 99, instance constr at level 0, method constr at level 0, args custom koika_args at level 0).
+Notation "'funcall' method args" :=
+    (UInternalCall (int_sig method) (int_body method) args)
+                                   (in custom koika at level 99, method constr at level 0, args custom koika_args at level 0).
+Notation "'call0' instance method " :=
+    (UInternalCall (int_sig method) (UCallModule instance id (int_body method)) nil)
+                                   (in custom koika at level 98, instance constr at level 0, method constr at level 0).
+Notation "'funcall0' method " :=
+    (UInternalCall (int_sig method) (int_body method) nil)
+                                   (in custom koika at level 98,  method constr at level 0).
+Notation "'get' '(' t ',' f ')'" :=
+  (UCall (UPrimFn (UStructFn (UDo GetField f))) t (UConstBits Ob))
+    (in custom koika at level 30, t custom koika at level 13, f constr at level 13, format "'get' '(' t ','  f ')'").
+
+Notation "'#' s" := (UConstBits s) (in custom koika at level 98, s constr at level 0 ).
+
 
 Notation "r '|>' s" :=
   (UCons r s)
-    (at level 99, s at level 99, right associativity) : sga_scope.
+    (at level 99, s at level 99, right associativity).
 Notation "'done'" :=
-  UDone (at level 99) : sga_scope.
+  UDone (at level 99).
 
-Arguments Var {var_t reg_t fn_t R Sigma sig} k {tau} {m} : assert.
-
-Notation "'[[read0]]'" := (LE LogRead P0 tt) (only printing).
-Notation "'[[read1]]'" := (LE LogRead P1 tt) (only printing).
-Notation "'[[write0'  v ']]'" := (LE LogWrite P0 v) (only printing).
-Notation "'[[write1'  v ']]'" := (LE LogWrite P1 v) (only printing).
+Module Tests.
+  Parameter pos_t : Type.
+  Parameter method_name_t : Type.
+  Parameter reg_t : Type.
+  Parameter fn_t : Type.
+  Notation uaction reg :=  (uaction pos_t method_name_t string reg (interop_ufn_t fn_t)).
+  Definition test_1 : uaction reg_t := {$ let "yoyo" := fail 2 in UError $}.
+  Definition test_2 : uaction reg_t := {$ UError; UError $}.
+  Definition test_3 : uaction reg_t := {$ set "yoyo" := UError ; UError $}.
+  Definition test_4 : uaction reg_t := {$ UError ; set "yoyo" := UError $}.
+  Definition test_5 : uaction reg_t := {$ let "yoyo" := set "yoyo" := UError in UError $}.
+  Definition test_6 : uaction reg_t := {$ let "yoyo" := set "yoyo" := UError; UError in UError;UError $}.
+  Definition test_7 : uaction reg_t := {$ (let "yoyo" := (set "yoyo" := UError); UError in UError;UError) $}.
+  Definition test_8 : uaction reg_t := {$ (let "yoyo" := set "yoyo" := UError; UError in UError);UError $}.
+  Inductive test : Set := |rData (n:nat).
+  Axiom data0 : reg_t.
+  Axiom data1 : reg_t.
+  Definition test_9 : uaction reg_t := {$ read0(data0) $}.
+  Definition test_10 : nat -> uaction test := (fun idx => {$ read0(rData idx) $}).
+  Definition test_11 : uaction reg_t := {$ (let "yoyo" := read0(data0) in write0(data0, UError)); fail $}.
+  Definition test_12 : uaction reg_t := {$ (let "yoyo" := if fail then read0(data0) else fail in write0(data0,UError));fail $}.
+  Definition test_13 : uaction reg_t := {$ "yoyo" $}.
+  Definition test_14 : uaction reg_t := {$ !"yoyo" && "yoyo" $}.
+  Definition test_14' : uaction reg_t := {$ !("yoyo" && "yoyo") $}.
+  Definition test_15 : uaction reg_t := {$ "yoyo" && read0(data0) $}.
+  Definition test_16 : uaction reg_t := {$ !read0(data1) && !read0(data1) $}.
+  Definition test_17 : uaction reg_t := {$ !read0(data1) && UError$}.
+  Definition test_18 : uaction reg_t := {$ !read0(data1) && "Yoyo" $}.
+  Definition test_19 : uaction reg_t := {$ "yoy" [ "oio" && "ab" ] && `UConstBits Ob~1~0` $}.
+  Definition test_20 : uaction reg_t := {$ "yoyo" [ UError :+ 3 ] && "yoyo" $}.
+  (* Notation "'{&' a '&}'" := (a) (a custom koika_types at level 200). *)
+  (* Definition test_21 := {& "yoyo" : bits_t 2 &}. *)
+  (* Definition test_22 := {& "yoyo" : bits_t 2 , "yoyo" : bits_t 2  &}. *)
+  Definition test_23 : UInternalFunction pos_t string reg_t fn_t := function "foo" ("arg1" : (bits_t 3),  "arg2" : (bits_t 2) ) :  bits_t 4 := UError.
+  Definition test_24 : nat -> UInternalFunction pos_t string reg_t fn_t := (fun sz => function "uouo" ("arg1" : bits_t sz , "arg1" : bits_t sz ) : bits_t sz  := UError).
+  Definition test_25 : nat -> UInternalFunction pos_t string reg_t (interop_ufn_t fn_t) := (fun sz => function "uouo" ("arg1" : bits_t sz ) : bits_t sz  := let "oo" := UError >> UError in UError).
+  Definition test_26 : nat -> UInternalFunction pos_t string reg_t fn_t := (fun sz => function "uouo" : bits_t sz  := UError).
+  Definition test_27 : uaction reg_t := {$
+           (if (!read0(data0)) then
+              write0(data0, `UConstBits Ob~1`);
+                let "yo" := if ("dlk" == `UConstBits Ob~1` ) then "bla" else "yoyo" || "foo"
+                in
+                write0(data0,`UConstBits Ob~1`)
+            else
+              read0(data0));
+         fail
+           $}.
+  (* Notation "'{*' a '*}'" := (a) (a custom koika_args at level 200). *)
+  (* Definition test_28 : list (uaction reg_t) := {* "yoyo" *}. *)
+  (* Definition test_29 : list (uaction reg_t) := {* "yoyo", if "var" then UError else UError;UError *}. *)
+End Tests.

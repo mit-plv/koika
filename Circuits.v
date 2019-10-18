@@ -21,8 +21,13 @@ Section Circuit.
   Context {Sigma: fn_t -> CExternalSignature}.
 
   Inductive rwdata_field :=
-    | rwdata_r0 | rwdata_r1 | rwdata_w0 | rwdata_w1
-    | rwdata_data0 | rwdata_data1 | rwdata_canfire.
+  | rwdata_r0 (r: reg_t)
+  | rwdata_r1 (r: reg_t)
+  | rwdata_w0 (r: reg_t)
+  | rwdata_w1 (r: reg_t)
+  | rwdata_data0 (r: reg_t)
+  | rwdata_data1 (r: reg_t)
+  | rwdata_canfire.
 
   Inductive circuit: nat -> Type :=
   | CNot (c: circuit 1): circuit 1
@@ -503,12 +508,12 @@ Section CircuitCompilation.
 
   Definition bundleref_wrap_rwdata bundle (r: reg_t) (ruleReg: @rwdata (CR r))
     : @rwdata (CR r) :=
-    {| read0 := CBundleRef bundle rwdata_r0 (ruleReg.(read0));
-       read1 := CBundleRef bundle rwdata_r1 (ruleReg.(read1));
-       write0 := CBundleRef bundle rwdata_w0 (ruleReg.(write0));
-       write1 := CBundleRef bundle rwdata_w1 (ruleReg.(write1));
-       data0 := CBundleRef bundle rwdata_data0 (ruleReg.(data0));
-       data1 := CBundleRef bundle rwdata_data1 (ruleReg.(data1)) |}.
+    {| read0 := CBundleRef bundle (rwdata_r0 r) (ruleReg.(read0));
+       read1 := CBundleRef bundle (rwdata_r1 r) (ruleReg.(read1));
+       write0 := CBundleRef bundle (rwdata_w0 r) (ruleReg.(write0));
+       write1 := CBundleRef bundle (rwdata_w1 r) (ruleReg.(write1));
+       data0 := CBundleRef bundle (rwdata_data0 r) (ruleReg.(data0));
+       data1 := CBundleRef bundle (rwdata_data1 r) (ruleReg.(data1)) |}.
 
   Definition bundleref_wrap_rwset bundle (rws: rwset) :=
     REnv.(map) (bundleref_wrap_rwdata bundle) rws.

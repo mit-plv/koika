@@ -14,7 +14,7 @@ Record demo_package_t :=
 
 Notation opt := simplify_bool_1.
 Notation interop_opt := (lco_opt_compose simplify_bool_1 elaborate_externals_1).
-Notation uaction := (uaction unit unit).
+Notation uaction := (uaction unit string).
 
 Module Ex1.
   Notation var_t := string.
@@ -51,10 +51,11 @@ Module Ex1.
   Example uactions r : uaction var_t reg_t fn_t :=
     match r with
     | r1 =>
-      UBind "x" (URead P0 R0)
-            (UIf (UCall Even (UVar "x") (UConstBits Ob))
-                 (UWrite P0 R1 (UConstBits Ob~1))
-                 (UWrite P0 R1 (UConstBits Ob~1)))
+      {$ let "x" := read0(R0) in
+         if (`UCall Even (UVar "x") (UConstBits Ob)`)
+         then write0(R1,`UConstBits Ob~1`)
+         else write0(R1,`UConstBits Ob~1`)
+                       $}
     end.
 
   Definition rules :=
@@ -68,6 +69,7 @@ Module Ex1.
 
   Definition s1_result :=
     Eval compute in interp_scheduler (ContextEnv.(create) r) sigma rules s1.
+
   Definition s1_circuit :=
     compile_scheduler opt (ContextEnv.(create) (readRegisters R Sigma)) rules s1.
 End Ex1.
@@ -100,17 +102,22 @@ Module Ex2.
             end.
 
   Example _negate : uaction var_t reg_t ufn_t  :=
-    UBind "x" (URead P1 R0)
-          (UWrite P1 R0 (UVar "x")).
+    {$
+       let "x" := read1(R0) in
+       write1(R0,"x")
+                $}.
 
   Example _swap_or_replace : uaction var_t reg_t ufn_t  :=
-    UBind "should_swap" (URead P0 R2)
-          (UIf (UVar "should_swap")
-               (USeq (UWrite P0 R1 (URead P0 R0))
-                     (UWrite P0 R0 (URead P0 R1)))
-               (UWrite P0 R0 (UCall UOr
-                                    (URead P0 R0)
-                                    (URead P0 R1)))).
+    {$
+      let "should_swap" := read0(R2) in
+      if "should_swap"
+      then
+        write0(R1,read0(R0));
+        write0(R0,read0(R1))
+      else
+        write0(R0,`UCall UOr {$ read0(R0) $} {$  read0(R1) $} `)
+                 $}.
+
 
   Example _ill_typed_write : uaction var_t reg_t ufn_t  :=
     UWrite P0 R2 (URead P0 R1).
@@ -164,7 +171,7 @@ Module Collatz.
   Definition ufn_t := interop_minimal_ufn_t.
   Inductive name_t := divide | multiply.
 
-  Definition logsz := 5.
+  Definition logsz := 4.
   Notation sz := (pow2 logsz).
 
   Definition R r :=
@@ -174,53 +181,43 @@ Module Collatz.
 
   Definition r idx : R idx :=
     match idx with
-    | R0 => Bits.of_nat 32 19
+    | R0 => Bits.of_nat 16 19
     end.
+  Notation uaction := (uaction var_t reg_t ufn_t).
+  Notation InternalFunction := (UInternalFunction unit string reg_t ufn_t).
+  (* Example NESVD 2019 *)
+  Definition _divide : uaction :=
+  {$
+    let "v" := read0(R0) in
+    let "odd" := "v"[#(Bits.zero logsz)] in
+    if !"odd"
+    then
+       write0(R0,"v" >> #Ob~1)
+    else
+      fail
+  $}.
 
-  (* TODO bug report *)
-  (* Notation "!!!!" := ltac:(exact (true, false, tt)). *)
-  (* Compute match (true, true, tt) with *)
-  (*         | !!!! => 1 *)
-  (*         end. *)
+  Definition TimesThree  : InternalFunction :=
+    function "timeThree" ("arg1" : bits_t 16) : bits_t 16 :=
+     ("arg1" << #Ob~1)  + "arg1".
 
-  Open Scope sga.
-
-  Definition _divide : uaction var_t reg_t ufn_t :=
-    Let "v" <- R0#read0 in
-    Let "odd" <- USel[[$"v", UConstBits (Bits.zero logsz)]] in
-    If UNot[[$"odd"]] Then
-       R0#write0(ULsr[[$"v", UConstBits Ob~1]])
-    Else
-       fail
-    EndIf.
-
-  Definition TimesThree (ex: uaction var_t reg_t ufn_t) :=
-    UUIntPlus[[ULsl[[ex, UConstBits Ob~1]], ex]]%sga_expr.
-
-  Definition _multiply : uaction var_t reg_t ufn_t :=
-    Let "v" <- R0#read1 in
-    Let "odd" <- USel[[$"v", UConstBits (Bits.zero logsz)]] in
-    If $"odd" Then
-       R0#write1(UUIntPlus[[TimesThree ($"v"),
-                            UConstBits (Bits.one sz)]])
-    Else
-       fail
-    EndIf.
-
-(* Bug report *)
-(* Require Import Coq.extraction.Extraction. *)
-(* (* Extraction Language JSON. *) *)
-(* Set Extraction KeepSingleton. *)
-(* Extraction Collatz.reg_t. *)
-
-  Definition cr := ContextEnv.(create) r.
+  Definition _multiply : uaction :=
+    {$
+    let "v" := read1(R0) in
+    let "odd" := "v"[#(Bits.zero logsz)] in
+    if "odd"
+    then
+       write1(R0, (funcall TimesThree "v") +  #(Bits.one sz))
+    else
+      fail
+        $}.
 
   Definition collatz : scheduler _ :=
     tc_scheduler (divide |> multiply |> done).
 
-  (* Ltac __must_typecheck R Sigma tcres ::= *)
-  (*   __must_typecheck_cbn R Sigma tcres. *)
+  Definition cr := ContextEnv.(create) r.
 
+  (* Typechecking  *)
   Definition rules :=
     tc_rules R interop_minimal_Sigma interop_minimal_uSigma
              (fun r => match r with
@@ -234,6 +231,7 @@ Module Collatz.
   Definition divide_result :=
     compute (interp_action cr interop_minimal_sigma CtxEmpty log_empty log_empty
                            (rules divide)).
+
   Definition multiply_result :=
     compute (interp_action cr interop_minimal_sigma CtxEmpty log_empty log_empty
                            (rules multiply)).
@@ -270,6 +268,7 @@ Module Collatz.
        vp := {| vp_pkg := sga_package;
                vp_external_rules := List.nil;
                vp_custom_fn_names := interop_empty_fn_names |} |}.
+  Check package.
 End Collatz.
 
 Require Import Coq.Lists.List.
@@ -321,19 +320,22 @@ Module Decoder (P: Unpacker) (F: Fetcher).
     | Rdecoded => (zero, (zero, (zero, tt)))
     end.
 
-  Open Scope sga.
-
   Notation uaction := (uaction var_t reg_t ufn_t).
 
   Definition _fetch : uaction :=
-    Let "pc" <- Rpc#read0 in
-    Let "encoded" <- F.fetch_instr _ "pc" in
-    ((Rencoded#write0($"encoded"));;
-     (Rpc#write0(UUIntPlus[[$"pc", UConstBits Ob~0~0~1]]))).
+    {$
+    let "pc" := read0(Rpc) in
+    let "encoded" := `F.fetch_instr _ "pc"` in
+    write0(Rencoded,"encoded");
+    write0(Rpc,"pc" + `UConstBits Ob~0~0~1`)
+                $}
+  .
 
   Definition _decode : uaction :=
-    Let "encoded" <- Rencoded#read1 in
-    (Rdecoded#write0 (P.unpack _ _ "encoded")).
+    {$
+    let "encoded" := read1(Rencoded) in
+    write0(Rdecoded,`P.unpack _ _ "encoded"`)
+     $}.
 
   Definition cr := ContextEnv.(create) r.
 
@@ -387,20 +389,19 @@ Module ManualUnpacker <: Unpacker.
     (UCall (UPrimFn (UStructFn fn)) a1 a2).
 
   Definition unpack reg_t custom_ufn_t encoded: uaction string reg_t (interop_ufn_t custom_ufn_t) :=
-    (Let "imm" <- SCall (UDoBits decoded_sig GetField "immediate") ($encoded) (UConstBits Ob) in
-     Let "src" <- SCall (UDoBits decoded_sig GetField "src") ($encoded) (UConstBits Ob) in
-     Let "dst" <- SCall (UDoBits decoded_sig GetField "dst") ($encoded) (UConstBits Ob) in
-     (* Let "imm" <- (UPart 0 16)[[$encoded, UConstBits Ob]] in *)
-     (* Let "dst" <- (UPart 16 8)[[$encoded, UConstBits Ob]] in *)
-     (* Let "src" <- (UPart 24 8)[[$encoded, UConstBits Ob]] in *)
-     (SCall (UDo SubstField "immediate")
-            (SCall (UDo SubstField "dst")
-                   (SCall (UDo SubstField "src")
-                          (UCall (UPrimFn (UConvFn (UInit (struct_t decoded_sig))))
-                                 (UConstBits Ob) (UConstBits Ob))
-                          ($"src"))
-                   ($"dst"))
-            ($"imm"))%sga_expr)%sga.
+    {$
+       let "imm" := `SCall (UDoBits decoded_sig GetField "immediate") {$ encoded $} (UConstBits Ob)` in
+       let "src" := `SCall (UDoBits decoded_sig GetField "src") {$ encoded $} (UConstBits Ob)` in
+       let "dst" := `SCall (UDoBits decoded_sig GetField "dst") {$ encoded $} (UConstBits Ob)` in
+       `SCall (UDo SubstField "immediate")
+               (SCall (UDo SubstField "dst")
+                      (SCall (UDo SubstField "src")
+                             (UCall (UPrimFn (UConvFn (UInit (struct_t decoded_sig))))
+                                    (UConstBits Ob) (UConstBits Ob))
+                             {$"src"$})
+                     {$"dst"$})
+               {$"imm"$}`
+     $}.
 End ManualUnpacker.
 
 Module PrimitiveUnpacker <: Unpacker.
@@ -529,34 +530,44 @@ Module Pipeline.
   Definition iSigma idx := interop_Sigma Sigma idx.
   Definition iuSigma := interop_uSigma uSigma.
 
-  Open Scope sga.
+  Local Notation "f [ arg ]" :=
+    (UCall (UCustomFn f) arg (UConstBits Ob))
+      (at level 99, arg at level 99, format "f [ arg ]").
+  Local Notation "f [ arg1 ',' arg2 ]" :=
+    (UCall (UCustomFn f) arg1 arg2)
+      (at level 99, arg1 at level 99, arg2 at level 99,
+       format "f [ arg1 ','  arg2 ]").
 
   Definition _doF : uaction _ _ _ :=
-    Let "v" <- inputReg#read0 in
-    ((inputReg#write0(Stream[$"v"]));;
-     Let "invalid" <- invalid#read1 in
-     If $"invalid" Then
-       invalid#write1(UConstBits Ob~0);;
-       (r0#write0(F[$"v"]))
-     Else
-       fail
-     EndIf).
+    {$
+       let "v" := read0(inputReg) in
+       write0(inputReg,`Stream[UVar "v"]`);
+       let "invalid" := read1(invalid) in
+       if "invalid"
+       then
+         write1(invalid,`UConstBits Ob~0`);
+         write0(r0,`F[UVar "v"]`)
+       else
+         fail
+           $}.
 
   Definition _doG : uaction _ _ _ :=
-    Let "invalid" <- invalid#read0 in
-    If UNot[[$"invalid"]] Then
-      Let "data" <- r0#read0 in
-      Let "v" <- outputReg#read0 in
-      ((outputReg#write0(Stream[$"v"]));;
-       (invalid#write0(UConstBits Ob~1));;
-       If (UCall (UPrimFn (UConvFn UEq)) (G[$"data"]) (G[F[$"v"] ])) Then
-           skip
-       Else
-           correct#write0(UConstBits Ob~0)
-       EndIf)
-    Else
-        fail
-    EndIf.
+    {$
+    let "invalid" := read0(invalid) in
+    if !"invalid" then
+      let "data" := read0(r0) in
+      let "v" := read0(outputReg) in
+      write0(outputReg,`Stream[{$"v"$}]`);
+      write0(invalid,`UConstBits Ob~1`);
+      if `G[UVar "data"]` == `G[F[UVar "v"]]`
+      then
+        `UConstBits Ob`
+      else
+        write0(correct,`UConstBits Ob~0`)
+    else
+      fail
+        $}.
+
 
   Definition rules :=
     tc_rules R iSigma iuSigma
@@ -646,13 +657,14 @@ Module RegisterFile_Ordered.
   Definition Sigma := interop_minimal_Sigma.
   Definition uSigma := interop_minimal_uSigma.
 
-  Open Scope sga.
-
   Definition _ReadReg : uaction _ _ interop_minimal_ufn_t :=
-    Let "v" <- rIndex#read0 in
-    ((rIndex#write0(UUIntPlus[[$"v", UConstBits (Bits.of_nat (log2 nregs) 1)]]));;
-     (rOutput#write0(UCompleteSwitch (log2 nregs) (pred nregs) "v"
-                                     (vect_map (fun idx => (rData idx)#read0) (all_indices nregs))))).
+
+    {$
+    let "v" := read0(rIndex) in
+    write0(rIndex,"v" + `UConstBits (Bits.of_nat (log2 nregs) 1)`);
+    write0(rOutput,`UCompleteSwitch (log2 nregs) (pred nregs) "v"
+                    (vect_map (fun idx => {$ read0(rData idx) $}) (all_indices nregs))`)
+  $}.
 
   Definition rules :=
     tc_rules R iSigma iuSigma
@@ -725,19 +737,20 @@ Module Enums.
   Definition Sigma := interop_minimal_Sigma.
   Definition uSigma := interop_minimal_uSigma.
 
-  Open Scope sga.
 
   Definition _Incr : uaction _ _ interop_minimal_ufn_t :=
-    Let "bits_a" <- (UCall (UPrimFn (UConvFn UPack))
-                          (rA#read0) (UConstBits Ob)) in
-    Let "bits_b" <- (UCall (UPrimFn (UConvFn UPack))
-                          (rB#read0) (UConstBits Ob)) in
-    Let "neg_a" <- UNot[[$"bits_a", UConstBits Ob]] in
-    Let "succ_b" <- UUIntPlus[[$"bits_b", UConstBits Ob~0~0~1]] in
-    ((rA#write0(UCall (UPrimFn (UConvFn (UUnpack (enum_t flag_sig))))
-                      ($"neg_a") (UConstBits Ob)));;
-     (rB#write0(UCall (UPrimFn (UConvFn (UUnpack (enum_t flag_sig))))
-                      ($"succ_b") (UConstBits Ob)))).
+    {$
+       let "bits_a" := `UCall (UPrimFn (UConvFn UPack))
+                               {$read0(rA)$} (UConstBits Ob)` in
+       let "bits_b" := `UCall (UPrimFn (UConvFn UPack))
+                               {$read0(rB)$} (UConstBits Ob)` in
+       let "neg_a" := !"bits_a" in
+       let "succ_b" := "bits_b" + `UConstBits Ob~0~0~1` in
+       write0(rA,`UCall (UPrimFn (UConvFn (UUnpack (enum_t flag_sig))))
+                {$"neg_a"$} (UConstBits Ob)`);
+       write0(rB, `UCall (UPrimFn (UConvFn (UUnpack (enum_t flag_sig))))
+                   {$"succ_b"$} (UConstBits Ob)`)
+       $}.
 
   (* Ltac __must_typecheck R Sigma tcres ::= *)
   (*   __must_typecheck_cbn R Sigma tcres. *)
@@ -791,20 +804,19 @@ Module Enums.
 End Enums.
 
 Module IntCall.
+  Definition ufn_t := interop_minimal_ufn_t.
   Module Delay.
     Inductive reg_t := buffer.
-    Definition fn_t := interop_empty_t.
-
-    Definition swap tau: UInternalFunction unit string reg_t fn_t  :=
-      {| int_sig := {{{ "swap" | "arg1" :: tau ~> tau }}};
-         int_body := (USeq (buffer#write0($"arg1")) (URead P0 buffer))%sga |}.
+    Definition swap tau: UInternalFunction unit string reg_t ufn_t  :=
+      function "swap" ("arg1" : tau) : tau :=
+      write0(buffer, "arg1");
+      read0(buffer).
 
     Instance FiniteType_reg_t : FiniteType reg_t := _.
   End Delay.
 
   Definition var_t := string.
   Inductive reg_t := rA | rDelay1 (d: Delay.reg_t) | rDelay2 (d: Delay.reg_t).
-  Definition ufn_t := interop_minimal_ufn_t.
   Inductive name_t := rl.
 
   Definition R r :=
@@ -818,13 +830,9 @@ Module IntCall.
   Definition uSigma := interop_minimal_uSigma.
   Notation uaction := (Syntax.uaction unit string).
 
-  Open Scope sga.
-  Open Scope sga_expr.
-
   Definition nor (sz: nat) : UInternalFunction unit var_t reg_t ufn_t :=
-    {| int_sig := {{{ ("nor<" ++ string_of_nat sz ++ ">")%string |
-                     "arg1" :: bits_t sz ~> "arg2" :: bits_t sz ~> bits_t sz }}};
-       int_body := UNot[[UOr[[$"arg1", $"arg2"]], UConstBits Ob]]%sga_expr |}.
+    function ("nor<" ++ string_of_nat sz ++ ">") ("arg1" : bits_t sz, "arg2" : bits_t sz) : bits_t sz :=
+  !("arg1" || "arg2").
 
   Notation UCallFn fn args :=
     (UInternalCall (int_sig fn) (int_body fn) args).
@@ -839,12 +847,13 @@ Module IntCall.
   Definition swap16 := Delay.swap (bits_t 16).
 
   Definition _rl : uaction string _ interop_minimal_ufn_t :=
-    Let "a" <- rA#read0 in
-    Let "old_a" <- UCallMethod rDelay2 fSigma swap16 (($"a") :: nil) in
-    Let "old_al" <- UCallMethod rDelay1 fSigma swap8 ((UPart 0 8)[[$"old_a", UConstBits Ob]] :: nil) in
-    ((rA#write0(UCallFn (nor 16) (rA#read0 :: ($"old_a") :: nil)));;
-     (UCallFn (display (Display.Str "rA: " :: Display.Value (bits_t 16) :: nil))
-              (($"a") :: nil))).
+    {$
+       let "a" := read0(rA) in
+       let "old_a" := call rDelay2 swap16 "a" in
+       let "old_al" := call rDelay1 swap8 ("old_a"[`UConstBits Ob~0~0~0~0` :+8])  in
+       write0(rA, funcall (nor 16) (read0(rA)), "old_a");
+       funcall (display (Display.Str "rA: " :: Display.Value (bits_t 16) :: nil)) "a"
+       $}.
 
   (* Ltac __must_typecheck R Sigma tcres ::= *)
   (*   __must_typecheck_cbn R Sigma tcres. *)
@@ -905,6 +914,163 @@ Module IntCall.
                vp_custom_fn_names := interop_empty_fn_names |} |}.
 End IntCall.
 
+Module ExternallyCompiledRule.
+  Open Scope string_scope.
+  Definition var_t := string.
+  Definition method_name_t := string.
+  Definition  custom_t:= interop_empty_t.
+  Definition ufn_t := (interop_ufn_t custom_t).
+  Definition pos_t := unit.
+
+  Module Type Fifo.
+    Parameter  T:type.
+  End Fifo.
+
+  Module Fifo1 (f: Fifo).
+    Import f.
+    Inductive reg_t := data0 |  valid0.
+
+    Definition R r :=
+      match r with
+      | data0 => T
+      | valid0 => bits_t 1
+      end.
+
+    Notation zero := (Bits.zeroes _).
+
+    Definition r idx : R idx :=
+      match idx with
+      | data0 => value_of_bits zero
+      | valid0 => zero
+      end.
+
+    Definition name_reg r :=
+      match r with
+      | data0 => "data0"
+      | valid0 => "valid0"
+      end.
+
+
+    Local Notation uaction := (uaction pos_t method_name_t var_t reg_t ufn_t).
+
+    Definition enq : @UInternalFunction pos_t method_name_t var_t reg_t ufn_t :=
+      function "enq" ("data" : T) : bits_t 0 :=
+        if (!read0(valid0)) then
+          write0(data0,"data");
+            write0(valid0,`UConstBits Ob~1`)
+        else
+          fail.
+
+
+    Definition deq : @UInternalFunction pos_t method_name_t var_t reg_t ufn_t :=
+      function "deq" : T :=
+        if (read0(valid0)) then
+          write0(valid0,`UConstBits Ob~0`);
+            read0(data0)
+        else
+          fail 5.
+
+    Instance FiniteType_reg_t : FiniteType reg_t := _.
+
+  End Fifo1.
+
+
+  Module FifoBit5 <: Fifo.
+    Definition T:= bits_t 5.
+  End FifoBit5.
+  Module Fifo5 := Fifo1 FifoBit5.
+
+  Inductive reg_t := MyFifo (fifof2state:Fifo5.reg_t) | Mem | Rdata .
+  Inductive custom_fn_t := .
+  Inductive name_t := fetch | ding.
+
+  Definition logsz := 5.
+  Notation sz := (pow2 logsz).
+
+  Definition R r :=
+    match r with
+    | MyFifo f => Fifo5.R f
+    | Mem => bits_t 5
+    | Rdata => bits_t 5
+    end.
+
+  Notation zero := (Bits.zeroes _).
+
+  Definition r idx : R idx :=
+    match idx with
+    | MyFifo f => Fifo5.r f
+    | Mem => zero
+    | Rdata => zero
+    end.
+
+
+  Notation uaction := (uaction pos_t method_name_t string reg_t ufn_t).
+
+  Definition _fetch :=
+    {$
+       let "memory" := read0(Mem) in
+       call MyFifo Fifo5.enq "memory"
+            $}.
+
+
+  Definition _ding :=
+    {$
+       let "dequeued" := call0 MyFifo Fifo5.deq in
+       if ("dequeued" == `UConstBits Ob~0~0~0~1~0 `) then
+         write0(Rdata,`UConstBits Ob~0~0~0~0~1`)
+       else
+         fail
+           $}.
+
+  Definition cr := ContextEnv.(create) r.
+  Definition Sigma := interop_minimal_Sigma.
+  Definition uSigma := interop_minimal_uSigma.
+
+  Definition rules :=
+    tc_rules R Sigma uSigma
+             (fun rl => match rl with
+                     | ding => _ding
+                     | fetch => _fetch
+                     end).
+
+  Definition bring : scheduler _ :=
+    tc_scheduler (fetch |> ding |> done).
+
+
+  Definition sga_package :=
+        {| sga_reg_types := R;
+           sga_reg_init := r;
+           sga_reg_finite := _;
+
+           sga_custom_fn_types := interop_empty_Sigma;
+
+           sga_reg_names r := match r with
+                              | Rdata => "Rdata"
+                              | Mem => "Mem"
+                              | MyFifo s => String.append "MyFifo" (Fifo5.name_reg s)
+                             end;
+
+           sga_rules := rules;
+           sga_rule_names r := match r with
+                             | ding => "ding"
+                             | fetch => "fetch"
+                             end;
+
+           sga_scheduler := bring;
+           sga_module_name := "externalMemory" |}.
+  Definition sim :=
+        {| sp_pkg := sga_package;
+           sp_var_names := fun x => x;
+           sp_custom_fn_names := interop_empty_fn_names;
+
+           sp_extfuns := None |}.
+  Definition verilog :=
+        {| vp_pkg := sga_package;
+           vp_external_rules := cons fetch nil;
+           vp_custom_fn_names := interop_empty_fn_names |} .
+  Definition package := {| sga := sga_package; sp := sim; vp := verilog |}.
+End ExternallyCompiledRule.
+
 Import ListNotations.
 Definition demo_packages : list demo_package_t :=
   [ Collatz.package;
@@ -912,4 +1078,5 @@ Definition demo_packages : list demo_package_t :=
     Pipeline.package;
     RegisterFile_Ordered.package;
     Enums.package;
-    IntCall.package ].
+    IntCall.package;
+    ExternallyCompiledRule.package].
