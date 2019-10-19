@@ -6,22 +6,21 @@ Import ListNotations.
 Open Scope bool_scope.
 
 Section Proof.
-  Context {name_t var_t reg_t fn_t: Type}.
+  Context {rule_name_t var_t reg_t ext_fn_t: Type}.
   Context {reg_t_eq_dec: EqDec reg_t}.
 
   Context {R: reg_t -> type}.
-  Context {Sigma: fn_t -> ExternalSignature}.
+  Context {Sigma: ext_fn_t -> ExternalSignature}.
   Context {REnv: Env reg_t}.
   Context (r: REnv.(env_t) R).
   Context (sigma: forall f, Sigma f).
-  Open Scope bool_scope.
 
   Notation Log := (Log R REnv).
   Notation action := (action var_t R Sigma).
   Notation rule := (rule var_t R Sigma).
-  Notation scheduler := (scheduler name_t).
+  Notation scheduler := (scheduler rule_name_t).
 
-  Context (rules: name_t -> rule).
+  Context (rules: rule_name_t -> rule).
 
   Fixpoint interp_scheduler'_trace
            (sched_log: Log)
@@ -52,7 +51,7 @@ Section Proof.
   Definition update_one r rl: option (REnv.(env_t) R) :=
     let/opt r := r in
     let log := @interp_scheduler'
-                name_t var_t reg_t fn_t
+                rule_name_t var_t reg_t ext_fn_t
                 R Sigma REnv r sigma rules
                 log_empty (Try rl Done Done) in
     Some (commit_update r log).
@@ -173,6 +172,9 @@ Section Proof.
       is_constructor c_hd; destruct x eqn:?
     | [ H: ?x = _ |- context[match ?x with _ => _ end] ] =>
       rewrite H
+    | [ H: context[_ -> interp_action _ _ _ _ _ ?a = Some _] |- _ ] =>
+      erewrite H by eauto
+    | _ => reflexivity
     end.
 
   Ltac t :=
@@ -184,31 +186,16 @@ Section Proof.
       interp_action (commit_update r sl') sigma Gamma sl action_log a = Some lv.
   Proof.
     induction a; cbn; intros Gamma sl sl' action_log lv HSome; try congruence.
-    - (* Assign *)
-      t.
-      erewrite IHa by eauto; reflexivity.
-    - (* Seq *)
-      t.
-      erewrite IHa1 by eauto; cbn.
-      erewrite IHa2 by eauto; reflexivity.
-    - (* Bind *)
-      t.
-      erewrite IHa1 by eauto; cbn.
-      erewrite IHa2 by eauto; reflexivity.
-    - (* if *)
-      t;
-        erewrite IHa1 by eauto; cbn;
-          [ erewrite IHa2 by eauto; cbn |
-            erewrite IHa3 by eauto; cbn ];
-          t; reflexivity.
-    - destruct port.
+    - (* Assign *) t.
+    - (* Seq *) t.
+    - (* Bind *) t.
+    - (* If *) t.
+    - destruct port; t.
       + (* Read0 *)
-        t.
         erewrite getenv_commit_update by eassumption.
         erewrite may_read0_no_writes by eauto.
         reflexivity.
       + (* Read1 *)
-        t.
         rewrite log_app_assoc.
         rewrite (latest_write0_app (log_app _ _)).
         destruct latest_write0.
@@ -216,15 +203,10 @@ Section Proof.
         * erewrite getenv_commit_update by eassumption.
           rewrite may_read1_latest_write_is_0 by eassumption.
           reflexivity.
-    - (* Write *)
-      t.
-      erewrite IHa by eauto; cbn.
-      t; reflexivity.
-    - (* Call *)
-      t.
-      erewrite IHa1 by eauto; cbn.
-      erewrite IHa2 by eauto; cbn.
-      reflexivity.
+    - (* Write *) t.
+    - (* UnOp *) t.
+    - (* BinOp *) t.
+    - (* ExternalCall *) t.
   Qed.
 
   Lemma OneRuleAtATime':
@@ -287,7 +269,7 @@ Section Proof.
   Lemma scheduler_trace_in_scheduler :
     forall s log l0 rs,
       interp_scheduler'_trace l0 s = Some (rs, log) ->
-      (forall r : name_t, In r rs -> In r (scheduler_rules s)).
+      (forall r : rule_name_t, In r rs -> In r (scheduler_rules s)).
   Proof.
     induction s; cbn in *.
     - inversion 1; subst; inversion 1.
