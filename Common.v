@@ -294,3 +294,5 @@ Section string_of_nat.
 End string_of_nat.
 
 Axiom __magic__ : forall {A}, A.
+
+Global Set Nested Proofs Allowed.

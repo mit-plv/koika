@@ -97,3 +97,49 @@ Proof.
   rewrite List.firstn_skipn.
   reflexivity.
 Qed.
+
+Lemma eq_bits_of_value:
+  forall {tau: type} (a1 a2: tau),
+    eq_bits (bits_of_value a1) (bits_of_value a2) =
+    (if eq_dec a1 a2 then Ob~1 else Ob~0).
+Proof.
+  unfold eq_bits;
+    intros; repeat destruct eq_dec;
+      try match goal with
+          | [ H: bits_of_value _ = bits_of_value _ |- _ ] => apply bits_of_value_inj in H
+          end; subst; congruence.
+Qed.
+
+Lemma get_field_bits_part:
+  forall {sig} (f : struct_index sig) (a : type_denote (struct_t sig)),
+    part (field_offset_right sig f) (field_sz sig f) (bits_of_value a) =
+    bits_of_value (get_field (struct_fields sig) a f).
+Proof.
+  intro sig;
+    repeat (simpl; unfold struct_index, field_type, field_sz, field_offset_right).
+  induction (struct_fields sig) as [ | (nm & tau) l ]; simpl.
+  * destruct f.
+  * destruct f as [ | f], a; cbn in *; intros.
+    -- rewrite part_end, vect_skipn_plus_app.
+       reflexivity.
+    -- rewrite <- IHl.
+       rewrite part_front, vect_firstn_plus_app by apply part_correct_le.
+       reflexivity.
+Qed.
+
+Lemma subst_field_bits_part_subst:
+  forall {sig} (f : struct_index sig) (a1 : type_denote (struct_t sig)) (a2 : field_type sig f),
+    part_subst (field_offset_right sig f) (field_type sig f) (bits_of_value a1) (bits_of_value a2) =
+    bits_of_value (tau := struct_t _) (subst_field (struct_fields sig) a1 f a2).
+Proof.
+  intro sig;
+    repeat (simpl; unfold struct_index, field_type, field_sz, field_offset_right).
+  induction (struct_fields sig) as [ | (nm & tau) l ]; simpl.
+  * destruct f.
+  * destruct f as [ | f], a1; cbn in *; intros.
+    -- rewrite part_subst_end, vect_split_app.
+       reflexivity.
+    -- rewrite <- IHl.
+       rewrite part_subst_front, vect_firstn_plus_app, vect_skipn_plus_app by apply part_correct_le.
+       reflexivity.
+Qed.

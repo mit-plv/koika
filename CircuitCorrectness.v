@@ -5,44 +5,87 @@ Import ListNotations.
 
 Require Import
         SGA.Common SGA.Environments SGA.Syntax
-        SGA.SemanticProperties SGA.CircuitProperties
+        SGA.SemanticProperties SGA.CircuitProperties SGA.PrimitiveProperties
         SGA.Interop.
 
-Section CompilerCorrectness.
-  Context {name_t var_t reg_t fn_t: Type}.
+Section PrimCompilerCorrectness.
+  Context {rule_name_t var_t reg_t ext_fn_t: Type}.
 
   Context {R: reg_t -> type}.
-  Notation cR := (CR R).
+  Context {Sigma: ext_fn_t -> ExternalSignature}.
 
-  Context {Sigma: fn_t -> ExternalSignature}.
-  Notation cSigma := (CSigma Sigma).
+  Context {REnv: Env reg_t}.
+  Context (cr: REnv.(env_t) (fun idx => bits (CR_of_R R idx))).
+  Context (csigma: forall f, CSigma_of_Sigma Sigma f).
+
+  Notation interp_circuit := (interp_circuit (rule_name_t := rule_name_t) cr csigma).
+
+  Ltac compile_op_t :=
+    match goal with
+    | _ => progress intros
+    | _ => progress simpl in *
+    | _ => progress unfold Bits.extend_beginning, Bits.extend_end, struct_sz, field_sz
+    | _ => rewrite bits_of_value_of_bits
+    | [ H: interp_circuit _ = _ |- _ ] => rewrite H
+    | [  |- context[match ?d with _ => _ end] ] => is_var d; destruct d
+    | [  |- context[eq_rect _ _ _ _ ?pr] ] => destruct pr
+    | _ => apply eq_bits_of_value || apply get_field_bits_part || apply subst_field_bits_part_subst
+    | _ => solve [eauto]
+    end.
+
+  Theorem compile_unop_correct :
+    forall fn c a,
+      interp_circuit c = bits_of_value a ->
+      interp_circuit (compile_unop fn c) = bits_of_value (PrimSpecs.sigma1 fn a).
+  Proof.
+    destruct fn; repeat compile_op_t.
+  Qed.
+
+  Theorem compile_binop_correct :
+    forall fn c1 c2 a1 a2,
+      interp_circuit c1 = bits_of_value a1 ->
+      interp_circuit c2 = bits_of_value a2 ->
+      interp_circuit (compile_binop fn c1 c2) = bits_of_value (PrimSpecs.sigma2 fn a1 a2).
+  Proof.
+    destruct fn; repeat compile_op_t.
+  Qed.
+End PrimCompilerCorrectness.
+
+Section CompilerCorrectness.
+  Context {rule_name_t var_t reg_t ext_fn_t: Type}.
+
+  Context {R: reg_t -> type}.
+  Notation CR := (CR_of_R R).
+
+  Context {Sigma: ext_fn_t -> ExternalSignature}.
+  Notation CSigma := (CSigma_of_Sigma Sigma).
 
   Context {REnv: Env reg_t}.
 
   Context (r: REnv.(env_t) R).
-  Notation cr := (circuit_r r).
+  Notation cr := (cr_of_r r).
 
   Instance reg_t_eq_dec : EqDec reg_t := @EqDec_FiniteType _ (REnv.(finite_keys)).
 
-  Notation rwdata := (rwdata (name_t := name_t) R Sigma).
+  Notation rwdata := (rwdata (rule_name_t := rule_name_t) R Sigma).
 
-  Context (sigma: forall f, ExternalSignature_denote (Sigma f)).
-  Context (csigma: forall f, CSig_denote (cSigma f)).
-  Context {csigma_correct: circuit_sigma_spec sigma csigma}.
-  Context (lco: local_circuit_optimizer (name_t := name_t) (rwdata := rwdata) cr csigma).
+  Context (sigma: forall f, Sigma f).
+  Context (csigma: forall f, CSigma f).
+  Context {csigma_correct: csigma_spec sigma csigma}.
+  Context (lco: local_circuit_optimizer (rule_name_t := rule_name_t) (rwdata := rwdata) cr csigma).
 
   Open Scope bool_scope.
 
   Notation Log := (Log R REnv).
-  Notation rwset := (rwset (name_t := name_t)).
-  Notation circuit := (circuit (name_t := name_t) (rwdata := rwdata) cR cSigma).
-  Notation scheduler_circuit := (scheduler_circuit (name_t := name_t) R Sigma REnv).
+  Notation rwset := (rwset (rule_name_t := rule_name_t)).
+  Notation circuit := (circuit (rule_name_t := rule_name_t) (rwdata := rwdata) CR CSigma).
+  Notation scheduler_circuit := (scheduler_circuit (rule_name_t := rule_name_t) R Sigma REnv).
   Notation action := (action var_t R Sigma).
   Notation rule := (rule var_t R Sigma).
-  Notation interp_circuit := (interp_circuit (name_t := name_t) cr csigma).
+  Notation interp_circuit := (interp_circuit (rule_name_t := rule_name_t) cr csigma).
   Notation circuit_lt := (circuit_lt r csigma).
 
-  Context (rc: REnv.(env_t) (fun reg => circuit (cR reg))).
+  Context (rc: REnv.(env_t) (fun reg => circuit (CR reg))).
 
   Definition circuit_env_equiv :=
     forall idx, interp_circuit (REnv.(getenv) rc idx) = bits_of_value (REnv.(getenv) r idx).
@@ -574,7 +617,13 @@ Section CompilerCorrectness.
       all: intros; apply rwset_circuit_lt_invariant_putenv; eauto.
       all: specialize (Hpr' idx); repeat (red || red in Hpr'); cbn;
         intuition eauto using circuit_lt_true, circuit_lt_opt_r.
-    - (* Call *)
+    - (* Unop *)
+      circuit_compile_destruct_t.
+      intuition eauto using circuit_lt_trans, rwset_circuit_lt_invariant_trans.
+    - (* Binop *)
+      circuit_compile_destruct_t.
+      intuition eauto using circuit_lt_trans, rwset_circuit_lt_invariant_trans.
+    - (* ExternalCall *)
       circuit_compile_destruct_t.
       intuition eauto using circuit_lt_trans, rwset_circuit_lt_invariant_trans.
   Qed.
@@ -1144,11 +1193,15 @@ Section CompilerCorrectness.
         all: intros;
           apply rwset_circuit_lt_invariant_putenv;
           eauto 8 with circuits.
-    - (* Call *)
-      t.
-      repeat apply conj; try apply csigma_correct; eauto.
-      eapply interp_circuit_circuit_lt_helper_false;
-        eauto using action_compile_willFire_of_canFire_decreasing.
+    - (* Unop *)
+      t; eauto 7 using compile_unop_correct.
+    - (* Binop *)
+      t; eauto 7 using compile_binop_correct,
+         interp_circuit_circuit_lt_helper_false,
+         action_compile_willFire_of_canFire_decreasing.
+    - (* ExternalCall *)
+      t; eauto 7 using interp_circuit_circuit_lt_helper_false,
+         action_compile_willFire_of_canFire_decreasing.
   Qed.
 
   Arguments update_accumulated_rwset : simpl never.
@@ -1257,8 +1310,11 @@ Section CompilerCorrectness.
   Hint Resolve log_data1_consistent'_mux_r : circuits.
   Hint Resolve log_rwdata_consistent_mux_r : circuits.
 
-  Notation scheduler := (scheduler name_t).
-  Context (rules: name_t -> rule).
+  Hint Resolve compile_unop_correct : circuits.
+  Hint Resolve compile_binop_correct : circuits.
+
+  Notation scheduler := (scheduler rule_name_t).
+  Context (rules: rule_name_t -> rule).
 
   Notation compile_scheduler' := (compile_scheduler' lco).
 
@@ -1453,7 +1509,7 @@ Section CompilerCorrectness.
   Theorem action_log_writes_ordered:
     forall sig tau a ctx Log log idx,
       log_writes_ordered (log_app log Log) idx ->
-      match @interp_action var_t reg_t fn_t R Sigma REnv r sigma sig tau ctx Log log a with
+      match @interp_action var_t reg_t ext_fn_t R Sigma REnv r sigma sig tau ctx Log log a with
       | Some (l', _, _) => log_writes_ordered (log_app l' Log) idx
       | None => True
       end.
@@ -1503,7 +1559,7 @@ Section CompilerCorrectness.
   Theorem scheduler_log_writes_ordered:
     forall s log idx,
       log_writes_ordered log idx ->
-      log_writes_ordered (@interp_scheduler' name_t var_t reg_t fn_t R Sigma REnv r sigma rules log s) idx.
+      log_writes_ordered (@interp_scheduler' rule_name_t var_t reg_t ext_fn_t R Sigma REnv r sigma rules log s) idx.
   Proof.
     induction s; cbn; intros; eauto.
     all: lazymatch goal with
@@ -1549,22 +1605,22 @@ Section CompilerCorrectness.
 End CompilerCorrectness.
 
 Section CircuitInit.
-  Context {name_t var_t reg_t fn_t: Type}.
+  Context {rule_name_t var_t reg_t ext_fn_t: Type}.
   Context {eq_dec_var_t: EqDec var_t}.
 
   Context {R: reg_t -> type}.
-  Context {Sigma: fn_t -> ExternalSignature}.
+  Context {Sigma: ext_fn_t -> ExternalSignature}.
   Context {REnv: Env reg_t}.
 
   Context (r: REnv.(env_t) R).
   Context (sigma: forall f, Sigma f).
 
   Lemma circuit_env_equiv_CReadRegister :
-    forall (csigma: forall f, CSig_denote (CSigma Sigma f)),
-      circuit_sigma_spec sigma csigma ->
-      circuit_env_equiv (name_t := name_t) r csigma (REnv.(create) CReadRegister).
+    forall (csigma: forall f, CSig_denote (CSigma_of_Sigma Sigma f)),
+      csigma_spec sigma csigma ->
+      circuit_env_equiv (rule_name_t := rule_name_t) r csigma (REnv.(create) CReadRegister).
   Proof.
-    unfold circuit_env_equiv, circuit_r; intros.
+    unfold circuit_env_equiv, cr_of_r; intros.
     rewrite getenv_create; cbn;
       rewrite getenv_map; cbn;
         reflexivity.
@@ -1572,55 +1628,32 @@ Section CircuitInit.
 End CircuitInit.
 
 Section Thm.
-  Context {name_t var_t reg_t fn_t: Type}.
+  Context {rule_name_t var_t reg_t ext_fn_t: Type}.
   Context {eq_dec_var_t: EqDec var_t}.
 
   Context {R: reg_t -> type}.
-  Context {Sigma: fn_t -> ExternalSignature}.
+  Context {Sigma: ext_fn_t -> ExternalSignature}.
   Context {REnv: Env reg_t}.
 
   Context (r: REnv.(env_t) R).
   Context (sigma: forall f, Sigma f).
 
-  Context (s: scheduler name_t).
+  Context (s: scheduler rule_name_t).
 
   Section Standalone.
-    Context (rules: name_t -> rule var_t R Sigma).
+    Context (rules: rule_name_t -> rule var_t R Sigma).
 
     Theorem scheduler_compiler_correct:
-      forall (lco: local_circuit_optimizer (circuit_r r) (circuit_sigma sigma)),
+      forall (lco: local_circuit_optimizer (cr_of_r r) (csigma_of_sigma sigma)),
         let spec_results := commit_update r (interp_scheduler r sigma rules s) in
         let circuits := compile_scheduler lco (REnv.(create) CReadRegister) rules s in
         forall reg,
-          interp_circuit (circuit_r r) (circuit_sigma sigma) (REnv.(getenv) circuits reg) =
+          interp_circuit (cr_of_r r) (csigma_of_sigma sigma) (REnv.(getenv) circuits reg) =
           bits_of_value (REnv.(getenv) spec_results reg).
     Proof.
       eauto using scheduler_compiler_correct',
       circuit_env_equiv_CReadRegister,
-      circuit_sigma_spec_circuit_sigma.
+      csigma_spec_csigma_of_sigma.
     Qed.
   End Standalone.
-
-  Section Interop.
-    Context (rules: name_t -> rule var_t R (interop_Sigma Sigma)).
-
-    Definition interop_lco :=
-      lco_compose
-        (name_t := name_t)
-        (bool_simpl_lco (r := circuit_r r))
-        (external_elaboration_lco (custom_Sigma := Sigma) (custom_sigma := sigma) (custom_fn_t := fn_t) r)
-        (rwdata := rwdata (name_t := name_t) R (interop_Sigma Sigma)).
-
-    Theorem scheduler_compiler_correct_interop:
-      let spec_results := commit_update r (interp_scheduler r (interop_sigma sigma) rules s) in
-      let circuits := compile_scheduler (fun sz => interop_lco.(lco_fn)) (REnv.(create) CReadRegister) rules s in
-      forall reg,
-        interp_circuit (circuit_r r) (circuit_sigma (interop_sigma sigma)) (REnv.(getenv) circuits reg) =
-        bits_of_value (REnv.(getenv) spec_results reg).
-    Proof.
-      eauto using scheduler_compiler_correct',
-      circuit_env_equiv_CReadRegister,
-      circuit_sigma_spec_circuit_sigma.
-    Qed.
-  End Interop.
 End Thm.

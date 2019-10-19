@@ -166,6 +166,26 @@ Proof.
       reflexivity.
 Qed.
 
+Lemma bits_of_value_inj :
+  forall {tau: type} (x y: type_denote tau),
+    bits_of_value x = bits_of_value y ->
+    x = y.
+Proof.
+  intros * H%(f_equal value_of_bits);
+    rewrite !value_of_bits_of_value in H;
+    auto.
+Qed.
+
+Lemma value_of_bits_inj :
+  forall {tau: type} (bs0 bs1: bits (type_sz tau)),
+    value_of_bits bs0 = value_of_bits bs1 ->
+    bs0 = bs1.
+Proof.
+  intros * H%(f_equal bits_of_value);
+    rewrite !bits_of_value_of_bits in H;
+    auto.
+Qed.
+
 (** * Coercions **)
 
 Coercion type_sz : type >-> nat.

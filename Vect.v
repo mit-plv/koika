@@ -319,6 +319,16 @@ Proof.
   rewrite <- (vect_firstn_plus_cast sz' sz); reflexivity.
 Qed.
 
+Lemma vect_firstn_plus_app {T sz n}:
+  forall (prefix: vect T n) (v: vect T sz),
+    vect_firstn_plus n (vect_app prefix v) = prefix.
+Proof.
+  induction n; destruct prefix; cbn; intros.
+  - destruct sz; reflexivity.
+  - rewrite vect_firstn_plus_eqn, IHn.
+    reflexivity.
+Qed.
+
 Fixpoint vect_skipn_plus_cast sz n:
   n + sz - n = sz.
 Proof. destruct n, sz; cbn; auto. Defined.
@@ -333,6 +343,16 @@ Lemma vect_skipn_plus_eqn {T sz sz'}:
 Proof.
   unfold vect_skipn_plus; cbn; intros.
   destruct sz'; try rewrite <- (vect_skipn_plus_cast 0 sz); reflexivity.
+Qed.
+
+Lemma vect_skipn_plus_app {T sz n}:
+  forall (prefix: vect T n) (v: vect T sz),
+    vect_skipn_plus n (vect_app prefix v) = v.
+Proof.
+  induction n; cbn; intros.
+  - destruct sz; reflexivity.
+  - rewrite vect_skipn_plus_eqn.
+    eauto.
 Qed.
 
 Lemma vect_skipn_skipn_plus :
