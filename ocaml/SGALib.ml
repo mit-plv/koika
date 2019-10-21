@@ -60,33 +60,18 @@ module Util = struct
 
   let ffi_sig_of_sga_external_sig ffi_name fsig =
     SGA.{ ffi_name;
-          ffi_arg1type = typ_of_sga_type fsig.arg1Type;
-          ffi_arg2type = typ_of_sga_type fsig.arg2Type;
+          ffi_argtype = typ_of_sga_type (List.hd (SGA.vect_to_list 1 fsig.argTypes));
           ffi_rettype = typ_of_sga_type fsig.retType }
 
-  let sga_external_sig_of_ffi_sig { ffi_arg1type; ffi_arg2type; ffi_rettype; _ } =
-    SGA.{ arg1Type = sga_type_of_typ ffi_arg1type;
-          arg2Type = sga_type_of_typ ffi_arg2type;
+  let sga_external_sig_of_ffi_sig { ffi_argtype; ffi_rettype; _ } =
+    SGA.{ argTypes = SGA.vect_of_list [sga_type_of_typ ffi_argtype];
           retType = sga_type_of_typ ffi_rettype }
 
-  let internal_sig_of_sga_internal_sig fsig =
-    SGA.{ int_name = fsig.int_name;
-          int_args = List.map (fun (nm, tau) -> nm, typ_of_sga_type tau) fsig.int_args;
-          int_rettype = typ_of_sga_type fsig.int_retType }
-
-  let sga_internal_sig_of_internal_sig (fsig: _ Common.internal_signature) =
+  let sga_intfun_of_intfun fbody (fsig: _ Common.internal_function) =
     { SGA.int_name = fsig.int_name;
-      SGA.int_args = List.map (fun (nm, tau) -> nm, sga_type_of_typ tau) fsig.int_args;
-      SGA.int_retType = sga_type_of_typ fsig.int_rettype }
-
-  let rec rwdata_of_sga_rwdata (reg_sigs: 'a -> reg_signature) = function
-    | SGA.Rwdata_r0 r -> Rwdata_r0 (reg_sigs r)
-    | SGA.Rwdata_r1 r -> Rwdata_r1 (reg_sigs r)
-    | SGA.Rwdata_w0 r -> Rwdata_w0 (reg_sigs r)
-    | SGA.Rwdata_w1 r -> Rwdata_w1 (reg_sigs r)
-    | SGA.Rwdata_data0 r -> Rwdata_data0 (reg_sigs r)
-    | SGA.Rwdata_data1 r -> Rwdata_data1 (reg_sigs r)
-    | SGA.Rwdata_canfire -> Rwdata_canfire
+      SGA.int_argspec = List.map (fun (nm, tau) -> nm, sga_type_of_typ tau) fsig.int_argspec;
+      SGA.int_retType = sga_type_of_typ fsig.int_rettype;
+      SGA.int_body = fbody fsig.int_body }
 
   let sga_type_to_string tau =
     typ_to_string (typ_of_sga_type tau)
@@ -113,6 +98,7 @@ module Util = struct
 
   type 'var_t sga_error_message =
     | ExplicitErrorInAst
+    | SugaredConstructorInAst
     | UnboundVariable of { var: 'var_t }
     | UnboundField of { field: string; sg: struct_sig }
     | UnboundEnumMember of { name: string; sg: enum_sig }
@@ -120,16 +106,15 @@ module Util = struct
     | TooManyArguments of { name: string; actual: int; expected: int }
     | TooFewArguments of { name: string; actual: int; expected: int }
     | TypeMismatch of { expected: typ; actual: typ }
-    | KindMismatch of { actual: typ; expected: string }
+    | KindMismatch of { actual: string; expected: string }
 
   let translate_sga_error_message = function
     | SGA.ExplicitErrorInAst ->
        ExplicitErrorInAst
+    | SGA.SugaredConstructorInAst ->
+       SugaredConstructorInAst
     | SGA.UnboundVariable var ->
        UnboundVariable { var }
-    | SGA.UnboundField (field, sg) ->
-       UnboundField { field = string_of_coq_string field;
-                      sg = struct_sig_of_sga_struct_sig sg }
     | SGA.UnboundEnumMember (name, sg) ->
        UnboundEnumMember { name = string_of_coq_string name;
                            sg = enum_sig_of_sga_enum_sig sg }
@@ -139,20 +124,17 @@ module Util = struct
        TooManyArguments { name; expected; actual = expected + nextras }
     | SGA.TooFewArguments (name, expected, nmissing) ->
        TooFewArguments { name; expected; actual = expected - nmissing }
-    | SGA.TypeMismatch (_tsig, actual, _expr, expected) ->
-       TypeMismatch { actual = typ_of_sga_type actual;
-                      expected = typ_of_sga_type expected }
-    | SGA.KindMismatch (_tsig, actual, _expr, expected) ->
-       KindMismatch { actual = typ_of_sga_type actual;
-                      expected = type_kind_to_string expected }
-
-  let ffi_sig_of_interop_fn ~custom_fn_info (fn: 'a SGA.interop_fn_t) =
-    match fn with
-    | SGA.PrimFn fn ->
-       ffi_sig_of_sga_external_sig (PrimFn fn) (SGA.prim_Sigma fn)
-    | SGA.CustomFn fn ->
-       let ffi = custom_fn_info fn in
-       { ffi with ffi_name = CustomFn ffi.ffi_name }
+    |SGA.BasicError err ->
+      match err with
+      | SGA.UnboundField (field, sg) ->
+         UnboundField { field = string_of_coq_string field;
+                        sg = struct_sig_of_sga_struct_sig sg }
+      | SGA.TypeMismatch (actual, expected) ->
+         TypeMismatch { actual = typ_of_sga_type actual;
+                        expected = typ_of_sga_type expected }
+      | SGA.KindMismatch (actual, expected) ->
+         KindMismatch { actual = type_kind_to_string actual;
+                        expected = type_kind_to_string expected }
 
   let rec value_of_sga_value tau v =
     match tau with
@@ -204,11 +186,11 @@ module Util = struct
     { reg_name = string_of_coq_string (pkg.sga_reg_names r);
       reg_init = init }
 
-  let fn_sigs_of_sga_package custom_fn_names (pkg: _ SGA.sga_package_t) =
-    let custom_fn_info fn =
-      let name, fn = custom_fn_names fn, pkg.sga_custom_fn_types fn in
-      ffi_sig_of_sga_external_sig name fn in
-    fun fn -> ffi_sig_of_interop_fn ~custom_fn_info fn
+  (* let fn_sigs_of_sga_package ext_fn_names (pkg: _ SGA.sga_package_t) =
+   *   let custom_fn_info fn =
+   *     let name, fn = custom_fn_names fn, pkg.sga_custom_fn_types fn in
+   *     ffi_sig_of_sga_external_sig name fn in
+   *   fun fn -> ffi_sig_of_interop_fn ~custom_fn_info fn *)
 
   (* Not implemented in Coq because Coq needs an R and a Sigma to iterate through an action *)
   let rec exists_subterm (f: _ SGA.action -> bool) (a: _ SGA.action) =
@@ -224,7 +206,9 @@ module Util = struct
           exists_subterm f cond || exists_subterm f tbranch || exists_subterm f fbranch
        | Read (_, _, _) -> false
        | Write (_, _, _, value) -> exists_subterm f value
-       | Call (_, _, arg1, arg2) -> exists_subterm f arg1 || exists_subterm f arg2
+       | Unop (_, _, a) -> exists_subterm f a
+       | Binop (_, _, a1, a2) -> exists_subterm f a1 || exists_subterm f a2
+       | ExternalCall (_, _, a) -> exists_subterm f a
 
   let action_mentions_var k a =
     exists_subterm (function
@@ -241,28 +225,34 @@ module Compilation = struct
     | 1 -> SGA.P1
     | _ -> assert false
 
+  type fn_t =
+    | External of ffi_signature
+    | Unop of SGA.PrimUntyped.ufn1
+    | Binop of SGA.PrimUntyped.ufn2
+
   type 'f raw_action =
-    ('f, ('f, value literal, reg_signature, (string ffi_signature) SGA.interop_ufn_t) action) locd
+    ('f, ('f, value literal, reg_signature, fn_t) action) locd
 
   type 'f translated_action =
-    ('f, method_name_t, var_t, reg_signature, string ffi_signature SGA.interop_ufn_t) SGA.uaction
+    ('f, fn_name_t, var_t, reg_signature, ffi_signature) SGA.uaction
 
   type debug_printer = { debug_print: 'f. 'f translated_action -> unit }
   let debug_printer : debug_printer ref =
     ref { debug_print = (fun _ -> Printf.eprintf "No printer installed\n%!") }
 
-  let rec translate_action ({ lpos; lcnt }: 'f raw_action) : 'f translated_action =
+  let rec translate_action  ({ lpos; lcnt }: 'f raw_action) : 'f translated_action =
+    let sugar (x: _ SGA.usugar) = SGA.USugar x in
     SGA.UAPos
       (lpos,
        match lcnt with
-       | Error -> SGA.UError
-       | Skip -> SGA.uSkip
-       | Fail tau -> SGA.UFail (Util.sga_type_of_typ tau)
-       | Lit (Var v) -> SGA.UVar v
-       | Lit (Const v) -> let tau, v = Util.sga_value_of_value v in SGA.UConst (tau, v)
+       | Error -> sugar UErrorInAst
+       | Skip -> sugar USkip
+       | Fail tau -> UFail (Util.sga_type_of_typ tau)
+       | Lit (Var v) -> UVar v
+       | Lit (Const v) -> let tau, v = Util.sga_value_of_value v in UConst (tau, v)
        | StructInit (sg, fields) ->
-          SGA.uStructInit (Util.sga_struct_sig_of_struct_sig sg)
-            (List.map (fun (nm, v) -> Util.coq_string_of_string nm.lcnt, translate_action v) fields)
+          let fields = List.map (fun (nm, v) -> Util.coq_string_of_string nm.lcnt, translate_action v) fields in
+          sugar @@ UStructInit (Util.sga_struct_sig_of_struct_sig sg, fields)
        | Assign (v, expr) -> SGA.UAssign (v.lcnt, translate_action expr)
        | Progn rs -> translate_seq rs
        | Let (bs, body) -> translate_bindings bs body
@@ -271,29 +261,29 @@ module Compilation = struct
        | When (e, rs) -> SGA.UIf (translate_action e, translate_seq rs, SGA.UFail (SGA.Bits_t 0))
        | Switch { binder; operand; default; branches } ->
           let bound_var = locd_make operand.lpos (Lit (Var binder)) in
-          let switch = SGA.uSwitch (translate_action bound_var)
-                        (translate_action default)
-                        (List.map (fun (lbl, br) ->
-                             translate_action lbl,
-                             translate_action br)
-                           branches) in
+          let branches = List.map (fun (lbl, br) -> translate_action lbl, translate_action br) branches in
+          let switch = sugar @@ USwitch (translate_action bound_var, translate_action default, branches) in
           SGA.UBind (binder, (translate_action operand), switch)
        | Read (port, reg) -> SGA.URead (translate_port port, reg.lcnt)
        | Write (port, reg, v) -> SGA.UWrite (translate_port port, reg.lcnt, translate_action v)
-       | InternalCall { signature; body; args } ->
-          SGA.UInternalCall (Util.sga_internal_sig_of_internal_sig signature,
-                             translate_action body, List.map translate_action args)
-       | Call (fn, a1 :: a2 :: []) -> SGA.UCall (fn.lcnt, translate_action a1, translate_action a2)
-       | Call (_, _) -> failwith "Attempting to translate a call with n != 2 arguments.")
+       | InternalCall { fn; args } ->
+          SGA.UInternalCall (Util.sga_intfun_of_intfun translate_action fn, List.map translate_action args)
+       | Call { fn; args } ->
+          let args = List.map translate_action args in
+          (match fn.lcnt, args with
+           | External ffi, [arg] -> UExternalCall (ffi, arg)
+           | Unop f, [arg] -> UUnop (f, arg)
+           | Binop f, [a1; a2] -> UBinop (f, a1, a2)
+           | _, _ -> failwith "Incorrect argument count in Call"))
   and translate_bindings bs body =
     match bs with
     | [] -> translate_seq body
-    | (v, e) :: bs -> SGA.UBind (v.lcnt, translate_action e, translate_bindings bs body)
+    | (v, e) :: bs -> UBind (v.lcnt, translate_action e, translate_bindings bs body)
   and translate_seq rs =
     match rs with
-    | [] -> SGA.uSkip
+    | [] -> SGA.USugar USkip
     | [r] -> translate_action r
-    | r :: rs -> SGA.USeq (translate_action r, translate_seq rs)
+    | r :: rs -> USeq (translate_action r, translate_seq rs)
 
   let rec translate_scheduler { lpos; lcnt } =
     SGA.USPos
@@ -307,10 +297,7 @@ module Compilation = struct
           SGA.UTry (r.lcnt, translate_scheduler s1, translate_scheduler s2))
 
   let _R = fun rs -> Util.sga_type_of_typ (reg_type rs)
-  let custom_Sigma fn = Util.sga_external_sig_of_ffi_sig fn
-  let custom_uSigma fn _a1 _a2 = SGA.Success fn
-  let interop_Sigma fn = SGA.interop_Sigma custom_Sigma fn
-  let interop_uSigma fn = SGA.interop_uSigma custom_uSigma fn
+  let _Sigma fn = Util.sga_external_sig_of_ffi_sig fn
 
   let rEnv_of_register_list tc_registers =
     let reg_indices = List.mapi (fun i x -> x.reg_name, i) tc_registers in
@@ -319,7 +306,7 @@ module Compilation = struct
                      SGA.finite_index = fun r -> Hashtbl.find regmap r.reg_name }
 
   type typechecked_action =
-    (var_t, reg_signature, (string ffi_signature) SGA.interop_fn_t) SGA.action
+    (var_t, reg_signature, ffi_signature) SGA.action
 
   type 'f raw_scheduler = ('f, 'f scheduler) locd
 
@@ -330,13 +317,13 @@ module Compilation = struct
   type compile_unit =
     { c_registers: reg_signature list;
       c_scheduler: string SGA.scheduler;
-      c_rules: (name_t * typechecked_rule) list;
+      c_rules: (rule_name_t * typechecked_rule) list;
       c_cpp_preamble: string option }
 
   type compiled_circuit =
-    (string, reg_signature, string ffi_signature SGA.interop_fn_t) sga_circuit
+    (string, reg_signature, ffi_signature) sga_circuit
 
-  let typecheck_scheduler (raw_ast: 'f raw_scheduler) : name_t SGA.scheduler =
+  let typecheck_scheduler (raw_ast: 'f raw_scheduler) : rule_name_t SGA.scheduler =
     let ast = translate_scheduler raw_ast in
     SGA.type_scheduler raw_ast.lpos ast
 
@@ -347,86 +334,122 @@ module Compilation = struct
   let typecheck_rule (raw_ast: 'pos_t raw_action)
       : (typechecked_action, ('pos_t * _)) result =
     let ast = translate_action raw_ast in
-    SGA.type_rule Util.string_eq_dec _R interop_Sigma interop_uSigma raw_ast.lpos ast
+    SGA.type_rule Util.string_eq_dec _R _Sigma raw_ast.lpos ast
     |> result_of_type_result
 
   let compile (cu: compile_unit) : (reg_signature -> compiled_circuit) =
     let rEnv = rEnv_of_register_list cu.c_registers in
     let r0: _ SGA.env_t = SGA.create rEnv (fun r -> SGA.CReadRegister r) in
     let rules r = List.assoc r cu.c_rules |> snd in
-    let opt = SGA.interop_opt _R custom_Sigma in
-    let env = SGA.compile_scheduler _R interop_Sigma rEnv opt r0 rules cu.c_scheduler in
+    let opt = SGA.simplify_bool_1 (SGA.cR_of_R _R) (SGA.cSigma_of_Sigma _Sigma) in
+    let env = SGA.compile_scheduler _R _Sigma rEnv opt r0 rules cu.c_scheduler in
     (fun r -> SGA.getenv rEnv env r)
 end
 
 module Graphs = struct
-  type 'fn_name_t circuit_graph = {
-      graph_roots: 'fn_name_t circuit_root list;
-      graph_nodes: 'fn_name_t circuit list
+  type circuit = circuit' Hashcons.hash_consed
+  and circuit' =
+    | CNot of circuit
+    | CAnd of circuit * circuit
+    | COr of circuit * circuit
+    | CMux of int * circuit * circuit * circuit
+    | CConst of bits_value
+    | CReadRegister of reg_signature
+    | CUnop of SGA.PrimTyped.fbits1 * circuit
+    | CBinop of SGA.PrimTyped.fbits2 * circuit * circuit
+    | CExternal of ffi_signature * circuit
+    | CBundle of string * ((reg_signature * rwdata) list)
+    | CBundleRef of int * circuit * rwcircuit
+    | CAnnot of int * string * circuit
+  and rwcircuit =
+    | Rwcircuit_rwdata of reg_signature * SGA.rwdata_field
+    | Rwcircuit_canfire
+  and rwdata =
+    { read0 : circuit;
+      read1 : circuit;
+      write0 : circuit;
+      write1 : circuit;
+      data0 : circuit;
+      data1 : circuit }
+
+  let rec rwcircuit_of_sga_rwcircuit (reg_sigs: 'a -> reg_signature) = function
+    | SGA.Rwcircuit_rwdata (r, field) -> Rwcircuit_rwdata (reg_sigs r, field)
+    | SGA.Rwcircuit_canfire -> Rwcircuit_canfire
+
+  type circuit_root = {
+      root_reg: reg_signature;
+      root_circuit: circuit;
     }
 
-  type verilog_ready_circuit_graph =
-    (SGA.prim_fn_t, string) fun_id_t circuit_graph
+  type circuit_graph = {
+      graph_roots: circuit_root list;
+      graph_nodes: circuit list
+    }
 
-  type ('rule_name_t, 'reg_t, 'fn_t, 'fn_name_t) dedup_input_t = {
+  type ('rule_name_t, 'reg_t, 'ext_fn_t) dedup_input_t = {
       di_regs: 'reg_t list;
       di_reg_sigs: 'reg_t -> reg_signature;
-      di_fn_sigs: 'fn_t -> 'fn_name_t ffi_signature;
+      di_fn_sigs: 'ext_fn_t -> ffi_signature;
       di_rule_names: 'rule_name_t -> string;
       di_external_rules: 'rule_name_t list;
-      di_circuits : 'reg_t -> ('rule_name_t, 'reg_t, 'fn_t) sga_circuit
+      di_circuits : 'reg_t -> ('rule_name_t, 'reg_t, 'ext_fn_t) sga_circuit
     }
 
-  let dedup_circuit (type rule_name_t reg_t fn_t fn_name_t)
-        (pkg: (rule_name_t, reg_t, fn_t, fn_name_t) dedup_input_t) : fn_name_t circuit_graph =
-    let module CircuitHash = struct
-        type t = fn_name_t circuit'
-        let rec equal (c: fn_name_t circuit') (c': fn_name_t circuit') =
-          match c, c' with
-          | CNot c1, CNot c1' ->
-             c1 == c1'
-          | CAnd (c1, c2), CAnd (c1', c2') ->
-             c1 == c1' && c2 == c2'
-          | COr (c1, c2), COr (c1', c2') ->
-             c1 == c1' && c2 == c2'
-          | CMux (_, c1, c2, c3), CMux (_, c1', c2', c3') ->
-             c1 == c1' && c2 == c2' && c3 == c3'
-          | CConst b, CConst b' ->
-             b = b' (* Not hashconsed *)
-          | CExternal (f, a1, a2), CExternal (f', a1', a2') ->
-             f = f' (* Not hashconsed *) && a1 == a1' && a2 == a2'
-          | CReadRegister r, CReadRegister r' ->
-             r = r' (* Not hashconsed *)
-          | CBundle (rule_name1, rwset1), CBundle (rule_name2, rwset2) ->
-             rule_name1 = rule_name2 && equal_rwsets rwset1 rwset2
-          | CBundleRef (_, bundle1, field1 ), CBundleRef (_, bundle2, field2) ->
-             bundle1 == bundle2 && field1 = field2
-          | CAnnot (_, s, c), CAnnot (_, s', c') ->
-             s = s' (* Not hashconsed *) && c == c'
-          | _, _ -> false
-        and equal_rwsets rwset1 rwset2 =
-          List.length rwset1 = List.length rwset2
-          && List.for_all2 (fun (rs1, rwdata1) (rs2, rwdata2) ->
-                rs1 = rs2 && equal_rwdata rwdata1 rwdata2)
-              rwset1 rwset2
-        and equal_rwdata rwdata1 rwdata2 =
-          rwdata1.read0 == rwdata2.read0
-          && rwdata1.read1 == rwdata2.read1
-          && rwdata1.write0 == rwdata2.write0
-          && rwdata1.write1 == rwdata2.write1
-          && rwdata1.data0 == rwdata2.data0
-          && rwdata1.data1 == rwdata2.data1
-        let hash c =
-          Hashtbl.hash c
-      end in
+  module CircuitHash = struct
+    type t = circuit'
+    let rec equal (c: circuit') (c': circuit') =
+      match c, c' with
+      | CNot c1, CNot c1' ->
+         c1 == c1'
+      | CAnd (c1, c2), CAnd (c1', c2') ->
+         c1 == c1' && c2 == c2'
+      | COr (c1, c2), COr (c1', c2') ->
+         c1 == c1' && c2 == c2'
+      | CMux (_, c1, c2, c3), CMux (_, c1', c2', c3') ->
+         c1 == c1' && c2 == c2' && c3 == c3'
+      | CConst b, CConst b' ->
+         b = b' (* Not hashconsed *)
+      | CReadRegister r, CReadRegister r' ->
+         r = r' (* Not hashconsed *)
+      | CUnop (f, a1), CUnop (f', a1') ->
+         f = f' (* Not hashconsed *) && a1 == a1'
+      | CBinop (f, a1, a2), CBinop (f', a1', a2') ->
+         f = f' (* Not hashconsed *) && a1 == a1' && a2 == a2'
+      | CExternal (f, a1), CExternal (f', a1') ->
+         f = f' (* Not hashconsed *) && a1 == a1'
+      | CBundle (rule_name1, rwset1), CBundle (rule_name2, rwset2) ->
+         rule_name1 = rule_name2 && equal_rwsets rwset1 rwset2
+      | CBundleRef (_, bundle1, field1 ), CBundleRef (_, bundle2, field2) ->
+         bundle1 == bundle2 && field1 = field2
+      | CAnnot (_, s, c), CAnnot (_, s', c') ->
+         s = s' (* Not hashconsed *) && c == c'
+      | _, _ -> false
+    and equal_rwsets rwset1 rwset2 =
+      List.length rwset1 = List.length rwset2
+      && List.for_all2 (fun (rs1, rwdata1) (rs2, rwdata2) ->
+            rs1 = rs2 && equal_rwdata rwdata1 rwdata2)
+          rwset1 rwset2
+    and equal_rwdata rwdata1 rwdata2 =
+      rwdata1.read0 == rwdata2.read0
+      && rwdata1.read1 == rwdata2.read1
+      && rwdata1.write0 == rwdata2.write0
+      && rwdata1.write1 == rwdata2.write1
+      && rwdata1.data0 == rwdata2.data0
+      && rwdata1.data1 == rwdata2.data1
+    let hash c =
+      Hashtbl.hash c
+  end
+
+  (* CircuitHashcons is used to find duplicate subcircuits *)
+  module CircuitHashcons = Hashcons.Make(CircuitHash)
+
+  let dedup_circuit (type rule_name_t reg_t fn_t)
+        (pkg: (rule_name_t, reg_t, fn_t) dedup_input_t) : circuit_graph =
     let module SGACircuitHash = struct
         type t = (rule_name_t, reg_t, fn_t) sga_circuit
         let equal o1 o2 = o1 == o2
         let hash o = Hashtbl.hash o
       end in
-
-    (* CircuitHashcons is used to find duplicate subcircuits *)
-    let module CircuitHashcons = Hashcons.Make(CircuitHash) in
     (* SGACircuitHashtbl is used to detect and leverage existing physical sharing *)
     let module SGACircuitHashtbl = Hashtbl.Make(SGACircuitHash) in
 
@@ -450,10 +473,14 @@ module Graphs = struct
          CMux (sz, dedup s, dedup c1, dedup c2)
       | SGA.CConst (sz, bs) ->
          CConst (Util.bits_const_of_sga_bits sz bs)
-      | SGA.CExternal (fn, c1, c2) ->
-         CExternal (pkg.di_fn_sigs fn, dedup c1, dedup c2)
       | SGA.CReadRegister r ->
          CReadRegister (pkg.di_reg_sigs r)
+      | SGA.CUnop (fn, c1) ->
+         CUnop (fn, dedup c1)
+      | SGA.CBinop (fn, c1, c2) ->
+         CBinop (fn, dedup c1, dedup c2)
+      | SGA.CExternal (fn, c1) ->
+         CExternal (pkg.di_fn_sigs fn, dedup c1)
       | SGA.CBundle (rule_name, regs_map) ->
          CBundle (pkg.di_rule_names rule_name,
                   List.map (fun r ->
@@ -465,7 +492,7 @@ module Graphs = struct
          (match bundle with
           | SGA.CBundle (rule_name, _regs) ->
              if List.mem rule_name pkg.di_external_rules then
-               CBundleRef(sz, dedup bundle, Util.rwdata_of_sga_rwdata pkg.di_reg_sigs field)
+               CBundleRef(sz, dedup bundle, rwcircuit_of_sga_rwcircuit pkg.di_reg_sigs field)
              else
                rebuild_circuit_for_deduplication circuit
           | _ -> assert false)
@@ -494,32 +521,34 @@ module Graphs = struct
     { graph_roots; graph_nodes }
 
   let graph_of_compile_unit (cu: Compilation.compile_unit)
-      : verilog_ready_circuit_graph =
+      : circuit_graph =
     let external_rules = List.filter (fun (_, (kind, _)) -> kind = `ExternalRule) cu.c_rules in
     dedup_circuit
       { di_regs = cu.c_registers;
         di_reg_sigs = (fun r -> r);
-        di_fn_sigs = (fun fn -> Util.ffi_sig_of_interop_fn ~custom_fn_info:(fun f -> f) fn);
+        di_fn_sigs = (fun fn -> fn);
         di_rule_names = (fun rln -> rln);
         di_external_rules = List.map fst external_rules;
         di_circuits = Compilation.compile cu }
 
   let graph_of_verilog_package (type rule_name_t var_t reg_t custom_fn_t)
         (vp: (rule_name_t, var_t, reg_t, custom_fn_t) SGA.verilog_package_t)
-      : verilog_ready_circuit_graph =
+      : circuit_graph =
     let sga = vp.vp_pkg in
     let di_regs =
       sga.sga_reg_finite.finite_elements in
     let di_circuits =
       let cp = SGA.compile_sga_package sga in
       fun r -> SGA.getenv cp.cp_reg_Env cp.cp_circuit r in
-    let custom_fn_names f =
-      Util.string_of_coq_string (vp.vp_custom_fn_names f) in
+    let di_fn_sigs f =
+      let fn_name = Util.string_of_coq_string (vp.vp_ext_fn_names f) in
+      let fn_sig = sga.sga_ext_fn_types f in
+      Util.ffi_sig_of_sga_external_sig fn_name fn_sig in
     dedup_circuit
       { di_regs;
         di_reg_sigs = Util.reg_sigs_of_sga_package sga;
         di_rule_names = (fun rln -> Util.string_of_coq_string @@ vp.vp_pkg.sga_rule_names rln);
         di_external_rules = vp.vp_external_rules;
-        di_fn_sigs = Util.fn_sigs_of_sga_package custom_fn_names sga;
+        di_fn_sigs;
         di_circuits }
 end

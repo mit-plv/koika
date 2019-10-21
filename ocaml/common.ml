@@ -107,14 +107,9 @@ let partition_types types =
       | Struct_t sg -> (enums, sg :: structs))
     types ([], [])
 
-type ('prim, 'custom) fun_id_t =
-  | CustomFn of 'custom
-  | PrimFn of 'prim
-
-type 'name_t ffi_signature = {
-    ffi_name: 'name_t;
-    ffi_arg1type: typ;
-    ffi_arg2type: typ;
+type ffi_signature = {
+    ffi_name: string;
+    ffi_argtype: typ;
     ffi_rettype: typ
   }
 
@@ -126,8 +121,8 @@ type reg_signature = {
 let reg_type r =
   typ_of_value r.reg_init
 
-type name_t = string
-type method_name_t = string
+type rule_name_t = string
+type fn_name_t = string
 type var_t = string
 type port_t = int
 
@@ -146,43 +141,50 @@ type 'cst_t literal =
   | Var of var_t
   | Const of 'cst_t
 
-type ('name_t, 'var_t) internal_signature = {
-    int_name: 'name_t;
-    int_args: ('name_t * typ) list;
-    int_rettype: typ
+type 'action internal_function = {
+    int_name: string;
+    int_argspec: (string * typ) list;
+    int_rettype: typ;
+    int_body: 'action
   }
 
 type ('f, 'lit_t, 'reg_t, 'fn_t) action =
   | Error
-  | Skip
   | Fail of typ
-  | Lit of 'lit_t
-  | StructInit of (struct_sig * (('f, string) locd * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd) list)
+  (* | UVar | UConst: replaced by Lit *)
   | Assign of (('f, var_t) locd * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd)
-  | Progn of ('f, 'lit_t, 'reg_t, 'fn_t) action_locd list
-  | Let of (('f, var_t) locd * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd) list
-           * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd list
+  (* | USeq: replaced by Progn *)
+  (* | UBind: replaced by Let *)
   | If of ('f, 'lit_t, 'reg_t, 'fn_t) action_locd
           * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd
           * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd list
-  | When of ('f, 'lit_t, 'reg_t, 'fn_t) action_locd
-            * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd list
-  | Switch of { binder: var_t;
-                operand: ('f, 'lit_t, 'reg_t, 'fn_t) action_locd;
-                default: ('f, 'lit_t, 'reg_t, 'fn_t) action_locd;
-                branches: (('f, 'lit_t, 'reg_t, 'fn_t) action_locd
-                           * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd) list } (* branches *)
   | Read of port_t
             * ('f, 'reg_t) locd
   | Write of port_t
              * ('f, 'reg_t) locd
              * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd
-  | Call of ('f, 'fn_t) locd
-            * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd list
+  (* | UUnop | UBinop | UExternalCall: replaced by UCall *)
   | InternalCall of
-      { signature: (string, string) internal_signature;
-        body: ('f, 'lit_t, 'reg_t, 'fn_t) action_locd;
+      { fn: ('f, 'lit_t, 'reg_t, 'fn_t) action_locd internal_function;
         args: ('f, 'lit_t, 'reg_t, 'fn_t) action_locd list }
+  (* Sugar on Coq side *)
+  | Skip
+  | Progn of ('f, 'lit_t, 'reg_t, 'fn_t) action_locd list
+  | StructInit of (struct_sig * (('f, string) locd * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd) list)
+  | Switch of { binder: var_t;
+                operand: ('f, 'lit_t, 'reg_t, 'fn_t) action_locd;
+                default: ('f, 'lit_t, 'reg_t, 'fn_t) action_locd;
+                branches: (('f, 'lit_t, 'reg_t, 'fn_t) action_locd
+                           * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd) list } (* branches *)
+  (* Not in Coq-side AST *)
+  | Lit of 'lit_t
+  | When of ('f, 'lit_t, 'reg_t, 'fn_t) action_locd
+            * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd list
+  | Let of (('f, var_t) locd * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd) list
+           * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd list
+  | Call of { fn: ('f, 'fn_t) locd;
+              args: ('f, 'lit_t, 'reg_t, 'fn_t) action_locd list }
+
 and ('f, 'lit_t, 'reg_t, 'fn_t) action_locd =
   ('f, ('f, 'lit_t, 'reg_t, 'fn_t) action) locd
 
@@ -190,40 +192,6 @@ type 'f scheduler =
   | Done
   | Sequence of ('f, string) locd list
   | Try of ('f, string) locd * ('f, 'f scheduler) locd * ('f, 'f scheduler) locd
-
-
-type 'fn circuit = 'fn circuit' Hashcons.hash_consed
-and 'fn circuit' =
-  | CNot of 'fn circuit
-  | CAnd of 'fn circuit * 'fn circuit
-  | COr of 'fn circuit * 'fn circuit
-  | CMux of size_t * 'fn circuit * 'fn circuit * 'fn circuit
-  | CConst of bits_value
-  | CExternal of 'fn ffi_signature * 'fn circuit * 'fn circuit
-  | CBundle of string * ((reg_signature * 'fn rwdata) list)
-  | CBundleRef of int * 'fn circuit * 'fn field
-  | CReadRegister of reg_signature
-  | CAnnot of size_t * string * 'fn circuit
-and 'fn field =
-  | Rwdata_r0 of reg_signature
-  | Rwdata_r1 of reg_signature
-  | Rwdata_w0 of reg_signature
-  | Rwdata_w1 of reg_signature
-  | Rwdata_data0 of reg_signature
-  | Rwdata_data1 of reg_signature
-  | Rwdata_canfire
-and 'fn rwdata =
-  { read0 : 'fn circuit;
-    read1 : 'fn circuit;
-    write0 : 'fn circuit;
-    write1 : 'fn circuit;
-    data0 : 'fn circuit;
-    data1 : 'fn circuit }
-
-type 'fn circuit_root = {
-    root_reg: reg_signature;
-    root_circuit: 'fn circuit;
-  }
 
 let with_output_to_file fname (f: out_channel -> unit) =
   let out = open_out fname in
