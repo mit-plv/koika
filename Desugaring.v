@@ -70,6 +70,8 @@ Section Desugaring.
        : uaction reg_t ext_fn_t :=
          let d a := desugar_action' pos fR fSigma a in
          match s with
+         | UErrorInAst =>
+           UError {| emsg := ExplicitErrorInAst; epos := pos; esource := ErrSrc s |}
          | USkip =>
            UConst (tau := bits_t 0) Ob
          | UProgn aa =>

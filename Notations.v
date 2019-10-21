@@ -22,7 +22,7 @@ Notation "'fail'" :=
   (UFail (bits_t 0)) (in custom koika at level 20, format "'fail'").
 Notation "'fail' t" :=
   (UFail (bits_t t)) (in custom koika at level 20, t constr at level 0 ,format "'fail' t").
-Notation "'UError'" := (UError {| emsg := ExplicitErrorInAst; epos := dummy_pos; esource := ErrSrc tt |}) (in custom koika at level 20).
+Notation "'UError'" := (USugar UErrorInAst) (in custom koika at level 20).
 Notation "'let' a ':=' b 'in' c" := (UBind a b c) (in custom koika at level 99, a constr at level 0, right associativity, format "'[v' 'let'  a  ':='  b  'in' '/' c ']'").
 Notation "a ';' b" := (USeq a b) (in custom koika at level 30, format "'[v' a ';' '/' b ']'" ).
 Notation "'set' a ':=' b" := (UAssign a b) (in custom koika at level 29, a constr at level 0, format "'set'  a  ':='  b").
@@ -112,8 +112,6 @@ Notation "'done'" :=
 
 Module Type Tests.
   Parameter pos_t : Type.
-  Parameter dp : DummyPos pos_t.
-  Existing Instance dp.
   Parameter fn_name_t : Type.
   Parameter reg_t : Type.
   Parameter fn_t : Type.

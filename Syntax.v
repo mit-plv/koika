@@ -21,6 +21,7 @@ Section Syntax.
   | UAPos (p: pos_t) (e: uaction)
   | USugar (s: usugar)
   with usugar {reg_t ext_fn_t} :=
+  | UErrorInAst
   | USkip
   | UProgn (aa: list uaction)
   | UConstBits {sz} (bs: bits sz)
