@@ -14,7 +14,7 @@ Section Desugaring.
 
   Import PrimUntyped.
 
-  Fixpoint desugar_UProgn {reg_t ufn_t} (aa: list (uaction reg_t ufn_t)) :=
+  Fixpoint desugar_UProgn {reg_t ext_fn_t} (aa: list (uaction reg_t ext_fn_t)) :=
     match aa with
     | [] => UConst (tau := bits_t 0) Ob
     | [a] => a
@@ -74,8 +74,6 @@ Section Desugaring.
            UError {| emsg := ExplicitErrorInAst; epos := pos; esource := ErrSrc s |}
          | USkip =>
            UConst (tau := bits_t 0) Ob
-         | UProgn aa =>
-           desugar_UProgn (List.map d aa)
          | UConstBits bs =>
            UConst (tau := bits_t _) bs
          | UConstString s =>
@@ -86,6 +84,12 @@ Section Desugaring.
            | None => UError {| epos := pos; emsg := UnboundEnumMember name sig;
                               esource := ErrSrc s |}
            end
+         | UProgn aa =>
+           desugar_UProgn (List.map d aa)
+         | ULet bindings body =>
+           List.fold_right (fun '(var, a) acc => UBind var (d a) acc) (d body) bindings
+         | UWhen cond body =>
+           UIf (d cond) (d body) (UFail (bits_t 0)) (* FIXME infer the type of the second branch? *)
          | UStructInit sig fields =>
            let uinit := UUnop (UConv (UUnpack (struct_t sig))) in
            let usubst f := UBinop (UStruct2 (USubstField f)) in

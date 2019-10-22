@@ -65,29 +65,28 @@ module UnresolvedAST = struct
     | Const of unresolved_value
 
   type unresolved_action =
-    | AstError
     | Fail of typ
     | Assign of (var_t locd * unresolved_action locd)
     | If of unresolved_action locd * unresolved_action locd * unresolved_action locd list
     | Read of port_t * unresolved_reg_name locd
     | Write of port_t * unresolved_reg_name locd * unresolved_action locd
     (* Sugar on Coq side *)
+    | AstError
     | Skip
     | Progn of unresolved_action locd list
-    | Switch of { binder: var_t;
-                  operand: unresolved_action locd;
+    | Let of (var_t locd * unresolved_action locd) list * unresolved_action locd list
+    | When of unresolved_action locd * unresolved_action locd list
+    | Switch of { operand: unresolved_action locd;
                   default: unresolved_action locd;
                   branches: (unresolved_action locd * unresolved_action locd) list }
     (* Not in Coq-side AST *)
     | Lit of unresolved_literal
-    | When of unresolved_action locd * unresolved_action locd list
-    | Let of (var_t locd * unresolved_action locd) list * unresolved_action locd list
     | Call of { fn: string locd; args: unresolved_action locd list }
   and unresolved_reg_name = string
 
   type unresolved_scheduler =
     | Done
-    | Sequence of rule_name_t locd list
+    | Cons of rule_name_t locd * unresolved_scheduler locd
     | Try of rule_name_t locd * unresolved_scheduler locd * unresolved_scheduler locd
 end
 
@@ -96,83 +95,73 @@ module ResolvedAST = struct
   open Compilation
 
   type uaction =
-    | AstError
     | Fail of typ
     | Var of var_t
     | Const of value
     | Assign of (var_t locd * uaction locd)
-    (* | USeq: replaced by Progn *)
-    (* | UBind: replaced by Let *)
-    | If of uaction locd * uaction locd * uaction locd list
+    | If of uaction locd * uaction locd * uaction locd
     | Read of port_t * reg_signature locd
     | Write of port_t * reg_signature locd * uaction locd
     | Unop of { fn: (SGA.PrimUntyped.ufn1) locd; arg: uaction locd }
     | Binop of { fn: (SGA.PrimUntyped.ufn2) locd; a1: uaction locd; a2: uaction locd }
     | ExternalCall of { fn: (ffi_signature) locd; arg: uaction locd }
     | InternalCall of { fn: uaction locd internal_function; args: uaction locd list }
-    (* Sugar on Coq side *)
+    | Sugar of usugar
+  and usugar =
+    | AstError
     | Skip
     | Progn of uaction locd list
-    | StructInit of { sg: struct_sig; fields: (string locd * uaction locd) list }
-    | Switch of { binder: var_t;
-                  operand: uaction locd;
+    | Let of (var_t locd * uaction locd) list * uaction locd
+    | When of uaction locd * uaction locd
+    | Switch of { operand: uaction locd;
                   default: uaction locd;
                   branches: (uaction locd * uaction locd) list }
-    (* Not in Coq-side AST *)
-    | When of uaction locd * uaction locd list
-    | Let of (var_t locd * uaction locd) list * uaction locd list
+    | StructInit of { sg: struct_sig; fields: (string locd * uaction locd) list }
 
   type uscheduler = UnresolvedAST.unresolved_scheduler
 
-  let rec translate_action  ({ lpos; lcnt }: uaction locd) : pos sga_uaction =
-    let sugar (x: _ SGA.usugar) = SGA.USugar x in
+  let rec translate_action ({ lpos; lcnt }: uaction locd) : pos sga_uaction =
     SGA.UAPos
       (lpos,
        match lcnt with
-       | AstError -> sugar UErrorInAst
-       | Skip -> sugar USkip
        | Fail tau -> UFail (Util.sga_type_of_typ tau)
        | Var v -> UVar v
        | Const v -> let tau, v = Util.sga_value_of_value v in UConst (tau, v)
-       | StructInit { sg; fields } ->
-          let fields = List.map (fun (nm, v) -> Util.coq_string_of_string nm.lcnt, translate_action v) fields in
-          sugar @@ UStructInit (Util.sga_struct_sig_of_struct_sig sg, fields)
        | Assign (v, expr) -> SGA.UAssign (v.lcnt, translate_action expr)
-       | Progn rs -> translate_seq rs
-       | Let (bs, body) -> translate_bindings bs body
-       | If (e, r, rs) -> SGA.UIf (translate_action e, translate_action r, translate_seq rs)
-       (* FIXME syntax for when in typechecker? *)
-       | When (e, rs) -> SGA.UIf (translate_action e, translate_seq rs, SGA.UFail (SGA.Bits_t 0))
-       | Switch { binder; operand; default; branches } ->
-          let bound_var = locd_make operand.lpos (Var binder) in
-          let branches = List.map (fun (lbl, br) -> translate_action lbl, translate_action br) branches in
-          let switch = sugar @@ USwitch (translate_action bound_var, translate_action default, branches) in
-          SGA.UBind (binder, (translate_action operand), switch)
+       | If (e, l, r) -> SGA.UIf (translate_action e, translate_action l, translate_action r)
        | Read (port, reg) -> SGA.URead (translate_port port, reg.lcnt)
        | Write (port, reg, v) -> SGA.UWrite (translate_port port, reg.lcnt, translate_action v)
+       | Unop { fn; arg } -> UUnop (fn.lcnt, translate_action arg)
+       | Binop { fn; a1; a2 } -> UBinop (fn.lcnt, translate_action a1, translate_action a2)
        | InternalCall { fn; args } ->
           SGA.UInternalCall (Util.sga_intfun_of_intfun translate_action fn, List.map translate_action args)
        | ExternalCall { fn; arg } -> UExternalCall (fn.lcnt, translate_action arg)
-       | Unop { fn; arg } -> UUnop (fn.lcnt, translate_action arg)
-       | Binop { fn; a1; a2 } -> UBinop (fn.lcnt, translate_action a1, translate_action a2))
-  and translate_bindings bs body =
-    match bs with
-    | [] -> translate_seq body
-    | (v, e) :: bs -> SGA.UBind (v.lcnt, translate_action e, translate_bindings bs body)
-  and translate_seq rs =
-    match rs with
-    | [] -> SGA.USugar USkip
-    | [r] -> translate_action r
-    | r :: rs -> USeq (translate_action r, translate_seq rs)
+       | Sugar u ->
+          SGA.USugar
+            (match u with
+             | AstError -> UErrorInAst
+             | Skip -> USkip
+             | Progn rs ->
+                UProgn (List.map translate_action rs)
+             | Let (bs, body) ->
+                let bindings = List.map (fun (var, a) -> var.lcnt, translate_action a) bs in
+                ULet (bindings, translate_action body)
+             | When (e, body) ->
+                UWhen (translate_action e, translate_action body)
+             | Switch { operand; default; branches } ->
+                let branches = List.map (fun (lbl, br) -> translate_action lbl, translate_action br) branches in
+                USwitch (translate_action operand, translate_action default, branches)
+             | StructInit { sg; fields } ->
+                let fields = List.map (fun (nm, v) -> Util.coq_string_of_string nm.lcnt, translate_action v) fields in
+                UStructInit (Util.sga_struct_sig_of_struct_sig sg, fields)))
 
   let rec translate_scheduler ({ lpos; lcnt }: uscheduler locd) =
     SGA.USPos
       (lpos,
        match lcnt with
        | Done -> SGA.UDone
-       | Sequence [] -> SGA.UDone
-       | Sequence (r :: rs) ->
-          SGA.UCons (r.lcnt, translate_scheduler { lpos; lcnt = Sequence rs })
+       | Cons (r, s) ->
+          SGA.UCons (r.lcnt, translate_scheduler s)
        | Try (r, s1, s2) ->
           SGA.UTry (r.lcnt, translate_scheduler s1, translate_scheduler s2))
 
@@ -796,10 +785,10 @@ let language_constructs =
    ("let", `Let);
    ("if", `If);
    ("when", `When);
-   ("write.0" , `Write 0);
-   ("write.1", `Write 1);
-   ("read.0" , `Read 0);
-   ("read.1", `Read 1);
+   ("write.0" , `Write P0);
+   ("write.1", `Write P1);
+   ("read.0" , `Read P0);
+   ("read.1", `Read P1);
    ("switch", `Switch)]
   |> StringMap.of_list
 
@@ -960,18 +949,21 @@ let parse (sexps: Pos.t sexp list) =
                  let reg = expect_single loc "register name" "call to write" args in
                  Read (port, expect_identifier "a register name" reg)
               | `Switch ->
-                 let operand, branches = expect_cons loc "switch operand" args in
+                 let inspected, branches = expect_cons loc "switch operand" args in
                  let branches = List.map expect_switch_branch branches in
-                 let operand = expect_action operand in
+                 let inspected = expect_action inspected in
                  let binder = gensym "switch_operand" in
-                 (match build_switch_body branches with
-                  | (Some default, branches) ->
-                     Switch { binder; operand; default; branches }
-                  | None, [] -> syntax_error loc @@ EmptySwitch
-                  | None, branches ->
-                     let default = { lpos = loc; lcnt = AstError } in
-                     let default = syntax_error ~default loc MissingDefaultInSwitch in
-                     Switch { binder; operand; default; branches }))
+                 let operand = locd_make inspected.lpos (Lit (Var binder)) in
+                 let switch = match build_switch_body branches with
+                   | (Some default, branches) ->
+                      Switch { operand; default; branches }
+                   | None, [] -> syntax_error loc @@ EmptySwitch
+                   | None, branches ->
+                      let default = { lpos = loc; lcnt = AstError } in
+                      let default = syntax_error ~default loc MissingDefaultInSwitch in
+                      Switch { operand; default; branches } in
+                 Let ([(locd_make operand.lpos binder, inspected)],
+                      [locd_make loc switch]))
           | None ->
              let args = List.map expect_action args in
              Call { fn = locd_make loc_hd hd; args })
@@ -1025,7 +1017,8 @@ let parse (sexps: Pos.t sexp list) =
        locd_make loc
          (match hd with
           | `Sequence ->
-             Sequence (Delay.map (expect_identifier "a rule name") args)
+             let rules = Delay.map (expect_identifier "a rule name") args in
+             List.fold_right (fun rl s -> Cons (rl, locd_make loc s)) rules Done
           | `Try ->
              let rname, args = expect_cons loc "rule name" args in
              let s1, s2 = expect_pair loc "subscheduler 1" "subscheduler 2" args in
@@ -1409,7 +1402,7 @@ let assemble_resolved_funcall name (fn: resolved_fn) (args: ResolvedAST.uaction 
       | [a1; a2] -> Binop { fn = locate fn; a1; a2 }
       | _ -> bad_arg_count 2)
   | FnStructInit { sg; field_names } ->
-     StructInit { sg; fields = List.combine field_names args }
+     Sugar (StructInit { sg; fields = List.combine field_names args })
 
 let resolve_register_reference registers { lpos; lcnt = name } =
   match List.find_opt (fun rsig -> rsig.reg_name = name) registers with
@@ -1421,10 +1414,9 @@ let rec resolve_struct_fields types fns registers fields =
 and resolve_action_nodelay types fns registers ({ lpos; lcnt }: unresolved_action locd)
   : ResolvedAST.uaction locd =
   let resolve_action = resolve_action types fns registers in
+  let resolve_actions_nodelay = resolve_actions_nodelay types fns registers lpos in
   { lpos;
     lcnt = match lcnt with
-           | AstError -> AstError
-           | Skip -> Skip
            | Fail sz -> Fail sz
            | Lit (Fail tau) -> Fail (resolve_type types (locd_make lpos tau))
            | Lit (Var v) -> ResolvedAST.Var v
@@ -1436,33 +1428,40 @@ and resolve_action_nodelay types fns registers ({ lpos; lcnt }: unresolved_actio
               ResolvedAST.Const (resolve_value types (locd_make lpos v))
            | Lit (Const v) -> ResolvedAST.Const (resolve_value types (locd_make lpos v))
            | Assign (v, a) -> Assign (v, resolve_action a)
-           | Progn rs -> Progn (List.map resolve_action rs)
-           | Let (bs, body) ->
-              Let (List.map (fun (var, expr) -> (var, resolve_action expr)) bs,
-                   List.map resolve_action body)
            | If (c, l, rs) ->
               If (resolve_action c,
                   resolve_action l,
-                  List.map resolve_action rs)
-           | When (c, rs) ->
-              When (resolve_action c, List.map resolve_action rs)
-           | Switch { binder; operand; default; branches } ->
-              Switch { binder;
-                       operand = resolve_action operand;
-                       default = resolve_action default;
-                       branches = List.map (fun (lbl, br) ->
-                                      resolve_action lbl, resolve_action br)
-                                    branches }
+                  resolve_actions_nodelay rs)
            | Read (port, r) ->
               Read (port, resolve_register_reference registers r)
            | Write (port, r, v) ->
               Write (port, resolve_register_reference registers r, resolve_action v)
+           (* Sugar *)
+           | Progn rs -> Sugar (Progn (List.map resolve_action rs))
+           | Let (bs, body) ->
+              Sugar (Let (List.map (fun (var, expr) -> (var, resolve_action expr)) bs,
+                           resolve_actions_nodelay body))
+           | AstError -> Sugar AstError
+           | Skip -> Sugar Skip
+           | When (c, rs) ->
+              Sugar (When (resolve_action c, resolve_actions_nodelay rs))
+           | Switch { operand; default; branches } ->
+              Sugar (Switch { operand = resolve_action operand;
+                              default = resolve_action default;
+                              branches = List.map (fun (lbl, br) ->
+                                             resolve_action lbl, resolve_action br)
+                                           branches })
            | Call { fn; args } ->
               let resolved_fn, args = resolve_function types fns fn args in
               assemble_resolved_funcall fn resolved_fn (List.map resolve_action args) }
+and resolve_actions_nodelay (types: typedecls) fns registers lpos actions =
+  match List.map (resolve_action types fns registers) actions with
+  | [] -> locd_make lpos (ResolvedAST.Sugar Skip)
+  | [a] -> a
+  | actions -> locd_make lpos (ResolvedAST.Sugar (Progn actions))
 and resolve_action types fns registers l
     : ResolvedAST.uaction locd =
-  Delay.apply4_default { l with lcnt = ResolvedAST.AstError }
+  Delay.apply4_default { l with lcnt = ResolvedAST.Sugar AstError }
     resolve_action_nodelay types fns registers l
 
 let resolve_rule types fns registers ((nm, action): _ * unresolved_rule locd) =
@@ -1503,8 +1502,9 @@ let resolve_scheduler rules ((nm, s): string locd * unresolved_scheduler locd) =
   let rec check_scheduler ({ lcnt; _ }: ResolvedAST.uscheduler locd) =
     match lcnt with
     | Done -> ()
-    | Sequence rs ->
-       Delay.iter check_rule rs
+    | Cons (r, s) ->
+       Delay.apply1 check_rule r;
+       Delay.apply1 check_scheduler s
     | Try (r, s1, s2) ->
        Delay.apply1 check_rule r;
        Delay.apply1 check_scheduler s1;

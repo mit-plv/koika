@@ -23,14 +23,16 @@ Section Syntax.
   with usugar {reg_t ext_fn_t} :=
   | UErrorInAst
   | USkip
-  | UProgn (aa: list uaction)
   | UConstBits {sz} (bs: bits sz)
   | UConstString (s: string)
   | UConstEnum (sig: enum_sig) (cst: string)
-  | UStructInit (sig: struct_sig) (fields: list (string * uaction))
+  | UProgn (aa: list uaction)
+  | ULet (bindings: list (var_t * uaction)) (body: uaction)
+  | UWhen (cond: uaction) (body: uaction)
   | USwitch (var: uaction)
             (default: uaction)
             (branches: list (uaction * uaction))
+  | UStructInit (sig: struct_sig) (fields: list (string * uaction))
   | UCallModule {module_reg_t module_ext_fn_t: Type}
                 (fR: module_reg_t -> reg_t)
                 (fSigma: module_ext_fn_t -> ext_fn_t)
