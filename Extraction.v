@@ -10,9 +10,18 @@ Require SGA.Common
         SGA.Interop
         SGA.Demo.
 
-(* This prevents an assertion error: *)
+(* These prevent assertion errors: *)
 Extraction Inline Circuits.retVal.
+Extraction Inline Types.argTypes Types.argSizes.
 (*
+  CBinop ((PrimTyped.Concat ((sub width sz0),
+    (type_sz
+      (vect_hd 0
+        (Obj.magic argTypes (assert false (* Proj Args *))
+          (PrimSignatures.coq_Sigma1 (PrimTyped.Bits1 (PrimTyped.ZExtL
+            (sz0, width))))))))), (CConst
+
+
   | Bind (sig0, tau, var, ex, body) ->
     let ex0 = compile_expr r sigma rEnv r0 cLog sig0 gamma tau ex clog in
     compile_rule r sigma rEnv r0 cLog ((var, tau)::sig0) (CtxCons (sig0, (var, tau),
@@ -29,6 +38,7 @@ Extraction "SGA.ml"
            Environments.ContextEnv Environments.to_list
            Vect.vect_to_list Vect.vect_of_list Vect.Bits.to_nat Vect.index_to_nat Vect.vect_zip
            Syntax.uscheduler
+           Desugaring.desugar_action
            TypeInference.type_action TypeInference.type_rule TypeInference.type_scheduler
            SyntaxTools.action_mentions_var SyntaxTools.member_mentions_shadowed_binding
            Circuits.compile_scheduler

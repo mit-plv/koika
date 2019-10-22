@@ -225,76 +225,18 @@ module Compilation = struct
     | 1 -> SGA.P1
     | _ -> assert false
 
-  type fn_t =
-    | External of ffi_signature
-    | Unop of SGA.PrimUntyped.ufn1
-    | Binop of SGA.PrimUntyped.ufn2
-
-  type 'f raw_action =
-    ('f, ('f, value literal, reg_signature, fn_t) action) locd
-
-  type 'f translated_action =
+  type 'f sga_uaction =
     ('f, fn_name_t, var_t, reg_signature, ffi_signature) SGA.uaction
+  type 'f sga_uscheduler =
+    ('f, rule_name_t) SGA.uscheduler
 
-  type debug_printer = { debug_print: 'f. 'f translated_action -> unit }
+  type sga_action = (var_t, reg_signature, ffi_signature) SGA.action
+  type sga_rule = [ `ExternalRule | `InternalRule ] * sga_action
+  type sga_scheduler = var_t SGA.scheduler
+
+  type debug_printer = { debug_print: 'f. 'f sga_uaction -> unit }
   let debug_printer : debug_printer ref =
     ref { debug_print = (fun _ -> Printf.eprintf "No printer installed\n%!") }
-
-  let rec translate_action  ({ lpos; lcnt }: 'f raw_action) : 'f translated_action =
-    let sugar (x: _ SGA.usugar) = SGA.USugar x in
-    SGA.UAPos
-      (lpos,
-       match lcnt with
-       | Error -> sugar UErrorInAst
-       | Skip -> sugar USkip
-       | Fail tau -> UFail (Util.sga_type_of_typ tau)
-       | Lit (Var v) -> UVar v
-       | Lit (Const v) -> let tau, v = Util.sga_value_of_value v in UConst (tau, v)
-       | StructInit (sg, fields) ->
-          let fields = List.map (fun (nm, v) -> Util.coq_string_of_string nm.lcnt, translate_action v) fields in
-          sugar @@ UStructInit (Util.sga_struct_sig_of_struct_sig sg, fields)
-       | Assign (v, expr) -> SGA.UAssign (v.lcnt, translate_action expr)
-       | Progn rs -> translate_seq rs
-       | Let (bs, body) -> translate_bindings bs body
-       | If (e, r, rs) -> SGA.UIf (translate_action e, translate_action r, translate_seq rs)
-       (* FIXME syntax for when in typechecker? *)
-       | When (e, rs) -> SGA.UIf (translate_action e, translate_seq rs, SGA.UFail (SGA.Bits_t 0))
-       | Switch { binder; operand; default; branches } ->
-          let bound_var = locd_make operand.lpos (Lit (Var binder)) in
-          let branches = List.map (fun (lbl, br) -> translate_action lbl, translate_action br) branches in
-          let switch = sugar @@ USwitch (translate_action bound_var, translate_action default, branches) in
-          SGA.UBind (binder, (translate_action operand), switch)
-       | Read (port, reg) -> SGA.URead (translate_port port, reg.lcnt)
-       | Write (port, reg, v) -> SGA.UWrite (translate_port port, reg.lcnt, translate_action v)
-       | InternalCall { fn; args } ->
-          SGA.UInternalCall (Util.sga_intfun_of_intfun translate_action fn, List.map translate_action args)
-       | Call { fn; args } ->
-          let args = List.map translate_action args in
-          (match fn.lcnt, args with
-           | External ffi, [arg] -> UExternalCall (ffi, arg)
-           | Unop f, [arg] -> UUnop (f, arg)
-           | Binop f, [a1; a2] -> UBinop (f, a1, a2)
-           | _, _ -> failwith "Incorrect argument count in Call"))
-  and translate_bindings bs body =
-    match bs with
-    | [] -> translate_seq body
-    | (v, e) :: bs -> UBind (v.lcnt, translate_action e, translate_bindings bs body)
-  and translate_seq rs =
-    match rs with
-    | [] -> SGA.USugar USkip
-    | [r] -> translate_action r
-    | r :: rs -> USeq (translate_action r, translate_seq rs)
-
-  let rec translate_scheduler { lpos; lcnt } =
-    SGA.USPos
-      (lpos,
-       match lcnt with
-       | Done -> SGA.UDone
-       | Sequence [] -> SGA.UDone
-       | Sequence (r :: rs) ->
-          SGA.UCons (r.lcnt, translate_scheduler { lpos; lcnt = Sequence rs })
-       | Try (r, s1, s2) ->
-          SGA.UTry (r.lcnt, translate_scheduler s1, translate_scheduler s2))
 
   let _R = fun rs -> Util.sga_type_of_typ (reg_type rs)
   let _Sigma fn = Util.sga_external_sig_of_ffi_sig fn
@@ -305,36 +247,25 @@ module Compilation = struct
     SGA.contextEnv { SGA.finite_elements = tc_registers;
                      SGA.finite_index = fun r -> Hashtbl.find regmap r.reg_name }
 
-  type typechecked_action =
-    (var_t, reg_signature, ffi_signature) SGA.action
-
-  type 'f raw_scheduler = ('f, 'f scheduler) locd
-
-  type typechecked_scheduler = var_t SGA.scheduler
-  type typechecked_rule = [ `ExternalRule | `InternalRule ] * typechecked_action
-
   (* FIXME hashmaps, not lists *)
   type compile_unit =
     { c_registers: reg_signature list;
       c_scheduler: string SGA.scheduler;
-      c_rules: (rule_name_t * typechecked_rule) list;
+      c_rules: (rule_name_t * sga_rule) list;
       c_cpp_preamble: string option }
 
   type compiled_circuit =
     (string, reg_signature, ffi_signature) sga_circuit
 
-  let typecheck_scheduler (raw_ast: 'f raw_scheduler) : rule_name_t SGA.scheduler =
-    let ast = translate_scheduler raw_ast in
-    SGA.type_scheduler raw_ast.lpos ast
+  let typecheck_scheduler pos (ast: 'f sga_uscheduler) : sga_scheduler =
+    SGA.type_scheduler pos ast
 
   let result_of_type_result = function
     | SGA.Success s -> Ok s
     | SGA.Failure (err: _ SGA.error) -> Error (err.epos, Util.translate_sga_error_message err.emsg)
 
-  let typecheck_rule (raw_ast: 'pos_t raw_action)
-      : (typechecked_action, ('pos_t * _)) result =
-    let ast = translate_action raw_ast in
-    SGA.type_rule Util.string_eq_dec _R _Sigma raw_ast.lpos ast
+  let typecheck_rule pos (ast: 'f sga_uaction) : (sga_action, ('pos_t * _)) result =
+    SGA.type_rule Util.string_eq_dec _R _Sigma pos (SGA.desugar_action pos ast)
     |> result_of_type_result
 
   let compile (cu: compile_unit) : (reg_signature -> compiled_circuit) =

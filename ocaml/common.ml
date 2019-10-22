@@ -137,61 +137,12 @@ let locd_make lpos lcnt =
 let locd_of_pair (pos, x) =
   locd_make pos x
 
-type 'cst_t literal =
-  | Var of var_t
-  | Const of 'cst_t
-
 type 'action internal_function = {
     int_name: string;
     int_argspec: (string * typ) list;
     int_rettype: typ;
     int_body: 'action
   }
-
-type ('f, 'lit_t, 'reg_t, 'fn_t) action =
-  | Error
-  | Fail of typ
-  (* | UVar | UConst: replaced by Lit *)
-  | Assign of (('f, var_t) locd * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd)
-  (* | USeq: replaced by Progn *)
-  (* | UBind: replaced by Let *)
-  | If of ('f, 'lit_t, 'reg_t, 'fn_t) action_locd
-          * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd
-          * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd list
-  | Read of port_t
-            * ('f, 'reg_t) locd
-  | Write of port_t
-             * ('f, 'reg_t) locd
-             * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd
-  (* | UUnop | UBinop | UExternalCall: replaced by UCall *)
-  | InternalCall of
-      { fn: ('f, 'lit_t, 'reg_t, 'fn_t) action_locd internal_function;
-        args: ('f, 'lit_t, 'reg_t, 'fn_t) action_locd list }
-  (* Sugar on Coq side *)
-  | Skip
-  | Progn of ('f, 'lit_t, 'reg_t, 'fn_t) action_locd list
-  | StructInit of (struct_sig * (('f, string) locd * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd) list)
-  | Switch of { binder: var_t;
-                operand: ('f, 'lit_t, 'reg_t, 'fn_t) action_locd;
-                default: ('f, 'lit_t, 'reg_t, 'fn_t) action_locd;
-                branches: (('f, 'lit_t, 'reg_t, 'fn_t) action_locd
-                           * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd) list } (* branches *)
-  (* Not in Coq-side AST *)
-  | Lit of 'lit_t
-  | When of ('f, 'lit_t, 'reg_t, 'fn_t) action_locd
-            * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd list
-  | Let of (('f, var_t) locd * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd) list
-           * ('f, 'lit_t, 'reg_t, 'fn_t) action_locd list
-  | Call of { fn: ('f, 'fn_t) locd;
-              args: ('f, 'lit_t, 'reg_t, 'fn_t) action_locd list }
-
-and ('f, 'lit_t, 'reg_t, 'fn_t) action_locd =
-  ('f, ('f, 'lit_t, 'reg_t, 'fn_t) action) locd
-
-type 'f scheduler =
-  | Done
-  | Sequence of ('f, string) locd list
-  | Try of ('f, string) locd * ('f, 'f scheduler) locd * ('f, 'f scheduler) locd
 
 let with_output_to_file fname (f: out_channel -> unit) =
   let out = open_out fname in

@@ -35,50 +35,164 @@ module Pos = struct
        sprintf "%s:%s:%s" fname line col
 end
 
-type nonrec 'a locd = (Pos.t, 'a) locd
+type pos = Pos.t
+type nonrec 'a locd = (pos, 'a) locd
 
-type unresolved_enumerator = {
-    enum: string;
-    constructor: string
-  }
+module UnresolvedAST = struct
+  type unresolved_enumerator = {
+      enum: string;
+      constructor: string
+    }
 
-type unresolved_value =
-  | UBits of bool array
-  | UEnum of unresolved_enumerator
+  type unresolved_value =
+    | UBits of bool array
+    | UEnum of unresolved_enumerator
 
-type unresolved_typedecl =
-  | Enum_u of { name: string locd; bitsize: int locd; members: (string locd * bits_value locd) list }
-  | Struct_u of { name: string locd; fields: (string locd * unresolved_type locd) list }
-and unresolved_type =
-  | Bits_u of int
-  | Unknown_u of string
+  type unresolved_typedecl =
+    | Enum_u of { name: string locd; bitsize: int locd; members: (string locd * bits_value locd) list }
+    | Struct_u of { name: string locd; fields: (string locd * unresolved_type locd) list }
+  and unresolved_type =
+    | Bits_u of int
+    | Unknown_u of string
 
-type unresolved_literal =
-  | Var of var_t
-  | Fail of unresolved_type
-  | Num of (string * int)
-  | Symbol of string
-  | Keyword of string
-  | Enumerator of { enum: string; constructor: string }
-  | Const of unresolved_value
+  type unresolved_literal =
+    | Var of var_t
+    | Fail of unresolved_type
+    | Num of (string * int)
+    | Symbol of string
+    | Keyword of string
+    | Enumerator of { enum: string; constructor: string }
+    | Const of unresolved_value
 
-type unresolved_action =
-  (Pos.t, unresolved_literal, string, string) action
+  type unresolved_action =
+    | AstError
+    | Fail of typ
+    | Assign of (var_t locd * unresolved_action locd)
+    | If of unresolved_action locd * unresolved_action locd * unresolved_action locd list
+    | Read of port_t * unresolved_reg_name locd
+    | Write of port_t * unresolved_reg_name locd * unresolved_action locd
+    (* Sugar on Coq side *)
+    | Skip
+    | Progn of unresolved_action locd list
+    | Switch of { binder: var_t;
+                  operand: unresolved_action locd;
+                  default: unresolved_action locd;
+                  branches: (unresolved_action locd * unresolved_action locd) list }
+    (* Not in Coq-side AST *)
+    | Lit of unresolved_literal
+    | When of unresolved_action locd * unresolved_action locd list
+    | Let of (var_t locd * unresolved_action locd) list * unresolved_action locd list
+    | Call of { fn: string locd; args: unresolved_action locd list }
+  and unresolved_reg_name = string
 
-type unresolved_rule =
-  string locd * unresolved_action locd
+  type unresolved_scheduler =
+    | Done
+    | Sequence of rule_name_t locd list
+    | Try of rule_name_t locd * unresolved_scheduler locd * unresolved_scheduler locd
+end
 
-type unresolved_scheduler =
-  string locd * (Pos.t scheduler) locd
+module ResolvedAST = struct
+  open SGALib
+  open Compilation
 
-type unresolved_register =
-  string locd * unresolved_value locd
+  type uaction =
+    | AstError
+    | Fail of typ
+    | Var of var_t
+    | Const of value
+    | Assign of (var_t locd * uaction locd)
+    (* | USeq: replaced by Progn *)
+    (* | UBind: replaced by Let *)
+    | If of uaction locd * uaction locd * uaction locd list
+    | Read of port_t * reg_signature locd
+    | Write of port_t * reg_signature locd * uaction locd
+    | Unop of { fn: (SGA.PrimUntyped.ufn1) locd; arg: uaction locd }
+    | Binop of { fn: (SGA.PrimUntyped.ufn2) locd; a1: uaction locd; a2: uaction locd }
+    | ExternalCall of { fn: (ffi_signature) locd; arg: uaction locd }
+    | InternalCall of { fn: uaction locd internal_function; args: uaction locd list }
+    (* Sugar on Coq side *)
+    | Skip
+    | Progn of uaction locd list
+    | StructInit of { sg: struct_sig; fields: (string locd * uaction locd) list }
+    | Switch of { binder: var_t;
+                  operand: uaction locd;
+                  default: uaction locd;
+                  branches: (uaction locd * uaction locd) list }
+    (* Not in Coq-side AST *)
+    | When of uaction locd * uaction locd list
+    | Let of (var_t locd * uaction locd) list * uaction locd list
+
+  type uscheduler = UnresolvedAST.unresolved_scheduler
+
+  let rec translate_action  ({ lpos; lcnt }: uaction locd) : pos sga_uaction =
+    let sugar (x: _ SGA.usugar) = SGA.USugar x in
+    SGA.UAPos
+      (lpos,
+       match lcnt with
+       | AstError -> sugar UErrorInAst
+       | Skip -> sugar USkip
+       | Fail tau -> UFail (Util.sga_type_of_typ tau)
+       | Var v -> UVar v
+       | Const v -> let tau, v = Util.sga_value_of_value v in UConst (tau, v)
+       | StructInit { sg; fields } ->
+          let fields = List.map (fun (nm, v) -> Util.coq_string_of_string nm.lcnt, translate_action v) fields in
+          sugar @@ UStructInit (Util.sga_struct_sig_of_struct_sig sg, fields)
+       | Assign (v, expr) -> SGA.UAssign (v.lcnt, translate_action expr)
+       | Progn rs -> translate_seq rs
+       | Let (bs, body) -> translate_bindings bs body
+       | If (e, r, rs) -> SGA.UIf (translate_action e, translate_action r, translate_seq rs)
+       (* FIXME syntax for when in typechecker? *)
+       | When (e, rs) -> SGA.UIf (translate_action e, translate_seq rs, SGA.UFail (SGA.Bits_t 0))
+       | Switch { binder; operand; default; branches } ->
+          let bound_var = locd_make operand.lpos (Var binder) in
+          let branches = List.map (fun (lbl, br) -> translate_action lbl, translate_action br) branches in
+          let switch = sugar @@ USwitch (translate_action bound_var, translate_action default, branches) in
+          SGA.UBind (binder, (translate_action operand), switch)
+       | Read (port, reg) -> SGA.URead (translate_port port, reg.lcnt)
+       | Write (port, reg, v) -> SGA.UWrite (translate_port port, reg.lcnt, translate_action v)
+       | InternalCall { fn; args } ->
+          SGA.UInternalCall (Util.sga_intfun_of_intfun translate_action fn, List.map translate_action args)
+       | ExternalCall { fn; arg } -> UExternalCall (fn.lcnt, translate_action arg)
+       | Unop { fn; arg } -> UUnop (fn.lcnt, translate_action arg)
+       | Binop { fn; a1; a2 } -> UBinop (fn.lcnt, translate_action a1, translate_action a2))
+  and translate_bindings bs body =
+    match bs with
+    | [] -> translate_seq body
+    | (v, e) :: bs -> SGA.UBind (v.lcnt, translate_action e, translate_bindings bs body)
+  and translate_seq rs =
+    match rs with
+    | [] -> SGA.USugar USkip
+    | [r] -> translate_action r
+    | r :: rs -> USeq (translate_action r, translate_seq rs)
+
+  let rec translate_scheduler ({ lpos; lcnt }: uscheduler locd) =
+    SGA.USPos
+      (lpos,
+       match lcnt with
+       | Done -> SGA.UDone
+       | Sequence [] -> SGA.UDone
+       | Sequence (r :: rs) ->
+          SGA.UCons (r.lcnt, translate_scheduler { lpos; lcnt = Sequence rs })
+       | Try (r, s1, s2) ->
+          SGA.UTry (r.lcnt, translate_scheduler s1, translate_scheduler s2))
+
+  let typecheck_scheduler (raw_ast: uscheduler locd) : rule_name_t SGA.scheduler =
+    typecheck_scheduler raw_ast.lpos (translate_scheduler raw_ast)
+
+  let typecheck_rule (raw_ast: uaction locd) : (sga_action, ('pos_t * _)) result =
+    typecheck_rule raw_ast.lpos (translate_action raw_ast)
+end
+
+open UnresolvedAST
+
+type unresolved_rule = unresolved_action
+type unresolved_register = unresolved_value
 
 type unresolved_module = {
     m_name: string locd;
-    m_registers: unresolved_register list;
-    m_rules: unresolved_rule list;
-    m_schedulers: unresolved_scheduler list;
+    m_registers: (string locd * unresolved_register locd) list;
+    m_rules: (string locd * unresolved_rule locd) list;
+    m_schedulers: (string locd * unresolved_scheduler locd) list;
     m_cpp_preamble: string list;
   }
 
@@ -105,28 +219,33 @@ type unresolved_unit = {
     mods: unresolved_module locd list;
   }
 
-type resolved_defun =
-  { dfn_signature: (string, string) internal_signature;
-    dfn_body: Pos.t SGALib.Compilation.raw_action }
+type resolved_extfun = ffi_signature
 
-type resolved_extfun =
-  { ext_nargs: int; ext_sig: string ffi_signature }
+type resolved_defun =
+  ResolvedAST.uaction internal_function
 
 type resolved_fn =
-  | ExternalFn of resolved_extfun
-  | InternalFn of resolved_defun
+  | FnExternal of ffi_signature
+  | FnInternal of resolved_defun
+  | FnUnop of SGALib.SGA.PrimUntyped.ufn1
+  | FnBinop of SGALib.SGA.PrimUntyped.ufn2
+  | FnStructInit of { sg: struct_sig; field_names: string locd list }
+
+type resolved_fndecl =
+  | ExternalDecl of resolved_extfun
+  | InternalDecl of resolved_defun
 
 type resolved_module = {
     name: string locd;
     registers: reg_signature list;
-    rules: (string * Pos.t SGALib.Compilation.raw_action) list;
-    schedulers: (string * Pos.t SGALib.Compilation.raw_scheduler) list;
+    rules: (string * ResolvedAST.uaction locd) list;
+    schedulers: (string * ResolvedAST.uscheduler locd) list;
     cpp_preamble: string list
   }
 
 type fndecls = {
-    fn_ordered: (string * resolved_fn) list;
-    fn_all: resolved_fn StringMap.t
+    fn_ordered: (string * resolved_fndecl) list;
+    fn_all: resolved_fndecl StringMap.t
   }
 
 type resolved_unit = {
@@ -257,8 +376,7 @@ module Errors = struct
          sprintf "Enumerator declarations should not be qualified: try %a instead of %a"
            fquote ("::" ^ constructor) fquote (enum ^ "::" ^ constructor)
       | TooManyArgumentsInExtfunDecl ->
-         "External fns with more than 2 arguments are not supported" ^
-           " (consider using a struct to pass more arguments)"
+         "External fns must take a single argument (use a struct to pass multiple arguments)"
   end
 
   module NameErrors = struct
@@ -310,6 +428,7 @@ module Errors = struct
     let classify (msg: t) =
       match msg with
       | ExplicitErrorInAst -> `TypeError
+      | SugaredConstructorInAst -> `SyntaxError
       | UnboundVariable _ -> `NameError
       | UnboundField _ -> `NameError
       | UnboundEnumMember _ -> `NameError
@@ -323,6 +442,8 @@ module Errors = struct
       match msg with
       | ExplicitErrorInAst ->
          "Untypeable term (likely due to an ill-typed subterm)"
+      | SugaredConstructorInAst ->
+         "Improper desugaring (this is a bug; please report it)"
       | UnboundVariable { var } ->
          sprintf "Unbound variable %a" fquote var
       | UnboundField { field; sg } ->
@@ -343,7 +464,7 @@ module Errors = struct
            fquote (typ_to_string actual) fquote (typ_to_string expected)
       | KindMismatch { actual; expected } ->
          sprintf "This term has type %a, but kind %a was expected"
-           fquote (typ_to_string actual) fquote expected
+           fquote actual fquote expected
   end
 
   module Warnings = struct
@@ -809,7 +930,7 @@ let parse (sexps: Pos.t sexp list) =
              (match fn with
               | `Fail ->
                  (match args with
-                  | [] -> Common.Fail (Bits_t 0)
+                  | [] -> Fail (Bits_t 0)
                   | [arg] -> Lit (Fail (expect_type ~bits_raw:true arg).lcnt)
                   | _ -> type_error loc @@ BadArgumentCount { fn = "fail"; expected = 1; given = List.length args })
               | `Setq ->
@@ -848,14 +969,14 @@ let parse (sexps: Pos.t sexp list) =
                      Switch { binder; operand; default; branches }
                   | None, [] -> syntax_error loc @@ EmptySwitch
                   | None, branches ->
-                     let default = { lpos = loc; lcnt = Invalid } in
+                     let default = { lpos = loc; lcnt = AstError } in
                      let default = syntax_error ~default loc MissingDefaultInSwitch in
                      Switch { binder; operand; default; branches }))
           | None ->
              let args = List.map expect_action args in
-             Call (locd_make loc_hd hd, args))
+             Call { fn = locd_make loc_hd hd; args })
   and expect_action s =
-    Delay.apply1_default { lpos = sexp_pos s; lcnt = Invalid } expect_action_nodelay s
+    Delay.apply1_default { lpos = sexp_pos s; lcnt = AstError } expect_action_nodelay s
   and expect_switch_branch branch =
     let loc, lst = expect_list "switch case" branch in
     let lbl, body = expect_cons loc "case label" lst in
@@ -865,7 +986,7 @@ let parse (sexps: Pos.t sexp list) =
              `SomeLabel (locd_make loc (Lit (Const cst))) in
     (lbl, locd_make loc (Progn (List.map expect_action body)))
   and build_switch_body branches =
-    Delay.fold_right (fun (lbl, (branch: _ action locd)) (default, branches) ->
+    Delay.fold_right (fun (lbl, (branch: unresolved_action locd)) (default, branches) ->
         match default, branches, lbl with
         | None, [], `AnyLabel _ ->
            (Some branch, [])
@@ -895,7 +1016,7 @@ let parse (sexps: Pos.t sexp list) =
     (name, locd_of_pair (expect_const "an initial value" init_val)) in
   let expect_actions (loc: Pos.t) body =
     locd_make loc (Progn (List.map expect_action body)) in
-  let rec expect_scheduler_body : Pos.t sexp -> Pos.t scheduler locd = function
+  let rec expect_scheduler_body : Pos.t sexp -> unresolved_scheduler locd = function
     | Atom { loc; atom } ->
        locd_make loc (expect_constant loc [("done", Done)] atom)
     | List { loc; elements } -> (* FIXME put these in special list *)
@@ -1107,42 +1228,44 @@ let special_primitives =
   |> StringMap.of_list
 
 let core_primitives =
-  let open SGALib.SGA in
-  let conv_fn f = UPrimFn (UConvFn f) in
-  let struct_fn f = UPrimFn (UStructFn f) in
-  [("eq", (`Fn (conv_fn UEq), 2));
-   ("=", (`Fn (conv_fn UEq), 2));
-   ("pack", (`Fn (conv_fn UPack), 1));
-   ("unpack", (`TypeFn (fun tau -> conv_fn (UUnpack tau)), 1));
-   ("ignore", (`Fn (conv_fn UIgnore), 1));
-   ("get", (`FieldFn (fun f -> struct_fn (UDo (GetField, f))) , 1));
-   ("update", (`FieldFn (fun f -> struct_fn (UDo (SubstField, f))), 2));
-   ("get-bits", (`StructFn (fun sg f -> struct_fn (UDoBits (sg, GetField, f))), 1));
-   ("update-bits", (`StructFn (fun sg f -> struct_fn (UDoBits (sg, SubstField, f))), 2))]
+  let open SGALib.SGA.PrimUntyped in
+  let unop fn = FnUnop fn in
+  let binop fn = FnBinop fn in
+  [("eq", `Fn (binop UEq));
+   ("=", `Fn (binop UEq));
+   ("pack", `Fn (unop (UConv UPack)));
+   ("unpack", `TypeFn (fun tau -> unop (UConv (UUnpack tau))));
+   ("ignore", `Fn (unop (UConv UIgnore)));
+   ("get", `FieldFn (fun f -> unop (UStruct1 (UGetField f))));
+   ("update", `FieldFn (fun f -> binop (UStruct2 (USubstField f))));
+   ("get-bits", `StructFn (fun sg f -> unop (UStruct1 (UGetFieldBits (sg, f)))));
+   ("update-bits", `StructFn (fun sg f -> binop (UStruct2 (USubstFieldBits (sg, f)))))]
   |> StringMap.of_list
 
 let bits_primitives =
-  let open SGALib.SGA in
-  [("sel", (`Prim0 USel, 2));
-   ("and", (`Prim0 UAnd, 2));
-   ("&", (`Prim0 UAnd, 2));
-   ("or", (`Prim0 UOr, 2));
-   ("|", (`Prim0 UOr, 2));
-   ("not", (`Prim0 UNot, 1));
-   ("~", (`Prim0 UNot, 1));
-   ("lsl", (`Prim0 ULsl, 2));
-   ("<<", (`Prim0 ULsl, 2));
-   ("lsr", (`Prim0 ULsr, 2));
-   (">>", (`Prim0 ULsr, 2));
-   ("concat", (`Prim0 UConcat, 2));
-   ("uintplus", (`Prim0 UUIntPlus, 2));
-   ("+", (`Prim0 UUIntPlus, 2));
-   ("<", (`Prim0 UUIntLt, 2));
-   ("zextl", (`Prim1 (fun n -> UZExtL n), 1));
-   ("zextr", (`Prim1 (fun n -> UZExtR n), 1));
-   ("indexed-part", (`Prim1 (fun n -> UIndexedPart n), 2));
-   ("part", (`Prim2 (fun n n' -> UPart (n, n')), 1));
-   ("part-subst", (`Prim2 (fun n n' -> UPart (n, n')), 2))]
+  let open SGALib.SGA.PrimUntyped in
+  let unop fn = FnUnop (UBits1 fn) in
+  let binop fn = FnBinop (UBits2 fn) in
+  [("sel", `Prim0 (binop USel));
+   ("and", `Prim0 (binop UAnd));
+   ("&", `Prim0 (binop UAnd));
+   ("or", `Prim0 (binop UOr));
+   ("|", `Prim0 (binop UOr));
+   ("not", `Prim0 (unop UNot));
+   ("~", `Prim0 (unop UNot));
+   ("lsl", `Prim0 (binop ULsl));
+   ("<<", `Prim0 (binop ULsl));
+   ("lsr", `Prim0 (binop ULsr));
+   (">>", `Prim0 (binop ULsr));
+   ("concat", `Prim0 (binop UConcat));
+   ("uintplus", `Prim0 (binop UUIntPlus));
+   ("+", `Prim0 (binop UUIntPlus));
+   ("<", `Prim0 (binop UUIntLt));
+   ("zextl", `Prim1 (fun n -> unop (UZExtL n)));
+   ("zextr", `Prim1 (fun n -> unop (UZExtR n)));
+   ("indexed-part", `Prim1 (fun n -> binop (UIndexedPart n)));
+   ("part", `Prim2 (fun n n' -> unop (UPart (n, n'))));
+   ("part-subst", `Prim2 (fun n n' -> unop (UPart (n, n'))))]
   |> StringMap.of_list
 
 let all_primitive_names =
@@ -1173,19 +1296,18 @@ let resolve_value types { lpos; lcnt } =
       | None -> name_error lpos @@ Unbound { kind = "enum"; prefix = ""; name = enum; candidates = keys types.td_enums })
 
 let try_resolve_bits_fn { lpos; lcnt = name } args =
-  let bits_fn nm = SGALib.SGA.UPrimFn (SGALib.SGA.UBitsFn nm) in
   match StringMap.find_opt name bits_primitives with
-  | Some (fn, nargs) ->
+  | Some fn ->
      Some (match fn with
            | `Prim0 fn ->
-              (bits_fn fn, nargs, args)
+              (fn, args)
            | `Prim1 fn ->
               let (_, (_, n)), args = rexpect_param rexpect_num lpos args in
-              (bits_fn (fn n), nargs, args)
+              (fn n, args)
            | `Prim2 fn ->
               let (_, (_, n)), args = rexpect_param rexpect_num lpos args in
               let (_, (_, n')), args = rexpect_param rexpect_num lpos args in
-              (bits_fn (fn n n'), nargs, args))
+              (fn n n', args))
   | None -> None
 
 let rexpect_pairs kind2 f1 f2 xs =
@@ -1207,39 +1329,32 @@ let try_resolve_primitive types name args =
     let (_, f), args = rexpect_param (rexpect_keyword "a struct field") name.lpos args in
     SGALib.Util.coq_string_of_string f, args in
   match StringMap.find_opt name.lcnt core_primitives with
-  | Some (fn, nargs) ->
+  | Some fn ->
      Some (match fn with
            | `Fn fn ->
-              (fn, nargs, args)
+              (fn, args)
            | `TypeFn fn ->
               let _, _, t, args = rexpect_type name.lpos types args in
-              (fn (SGALib.Util.sga_type_of_typ t), nargs, args)
+              (fn (SGALib.Util.sga_type_of_typ t), args)
            | `FieldFn fn ->
               let f, args = rexpect_field args in
-              (fn f, nargs, args)
+              (fn f, args)
            | `StructFn fn ->
               let loc, nm, t, args = rexpect_type name.lpos types args in
               let f, args = rexpect_field args in
-              (fn (must_struct_t loc nm t) f, nargs, args))
+              (fn (must_struct_t loc nm t) f, args))
   | None -> try_resolve_bits_fn name args
 
-let literal_tt = Lit (Const (UBits [||]))
-
-type partly_resolved_funcall =
-  | RStructInit of { sg: struct_sig; fields: (string locd * unresolved_action locd) list }
-  | RInternalCall of { fn: resolved_defun; args: unresolved_action locd list }
-  | RExternalCall of { fn: string ffi_signature SGALib.SGA.interop_ufn_t locd;
-                       a1: unresolved_action locd;
-                       a2: unresolved_action locd }
+let literal_zero sz = Lit (Const (UBits (Array.make sz false)))
 
 let try_resolve_special_primitive types name (args: unresolved_action locd list) =
   match StringMap.find_opt name.lcnt special_primitives with
   | Some `Init ->
      let loc, nm, tau, args = rexpect_type name.lpos types args in
      let sga_tau = SGALib.Util.sga_type_of_typ tau in
-     let uinit = SGALib.SGA.(UPrimFn (UConvFn (UInit sga_tau))) in
-     let tt = { lpos = loc; lcnt = literal_tt } in
-     let uinit_call = RExternalCall { fn = locd_make loc uinit; a1 = tt; a2 = tt } in
+     let uunpack = SGALib.SGA.PrimUntyped.(UConv (UUnpack sga_tau)) in
+     let zero = { lpos = loc; lcnt = literal_zero (typ_sz tau) } in
+     let uinit_call = FnUnop uunpack, [zero] in
      (match tau with
       | Bits_t sz ->
          warning name.lpos @@ BadInitBits { init = nm; size = sz };
@@ -1253,37 +1368,48 @@ let try_resolve_special_primitive types name (args: unresolved_action locd list)
          let expect_field_val x = x in
          Some (match rexpect_pairs "value" expect_field_name expect_field_val args with
                | [] -> uinit_call
-               | fields -> RStructInit { sg; fields }))
+               | fields -> let field_names, actions = List.split fields in
+                           FnStructInit { sg; field_names }, actions))
   | _ -> None
 
-let pad_function_call name fn nargs (args: unresolved_action locd list) =
-  assert (nargs <= 2);
-  let given = List.length args in
-  if given <> nargs then
-    type_error name.lpos @@ BadArgumentCount { fn = name.lcnt; expected = nargs; given }
-  else
-    let tt = { lpos = name.lpos; lcnt = literal_tt } in
-    let a1, a2 = match args with
-      | [] -> tt, tt
-      | [a1] -> a1, tt
-      | [a1; a2] -> a1, a2
-      | _ -> assert false in
-    RExternalCall { fn = { lpos = name.lpos; lcnt = fn }; a1; a2 }
-
-let resolve_function types fns name (args: unresolved_action locd list) =
+let resolve_function types fns name (args: unresolved_action locd list)
+  : resolved_fn * unresolved_action locd list =
   match try_resolve_special_primitive types name args with
   | Some resolved -> resolved
   | None ->
      match try_resolve_primitive types name args with
-     | Some (fn, nargs, args) -> pad_function_call name fn nargs args
+     | Some (fn, args) -> (fn, args)
      | None ->
         match StringMap.find_opt name.lcnt fns with
-        | Some (InternalFn fn) -> RInternalCall { fn; args }
-        | Some (ExternalFn ext) -> pad_function_call name (SGALib.SGA.UCustomFn ext.ext_sig) ext.ext_nargs args
+        | Some (InternalDecl fn) -> (FnInternal fn, args)
+        | Some (ExternalDecl ext) -> (FnExternal ext, args)
         | None -> let candidates = all_primitive_names in
                   name_error name.lpos @@
                     Unbound { kind = "function"; prefix = "";
                               name = name.lcnt; candidates }
+
+let assemble_resolved_funcall name (fn: resolved_fn) (args: ResolvedAST.uaction locd list) =
+  let given = List.length args in
+  let bad_arg_count nexpected =
+    type_error name.lpos @@ BadArgumentCount { fn = name.lcnt; expected = nexpected; given } in
+  let locate fn = { lpos = name.lpos; lcnt = fn } in
+  match fn with
+  | FnExternal fn ->
+     (match args with
+      | [arg] -> ResolvedAST.ExternalCall { fn = locate fn; arg }
+      | _ -> bad_arg_count 1)
+  | FnInternal fn ->
+     InternalCall { fn = { fn with int_body = locate fn.int_body }; args }
+  | FnUnop fn ->
+     (match args with
+      | [arg] -> Unop { fn = locate fn; arg }
+      | _ -> bad_arg_count 1)
+  | FnBinop fn ->
+     (match args with
+      | [a1; a2] -> Binop { fn = locate fn; a1; a2 }
+      | _ -> bad_arg_count 2)
+  | FnStructInit { sg; field_names } ->
+     StructInit { sg; fields = List.combine field_names args }
 
 let resolve_register_reference registers { lpos; lcnt = name } =
   match List.find_opt (fun rsig -> rsig.reg_name = name) registers with
@@ -1292,25 +1418,24 @@ let resolve_register_reference registers { lpos; lcnt = name } =
 
 let rec resolve_struct_fields types fns registers fields =
   List.map (fun (nm, v) -> nm, resolve_action types fns registers v) fields
-and resolve_action_nodelay types fns registers ({ lpos; lcnt }: unresolved_action locd) =
+and resolve_action_nodelay types fns registers ({ lpos; lcnt }: unresolved_action locd)
+  : ResolvedAST.uaction locd =
   let resolve_action = resolve_action types fns registers in
   { lpos;
     lcnt = match lcnt with
+           | AstError -> AstError
            | Skip -> Skip
-           | Invalid -> Invalid
            | Fail sz -> Fail sz
            | Lit (Fail tau) -> Fail (resolve_type types (locd_make lpos tau))
-           | Lit (Var v) -> Lit (Common.Var v)
+           | Lit (Var v) -> ResolvedAST.Var v
            | Lit (Num (s, _)) -> syntax_error lpos @@ MissingSize { number = s }
            | Lit (Symbol symbol) -> syntax_error lpos @@ UnexpectedSymbol { symbol }
            | Lit (Keyword keyword) -> syntax_error lpos @@ UnexpectedKeyword { keyword }
            | Lit (Enumerator { enum; constructor }) ->
               let v = UEnum { enum; constructor } in
-              Lit (Common.Const (resolve_value types (locd_make lpos v)))
-           | Lit (Const v) -> Lit (Common.Const (resolve_value types (locd_make lpos v)))
+              ResolvedAST.Const (resolve_value types (locd_make lpos v))
+           | Lit (Const v) -> ResolvedAST.Const (resolve_value types (locd_make lpos v))
            | Assign (v, a) -> Assign (v, resolve_action a)
-           | StructInit (sg, fields) ->
-              StructInit (sg, resolve_struct_fields types fns registers fields)
            | Progn rs -> Progn (List.map resolve_action rs)
            | Let (bs, body) ->
               Let (List.map (fun (var, expr) -> (var, resolve_action expr)) bs,
@@ -1332,28 +1457,19 @@ and resolve_action_nodelay types fns registers ({ lpos; lcnt }: unresolved_actio
               Read (port, resolve_register_reference registers r)
            | Write (port, r, v) ->
               Write (port, resolve_register_reference registers r, resolve_action v)
-           | InternalCall { signature; body; args } ->
-              InternalCall { signature; body = resolve_action body;
-                             args = List.map resolve_action args }
-           | Call (fn, args) ->
-              (match resolve_function types fns fn args with
-               | RExternalCall { fn; a1; a2 } ->
-                  Call (fn, [resolve_action a1; resolve_action a2])
-               | RStructInit { sg; fields } ->
-                  StructInit (sg, resolve_struct_fields types fns registers fields)
-               | RInternalCall { fn = { dfn_signature; dfn_body }; args } ->
-                  InternalCall { signature = dfn_signature;
-                                 body = dfn_body;
-                                 args = List.map resolve_action args }) }
-and resolve_action types fns registers l =
-  Delay.apply4_default { l with lcnt = Invalid }
+           | Call { fn; args } ->
+              let resolved_fn, args = resolve_function types fns fn args in
+              assemble_resolved_funcall fn resolved_fn (List.map resolve_action args) }
+and resolve_action types fns registers l
+    : ResolvedAST.uaction locd =
+  Delay.apply4_default { l with lcnt = ResolvedAST.AstError }
     resolve_action_nodelay types fns registers l
 
-let resolve_rule types fns registers ((nm, action): unresolved_rule) =
+let resolve_rule types fns registers ((nm, action): _ * unresolved_rule locd) =
   (nm.lcnt, resolve_action types fns registers action)
 
 let resolve_fn_decl types fns { ufn_name; ufn_signature; ufn_rettype; ufn_body }
-    : string * resolved_fn =
+    : string * resolved_fndecl =
   if StringSet.mem ufn_name.lcnt all_primitives then
     name_error ufn_name.lpos @@ FnShadowsPrimitive { ext_name = ufn_name.lcnt };
   let args = Delay.map (fun (nm, tau) -> nm.lcnt, resolve_type types tau) ufn_signature in
@@ -1362,31 +1478,29 @@ let resolve_fn_decl types fns { ufn_name; ufn_signature; ufn_rettype; ufn_body }
    match ufn_body with
    | InternalUfn body ->
       let body = resolve_action types fns [] body in
-      InternalFn { dfn_signature = { int_name = ufn_name.lcnt;
-                                     int_rettype = rettype;
-                                     int_args = args };
-                   dfn_body = body }
+      InternalDecl { int_name = ufn_name.lcnt;
+                     int_rettype = rettype;
+                     int_argspec = args;
+                     int_body = body.lcnt }
    | ExternalUfn ->
       let unit_t = Bits_t 0 in
-      let ffi_arg1type, ffi_arg2type = match List.map snd args with
-        | [] -> unit_t, unit_t
-        | [t] -> t, unit_t
-        | [x; y] -> x, y
+      let ffi_argtype = match List.map snd args with
+        | [] -> unit_t
+        | [t] -> t
         | _ -> syntax_error ufn_name.lpos @@ TooManyArgumentsInExtfunDecl in
-      ExternalFn { ext_nargs = List.length args;
-                   ext_sig = { ffi_name = ufn_name.lcnt;
-                               ffi_arg1type; ffi_arg2type;
-                               ffi_rettype = rettype } })
+      ExternalDecl { ffi_name = ufn_name.lcnt;
+                     ffi_argtype;
+                     ffi_rettype = rettype })
 
 let resolve_register types (name, init) =
   { reg_name = name.lcnt;
     reg_init = resolve_value types init }
 
-let resolve_scheduler rules ((nm, s): unresolved_scheduler) =
+let resolve_scheduler rules ((nm, s): string locd * unresolved_scheduler locd) =
   let check_rule { lpos; lcnt = name } =
     if not (List.mem_assoc name rules) then
       name_error lpos @@ Unbound { kind = "rule"; prefix = ""; name; candidates = [] } in
-  let rec check_scheduler ({ lcnt; _ }: Pos.t scheduler locd) =
+  let rec check_scheduler ({ lcnt; _ }: ResolvedAST.uscheduler locd) =
     match lcnt with
     | Done -> ()
     | Sequence rs ->
@@ -1397,7 +1511,7 @@ let resolve_scheduler rules ((nm, s): unresolved_scheduler) =
        Delay.apply1 check_scheduler s2 in
   check_scheduler s; (nm.lcnt, s)
 
-let resolve_module types (fns: resolved_fn StringMap.t)
+let resolve_module types (fns: resolved_fndecl StringMap.t)
       { lpos; lcnt = { m_name; m_registers; m_rules; m_schedulers; m_cpp_preamble } } =
   let registers = Delay.map (resolve_register types) m_registers in
   let rules = Delay.map (resolve_rule types fns registers) m_rules in
@@ -1423,11 +1537,11 @@ let check_result = function
   | Error (epos, emsg) -> type_inference_error epos emsg
 
 let typecheck_module { name; cpp_preamble; registers; rules; schedulers } =
-  let open SGALib.Compilation in
-  let tc_rule (nm, r) = (nm, (`InternalRule, check_result (typecheck_rule r))) in
+  let tc_rule (nm, r) = (nm, (`InternalRule, check_result (ResolvedAST.typecheck_rule r))) in
   let c_rules = Delay.map tc_rule rules in
-  let schedulers = Delay.map (typecheck_scheduler << snd) schedulers in
+  let schedulers = Delay.map (ResolvedAST.typecheck_scheduler << snd) schedulers in
   if schedulers = [] then name_error name.lpos @@ MissingScheduler { modname = name.lcnt };
+  SGALib.Compilation.
   { c_registers = registers;
     c_rules;
     c_scheduler = List.hd schedulers;
