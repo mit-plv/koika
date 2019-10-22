@@ -104,11 +104,6 @@ namespace prims {
   }
 
   template<std::size_t sz1, std::size_t idx, std::size_t width>
-  bits<width> part(const bits<sz1> data, const unit /*unused*/) {
-    return truncate<width, sz1>(data >> idx);
-  }
-
-  template<std::size_t sz1, std::size_t idx, std::size_t width>
   bits<sz1> part_subst(const bits<sz1> data, const bits<width> repl) {
     const bits<sz1> mask = ~(widen<sz1>(ones<width>()) << idx);
     return (data & mask) | (widen<sz1>(repl) << idx);
@@ -117,11 +112,6 @@ namespace prims {
   template<std::size_t sz1, std::size_t sz2, std::size_t width>
   bits<width> indexed_part(const bits<sz1> data, const bits<sz2> idx) {
     return truncate<width, sz1>(data >> idx);
-  }
-
-  template<std::size_t sz>
-  bits<sz> lnot(const bits<sz> data, const unit /*unused*/) {
-    return mask<sz>(~data);
   }
 
   template<std::size_t sz>
@@ -164,14 +154,24 @@ namespace prims {
     return widen<sz1 + sz2>(x) << sz2 | y;
   }
 
+  template<std::size_t sz>
+  bits<sz> lnot(const bits<sz> data) {
+    return mask<sz>(~data);
+  }
+
   template<std::size_t sz, std::size_t width>
-  bits<std::max(sz, width)> zextl(const bits<sz> x, const unit /*unused*/) {
+  bits<std::max(sz, width)> zextl(const bits<sz> x) {
     return widen<std::max(sz, width)>(x);
   }
 
   template<std::size_t sz, std::size_t width>
-  bits<std::max(sz, width)> zextr(const bits<sz> x, const unit /*unused*/) {
+  bits<std::max(sz, width)> zextr(const bits<sz> x) {
     return widen<std::max(sz, width)>(x) << (std::max(width, sz) - sz);
+  }
+
+  template<std::size_t sz1, std::size_t idx, std::size_t width>
+  bits<width> part(const bits<sz1> data) {
+    return truncate<width, sz1>(data >> idx);
   }
 
   unit display(const std::string& msg) {

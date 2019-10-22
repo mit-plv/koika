@@ -16,10 +16,6 @@ Section Packages.
       Typically an inductive [rule1 | rule2 | …]. **)
   Context {rule_name_t: Type}.
 
-  (** [ext_fn_t]: The type of external functions names.
-      Typically an inductive. *)
-  Context {ext_fn_t: Type}.
-
   (** [var_t]: The type of variables used in let bindings.
       Typically [string]. *)
   Context {var_t: Type}.
@@ -27,6 +23,10 @@ Section Packages.
   (** [reg_t]: The type of registers used in the program.
       Typically an inductive [R0 | R1 | …] *)
   Context {reg_t: Type}.
+
+  (** [ext_fn_t]: The type of external functions names.
+      Typically an inductive. *)
+  Context {ext_fn_t: Type}.
 
   Record sga_package_t :=
     {

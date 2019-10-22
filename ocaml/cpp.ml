@@ -1,25 +1,25 @@
 open Common
 module SGA = SGALib.SGA
 
-type ('name_t, 'var_t, 'reg_t, 'fn_t) cpp_rule_t = {
-    rl_name: 'name_t;
+type ('rule_name_t, 'var_t, 'reg_t, 'ext_fn_t) cpp_rule_t = {
+    rl_name: 'rule_name_t;
     rl_footprint: 'reg_t list;
-    rl_body: ('var_t, 'reg_t, 'fn_t) SGA.rule;
+    rl_body: ('var_t, 'reg_t, 'ext_fn_t) SGA.rule;
   }
 
-type ('prim, 'name_t, 'var_t, 'reg_t, 'fn_t) cpp_input_t = {
+type ('rule_name_t, 'var_t, 'reg_t, 'ext_fn_t) cpp_input_t = {
     cpp_classname: string;
     cpp_header_name: string;
-    cpp_scheduler: 'name_t SGA.scheduler;
+    cpp_scheduler: 'rule_name_t SGA.scheduler;
 
     cpp_var_names: 'var_t -> string;
 
-    cpp_rules: ('name_t, 'var_t, 'reg_t, 'fn_t) cpp_rule_t list;
-    cpp_rule_names: 'name_t -> string;
+    cpp_rules: ('rule_name_t, 'var_t, 'reg_t, 'ext_fn_t) cpp_rule_t list;
+    cpp_rule_names: 'rule_name_t -> string;
 
     cpp_registers: 'reg_t list;
     cpp_register_sigs: 'reg_t -> reg_signature;
-    cpp_function_sigs: 'fn_t -> ('prim, string) fun_id_t ffi_signature;
+    cpp_ext_sigs: 'ext_fn_t -> ffi_signature;
 
     cpp_extfuns: string option;
   }
@@ -31,13 +31,13 @@ type program_info =
   { mutable pi_committed: bool;
     mutable pi_needs_multiprecision: bool;
     mutable pi_user_types: (string * typ) list;
-    pi_custom_funcalls: (string, (SGA.prim_fn_t, string) Common.fun_id_t Common.ffi_signature) Hashtbl.t }
+    pi_ext_funcalls: (Common.ffi_signature, unit) Hashtbl.t }
 
 let fresh_program_info () =
   { pi_committed = false;
     pi_needs_multiprecision = false;
     pi_user_types = [];
-    pi_custom_funcalls = Hashtbl.create 50 }
+    pi_ext_funcalls = Hashtbl.create 50 }
 
 let assert_uncommitted { pi_committed; _ } =
   assert (not pi_committed)
@@ -111,16 +111,14 @@ module Mangling = struct
     { r with reg_name = mangle_name r.reg_name }
 
   let mangle_function_sig f =
-    { f with ffi_name = match f.ffi_name with
-                        | CustomFn f -> CustomFn (mangle_name f)
-                        | PrimFn f -> PrimFn f }
+    { f with ffi_name = mangle_name f.ffi_name }
 
   let mangle_unit u =
     { u with (* The prefixes are needed to prevent collisions with ‘prims::’ *)
       cpp_classname = mangle_name ~prefix:"module" u.cpp_classname;
       cpp_rule_names = (fun rl -> rl |> u.cpp_rule_names |> mangle_name ~prefix:"rule");
       cpp_register_sigs = (fun r -> r |> u.cpp_register_sigs |> mangle_register_sig);
-      cpp_function_sigs = (fun f -> f |> u.cpp_function_sigs |> mangle_function_sig) }
+      cpp_ext_sigs = (fun f -> f |> u.cpp_ext_sigs |> mangle_function_sig) }
 end
 
 let cpp_enum_name pi sg =
@@ -205,35 +203,36 @@ let assert_bits (tau: typ) =
   | Bits_t sz -> sz
   | _ -> failwith "Expecting bits, not struct or enum"
 
-let cpp_funcall f a1 a2 =
+let cpp_ext_funcall f a =
   (* The current implementation of external functions requires the client to
      pass a class implementing those functions as a template argument.  An
-     other approach would have made custom functions virtual methods, but
+     other approach would have made external functions virtual methods, but
      then they couldn't have been templated functions. *)
   (* The ‘.template’ part ensures that ‘extfuns.xyz<p>()’ is not parsed as a
      comparison. *)
-  sprintf "extfuns.template %s(%s, %s)" f a1 a2
+  sprintf "extfuns.template %s(%s)" f a
 
-let cpp_bits_fn_name f tau1 tau2 =
-  let sz1 = assert_bits tau1 in
-  let sz2 = assert_bits tau2 in
+let cpp_bits1_fn_name (f: SGA.PrimTyped.fbits1) =
   sprintf "prims::%s"
     (match f with
-     | SGA.Sel _sz -> sprintf "sel<%d, %d>" sz1 sz2
-     | SGA.Part (_sz, offset, width) -> sprintf "part<%d, %d, %d>" sz1 offset width
-     | SGA.PartSubst (_sz, offset, width) -> sprintf "part_subst<%d, %d, %d>" sz1 offset width
-     | SGA.IndexedPart (_sz, width) -> sprintf "indexed_part<%d, %d, %d>" sz1 sz2 width
-     | SGA.And _sz -> sprintf "land<%d>" sz1
-     | SGA.Or _sz -> sprintf "lor<%d>" sz1
-     | SGA.Not _sz -> sprintf "lnot<%d>" sz1
-     | SGA.Lsl (_sz, _places) -> sprintf "lsl<%d, %d>" sz1 sz2
-     | SGA.Lsr (_sz, _places) -> sprintf "lsr<%d, %d>" sz1 sz2
-     | SGA.EqBits _sz -> sprintf "eq<%d>" sz1
-     | SGA.Concat (_sz1, _sz2) -> sprintf "concat<%d, %d>" sz1 sz2
-     | SGA.ZExtL (_sz, width) -> sprintf "zextl<%d, %d>" sz1 width
-     | SGA.ZExtR (_sz, width) -> sprintf "zextr<%d, %d>" sz1 width
-     | SGA.UIntPlus _sz -> sprintf "plus<%d>" sz1
-     | SGA.UIntLt _sz -> sprintf "lt<%d>" sz1)
+     | Not sz -> sprintf "lnot<%d>" sz
+     | ZExtL (sz, width) -> sprintf "zextl<%d, %d>" sz width
+     | ZExtR (sz, width) -> sprintf "zextr<%d, %d>" sz width
+     | Part (sz, offset, width) -> sprintf "part<%d, %d, %d>" sz offset width)
+
+let cpp_bits2_fn_name (f: SGA.PrimTyped.fbits2) =
+  (match f with
+   | And sz -> sprintf "land<%d>" sz
+   | Or sz -> sprintf "lor<%d>" sz
+   | Lsl (bits_sz, shift_sz) -> sprintf "lsl<%d, %d>" bits_sz shift_sz
+   | Lsr (bits_sz, shift_sz) -> sprintf "lsr<%d, %d>" bits_sz shift_sz
+   | EqBits sz -> sprintf "eq<%d>" sz
+   | Concat (sz1, sz2) -> sprintf "concat<%d, %d>" sz1 sz2
+   | Sel sz -> sprintf "sel<%d, %d>" sz (SGALib.SGA.log2 sz)
+   | PartSubst (sz, offset, width) -> sprintf "part_subst<%d, %d, %d>" sz offset width
+   | IndexedPart (sz, width) -> sprintf "indexed_part<%d, %d, %d>" sz (SGALib.SGA.log2 sz) width
+   | UIntPlus sz -> sprintf "plus<%d>" sz
+   | UIntLt sz -> sprintf "lt<%d>" sz)
 
 let cpp_get_preamble () =
   let inc = open_in "preamble.hpp" in
@@ -241,23 +240,20 @@ let cpp_get_preamble () =
   close_in inc;
   preamble
 
-let reconstruct_switch sigs action =
+let reconstruct_switch action =
   let rec loop v = function
     | SGA.If (_, _,
-              SGA.Call (_,
-                        fn,
-                        SGA.Var (_, v', _, _m),
-                        SGA.Const (_, ((SGA.Bits_t _ | SGA.Enum_t _) as tau), cst)),
+              SGA.Binop (_,
+                         (SGA.PrimTyped.Eq _ | SGA.PrimTyped.Bits2 (SGA.PrimTyped.EqBits _)),
+                         SGA.Var (_, v', _, _m),
+                         SGA.Const (_, ((SGA.Bits_t _ | SGA.Enum_t _) as tau), cst)),
               tbr, fbr) when (match v with
                               | Some v -> v' = v
                               | None -> true) ->
-       (match sigs fn with
-        | { ffi_name = PrimFn (SGA.BitsFn (SGA.EqBits _) | SGA.ConvFn (_, SGA.Eq)); _ } ->
-           let default, branches = match loop (Some v') fbr with
-             | Some (_, default, branches) -> default, branches
-             | None -> fbr, [] in
-           Some (v', default, (SGALib.Util.value_of_sga_value tau cst, tbr) :: branches)
-        | _ -> None)
+       let default, branches = match loop (Some v') fbr with
+         | Some (_, default, branches) -> default, branches
+         | None -> fbr, [] in
+       Some (v', default, (SGALib.Util.value_of_sga_value tau cst, tbr) :: branches)
     | _ -> None in
   match loop None action with
   | Some (_, _, [_]) | None -> None
@@ -276,8 +272,8 @@ type assignment_result =
   | PureExpr of string
   | ImpureExpr of string
 
-let compile (type name_t var_t reg_t)
-      (hpp: (_, name_t, var_t, reg_t, _) cpp_input_t) =
+let compile (type rule_name_t var_t reg_t ext_fn_t)
+      (hpp: (rule_name_t, var_t, reg_t, ext_fn_t) cpp_input_t) =
   let buffer = ref (Buffer.create 0) in
   let hpp = Mangling.mangle_unit hpp in
 
@@ -367,12 +363,13 @@ let compile (type name_t var_t reg_t)
   let sp_comparison ?(ns="") tau a1 a2 =
     sprintf "%s(%s, %s)" (sp_comparator ~ns tau) a1 a2 in
 
-  let sp_initializer tau =
-    let bs0 sz = Array.make sz false in
-    match tau with
-    | Bits_t sz -> sp_value (Bits (bs0 sz))
-    | Enum_t sg -> sp_value (Enum (sg, (bs0 sg.enum_bitsize)))
-    | Struct_t sg -> sprintf "%s {}" (cpp_struct_name sg) in
+  (* Not needed: unpack(0) instead *)
+  (* let sp_initializer tau =
+   *   let bs0 sz = Array.make sz false in
+   *   match tau with
+   *   | Bits_t sz -> sp_value (Bits (bs0 sz))
+   *   | Enum_t sg -> sp_value (Enum (sg, (bs0 sg.enum_bitsize)))
+   *   | Struct_t sg -> sprintf "%s {}" (cpp_struct_name sg) in *)
 
   let sp_parenthesized arg =
     if arg = "" then "" else sprintf "(%s)" arg in
@@ -595,7 +592,7 @@ let compile (type name_t var_t reg_t)
       prbody ();
       p ");" in
 
-    let p_rule (rule: (name_t, var_t, reg_t, _) cpp_rule_t) =
+    let p_rule (rule: (rule_name_t, var_t, reg_t, ext_fn_t) cpp_rule_t) =
       gensym_reset ();
 
       let p_reset () =
@@ -662,42 +659,45 @@ let compile (type name_t var_t reg_t)
         | PureExpr s when List.exists is_impure_expr dependencies -> ImpureExpr s
         | other -> other in
 
-      (* FIXME This code drops a1 and a2 (and their effects) when they aren't used by fn *)
-      let p_funcall target fn a1 a2 =
-        let { ffi_name; ffi_arg1type = tau1; ffi_arg2type = tau2; _ } = fn in
-        match ffi_name with
-        | CustomFn f ->
-           assert_uncommitted program_info;
-           Hashtbl.replace program_info.pi_custom_funcalls f fn;
-           ImpureExpr (cpp_funcall f a1 a2)
-        | PrimFn (SGA.DisplayFn fn) ->
-           ImpureExpr
-             (sprintf "prims::display(%s(%s))" (sp_value_printer tau1)
-                (match fn with
-                 | SGA.DisplayUtf8 _ -> sprintf "%s, repr_style::utf8" a1
-                 | SGA.DisplayValue _ -> a1))
-        | PrimFn (SGA.ConvFn (tau, fn)) ->
+      let p_unop (fn: SGALib.SGA.PrimTyped.fn1) a1 =
+        let open SGALib.SGA.PrimTyped in
+        match fn with
+        | Display fn ->
+           let tau, args = match fn with
+             | DisplayUtf8 sz -> Bits_t sz, sprintf "%s, repr_style::utf8" a1
+             | DisplayValue tau -> SGALib.Util.typ_of_sga_type tau, a1 in
+           ImpureExpr (sprintf "prims::display(%s(%s))" (sp_value_printer tau) args)
+        | Conv (tau, fn) ->
            let ns = "prims::" in
            let tau = SGALib.Util.typ_of_sga_type tau in
            PureExpr (match fn with
-                     | SGA.Eq -> sp_comparison ~ns tau a1 a2
-                     | SGA.Init -> sp_initializer tau
-                     | SGA.Pack -> sp_packer ~ns ~arg:a1 tau
-                     | SGA.Unpack -> sp_unpacker ~ns ~arg:a1 tau
-                     | SGA.Ignore -> sprintf "prims::ignore(%s)" a1)
-        | PrimFn (SGA.BitsFn f) ->
-           PureExpr (sprintf "%s(%s, %s)" (cpp_bits_fn_name f tau1 tau2) a1 a2)
-        | PrimFn (SGA.StructFn (sg, ac, idx)) ->
+                     | Pack -> sp_packer ~ns ~arg:a1 tau
+                     | Unpack -> sp_unpacker ~ns ~arg:a1 tau
+                     | Ignore -> sprintf "prims::ignore(%s)" a1)
+        | Bits1 fn ->
+           PureExpr (sprintf "%s(%s)" (cpp_bits1_fn_name fn) a1)
+        | Struct1 (sg, idx) ->
+           (* Extraction eliminated the single-constructor struct1 inductive (GetField) *)
+           let fname, _tau = SGALib.Util.list_nth sg.struct_fields idx in
+           let fname = cpp_field_name (SGALib.Util.string_of_coq_string fname) in
+           PureExpr (sprintf "%s.%s" a1 fname)
+      in
+
+      let p_binop target (fn: SGALib.SGA.PrimTyped.fn2) a1 a2 =
+        let open SGALib.SGA.PrimTyped in
+        match fn with
+        | Eq tau ->
+           PureExpr (sp_comparison ~ns:"prims::" (SGALib.Util.typ_of_sga_type tau) a1 a2)
+        | Bits2 fn ->
+           PureExpr (sprintf "%s(%s, %s)" (cpp_bits2_fn_name fn) a1 a2)
+        | Struct2 (sg, idx) ->
+           (* Extraction eliminated the single-constructor struct2 inductive (SusbtField) *)
            let sg = SGALib.Util.struct_sig_of_sga_struct_sig sg in
            let fname, _tau = SGALib.Util.list_nth sg.struct_fields idx in
-           let fname = cpp_field_name fname in
-           match ac with
-           | SGA.GetField -> PureExpr (sprintf "%s.%s" a1 fname)
-           | SGA.SubstField ->
-              let tinfo = ensure_target (Struct_t sg) target in
-              let res = p_assign_expr (VarTarget tinfo) (PureExpr a1) in
-              p "%s.%s = %s;" tinfo.name fname a2;
-              res in
+           let tinfo = ensure_target (Struct_t sg) target in
+           let res = p_assign_expr (VarTarget tinfo) (PureExpr a1) in
+           p "%s.%s = %s;" tinfo.name (cpp_field_name fname) a2;
+           res in
 
       let assert_no_shadowing sg v tau v_to_string m =
         if SGALib.Util.member_mentions_shadowed_binding sg v tau m then
@@ -737,7 +737,7 @@ let compile (type name_t var_t reg_t)
                p_assign_expr target (p_action target rl))
         | SGA.If (_, _, cond, tbr, fbr) ->
            let target = p_declare_target target in
-           (match reconstruct_switch hpp.cpp_function_sigs rl with
+           (match reconstruct_switch rl with
             | Some (var, default, branches) ->
                p_switch target var default branches
             | None ->
@@ -766,11 +766,20 @@ let compile (type name_t var_t reg_t)
                pr "log.%s.%s(%s, Log.%s.rwset)"
                  r.reg_name fn_name v r.reg_name);
            p_assign_expr target (PureExpr "prims::tt")
-        | SGA.Call (_, fn, arg1, arg2) ->
-           let f = hpp.cpp_function_sigs fn in
-           let a1 = p_action (gensym_target f.ffi_arg1type "x") arg1 in
-           let a2 = p_action (gensym_target f.ffi_arg2type "y") arg2 in
-           taint [a1; a2] (p_funcall target f (must_value a1) (must_value a2))
+        | SGA.Unop (_, fn, a) ->
+           let fsig = SGALib.SGA.PrimSignatures.coq_Sigma1 fn in
+           let a = p_action (gensym_target (SGALib.Util.argType 1 fsig 1) "x") a in
+           taint [a] (p_unop fn (must_value a))
+        | SGA.Binop (_, fn, a1, a2) ->
+           let fsig = SGALib.SGA.PrimSignatures.coq_Sigma2 fn in
+           let a1 = p_action (gensym_target (SGALib.Util.argType 2 fsig 1) "x") a1 in
+           let a2 = p_action (gensym_target (SGALib.Util.argType 2 fsig 2) "y") a2 in
+           taint [a1; a2] (p_binop target fn (must_value a1) (must_value a2))
+        | SGA.ExternalCall (_, fn, a) ->
+           let ffi = hpp.cpp_ext_sigs fn in
+           let a = p_action (gensym_target ffi.ffi_argtype "x") a in
+           Hashtbl.replace program_info.pi_ext_funcalls ffi ();
+           ImpureExpr (cpp_ext_funcall ffi.ffi_name (must_value a))
       and p_switch target var default branches =
         let rec loop = function
           | [] ->
@@ -881,11 +890,10 @@ let compile (type name_t var_t reg_t)
         p_buffer impl;
         nl ()) in
 
-  let p_extfun_decl (name, { ffi_arg1type; ffi_arg2type; ffi_rettype; _ }) =
-    let sp_arg i typ = sprintf "const %s a%d" (cpp_type_of_type typ) i in
-    let args = sprintf "%s, %s" (sp_arg 1 ffi_arg1type) (sp_arg 2 ffi_arg2type) in
+  let p_extfun_decl { ffi_name; ffi_argtype; ffi_rettype } =
+    let sp_arg typ = sprintf "const %s arg" (cpp_type_of_type typ) in
     let typ = cpp_type_of_type ffi_rettype in
-    p_comment "%s %s(%s);" typ name args in
+    p_comment "%s %s(%s);" typ ffi_name (sp_arg ffi_argtype) in
 
   let p_cpp () =
     p "#include \"%s.hpp\"" hpp.cpp_header_name;
@@ -897,11 +905,10 @@ let compile (type name_t var_t reg_t)
         p_scoped "class extfuns" ~terminator:";" (fun () ->
             p "public:";
             p_comment "External methods (if any) should be implemented here.";
-            if Hashtbl.length program_info.pi_custom_funcalls > 0 then
+            if Hashtbl.length program_info.pi_ext_funcalls > 0 then
               (p_comment "Approximate signatures are provided below for convenience.";
-               let cmp f1 f2 = compare (fst f1) (fst f2) in
-               let fns = List.of_seq (Hashtbl.to_seq program_info.pi_custom_funcalls) in
-               List.iter p_extfun_decl (List.sort cmp fns))));
+               let fns = List.of_seq (Hashtbl.to_seq_keys program_info.pi_ext_funcalls) in
+               List.iter p_extfun_decl (List.sort compare fns))));
     nl ();
 
     p "using sim_t = %s<extfuns>;" hpp.cpp_classname;
@@ -954,9 +961,12 @@ let action_footprint a =
     | SGA.Write (_, _, r, ex) ->
        Hashtbl.replace m r ();
        action_footprint ex
-    | SGA.Call (_, _, ex1, ex2) ->
-       action_footprint ex1;
-       action_footprint ex2 in
+    | SGA.Unop (_, _, arg) ->
+       action_footprint arg
+    | SGA.Binop (_, _, a1, a2) ->
+       action_footprint a1; action_footprint a2
+    | SGA.ExternalCall (_, _, arg) ->
+       action_footprint arg in
 
   action_footprint a;
   List.of_seq (Hashtbl.to_seq_keys m)
@@ -972,7 +982,7 @@ let input_of_compile_unit classname ({ c_registers; c_scheduler; c_rules; c_cpp_
     cpp_scheduler = c_scheduler;
     cpp_registers = c_registers;
     cpp_register_sigs = (fun r -> r);
-    cpp_function_sigs = SGALib.Util.ffi_sig_of_interop_fn ~custom_fn_info:(fun f -> f);
+    cpp_ext_sigs = (fun f -> f);
     cpp_var_names = (fun x -> x);
     cpp_extfuns = c_cpp_preamble; }
 
@@ -986,12 +996,12 @@ let collect_rules sched =
 let cpp_rule_of_sga_package_rule (s: _ SGALib.SGA.sga_package_t) (rn: Obj.t) =
   cpp_rule_of_action (rn, (`Internal, s.sga_rules rn))
 
-let input_of_sim_package (sp: _ SGALib.SGA.sim_package_t)
-    : (SGA.prim_fn_t, Obj.t, Obj.t, Obj.t, string SGA.interop_fn_t) cpp_input_t =
+let input_of_sim_package (type ext_fn_t) (sp: (_, _, _, ext_fn_t) SGALib.SGA.sim_package_t)
+    : (Obj.t, Obj.t, Obj.t, ext_fn_t) cpp_input_t =
   let sga = sp.sp_pkg in
   let rules = collect_rules sga.sga_scheduler in
   let classname = SGALib.Util.string_of_coq_string sga.sga_module_name in
-  let custom_fn_names f = SGALib.Util.string_of_coq_string (sp.sp_custom_fn_names f) in
+  let ext_fn_name f = SGALib.Util.string_of_coq_string (sp.sp_ext_fn_names f) in
   { cpp_classname = classname;
     cpp_header_name = classname;
     cpp_rule_names = (fun rn -> SGALib.Util.string_of_coq_string (sga.sga_rule_names rn));
@@ -999,7 +1009,7 @@ let input_of_sim_package (sp: _ SGALib.SGA.sim_package_t)
     cpp_scheduler = sga.sga_scheduler;
     cpp_registers = sga.sga_reg_finite.finite_elements;
     cpp_register_sigs = SGALib.Util.reg_sigs_of_sga_package sga;
-    cpp_function_sigs = SGALib.Util.fn_sigs_of_sga_package custom_fn_names sga;
+    cpp_ext_sigs = (fun f -> SGALib.Util.ffi_sig_of_sga_external_sig (ext_fn_name f) (sga.sga_ext_fn_types f));
     cpp_var_names = (fun x -> SGALib.Util.string_of_coq_string (sp.sp_var_names x));
     cpp_extfuns = (match sp.sp_extfuns with
                    | None -> None
