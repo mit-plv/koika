@@ -221,18 +221,19 @@ let cpp_bits1_fn_name (f: SGA.PrimTyped.fbits1) =
      | Part (sz, offset, width) -> sprintf "part<%d, %d, %d>" sz offset width)
 
 let cpp_bits2_fn_name (f: SGA.PrimTyped.fbits2) =
-  (match f with
-   | And sz -> sprintf "land<%d>" sz
-   | Or sz -> sprintf "lor<%d>" sz
-   | Lsl (bits_sz, shift_sz) -> sprintf "lsl<%d, %d>" bits_sz shift_sz
-   | Lsr (bits_sz, shift_sz) -> sprintf "lsr<%d, %d>" bits_sz shift_sz
-   | EqBits sz -> sprintf "eq<%d>" sz
-   | Concat (sz1, sz2) -> sprintf "concat<%d, %d>" sz1 sz2
-   | Sel sz -> sprintf "sel<%d, %d>" sz (SGALib.SGA.log2 sz)
-   | PartSubst (sz, offset, width) -> sprintf "part_subst<%d, %d, %d>" sz offset width
-   | IndexedPart (sz, width) -> sprintf "indexed_part<%d, %d, %d>" sz (SGALib.SGA.log2 sz) width
-   | UIntPlus sz -> sprintf "plus<%d>" sz
-   | UIntLt sz -> sprintf "lt<%d>" sz)
+  sprintf "prims::%s"
+    (match f with
+     | And sz -> sprintf "land<%d>" sz
+     | Or sz -> sprintf "lor<%d>" sz
+     | Lsl (bits_sz, shift_sz) -> sprintf "lsl<%d, %d>" bits_sz shift_sz
+     | Lsr (bits_sz, shift_sz) -> sprintf "lsr<%d, %d>" bits_sz shift_sz
+     | EqBits sz -> sprintf "eq<%d>" sz
+     | Concat (sz1, sz2) -> sprintf "concat<%d, %d>" sz1 sz2
+     | Sel sz -> sprintf "sel<%d, %d>" sz (SGALib.SGA.log2 sz)
+     | PartSubst (sz, offset, width) -> sprintf "part_subst<%d, %d, %d>" sz offset width
+     | IndexedPart (sz, width) -> sprintf "indexed_part<%d, %d, %d>" sz (SGALib.SGA.log2 sz) width
+     | UIntPlus sz -> sprintf "plus<%d>" sz
+     | UIntLt sz -> sprintf "lt<%d>" sz)
 
 let cpp_get_preamble () =
   let inc = open_in "preamble.hpp" in
@@ -768,12 +769,12 @@ let compile (type rule_name_t var_t reg_t ext_fn_t)
            p_assign_expr target (PureExpr "prims::tt")
         | SGA.Unop (_, fn, a) ->
            let fsig = SGALib.SGA.PrimSignatures.coq_Sigma1 fn in
-           let a = p_action (gensym_target (SGALib.Util.argType 1 fsig 1) "x") a in
+           let a = p_action (gensym_target (SGALib.Util.argType 1 fsig 0) "x") a in
            taint [a] (p_unop fn (must_value a))
         | SGA.Binop (_, fn, a1, a2) ->
            let fsig = SGALib.SGA.PrimSignatures.coq_Sigma2 fn in
-           let a1 = p_action (gensym_target (SGALib.Util.argType 2 fsig 1) "x") a1 in
-           let a2 = p_action (gensym_target (SGALib.Util.argType 2 fsig 2) "y") a2 in
+           let a1 = p_action (gensym_target (SGALib.Util.argType 2 fsig 0) "x") a1 in
+           let a2 = p_action (gensym_target (SGALib.Util.argType 2 fsig 1) "y") a2 in
            taint [a1; a2] (p_binop target fn (must_value a1) (must_value a2))
         | SGA.ExternalCall (_, fn, a) ->
            let ffi = hpp.cpp_ext_sigs fn in

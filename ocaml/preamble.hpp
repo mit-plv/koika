@@ -2,11 +2,12 @@
 #define _PREAMBLE_HPP
 
 #include <cstdint>
-#include <limits>
-#include <type_traits>
+#include <limits> // For std::numeric_limits used in prims::mask
+#include <type_traits> // For std::conditional_t
+#include <algorithm> // For std::max
+#include <string> // For prims::display
 
 #ifndef SIM_MINIMAL
-#include <string>
 #include <sstream>
 #include <iostream>
 #endif // #ifndef SIM_MINIMAL
