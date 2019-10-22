@@ -35,7 +35,7 @@ let io_decl_to_string (io_decl:io_decl) =
 
 type io_decls = io_decl list
 
-let io_from_reg (root: _ circuit_root) : io_decls =
+let io_from_reg (root: circuit_root) : io_decls =
   let reg_name = root.root_reg.reg_name in
   let reg_type = reg_type root.root_reg in
   [
@@ -50,17 +50,20 @@ let clock_and_reset : io_decls =
   ]
 
 
-let field_to_string (field: 'a field) =
-  match field with
-  | Rwdata_r0 r -> r.reg_name^"_read0"
-  | Rwdata_r1 r -> r.reg_name^"_read1"
-  | Rwdata_w0 r -> r.reg_name^"_write0"
-  | Rwdata_w1 r -> r.reg_name^"_write1"
-  | Rwdata_data0 r -> r.reg_name^"_data0"
-  | Rwdata_data1 r -> r.reg_name^"_data1"
-  | Rwdata_canfire -> "_canfire"
+let rwcircuit_to_string (rwc: rwcircuit) =
+  match rwc with
+  | Rwcircuit_rwdata (reg, field) ->
+     reg.reg_name ^
+       (match field with
+        | Rwdata_r0 -> "_read0"
+        | Rwdata_r1 -> "_read1"
+        | Rwdata_w0 -> "_write0"
+        | Rwdata_w1 -> "_write1"
+        | Rwdata_data0 -> "_data0"
+        | Rwdata_data1 -> "_data1")
+  | Rwcircuit_canfire -> "_canfire"
 
-let io_from_bundles (c: _ circuit) =
+let io_from_bundles (c: circuit) =
   match c.node with
   | CBundle (rule_name, regs) ->
      List.flatten
@@ -73,16 +76,16 @@ let io_from_bundles (c: _ circuit) =
                            Output("rule_"^rule_name^"_output_"^reg.reg_name^"_write1", 1) ])
           regs
 
-  | CBundleRef (size, bundle, field) ->
+  | CBundleRef (size, bundle, rwc) ->
      begin
        match bundle.node with
        | CBundle(rule_name, _) ->
-          [ Input("rule_"^rule_name^ "_input_" ^ field_to_string field, size) ]
+          [ Input("rule_"^rule_name^ "_input_" ^ rwcircuit_to_string rwc, size) ]
        | _ -> []
      end
   | _ -> []
 
-let io_declarations ?(debug=false) (circuit: _ circuit_graph) : io_decls =
+let io_declarations (circuit: circuit_graph) : io_decls =
   clock_and_reset @ (List.flatten @@ (List.map io_from_reg (circuit.graph_roots)) @ (List.map io_from_bundles circuit.graph_nodes))
 
 
@@ -114,7 +117,7 @@ let internal_decl_to_string (internal_decl: internal_decl) =
 type internal_decls = internal_decl list
 
 
-let internal_decl_for_reg (root: _ circuit_root) =
+let internal_decl_for_reg (root: circuit_root) =
   let reg_name = root.root_reg.reg_name in
   let reg_type = reg_type root.root_reg in
   Reg(reg_name, typ_sz reg_type)
@@ -122,7 +125,7 @@ let internal_decl_for_reg (root: _ circuit_root) =
 let internal_decl_for_net
       (environment: (int, string) Hashtbl.t)
       (gensym : int ref)
-      (c: _ circuit)
+      (c: circuit)
   =
   let name_ptr = !gensym in
   gensym := !gensym + 1;
@@ -137,13 +140,19 @@ let internal_decl_for_net
      Hashtbl.add environment c.tag (name ^ name_net);
      Wire(name ^ name_net, n) (* Prefix with the name given by the user *)
   | CConst l -> Wire(name_net, Array.length l)
-  | CExternal (ffi_sig, _, _) -> Wire(name_net, typ_sz ffi_sig.ffi_rettype)
+  | CUnop (fn, _) ->
+     let fsig = SGALib.SGA.PrimSignatures.coq_Sigma1 (Bits1 fn) in
+     Wire(name_net, typ_sz (SGALib.Util.retType fsig))
+  | CBinop (fn, _, _) ->
+     let fsig = SGALib.SGA.PrimSignatures.coq_Sigma2 (Bits2 fn) in
+     Wire(name_net, typ_sz (SGALib.Util.retType fsig))
+  | CExternal (ffi_sig, _) -> Wire(name_net, typ_sz ffi_sig.ffi_rettype)
   | CReadRegister r_sig -> Wire(name_net, typ_sz (reg_type r_sig))
   | CBundle (_,_) -> Nothing
   | CBundleRef (sz, _, _) -> Wire(name_net, sz)
 
 
-let internal_declarations (environment: (int, string) Hashtbl.t) (circuit: _ circuit_graph) =
+let internal_declarations (environment: (int, string) Hashtbl.t) (circuit: circuit_graph) =
   let gensym = ref 0 in
   let reg_declarations = List.map internal_decl_for_reg (circuit.graph_roots) in
   let internal_declarations = List.map
@@ -175,7 +184,9 @@ type expression =
   | EMux of size_t * string * string * string
   | EIO of string
   | EConst of string
-  | EExternal of (SGA.prim_fn_t, string) fun_id_t ffi_signature * string * string
+  | EUnop of SGA.PrimTyped.fbits1 * string
+  | EBinop of SGA.PrimTyped.fbits2 * string * string
+  | EExternal of ffi_signature * string
   | EReadRegister of string
   | EAnnot of size_t * string * string
 
@@ -196,38 +207,31 @@ let assignment_to_string (gensym: int ref) (assignment: assignment) =
    | EMux (_, sel, t, f) -> default_left ^ sel ^ " ? " ^ t ^ " : " ^ f
    | EIO s -> default_left ^ s
    | EConst s -> default_left ^ s
-   | EExternal (ffi, arg1, arg2) ->
-      let fct_name = (ffi.ffi_name) in
-      (match fct_name with
-       | CustomFn s -> let number_s = !gensym in
-                       gensym := !gensym + 1 ;
-                       "\t"^ s ^ " " ^ (s ^ "__instance__" ^ string_of_int number_s) ^
-                         "(" ^ arg1 ^ ", " ^ arg2 ^ "," ^ lhs ^ ")"
-       | PrimFn (DisplayFn _) ->
-          failwith "FIXME: unimplemented"
-       | PrimFn (BitsFn typePrim) ->
-          (match typePrim with
-           | SGA.UIntPlus _ -> default_left ^ arg1 ^ " + " ^ arg2
-           | SGA.UIntLt _ -> default_left ^ arg1 ^ " < " ^ arg2
-           | SGA.Sel _ -> default_left ^ arg1 ^ "[" ^ arg2 ^ "]"
-           | SGA.Part (_, offset, slice_sz) -> default_left ^ arg1 ^ "[" ^ (string_of_int offset) ^ " +: " ^ string_of_int slice_sz ^ "]"
-           | SGA.PartSubst (_, offset, slice_sz) ->
-              Printf.sprintf "assign %s = %s; assign %s[%d +: %d] = %s; // FIXME"
-                lhs arg1 lhs offset slice_sz arg2
-           | SGA.IndexedPart (_, slice_sz) -> default_left ^ arg1 ^ "[" ^ arg2 ^ " +: " ^ string_of_int slice_sz ^ "]"
-           | SGA.And _ ->  default_left ^ arg1 ^ " & " ^ arg2
-           | SGA.Or _ -> default_left ^ arg1 ^ " | " ^ arg2
-           | SGA.Not _ -> default_left ^ "~" ^ arg1
-           | SGA.Lsl (_, _) -> default_left ^ arg1 ^ " << " ^ arg2
-           | SGA.Lsr (_, _) -> default_left ^ arg1 ^ " >> " ^ arg2
-           | SGA.EqBits _ -> default_left ^ arg1 ^ " == " ^ arg2
-           | SGA.Concat (_, _) -> default_left ^ "{" ^ arg1 ^ ", " ^ arg2 ^ "}"
-           | SGA.ZExtL _ | SGA.ZExtR _ -> failwith_unlowered ()
-          )
-       | PrimFn (SGA.ConvFn _)
-       | PrimFn (SGA.StructFn _) ->
-          failwith_unlowered ()
-      )
+   | EUnop (fn, arg1) ->
+      (match fn with
+       | Not _ -> default_left ^ "~" ^ arg1
+       | Part (_, offset, slice_sz) -> default_left ^ arg1 ^ "[" ^ (string_of_int offset) ^ " +: " ^ string_of_int slice_sz ^ "]"
+       | ZExtL _ | ZExtR _ -> failwith_unlowered ())
+   | EBinop (fn, arg1, arg2) ->
+      (match fn with
+       | UIntPlus _ -> default_left ^ arg1 ^ " + " ^ arg2
+       | UIntLt _ -> default_left ^ arg1 ^ " < " ^ arg2
+       | Sel _ -> default_left ^ arg1 ^ "[" ^ arg2 ^ "]"
+       | PartSubst (_, offset, slice_sz) ->
+          Printf.sprintf "assign %s = %s; assign %s[%d +: %d] = %s; // FIXME"
+            lhs arg1 lhs offset slice_sz arg2
+       | IndexedPart (_, slice_sz) -> default_left ^ arg1 ^ "[" ^ arg2 ^ " +: " ^ string_of_int slice_sz ^ "]"
+       | And _ ->  default_left ^ arg1 ^ " & " ^ arg2
+       | Or _ -> default_left ^ arg1 ^ " | " ^ arg2
+       | Lsl (_, _) -> default_left ^ arg1 ^ " << " ^ arg2
+       | Lsr (_, _) -> default_left ^ arg1 ^ " >> " ^ arg2
+       | EqBits _ -> default_left ^ arg1 ^ " == " ^ arg2
+       | Concat (_, _) -> default_left ^ "{" ^ arg1 ^ ", " ^ arg2 ^ "}")
+   | EExternal (ffi, arg) ->
+      let number_s = !gensym in (* FIXME use the gensym from common.ml *)
+      gensym := !gensym + 1 ;
+      "\t"^ ffi.ffi_name ^ " " ^ (ffi.ffi_name ^ "__instance__" ^ string_of_int number_s) ^
+        "(" ^ arg ^ "," ^ lhs ^ ")"
    | EReadRegister r -> default_left ^ r
    | EAnnot (_, _, rhs) -> default_left ^ rhs) ^ ";"
 
@@ -237,46 +241,47 @@ type continous_assignments = assignment list
 
 let assignment_node
       (environment: (int, string) Hashtbl.t)
-      (c: _ circuit)
+      (c: circuit)
   : continous_assignments
   =
+  let env = Hashtbl.find environment in
   let node = c.node in
   match node with
-  | CBundleRef (_, bundle , field) ->
+  | CBundleRef (_, bundle , rwc) ->
      begin
        match bundle.node with
        | CBundle (rule_name, _) ->
-          [(Hashtbl.find environment c.tag, EIO("rule_"^rule_name^ "_input_" ^ field_to_string field))]
+          [(env c.tag, EIO("rule_"^rule_name^ "_input_" ^ rwcircuit_to_string rwc))]
        | _ -> assert false
      end
   | CBundle (rule_name, list_assigns) ->
      List.flatten
      @@ List.map (fun (reg,rwdata) ->
-            [("rule_"^rule_name^"_output_"^reg.reg_name^"_data0", EIO(Hashtbl.find environment @@ rwdata.data0.tag));
-             ("rule_"^rule_name^"_output_"^reg.reg_name^"_data1", EIO(Hashtbl.find environment @@ rwdata.data1.tag));
-             ("rule_"^rule_name^"_output_"^reg.reg_name^"_read0", EIO(Hashtbl.find environment @@ rwdata.read0.tag));
-             ("rule_"^rule_name^"_output_"^reg.reg_name^"_read1", EIO(Hashtbl.find environment @@ rwdata.read1.tag));
-             ("rule_"^rule_name^"_output_"^reg.reg_name^"_write0", EIO(Hashtbl.find environment @@ rwdata.write0.tag));
-             ("rule_"^rule_name^"_output_"^reg.reg_name^"_write1", EIO(Hashtbl.find environment @@ rwdata.write1.tag))])
+            [("rule_"^rule_name^"_output_"^reg.reg_name^"_data0", EIO(env rwdata.data0.tag));
+             ("rule_"^rule_name^"_output_"^reg.reg_name^"_data1", EIO(env rwdata.data1.tag));
+             ("rule_"^rule_name^"_output_"^reg.reg_name^"_read0", EIO(env rwdata.read0.tag));
+             ("rule_"^rule_name^"_output_"^reg.reg_name^"_read1", EIO(env rwdata.read1.tag));
+             ("rule_"^rule_name^"_output_"^reg.reg_name^"_write0", EIO(env rwdata.write0.tag));
+             ("rule_"^rule_name^"_output_"^reg.reg_name^"_write1", EIO(env rwdata.write1.tag))])
           list_assigns
   | _ ->
      begin
-     let rhs_name = Hashtbl.find environment c.tag in (* And by then the ptr has been given a name. *)
+     let rhs_name = env c.tag in (* And by then the ptr has been given a name. *)
      let expr = match node with
        (* Assumes no dangling pointers  *)
-       | CNot c -> ENot (Hashtbl.find environment c.tag)
-       | CAnd (c_1, c_2) -> EAnd (Hashtbl.find environment c_1.tag, Hashtbl.find environment c_2.tag)
-       | COr (c_1, c_2) -> EOr (Hashtbl.find environment c_1.tag, Hashtbl.find environment c_2.tag)
+       | CNot c -> ENot (env c.tag)
+       | CAnd (c_1, c_2) -> EAnd (env c_1.tag, env c_2.tag)
+       | COr (c_1, c_2) -> EOr (env c_1.tag, env c_2.tag)
        | CMux (sz, c_sel, c_t, c_f) -> EMux (sz,
-                                             Hashtbl.find environment c_sel.tag,
-                                             Hashtbl.find environment c_t.tag,
-                                             Hashtbl.find environment c_f.tag)
+                                             env c_sel.tag,
+                                             env c_t.tag,
+                                             env c_f.tag)
        | CConst l -> EConst (string_of_bits l) (* TODO *)
-       | CExternal (ffi_sig, c_1, c_2) -> EExternal (ffi_sig,
-                                                     Hashtbl.find environment c_1.tag,
-                                                     Hashtbl.find environment c_2.tag)
+       | CUnop (fn, c_1) -> EUnop (fn, env c_1.tag)
+       | CBinop (fn, c_1, c_2) -> EBinop (fn, env c_1.tag, env c_2.tag)
+       | CExternal (ffi_sig, c_1) -> EExternal (ffi_sig, env c_1.tag)
        | CReadRegister r_sig -> EReadRegister (r_sig.reg_name)
-       | CAnnot (sz, name_rhs, c) -> EAnnot (sz, name_rhs, Hashtbl.find environment c.tag)
+       | CAnnot (sz, name_rhs, c) -> EAnnot (sz, name_rhs, env c.tag)
        | _ -> assert false
      in
      [(rhs_name, expr)]
@@ -284,7 +289,7 @@ let assignment_node
 
 let continous_assignments
       (environment: (int, string) Hashtbl.t)
-      (circuit: _ circuit_graph)
+      (circuit: circuit_graph)
     : continous_assignments
   =
   (List.map (fun root -> (root.root_reg.reg_name ^ "__data", EReadRegister root.root_reg.reg_name))
@@ -322,7 +327,7 @@ type statements = statement list
 
 let statements
       (environment: (int, string) Hashtbl.t)
-      (circuit: _ circuit_graph)
+      (circuit: circuit_graph)
     : statements
   =
   List.map (fun root ->
@@ -332,7 +337,7 @@ let statements
       Update (reg_name, reg_init, reg_wire_update))
     (circuit.graph_roots)
 
-let main out (circuit: verilog_ready_circuit_graph) =
+let main out (circuit: circuit_graph) =
   let environment = Hashtbl.create 50 in
   let instance_external_gensym = ref 0 in
   let io_decls = io_declarations circuit in

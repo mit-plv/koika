@@ -58,9 +58,15 @@ module Util = struct
       enum_members = SGA.vect_of_list (List.map (fun (nm, _) -> coq_string_of_string nm) enum_members);
       enum_bitpatterns = SGA.vect_of_list (List.map (fun (_, bs) -> sga_bits_of_bits_const bs) enum_members) }
 
+  let argType nargs (fsig: SGA.sig1) idx : typ =
+    typ_of_sga_type @@ List.nth (SGA.vect_to_list nargs fsig.argTypes) idx
+
+  let retType (fsig: SGA.sig1) : typ =
+    typ_of_sga_type fsig.retType
+
   let ffi_sig_of_sga_external_sig ffi_name fsig =
     SGA.{ ffi_name;
-          ffi_argtype = typ_of_sga_type (List.hd (SGA.vect_to_list 1 fsig.argTypes));
+          ffi_argtype = argType 1 fsig 0;
           ffi_rettype = typ_of_sga_type fsig.retType }
 
   let sga_external_sig_of_ffi_sig { ffi_argtype; ffi_rettype; _ } =
