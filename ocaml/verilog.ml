@@ -193,8 +193,7 @@ type expression =
 type assignment = string * expression (* LHS, RHS *)
 
 let failwith_unlowered () =
-  failwith "The verilog backend doesn't support enums, structs, nor zextl and zextr.
-Make sure to pass `elaborate_externals_1' to `compile_scheduler'."
+  failwith "The verilog backend doesn't support zextl and zextr: they should be elaborated away by the compiler."
 
 let assignment_to_string (gensym: int ref) (assignment: assignment) =
   let (lhs,expr) = assignment in
