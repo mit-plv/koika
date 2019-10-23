@@ -97,9 +97,9 @@ Module Display.
 End Display.
 
 Section TypedSyntaxMacros.
-  Context {var_t reg_t fn_t: Type}.
+  Context {var_t reg_t ext_fn_t: Type}.
   Context {R: reg_t -> type}
-          {Sigma: fn_t -> ExternalSignature}.
+          {Sigma: ext_fn_t -> ExternalSignature}.
 
   Notation action := (action var_t R Sigma).
 

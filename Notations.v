@@ -114,8 +114,8 @@ Module Type Tests.
   Parameter pos_t : Type.
   Parameter fn_name_t : Type.
   Parameter reg_t : Type.
-  Parameter fn_t : Type.
-  Notation uaction reg_t := (uaction pos_t string fn_name_t reg_t fn_t).
+  Parameter ext_fn_t : Type.
+  Notation uaction reg_t := (uaction pos_t string fn_name_t reg_t ext_fn_t).
   Definition test_1 : uaction reg_t := {$ let "yoyo" := fail 2 in UError $}.
   Definition test_2 : uaction reg_t := {$ UError; UError $}.
   Definition test_3 : uaction reg_t := {$ set "yoyo" := UError ; UError $}.

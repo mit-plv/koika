@@ -4,8 +4,8 @@ let __ = let rec f _ = Obj.repr f in Obj.repr f
 open Common
 module SGA = SGA
 
-type ('name_t, 'reg_t, 'fn_t) sga_circuit =
-  ('name_t, 'reg_t, 'fn_t, ('name_t, 'reg_t, 'fn_t) SGA.rwdata) SGA.circuit
+type ('name_t, 'reg_t, 'ext_fn_t) sga_circuit =
+  ('name_t, 'reg_t, 'ext_fn_t, ('name_t, 'reg_t, 'ext_fn_t) SGA.rwdata) SGA.circuit
 
 module Util = struct
   let list_nth (l: 'a list) (n: SGA.index) =
@@ -380,10 +380,10 @@ module Graphs = struct
   (* CircuitHashcons is used to find duplicate subcircuits *)
   module CircuitHashcons = Hashcons.Make(CircuitHash)
 
-  let dedup_circuit (type rule_name_t reg_t fn_t)
-        (pkg: (rule_name_t, reg_t, fn_t) dedup_input_t) : circuit_graph =
+  let dedup_circuit (type rule_name_t reg_t ext_fn_t)
+        (pkg: (rule_name_t, reg_t, ext_fn_t) dedup_input_t) : circuit_graph =
     let module SGACircuitHash = struct
-        type t = (rule_name_t, reg_t, fn_t) sga_circuit
+        type t = (rule_name_t, reg_t, ext_fn_t) sga_circuit
         let equal o1 o2 = o1 == o2
         let hash o = Hashtbl.hash o
       end in
@@ -398,7 +398,7 @@ module Graphs = struct
     let circuit_to_deduplicated = SGACircuitHashtbl.create 50 in
     let deduplicated_circuits = CircuitHashcons.create 50 in
 
-    let rec rebuild_circuit_for_deduplication (c: (rule_name_t, reg_t, fn_t) sga_circuit) =
+    let rec rebuild_circuit_for_deduplication (c: (rule_name_t, reg_t, ext_fn_t) sga_circuit) =
       match c with
       | SGA.CNot c ->
          CNot (dedup c)
@@ -435,14 +435,14 @@ module Graphs = struct
           | _ -> assert false)
       | SGA.CAnnot (sz, annot, c) ->
          CAnnot (sz, Util.string_of_coq_string annot, dedup c)
-    and rebuild_rwdata_for_deduplication (rw : (rule_name_t, reg_t, fn_t) SGA.rwdata) =
+    and rebuild_rwdata_for_deduplication (rw : (rule_name_t, reg_t, ext_fn_t) SGA.rwdata) =
       { read0 = dedup rw.read0;
         read1 = dedup rw.read1;
         write0 = dedup rw.write0;
         write1 = dedup rw.write1;
         data0 = dedup rw.data0;
         data1 = dedup rw.data1; }
-    and dedup (c: (rule_name_t, reg_t, fn_t) sga_circuit) =
+    and dedup (c: (rule_name_t, reg_t, ext_fn_t) sga_circuit) =
       match SGACircuitHashtbl.find_opt circuit_to_deduplicated c with
       | Some c' -> c'
       | None ->

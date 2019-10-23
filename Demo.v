@@ -25,7 +25,7 @@ Notation UInternalFunction reg_t ext_fn_t := (InternalFunction fn_name_t var_t (
 Module Ex1.
   Notation var_t := string.
   Inductive reg_t := R0 | R1.
-  Inductive fn_t := Even | Odd.
+  Inductive ext_fn_t := Even | Odd.
   Inductive rule_name_t := r1.
 
   Definition R reg : type :=
@@ -53,7 +53,7 @@ Module Ex1.
     | Odd => fun (bs: bits 3) => Ob~(Bits.lsb bs)
     end.
 
-  Example uactions r : uaction reg_t fn_t :=
+  Example uactions r : uaction reg_t ext_fn_t :=
     match r with
     | r1 =>
       {$ let "x" := read0(R0) in
@@ -81,7 +81,7 @@ End Ex1.
 
 Module Ex2.
   Inductive reg_t := R0 | R1 | R2.
-  Definition fn_t := empty_ext_fn_t.
+  Definition ext_fn_t := empty_ext_fn_t.
   Inductive rule_name_t := negate | swap_or_replace.
 
   Definition R r :=
@@ -91,13 +91,13 @@ Module Ex2.
     | R2 => bits_t 1
     end.
 
-  Example _negate : uaction reg_t fn_t  :=
+  Example _negate : uaction reg_t ext_fn_t  :=
     {$
        let "x" := read1(R0) in
        write1(R0,"x")
                 $}.
 
-  Example _swap_or_replace : uaction reg_t fn_t  :=
+  Example _swap_or_replace : uaction reg_t ext_fn_t  :=
     {$
       let "should_swap" := read0(R2) in
       if "should_swap"
@@ -108,10 +108,10 @@ Module Ex2.
         write0(R0, read0(R0) || read0(R1))
                  $}.
 
-  Example _ill_typed_write : uaction reg_t fn_t  :=
+  Example _ill_typed_write : uaction reg_t ext_fn_t  :=
     UWrite P0 R2 (URead P0 R1).
 
-  Example _unbound_variable : uaction reg_t fn_t  :=
+  Example _unbound_variable : uaction reg_t ext_fn_t  :=
     UWrite P0 R0 (UVar "y").
 
   Example tsched : scheduler rule_name_t :=
@@ -150,7 +150,7 @@ Notation compute t :=
 
 Module Collatz.
   Inductive reg_t := R0.
-  Definition fn_t := empty_ext_fn_t.
+  Definition ext_fn_t := empty_ext_fn_t.
   Inductive rule_name_t := divide | multiply.
 
   Definition logsz := 4.
@@ -169,11 +169,11 @@ Module Collatz.
   Notation zero := (Bits.zero logsz).
   Notation one := (Bits.zero logsz).
 
-  Definition times_three : UInternalFunction reg_t fn_t :=
+  Definition times_three : UInternalFunction reg_t ext_fn_t :=
     function "times_three" ("arg1" : bits_t 16) : bits_t 16 :=
      ("arg1" << #Ob~1)  + "arg1".
 
-  Definition _divide : uaction reg_t fn_t :=
+  Definition _divide : uaction reg_t ext_fn_t :=
   {$
     let "v" := read0(R0) in
     let "odd" := "v"[#Ob~0~0~0~0] in
@@ -183,7 +183,7 @@ Module Collatz.
       fail
   $}.
 
-  Definition _multiply : uaction reg_t fn_t :=
+  Definition _multiply : uaction reg_t ext_fn_t :=
   {$
     let "v" := read1(R0) in
     let "odd" := "v"[#Ob~0~0~0~0] in
@@ -273,7 +273,7 @@ Definition decoded_sig :=
 
 Module Decoder (P: Unpacker) (F: Fetcher).
   Inductive reg_t := Rpc | Rencoded | Rdecoded.
-  Definition fn_t := F.ext_fn_t.
+  Definition ext_fn_t := F.ext_fn_t.
   Inductive rule_name_t := fetch | decode.
 
   Definition Sigma := F.Sigma.
@@ -297,7 +297,7 @@ Module Decoder (P: Unpacker) (F: Fetcher).
     | Rdecoded => (zero, (zero, (zero, tt)))
     end.
 
-  Definition _fetch : uaction reg_t fn_t :=
+  Definition _fetch : uaction reg_t ext_fn_t :=
     {$
     let "pc" := read0(Rpc) in
     let "encoded" := `F.fetch_instr _ "pc"` in
@@ -305,7 +305,7 @@ Module Decoder (P: Unpacker) (F: Fetcher).
     write0(Rpc,"pc" + `UConstBits Ob~0~0~1`)
                 $}.
 
-  Definition _decode : uaction reg_t fn_t :=
+  Definition _decode : uaction reg_t ext_fn_t :=
     {$
     let "encoded" := read1(Rencoded) in
     write0(Rdecoded,`P.unpack _ _ "encoded"`)
@@ -473,7 +473,6 @@ End PrimitiveDecoder.
 Module Pipeline.
   Inductive reg_t := r0 | outputReg | inputReg | invalid | correct.
   Inductive ext_fn_t := Stream | F | G.
-  Definition fn_t := ext_fn_t.
   Inductive rule_name_t := doF | doG.
 
   Definition sz := (pow2 5).
@@ -601,7 +600,7 @@ Module RegisterFile_Ordered.
   (*                        :: nil |}. *)
 
   Inductive reg_t := rIndex | rData (n: Vect.index nregs) | rOutput.
-  Definition fn_t := empty_ext_fn_t.
+  Definition ext_fn_t := empty_ext_fn_t.
   Inductive rule_name_t := ReadReg.
 
   Definition R r :=
@@ -673,7 +672,7 @@ End RegisterFile_Ordered.
 
 Module Enums.
   Inductive reg_t := rA | rB.
-  Definition fn_t := empty_ext_fn_t.
+  Definition ext_fn_t := empty_ext_fn_t.
   Inductive rule_name_t := Incr.
 
   Import ListNotations.
@@ -752,12 +751,12 @@ Module Enums.
 End Enums.
 
 Module IntCall.
-  Definition fn_t := empty_ext_fn_t.
+  Definition ext_fn_t := empty_ext_fn_t.
 
   Module Delay.
     Inductive reg_t := buffer.
 
-    Definition swap tau: UInternalFunction reg_t fn_t  :=
+    Definition swap tau: UInternalFunction reg_t ext_fn_t  :=
       function "swap" ("arg1" : tau) : tau :=
       write0(buffer, "arg1");
       read0(buffer).
@@ -777,14 +776,13 @@ Module IntCall.
 
   Definition Sigma := empty_Sigma.
 
-  Definition nor (sz: nat) : UInternalFunction reg_t fn_t :=
+  Definition nor (sz: nat) : UInternalFunction reg_t ext_fn_t :=
     function ("nor<" ++ string_of_nat sz ++ ">") ("arg1" : bits_t sz, "arg2" : bits_t sz) : bits_t sz :=
   !("arg1" || "arg2").
 
   Definition display :=
     (Display.Printer (ext_fn_t := empty_ext_fn_t) (reg_t := reg_t) (pos_t := pos_t)).
 
-  Definition fSigma (fn: empty_ext_fn_t) : fn_t := match fn with end.
   Definition swap8 := Delay.swap (bits_t 8).
   Definition swap16 := Delay.swap (bits_t 16).
 
@@ -858,7 +856,7 @@ End IntCall.
 
 Module ExternallyCompiledRule.
   Open Scope string_scope.
-  Definition fn_t := empty_ext_fn_t.
+  Definition ext_fn_t := empty_ext_fn_t.
 
   Module Type Fifo.
     Parameter T: type.
@@ -888,7 +886,7 @@ Module ExternallyCompiledRule.
       | valid0 => "valid0"
       end.
 
-    Definition enq : UInternalFunction reg_t fn_t :=
+    Definition enq : UInternalFunction reg_t ext_fn_t :=
       function "enq" ("data" : T) : bits_t 0 :=
         if (!read0(valid0)) then
           write0(data0,"data");
@@ -896,7 +894,7 @@ Module ExternallyCompiledRule.
         else
           fail.
 
-    Definition deq : UInternalFunction reg_t fn_t :=
+    Definition deq : UInternalFunction reg_t ext_fn_t :=
       function "deq" : T :=
         if (read0(valid0)) then
           write0(valid0,`UConstBits Ob~0`);
@@ -1004,7 +1002,7 @@ Notation zero := (Bits.zeroes _).
 
 Module GcdMachine.
   Open Scope string_scope.
-  Definition fn_t := empty_ext_fn_t.
+  Definition ext_fn_t := empty_ext_fn_t.
 
   Inductive reg_t := input_data |  input_valid | gcd_busy | gcd_a | gcd_b | output_data.
   Instance FiniteType_reg_t : FiniteType reg_t := _.
@@ -1036,7 +1034,7 @@ Module GcdMachine.
     | output_data => zero
     end.
 
-  Definition gcd_start : uaction reg_t fn_t  :=
+  Definition gcd_start : uaction reg_t ext_fn_t  :=
     {$
        if (read0(input_valid) == `UConstBits Ob~1`
             && !read0(gcd_busy)) then
@@ -1049,15 +1047,15 @@ Module GcdMachine.
          fail
            $}.
 
-  Definition sub  : UInternalFunction reg_t fn_t :=
+  Definition sub  : UInternalFunction reg_t ext_fn_t :=
     function "sub" ("arg1" : bits_t 16, "arg2" : bits_t 16) : bits_t 16 :=
       ("arg1" + !"arg2" + `UConstBits (Bits.of_nat 16 1)`).
 
-  Definition lt16 : UInternalFunction reg_t fn_t :=
+  Definition lt16 : UInternalFunction reg_t ext_fn_t :=
     function "lt" ("arg1" : bits_t 16, "arg2" : bits_t 16) : bits_t 1 :=
       (funcall sub "arg1", "arg2")[`UConstBits (Bits.of_nat 4 15)`].
 
-  Fixpoint lt (sz: nat) : UInternalFunction reg_t fn_t :=
+  Fixpoint lt (sz: nat) : UInternalFunction reg_t ext_fn_t :=
     match sz with
     | O => function "lt" ("arg1" : bits_t 0, "arg2" : bits_t 0) : bits_t 0 := `USugar (UConstBits Ob~1)`
     | S sz => function "lt" ("arg1" : bits_t sz, "arg2" : bits_t sz) : bits_t sz :=
@@ -1065,7 +1063,7 @@ Module GcdMachine.
       "arg1"[`UConstBits (Bits.of_nat sz sz)`] || "arg2"[`UConstBits (Bits.of_nat sz sz)`]
     end.
 
-  Definition gcd_compute  : uaction reg_t fn_t  :=
+  Definition gcd_compute  : uaction reg_t ext_fn_t  :=
     {$
        let "a" := read0(gcd_a) in
        let "b" := read0(gcd_b) in
@@ -1079,7 +1077,7 @@ Module GcdMachine.
          fail
            $}.
 
-    Definition gcd_getresult  : uaction reg_t fn_t  :=
+    Definition gcd_getresult  : uaction reg_t ext_fn_t  :=
       {$
        if ( read1(gcd_a) == `UConstBits (Bits.of_nat 16 0)`
           && read1(gcd_busy)) then
