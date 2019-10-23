@@ -122,7 +122,7 @@ let pp_internal_sig ppf (f: _ internal_signature) =
   fprintf ppf "{{{ %a | %a ~> %a }}}"
     pp_quoted f.int_name
     (pp_seq (pp_sep " ~> ") pp_internal_sig_arg) f.int_args
-    (pp_type ~wrap:false) f.int_rettype
+    (pp_type ~wrap:false) f.int_retType
 
 let pp_custom_fn_types ppf (extfuns: string ffi_signature list) =
   fprintf ppf "@[<hv 2>Definition custom_Sigma (f: custom_fn_t): ExternalSignature :=@ ";

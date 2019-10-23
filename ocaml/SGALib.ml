@@ -76,7 +76,7 @@ module Util = struct
   let sga_intfun_of_intfun fbody (fsig: _ Common.internal_function) =
     { SGA.int_name = fsig.int_name;
       SGA.int_argspec = List.map (fun (nm, tau) -> nm, sga_type_of_typ tau) fsig.int_argspec;
-      SGA.int_retType = sga_type_of_typ fsig.int_rettype;
+      SGA.int_retType = sga_type_of_typ fsig.int_retType;
       SGA.int_body = fbody fsig.int_body }
 
   let sga_type_to_string tau =
