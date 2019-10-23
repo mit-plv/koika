@@ -137,3 +137,9 @@ Proof.
       * left. eexists. apply MemberTl. eassumption.
       * right.
 Defined.
+
+Fixpoint mmap {K V} (l: list K) (f: forall k: K, member k l -> V) {struct l} : list V :=
+  match l return ((forall k : K, member k l -> V) -> list V) with
+   | [] => fun _ => []
+   | k :: l => fun f => f k (MemberHd k l) :: mmap l (fun k' m => f k' (MemberTl k' k l m))
+   end f.

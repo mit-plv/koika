@@ -38,7 +38,8 @@ Section Circuit.
   | CExternal (idx: ext_fn_t)
               (a: circuit (CSigma idx).(arg1Size))
     : circuit (CSigma idx).(retSize)
-  | CBundleRef {sz} (name: rule_name_t) (bundle: forall (r: reg_t), rwdata (CR r))
+  | CBundleRef {sz} (name: rule_name_t) (regs: list reg_t)
+               (bundle: context (fun r => rwdata (CR r)) regs)
                (field: rwcircuit_field) (c: circuit sz): circuit sz
   | CAnnot {sz} (annot: string) (c: circuit sz): circuit sz.
 End Circuit.
@@ -79,7 +80,7 @@ Section Interpretation.
       PrimSpecs.sigma1 (Bits1 fn) (interp_circuit arg1)
     | CBinop fn arg1 arg2 =>
       PrimSpecs.sigma2 (Bits2 fn) (interp_circuit arg1) (interp_circuit arg2)
-    | CBundleRef _ _ _ c =>
+    | CBundleRef _ _ _ _ c =>
       interp_circuit c
     | CAnnot _ c =>
       interp_circuit c
@@ -573,26 +574,27 @@ Section CircuitCompilation.
                       data1 := (ruleReg.(data1)) |})
                 rl_rwset acc.
 
-  Definition bundleref_wrap_rwdata rl bundle (r: reg_t) (ruleReg: @rwdata (CR r))
+  Definition bundleref_wrap_rwdata rl rs bundle (r: reg_t) (ruleReg: @rwdata (CR r))
     : @rwdata (CR r) :=
-    {| read0 := CBundleRef rl bundle (rwcircuit_rwdata r rwdata_r0) (ruleReg.(read0));
-       read1 := CBundleRef rl bundle (rwcircuit_rwdata r rwdata_r1) (ruleReg.(read1));
-       write0 := CBundleRef rl bundle (rwcircuit_rwdata r rwdata_w0) (ruleReg.(write0));
-       write1 := CBundleRef rl bundle (rwcircuit_rwdata r rwdata_w1) (ruleReg.(write1));
-       data0 := CBundleRef rl bundle (rwcircuit_rwdata r rwdata_data0) (ruleReg.(data0));
-       data1 := CBundleRef rl bundle (rwcircuit_rwdata r rwdata_data1) (ruleReg.(data1)) |}.
+    {| read0 := CBundleRef rl rs bundle (rwcircuit_rwdata r rwdata_r0) (ruleReg.(read0));
+       read1 := CBundleRef rl rs bundle (rwcircuit_rwdata r rwdata_r1) (ruleReg.(read1));
+       write0 := CBundleRef rl rs bundle (rwcircuit_rwdata r rwdata_w0) (ruleReg.(write0));
+       write1 := CBundleRef rl rs bundle (rwcircuit_rwdata r rwdata_w1) (ruleReg.(write1));
+       data0 := CBundleRef rl rs bundle (rwcircuit_rwdata r rwdata_data0) (ruleReg.(data0));
+       data1 := CBundleRef rl rs bundle (rwcircuit_rwdata r rwdata_data1) (ruleReg.(data1)) |}.
 
-  Definition bundleref_wrap_rwset rl bundle (rws: rwset) :=
-    REnv.(map) (bundleref_wrap_rwdata rl bundle) rws.
+  Definition bundleref_wrap_rwset rl rs bundle (rws: rwset) :=
+    REnv.(map) (bundleref_wrap_rwdata rl rs bundle) rws.
 
-  Definition bundleref_wrap_erwc rl bundle erwc :=
-    {| canFire := CBundleRef rl bundle rwcircuit_canfire erwc.(canFire);
-       regs := bundleref_wrap_rwset rl bundle erwc.(regs) |}.
+  Definition bundleref_wrap_erwc rl rs bundle erwc :=
+    {| canFire := CBundleRef rl rs bundle rwcircuit_canfire erwc.(canFire);
+       regs := bundleref_wrap_rwset rl rs bundle erwc.(regs) |}.
 
   Definition bundleref_wrap_action_circuit {tau} (input: rwset) (rl: @action_circuit tau) (rl_name: rule_name_t)
     : @action_circuit tau :=
-    let bundle := REnv.(getenv) input in
-    {| erwc := bundleref_wrap_erwc rl_name bundle rl.(erwc);
+    let rs := finite_elements (FiniteType := REnv.(finite_keys)) in
+    let bundle := ccreate rs (fun r _ => REnv.(getenv) input r) in
+    {| erwc := bundleref_wrap_erwc rl_name rs bundle rl.(erwc);
        retVal := rl.(retVal) |}.
 
   Context (rules: rule_name_t -> rule var_t R Sigma).
