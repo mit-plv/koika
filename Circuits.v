@@ -38,8 +38,8 @@ Section Circuit.
   | CExternal (idx: ext_fn_t)
               (a: circuit (CSigma idx).(arg1Size))
     : circuit (CSigma idx).(retSize)
-  | CBundle (name: rule_name_t) (bundle: forall (r: reg_t), rwdata (CR r)): circuit 0
-  | CBundleRef {sz} (source_bundle: circuit 0) (field: rwcircuit_field) (c: circuit sz): circuit sz
+  | CBundleRef {sz} (name: rule_name_t) (bundle: forall (r: reg_t), rwdata (CR r))
+               (field: rwcircuit_field) (c: circuit sz): circuit sz
   | CAnnot {sz} (annot: string) (c: circuit sz): circuit sz.
 End Circuit.
 
@@ -79,9 +79,7 @@ Section Interpretation.
       PrimSpecs.sigma1 (Bits1 fn) (interp_circuit arg1)
     | CBinop fn arg1 arg2 =>
       PrimSpecs.sigma2 (Bits2 fn) (interp_circuit arg1) (interp_circuit arg2)
-    | CBundle _ _ =>
-      Ob
-    | CBundleRef _ _ c =>
+    | CBundleRef _ _ _ c =>
       interp_circuit c
     | CAnnot _ c =>
       interp_circuit c
@@ -99,14 +97,11 @@ Section CircuitOptimizer.
   Notation Circuit := circuit.
   Notation circuit := (circuit (rule_name_t := rule_name_t) (rwdata := rwdata) CR CSigma).
 
-  Context {REnv: Env reg_t}.
-
-  Context (cr: REnv.(env_t) (fun idx => bits (CR idx))).
   Context (csigma: forall f, CSig_denote (CSigma f)).
 
   Record local_circuit_optimizer :=
     { lco_fn :> forall {sz}, circuit sz -> circuit sz;
-      lco_proof: forall {sz} (c: circuit sz),
+      lco_proof: forall {REnv: Env reg_t} (cr: REnv.(env_t) (fun idx => bits (CR idx))) {sz} (c: circuit sz),
           interp_circuit cr csigma (lco_fn c) =
           interp_circuit cr csigma c }.
 
@@ -181,6 +176,9 @@ Section CircuitOptimizer.
     | _ => fun c => simplify_bool_1' c
     end c.
 
+  Context {REnv: Env reg_t}.
+  Context (cr: REnv.(env_t) (fun idx => bits (CR idx))).
+
   Lemma asconst_Some :
     forall {sz} (c: circuit sz) bs,
       asconst c = Some bs ->
@@ -234,16 +232,29 @@ Section CircuitOptimizer.
       destruct interp_circuit; reflexivity.
     - eauto using simplify_bool_1'_correct.
   Qed.
-
-  Definition bool_simpl_lco :=
-    {| lco_fn := @simplify_bool_1; lco_proof := @simplify_bool_1_correct |}.
 End CircuitOptimizer.
 
 Arguments simplify_bool_1 {rule_name_t reg_t ext_fn_t CR CSigma rwdata} [sz] c : assert.
-Arguments lco_fn {rule_name_t reg_t ext_fn_t CR CSigma rwdata REnv cr csigma} l {sz} c : assert.
-Arguments lco_proof {rule_name_t reg_t ext_fn_t CR CSigma rwdata REnv cr csigma} l {sz} c : assert.
-Arguments lco_compose {rule_name_t reg_t ext_fn_t CR CSigma rwdata REnv cr csigma} l1 l2 : assert.
-Arguments bool_simpl_lco {rule_name_t reg_t ext_fn_t CR CSigma rwdata REnv cr csigma} : assert.
+Arguments simplify_bool_1_correct {rule_name_t reg_t ext_fn_t CR CSigma rwdata} csigma [REnv] cr [sz] c : assert.
+Arguments lco_fn {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} l {sz} c : assert.
+Arguments lco_proof {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} l {REnv} cr [sz] c : assert.
+Arguments lco_compose {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} l1 l2 : assert.
+
+Section BoolLCO.
+  Context {rule_name_t reg_t ext_fn_t: Type}.
+
+  Context {CR: reg_t -> nat}.
+  Context {CSigma: ext_fn_t -> CExternalSignature}.
+
+  Context {rwdata: nat -> Type}.
+  Context (csigma: forall f, CSig_denote (CSigma f)).
+
+  Definition bool_simpl_lco: @local_circuit_optimizer rule_name_t _ _ CR _ rwdata csigma :=
+    {| lco_fn := simplify_bool_1;
+       lco_proof := simplify_bool_1_correct csigma |}.
+End BoolLCO.
+
+Arguments bool_simpl_lco {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} : assert.
 
 Section CircuitCompilation.
   Context {rule_name_t var_t reg_t ext_fn_t: Type}.
@@ -562,26 +573,26 @@ Section CircuitCompilation.
                       data1 := (ruleReg.(data1)) |})
                 rl_rwset acc.
 
-  Definition bundleref_wrap_rwdata bundle (r: reg_t) (ruleReg: @rwdata (CR r))
+  Definition bundleref_wrap_rwdata rl bundle (r: reg_t) (ruleReg: @rwdata (CR r))
     : @rwdata (CR r) :=
-    {| read0 := CBundleRef bundle (rwcircuit_rwdata r rwdata_r0) (ruleReg.(read0));
-       read1 := CBundleRef bundle (rwcircuit_rwdata r rwdata_r1) (ruleReg.(read1));
-       write0 := CBundleRef bundle (rwcircuit_rwdata r rwdata_w0) (ruleReg.(write0));
-       write1 := CBundleRef bundle (rwcircuit_rwdata r rwdata_w1) (ruleReg.(write1));
-       data0 := CBundleRef bundle (rwcircuit_rwdata r rwdata_data0) (ruleReg.(data0));
-       data1 := CBundleRef bundle (rwcircuit_rwdata r rwdata_data1) (ruleReg.(data1)) |}.
+    {| read0 := CBundleRef rl bundle (rwcircuit_rwdata r rwdata_r0) (ruleReg.(read0));
+       read1 := CBundleRef rl bundle (rwcircuit_rwdata r rwdata_r1) (ruleReg.(read1));
+       write0 := CBundleRef rl bundle (rwcircuit_rwdata r rwdata_w0) (ruleReg.(write0));
+       write1 := CBundleRef rl bundle (rwcircuit_rwdata r rwdata_w1) (ruleReg.(write1));
+       data0 := CBundleRef rl bundle (rwcircuit_rwdata r rwdata_data0) (ruleReg.(data0));
+       data1 := CBundleRef rl bundle (rwcircuit_rwdata r rwdata_data1) (ruleReg.(data1)) |}.
 
-  Definition bundleref_wrap_rwset bundle (rws: rwset) :=
-    REnv.(map) (bundleref_wrap_rwdata bundle) rws.
+  Definition bundleref_wrap_rwset rl bundle (rws: rwset) :=
+    REnv.(map) (bundleref_wrap_rwdata rl bundle) rws.
 
-  Definition bundleref_wrap_erwc bundle erwc :=
-    {| canFire := CBundleRef bundle rwcircuit_canfire erwc.(canFire);
-       regs := bundleref_wrap_rwset bundle erwc.(regs) |}.
+  Definition bundleref_wrap_erwc rl bundle erwc :=
+    {| canFire := CBundleRef rl bundle rwcircuit_canfire erwc.(canFire);
+       regs := bundleref_wrap_rwset rl bundle erwc.(regs) |}.
 
   Definition bundleref_wrap_action_circuit {tau} (input: rwset) (rl: @action_circuit tau) (rl_name: rule_name_t)
     : @action_circuit tau :=
-    let bundle := CBundle rl_name (REnv.(getenv) input) in
-    {| erwc := bundleref_wrap_erwc bundle rl.(erwc);
+    let bundle := REnv.(getenv) input in
+    {| erwc := bundleref_wrap_erwc rl_name bundle rl.(erwc);
        retVal := rl.(retVal) |}.
 
   Context (rules: rule_name_t -> rule var_t R Sigma).

@@ -412,21 +412,18 @@ module Graphs = struct
          CBinop (fn, dedup c1, dedup c2)
       | SGA.CExternal (fn, c1) ->
          CExternal (pkg.di_fn_sigs fn, dedup c1)
-      | SGA.CBundle (rule_name, regs_map) ->
-         CBundle (pkg.di_rule_names rule_name,
-                  List.map (fun r ->
-                      let rwdata = regs_map r in
-                      (pkg.di_reg_sigs r,
-                       rebuild_rwdata_for_deduplication rwdata))
-                    pkg.di_regs)
-      | SGA.CBundleRef (sz, bundle, field, circuit) ->
-         (match bundle with
-          | SGA.CBundle (rule_name, _regs) ->
-             if List.mem rule_name pkg.di_external_rules then
-               CBundleRef(sz, dedup bundle, rwcircuit_of_sga_rwcircuit pkg.di_reg_sigs field)
-             else
-               rebuild_circuit_for_deduplication circuit
-          | _ -> assert false)
+      | SGA.CBundleRef (sz, rule_name, bundle, field, circuit) ->
+         let bundle =
+           CBundle (pkg.di_rule_names rule_name,
+                    List.map (fun r ->
+                        let rwdata = bundle r in
+                        (pkg.di_reg_sigs r,
+                         rebuild_rwdata_for_deduplication rwdata))
+                      pkg.di_regs) in
+         if List.mem rule_name pkg.di_external_rules then
+           CBundleRef(sz, hashcons bundle, rwcircuit_of_sga_rwcircuit pkg.di_reg_sigs field)
+         else
+           rebuild_circuit_for_deduplication circuit
       | SGA.CAnnot (sz, annot, c) ->
          CAnnot (sz, Util.string_of_coq_string annot, dedup c)
     and rebuild_rwdata_for_deduplication (rw : (rule_name_t, reg_t, ext_fn_t) SGA.rwdata) =
@@ -440,9 +437,11 @@ module Graphs = struct
       match SGACircuitHashtbl.find_opt circuit_to_deduplicated c with
       | Some c' -> c'
       | None ->
-         let circuit = CircuitHashcons.hashcons deduplicated_circuits (rebuild_circuit_for_deduplication c) in
+         let circuit = hashcons (rebuild_circuit_for_deduplication c) in
          SGACircuitHashtbl.add circuit_to_deduplicated c circuit;
-         circuit in
+         circuit
+    and hashcons c =
+      CircuitHashcons.hashcons deduplicated_circuits c in
     let graph_roots = List.map (fun reg ->
                           let c = pkg.di_circuits reg in
                           { root_reg = pkg.di_reg_sigs reg;

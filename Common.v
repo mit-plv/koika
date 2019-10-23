@@ -225,6 +225,16 @@ Section Lists.
     induction l1; destruct n; cbn; try (inversion 1; reflexivity).
     - intros; apply IHl1; omega.
   Qed.
+
+  Lemma forallb_pointwise {A} :
+    forall f1 f2 (ls: list A),
+      (forall x, List.In x ls -> f1 x = f2 x) ->
+      forallb f1 ls = forallb f2 ls.
+  Proof.
+    induction ls; cbn.
+    - reflexivity.
+    - intros; f_equal; eauto.
+  Qed.
 End Lists.
 
 Inductive result {S F} :=
