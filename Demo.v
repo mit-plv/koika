@@ -19,6 +19,20 @@ Definition fn_name_t := string.
 Notation uaction := (uaction pos_t var_t fn_name_t).
 Notation UInternalFunction reg_t ext_fn_t := (InternalFunction fn_name_t var_t (uaction reg_t ext_fn_t)).
 
+(* FIXME *)
+Notation "'Ob'" :=
+  (@_vect_nil bool)
+    (at level 7, left associativity, only printing) : bits_printing.
+Notation "bs '~' 0" :=
+  {| vhd := false; vtl := bs |}
+    (at level 7, left associativity, only printing) : bits_printing.
+Notation "bs '~' 1" :=
+  {| vhd := true; vtl := bs |}
+    (at level 7, left associativity, only printing) : bits_printing.
+Global Open Scope bits_printing.
+
+Open Scope list_scope.
+
 Module Ex1.
   Notation var_t := string.
   Inductive reg_t := R0 | R1.
