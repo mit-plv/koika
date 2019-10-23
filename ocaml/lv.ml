@@ -211,7 +211,7 @@ type unresolved_unit = {
 type resolved_extfun = ffi_signature
 
 type resolved_defun =
-  ResolvedAST.uaction internal_function
+  ResolvedAST.uaction locd internal_function
 
 type resolved_fn =
   | FnExternal of ffi_signature
@@ -1392,7 +1392,7 @@ let assemble_resolved_funcall name (fn: resolved_fn) (args: ResolvedAST.uaction 
       | [arg] -> ResolvedAST.ExternalCall { fn = locate fn; arg }
       | _ -> bad_arg_count 1)
   | FnInternal fn ->
-     InternalCall { fn = { fn with int_body = locate fn.int_body }; args }
+     InternalCall { fn; args }
   | FnUnop fn ->
      (match args with
       | [arg] -> Unop { fn = locate fn; arg }
@@ -1480,7 +1480,7 @@ let resolve_fn_decl types fns { ufn_name; ufn_signature; ufn_rettype; ufn_body }
       InternalDecl { int_name = ufn_name.lcnt;
                      int_retType = rettype;
                      int_argspec = args;
-                     int_body = body.lcnt }
+                     int_body = body }
    | ExternalUfn ->
       let unit_t = Bits_t 0 in
       let ffi_argtype = match List.map snd args with
