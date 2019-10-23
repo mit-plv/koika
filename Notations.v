@@ -7,14 +7,17 @@ Require Export
         SGA.Semantics
         SGA.Circuits
         SGA.Primitives
-        SGA.Interop.
+        SGA.Interop
+        SGA.SyntaxTools.
 
 Export SigNotations.
 Export PrimUntyped.
 
 Require Coq.Lists.List.
+Require Import Coq.Strings.String.
 Export Coq.Lists.List.ListNotations.
 Global Open Scope list_scope.
+Global Open Scope string_scope.
 
 Class DummyPos pos_t := { dummy_pos: pos_t }.
 Instance DummyPos_unit : DummyPos unit := {| dummy_pos := tt |}.

@@ -41,6 +41,7 @@ Extraction "SGA.ml"
            Desugaring.desugar_action
            TypeInference.type_action TypeInference.type_rule TypeInference.type_scheduler
            SyntaxTools.action_mentions_var SyntaxTools.member_mentions_shadowed_binding
+           SyntaxTools.action_footprint
            Circuits.compile_scheduler
            Interop.sga_package_t Interop.circuit_package_t Interop.sim_package_t
            Interop.struct_of_list Interop.struct_to_list

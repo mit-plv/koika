@@ -227,6 +227,9 @@ Definition to_list {K} (E: Env K) {V} (ev: E.(env_t) V) :=
   E.(fold_right) (fun (k: K) (v: V k) (t: list { k: K & V k }) =>
                     (existT _ k v) :: t) ev List.nil.
 
+Definition to_alist {K} (E: Env K) {V} (ev: E.(env_t) (fun _ => V)) :=
+  E.(fold_right) (fun (k: K) (v: V) (t: list (K * V)) => (k, v) :: t) ev List.nil.
+
 Definition finite_member {T} {FT: FiniteType T} (t: T) :
   member t finite_elements.
 Proof.

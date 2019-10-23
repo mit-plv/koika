@@ -1,8 +1,4 @@
-Require Import SGA.Types.
 Require Import SGA.Notations.
-
-Require Import Coq.Strings.String.
-Open Scope string_scope.
 
 Record demo_package_t :=
   { dp_var_t : Type;
