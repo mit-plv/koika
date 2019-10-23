@@ -247,11 +247,11 @@ module Compilation = struct
   let _R = fun rs -> Util.sga_type_of_typ (reg_type rs)
   let _Sigma fn = Util.sga_external_sig_of_ffi_sig fn
 
-  let rEnv_of_register_list tc_registers =
+  let finiteType_of_register_list tc_registers =
     let reg_indices = List.mapi (fun i x -> x.reg_name, i) tc_registers in
     let regmap = Hashtbl.of_seq (List.to_seq reg_indices) in
-    SGA.contextEnv { SGA.finite_elements = tc_registers;
-                     SGA.finite_index = fun r -> Hashtbl.find regmap r.reg_name }
+    { SGA.finite_elements = tc_registers;
+      SGA.finite_index = fun r -> Hashtbl.find regmap r.reg_name }
 
   (* FIXME hashmaps, not lists *)
   type compile_unit =
@@ -275,11 +275,10 @@ module Compilation = struct
     |> result_of_type_result
 
   let compile (cu: compile_unit) : (reg_signature -> compiled_circuit) =
-    let rEnv = rEnv_of_register_list cu.c_registers in
-    let r0: _ SGA.env_t = SGA.create rEnv (fun r -> SGA.CReadRegister r) in
+    let finiteType = finiteType_of_register_list cu.c_registers in
     let rules r = List.assoc r cu.c_rules |> snd in
-    let opt = SGA.simplify_bool_1 (SGA.cR_of_R _R) (SGA.cSigma_of_Sigma _Sigma) in
-    let env = SGA.compile_scheduler _R _Sigma rEnv opt r0 rules cu.c_scheduler in
+    let rEnv = SGA.contextEnv finiteType in
+    let env = SGA.compile_scheduler _R _Sigma finiteType rules cu.c_scheduler in
     (fun r -> SGA.getenv rEnv env r)
 end
 

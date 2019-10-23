@@ -247,7 +247,6 @@ Arguments bool_simpl_lco {rule_name_t reg_t ext_fn_t CR CSigma rwdata REnv cr cs
 
 Section CircuitCompilation.
   Context {rule_name_t var_t reg_t ext_fn_t: Type}.
-  Context {reg_t_eq_dec: EqDec reg_t}.
 
   Context {R: reg_t -> type}.
   Context {Sigma: ext_fn_t -> ExternalSignature}.
@@ -563,8 +562,6 @@ Section CircuitCompilation.
                       data1 := (ruleReg.(data1)) |})
                 rl_rwset acc.
 
-  Context (rules: rule_name_t -> rule var_t R Sigma).
-
   Definition bundleref_wrap_rwdata bundle (r: reg_t) (ruleReg: @rwdata (CR r))
     : @rwdata (CR r) :=
     {| read0 := CBundleRef bundle (rwcircuit_rwdata r rwdata_r0) (ruleReg.(read0));
@@ -587,7 +584,9 @@ Section CircuitCompilation.
     {| erwc := bundleref_wrap_erwc bundle rl.(erwc);
        retVal := rl.(retVal) |}.
 
-  Fixpoint compile_scheduler'
+  Context (rules: rule_name_t -> rule var_t R Sigma).
+
+  Fixpoint compile_scheduler_circuit
            (s: scheduler rule_name_t)
            (input: scheduler_circuit):
     scheduler_circuit :=
@@ -600,24 +599,24 @@ Section CircuitCompilation.
       let acc := update_accumulated_rwset rl.(erwc).(regs) input in
       let will_fire := willFire_of_canFire rl.(erwc) input in
       let input := mux_rwsets "mux_input" will_fire acc input in
-      compile_scheduler' s input
+      compile_scheduler_circuit s input
     | Try rl st sf =>
       let (rl, Gamma) := compile_action CtxEmpty (rules rl) (adapter input) in
       let acc := update_accumulated_rwset rl.(erwc).(regs) input in
-      let st := compile_scheduler' st acc in
-      let sf := compile_scheduler' sf input in
+      let st := compile_scheduler_circuit st acc in
+      let sf := compile_scheduler_circuit sf input in
       let will_fire := willFire_of_canFire rl.(erwc) input in
       mux_rwsets "mux_subschedulers" will_fire st sf
     end.
 
   Definition commit_rwdata {sz} (reg: @rwdata sz) initial_value : circuit sz :=
     CAnnotOpt "commit_write1"
-           (CMux (reg.(write1))
-                 (reg.(data1))
-                 (CAnnotOpt "commit_write0"
-                         (CMux (reg.(write0))
-                               (reg.(data0))
-                               (CAnnotOpt "commit_unchanged" initial_value)))).
+              (CMux (reg.(write1))
+                    (reg.(data1))
+                    (CAnnotOpt "commit_write0"
+                               (CMux (reg.(write0))
+                                     (reg.(data0))
+                                     (CAnnotOpt "commit_unchanged" initial_value)))).
 
   Definition state_transition_circuit :=
     REnv.(env_t) (fun reg => circuit (R reg)).
@@ -633,8 +632,8 @@ Section CircuitCompilation.
   Definition init_scheduler_circuit : scheduler_circuit :=
     REnv.(create) init_scheduler_rwdata.
 
-  Definition compile_scheduler (s: scheduler rule_name_t) : state_transition_circuit :=
-    let s := compile_scheduler' s init_scheduler_circuit in
+  Definition compile_scheduler' (s: scheduler rule_name_t) : state_transition_circuit :=
+    let s := compile_scheduler_circuit s init_scheduler_circuit in
     REnv.(map2) (fun k r1 r2 => commit_rwdata r1 r2) s cr.
 End CircuitCompilation.
 
@@ -648,3 +647,18 @@ Arguments rwdata {rule_name_t reg_t ext_fn_t} R Sigma sz : assert.
 Arguments action_circuit {rule_name_t reg_t ext_fn_t} R Sigma REnv sz : assert.
 Arguments scheduler_circuit {rule_name_t reg_t ext_fn_t} R Sigma REnv : assert.
 Arguments state_transition_circuit rule_name_t {reg_t ext_fn_t} R Sigma REnv : assert.
+
+Section SimpleSchedulerCompilation.
+  Context {rule_name_t var_t reg_t ext_fn_t: Type}.
+
+  Context {R: reg_t -> type}.
+  Context {Sigma: ext_fn_t -> ExternalSignature}.
+  Context {FiniteType_reg_t: FiniteType reg_t}.
+
+  Definition compile_scheduler
+             (rules: rule_name_t -> rule var_t R Sigma)
+             (s: scheduler rule_name_t)
+    : state_transition_circuit rule_name_t R Sigma _ :=
+    let cr := ContextEnv.(create) (readRegisters R Sigma) in
+    compile_scheduler' simplify_bool_1 cr rules s.
+End SimpleSchedulerCompilation.

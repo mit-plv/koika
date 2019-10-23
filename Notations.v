@@ -12,6 +12,10 @@ Require Export
 Export SigNotations.
 Export PrimUntyped.
 
+Require Coq.Lists.List.
+Export Coq.Lists.List.ListNotations.
+Global Open Scope list_scope.
+
 Class DummyPos pos_t := { dummy_pos: pos_t }.
 Instance DummyPos_unit : DummyPos unit := {| dummy_pos := tt |}.
 

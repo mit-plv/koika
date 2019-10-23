@@ -13,9 +13,6 @@ Record demo_package_t :=
     vp : @verilog_package_t dp_var_t dp_reg_t dp_rule_name_t dp_ext_fn_t;
     sp : @sim_package_t dp_var_t dp_reg_t dp_rule_name_t dp_ext_fn_t }.
 
-Notation opt := simplify_bool_1.
-Notation interop_opt := simplify_bool_1.
-
 Definition pos_t := unit.
 Definition var_t := string.
 Definition fn_name_t := string.
@@ -76,7 +73,7 @@ Module Ex1.
     Eval compute in interp_scheduler (ContextEnv.(create) r) sigma rules s1.
 
   Definition s1_circuit :=
-    compile_scheduler opt (ContextEnv.(create) (readRegisters R Sigma)) rules s1.
+    compile_scheduler rules s1.
 End Ex1.
 
 Module Ex2.
@@ -140,7 +137,7 @@ Module Ex2.
   Definition tsched_result :=
     Eval compute in interp_scheduler (ContextEnv.(create) r) empty_sigma rules tsched.
   Definition tsched_circuit :=
-    compile_scheduler opt (ContextEnv.(create) (readRegisters R empty_Sigma)) rules tsched.
+    compile_scheduler rules tsched.
 End Ex2.
 
 Notation compute t :=
@@ -218,7 +215,7 @@ Module Collatz.
                            (rules multiply)).
 
   Definition circuit :=
-    compile_scheduler interop_opt (ContextEnv.(create) (readRegisters R empty_Sigma)) rules collatz.
+    compile_scheduler rules collatz.
 
   Definition sga_package :=
     {| sga_reg_types := R;
@@ -448,7 +445,7 @@ Module ManualDecoder.
                     end).
 
   Definition circuit :=
-    compile_scheduler interop_opt (ContextEnv.(create) (readRegisters R Sigma)) rules decoder.
+    compile_scheduler rules decoder.
 
   Definition package := make_package "manual_decoder" rules.
 End ManualDecoder.
@@ -465,7 +462,7 @@ Module PrimitiveDecoder.
                     end).
 
   Definition circuit :=
-    compile_scheduler interop_opt (ContextEnv.(create) (readRegisters R Sigma)) rules decoder.
+    compile_scheduler rules decoder.
 
   Definition package := make_package "primitive_decoder" rules.
 End PrimitiveDecoder.
@@ -492,19 +489,19 @@ Module Pipeline.
     | G => {{ bits_t sz ~> bits_t sz }}
     end.
 
-  Local Notation "f [ arg ]" :=
+  Local Notation "f [[ arg ]]" :=
     (UExternalCall f arg)
-      (at level 99, arg at level 99, format "f [ arg ]").
+      (at level 99, arg at level 99, format "f [[ arg ]]").
 
   Definition _doF : uaction _ _ :=
     {$
        let "v" := read0(inputReg) in
-       write0(inputReg,`Stream[UVar "v"]`);
+       write0(inputReg,`Stream[[UVar "v"]]`);
        let "invalid" := read1(invalid) in
        if "invalid"
        then
          write1(invalid,`UConstBits Ob~0`);
-         write0(r0,`F[UVar "v"]`)
+         write0(r0,`F[[UVar "v"]]`)
        else
          fail
            $}.
@@ -515,9 +512,9 @@ Module Pipeline.
     if !"invalid" then
       let "data" := read0(r0) in
       let "v" := read0(outputReg) in
-      write0(outputReg,`Stream[{$"v"$}]`);
+      write0(outputReg,`Stream[[{$"v"$}]]`);
       write0(invalid,`UConstBits Ob~1`);
-      if `G[UVar "data"]` == `G[F[UVar "v"]]`
+      if `G[[UVar "data"]]` == `G[[F[[UVar "v"]]]]`
       then
         `UConstBits Ob`
       else
@@ -537,7 +534,7 @@ Module Pipeline.
     tc_scheduler (doG |> doF |> done).
 
   Definition circuit :=
-    compile_scheduler interop_opt (ContextEnv.(create) (readRegisters R Sigma)) rules Pipeline.
+    compile_scheduler rules Pipeline.
 
   Definition fn_names fn :=
     match fn with
@@ -632,7 +629,7 @@ Module RegisterFile_Ordered.
   Instance FiniteType_reg_t : FiniteType reg_t := _.
 
   Definition circuit :=
-    compile_scheduler interop_opt (ContextEnv.(create) (readRegisters R Sigma)) rules regfile.
+    compile_scheduler rules regfile.
 
   Definition sga_package :=
     {| sga_reg_types := R;
@@ -714,7 +711,7 @@ Module Enums.
   Instance FiniteType_reg_t : FiniteType reg_t := _.
 
   Definition circuit :=
-    compile_scheduler interop_opt (ContextEnv.(create) (readRegisters R Sigma)) rules enum_scheduler.
+    compile_scheduler rules enum_scheduler.
 
   Definition sga_package :=
     {| sga_reg_types := R;
@@ -810,7 +807,7 @@ Module IntCall.
   Instance FiniteType_reg_t : FiniteType reg_t := _.
 
   Definition circuit :=
-    compile_scheduler interop_opt (ContextEnv.(create) (readRegisters R Sigma)) rules sched.
+    compile_scheduler rules sched.
 
   Definition r reg : R reg :=
     match reg with

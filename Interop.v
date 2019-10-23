@@ -192,9 +192,5 @@ Section Compilation.
     let FT := s.(sga_reg_finite) in
     {| cp_pkg := s;
        cp_reg_Env := ContextEnv;
-       cp_circuit :=
-         let R := s.(sga_reg_types) in
-         let Sigma := s.(sga_ext_fn_types) in
-         let r := ContextEnv.(create) (readRegisters R Sigma) in
-         compile_scheduler simplify_bool_1 r s.(sga_rules) s.(sga_scheduler) |}.
+       cp_circuit := compile_scheduler s.(sga_rules) s.(sga_scheduler) |}.
 End Compilation.
