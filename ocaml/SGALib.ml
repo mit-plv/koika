@@ -227,9 +227,8 @@ end
 
 module Compilation = struct
   let translate_port = function
-    | 0 -> SGA.P0
-    | 1 -> SGA.P1
-    | _ -> assert false
+    | P0 -> SGA.P0
+    | P1 -> SGA.P1
 
   type 'f sga_uaction =
     ('f, fn_name_t, var_t, reg_signature, ffi_signature) SGA.uaction
@@ -239,10 +238,6 @@ module Compilation = struct
   type sga_action = (var_t, reg_signature, ffi_signature) SGA.action
   type sga_rule = [ `ExternalRule | `InternalRule ] * sga_action
   type sga_scheduler = var_t SGA.scheduler
-
-  type debug_printer = { debug_print: 'f. 'f sga_uaction -> unit }
-  let debug_printer : debug_printer ref =
-    ref { debug_print = (fun _ -> Printf.eprintf "No printer installed\n%!") }
 
   let _R = fun rs -> Util.sga_type_of_typ (reg_type rs)
   let _Sigma fn = Util.sga_external_sig_of_ffi_sig fn

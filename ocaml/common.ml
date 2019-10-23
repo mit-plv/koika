@@ -124,7 +124,7 @@ let reg_type r =
 type rule_name_t = string
 type fn_name_t = string
 type var_t = string
-type port_t = int
+type port_t = P0 | P1
 
 type ('loc_t, 'content_t) locd = {
     lpos: 'loc_t;

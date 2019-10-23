@@ -170,6 +170,10 @@ module ResolvedAST = struct
 
   let typecheck_rule (raw_ast: uaction locd) : (sga_action, ('pos_t * _)) result =
     typecheck_rule raw_ast.lpos (translate_action raw_ast)
+
+  type debug_printer = { debug_print: uaction -> unit }
+  let debug_printer : debug_printer ref =
+    ref { debug_print = (fun _ -> Printf.eprintf "No printer installed\n%!") }
 end
 
 open UnresolvedAST
@@ -1385,21 +1389,23 @@ let assemble_resolved_funcall name (fn: resolved_fn) (args: ResolvedAST.uaction 
   let given = List.length args in
   let bad_arg_count nexpected =
     type_error name.lpos @@ BadArgumentCount { fn = name.lcnt; expected = nexpected; given } in
-  let locate fn = { lpos = name.lpos; lcnt = fn } in
+  let addloc fn = { lpos = name.lpos; lcnt = fn } in
   match fn with
   | FnExternal fn ->
-     (match args with
-      | [arg] -> ResolvedAST.ExternalCall { fn = locate fn; arg }
-      | _ -> bad_arg_count 1)
+     let arg = match args with
+       | [] -> addloc (ResolvedAST.Const (Bits [||]))
+       | [arg] -> arg
+       | _ -> bad_arg_count 1 in
+     ResolvedAST.ExternalCall { fn = addloc fn; arg }
   | FnInternal fn ->
      InternalCall { fn; args }
   | FnUnop fn ->
      (match args with
-      | [arg] -> Unop { fn = locate fn; arg }
+      | [arg] -> Unop { fn = addloc fn; arg }
       | _ -> bad_arg_count 1)
   | FnBinop fn ->
      (match args with
-      | [a1; a2] -> Binop { fn = locate fn; a1; a2 }
+      | [a1; a2] -> Binop { fn = addloc fn; a1; a2 }
       | _ -> bad_arg_count 2)
   | FnStructInit { sg; field_names } ->
      Sugar (StructInit { sg; fields = List.combine field_names args })
