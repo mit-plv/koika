@@ -20,6 +20,9 @@
 
 (defmacro extfun (name args ret))
 
+(defmacro cpp-preamble (s))
+(defmacro sequence (s))
+
 (defmacro read.0 (name))
 (defmacro write.0 (name val)
   (declare (indent 1)))
