@@ -632,7 +632,7 @@ let compile (type rule_name_t var_t reg_t ext_fn_t)
       let p_assign_expr ?(prefix = "") target result =
         match target, result with
         | VarTarget { declared = true; name; _ }, (PureExpr e | ImpureExpr e) ->
-           p "%s = %s;" name e;
+           if name <> e then p "%s = %s;" name e;
            Assigned name
         | VarTarget { tau; name; _ }, (PureExpr e | ImpureExpr e) ->
            p_decl ~prefix ~init:(Some e) tau name;
