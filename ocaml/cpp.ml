@@ -503,7 +503,17 @@ let compile (type name_t var_t reg_t)
     | Enum_t sg -> p_enum_eq sg; p_enum_pack sg; nl (); p_enum_unpack sg
     | Struct_t sg -> p_struct_eq sg; nl (); p_struct_pack sg; nl (); p_struct_unpack sg in
 
-  let p_type_declarations types =
+  let complete_user_types () =
+    let reg_typ (_, t) = register_subtypes user_types needs_multiprecision t in
+    List.iter reg_typ !user_types;
+    !user_types in
+
+  let p_type_declarations () =
+    p "//////////////";
+    p "// TYPEDEFS //";
+    p "//////////////";
+    nl ();
+    let types = complete_user_types () in
     let types = topo_sort_types (sort_types (List.map snd types)) in
     let enums, structs = partition_types types in
     List.iter p_enum_decl enums;
@@ -525,10 +535,6 @@ let compile (type name_t var_t reg_t)
       p "#define NEEDS_BOOST_MULTIPRECISION";
       nl ());
     p "%s" (cpp_get_preamble ());
-    nl ();
-    let reg_typ (_, t) = register_subtypes user_types needs_multiprecision t in
-    List.iter reg_typ !user_types;
-    p_type_declarations !user_types;
   in
 
   let iter_registers f regs =
@@ -851,8 +857,11 @@ let compile (type name_t var_t reg_t)
 
   let p_hpp () =
     let impl = with_output_to_buffer p_impl in
+    let typedefs = with_output_to_buffer p_type_declarations in
     p_includeguard (fun () ->
         p_preamble ();
+        nl ();
+        p_buffer typedefs;
         nl ();
         p_buffer impl;
         nl ()) in
