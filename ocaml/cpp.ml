@@ -27,13 +27,34 @@ type ('prim, 'name_t, 'var_t, 'reg_t, 'fn_t) cpp_input_t = {
 let sprintf = Printf.sprintf
 let fprintf = Printf.fprintf
 
-let register_type (user_types: (string * typ) list ref) nm tau =
-  match List.assoc_opt nm !user_types with
+type program_info =
+  { mutable pi_committed: bool;
+    mutable pi_needs_multiprecision: bool;
+    mutable pi_user_types: (string * typ) list;
+    pi_custom_funcalls: (string, (SGA.prim_fn_t, string) Common.fun_id_t Common.ffi_signature) Hashtbl.t }
+
+let fresh_program_info () =
+  { pi_committed = false;
+    pi_needs_multiprecision = false;
+    pi_user_types = [];
+    pi_custom_funcalls = Hashtbl.create 50 }
+
+let assert_uncommitted { pi_committed; _ } =
+  assert (not pi_committed)
+
+let request_multiprecision pi =
+  assert_uncommitted pi;
+  pi.pi_needs_multiprecision <- true
+
+let register_type (pi: program_info) nm tau =
+  match List.assoc_opt nm pi.pi_user_types with
   | Some tau' ->
      if tau <> tau' then
        failwith (sprintf "Incompatible uses of type name `%s':\n%s\n%s"
                    nm (typ_to_string tau) (typ_to_string tau'))
-  | None -> user_types := (nm, tau) :: !user_types
+  | None ->
+     assert_uncommitted pi;
+     pi.pi_user_types <- (nm, tau) :: pi.pi_user_types
 
 let gensym_prefix = "_"
 let gensym, gensym_reset = make_gensym gensym_prefix
@@ -102,50 +123,45 @@ module Mangling = struct
       cpp_function_sigs = (fun f -> f |> u.cpp_function_sigs |> mangle_function_sig) }
 end
 
-let cpp_enum_name user_types sg =
+let cpp_enum_name pi sg =
   let name = Mangling.mangle_name ~prefix:"enum" sg.enum_name in
-  register_type user_types name (Enum_t sg); name
+  register_type pi name (Enum_t sg); name
 
-let cpp_struct_name user_types sg =
+let cpp_struct_name pi sg =
   let name = Mangling.mangle_name ~prefix:"struct" sg.struct_name in
-  register_type user_types sg.struct_name (Struct_t sg); name
+  register_type pi sg.struct_name (Struct_t sg); name
 
 let cpp_type_of_type
-      (user_types: (string * typ) list ref)
-      (needs_multiprecision: bool ref)
+      (pi: program_info)
       (tau: typ) =
   match tau with
   | Bits_t sz ->
      assert (sz >= 0);
      if sz > 64 then
-       needs_multiprecision := true;
+       request_multiprecision pi;
      if sz = 0 then
        "unit"
      else if sz <= 1024 then
        sprintf "bits<%d>" sz
      else
        failwith (sprintf "Unsupported size: %d" sz)
-  | Enum_t sg -> cpp_enum_name user_types sg
-  | Struct_t sg -> cpp_struct_name user_types sg
+  | Enum_t sg -> cpp_enum_name pi sg
+  | Struct_t sg -> cpp_struct_name pi sg
 
-let cpp_enumerator_name user_types ?(enum=None) nm =
+let cpp_enumerator_name pi ?(enum=None) nm =
   let nm = Mangling.mangle_name nm in
   match enum with
   | None -> nm
-  | Some sg -> sprintf "%s::%s" (cpp_enum_name user_types sg) nm
+  | Some sg -> sprintf "%s::%s" (cpp_enum_name pi sg) nm
 
 let cpp_field_name nm =
   Mangling.mangle_name nm
 
-let register_subtypes
-      (user_types: (string * typ) list ref)
-      (needs_multiprecision: bool ref)
-      tau =
+let register_subtypes (pi: program_info) tau =
   let rec loop tau = match tau with
-    | Bits_t sz ->
-       if sz > 64 then needs_multiprecision := true;
-    | Enum_t sg -> ignore (cpp_enum_name user_types sg)
-    | Struct_t sg -> ignore (cpp_struct_name user_types sg);
+    | Bits_t sz -> if sz > 64 then request_multiprecision pi
+    | Enum_t sg -> ignore (cpp_enum_name pi sg)
+    | Struct_t sg -> ignore (cpp_struct_name pi sg);
                      List.iter (loop << snd) sg.struct_fields in
   loop tau
 
@@ -154,10 +170,10 @@ let z_to_hex bitlength z =
   let fmt = sprintf "%%0#%dx" (w + 2) in
   Z.format fmt z
 
-let cpp_const_init (needs_multiprecision: bool ref) sz cst =
+let cpp_const_init (pi: program_info) sz cst =
   assert (sz >= 0);
   if sz > 64 then
-    needs_multiprecision := true;
+    request_multiprecision pi;
   let cst =
     z_to_hex sz cst in
   if sz = 0 then
@@ -272,15 +288,12 @@ let compile (type name_t var_t reg_t)
   let p_buffer b = Buffer.add_buffer !buffer b in
   let set_buffer b = let b' = !buffer in buffer := b; b' in
 
-  let needs_multiprecision = ref false in
-  let user_types = ref [] in
-  let custom_funcalls = Hashtbl.create 50 in
-
-  let cpp_type_of_type = cpp_type_of_type user_types needs_multiprecision in
-  let cpp_enum_name = cpp_enum_name user_types in
-  let cpp_struct_name = cpp_struct_name user_types in
-  let cpp_enumerator_name = cpp_enumerator_name user_types in
-  let cpp_const_init = cpp_const_init needs_multiprecision in
+  let program_info = fresh_program_info () in
+  let cpp_type_of_type = cpp_type_of_type program_info in
+  let cpp_enum_name = cpp_enum_name program_info in
+  let cpp_struct_name = cpp_struct_name program_info in
+  let cpp_enumerator_name = cpp_enumerator_name program_info in
+  let cpp_const_init = cpp_const_init program_info in
 
   let rec iter_sep sep body = function
     | [] -> ()
@@ -504,9 +517,9 @@ let compile (type name_t var_t reg_t)
     | Struct_t sg -> p_struct_eq sg; nl (); p_struct_pack sg; nl (); p_struct_unpack sg in
 
   let complete_user_types () =
-    let reg_typ (_, t) = register_subtypes user_types needs_multiprecision t in
-    List.iter reg_typ !user_types;
-    !user_types in
+    let reg_typ (_, t) = register_subtypes program_info t in
+    List.iter reg_typ program_info.pi_user_types;
+    program_info.pi_user_types in
 
   let p_type_declarations () =
     p "//////////////";
@@ -531,7 +544,8 @@ let compile (type name_t var_t reg_t)
     p "// PREAMBLE //";
     p "//////////////";
     nl ();
-    if !needs_multiprecision then (
+    program_info.pi_committed <- true;
+    if program_info.pi_needs_multiprecision then (
       p "#define NEEDS_BOOST_MULTIPRECISION";
       nl ());
     p "%s" (cpp_get_preamble ());
@@ -653,7 +667,8 @@ let compile (type name_t var_t reg_t)
         let { ffi_name; ffi_arg1type = tau1; ffi_arg2type = tau2; _ } = fn in
         match ffi_name with
         | CustomFn f ->
-           Hashtbl.replace custom_funcalls f fn;
+           assert_uncommitted program_info;
+           Hashtbl.replace program_info.pi_custom_funcalls f fn;
            ImpureExpr (cpp_funcall f a1 a2)
         | PrimFn (SGA.DisplayFn fn) ->
            ImpureExpr
@@ -882,10 +897,10 @@ let compile (type name_t var_t reg_t)
         p_scoped "class extfuns" ~terminator:";" (fun () ->
             p "public:";
             p_comment "External methods (if any) should be implemented here.";
-            if Hashtbl.length custom_funcalls > 0 then
+            if Hashtbl.length program_info.pi_custom_funcalls > 0 then
               (p_comment "Approximate signatures are provided below for convenience.";
                let cmp f1 f2 = compare (fst f1) (fst f2) in
-               let fns = List.of_seq (Hashtbl.to_seq custom_funcalls) in
+               let fns = List.of_seq (Hashtbl.to_seq program_info.pi_custom_funcalls) in
                List.iter p_extfun_decl (List.sort cmp fns))));
     nl ();
 
@@ -916,8 +931,8 @@ let compile (type name_t var_t reg_t)
             p "snapshot.dump();";
             p "return 0;")) in
 
-  let buf_hpp = with_output_to_buffer p_hpp in
   let buf_cpp = with_output_to_buffer p_cpp in
+  let buf_hpp = with_output_to_buffer p_hpp in
   (buf_hpp, buf_cpp)
 
 let action_footprint a =
