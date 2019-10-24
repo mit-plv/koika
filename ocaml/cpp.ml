@@ -149,10 +149,17 @@ let register_subtypes
                      List.iter (loop << snd) sg.struct_fields in
   loop tau
 
+let z_to_hex bitlength z =
+  let w = (bitlength + 7) / 8 in
+  let fmt = sprintf "%%0#%dx" (w + 2) in
+  Z.format fmt z
+
 let cpp_const_init (needs_multiprecision: bool ref) sz cst =
   assert (sz >= 0);
   if sz > 64 then
     needs_multiprecision := true;
+  let cst =
+    z_to_hex sz cst in
   if sz = 0 then
     "prims::tt"
   else if sz <= 8 then
@@ -325,10 +332,9 @@ let compile (type name_t var_t reg_t)
     | Enum (sg, v) -> sp_enum_value sg v
     | Struct (sg, fields) -> sp_struct_value sg fields
   and sp_bits_value bs =
-    let bs_size = Array.length bs in
-    let w = (bs_size + 7) / 8 in
-    let fmt = sprintf "%%0#%dx" (w + 2) in
-    cpp_const_init bs_size (Z.format fmt (bits_to_Z bs))
+    let z = bits_to_Z bs in
+    let bitlength = Array.length bs in
+    cpp_const_init bitlength z
   and sp_enum_value sg v =
     match enum_find_field_opt sg v with
     | None -> sprintf "static_cast<%s>(%s)" (cpp_enum_name sg) (sp_bits_value v)
@@ -466,7 +472,7 @@ let compile (type name_t var_t reg_t)
     let p_struct_pack sg =
       let var = "packed" in
       p_pack (fun () ->
-          p_decl (Bits_t v_sz) var ~init:(Some (cpp_const_init v_sz "0"));
+          p_decl (Bits_t v_sz) var ~init:(Some (cpp_const_init v_sz Z.zero));
           List.iteri (fun idx (fname, ftau) ->
               let sz = typ_sz ftau in
               let fname = cpp_field_name fname in
