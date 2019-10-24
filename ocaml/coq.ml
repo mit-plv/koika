@@ -216,7 +216,7 @@ and pp_prim_ustruct2 ppf (f: SGALib.SGA.PrimUntyped.ustruct2) = match f with
   | USubstFieldBits (sg, f) -> pp_app ppf "USubstFieldBits" "%a@ %a" pp_sga_struct_name sg pp_coq_quoted f
 
 let pp_pos ppf pos =
-  pp_quoted ppf (Lv.Pos.to_string pos)
+  pp_quoted ppf (Pos.to_string pos)
 
 let pp_maybe_pos print_positions constructor pp ppf a =
   if print_positions then pp_app ppf constructor "%a@ %a" pp_pos a.lpos pp a.lcnt
@@ -292,7 +292,7 @@ let pp_scheduler print_positions ppf (name, scheduler) =
          pp_app ppf "UTry" "%a@ @[<v>%a@ %a@]"
            pp_raw r.lcnt loop s1 loop s2 in
     pp_maybe_pos print_positions "USPos" pp ppf s in
-  fprintf ppf "@[<2>Definition %s : scheduler rule_name_t :=@ tc_scheduler @[%a@]@]."
+  fprintf ppf "@[<2>Definition %s : scheduler pos_t rule_name_t :=@ tc_scheduler @[%a@]@]."
     name loop scheduler;
   brk 2 ppf;
   fprintf ppf "@[<2>Definition %s_circuit : state_transition_circuit rule_name_t R Sigma ContextEnv :=@ " name;

@@ -258,7 +258,7 @@ End BoolLCO.
 Arguments bool_simpl_lco {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} : assert.
 
 Section CircuitCompilation.
-  Context {rule_name_t var_t reg_t ext_fn_t: Type}.
+  Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
 
   Context {R: reg_t -> type}.
   Context {Sigma: ext_fn_t -> ExternalSignature}.
@@ -417,10 +417,10 @@ Section CircuitCompilation.
              {sig: tsig var_t}
              {tau}
              (Gamma: ccontext sig)
-             (a: action var_t R Sigma sig tau)
+             (a: action pos_t var_t R Sigma sig tau)
              (clog: rwcircuit):
       @action_circuit tau * (ccontext sig) :=
-      match a in action _ _ _ ts tau return ccontext ts -> @action_circuit tau * ccontext ts with
+      match a in action _ _ _ _ ts tau return ccontext ts -> @action_circuit tau * ccontext ts with
       | Fail tau => fun Gamma =>
         ({| retVal := $`"fail"`Bits.zero (type_sz tau); (* LATER: Question mark here *)
             erwc := {| canFire := $`"fail_cF"` Ob~0;
@@ -437,12 +437,12 @@ Section CircuitCompilation.
       | Seq r1 r2 => fun Gamma =>
         let (cex, Gamma) := (compile_action Gamma r1 clog) in
         compile_action Gamma r2 cex.(erwc)
-      | @Assign _ _ _ _ _ _ k tau m ex => fun Gamma =>
+      | @Assign _ _ _ _ _ _ _ k tau m ex => fun Gamma =>
         let (cex, Gamma) := compile_action Gamma ex clog in
         ({| retVal := $`"assign_retVal"`Bits.nil;
             erwc := cex.(erwc) |},
          creplace m cex.(retVal) Gamma)
-      | @Bind _ _ _ _ _ sig tau tau' var ex body => fun Gamma =>
+      | @Bind _ _ _ _ _ _ sig tau tau' var ex body => fun Gamma =>
         let (ex, Gamma) := compile_action Gamma ex clog in
         let (ex, Gamma) := compile_action (CtxCons (var, tau) ex.(retVal) Gamma) body ex.(erwc) in
         (ex, ctl Gamma)
@@ -524,7 +524,9 @@ Section CircuitCompilation.
         ({| retVal := CAnnotOpt "External_call" (CExternal fn a.(retVal));
             erwc := a.(erwc) |},
          Gamma)
-        end Gamma.
+      | APos _ a => fun Gamma =>
+        compile_action Gamma a clog
+      end Gamma.
   End Action.
 
   Definition adapter (cs: scheduler_circuit) : rwcircuit :=
@@ -597,10 +599,10 @@ Section CircuitCompilation.
     {| erwc := bundleref_wrap_erwc rl_name rs bundle rl.(erwc);
        retVal := rl.(retVal) |}.
 
-  Context (rules: rule_name_t -> rule var_t R Sigma).
+  Context (rules: rule_name_t -> rule pos_t var_t R Sigma).
 
   Fixpoint compile_scheduler_circuit
-           (s: scheduler rule_name_t)
+           (s: scheduler pos_t rule_name_t)
            (input: scheduler_circuit):
     scheduler_circuit :=
     match s with
@@ -620,6 +622,8 @@ Section CircuitCompilation.
       let sf := compile_scheduler_circuit sf input in
       let will_fire := willFire_of_canFire rl.(erwc) input in
       mux_rwsets "mux_subschedulers" will_fire st sf
+    | SPos _ s =>
+      compile_scheduler_circuit s input
     end.
 
   Definition commit_rwdata {sz} (reg: @rwdata sz) initial_value : circuit sz :=
@@ -645,7 +649,7 @@ Section CircuitCompilation.
   Definition init_scheduler_circuit : scheduler_circuit :=
     REnv.(create) init_scheduler_rwdata.
 
-  Definition compile_scheduler' (s: scheduler rule_name_t) : state_transition_circuit :=
+  Definition compile_scheduler' (s: scheduler pos_t rule_name_t) : state_transition_circuit :=
     let s := compile_scheduler_circuit s init_scheduler_circuit in
     REnv.(map2) (fun k r1 r2 => commit_rwdata r1 r2) s cr.
 End CircuitCompilation.
@@ -662,15 +666,15 @@ Arguments scheduler_circuit {rule_name_t reg_t ext_fn_t} R Sigma REnv : assert.
 Arguments state_transition_circuit rule_name_t {reg_t ext_fn_t} R Sigma REnv : assert.
 
 Section SimpleSchedulerCompilation.
-  Context {rule_name_t var_t reg_t ext_fn_t: Type}.
+  Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
 
   Context {R: reg_t -> type}.
   Context {Sigma: ext_fn_t -> ExternalSignature}.
   Context {FiniteType_reg_t: FiniteType reg_t}.
 
   Definition compile_scheduler
-             (rules: rule_name_t -> rule var_t R Sigma)
-             (s: scheduler rule_name_t)
+             (rules: rule_name_t -> rule pos_t var_t R Sigma)
+             (s: scheduler pos_t rule_name_t)
     : state_transition_circuit rule_name_t R Sigma _ :=
     let cr := ContextEnv.(create) (readRegisters R Sigma) in
     compile_scheduler' simplify_bool_1 cr rules s.

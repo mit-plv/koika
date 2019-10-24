@@ -194,7 +194,7 @@ module Util = struct
 
   (* let fn_sigs_of_sga_package ext_fn_names (pkg: _ SGA.sga_package_t) =
    *   let custom_fn_info fn =
-   *     let name, fn = custom_fn_names fn, pkg.sga_custom_fn_types fn in
+   *     let name, fn = custom_fn_names fn, pkg.sga_ext_fn_types fn in
    *     ffi_sig_of_sga_external_sig name fn in
    *   fun fn -> ffi_sig_of_interop_fn ~custom_fn_info fn *)
 
@@ -215,6 +215,7 @@ module Util = struct
        | Unop (_, _, a) -> exists_subterm f a
        | Binop (_, _, a1, a2) -> exists_subterm f a1 || exists_subterm f a2
        | ExternalCall (_, _, a) -> exists_subterm f a
+       | APos (_, _, _, a) -> exists_subterm f a
 
   let action_mentions_var k a =
     exists_subterm (function
@@ -235,9 +236,9 @@ module Compilation = struct
   type 'f sga_uscheduler =
     ('f, rule_name_t) SGA.uscheduler
 
-  type sga_action = (var_t, reg_signature, ffi_signature) SGA.action
-  type sga_rule = [ `ExternalRule | `InternalRule ] * sga_action
-  type sga_scheduler = var_t SGA.scheduler
+  type 'f sga_action = ('f, var_t, reg_signature, ffi_signature) SGA.action
+  type 'f sga_rule = [ `ExternalRule | `InternalRule ] * 'f sga_action
+  type 'f sga_scheduler = ('f, var_t) SGA.scheduler
 
   let _R = fun rs -> Util.sga_type_of_typ (reg_type rs)
   let _Sigma fn = Util.sga_external_sig_of_ffi_sig fn
@@ -249,27 +250,28 @@ module Compilation = struct
       SGA.finite_index = fun r -> Hashtbl.find regmap r.reg_name }
 
   (* FIXME hashmaps, not lists *)
-  type compile_unit =
+  type 'f compile_unit =
     { c_registers: reg_signature list;
-      c_scheduler: string SGA.scheduler;
-      c_rules: (rule_name_t * sga_rule) list;
-      c_cpp_preamble: string option }
+      c_scheduler: ('f, string) SGA.scheduler;
+      c_rules: (rule_name_t * 'f sga_rule) list;
+      c_cpp_preamble: string option;
+      c_pos_of_pos: 'f -> Pos.t }
 
   type compiled_circuit =
     (string, reg_signature, ffi_signature) sga_circuit
 
-  let typecheck_scheduler pos (ast: 'f sga_uscheduler) : sga_scheduler =
+  let typecheck_scheduler pos (ast: 'f sga_uscheduler) : 'f sga_scheduler =
     SGA.type_scheduler pos ast
 
   let result_of_type_result = function
     | SGA.Success s -> Ok s
     | SGA.Failure (err: _ SGA.error) -> Error (err.epos, Util.translate_sga_error_message err.emsg)
 
-  let typecheck_rule pos (ast: 'f sga_uaction) : (sga_action, ('pos_t * _)) result =
+  let typecheck_rule pos (ast: 'f sga_uaction) : ('f sga_action, ('f * _)) result =
     SGA.type_rule Util.string_eq_dec _R _Sigma pos (SGA.desugar_action pos ast)
     |> result_of_type_result
 
-  let compile (cu: compile_unit) : (reg_signature -> compiled_circuit) =
+  let compile (cu: 'f compile_unit) : (reg_signature -> compiled_circuit) =
     let finiteType = finiteType_of_register_list cu.c_registers in
     let rules r = List.assoc r cu.c_rules |> snd in
     let rEnv = SGA.contextEnv finiteType in
@@ -448,7 +450,7 @@ module Graphs = struct
     let graph_nodes = list_of_hashcons deduplicated_circuits in
     { graph_roots; graph_nodes }
 
-  let graph_of_compile_unit (cu: Compilation.compile_unit)
+  let graph_of_compile_unit (cu: 'f Compilation.compile_unit)
       : circuit_graph =
     let external_rules = List.filter (fun (_, (kind, _)) -> kind = `ExternalRule) cu.c_rules in
     dedup_circuit
@@ -459,8 +461,8 @@ module Graphs = struct
         di_external_rules = List.map fst external_rules;
         di_circuits = Compilation.compile cu }
 
-  let graph_of_verilog_package (type rule_name_t var_t reg_t custom_fn_t)
-        (vp: (rule_name_t, var_t, reg_t, custom_fn_t) SGA.verilog_package_t)
+  let graph_of_verilog_package (type pos_t var_t rule_name_t reg_t ext_fn_t)
+        (vp: (pos_t, var_t, rule_name_t, reg_t, ext_fn_t) SGA.verilog_package_t)
       : circuit_graph =
     let sga = vp.vp_pkg in
     let di_regs =

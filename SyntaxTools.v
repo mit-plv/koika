@@ -3,13 +3,13 @@ Require Import SGA.Member SGA.TypedSyntax.
 Import ListNotations.
 
 Section SyntaxTools.
-  Context {rule_name_t var_t reg_t ext_fn_t: Type}.
+  Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
   Context {R: reg_t -> type}
           {Sigma: ext_fn_t -> ExternalSignature}.
 
-  Notation rule := (rule var_t R Sigma).
-  Notation action := (action var_t R Sigma).
-  Notation scheduler := (scheduler rule_name_t).
+  Notation rule := (rule pos_t var_t R Sigma).
+  Notation action := (action pos_t var_t R Sigma).
+  Notation scheduler := (scheduler pos_t rule_name_t).
 
   Section Footprint.
     Context {REnv : Env reg_t}.
@@ -29,6 +29,7 @@ Section SyntaxTools.
       | Unop fn arg1 => action_footprint acc arg1
       | Binop fn arg1 arg2 => action_footprint (action_footprint acc arg1) arg2
       | ExternalCall fn arg => action_footprint acc arg
+      | APos _ a => action_footprint acc a
       end.
 
     Fixpoint all_scheduler_paths (s: scheduler) : list (list rule_name_t) :=
@@ -37,6 +38,7 @@ Section SyntaxTools.
       | Done => [[]]
       | Cons r s => cons r s
       | Try r s1 s2 => List.app (cons r s1) (cons r s2)
+      | SPos _ s => all_scheduler_paths s
       end.
 
     Record reg_rules :=
@@ -107,6 +109,7 @@ Section SyntaxTools.
       | Unop fn a => existsb_subterm f a
       | Binop fn a1 a2 => existsb_subterm f a1 || existsb_subterm f a2
       | ExternalCall fn arg => existsb_subterm f arg
+      | APos _ a => existsb_subterm f a
       end.
 
   Fixpoint member_mentions_shadowed_binding
@@ -124,7 +127,7 @@ Section SyntaxTools.
 
   Fixpoint action_mentions_var {EQ: EqDec var_t} {sig tau} (k: var_t) (a: action sig tau) :=
     existsb_subterm (fun _ _ a => match a with
-                               | @Var _ _ _ _ _ _ k' _ m => beq_dec k k'
+                               | @Var _ _ _ _ _ _ _ k' _ m => beq_dec k k'
                                | _ => false
                                end) a.
 End SyntaxTools.

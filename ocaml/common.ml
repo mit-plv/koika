@@ -11,6 +11,47 @@ module StringMap = struct
   let of_list s = of_seq (List.to_seq s)
 end
 
+module Pos = struct
+  open Printf
+
+  type pos = { line: int; col: int }
+  type range = { rbeg: pos; rend: pos }
+
+  type t =
+    | Unknown
+    | StrPos of string
+    | Filename of string
+    | Range of string * range
+
+  let compare p1 p2 =
+    match p1, p2 with
+    | Unknown, Unknown -> 0
+    | Unknown, _ -> -1 | _, Unknown -> 1
+    | StrPos _, StrPos _ -> 0 (* Use reporting order *)
+    | StrPos _, _ -> -1 | _, StrPos _ -> 1
+    | Filename f1, Filename f2 -> compare f1 f2
+    | Filename _, _ -> -1 | _, Filename _ -> 1
+    | Range (f1, rng1), Range (f2, rng2) ->
+       match compare f1 f2 with
+       | 0 -> compare rng1 rng2
+       | n -> n
+
+  let range_to_string begpos endpos =
+    if begpos = endpos then sprintf "%d" begpos
+    else sprintf "%d-%d" begpos endpos
+
+  (* Emacs expects columns to start at 1 in compilation output *)
+  let to_string = function
+    | Unknown -> "<position unknown>"
+    | StrPos s -> s
+    | Filename f ->
+       sprintf "%s:0:1" f
+    | Range (fname, { rbeg; rend }) ->
+       let line = range_to_string rbeg.line rend.line in
+       let col = range_to_string (rbeg.col + 1) (rend.col + 1) in
+       sprintf "%s:%s:%s" fname line col
+end
+
 type bits_value = bool array
 
 type typ =

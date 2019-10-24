@@ -1,21 +1,22 @@
 open Common
 module SGA = SGALib.SGA
 
-type ('rule_name_t, 'var_t, 'reg_t, 'ext_fn_t) cpp_rule_t = {
+type ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_rule_t = {
     rl_name: 'rule_name_t;
     rl_footprint: 'reg_t list;
-    rl_body: ('var_t, 'reg_t, 'ext_fn_t) SGA.rule;
+    rl_body: ('pos_t, 'var_t, 'reg_t, 'ext_fn_t) SGA.rule;
   }
 
-type ('rule_name_t, 'var_t, 'reg_t, 'ext_fn_t) cpp_input_t = {
+type ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_input_t = {
     cpp_classname: string;
     cpp_header_name: string;
-    cpp_scheduler: 'rule_name_t SGA.scheduler;
 
+    cpp_pos_of_pos: 'pos_t -> Pos.t;
     cpp_var_names: 'var_t -> string;
-
-    cpp_rules: ('rule_name_t, 'var_t, 'reg_t, 'ext_fn_t) cpp_rule_t list;
     cpp_rule_names: 'rule_name_t -> string;
+
+    cpp_scheduler: ('pos_t, 'rule_name_t) SGA.scheduler;
+    cpp_rules: ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_rule_t list;
 
     cpp_registers: 'reg_t list;
     cpp_register_sigs: 'reg_t -> reg_signature;
@@ -273,8 +274,8 @@ type assignment_result =
   | PureExpr of string
   | ImpureExpr of string
 
-let compile (type rule_name_t var_t reg_t ext_fn_t)
-      (hpp: (rule_name_t, var_t, reg_t, ext_fn_t) cpp_input_t) =
+let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
+      (hpp: (pos_t, var_t, rule_name_t, reg_t, ext_fn_t) cpp_input_t) =
   let buffer = ref (Buffer.create 0) in
   let hpp = Mangling.mangle_unit hpp in
 
@@ -593,7 +594,19 @@ let compile (type rule_name_t var_t reg_t ext_fn_t)
       prbody ();
       p ");" in
 
-    let p_rule (rule: (rule_name_t, var_t, reg_t, ext_fn_t) cpp_rule_t) =
+    let backslash_re =
+      Str.regexp "\\\\" in
+
+    let sp_escaped_string s =
+      Str.global_replace backslash_re "\\\\\\\\" s in
+
+    let p_pos (pos: Pos.t) =
+      match pos with
+      | Unknown | StrPos _ | Filename _ -> ()
+      | Range (filename, { rbeg = { line; _ }; _ }) ->
+         p "#line %d \"%s\"" line (sp_escaped_string filename) in
+
+    let p_rule (rule: (pos_t, var_t, rule_name_t, reg_t, ext_fn_t) cpp_rule_t) =
       gensym_reset ();
 
       let p_reset () =
@@ -704,7 +717,8 @@ let compile (type rule_name_t var_t reg_t ext_fn_t)
         if SGALib.Util.member_mentions_shadowed_binding sg v tau m then
           failwith (sprintf "Variable %s is shadowed by a later binding, but the program references the original binding." (v_to_string v)) in
 
-      let rec p_action (target: assignment_target) (rl: (var_t, reg_t, _) SGA.action) =
+      let rec p_action (target: assignment_target) (rl: (pos_t, var_t, reg_t, _) SGA.action) =
+        p_pos pos;
         match rl with
         | SGA.Fail (_, _) ->
            p "return false;";
@@ -726,28 +740,28 @@ let compile (type rule_name_t var_t reg_t ext_fn_t)
            assert_no_shadowing sg v tau hpp.cpp_var_names m;
            let vtarget = VarTarget { tau = SGALib.Util.typ_of_sga_type tau;
                                      declared = true; name = hpp.cpp_var_names v } in
-           p_assign_and_ignore vtarget (p_action vtarget ex);
+           p_assign_and_ignore vtarget (p_action pos vtarget ex);
            p_assign_expr target (PureExpr "prims::tt")
         | SGA.Seq (_, _, a1, a2) ->
-           p_assign_and_ignore NoTarget (p_action NoTarget a1);
-           p_action target a2
+           p_assign_and_ignore NoTarget (p_action pos NoTarget a1);
+           p_action pos target a2
         | SGA.Bind (_, tau, _, v, expr, rl) ->
            let target = p_declare_target target in
            p_scoped "/* bind */" (fun () ->
-               p_bound_var_assign tau v expr;
-               p_assign_expr target (p_action target rl))
+               p_bound_var_assign pos tau v expr;
+               p_assign_expr target (p_action pos target rl))
         | SGA.If (_, _, cond, tbr, fbr) ->
            let target = p_declare_target target in
            (match reconstruct_switch rl with
             | Some (var, default, branches) ->
-               p_switch target var default branches
+               p_switch pos target var default branches
             | None ->
                let ctarget = gensym_target (Bits_t 1) "c" in
-               let cexpr = p_action ctarget cond in
+               let cexpr = p_action pos ctarget cond in
                (p_scoped (sprintf "if (bool(%s))" (must_value cexpr))
-                  (fun () -> p_assign_and_ignore target (p_action target tbr)));
+                  (fun () -> p_assign_and_ignore target (p_action pos target tbr)));
                p_scoped "else"
-                 (fun () -> p_assign_expr target (p_action target fbr)))
+                 (fun () -> p_assign_expr target (p_action pos target fbr)))
         | SGA.Read (_, port, reg) ->
            let r = hpp.cpp_register_sigs reg in
            let var = p_ensure_declared (ensure_target (reg_type r) target) in
@@ -759,7 +773,7 @@ let compile (type rule_name_t var_t reg_t ext_fn_t)
         | SGA.Write (_, port, reg, expr) ->
            let r = hpp.cpp_register_sigs reg in
            let vt = gensym_target (reg_type r) "v" in
-           let v = must_value (p_action vt expr) in
+           let v = must_value (p_action pos vt expr) in
            let fn_name = match port with
              | P0 -> "write0"
              | P1 -> "write1" in
@@ -769,31 +783,33 @@ let compile (type rule_name_t var_t reg_t ext_fn_t)
            p_assign_expr target (PureExpr "prims::tt")
         | SGA.Unop (_, fn, a) ->
            let fsig = SGALib.SGA.PrimSignatures.coq_Sigma1 fn in
-           let a = p_action (gensym_target (SGALib.Util.argType 1 fsig 0) "x") a in
+           let a = p_action pos (gensym_target (SGALib.Util.argType 1 fsig 0) "x") a in
            taint [a] (p_unop fn (must_value a))
         | SGA.Binop (_, fn, a1, a2) ->
            let fsig = SGALib.SGA.PrimSignatures.coq_Sigma2 fn in
-           let a1 = p_action (gensym_target (SGALib.Util.argType 2 fsig 0) "x") a1 in
-           let a2 = p_action (gensym_target (SGALib.Util.argType 2 fsig 1) "y") a2 in
+           let a1 = p_action pos (gensym_target (SGALib.Util.argType 2 fsig 0) "x") a1 in
+           let a2 = p_action pos (gensym_target (SGALib.Util.argType 2 fsig 1) "y") a2 in
            taint [a1; a2] (p_binop target fn (must_value a1) (must_value a2))
         | SGA.ExternalCall (_, fn, a) ->
            let ffi = hpp.cpp_ext_sigs fn in
-           let a = p_action (gensym_target ffi.ffi_argtype "x") a in
+           let a = p_action pos (gensym_target ffi.ffi_argtype "x") a in
            Hashtbl.replace program_info.pi_ext_funcalls ffi ();
            ImpureExpr (cpp_ext_funcall ffi.ffi_name (must_value a))
-      and p_switch target var default branches =
+        | SGA.APos (_, _, pos, a) ->
+           p_action (hpp.cpp_pos_of_pos pos) target a
+      and p_switch pos target var default branches =
         let rec loop = function
           | [] ->
              p "default:";
-             p_assign_expr target (p_action target default);
+             p_assign_expr target (p_action pos target default);
           | (const, action) :: branches ->
              p "case %s:" (sp_value const);
-             p_assign_and_ignore target (p_action target action);
+             p_assign_and_ignore target (p_action pos target action);
              p "break;";
              loop branches in
         p_scoped (sprintf "switch (%s)" (hpp.cpp_var_names var)) (fun () ->
             loop branches)
-      and p_bound_var_assign tau v expr =
+      and p_bound_var_assign pos tau v expr =
         let needs_tmp = SGALib.Util.action_mentions_var v expr in
         let tau = SGALib.Util.typ_of_sga_type tau in
         let vtarget = VarTarget { tau; declared = false; name = hpp.cpp_var_names v } in
@@ -802,17 +818,16 @@ let compile (type rule_name_t var_t reg_t ext_fn_t)
             (* ‘int x = x + 1;’ doesn't work in C++ (basic.scope.pdecl), so if
                the rhs uses a variable with name ‘v’ we need a temp variable. *)
             let vtmp = gensym_target tau "tmp" in
-            must_expr (p_assign_expr vtmp (p_action vtmp expr))
-          else p_action vtarget expr in
+            must_expr (p_assign_expr vtmp (p_action pos vtmp expr))
+          else p_action pos vtarget expr in
         p_assign_and_ignore vtarget expr
       and p_assign_and_ignore target expr =
         ignore (p_assign_expr target expr) in
 
-
       p_fn ~typ:"bool" ~name:(hpp.cpp_rule_names rule.rl_name) (fun () ->
           p_reset ();
           nl ();
-          p_assign_and_ignore NoTarget (p_action NoTarget rule.rl_body);
+          p_assign_and_ignore NoTarget (p_action Pos.Unknown NoTarget rule.rl_body);
           nl ();
           p_commit ()) in
 
@@ -823,20 +838,24 @@ let compile (type rule_name_t var_t reg_t ext_fn_t)
         ~args:"const state_t init" ~annot:" : state(init)"
         (fun () -> iter_all_registers p_init_data0) in
 
-    let rec p_scheduler = function
+    let rec p_scheduler pos s =
+      p_pos pos;
+      match s with
       | SGA.Done -> ()
       | SGA.Cons (rl_name, s) ->
          p "%s();" (hpp.cpp_rule_names rl_name);
-         p_scheduler s
+         p_scheduler pos s
       | SGA.Try (rl_name, s1, s2) ->
-         p_scoped (sprintf "if (%s())" (hpp.cpp_rule_names rl_name)) (fun () -> p_scheduler s1);
-         p_scoped "else" (fun () -> p_scheduler s2) in
+         p_scoped (sprintf "if (%s())" (hpp.cpp_rule_names rl_name)) (fun () -> p_scheduler pos s1);
+         p_scoped "else" (fun () -> p_scheduler pos s2)
+      | SGA.SPos (pos, s) ->
+         p_scheduler (hpp.cpp_pos_of_pos pos) s in
 
     let p_cycle () =
       let p_commit_register r =
         p "state.%s = Log.%s.commit();" r.reg_name r.reg_name in
       p_fn ~typ:"void" ~name:"cycle" (fun () ->
-          p_scheduler hpp.cpp_scheduler;
+          p_scheduler Pos.Unknown hpp.cpp_scheduler;
           iter_all_registers p_commit_register) in
 
     let p_run () =
@@ -967,7 +986,9 @@ let action_footprint a =
     | SGA.Binop (_, _, a1, a2) ->
        action_footprint a1; action_footprint a2
     | SGA.ExternalCall (_, _, arg) ->
-       action_footprint arg in
+       action_footprint arg
+    | SGA.APos (_, _, _, a) ->
+       action_footprint a in
 
   action_footprint a;
   List.of_seq (Hashtbl.to_seq_keys m)
@@ -975,43 +996,46 @@ let action_footprint a =
 let cpp_rule_of_action (rl_name, (_kind, rl_body)) =
   { rl_name; rl_body; rl_footprint = action_footprint rl_body }
 
-let input_of_compile_unit classname ({ c_registers; c_scheduler; c_rules; c_cpp_preamble }: SGALib.Compilation.compile_unit) =
+let input_of_compile_unit classname (cu: 'f SGALib.Compilation.compile_unit) =
   { cpp_classname = classname;
     cpp_header_name = classname;
+    cpp_pos_of_pos = cu.c_pos_of_pos;
+    cpp_var_names = (fun x -> x);
     cpp_rule_names = (fun rl -> rl);
-    cpp_rules = List.map cpp_rule_of_action c_rules;
-    cpp_scheduler = c_scheduler;
-    cpp_registers = c_registers;
+    cpp_scheduler = cu.c_scheduler;
+    cpp_rules = List.map cpp_rule_of_action cu.c_rules;
+    cpp_registers = cu.c_registers;
     cpp_register_sigs = (fun r -> r);
     cpp_ext_sigs = (fun f -> f);
-    cpp_var_names = (fun x -> x);
-    cpp_extfuns = c_cpp_preamble; }
+    cpp_extfuns = cu.c_cpp_preamble; }
 
 let collect_rules sched =
   let rec loop acc = function
   | SGA.Done -> List.rev acc
   | SGA.Cons (rl, s) -> loop (rl :: acc) s
   | SGA.Try (rl, l, r) -> loop (loop (rl :: acc) l) r
+  | SGA.SPos (_, s) -> loop acc s
   in loop [] sched
 
 let cpp_rule_of_sga_package_rule (s: _ SGALib.SGA.sga_package_t) (rn: Obj.t) =
   cpp_rule_of_action (rn, (`Internal, s.sga_rules rn))
 
-let input_of_sim_package (type ext_fn_t) (sp: (_, _, _, ext_fn_t) SGALib.SGA.sim_package_t)
-    : (Obj.t, Obj.t, Obj.t, ext_fn_t) cpp_input_t =
+let input_of_sim_package (type ext_fn_t) (sp: (_, _, _, _, ext_fn_t) SGALib.SGA.sim_package_t)
+    : (_, Obj.t, Obj.t, Obj.t, ext_fn_t) cpp_input_t =
   let sga = sp.sp_pkg in
   let rules = collect_rules sga.sga_scheduler in
   let classname = SGALib.Util.string_of_coq_string sga.sga_module_name in
   let ext_fn_name f = SGALib.Util.string_of_coq_string (sp.sp_ext_fn_names f) in
   { cpp_classname = classname;
     cpp_header_name = classname;
+    cpp_pos_of_pos = (fun _ -> Pos.Unknown);
+    cpp_var_names = (fun x -> SGALib.Util.string_of_coq_string (sp.sp_var_names x));
     cpp_rule_names = (fun rn -> SGALib.Util.string_of_coq_string (sga.sga_rule_names rn));
-    cpp_rules = List.map (cpp_rule_of_sga_package_rule sga) rules;
     cpp_scheduler = sga.sga_scheduler;
+    cpp_rules = List.map (cpp_rule_of_sga_package_rule sga) rules;
     cpp_registers = sga.sga_reg_finite.finite_elements;
     cpp_register_sigs = SGALib.Util.reg_sigs_of_sga_package sga;
     cpp_ext_sigs = (fun f -> SGALib.Util.ffi_sig_of_sga_external_sig (ext_fn_name f) (sga.sga_ext_fn_types f));
-    cpp_var_names = (fun x -> SGALib.Util.string_of_coq_string (sp.sp_var_names x));
     cpp_extfuns = (match sp.sp_extfuns with
                    | None -> None
                    | Some s -> Some (SGALib.Util.string_of_coq_string s)); }

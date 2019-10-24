@@ -47,7 +47,7 @@ Arguments RLog: clear implicits.
 Arguments Log {reg_t} R REnv : assert.
 
 Section Interp.
-  Context {rule_name_t var_t reg_t ext_fn_t: Type}.
+  Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
   Context {reg_t_eq_dec: EqDec reg_t}.
 
   Context {R: reg_t -> type}.
@@ -114,9 +114,9 @@ Section Interp.
     | P1 => negb (log_existsb (log_app rule_log sched_log) idx is_write1)
     end.
 
-  Notation rule := (rule var_t R Sigma).
-  Notation action := (action var_t R Sigma).
-  Notation scheduler := (scheduler rule_name_t).
+  Notation rule := (rule pos_t var_t R Sigma).
+  Notation action := (action pos_t var_t R Sigma).
+  Notation scheduler := (scheduler pos_t rule_name_t).
 
   Definition vcontext (sig: tsig var_t) :=
     context (fun '(k, tau) => type_denote tau) sig.
@@ -130,7 +130,7 @@ Section Interp.
              (action_log: Log)
              (a: action sig tau)
     : option (Log * tau * (vcontext sig)) :=
-      match a in TypedSyntax.action _ _ _ ts tau return (vcontext ts -> option (Log * tau * (vcontext ts)))  with
+      match a in TypedSyntax.action _ _ _ _ ts tau return (vcontext ts -> option (Log * tau * (vcontext ts)))  with
       | Fail tau => fun _ =>
         None
       | Var m => fun Gamma =>
@@ -140,10 +140,10 @@ Section Interp.
       | Seq r1 r2 => fun Gamma =>
         let/opt3 action_log, _, Gamma := interp_action Gamma sched_log action_log r1 in
         interp_action Gamma sched_log action_log r2
-      | @Assign _ _ _ _ _ _ k tau m ex => fun Gamma =>
+      | @Assign _ _ _ _ _ _ _ k tau m ex => fun Gamma =>
         let/opt3 action_log, v, Gamma := interp_action Gamma sched_log action_log ex in
         Some (action_log, Ob, creplace m v Gamma)
-      | @Bind _ _ _ _ _ sig tau tau' var ex body => fun (Gamma : vcontext sig) =>
+      | @Bind _ _ _ _ _ _ sig tau tau' var ex body => fun (Gamma : vcontext sig) =>
         let/opt3 action_log1, v, Gamma := interp_action Gamma sched_log action_log ex in
         let/opt3 action_log2, v, Gamma := interp_action (CtxCons (var, tau) v Gamma) sched_log action_log1 body in
         Some (action_log2, v, ctl Gamma)
@@ -181,6 +181,8 @@ Section Interp.
       | ExternalCall fn arg1 => fun Gamma =>
         let/opt3 action_log, arg1, Gamma := interp_action Gamma sched_log action_log arg1 in
         Some (action_log, sigma fn arg1, Gamma)
+      | APos _ a => fun Gamma =>
+        interp_action Gamma sched_log action_log a
       end Gamma.
   End Action.
 
@@ -200,6 +202,7 @@ Section Interp.
       | Done => sched_log
       | Cons r s => interp_try r s s
       | Try r s1 s2 => interp_try r s1 s2
+      | SPos _ s => interp_scheduler' sched_log s
       end.
 
     Definition interp_scheduler (s: scheduler) :=

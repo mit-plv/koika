@@ -11,7 +11,7 @@ Section ErrorReporting.
           {Sigma: ext_fn_t -> ExternalSignature}.
 
   Definition lift_basic_error_message
-             (pos: pos_t) {sig tau} (e: action var_t R Sigma sig tau)
+             (pos: pos_t) {sig tau} (e: action pos_t var_t R Sigma sig tau)
              (err: basic_error_message) : error pos_t var_t fn_name_t :=
     {| epos := pos;
        emsg := BasicError err;
@@ -19,15 +19,15 @@ Section ErrorReporting.
 
   Definition lift_fn1_tc_result
              {A sig tau}
-             pos (e: action var_t R Sigma sig tau)
+             pos (e: action pos_t var_t R Sigma sig tau)
              (r: result A fn_tc_error)
     : result A (error pos_t var_t fn_name_t) :=
     result_map_failure (fun '(side, err) => lift_basic_error_message pos e err) r.
 
   Definition lift_fn2_tc_result
              {A sig1 tau1 sig2 tau2}
-             pos1 (e1: action var_t R Sigma sig1 tau1)
-             pos2 (e2: action var_t R Sigma sig2 tau2)
+             pos1 (e1: action pos_t var_t R Sigma sig1 tau1)
+             pos2 (e2: action pos_t var_t R Sigma sig2 tau2)
              (r: result A fn_tc_error)
     : result A (error pos_t var_t fn_name_t) :=
     result_map_failure (fun '(side, err) =>
@@ -48,9 +48,9 @@ Section TypeInference.
   Notation uaction := (uaction pos_t var_t fn_name_t).
   Notation uscheduler := (uscheduler pos_t rule_name_t).
 
-  Notation action := (action var_t R Sigma).
-  Notation rule := (rule var_t R Sigma).
-  Notation scheduler := (scheduler rule_name_t).
+  Notation action := (action pos_t var_t R Sigma).
+  Notation rule := (rule pos_t var_t R Sigma).
+  Notation scheduler := (scheduler pos_t rule_name_t).
 
   Section Action.
     Notation error := (error pos_t var_t fn_name_t).
@@ -174,7 +174,9 @@ Section TypeInference.
         let/res arg1' := type_action pos1 sig arg1 in
         let/res arg1' := cast_action pos1 (Sigma fn).(arg1Type) (``arg1') in
         Success (EX (ExternalCall fn arg1'))
-      | UAPos pos e => type_action pos sig e
+      | UAPos pos e =>
+        let/res e := type_action pos sig e in
+        Success (EX (APos pos ``e))
       end.
 
     Definition type_rule (pos: pos_t) (e: uaction reg_t ext_fn_t) : result rule :=
@@ -197,7 +199,7 @@ Section TypeInference.
         let s := type_scheduler pos s in
         Cons r s
       | USPos pos s =>
-        type_scheduler pos s
+        SPos pos (type_scheduler pos s)
       end.
   End Scheduler.
 End TypeInference.

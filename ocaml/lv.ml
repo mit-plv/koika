@@ -3,40 +3,14 @@ open Common
 let lcnt x = x.lcnt
 let sprintf = Printf.sprintf
 
-module Pos = struct
-  type t =
-    | StrPos of string
-    | Filename of string
-    | SexpRange of string * Parsexp.Positions.range
+type nonrec 'a locd = (Pos.t, 'a) locd
 
-  let compare p1 p2 =
-    match p1, p2 with
-    | StrPos _, StrPos _ -> 0 (* Use reporting order *)
-    | StrPos _, _ -> -1 | _, StrPos _ -> 1
-    | Filename f1, Filename f2 -> compare f1 f2
-    | Filename _, _ -> -1 | _, Filename _ -> 1
-    | SexpRange (f1, rng1), SexpRange (f2, rng2) ->
-       match compare f1 f2 with
-       | 0 -> Parsexp.Positions.compare_range rng1 rng2
-       | n -> n
+let pos_of_sexp_pos ({ line; col; _ }: Parsexp.Positions.pos) =
+  Pos.{ line; col }
 
-  let range_to_string begpos endpos =
-    if begpos = endpos then sprintf "%d" begpos
-    else sprintf "%d-%d" begpos endpos
-
-  (* Emacs expects columns to start at 1 in compilation output *)
-  let to_string = function
-    | StrPos s -> s
-    | Filename f ->
-       sprintf "%s:0:1" f
-    | SexpRange (fname, { start_pos; end_pos }) ->
-       let line = range_to_string start_pos.line end_pos.line in
-       let col = range_to_string (start_pos.col + 1) (end_pos.col + 1) in
-       sprintf "%s:%s:%s" fname line col
-end
-
-type pos = Pos.t
-type nonrec 'a locd = (pos, 'a) locd
+let range_of_sexp_range ({ start_pos; end_pos }: Parsexp.Positions.range) =
+  Pos.{ rbeg = pos_of_sexp_pos start_pos;
+        rend = pos_of_sexp_pos end_pos }
 
 module UnresolvedAST = struct
   type unresolved_enumerator = {
@@ -120,7 +94,7 @@ module ResolvedAST = struct
 
   type uscheduler = UnresolvedAST.unresolved_scheduler
 
-  let rec translate_action ({ lpos; lcnt }: uaction locd) : pos sga_uaction =
+  let rec translate_action ({ lpos; lcnt }: uaction locd) : Pos.t sga_uaction =
     SGA.UAPos
       (lpos,
        match lcnt with
@@ -165,10 +139,10 @@ module ResolvedAST = struct
        | Try (r, s1, s2) ->
           SGA.UTry (r.lcnt, translate_scheduler s1, translate_scheduler s2))
 
-  let typecheck_scheduler (raw_ast: uscheduler locd) : rule_name_t SGA.scheduler =
+  let typecheck_scheduler (raw_ast: uscheduler locd) : (Pos.t, rule_name_t) SGA.scheduler =
     typecheck_scheduler raw_ast.lpos (translate_scheduler raw_ast)
 
-  let typecheck_rule (raw_ast: uaction locd) : (sga_action, ('pos_t * _)) result =
+  let typecheck_rule (raw_ast: uaction locd) : (Pos.t sga_action, (Pos.t * _)) result =
     typecheck_rule raw_ast.lpos (translate_action raw_ast)
 
   type debug_printer = { debug_print: uaction -> unit }
@@ -669,7 +643,7 @@ module DelayedReader (P: Parsexp.Eager_parser) = struct
         let pos = Parse_error.position err in
         let range = Positions.{ start_pos = pos; end_pos = pos } in
         let msg = Parse_error.message err in
-        parse_error (Pos.SexpRange (fname, range)) @@ SexpError { msg } in
+        parse_error (Pos.Range (fname, range_of_sexp_range range)) @@ SexpError { msg } in
     let rec read_sexps pos =
       P.State.reset ~pos state;
       try Delay.apply1 feed pos.offset; []
@@ -682,7 +656,7 @@ module DelayedReader_cst = DelayedReader (Parsexp.Eager_cst)
 
 let read_cst_sexps fname =
   let wrap_loc loc =
-    Pos.SexpRange (fname, loc) in
+    Pos.Range (fname, range_of_sexp_range loc) in
   let rec drop_comments (s: Parsexp.Cst.t_or_comment) =
     match s with
     | Parsexp.Cst.Sexp (Parsexp.Cst.Atom { loc; atom; _ }) ->
@@ -897,6 +871,8 @@ let parse (sexps: Pos.t sexp list) =
              match try_plain_int atom with
              | Some n when bits_raw -> Bits_u n
              | _ -> syntax_error loc @@ BadType { atom })
+    | List { elements = [Atom { loc; atom = "bool"; _ }]; _ } ->
+       locd_make loc (Bits_u 1)
     | List { loc; elements } ->
        let hd, sizes = expect_cons loc "type" elements in
        let _ = expect_constant_atom [("bits", ())] hd in
@@ -1542,18 +1518,19 @@ let check_result = function
   | Ok cs -> cs
   | Error (epos, emsg) -> type_inference_error epos emsg
 
-let typecheck_module { name; cpp_preamble; registers; rules; schedulers } =
+let typecheck_module { name; cpp_preamble; registers; rules; schedulers }
+  : Pos.t SGALib.Compilation.compile_unit =
   let tc_rule (nm, r) = (nm, (`InternalRule, check_result (ResolvedAST.typecheck_rule r))) in
   let c_rules = Delay.map tc_rule rules in
   let schedulers = Delay.map (ResolvedAST.typecheck_scheduler << snd) schedulers in
   if schedulers = [] then name_error name.lpos @@ MissingScheduler { modname = name.lcnt };
-  SGALib.Compilation.
   { c_registers = registers;
     c_rules;
     c_scheduler = List.hd schedulers;
-    c_cpp_preamble = match cpp_preamble with
-                     | [] -> None
-                     | strs -> Some (String.concat "\n" strs) }
+    c_cpp_preamble = (match cpp_preamble with
+                      | [] -> None
+                      | strs -> Some (String.concat "\n" strs));
+    c_pos_of_pos = (fun pos -> pos) }
 
 let typecheck resolved =
   Delay.map typecheck_module resolved.r_mods

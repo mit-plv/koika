@@ -4,7 +4,7 @@ Require Export SGA.Common SGA.Environments SGA.Types SGA.Primitives.
 Import PrimTyped PrimSignatures.
 
 Section TypedSyntax.
-  Context {rule_name_t var_t reg_t ext_fn_t: Type}.
+  Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
   Context {R: reg_t -> type}.
   Context {Sigma: ext_fn_t -> ExternalSignature}.
 
@@ -44,16 +44,19 @@ Section TypedSyntax.
   | ExternalCall {sig}
                  (fn: ext_fn_t)
                  (arg: action sig (Sigma fn).(arg1Type))
-    : action sig (Sigma fn).(retType).
+    : action sig (Sigma fn).(retType)
+  | APos {sig tau} (pos: pos_t) (a: action sig tau)
+    : action sig tau.
 
   Inductive scheduler :=
   | Done
   | Cons (r: rule_name_t) (s: scheduler)
-  | Try (r: rule_name_t) (s1 s2: scheduler).
+  | Try (r: rule_name_t) (s1 s2: scheduler)
+  | SPos (pos: pos_t) (s: scheduler).
 
   Definition rule := action nil unit_t.
 End TypedSyntax.
 
-Arguments rule var_t {reg_t ext_fn_t} R Sigma : assert.
-Arguments action var_t {reg_t ext_fn_t} R Sigma sig tau : assert.
+Arguments rule pos_t var_t {reg_t ext_fn_t} R Sigma : assert.
+Arguments action pos_t var_t {reg_t ext_fn_t} R Sigma sig tau : assert.
 Arguments scheduler : clear implicits.

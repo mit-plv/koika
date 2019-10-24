@@ -82,7 +82,7 @@ Section Bools.
 End Bools.
 
 Section Circuits.
-  Context {rule_name_t var_t reg_t ext_fn_t: Type}.
+  Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
 
   Context {R: reg_t -> type}.
   Notation CR := (CR_of_R R).

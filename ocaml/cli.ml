@@ -70,7 +70,7 @@ let rec run_backend backend out_fname resolved c_unit =
 
 let first_compile_unit in_fname mods =
   match mods with
-  | [] -> Lv.name_error (Lv.Pos.Filename in_fname) @@ MissingModule
+  | [] -> Lv.name_error (Pos.Filename in_fname) @@ MissingModule
   | md :: _ -> md
 
 let print_errors_and_warnings errs =
@@ -80,11 +80,13 @@ let print_errors_and_warnings errs =
 
 let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
   let open Lv in
+  let cli_in_fname =
+    Core.Filename.realpath cli_in_fname in
+  let read =
+    match cli_frontend with
+    | `Annotated -> read_annotated_sexps
+    | `Sexps -> read_cst_sexps in
   try
-    let read =
-      match cli_frontend with
-      | `Annotated -> read_annotated_sexps
-      | `Sexps -> read_cst_sexps in
     let resolved, typechecked =
       Delay.with_delayed_errors (fun () ->
           let resolved =  resolve (parse (read cli_in_fname)) in

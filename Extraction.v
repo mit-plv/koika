@@ -21,7 +21,6 @@ Extraction Inline Types.argTypes Types.argSizes.
           (PrimSignatures.coq_Sigma1 (PrimTyped.Bits1 (PrimTyped.ZExtL
             (sz0, width))))))))), (CConst
 
-
   | Bind (sig0, tau, var, ex, body) ->
     let ex0 = compile_expr r sigma rEnv r0 cLog sig0 gamma tau ex clog in
     compile_rule r sigma rEnv r0 cLog ((var, tau)::sig0) (CtxCons (sig0, (var, tau),

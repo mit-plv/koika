@@ -97,11 +97,11 @@ Module Display.
 End Display.
 
 Section TypedSyntaxMacros.
-  Context {var_t reg_t ext_fn_t: Type}.
+  Context {pos_t var_t reg_t ext_fn_t: Type}.
   Context {R: reg_t -> type}
           {Sigma: ext_fn_t -> ExternalSignature}.
 
-  Notation action := (action var_t R Sigma).
+  Notation action := (action pos_t var_t R Sigma).
 
   Fixpoint mshift {K} (prefix: list K) {sig: list K} {k} (m: member k sig)
     : member k (prefix ++ sig) :=
@@ -136,6 +136,7 @@ Section TypedSyntaxMacros.
     - exact (Unop fn (infix_action infix _ _ _ a)).
     - exact (Binop fn (infix_action infix _ _ _ a1) (infix_action infix _ _ _ a2)).
     - exact (ExternalCall fn (infix_action infix _ _ _ a)).
+    - exact (infix_action infix _ _ _ a).
   Defined.
 
   Definition prefix_action (prefix: tsig var_t) {sig: tsig var_t} {tau} (a: action sig tau)

@@ -6,7 +6,7 @@ Import ListNotations.
 Open Scope bool_scope.
 
 Section Proof.
-  Context {rule_name_t var_t reg_t ext_fn_t: Type}.
+  Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
   Context {reg_t_eq_dec: EqDec reg_t}.
 
   Context {R: reg_t -> type}.
@@ -16,9 +16,9 @@ Section Proof.
   Context (sigma: forall f, Sigma f).
 
   Notation Log := (Log R REnv).
-  Notation action := (action var_t R Sigma).
-  Notation rule := (rule var_t R Sigma).
-  Notation scheduler := (scheduler rule_name_t).
+  Notation action := (action pos_t var_t R Sigma).
+  Notation rule := (rule pos_t var_t R Sigma).
+  Notation scheduler := (scheduler pos_t rule_name_t).
 
   Context (rules: rule_name_t -> rule).
 
@@ -38,6 +38,7 @@ Section Proof.
     | Done => Some ([], sched_log)
     | Cons rl s => interp_try rl s s
     | Try rl s1 s2 => interp_try rl s1 s2
+    | SPos _ s => interp_scheduler'_trace sched_log s
     end.
 
   Definition interp_scheduler_trace_and_update
@@ -51,7 +52,7 @@ Section Proof.
   Definition update_one r rl: option (REnv.(env_t) R) :=
     let/opt r := r in
     let log := @interp_scheduler'
-                rule_name_t var_t reg_t ext_fn_t
+                pos_t var_t rule_name_t reg_t ext_fn_t
                 R Sigma REnv r sigma rules
                 log_empty (Try rl Done Done) in
     Some (commit_update r log).
@@ -207,6 +208,7 @@ Section Proof.
     - (* UnOp *) t.
     - (* BinOp *) t.
     - (* ExternalCall *) t.
+    - (* APos *) t.
   Qed.
 
   Lemma OneRuleAtATime':
@@ -215,8 +217,8 @@ Section Proof.
       List.fold_left (update_one) rs (Some (commit_update r l0)) = Some r'.
   Proof.
     induction s; cbn.
-    - inversion 1; subst; cbn in *; eauto.
-    - unfold interp_scheduler_trace_and_update; cbn; intros; t.
+    - (* Done *) inversion 1; subst; cbn in *; eauto.
+    - (* Cons *) unfold interp_scheduler_trace_and_update; cbn; intros; t.
       + erewrite interp_action_commit by (rewrite log_app_empty_r; eassumption);
           cbn.
         rewrite log_app_empty_l.
@@ -227,7 +229,7 @@ Section Proof.
       + eapply IHs.
         unfold interp_scheduler_trace_and_update; rewrite Heqo.
         reflexivity.
-    - unfold interp_scheduler_trace_and_update; cbn; intros; t.
+    - (* Try *) unfold interp_scheduler_trace_and_update; cbn; intros; t.
       + erewrite interp_action_commit by (rewrite log_app_empty_r; eassumption);
           cbn.
         rewrite log_app_empty_l.
@@ -238,6 +240,7 @@ Section Proof.
       + eapply IHs2.
         unfold interp_scheduler_trace_and_update; rewrite Heqo.
         reflexivity.
+    - (* SPos *) eauto.
   Qed.
 
   Lemma interp_scheduler_trace_correct :
@@ -246,17 +249,18 @@ Section Proof.
       exists rs, interp_scheduler'_trace l0 s = Some (rs, log).
   Proof.
     induction s; cbn.
-    - inversion 1; subst; eauto.
-    - intros * Heq. destruct interp_action as [((log' & ?) & ?) | ] eqn:?.
+    - (* Done *) inversion 1; subst; eauto.
+    - (* Cons *) intros * Heq. destruct interp_action as [((log' & ?) & ?) | ] eqn:?.
       + destruct (IHs _ _ Heq) as (rs & Heq').
         rewrite Heq'; eauto.
       + destruct (IHs _ _ Heq) as (rs & Heq').
         rewrite Heq'; eauto.
-    - intros * Heq. destruct interp_action as [((log' & ?) & ?) | ] eqn:?.
+    - (* Try *) intros * Heq. destruct interp_action as [((log' & ?) & ?) | ] eqn:?.
       + destruct (IHs1 _ _ Heq) as (rs & Heq').
         rewrite Heq'; eauto.
       + destruct (IHs2 _ _ Heq) as (rs & Heq').
         rewrite Heq'; eauto.
+    - (* SPos *) eauto.
   Qed.
 
   Fixpoint scheduler_rules (s: scheduler) :=
@@ -264,6 +268,7 @@ Section Proof.
     | Done => []
     | Cons r s => r :: scheduler_rules s
     | Try r s1 s2 => r :: scheduler_rules s1 ++ scheduler_rules s2
+    | SPos _ s => scheduler_rules s
     end.
 
   Lemma scheduler_trace_in_scheduler :
@@ -272,13 +277,14 @@ Section Proof.
       (forall r : rule_name_t, In r rs -> In r (scheduler_rules s)).
   Proof.
     induction s; cbn in *.
-    - inversion 1; subst; inversion 1.
-    - intros * H * H'; t.
+    - (* Done *) inversion 1; subst; inversion 1.
+    - (* Cons *) intros * H * H'; t.
       + inversion H'; subst; eauto.
       + eauto.
-    - intros * H * H'; rewrite in_app_iff; t.
+    - (* Try *) intros * H * H'; rewrite in_app_iff; t.
       + inversion H'; subst; eauto.
       + eauto.
+    - (* SPos *) eauto.
   Qed.
 
   Theorem OneRuleAtATime:

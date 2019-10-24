@@ -12,13 +12,17 @@ Definition empty_fn_names (fn: empty_ext_fn_t)
   : string := match fn with end.
 
 Section Packages.
-  (** [rule_name_t]: The type of rule names.
-      Typically an inductive [rule1 | rule2 | …]. **)
-  Context {rule_name_t: Type}.
+  (** [pos_t]: The type of positions used in actions.
+      Typically [string] or [unit]. *)
+  Context {pos_t: Type}.
 
   (** [var_t]: The type of variables used in let bindings.
       Typically [string]. *)
   Context {var_t: Type}.
+
+  (** [rule_name_t]: The type of rule names.
+      Typically an inductive [rule1 | rule2 | …]. **)
+  Context {rule_name_t: Type}.
 
   (** [reg_t]: The type of registers used in the program.
       Typically an inductive [R0 | R1 | …] *)
@@ -45,12 +49,12 @@ Section Packages.
 
       (** [sga_rules]: The rules of the program. **)
       sga_rules: forall _: rule_name_t,
-          TypedSyntax.rule var_t sga_reg_types sga_ext_fn_types;
+          TypedSyntax.rule pos_t var_t sga_reg_types sga_ext_fn_types;
       (** [sga_rule_names]: These names are used to generate readable code. **)
       sga_rule_names: rule_name_t -> string;
 
       (** [sga_scheduler]: The scheduler. **)
-      sga_scheduler: TypedSyntax.scheduler rule_name_t;
+      sga_scheduler: TypedSyntax.scheduler pos_t rule_name_t;
 
       (** [sga_module_name]: The name of the current package. **)
       sga_module_name: string
@@ -185,10 +189,10 @@ Section TypeConv.
 End TypeConv.
 
 Section Compilation.
-  Context {rule_name_t var_t reg_t ext_fn_t: Type}.
+  Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
 
   Definition compile_sga_package
-             (s: @sga_package_t rule_name_t var_t reg_t ext_fn_t) : circuit_package_t :=
+             (s: @sga_package_t pos_t var_t rule_name_t reg_t ext_fn_t) : circuit_package_t :=
     let FT := s.(sga_reg_finite) in
     {| cp_pkg := s;
        cp_reg_Env := ContextEnv;

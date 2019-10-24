@@ -9,7 +9,7 @@ Require Import
         SGA.Interop.
 
 Section PrimCompilerCorrectness.
-  Context {rule_name_t var_t reg_t ext_fn_t: Type}.
+  Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
 
   Context {R: reg_t -> type}.
   Context {Sigma: ext_fn_t -> ExternalSignature}.
@@ -52,7 +52,7 @@ Section PrimCompilerCorrectness.
 End PrimCompilerCorrectness.
 
 Section CompilerCorrectness.
-  Context {rule_name_t var_t reg_t ext_fn_t: Type}.
+  Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
 
   Context {R: reg_t -> type}.
   Notation CR := (CR_of_R R).
@@ -82,8 +82,8 @@ Section CompilerCorrectness.
   Notation rwset := (rwset (rule_name_t := rule_name_t)).
   Notation circuit := (circuit (rule_name_t := rule_name_t) (rwdata := rwdata) CR CSigma).
   Notation scheduler_circuit := (scheduler_circuit (rule_name_t := rule_name_t) R Sigma REnv).
-  Notation action := (action var_t R Sigma).
-  Notation rule := (rule var_t R Sigma).
+  Notation action := (action pos_t var_t R Sigma).
+  Notation rule := (rule pos_t var_t R Sigma).
   Notation interp_circuit := (interp_circuit (rule_name_t := rule_name_t) cr csigma).
   Notation circuit_lt := (circuit_lt r csigma).
 
@@ -627,6 +627,7 @@ Section CompilerCorrectness.
     - (* ExternalCall *)
       circuit_compile_destruct_t.
       intuition eauto using circuit_lt_trans, rwset_circuit_lt_invariant_trans.
+    - (* APos *) eauto.
   Qed.
 
   Lemma circuit_lt_willFire_of_canFire':
@@ -1203,6 +1204,7 @@ Section CompilerCorrectness.
     - (* ExternalCall *)
       t; eauto 7 using interp_circuit_circuit_lt_helper_false,
          action_compile_willFire_of_canFire_decreasing.
+    - (* APos *) t.
   Qed.
 
   Arguments update_accumulated_rwset : simpl never.
@@ -1314,16 +1316,16 @@ Section CompilerCorrectness.
   Hint Resolve compile_unop_correct : circuits.
   Hint Resolve compile_binop_correct : circuits.
 
-  Notation scheduler := (scheduler rule_name_t).
+  Notation scheduler := (scheduler pos_t rule_name_t).
   Context (rules: rule_name_t -> rule).
 
   Notation compile_scheduler_circuit := (compile_scheduler_circuit lco).
   Notation compile_scheduler' := (compile_scheduler' lco).
 
   Lemma interp_circuit_willFire_of_canFire_remove_bundle' :
-    forall (cLog: rwset) (c: rwcircuit) rl bundle,
+    forall (cLog: rwset) (c: rwcircuit) rl rs bundle,
         interp_circuit
-          (Circuits.willFire_of_canFire lco (bundleref_wrap_erwc rl bundle c) cLog) =
+          (Circuits.willFire_of_canFire lco (bundleref_wrap_erwc rl rs bundle c) cLog) =
         interp_circuit
           (Circuits.willFire_of_canFire (REnv := REnv) lco c cLog) .
   Proof.
@@ -1337,11 +1339,11 @@ Section CompilerCorrectness.
   Qed.
 
   Lemma interp_circuit_willFire_of_canFire_remove_bundle :
-    forall (cLog: rwset) (c: rwcircuit) rl bundle res,
+    forall (cLog: rwset) (c: rwcircuit) rl rs bundle res,
       interp_circuit
         ((Circuits.willFire_of_canFire (REnv := REnv) lco c) cLog) = res ->
       interp_circuit
-        (Circuits.willFire_of_canFire lco (bundleref_wrap_erwc rl bundle c) cLog) = res.
+        (Circuits.willFire_of_canFire lco (bundleref_wrap_erwc rl rs bundle c) cLog) = res.
   Proof.
     intros; subst; apply interp_circuit_willFire_of_canFire_remove_bundle'.
   Qed.
@@ -1359,58 +1361,58 @@ Section CompilerCorrectness.
            | [ |- context[match (?ind) with _ => _ end] ] => destruct ind
            end; eauto.
 
-  Lemma log_data1_consistent'_bundle_equiv : forall Log cLog regs rl bundle,
+  Lemma log_data1_consistent'_bundle_equiv : forall Log cLog regs rl rs bundle,
       log_data1_consistent'
         Log (Circuits.update_accumulated_rwset lco regs cLog) <->
       log_data1_consistent'
-        Log (Circuits.update_accumulated_rwset lco (bundleref_wrap_rwset rl bundle regs) cLog).
+        Log (Circuits.update_accumulated_rwset lco (bundleref_wrap_rwset rl rs bundle regs) cLog).
   Proof.
     unfold log_data1_consistent', bundleref_wrap_rwset, update_accumulated_rwset;
       split; intros H idx; specialize (H idx);
         bundle_t.
   Qed.
 
-  Lemma log_data0_consistent'_bundle_equiv : forall Log cLog regs rl bundle,
+  Lemma log_data0_consistent'_bundle_equiv : forall Log cLog regs rl rs bundle,
       log_data0_consistent'
         Log (Circuits.update_accumulated_rwset lco regs cLog) <->
       log_data0_consistent'
-        Log (Circuits.update_accumulated_rwset lco (bundleref_wrap_rwset rl bundle regs) cLog).
+        Log (Circuits.update_accumulated_rwset lco (bundleref_wrap_rwset rl rs bundle regs) cLog).
   Proof.
     unfold log_data0_consistent', bundleref_wrap_rwset, update_accumulated_rwset;
       split; intros H idx; specialize (H idx);
         bundle_t.
   Qed.
 
-  Lemma log_rwdata_consistent_bundle_equiv : forall Log regs rl bundle,
+  Lemma log_rwdata_consistent_bundle_equiv : forall Log regs rl rs bundle,
       log_rwdata_consistent Log regs <->
-      log_rwdata_consistent Log (bundleref_wrap_rwset rl bundle regs).
+      log_rwdata_consistent Log (bundleref_wrap_rwset rl rs bundle regs).
   Proof.
     unfold log_rwdata_consistent, bundleref_wrap_rwset;
       split; intros H idx; specialize (H idx);
         bundle_t.
   Qed.
 
-  Lemma log_data1_consistent'_bundle_elim : forall Log cLog regs rl bundle,
+  Lemma log_data1_consistent'_bundle_elim : forall Log cLog regs rl rs bundle,
       log_data1_consistent'
         Log (Circuits.update_accumulated_rwset lco regs cLog) ->
       log_data1_consistent'
-        Log (Circuits.update_accumulated_rwset lco (bundleref_wrap_rwset rl bundle regs) cLog).
+        Log (Circuits.update_accumulated_rwset lco (bundleref_wrap_rwset rl rs bundle regs) cLog).
   Proof.
     apply log_data1_consistent'_bundle_equiv.
   Qed.
 
-  Lemma log_data0_consistent'_bundle_elim : forall Log cLog regs rl bundle,
+  Lemma log_data0_consistent'_bundle_elim : forall Log cLog regs rl rs bundle,
       log_data0_consistent'
         Log (Circuits.update_accumulated_rwset lco regs cLog) ->
       log_data0_consistent'
-        Log (Circuits.update_accumulated_rwset lco (bundleref_wrap_rwset rl bundle regs) cLog).
+        Log (Circuits.update_accumulated_rwset lco (bundleref_wrap_rwset rl rs bundle regs) cLog).
   Proof.
     apply log_data0_consistent'_bundle_equiv.
   Qed.
 
-  Lemma log_rwdata_consistent_bundle_elim : forall Log regs rl bundle,
+  Lemma log_rwdata_consistent_bundle_elim : forall Log regs rl rs bundle,
       log_rwdata_consistent Log regs ->
-      log_rwdata_consistent Log (bundleref_wrap_rwset rl bundle regs).
+      log_rwdata_consistent Log (bundleref_wrap_rwset rl rs bundle regs).
   Proof.
     apply log_rwdata_consistent_bundle_equiv.
   Qed.
@@ -1456,6 +1458,7 @@ Section CompilerCorrectness.
         * apply log_data1_consistent'_mux_r; try apply IHs2; ceauto.
         * apply log_data0_consistent'_mux_r; try apply IHs2; ceauto.
         * apply log_rwdata_consistent_mux_r; try apply IHs2; ceauto.
+    - eauto.
   Qed.
 
   Notation init_scheduler_circuit := (init_scheduler_circuit lco).
@@ -1501,7 +1504,7 @@ Section CompilerCorrectness.
   Theorem action_log_writes_ordered:
     forall sig tau a ctx Log log idx,
       log_writes_ordered (log_app log Log) idx ->
-      match @interp_action var_t reg_t ext_fn_t R Sigma REnv r sigma sig tau ctx Log log a with
+      match @interp_action pos_t var_t reg_t ext_fn_t R Sigma REnv r sigma sig tau ctx Log log a with
       | Some (l', _, _) => log_writes_ordered (log_app l' Log) idx
       | None => True
       end.
@@ -1551,7 +1554,7 @@ Section CompilerCorrectness.
   Theorem scheduler_log_writes_ordered:
     forall s log idx,
       log_writes_ordered log idx ->
-      log_writes_ordered (@interp_scheduler' rule_name_t var_t reg_t ext_fn_t R Sigma REnv r sigma rules log s) idx.
+      log_writes_ordered (@interp_scheduler' pos_t var_t rule_name_t reg_t ext_fn_t R Sigma REnv r sigma rules log s) idx.
   Proof.
     induction s; cbn; intros; eauto.
     all: lazymatch goal with
@@ -1597,7 +1600,7 @@ Section CompilerCorrectness.
 End CompilerCorrectness.
 
 Section CircuitInit.
-  Context {rule_name_t var_t reg_t ext_fn_t: Type}.
+  Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
   Context {eq_dec_var_t: EqDec var_t}.
 
   Context {R: reg_t -> type}.
@@ -1620,7 +1623,7 @@ Section CircuitInit.
 End CircuitInit.
 
 Section Thm.
-  Context {rule_name_t var_t reg_t ext_fn_t: Type}.
+  Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
   Context {eq_dec_var_t: EqDec var_t}.
 
   Context {R: reg_t -> type}.
@@ -1630,10 +1633,10 @@ Section Thm.
   Context (r: ContextEnv.(env_t) R).
   Context (sigma: forall f, Sigma f).
 
-  Context (s: scheduler rule_name_t).
+  Context (s: scheduler pos_t rule_name_t).
 
   Section Standalone.
-    Context (rules: rule_name_t -> rule var_t R Sigma).
+    Context (rules: rule_name_t -> rule pos_t var_t R Sigma).
 
     Theorem scheduler_compiler_correct:
       let spec_results := commit_update r (interp_scheduler r sigma rules s) in

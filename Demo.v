@@ -1,19 +1,20 @@
 Require Import SGA.Notations.
 
-Record demo_package_t :=
-  { dp_var_t : Type;
-    dp_reg_t : Type;
-    dp_rule_name_t : Type;
-    dp_ext_fn_t : Type;
-    sga : @sga_package_t dp_var_t dp_reg_t dp_rule_name_t dp_ext_fn_t;
-    vp : @verilog_package_t dp_var_t dp_reg_t dp_rule_name_t dp_ext_fn_t;
-    sp : @sim_package_t dp_var_t dp_reg_t dp_rule_name_t dp_ext_fn_t }.
-
 Definition pos_t := unit.
 Definition var_t := string.
 Definition fn_name_t := string.
+
+Notation scheduler := (scheduler pos_t _).
 Notation uaction := (uaction pos_t var_t fn_name_t).
 Notation UInternalFunction reg_t ext_fn_t := (InternalFunction fn_name_t var_t (uaction reg_t ext_fn_t)).
+
+Record demo_package_t :=
+  { dp_reg_t : Type;
+    dp_rule_name_t : Type;
+    dp_ext_fn_t : Type;
+    sga : @sga_package_t pos_t var_t dp_reg_t dp_rule_name_t dp_ext_fn_t;
+    vp : @verilog_package_t pos_t var_t dp_reg_t dp_rule_name_t dp_ext_fn_t;
+    sp : @sim_package_t pos_t var_t dp_reg_t dp_rule_name_t dp_ext_fn_t }.
 
 (* FIXME *)
 Notation "'Ob'" :=
@@ -121,13 +122,13 @@ Module Ex2.
   Example _unbound_variable : uaction reg_t ext_fn_t  :=
     UWrite P0 R0 (UVar "y").
 
-  Example tsched : scheduler rule_name_t :=
+  Example tsched : scheduler :=
     tc_scheduler (UTry swap_or_replace (UTry negate UDone UDone) (UTry negate UDone UDone)).
 
-  Fail Example trule : rule var_t R Sigma :=
+  Fail Example trule : rule pos_t var_t R Sigma :=
     tc_rule R Sigma _ill_typed_write.
 
-  Fail Example trule : rule var_t R Sigma :=
+  Fail Example trule : rule pos_t var_t R Sigma :=
     tc_rule R Sigma _unbound_variable.
 
   Definition r idx : R idx :=
@@ -137,7 +138,7 @@ Module Ex2.
     | R2 => Ob~1
     end.
 
-  Definition rules : rule_name_t -> rule var_t R empty_Sigma :=
+  Definition rules : rule_name_t -> rule pos_t var_t R empty_Sigma :=
     tc_rules R empty_Sigma
              (fun r => match r with
                     | negate => _negate
@@ -200,7 +201,7 @@ Module Collatz.
       fail
   $}.
 
-  Definition collatz : scheduler _ :=
+  Definition collatz : scheduler :=
     tc_scheduler (divide |> multiply |> done).
 
   Definition cr := ContextEnv.(create) r.
@@ -320,14 +321,14 @@ Module Decoder (P: Unpacker) (F: Fetcher).
 
   Definition cr := ContextEnv.(create) r.
 
-  Definition decoder : scheduler _ :=
+  Definition decoder : scheduler :=
     tc_scheduler (fetch |> decode |> done).
 
   (* Ltac __must_typecheck R Sigma tcres ::= *)
   (*   __must_typecheck_cbn R Sigma tcres. *)
 
   Notation rulemap_t :=
-    (rule_name_t -> rule string R F.Sigma).
+    (rule_name_t -> rule pos_t var_t R F.Sigma).
 
   Definition make_package (modname: string) (rules: rulemap_t) :=
     let sga_package :=
@@ -540,7 +541,7 @@ Module Pipeline.
                      | doG => _doG
                      end).
 
-  Definition Pipeline : scheduler _ :=
+  Definition Pipeline : scheduler :=
     tc_scheduler (doG |> doF |> done).
 
   Definition circuit :=
@@ -633,7 +634,7 @@ Module RegisterFile_Ordered.
                      | ReadReg => _ReadReg
                      end).
 
-  Definition regfile : scheduler _ :=
+  Definition regfile : scheduler :=
     tc_scheduler (ReadReg |> done).
 
   Instance FiniteType_reg_t : FiniteType reg_t := _.
@@ -715,7 +716,7 @@ Module Enums.
                      | Incr => _Incr
                      end).
 
-  Definition enum_scheduler : scheduler _ :=
+  Definition enum_scheduler : scheduler :=
     tc_scheduler (Incr |> done).
 
   Instance FiniteType_reg_t : FiniteType reg_t := _.
@@ -811,7 +812,7 @@ Module IntCall.
                      | rl => _rl
                      end).
 
-  Definition sched : scheduler _ :=
+  Definition sched : scheduler :=
     tc_scheduler (rl |> done).
 
   Instance FiniteType_reg_t : FiniteType reg_t := _.
@@ -968,7 +969,7 @@ Module ExternallyCompiledRule.
                      | fetch => _fetch
                      end).
 
-  Definition bring : scheduler _ :=
+  Definition bring : scheduler :=
     tc_scheduler (fetch |> ding |> done).
 
 
@@ -1106,7 +1107,7 @@ Module GcdMachine.
                      | step_compute => gcd_compute
                      | get_result => gcd_getresult end).
 
-  Definition bring : scheduler _ :=
+  Definition bring : scheduler :=
     tc_scheduler (start |> step_compute |> get_result |> done).
 
   Definition sga_package :=
