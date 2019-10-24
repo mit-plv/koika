@@ -106,7 +106,11 @@ Ltac FiniteType_t_compute_index :=
          doesn't operate in the current context (and so FiniteType_norec isn't
          taken into account). *)
       pose proof (finite_type_norec tx);
-      eapply (finite_surjective (FiniteType := ltac:(typeclasses eauto)))
+      lazymatch goal with
+      | [ |- _ = Some ?z ] =>
+        let tx' := type of z in
+        eapply (finite_surjective (T := tx') (FiniteType := ltac:(typeclasses eauto)))
+      end
     | ?x => instantiate (1 := len);
            instantiate (1 := _ :: _);
            vm_compute; reflexivity
@@ -153,12 +157,18 @@ Ltac FiniteType_t :=
 Hint Extern 1 (FiniteType _) => FiniteType_t : typeclass_instances.
 
 Module Examples.
-  Inductive t' := A | B.
-  Inductive t'' := A' | B' (x': t') | C'.
+  Inductive t    := A | B.
+  Inductive t'   := A' | B'.
+  Inductive t''  := A'' | B'' (x': t) | C''.
+  Inductive t''' := A''' | B''' (x': t) | C''' | D''' (x' : t').
 
   Instance t'f : FiniteType t'.
   Proof. FiniteType_t. Defined.
 
   Instance t''f: FiniteType t''.
   Proof. FiniteType_t. Defined.
+
+  Instance t'''f: FiniteType t'''.
+  Proof. FiniteType_t. Defined.
+
 End Examples.
