@@ -1020,7 +1020,7 @@ let clang_format fname =
 let compile_cpp fname =
   let srcname = fname ^ ".cpp" in
   let exename = fname ^ ".exe" in
-  command ~verbose:true "g++" ["-O3"; "-Wall"; "-Wextra"; srcname; "-o"; exename]
+  command ~verbose:true "g++" ["-O3"; "-Wall"; "-Wextra"; "-fno-stack-protector"; srcname; "-o"; exename]
 
 let write_cpp fname ext buf =
   let fname = fname ^ ext in
