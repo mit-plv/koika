@@ -1,6 +1,12 @@
 open Common
 module SGA = SGALib.SGA
 
+(* #line pragmas make the C++ code harder to read, and they cover too-large a
+   scope (in particular, the last #line pragma in a program overrides positions
+   for all subsequent code, while we'd want to use the C++ positions for these
+   lines) *)
+let add_line_pragmas = false
+
 type ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_rule_t = {
     rl_name: 'rule_name_t;
     rl_footprint: 'reg_t list;
@@ -601,10 +607,11 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
       Str.global_replace backslash_re "\\\\\\\\" s in
 
     let p_pos (pos: Pos.t) =
-      match pos with
-      | Unknown | StrPos _ | Filename _ -> ()
-      | Range (filename, { rbeg = { line; _ }; _ }) ->
-         p "#line %d \"%s\"" line (sp_escaped_string filename) in
+      if add_line_pragmas then
+        match pos with
+        | Unknown | StrPos _ | Filename _ -> ()
+        | Range (filename, { rbeg = { line; _ }; _ }) ->
+           p "#line %d \"%s\"" line (sp_escaped_string filename) in
 
     let p_rule (rule: (pos_t, var_t, rule_name_t, reg_t, ext_fn_t) cpp_rule_t) =
       gensym_reset ();
