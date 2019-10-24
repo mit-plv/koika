@@ -162,21 +162,21 @@ Section Circuits.
   Proof. firstorder. Qed.
 
   Lemma circuit_lt_CBundleRef :
-    forall rl1 rl2 b1 b2 field1 field2 c1 c2,
+    forall rl1 rl2 rs1 rs2 b1 b2 field1 field2 c1 c2,
       circuit_lt c1 c2 ->
-      circuit_lt (CBundleRef rl1 b1 field1 c1) (CBundleRef rl2 b2 field2 c2).
+      circuit_lt (CBundleRef rl1 rs1 b1 field1 c1) (CBundleRef rl2 rs2 b2 field2 c2).
   Proof. firstorder. Qed.
 
   Lemma circuit_lt_CBundleRef_l :
-    forall rl1 b1 field1 c1 c2,
+    forall rl1 rs1 b1 field1 c1 c2,
       circuit_lt c1 c2 ->
-      circuit_lt (CBundleRef rl1 b1 field1 c1) c2.
+      circuit_lt (CBundleRef rl1 rs1 b1 field1 c1) c2.
   Proof. firstorder. Qed.
 
   Lemma circuit_lt_CBundleRef_r :
-    forall rl2 b2 field2 c1 c2,
+    forall rl2 rs2 b2 field2 c1 c2,
       circuit_lt c1 c2 ->
-      circuit_lt c1 (CBundleRef rl2 b2 field2 c2).
+      circuit_lt c1 (CBundleRef rl2 rs2 b2 field2 c2).
   Proof. firstorder. Qed.
 
   Lemma circuit_lt_CAnd :
