@@ -724,7 +724,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
         if SGALib.Util.member_mentions_shadowed_binding sg v tau m then
           failwith (sprintf "Variable %s is shadowed by a later binding, but the program references the original binding." (v_to_string v)) in
 
-      let rec p_action (target: assignment_target) (rl: (pos_t, var_t, reg_t, _) SGA.action) =
+      let rec p_action (pos: Pos.t) (target: assignment_target) (rl: (pos_t, var_t, reg_t, _) SGA.action) =
         p_pos pos;
         match rl with
         | SGA.Fail (_, _) ->
