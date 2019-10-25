@@ -635,9 +635,6 @@ Section CircuitCompilation.
                                      (reg.(data0))
                                      (CAnnotOpt "commit_unchanged" initial_value)))).
 
-  Definition state_transition_circuit :=
-    REnv.(env_t) (fun reg => circuit (R reg)).
-
   Definition init_scheduler_rwdata idx : rwdata :=
     {| read0 := $`"sched_init_no_read0"` Ob~0;
        read1 := $`"sched_init_no_read1"` Ob~0;
@@ -649,7 +646,11 @@ Section CircuitCompilation.
   Definition init_scheduler_circuit : scheduler_circuit :=
     REnv.(create) init_scheduler_rwdata.
 
-  Definition compile_scheduler' (s: scheduler pos_t rule_name_t) : state_transition_circuit :=
+  Definition register_update_circuitry :=
+    REnv.(env_t) (fun reg => circuit (CR reg)).
+
+  Definition compile_scheduler' (s: scheduler pos_t rule_name_t)
+    : register_update_circuitry :=
     let s := compile_scheduler_circuit s init_scheduler_circuit in
     REnv.(map2) (fun k r1 r2 => commit_rwdata r1 r2) s cr.
 End CircuitCompilation.
@@ -663,9 +664,9 @@ Arguments readRegisters {rule_name_t reg_t ext_fn_t} R Sigma idx : assert.
 Arguments rwdata {rule_name_t reg_t ext_fn_t} R Sigma sz : assert.
 Arguments action_circuit {rule_name_t reg_t ext_fn_t} R Sigma REnv sz : assert.
 Arguments scheduler_circuit {rule_name_t reg_t ext_fn_t} R Sigma REnv : assert.
-Arguments state_transition_circuit rule_name_t {reg_t ext_fn_t} R Sigma REnv : assert.
+Arguments register_update_circuitry rule_name_t {reg_t ext_fn_t} R Sigma REnv : assert.
 
-Section SimpleSchedulerCompilation.
+Section Helpers.
   Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
 
   Context {R: reg_t -> type}.
@@ -675,7 +676,17 @@ Section SimpleSchedulerCompilation.
   Definition compile_scheduler
              (rules: rule_name_t -> rule pos_t var_t R Sigma)
              (s: scheduler pos_t rule_name_t)
-    : state_transition_circuit rule_name_t R Sigma _ :=
+    : register_update_circuitry rule_name_t R Sigma _ :=
     let cr := ContextEnv.(create) (readRegisters R Sigma) in
     compile_scheduler' simplify_bool_1 cr rules s.
-End SimpleSchedulerCompilation.
+
+  Context {REnv: Env reg_t}.
+  Context (r: REnv.(env_t) R).
+  Context (sigma: forall f, Sigma f).
+
+  Definition interp_circuits
+             (circuits: register_update_circuitry rule_name_t R Sigma REnv) :=
+    let cr := cr_of_r r in
+    let csigma := csigma_of_sigma sigma in
+    REnv.(map) (fun _ c => interp_circuit cr csigma c) circuits.
+End Helpers.

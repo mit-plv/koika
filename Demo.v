@@ -16,20 +16,6 @@ Record demo_package_t :=
     vp : @verilog_package_t pos_t var_t dp_reg_t dp_rule_name_t dp_ext_fn_t;
     sp : @sim_package_t pos_t var_t dp_reg_t dp_rule_name_t dp_ext_fn_t }.
 
-(* FIXME *)
-Notation "'Ob'" :=
-  (@_vect_nil bool)
-    (at level 7, left associativity, only printing) : bits_printing.
-Notation "bs '~' 0" :=
-  {| vhd := false; vtl := bs |}
-    (at level 7, left associativity, only printing) : bits_printing.
-Notation "bs '~' 1" :=
-  {| vhd := true; vtl := bs |}
-    (at level 7, left associativity, only printing) : bits_printing.
-Global Open Scope bits_printing.
-
-Open Scope list_scope.
-
 Module Ex1.
   Notation var_t := string.
   Inductive reg_t := R0 | R1.
@@ -47,7 +33,6 @@ Module Ex1.
     | Even => {{ bits_t 3 ~> bits_t 1}}
     | Odd => {{ bits_t 3 ~> bits_t 1}}
     end.
-
 
   Definition r idx : R idx :=
     match idx with
@@ -83,10 +68,14 @@ Module Ex1.
   Definition s1_result :=
     Eval compute in interp_scheduler (ContextEnv.(create) r) sigma rules s1.
 
-  Definition s1_circuit :=
-    compile_scheduler rules s1.
-End Ex1.
+  Compute (interp_scheduler (ContextEnv.(create) r) sigma rules s1).
 
+  Definition s1_circuits :=
+    compile_scheduler rules s1.
+
+  Definition s1_circuits_result :=
+    Eval compute in interp_circuits (ContextEnv.(create) r) sigma s1_circuits.
+End Ex1.
 Module Ex2.
   Inductive reg_t := R0 | R1 | R2.
   Definition ext_fn_t := empty_ext_fn_t.
@@ -147,10 +136,11 @@ Module Ex2.
 
   Definition tsched_result :=
     Eval compute in interp_scheduler (ContextEnv.(create) r) empty_sigma rules tsched.
-  Definition tsched_circuit :=
+  Definition tsched_circuits :=
     compile_scheduler rules tsched.
+  Definition tsched_circuits_result :=
+    Eval compute in interp_circuits (ContextEnv.(create) r) empty_sigma tsched_circuits.
 End Ex2.
-
 Notation compute t :=
   ltac:(let tt := type of t in
         let t := (eval lazy in t) in
@@ -225,9 +215,11 @@ Module Collatz.
     compute (interp_action cr empty_sigma CtxEmpty log_empty log_empty
                            (rules multiply)).
 
-  Definition circuit :=
+  Definition circuits :=
     compile_scheduler rules collatz.
 
+  Definition circuits_result :=
+    Eval compute in interp_circuits (ContextEnv.(create) r) empty_sigma circuits.
   Definition sga_package :=
     {| sga_reg_types := R;
        sga_reg_init := r;
@@ -455,8 +447,11 @@ Module ManualDecoder.
                     | decode => _decode
                     end).
 
-  Definition circuit :=
+  Definition circuits :=
     compile_scheduler rules decoder.
+
+  Definition circuits_result sigma :=
+    interp_circuits (ContextEnv.(create) r) sigma circuits.
 
   Definition package := make_package "manual_decoder" rules.
 End ManualDecoder.
@@ -472,8 +467,11 @@ Module PrimitiveDecoder.
                     | decode => _decode
                     end).
 
-  Definition circuit :=
+  Definition circuits :=
     compile_scheduler rules decoder.
+
+  Definition circuits_result sigma :=
+    interp_circuits (ContextEnv.(create) r) sigma circuits.
 
   Definition package := make_package "primitive_decoder" rules.
 End PrimitiveDecoder.
@@ -491,6 +489,15 @@ Module Pipeline.
     | inputReg => bits_t sz
     | outputReg => bits_t sz
     | invalid | correct => bits_t 1
+    end.
+
+  Definition r reg : R reg :=
+    match reg with
+    | r0 => Bits.of_N _ 0
+    | outputReg => Bits.of_N _ 0
+    | inputReg => Bits.of_N _ 0
+    | invalid => Ob~1
+    | correct => Ob~1
     end.
 
   Definition Sigma (fn: ext_fn_t) : ExternalSignature :=
@@ -544,8 +551,11 @@ Module Pipeline.
   Definition Pipeline : scheduler :=
     tc_scheduler (doG |> doF |> done).
 
-  Definition circuit :=
+  Definition circuits :=
     compile_scheduler rules Pipeline.
+
+  Definition circuits_result sigma :=
+    interp_circuits (ContextEnv.(create) r) sigma circuits.
 
   Definition fn_names fn :=
     match fn with
@@ -556,21 +566,15 @@ Module Pipeline.
 
   Definition sga_package :=
     {| sga_reg_types := R;
-       sga_reg_init r := match r with
-                        | r0 => Bits.of_N _ 0
-                        | outputReg => Bits.of_N _ 0
-                        | inputReg => Bits.of_N _ 0
-                        | invalid => Ob~1
-                        | correct => Ob~1
-                        end%N;
+       sga_reg_init reg := r reg;
        sga_reg_finite := _;
-       sga_reg_names r := match r with
-                         | r0 => "r0"
-                         | outputReg => "outputReg"
-                         | inputReg => "inputReg"
-                         | invalid => "invalid"
-                         | correct => "correct"
-                         end;
+       sga_reg_names reg := match reg with
+                           | r0 => "r0"
+                           | outputReg => "outputReg"
+                           | inputReg => "inputReg"
+                           | invalid => "invalid"
+                           | correct => "correct"
+                           end;
 
        sga_ext_fn_types := Sigma;
 
@@ -596,8 +600,31 @@ using extfuns = pipeline_extfuns;" |};
                vp_ext_fn_names := fn_names |} |}.
 End Pipeline.
 
+Section CircuitTools.
+  Context {rule_name_t reg_t ext_fn_t: Type}.
+  Context {CR: reg_t -> nat}.
+  Context {CSigma: ext_fn_t -> CExternalSignature}.
+  Context {rwdata: nat -> Type}.
+
+  Fixpoint circuit_size {sz: nat}
+           (c: circuit (rwdata := rwdata) (rule_name_t := rule_name_t) CR CSigma sz): N :=
+    1 + match c with
+        | CNot c => circuit_size c
+        | CAnd c1 c2 => circuit_size c1 + circuit_size c2
+        | COr c1 c2 => circuit_size c1 + circuit_size c2
+        | CMux select c1 c2 => circuit_size select + circuit_size c1 + circuit_size c2
+        | CConst _ => 0
+        | CReadRegister _ => 0
+        | CUnop _ a1 => circuit_size a1
+        | CBinop _ a1 a2 => circuit_size a1 + circuit_size a2
+        | CExternal _ a => circuit_size a
+        | CBundleRef _ _ _ _ c => circuit_size c
+        | CAnnot _ c => circuit_size c
+        end.
+End CircuitTools.
+
 Module RegisterFile_Ordered.
-  Definition nregs := 16.
+  Definition nregs := 2.
   Definition reg_sz := 32.
 
   (* Definition instr_sig := *)
@@ -618,7 +645,13 @@ Module RegisterFile_Ordered.
     | rOutput => bits_t reg_sz
     end.
 
-  Definition Sigma := empty_Sigma.
+  Definition r reg : R reg :=
+    match reg with
+    | rIndex => Bits.zero _
+    | rData n => Bits.of_nat _ (index_to_nat n)
+    | rOutput => Bits.zero _
+    end.
+
 
   Definition _ReadReg : uaction _ empty_ext_fn_t :=
     {$
@@ -629,7 +662,7 @@ Module RegisterFile_Ordered.
   $}.
 
   Definition rules :=
-    tc_rules R Sigma
+    tc_rules R empty_Sigma
              (fun rl => match rl with
                      | ReadReg => _ReadReg
                      end).
@@ -639,22 +672,21 @@ Module RegisterFile_Ordered.
 
   Instance FiniteType_reg_t : FiniteType reg_t := _.
 
-  Definition circuit :=
+  Definition circuits :=
     compile_scheduler rules regfile.
+
+  (* Definition circuits_result := *)
+  (*   Eval native_compute in interp_circuits (ContextEnv.(create) r) empty_sigma circuits. *)
 
   Definition sga_package :=
     {| sga_reg_types := R;
-       sga_reg_init r := match r with
-                        | rIndex => Bits.zero _
-                        | rData n => Bits.of_nat _ (index_to_nat n)
-                        | rOutput => Bits.zero _
-                        end%N;
+       sga_reg_init reg := r reg;
        sga_reg_finite := _;
-       sga_reg_names r := match r with
-                         | rIndex => "rIndex"
-                         | rData n => String.append "rData" (string_of_nat (index_to_nat n))
-                         | rOutput => "rOutput"
-                         end;
+       sga_reg_names reg := match reg with
+                           | rIndex => "rIndex"
+                           | rData n => String.append "rData" (string_of_nat (index_to_nat n))
+                           | rOutput => "rOutput"
+                           end;
 
        sga_ext_fn_types := empty_Sigma;
 
@@ -695,7 +727,11 @@ Module Enums.
     | rA | rB => enum_t flag_sig
     end.
 
-  Definition Sigma := empty_Sigma.
+  Definition r reg : R reg :=
+    match reg with
+    | rA => Ob~1~1~0
+    | rB => Bits.zero _
+    end.
 
   Definition _Incr : uaction _ empty_ext_fn_t :=
     {$
@@ -711,7 +747,7 @@ Module Enums.
   (*   __must_typecheck_cbn R Sigma tcres. *)
 
   Definition rules :=
-    tc_rules R Sigma
+    tc_rules R empty_Sigma
              (fun rl => match rl with
                      | Incr => _Incr
                      end).
@@ -721,15 +757,15 @@ Module Enums.
 
   Instance FiniteType_reg_t : FiniteType reg_t := _.
 
-  Definition circuit :=
+  Definition circuits :=
     compile_scheduler rules enum_scheduler.
+
+  Definition circuits_result :=
+    Eval compute in interp_circuits (ContextEnv.(create) r) empty_sigma circuits.
 
   Definition sga_package :=
     {| sga_reg_types := R;
-       sga_reg_init r := match r with
-                        | rA => Ob~1~1~0
-                        | rB => Bits.zero _
-                        end%N;
+       sga_reg_init := r;
        sga_reg_finite := _;
        sga_reg_names r := match r with
                          | rA => "rA"
@@ -782,7 +818,12 @@ Module IntCall.
     | rDelay2 buffer => bits_t 16
     end.
 
-  Definition Sigma := empty_Sigma.
+  Definition r reg : R reg :=
+    match reg with
+    | rA => Bits.of_N _ 12
+    | rDelay1 buffer => Bits.zero _
+    | rDelay2 buffer => Bits.zero _
+    end.
 
   Definition nor (sz: nat) : UInternalFunction reg_t ext_fn_t :=
     function ("nor<" ++ string_of_nat sz ++ ">") ("arg1" : bits_t sz, "arg2" : bits_t sz) : bits_t sz :=
@@ -807,7 +848,7 @@ Module IntCall.
   (*   __must_typecheck_cbn R Sigma tcres. *)
 
   Definition rules :=
-    tc_rules R Sigma
+    tc_rules R empty_Sigma
              (fun rl => match rl with
                      | rl => _rl
                      end).
@@ -817,15 +858,11 @@ Module IntCall.
 
   Instance FiniteType_reg_t : FiniteType reg_t := _.
 
-  Definition circuit :=
+  Definition circuits :=
     compile_scheduler rules sched.
 
-  Definition r reg : R reg :=
-    match reg with
-    | rA => Bits.of_N _ 12
-    | rDelay1 buffer => Bits.zero _
-    | rDelay2 buffer => Bits.zero _
-    end.
+  Definition circuits_result :=
+    Eval compute in interp_circuits (ContextEnv.(create) r) empty_sigma circuits.
 
   Definition sched_result :=
     Eval compute in interp_scheduler (ContextEnv.(create) r) empty_sigma rules sched.
@@ -863,7 +900,6 @@ Module IntCall.
 End IntCall.
 
 Module ExternallyCompiledRule.
-  Open Scope string_scope.
   Definition ext_fn_t := empty_ext_fn_t.
 
   Module Type Fifo.
@@ -960,10 +996,9 @@ Module ExternallyCompiledRule.
            $}.
 
   Definition cr := ContextEnv.(create) r.
-  Definition Sigma := empty_Sigma.
 
   Definition rules :=
-    tc_rules R Sigma
+    tc_rules R empty_Sigma
              (fun rl => match rl with
                      | ding => _ding
                      | fetch => _fetch
@@ -978,7 +1013,7 @@ Module ExternallyCompiledRule.
            sga_reg_init := r;
            sga_reg_finite := _;
 
-           sga_ext_fn_types := Sigma;
+           sga_ext_fn_types := empty_Sigma;
 
            sga_reg_names r := match r with
                               | Rdata => "Rdata"
@@ -1009,7 +1044,6 @@ End ExternallyCompiledRule.
 Notation zero := (Bits.zeroes _).
 
 Module GcdMachine.
-  Open Scope string_scope.
   Definition ext_fn_t := empty_ext_fn_t.
 
   Inductive reg_t := input_data |  input_valid | gcd_busy | gcd_a | gcd_b | output_data.
@@ -1098,10 +1132,9 @@ Module GcdMachine.
   Inductive name_t := start | step_compute | get_result.
 
   Definition cr := ContextEnv.(create) init_r.
-  Definition Sigma := empty_Sigma.
 
   Definition rules :=
-    tc_rules R Sigma
+    tc_rules R empty_Sigma
              (fun rl => match rl with
                      | start => gcd_start
                      | step_compute => gcd_compute

@@ -16,8 +16,8 @@ Export PrimUntyped.
 Require Coq.Lists.List.
 Require Import Coq.Strings.String.
 Export Coq.Lists.List.ListNotations.
-Global Open Scope list_scope.
-Global Open Scope string_scope.
+Open Scope list_scope.
+Open Scope string_scope.
 
 Class DummyPos pos_t := { dummy_pos: pos_t }.
 Instance DummyPos_unit : DummyPos unit := {| dummy_pos := tt |}.
@@ -169,10 +169,30 @@ Module Type Tests.
   (* Definition test_29 : list (uaction reg_t) := {* "yoyo", if "var" then UError else UError;UError *}. *)
 End Tests.
 
-Notation "'[[read0]]'" := (LE LogRead P0 tt) (only printing).
-Notation "'[[read1]]'" := (LE LogRead P1 tt) (only printing).
-Notation "'[[write0'  v ']]'" := (LE LogWrite P0 v) (only printing).
-Notation "'[[write1'  v ']]'" := (LE LogWrite P1 v) (only printing).
+Notation "'read0'" := (LE LogRead P0 tt) (only printing) : log_entries.
+Notation "'read1'" := (LE LogRead P1 tt) (only printing) : log_entries.
+Notation "'write0' v" := (LE LogWrite P0 v) (at level 10, only printing) : log_entries.
+Notation "'write1' v" := (LE LogWrite P1 v) (at level 10, only printing) : log_entries.
+
+Notation "∅" :=
+  (CtxEmpty) (at level 80, only printing) : context.
+Notation "[ x  ↦  y ]  ::  tl" :=
+  (CtxCons x y tl) (at level 80, right associativity, only printing) : context.
+
+(* FIXME *)
+Notation "'Ob'" :=
+  (@_vect_nil bool)
+    (at level 7, left associativity, only printing) : bits_printing.
+Notation "bs '~' 0" :=
+  {| vhd := false; vtl := bs |}
+    (at level 7, left associativity, only printing) : bits_printing.
+Notation "bs '~' 1" :=
+  {| vhd := true; vtl := bs |}
+    (at level 7, left associativity, only printing) : bits_printing.
+
+Open Scope context.
+Open Scope log_entries.
+Open Scope bits_printing.
 
 Ltac __must_typecheck_extract_result x :=
   lazymatch x with
