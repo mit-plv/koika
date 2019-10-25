@@ -469,7 +469,7 @@ module Graphs = struct
       sga.sga_reg_finite.finite_elements in
     let di_circuits =
       let cp = SGA.compile_sga_package sga in
-      fun r -> SGA.getenv cp.cp_reg_Env cp.cp_circuit r in
+      fun r -> SGA.getenv cp.cp_reg_Env cp.cp_circuits r in
     let di_fn_sigs f =
       let fn_name = Util.string_of_coq_string (vp.vp_ext_fn_names f) in
       let fn_sig = sga.sga_ext_fn_types f in
