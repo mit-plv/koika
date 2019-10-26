@@ -324,13 +324,18 @@ let continous_assignments
 type statement = Update of string  * string  * string
 (* name register, init value, net obtained by looking up the root of the register *)
 
-let statement_to_string (statement: statement) =
+let statement_to_string ?(add_overwrite_finegrain=false) (statement: statement) =
   let Update (reg, initvalue, net_update) = statement in (* Really we can do that? That's cool *)
   (* So we should compensate with something less cool: *)
+  if add_overwrite_finegrain then
   "\talways @(posedge clock) begin\n\t\tif (reset) begin\n\t\t\t" ^ reg ^ " <= " ^ initvalue ^ ";\n" ^
     "\t\tend else begin\n" ^ "\t\t\tif (" ^ reg ^ "__overwrite" ^ ") begin\n" ^
       "\t\t\t\t" ^ reg ^ " <= " ^ reg ^ "__overwrite_data" ^ ";\n\t\t\tend else begin\n" ^
         "\t\t\t\t" ^ reg ^ " <= " ^ net_update ^ ";\n\t\t\tend\n\t\tend\n\tend"
+  else
+    "\talways @(posedge clock) begin\n\t\tif (reset) begin\n\t\t\t" ^ reg ^ " <= " ^ reg ^ "__overwrite_data" ^ ";\n" ^
+    "\t\tend else begin\n" ^
+        "\t\t\t\t" ^ reg ^ " <= " ^ net_update ^ ";\n\t\t\tend\n\t\tend\n"
 
 type statements = statement list
 
