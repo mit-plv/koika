@@ -873,7 +873,7 @@ Section CompilerCorrectness.
       destruct (interp_action _ _ Gamma Log log ex) as [(? & ?) | ] eqn:?; cbn
     | [ H: interp_circuit ?x = bits_of_value _ |- context[interp_circuit ?x] ] =>
       rewrite H
-    | [  |- context[REnv.(getenv) (REnv.(map2) _ _ _)] ] =>
+    | [  |- context[REnv.(getenv) (map2 REnv _ _ _)] ] =>
       rewrite getenv_map2
     | [ Heq: Circuits.compile_action ?lco ?rc ?gamma ?ex ?clog = _  |- _ ] => progress rewrite Heq in *
     end.

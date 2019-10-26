@@ -26,7 +26,7 @@ Section Logs.
     REnv.(create) (fun _ => []).
 
   Definition log_app (l1 l2: Log) :=
-    REnv.(map2) (fun _ ll1 ll2 => ll1 ++ ll2) l1 l2.
+    map2 REnv (fun _ ll1 ll2 => ll1 ++ ll2) l1 l2.
 
   Definition log_find {T} (log: Log) reg (f: @LogEntry (R reg) -> option T) : option T :=
     list_find_opt f (REnv.(getenv) log reg).

@@ -274,7 +274,7 @@ Section CircuitCompilation.
 
   Definition cr_of_r (r: REnv.(env_t) R)
     : REnv.(env_t) (fun idx => bits (CR idx)) :=
-    REnv.(map) (fun idx v => bits_of_value v) r.
+    map REnv (fun idx v => bits_of_value v) r.
 
   Definition csigma_of_sigma (sigma: forall f, Sig_denote (Sigma f))
     : forall f, CSig_denote (CSigma f) :=
@@ -355,7 +355,7 @@ Section CircuitCompilation.
        data1 := CAnnotOpt an (CMux cond (data1 tReg) (data1 fReg)) |}.
 
   Definition mux_rwsets an (cond: circuit 1) (tRegs fRegs: rwset) :=
-    REnv.(map2) (fun k treg freg => mux_rwdata an cond treg freg)
+    map2 REnv (fun k treg freg => mux_rwdata an cond treg freg)
                 tRegs fRegs.
 
   Fixpoint mux_ccontext {sig} (cond: circuit 1) (ctxT: ccontext sig) (ctxF: ccontext sig) : ccontext sig.
@@ -531,7 +531,7 @@ Section CircuitCompilation.
 
   Definition adapter (cs: scheduler_circuit) : rwcircuit :=
     {| canFire := $`"cF_init"` Ob~1;
-       regs := REnv.(map) (fun k reg => {| read0 := $`"init_no_read0"` Ob~0;
+       regs := map REnv (fun k reg => {| read0 := $`"init_no_read0"` Ob~0;
                                        read1 := $`"init_no_read1"` Ob~0;
                                        write0 := $`"init_no_write0"` Ob~0;
                                        write1 := $`"init_no_write1"` Ob~0;
@@ -558,16 +558,16 @@ Section CircuitCompilation.
     (willFire_of_canFire'_rw1 ruleReg inReg).
 
   Definition willFire_of_canFire cRule cInput : circuit 1 :=
-    REnv.(fold_right)
+    fold_right REnv
            (fun k '(ruleReg, inReg) acc =>
               acc &&`"wF_fold_res"` willFire_of_canFire' ruleReg inReg)
-           (REnv.(zip) cRule.(regs) cInput) cRule.(canFire).
+           (zip REnv cRule.(regs) cInput) cRule.(canFire).
 
   Arguments willFire_of_canFire' : simpl never.
 
   Definition update_accumulated_rwset (rl_rwset acc: rwset) :=
     let an := "compute_accumulated_rwset" in
-    REnv.(map2) (fun _ ruleReg accReg =>
+    map2 REnv (fun _ ruleReg accReg =>
                    {| read0 := (ruleReg.(read0)) ||`an` (accReg.(read0));
                       read1 := (ruleReg.(read1)) ||`an` (accReg.(read1));
                       write0 := (ruleReg.(write0)) ||`an` (accReg.(write0));
@@ -586,7 +586,7 @@ Section CircuitCompilation.
        data1 := CBundleRef rl rs bundle (rwcircuit_rwdata r rwdata_data1) (ruleReg.(data1)) |}.
 
   Definition bundleref_wrap_rwset rl rs bundle (rws: rwset) :=
-    REnv.(map) (bundleref_wrap_rwdata rl rs bundle) rws.
+    map REnv (bundleref_wrap_rwdata rl rs bundle) rws.
 
   Definition bundleref_wrap_erwc rl rs bundle erwc :=
     {| canFire := CBundleRef rl rs bundle rwcircuit_canfire erwc.(canFire);
@@ -652,7 +652,7 @@ Section CircuitCompilation.
   Definition compile_scheduler' (s: scheduler pos_t rule_name_t)
     : register_update_circuitry :=
     let s := compile_scheduler_circuit s init_scheduler_circuit in
-    REnv.(map2) (fun k r1 r2 => commit_rwdata r1 r2) s cr.
+    map2 REnv (fun k r1 r2 => commit_rwdata r1 r2) s cr.
 End CircuitCompilation.
 
 Arguments CR_of_R {reg_t} R idx : assert.
@@ -688,5 +688,5 @@ Section Helpers.
              (circuits: register_update_circuitry rule_name_t R Sigma REnv) :=
     let cr := cr_of_r r in
     let csigma := csigma_of_sigma sigma in
-    REnv.(map) (fun _ c => interp_circuit cr csigma c) circuits.
+    map REnv (fun _ c => interp_circuit cr csigma c) circuits.
 End Helpers.

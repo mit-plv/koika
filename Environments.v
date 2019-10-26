@@ -181,11 +181,11 @@ Definition equiv {K} (E: Env K) {V: esig K} (ev1 ev2: E.(env_t) V) :=
   forall k: K, E.(getenv) ev1 k = E.(getenv) ev2 k.
 
 Lemma equiv_refl {K} (E: Env K) {V: esig K} (ev: E.(env_t) V) :
-  E.(equiv) ev ev.
+  equiv E ev ev.
 Proof. firstorder. Qed.
 
 Lemma equiv_eq {K} (E: Env K) {V: esig K} (ev1 ev2: E.(env_t) V) :
-  E.(equiv) ev1 ev2 ->
+  equiv E ev1 ev2 ->
   ev1 = ev2.
 Proof.
   intros.
@@ -206,7 +206,7 @@ Definition zip {K} (E: Env K) {V1 V2: esig K} (ev1: E.(env_t) V1) (ev2: E.(env_t
   E.(create) (fun k => (E.(getenv) ev1 k, E.(getenv) ev2 k)).
 
 Lemma getenv_zip {K} (E: Env K) {V1 V2: esig K} (ev1: E.(env_t) V1) (ev2: E.(env_t) V2) k :
-  E.(getenv) (E.(zip) ev1 ev2) k = (E.(getenv) ev1 k, E.(getenv) ev2 k).
+  E.(getenv) (zip E ev1 ev2) k = (E.(getenv) ev1 k, E.(getenv) ev2 k).
 Proof.
   unfold zip; rewrite getenv_create; reflexivity.
 Qed.
@@ -224,11 +224,11 @@ Definition fold_right {K} (E: Env K) {V T} (f: forall k: K, V k -> T -> T) (ev: 
   List.fold_right (fun (k: K) (t: T) => f k (E.(getenv) ev k) t) t0 (@finite_elements K E.(finite_keys)).
 
 Definition to_list {K} (E: Env K) {V} (ev: E.(env_t) V) :=
-  E.(fold_right) (fun (k: K) (v: V k) (t: list { k: K & V k }) =>
+  fold_right E (fun (k: K) (v: V k) (t: list { k: K & V k }) =>
                     (existT _ k v) :: t) ev List.nil.
 
 Definition to_alist {K} (E: Env K) {V} (ev: E.(env_t) (fun _ => V)) :=
-  E.(fold_right) (fun (k: K) (v: V) (t: list (K * V)) => (k, v) :: t) ev List.nil.
+  fold_right E (fun (k: K) (v: V) (t: list (K * V)) => (k, v) :: t) ev List.nil.
 
 Definition finite_member {T} {FT: FiniteType T} (t: T) :
   member t finite_elements.

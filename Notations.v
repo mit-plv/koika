@@ -169,17 +169,20 @@ Module Type Tests.
   (* Definition test_29 : list (uaction reg_t) := {* "yoyo", if "var" then UError else UError;UError *}. *)
 End Tests.
 
+Declare Scope log_entries.
 Notation "'read0'" := (LE LogRead P0 tt) (only printing) : log_entries.
 Notation "'read1'" := (LE LogRead P1 tt) (only printing) : log_entries.
 Notation "'write0' v" := (LE LogWrite P0 v) (at level 10, only printing) : log_entries.
 Notation "'write1' v" := (LE LogWrite P1 v) (at level 10, only printing) : log_entries.
 
+Declare Scope context.
 Notation "∅" :=
   (CtxEmpty) (at level 80, only printing) : context.
 Notation "[ x  ↦  y ]  ::  tl" :=
   (CtxCons x y tl) (at level 80, right associativity, only printing) : context.
 
 (* FIXME *)
+Declare Scope bits_printing.
 Notation "'Ob'" :=
   (@_vect_nil bool)
     (at level 7, left associativity, only printing) : bits_printing.
