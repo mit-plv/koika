@@ -1,12 +1,5 @@
 Require Import SGA.Notations.
 
-Definition pos_t := unit.
-Definition var_t := string.
-Definition fn_name_t := string.
-
-Notation scheduler := (scheduler pos_t _).
-Notation uaction := (uaction pos_t var_t fn_name_t).
-Notation UInternalFunction reg_t ext_fn_t := (InternalFunction fn_name_t var_t (uaction reg_t ext_fn_t)).
 
 Record demo_package_t :=
   { dp_reg_t : Type;

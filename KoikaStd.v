@@ -1,11 +1,5 @@
 Require Import SGA.Notations.
 
-Definition pos_t := unit.
-Definition var_t := string.
-Definition fn_name_t := string.
-Notation uaction := (uaction pos_t var_t fn_name_t).
-Notation UInternalFunction reg_t ext_fn_t := (InternalFunction fn_name_t var_t (uaction reg_t ext_fn_t)).
-
 Module Type Fifo.
   Parameter T:type.
 End Fifo.

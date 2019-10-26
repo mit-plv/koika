@@ -260,6 +260,14 @@ Open Scope context.
 Open Scope log_entries.
 Open Scope bits_printing.
 
+Definition pos_t := unit.
+Definition var_t := string.
+Definition fn_name_t := string.
+
+Notation scheduler := (scheduler pos_t _).
+Notation uaction := (uaction pos_t var_t fn_name_t).
+Notation UInternalFunction reg_t ext_fn_t := (InternalFunction fn_name_t var_t (uaction reg_t ext_fn_t)).
+
 Ltac __must_typecheck_extract_result x :=
   lazymatch x with
   | Success ?tm => tm
