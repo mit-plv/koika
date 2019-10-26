@@ -216,9 +216,20 @@ let assignment_to_string (gensym: int ref) (assignment: assignment) =
        | UIntPlus _ -> default_left ^ arg1 ^ " + " ^ arg2
        | UIntLt _ -> default_left ^ arg1 ^ " < " ^ arg2
        | Sel _ -> default_left ^ arg1 ^ "[" ^ arg2 ^ "]"
-       | PartSubst (_, offset, slice_sz) ->
-          Printf.sprintf "assign %s = %s; assign %s[%d +: %d] = %s; // FIXME"
-            lhs arg1 lhs offset slice_sz arg2
+       | PartSubst (sz, offset, slice_sz) ->
+          if (offset > 0) then
+            if (offset + slice_sz <= sz-1) then
+              Printf.sprintf "\tassign %s = {%s[%d : %d], %s, %s[%d : %d]}"
+                lhs arg1 (sz-1) (offset+slice_sz)  arg2 arg1 (offset-1) 0
+            else
+              Printf.sprintf "\tassign %s = { %s, %s[%d : %d]}"
+                lhs arg2 arg1 (offset-1) 0
+          else
+            if sz = 0 then
+              failwith "Unhandled case, slicing size 0?"
+            else
+              Printf.sprintf "assign %s = {%s[%d : %d], %s}"
+                lhs arg1 (sz-1) (slice_sz)  arg2
        | IndexedPart (_, slice_sz) -> default_left ^ arg1 ^ "[" ^ arg2 ^ " +: " ^ string_of_int slice_sz ^ "]"
        | And _ ->  default_left ^ arg1 ^ " & " ^ arg2
        | Or _ -> default_left ^ arg1 ^ " | " ^ arg2
