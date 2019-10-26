@@ -192,25 +192,25 @@ Module CircuitSignatures.
 
   Definition CSigma1 (fn: fbits1) : CSig 1 :=
     match fn with
-    | Not sz => {{ sz ~> sz }}
-    | ZExtL sz width => {{ sz ~> (Nat.max sz width) }}
-    | ZExtR sz width => {{ sz ~> (Nat.max sz width) }}
-    | Part sz offset width => {{ sz ~> width }}
+    | Not sz => {$ sz ~> sz $}
+    | ZExtL sz width => {$ sz ~> (Nat.max sz width) $}
+    | ZExtR sz width => {$ sz ~> (Nat.max sz width) $}
+    | Part sz offset width => {$ sz ~> width $}
     end.
 
   Definition CSigma2 (fn: PrimTyped.fbits2) : CSig 2 :=
     match fn with
-    | Sel sz => {{ sz ~> (log2 sz) ~> 1 }}
-    | PartSubst sz offset width => {{ sz ~> width ~> sz }}
-    | IndexedPart sz width => {{ sz ~> (log2 sz) ~> width }}
-    | And sz => {{ sz ~> sz ~> sz }}
-    | Or sz => {{ sz ~> sz ~> sz }}
-    | Lsl bits_sz shift_sz => {{ bits_sz ~> shift_sz ~> bits_sz }}
-    | Lsr bits_sz shift_sz => {{ bits_sz ~> shift_sz ~> bits_sz }}
-    | EqBits sz => {{ sz ~> sz ~> 1 }}
-    | Concat sz1 sz2 => {{ sz1 ~> sz2 ~> (sz2 + sz1) }}
-    | UIntPlus sz => {{ sz ~> sz ~> sz }}
-    | UIntLt sz => {{ sz ~> sz ~> 1 }}
+    | Sel sz => {$ sz ~> (log2 sz) ~> 1 $}
+    | PartSubst sz offset width => {$ sz ~> width ~> sz $}
+    | IndexedPart sz width => {$ sz ~> (log2 sz) ~> width $}
+    | And sz => {$ sz ~> sz ~> sz $}
+    | Or sz => {$ sz ~> sz ~> sz $}
+    | Lsl bits_sz shift_sz => {$ bits_sz ~> shift_sz ~> bits_sz $}
+    | Lsr bits_sz shift_sz => {$ bits_sz ~> shift_sz ~> bits_sz $}
+    | EqBits sz => {$ sz ~> sz ~> 1 $}
+    | Concat sz1 sz2 => {$ sz1 ~> sz2 ~> (sz2 + sz1) $}
+    | UIntPlus sz => {$ sz ~> sz ~> sz $}
+    | UIntLt sz => {$ sz ~> sz ~> 1 $}
     end.
 End CircuitSignatures.
 
@@ -222,23 +222,23 @@ Module PrimSignatures.
     match fn with
     | Conv tau fn =>
       match fn with
-      | Pack => {{ tau ~> bits_t (type_sz tau) }}
-      | Unpack => {{ bits_t (type_sz tau) ~> tau }}
-      | Ignore => {{ tau ~> unit_t }}
+      | Pack => {$ tau ~> bits_t (type_sz tau) $}
+      | Unpack => {$ bits_t (type_sz tau) ~> tau $}
+      | Ignore => {$ tau ~> unit_t $}
       end
     | Display fn =>
-      {{ match fn with
+      {$ match fn with
          | DisplayUtf8 sz => bits_t sz
          | DisplayValue tau => tau
-         end ~> unit_t }}
+         end ~> unit_t $}
     | Bits1 fn => Sig_of_CSig (CSigma1 fn)
-    | Struct1 GetField sig idx => {{ struct_t sig ~> field_type sig idx }}
+    | Struct1 GetField sig idx => {$ struct_t sig ~> field_type sig idx $}
     end.
 
   Definition Sigma2 (fn: fn2) : Sig 2 :=
     match fn with
-    | Eq tau => {{ tau ~> tau ~> bits_t 1 }}
-    | Struct2 SubstField sig idx => {{ struct_t sig ~> field_type sig idx ~> struct_t sig }}
+    | Eq tau => {$ tau ~> tau ~> bits_t 1 $}
+    | Struct2 SubstField sig idx => {$ struct_t sig ~> field_type sig idx ~> struct_t sig $}
     | Bits2 fn => Sig_of_CSig (CSigma2 fn)
     end.
 End PrimSignatures.

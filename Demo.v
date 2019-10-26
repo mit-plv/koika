@@ -30,8 +30,8 @@ Module Ex1.
 
   Definition Sigma fn : ExternalSignature :=
     match fn with
-    | Even => {{ bits_t 3 ~> bits_t 1}}
-    | Odd => {{ bits_t 3 ~> bits_t 1}}
+    | Even => {$ bits_t 3 ~> bits_t 1 $}
+    | Odd => {$ bits_t 3 ~> bits_t 1 $}
     end.
 
   Definition r idx : R idx :=
@@ -49,11 +49,11 @@ Module Ex1.
   Example uactions r : uaction reg_t ext_fn_t :=
     match r with
     | r1 =>
-      {$ let "x" := read0(R0) in
+      {{ let x := read0(R0) in
          if (`UExternalCall Even (UVar "x")`)
          then write0(R1,`UConstBits Ob~1`)
          else write0(R1,`UConstBits Ob~1`)
-                       $}
+                       }}
     end.
 
   Definition rules :=
@@ -89,21 +89,21 @@ Module Ex2.
     end.
 
   Example _negate : uaction reg_t ext_fn_t  :=
-    {$
-       let "x" := read1(R0) in
-       write1(R0,"x")
-                $}.
+    {{
+       let x := read1(R0) in
+       write1(R0,x)
+    }}.
 
   Example _swap_or_replace : uaction reg_t ext_fn_t  :=
-    {$
-      let "should_swap" := read0(R2) in
-      if "should_swap"
+    {{
+      let should_swap := read0(R2) in
+      if should_swap
       then
         write0(R1,read0(R0));
         write0(R0,read0(R1))
       else
         write0(R0, read0(R0) || read0(R1))
-                 $}.
+    }}.
 
   Example _ill_typed_write : uaction reg_t ext_fn_t  :=
     UWrite P0 R2 (URead P0 R1).
@@ -168,28 +168,28 @@ Module Collatz.
   Notation one := (Bits.zero logsz).
 
   Definition times_three : UInternalFunction reg_t ext_fn_t :=
-    function "times_three" ("arg1" : bits_t 16) : bits_t 16 :=
-     ("arg1" << #Ob~1)  + "arg1".
+    function (arg1 : bits_t 16) : bits_t 16 :=
+     (arg1 << #Ob~1)  + arg1.
 
   Definition _divide : uaction reg_t ext_fn_t :=
-  {$
-    let "v" := read0(R0) in
-    let "odd" := "v"[#Ob~0~0~0~0] in
-    if !"odd" then
-      write0(R0,"v" >> #Ob~1)
+  {{
+    let v := read0(R0) in
+    let odd := v[#Ob~0~0~0~0] in
+    if !odd then
+      write0(R0,v >> #Ob~1)
     else
       fail
-  $}.
+  }}.
 
   Definition _multiply : uaction reg_t ext_fn_t :=
-  {$
-    let "v" := read1(R0) in
-    let "odd" := "v"[#Ob~0~0~0~0] in
-    if "odd" then
-      write1(R0, (funcall times_three "v") + #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1)
+  {{
+    let v := read1(R0) in
+    let odd := v[#Ob~0~0~0~0] in
+    if odd then
+      write1(R0, (funcall times_three (v)) + #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1)
     else
       fail
-  $}.
+  }}.
 
   Definition collatz : scheduler :=
     tc_scheduler (divide |> multiply |> done).
@@ -298,18 +298,19 @@ Module Decoder (P: Unpacker) (F: Fetcher).
     end.
 
   Definition _fetch : uaction reg_t ext_fn_t :=
-    {$
-    let "pc" := read0(Rpc) in
-    let "encoded" := `F.fetch_instr _ "pc"` in
-    write0(Rencoded,"encoded");
-    write0(Rpc,"pc" + `UConstBits Ob~0~0~1`)
-                $}.
+    {{
+    let pc := read0(Rpc) in
+    let encoded := `F.fetch_instr _ "pc"` in
+    write0(Rencoded, encoded);
+    write0(Rpc, pc + #Ob~0~0~1)
+    }}
+  .
 
   Definition _decode : uaction reg_t ext_fn_t :=
-    {$
-    let "encoded" := read1(Rencoded) in
+    {{
+    let encoded := read1(Rencoded) in
     write0(Rdecoded,`P.unpack _ _ "encoded"`)
-     $}.
+    }}.
 
   Definition cr := ContextEnv.(create) r.
 
@@ -363,18 +364,19 @@ Module ManualUnpacker <: Unpacker.
   Notation SCall2 fn a1 a2 := (UBinop (UStruct2 fn) a1 a2).
 
   Definition unpack reg_t ext_fn_t encoded: uaction reg_t ext_fn_t :=
-    {$
-       let "imm" := `SCall1 (UGetFieldBits decoded_sig "immediate") {$ encoded $}` in
-       let "src" := `SCall1 (UGetFieldBits decoded_sig "src") {$ encoded $}` in
-       let "dst" := `SCall1 (UGetFieldBits decoded_sig "dst") {$ encoded $}` in
-       `SCall2 (USubstField "immediate")
-               (SCall2 (USubstField "dst")
-                      (SCall2 (USubstField "src")
-                             (UUnop (UConv (UUnpack (struct_t decoded_sig))) (UConstBits (Bits.zero 32)))
-                             {$"src"$})
-                     {$"dst"$})
-               {$"imm"$}`
-     $}.
+    {{
+        let imm := `SCall1 (UGetFieldBits decoded_sig "immediate") (UVar encoded)` in
+        let src := `SCall1 (UGetFieldBits decoded_sig "src") (UVar encoded)` in
+        let dst := `SCall1 (UGetFieldBits decoded_sig "dst") (UVar encoded)` in
+        `SCall2 (USubstField "immediate")
+         (SCall2 (USubstField "dst")
+                 (SCall2 (USubstField "src")
+                         (UUnop (UConv (UUnpack (struct_t decoded_sig))) (UConstBits (Bits.zero 32)))
+                         {{ src }})
+                 {{ dst }})
+         {{ imm }}`
+     }}.
+
 End ManualUnpacker.
 
 Module PrimitiveUnpacker <: Unpacker.
@@ -422,7 +424,7 @@ Module PrimitiveFetcher <: Fetcher.
 
   Definition Sigma (fn: ext_fn_t) : ExternalSignature :=
     match fn with
-    | FetchInstr => {{ bits_t 3 ~> bits_t 32 }}
+    | FetchInstr => {$ bits_t 3 ~> bits_t 32 $}
     end.
 
   Definition ext_fn_names (fn: ext_fn_t) : string :=
@@ -502,9 +504,9 @@ Module Pipeline.
 
   Definition Sigma (fn: ext_fn_t) : ExternalSignature :=
     match fn with
-    | Stream => {{ bits_t sz ~> bits_t sz }}
-    | F => {{ bits_t sz ~> bits_t sz }}
-    | G => {{ bits_t sz ~> bits_t sz }}
+    | Stream => {$ bits_t sz ~> bits_t sz $}
+    | F => {$ bits_t sz ~> bits_t sz $}
+    | G => {$ bits_t sz ~> bits_t sz $}
     end.
 
   Local Notation "f [[ arg ]]" :=
@@ -512,25 +514,25 @@ Module Pipeline.
       (at level 99, arg at level 99, format "f [[ arg ]]").
 
   Definition _doF : uaction _ _ :=
-    {$
-       let "v" := read0(inputReg) in
+    {{
+       let v := read0(inputReg) in
        write0(inputReg,`Stream[[UVar "v"]]`);
-       let "invalid" := read1(invalid) in
-       if "invalid"
+       let invalid := read1(invalid) in
+       if invalid
        then
          write1(invalid,`UConstBits Ob~0`);
          write0(r0,`F[[UVar "v"]]`)
        else
          fail
-           $}.
+    }}.
 
   Definition _doG : uaction _ _ :=
-    {$
-    let "invalid" := read0(invalid) in
-    if !"invalid" then
-      let "data" := read0(r0) in
-      let "v" := read0(outputReg) in
-      write0(outputReg,`Stream[[{$"v"$}]]`);
+    {{
+    let invalid := read0(invalid) in
+    if !invalid then
+      let data := read0(r0) in
+      let v := read0(outputReg) in
+      write0(outputReg,`Stream[[{{v}}]]`);
       write0(invalid,`UConstBits Ob~1`);
       if `G[[UVar "data"]]` == `G[[F[[UVar "v"]]]]`
       then
@@ -539,7 +541,7 @@ Module Pipeline.
         write0(correct,`UConstBits Ob~0`)
     else
       fail
-        $}.
+    }}.
 
   Definition rules :=
     tc_rules R Sigma
@@ -654,12 +656,12 @@ Module RegisterFile_Ordered.
 
 
   Definition _ReadReg : uaction _ empty_ext_fn_t :=
-    {$
-    let "v" := read0(rIndex) in
-    write0(rIndex,"v" + `UConstBits (Bits.of_nat (log2 nregs) 1)`);
+    {{
+    let v := read0(rIndex) in
+    write0(rIndex,v + `UConstBits (Bits.of_nat (log2 nregs) 1)`);
     write0(rOutput,`UCompleteSwitch (log2 nregs) (pred nregs) "v"
-                    (vect_map (fun idx => {$ read0(rData idx) $}) (all_indices nregs))`)
-  $}.
+                    (vect_map (fun idx => {{ read0(rData idx) }}) (all_indices nregs))`)
+    }}.
 
   Definition rules :=
     tc_rules R empty_Sigma
@@ -734,14 +736,14 @@ Module Enums.
     end.
 
   Definition _Incr : uaction _ empty_ext_fn_t :=
-    {$
-       let "bits_a" := `UUnop (UConv UPack) {$read0(rA)$}` in
-       let "bits_b" := `UUnop (UConv UPack) {$read0(rB)$}` in
-       let "neg_a" := !"bits_a" in
-       let "succ_b" := "bits_b" + `UConstBits Ob~0~0~1` in
-       write0(rA,`UUnop (UConv (UUnpack (enum_t flag_sig))) {$"neg_a"$}`);
-       write0(rB, `UUnop (UConv (UUnpack (enum_t flag_sig))) {$"succ_b"$}`)
-       $}.
+    {{
+       let bits_a := `UUnop (UConv UPack) {{read0(rA)}}` in
+       let bits_b := `UUnop (UConv UPack) {{read0(rB)}}` in
+       let neg_a := !bits_a in
+       let succ_b := bits_b + `UConstBits Ob~0~0~1` in
+       write0(rA,`UUnop (UConv (UUnpack (enum_t flag_sig))) {{neg_a}}`);
+       write0(rB, `UUnop (UConv (UUnpack (enum_t flag_sig))) {{succ_b}}`)
+    }}.
 
   (* Ltac __must_typecheck R Sigma tcres ::= *)
   (*   __must_typecheck_cbn R Sigma tcres. *)
@@ -801,8 +803,8 @@ Module IntCall.
     Inductive reg_t := buffer.
 
     Definition swap tau: UInternalFunction reg_t ext_fn_t  :=
-      function "swap" ("arg1" : tau) : tau :=
-      write0(buffer, "arg1");
+      function (arg1 : tau) : tau :=
+      write0(buffer, arg1);
       read0(buffer).
 
     Instance FiniteType_reg_t : FiniteType reg_t := _.
@@ -826,8 +828,8 @@ Module IntCall.
     end.
 
   Definition nor (sz: nat) : UInternalFunction reg_t ext_fn_t :=
-    function ("nor<" ++ string_of_nat sz ++ ">") ("arg1" : bits_t sz, "arg2" : bits_t sz) : bits_t sz :=
-  !("arg1" || "arg2").
+    function  (arg1 : bits_t sz, arg2 : bits_t sz) : bits_t sz :=
+  !(arg1 || arg2).
 
   Definition display :=
     (Display.Printer (ext_fn_t := empty_ext_fn_t) (reg_t := reg_t) (pos_t := pos_t)).
@@ -835,14 +837,14 @@ Module IntCall.
   Definition swap8 := Delay.swap (bits_t 8).
   Definition swap16 := Delay.swap (bits_t 16).
 
-  Definition _rl : uaction _ empty_ext_fn_t :=
-    {$
-       let "a" := read0(rA) in
-       let "old_a" := call rDelay2 swap16 "a" in
-       let "old_al" := call rDelay1 swap8 ("old_a"[`UConstBits Ob~0~0~0~0` :+8])  in
-       write0(rA, funcall (nor 16) (read0(rA)), "old_a");
-       funcall (display (Display.Str "rA: " :: Display.Value (bits_t 16) :: nil)) "a"
-       $}.
+  Definition _rl : uaction reg_t empty_ext_fn_t :=
+    {{
+       let a := read0(rA) in
+       let old_a := call rDelay2 swap16 (a) in
+       let old_al := call rDelay1 swap8 (old_a[#Ob~0~0~0~0 :+8])  in
+       write0(rA, funcall (nor 16) ((read0(rA)), old_a));
+       funcall (display (Display.Str "rA: " :: Display.Value (bits_t 16) :: nil)) (a)
+    }}.
 
   (* Ltac __must_typecheck R Sigma tcres ::= *)
   (*   __must_typecheck_cbn R Sigma tcres. *)
@@ -910,7 +912,6 @@ Module ExternallyCompiledRule.
   Module Fifo5 := Fifo1 FifoBit5.
 
   Inductive reg_t := MyFifo (fifof2state:Fifo5.reg_t) | Mem | Rdata .
-  Inductive custom_fn_t := .
   Inductive name_t := fetch | ding.
 
   Definition logsz := 5.
@@ -932,21 +933,22 @@ Module ExternallyCompiledRule.
     | Rdata => zero
     end.
 
+
   Definition _fetch :=
-    {$
-       let "memory" := read0(Mem) in
-       call MyFifo Fifo5.enq "memory"
-            $}.
+    {{
+       let memory := read0(Mem) in
+       call MyFifo Fifo5.enq (memory)
+    }}.
 
 
-  Definition _ding :=
-    {$
-       let "dequeued" := call0 MyFifo Fifo5.deq in
-       if ("dequeued" == `UConstBits Ob~0~0~0~1~0 `) then
-         write0(Rdata,`UConstBits Ob~0~0~0~0~1`)
+  Definition _ding : uaction reg_t empty_ext_fn_t :=
+    {{
+       let dequeued := call0 MyFifo Fifo5.deq in
+       if (dequeued == #Ob~0~0~0~1~0) then
+         write0(Rdata, #Ob~0~0~0~0~1)
        else
          fail
-           $}.
+    }}.
 
   Definition cr := ContextEnv.(create) r.
 
@@ -959,7 +961,6 @@ Module ExternallyCompiledRule.
 
   Definition bring : scheduler :=
     tc_scheduler (fetch |> ding |> done).
-
 
   Definition sga_package :=
         {| sga_reg_types := R;
@@ -1000,6 +1001,7 @@ Module GcdMachine.
   Definition ext_fn_t := empty_ext_fn_t.
 
   Inductive reg_t := input_data |  input_valid | gcd_busy | gcd_a | gcd_b | output_data.
+
   Instance FiniteType_reg_t : FiniteType reg_t := _.
 
   Definition pair_sig :=
@@ -1007,7 +1009,6 @@ Module GcdMachine.
      struct_fields := ("a", bits_t 16)
                         :: ("b", bits_t 16)
                         :: nil |}.
-
 
   Definition R r :=
     match r with
@@ -1029,58 +1030,58 @@ Module GcdMachine.
     | output_data => zero
     end.
 
-  Definition gcd_start : uaction reg_t ext_fn_t  :=
-    {$
-       if (read0(input_valid) == `UConstBits Ob~1`
+Definition gcd_start : uaction reg_t ext_fn_t  :=
+    {{
+       if (read0(input_valid) == #(Ob~1)
             && !read0(gcd_busy)) then
-         let "data" := read0(input_data) in
-         write0(gcd_a, get("data", "a"));
-         write0(gcd_b, get("data", "b"));
-         write0(gcd_busy, `UConstBits Ob~1`);
-         write0(input_valid, `UConstBits Ob~0`)
+         let data := read0(input_data) in
+         write0(gcd_a, get(data, a));
+         write0(gcd_b, get(data, b));
+         write0(gcd_busy, #Ob~1);
+         write0(input_valid, #Ob~0)
        else
          fail
-           $}.
+           }}.
 
   Definition sub  : UInternalFunction reg_t ext_fn_t :=
-    function "sub" ("arg1" : bits_t 16, "arg2" : bits_t 16) : bits_t 16 :=
-      ("arg1" + !"arg2" + `UConstBits (Bits.of_nat 16 1)`).
+    function (arg1 : bits_t 16, arg2 : bits_t 16) : bits_t 16 :=
+      (arg1 + !arg2 + `UConstBits (Bits.of_nat 16 1)`).
 
   Definition lt16 : UInternalFunction reg_t ext_fn_t :=
-    function "lt" ("arg1" : bits_t 16, "arg2" : bits_t 16) : bits_t 1 :=
-      (funcall sub "arg1", "arg2")[`UConstBits (Bits.of_nat 4 15)`].
+    function (arg1 : bits_t 16, arg2 : bits_t 16) : bits_t 1 :=
+      (funcall sub (arg1, arg2))[`UConstBits (Bits.of_nat 4 15)`].
 
   Fixpoint lt (sz: nat) : UInternalFunction reg_t ext_fn_t :=
     match sz with
-    | O => function "lt" ("arg1" : bits_t 0, "arg2" : bits_t 0) : bits_t 0 := `USugar (UConstBits Ob~1)`
-    | S sz => function "lt" ("arg1" : bits_t sz, "arg2" : bits_t sz) : bits_t sz :=
-      let "subLt" := funcall (lt sz) "arg1"[`UConstBits (Bits.of_nat sz 0)` :+ sz], "arg2"[`UConstBits (Bits.of_nat sz 0)` :+ sz] in
-      "arg1"[`UConstBits (Bits.of_nat sz sz)`] || "arg2"[`UConstBits (Bits.of_nat sz sz)`]
+    | O => function (arg1 : bits_t 0, arg2 : bits_t 0) : bits_t 0 := #Ob~1
+    | S sz => function (arg1 : bits_t sz, arg2 : bits_t sz) : bits_t sz :=
+      let subLt := funcall (lt sz) (arg1[#(Bits.of_nat sz 0) :+ sz], arg2[#(Bits.of_nat sz 0) :+ sz]) in
+      arg1[#(Bits.of_nat sz sz)] || arg2[#(Bits.of_nat sz sz)]
     end.
 
-  Definition gcd_compute  : uaction reg_t ext_fn_t  :=
-    {$
-       let "a" := read0(gcd_a) in
-       let "b" := read0(gcd_b) in
-       if !("a" == `UConstBits (Bits.of_nat 16 0)`) then
-         if (funcall lt16 "a", "b") then
-           write0(gcd_b, "a");
-           write0(gcd_a, "b")
+  Definition gcd_compute  : uaction reg_t ext_fn_t :=
+    {{
+       let a := read0(gcd_a) in
+       let b := read0(gcd_b) in
+       if !(a == #(Bits.of_nat 16 0)) then
+         if (funcall lt16 (a, b)) then
+           write0(gcd_b, a);
+           write0(gcd_a, b)
          else
-           write0(gcd_a, funcall sub "a","b")
+           write0(gcd_a, funcall sub (a,b))
        else
          fail
-           $}.
+    }}.
 
-    Definition gcd_getresult  : uaction reg_t ext_fn_t  :=
-      {$
-       if ( read1(gcd_a) == `UConstBits (Bits.of_nat 16 0)`
+    Definition gcd_getresult : uaction reg_t ext_fn_t :=
+      {{
+       if ((read1(gcd_a) == #(Bits.of_nat 16 0))
           && read1(gcd_busy)) then
-         write0(gcd_busy, `UConstBits Ob~0`);
+         write0(gcd_busy, #Ob~0);
          write0(output_data, read1(gcd_b))
        else
          fail
-           $}.
+      }}.
 
   Inductive name_t := start | step_compute | get_result.
 

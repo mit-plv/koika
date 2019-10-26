@@ -213,11 +213,11 @@ Notation arg1Size fsig := (vect_hd fsig.(argSizes)).
 Notation arg2Size fsig := (vect_hd (vect_tl fsig.(argSizes))).
 
 Module CSigNotations.
-  Notation "{{  a1 ~> ret  }}" :=
+  Notation "{$  a1 ~> ret  $}" :=
     {| argSizes := vect_cons a1 vect_nil;
        retSize := ret |}.
 
-  Notation "{{  a1 ~> a2 ~> ret  }}" :=
+  Notation "{$  a1 ~> a2 ~> ret  $}" :=
     {| argSizes := vect_cons a1 (vect_cons a2 vect_nil);
        retSize := ret |}.
 End CSigNotations.
@@ -248,11 +248,11 @@ Notation arg1Type fsig := (vect_hd fsig.(argTypes)).
 Notation arg2Type fsig := (vect_hd (vect_tl fsig.(argTypes))).
 
 Module SigNotations.
-  Notation "{{  a1 ~> ret  }}" :=
+  Notation "{$  a1 ~> ret  $}" :=
     {| argTypes := vect_cons a1 vect_nil;
        retType := ret |}.
 
-  Notation "{{  a1 ~> a2 ~> ret  }}" :=
+  Notation "{$  a1 ~> a2 ~> ret  $}" :=
     {| argTypes := vect_cons a1 (vect_cons a2 vect_nil);
        retType := ret |}.
 End SigNotations.
