@@ -899,61 +899,14 @@ Module IntCall.
                vp_ext_fn_names := empty_fn_names |} |}.
 End IntCall.
 
+Require Import KoikaStd.
+
 Module ExternallyCompiledRule.
-  Definition ext_fn_t := empty_ext_fn_t.
-
-  Module Type Fifo.
-    Parameter T: type.
-  End Fifo.
-
-  Module Fifo1 (f: Fifo).
-    Import f.
-    Inductive reg_t := data0 |  valid0.
-
-    Definition R r :=
-      match r with
-      | data0 => T
-      | valid0 => bits_t 1
-      end.
-
-    Notation zero := (Bits.zeroes _).
-
-    Definition r idx : R idx :=
-      match idx with
-      | data0 => value_of_bits zero
-      | valid0 => zero
-      end.
-
-    Definition name_reg r :=
-      match r with
-      | data0 => "data0"
-      | valid0 => "valid0"
-      end.
-
-    Definition enq : UInternalFunction reg_t ext_fn_t :=
-      function "enq" ("data" : T) : bits_t 0 :=
-        if (!read0(valid0)) then
-          write0(data0,"data");
-          write0(valid0,`UConstBits Ob~1`)
-        else
-          fail.
-
-    Definition deq : UInternalFunction reg_t ext_fn_t :=
-      function "deq" : T :=
-        if (read0(valid0)) then
-          write0(valid0,`UConstBits Ob~0`);
-            read0(data0)
-        else
-          fail 5.
-
-    Instance FiniteType_reg_t : FiniteType reg_t := _.
-
-  End Fifo1.
-
 
   Module FifoBit5 <: Fifo.
     Definition T:= bits_t 5.
   End FifoBit5.
+
   Module Fifo5 := Fifo1 FifoBit5.
 
   Inductive reg_t := MyFifo (fifof2state:Fifo5.reg_t) | Mem | Rdata .
