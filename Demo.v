@@ -61,8 +61,6 @@ Module Ex1.
   Definition s1_result :=
     Eval compute in interp_scheduler (ContextEnv.(create) r) sigma rules s1.
 
-  Compute (interp_scheduler (ContextEnv.(create) r) sigma rules s1).
-
   Definition s1_circuits :=
     compile_scheduler rules s1.
 
