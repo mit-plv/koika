@@ -101,7 +101,7 @@ Notation "x" := (cons x nil) (in custom koika_args at level 60, x custom koika a
 Notation "arg1 , arg2" := (app arg1 arg2) (in custom koika_args at level 13, arg1 custom koika_args, arg2 custom koika_args).
 Notation "a '++' b" :=  (UBinop (UBits2 UConcat) a b) (in custom koika at level 80,  right associativity, format "a  '++'  b").
 Notation "'call' instance method '(' args ')'" :=
-    (UCallModule instance id method args)
+    (USugar (UCallModule instance id method args))
       (in custom koika at level 99, instance constr at level 0, method constr at level 0, args custom koika_args at level 0).
 Notation "'funcall' method '(' args ')'" :=
     (UInternalCall method args)
