@@ -68,6 +68,7 @@ Notation "a '+' b" :=  (UBinop (UBits2 UUIntPlus) a b) (in custom koika at level
 Notation "a '==' b" :=  (UBinop UEq a b) (in custom koika at level 79, format "a  '=='  b").
 Notation "a '>>' b" :=  (UBinop (UBits2 ULsr) a b) (in custom koika at level 79, format "a  '>>'  b").
 Notation "a '<<' b" :=  (UBinop (UBits2 ULsl) a b) (in custom koika at level 79, format "a  '<<'  b").
+Notation "a '<' b" :=  (UBinop (UBits2 UUIntLt) a b) (in custom koika at level 79, format "a  '<'  b").
 Notation "'{' a ',' b '}'" := (UBinop (UBits2 UConcat) a b) (in custom koika at level 99, format "'{' a ',' b '}'").
 Notation "a '[' b ']'" := (UBinop (UBits2 USel) a b) (in custom koika at level 75, format "'[' a [ b ] ']'").
 Notation "a '[' b ':+' c ']'" := (UBinop (UBits2 (UIndexedPart c)) a b) (in custom koika at level 75, c constr at level 0, format "'[' a [ b ':+' c ] ']'").
