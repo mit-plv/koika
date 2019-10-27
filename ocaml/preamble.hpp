@@ -1,7 +1,9 @@
 #ifndef _PREAMBLE_HPP
 #define _PREAMBLE_HPP
 
+#include <cstddef> // For size_t
 #include <cstdint>
+#include <cstring> // For memcpy
 #include <limits> // For std::numeric_limits used in prims::mask
 #include <type_traits> // For std::conditional_t
 #include <algorithm> // For std::max
@@ -41,9 +43,17 @@ using wbits = std::conditional_t<size <= 128, boost::multiprecision::uint128_t,
               std::conditional_t<size <= 512, boost::multiprecision::uint512_t,
               std::conditional_t<size <= 1024, boost::multiprecision::uint1024_t,
                                  void>>>>;
+template<std::size_t size>
+using wsbits = std::conditional_t<size <= 128, boost::multiprecision::int128_t,
+               std::conditional_t<size <= 256, boost::multiprecision::int256_t,
+               std::conditional_t<size <= 512, boost::multiprecision::int512_t,
+               std::conditional_t<size <= 1024, boost::multiprecision::int1024_t,
+                                  void>>>>;
 #else
 template<std::size_t size>
 using wbits = void;
+template<std::size_t size>
+using wsbits = void;
 #endif // #ifdef NEEDS_BOOST_MULTIPRECISION
 
 struct unit {};
@@ -55,6 +65,14 @@ using bits = std::conditional_t<size ==  0, unit,
              std::conditional_t<size <= 32, std::uint32_t,
              std::conditional_t<size <= 64, std::uint64_t,
                                 wbits<size>>>>>>;
+
+template<std::size_t size>
+using sbits = std::conditional_t<size ==  0, unit,
+              std::conditional_t<size <=  8, std::int8_t,
+              std::conditional_t<size <= 16, std::int16_t,
+              std::conditional_t<size <= 32, std::int32_t,
+              std::conditional_t<size <= 64, std::int64_t,
+                                 wsbits<size>>>>>>;
 
 // https://stackoverflow.com/questions/57417154/
 #define UINT8(c) static_cast<uint8_t>(UINT8_C(c))
@@ -77,11 +95,15 @@ namespace prims {
     __builtin_unreachable();
   }
 
+  template<size_t sz>
+  size_t padding_width() {
+    return std::numeric_limits<bits<sz>>::digits - sz;
+  }
+
   template<std::size_t sz>
   bits<sz> ones() {
-    // GCC and Clang are smart enough to elide this when shift_amount == 0
-    constexpr uint8_t shift_amount = std::numeric_limits<bits<sz>>::digits - sz;
-    return std::numeric_limits<bits<sz>>::max() >> shift_amount;
+    // GCC and Clang are smart enough to elide the shift when digits == sz
+    return std::numeric_limits<bits<sz>>::max() >> padding_width<sz>();
   }
 
   template<std::size_t sz>
@@ -99,9 +121,14 @@ namespace prims {
     return mask<ret_sz>(widen<ret_sz>(arg));
   }
 
+  template<std::size_t sz>
+  bits<1> msb(const bits<sz> bs) {
+    return sz == 0 ? 0 : truncate<1, sz>(bs >> (sz - 1));
+  }
+
   template<std::size_t sz1, std::size_t sz2>
   bits<1> sel(const bits<sz1> data, const bits<sz2> idx) {
-    return truncate<1,sz1>(data >> idx);
+    return truncate<1, sz1>(data >> idx);
   }
 
   template<std::size_t sz1, std::size_t idx, std::size_t width>
@@ -125,6 +152,11 @@ namespace prims {
     return data1 | data2;
   }
 
+  template<std::size_t sz>
+  bits<sz> lxor(const bits<sz> data1, const bits<sz> data2) {
+    return data1 ^ data2;
+  }
+
   template<std::size_t sz1, std::size_t sz2>
   bits<sz1> lsr(const bits<sz1> data, const bits<sz2> shift) {
     return data >> shift;
@@ -146,8 +178,58 @@ namespace prims {
   }
 
   template<std::size_t sz>
+  bits<sz> minus(const bits<sz> x, const bits<sz> y) {
+    return mask<sz>(x + ~y + 1);
+  }
+
+  template<std::size_t sz>
   bits<1> lt(const bits<sz> x, const bits<sz> y) {
     return x < y;
+  }
+
+  template<std::size_t sz>
+  bits<1> gt(const bits<sz> x, const bits<sz> y) {
+    return x > y;
+  }
+
+  template<std::size_t sz>
+  bits<1> le(const bits<sz> x, const bits<sz> y) {
+    return x <= y;
+  }
+
+  template<std::size_t sz>
+  bits<1> ge(const bits<sz> x, const bits<sz> y) {
+    return x >= y;
+  }
+
+  template<std::size_t sz>
+  bits<sz> shifted_sbits_of_bits(const bits<sz> x) {
+    // This constructs an int of the same bitsize as x, with the same
+    // bitpattern, except that it uses the high bits of the storage type instead
+    // of the low ones (e.g. 4'b1101 is represented as 8'b11010000).
+    sbits<sz> sx; // FIXME does this work with multiprecision?
+    std::memcpy(&sx, &x, sizeof x);
+    return sx << padding_width<sz>();
+  }
+
+  template<std::size_t sz>
+  bits<1> slt(const bits<sz> x, const bits<sz> y) {
+    return shifted_sbits_of_bits(x) < shifted_sbits_of_bits(y);
+  }
+
+  template<std::size_t sz>
+  bits<1> sgt(const bits<sz> x, const bits<sz> y) {
+    return shifted_sbits_of_bits(x) > shifted_sbits_of_bits(y);
+  }
+
+  template<std::size_t sz>
+  bits<1> sle(const bits<sz> x, const bits<sz> y) {
+    return shifted_sbits_of_bits(x) <= shifted_sbits_of_bits(y);
+  }
+
+  template<std::size_t sz>
+  bits<1> sge(const bits<sz> x, const bits<sz> y) {
+    return shifted_sbits_of_bits(x) >= shifted_sbits_of_bits(y);
   }
 
   template<std::size_t sz1, std::size_t sz2>
@@ -216,7 +298,8 @@ struct _repr {
     case repr_style::bin:
       stream << (r.include_size ? "b" : "0b");
       for (size_t pos = sz; pos > 0; pos--) {
-        stream << uint(prims::truncate<1, sz>(r.val >> (pos - 1u)));
+        unsigned int bit = prims::truncate<1, sz>(r.val >> (pos - 1u));
+        stream << bit;
       }
     break;
     case repr_style::hex:

@@ -102,6 +102,12 @@ Fixpoint vect T n : Type :=
 Definition vect_hd {T n} (v: vect T (S n)) : T :=
   v.(vhd).
 
+Definition vect_hd_default {T n} (t: T) (v: vect T n) : T :=
+  match n return vect T n -> T with
+  | 0 => fun _ => t
+  | S n => fun v => vect_hd v
+  end v.
+
 Definition vect_tl {T n} (v: vect T (S n)) : vect T n :=
   v.(vtl).
 
@@ -188,6 +194,12 @@ Fixpoint vect_last {T n} (v: vect T (S n)) : T :=
   match n return vect T (S n) -> T with
   | O => fun v => vect_hd v
   | S _ => fun v => vect_last (vect_tl v)
+  end v.
+
+Definition vect_last_default {T n} (t: T) (v: vect T n) : T :=
+  match n return vect T n -> T with
+  | 0 => fun _ => t
+  | S n => fun v => vect_last v
   end v.
 
 Fixpoint vect_map {T T' n} (f: T -> T') (v: vect T n) : vect T' n :=
@@ -678,13 +690,12 @@ Module Bits.
   Notation nil := (@vect_nil bool).
   Notation cons := (@vect_cons bool).
   Notation const := (@vect_const bool).
-  Notation app x y := (@vect_app bool _ _ y x). (* !! *)
+  Notation app := (fun x y => @vect_app bool _ _ y x). (* !! *)
   Notation split := (@vect_split bool).
   Notation nth := (@vect_nth bool).
   Notation hd := (@vect_hd bool).
   Notation tl := (@vect_tl bool).
   Notation single := (@hd 0).
-  Notation lsb := (@vect_last bool).
   Notation map := (@vect_map bool).
   Notation map2 := (@vect_map2 bool).
   Notation of_list := (@vect_of_list bool).
@@ -692,6 +703,11 @@ Module Bits.
   Notation extend_end := (@vect_extend_end bool).
   Notation zeroes n := (@const n false).
   Notation ones n := (@const n true).
+  Notation lsb := (@vect_hd_default bool _ false).
+  Notation msb := (@vect_last_default bool _ false).
+
+  Definition neg {sz} (b: bits sz) :=
+    map negb b.
 
   Definition lsr1 {sz} (b: bits sz) :=
     match sz return bits sz -> bits sz with
@@ -703,65 +719,142 @@ Module Bits.
     | 0 => fun b => b
     | S _ => fun b => vect_cons false (snd (vect_unsnoc b))
     end b.
+
   Definition lsr {sz} nplaces (b: bits sz) :=
     vect_repeat lsr1 nplaces b.
   Definition lsl {sz} nplaces (b: bits sz) :=
     vect_repeat lsl1 nplaces b.
 
-  Fixpoint to_N {sz: nat} (bs: bits sz) {struct sz} : N :=
-    match sz return bits sz -> N with
-    | O => fun _ => 0%N
-    | S n => fun bs => ((if hd bs then 1 else 0) + 2 * to_N (tl bs))%N
-    end bs.
+  Section Casts.
+    Fixpoint to_N {sz: nat} (bs: bits sz) {struct sz} : N :=
+      match sz return bits sz -> N with
+      | O => fun _ => 0%N
+      | S n => fun bs => ((if hd bs then 1 else 0) + 2 * to_N (tl bs))%N
+      end bs.
 
-  Definition to_nat {sz: nat} (bs: bits sz) : nat :=
-    N.to_nat (to_N bs).
+    Definition to_nat {sz: nat} (bs: bits sz) : nat :=
+      N.to_nat (to_N bs).
 
-  Fixpoint of_positive (sz: nat) (p: positive) {struct sz} : bits sz :=
-    match sz with
-    | 0 => nil
-    | S sz =>
-      match p with
-      | xI p => cons true (of_positive sz p)
-      | xO p => cons false (of_positive sz p)
-      | xH => cons true (const sz false)
-      end
-    end.
+    Definition to_index {sz} sz' (bs: bits sz) : option (index sz') :=
+      index_of_nat sz' (to_nat bs).
 
-  Definition of_N sz (n: N): bits sz :=
-    match n with
-    | N0 => const sz false
-    | Npos p => of_positive sz p
-    end.
+    Fixpoint to_2cZ {sz} (bs: bits sz) : Z :=
+      if msb bs then
+        match to_N (neg bs) with
+        | N0 => -1
+        | Npos x => Zneg (Pos.succ x)
+        end
+      else
+        match to_N bs with
+        | N0 => 0
+        | Npos x => Zpos x
+        end%Z.
 
-  Definition of_nat sz (n: nat) : bits sz :=
-    of_N sz (N.of_nat n).
+    Fixpoint of_positive (sz: nat) (p: positive) {struct sz} : bits sz :=
+      match sz with
+      | 0 => nil
+      | S sz =>
+        match p with
+        | xI p => cons true (of_positive sz p)
+        | xO p => cons false (of_positive sz p)
+        | xH => cons true (const sz false)
+        end
+      end.
 
-  Definition zero sz : bits sz := of_N sz N.zero.
-  Definition one sz : bits sz := of_N sz N.one.
+    Definition of_N sz (n: N): bits sz :=
+      match n with
+      | N0 => zeroes sz
+      | Npos p => of_positive sz p
+      end.
 
-  Definition to_index {sz} sz' (bs: bits sz) : option (index sz') :=
-    index_of_nat sz' (to_nat bs).
+    Definition of_nat sz (n: nat) : bits sz :=
+      of_N sz (N.of_nat n).
 
-  Lemma single_cons :
-    forall bs, cons (single bs) nil = bs.
-  Proof. destruct bs as [ ? [ ] ]; reflexivity. Qed.
+    Definition of_2cZ sz (z: Z) : bits sz :=
+      match sz with
+      | 0 => zeroes 0
+      | S sz =>
+        match z with
+        | Z0 => zeroes (S sz)
+        | Zpos x => vect_snoc false (of_positive sz x)
+        | Zneg x => vect_snoc true (neg (of_N sz (N.pred (Npos x))))
+        end
+      end.
+  End Casts.
 
-  Lemma cons_inj :
-    forall {sz} b1 b2 (t1 t2: bits sz),
-      cons b1 t1 = cons b2 t2 ->
-      b1 = b2 /\ t1 = t2.
-  Proof.
-    inversion 1; subst; eauto.
-  Qed.
+  Section Arithmetic.
+    Definition zero sz : bits sz := of_N sz N.zero.
+    Definition one sz : bits sz := of_N sz N.one.
 
-  Lemma single_inj:
-    forall bs1 bs2,
-      single bs1 = single bs2 ->
-      bs1 = bs2.
-  Proof.
-    intros * Heq; rewrite <- (single_cons bs1), <- (single_cons bs2), Heq; reflexivity.
-  Qed.
+    Definition plus {sz} (bs1 bs2: bits sz) :=
+      Bits.of_N sz (Bits.to_N bs1 + Bits.to_N bs2)%N.
+
+    Definition minus {sz} (bs1 bs2: bits sz) :=
+      plus (plus bs1 (neg bs2)) (one sz).
+  End Arithmetic.
+
+  Section Comparisons.
+    Definition lift_comparison {A sz}
+               (cast: bits sz -> A) (compare: A -> A -> comparison)
+               (cmp: comparison -> bool)
+               (bs1 bs2: bits sz) : bool :=
+      cmp (compare (cast bs1) (cast bs2)).
+
+    Scheme Equality for comparison.
+    Infix "==c" := comparison_beq (at level 0).
+    Open Scope bool_scope.
+
+    Definition is_lt (cmp: comparison) : bool :=
+      cmp ==c Lt.
+    Definition is_le (cmp: comparison) : bool :=
+      cmp ==c Lt || cmp ==c Eq.
+    Definition is_gt (cmp: comparison) : bool :=
+      cmp ==c Gt.
+    Definition is_ge (cmp: comparison) : bool :=
+      cmp ==c Gt || cmp ==c Eq.
+
+    Definition unsigned_lt {sz} (bs1 bs2: bits sz) : bool :=
+      lift_comparison Bits.to_N N.compare is_lt bs1 bs2.
+    Definition unsigned_le {sz} (bs1 bs2: bits sz) : bool :=
+      lift_comparison Bits.to_N N.compare is_le bs1 bs2.
+    Definition unsigned_gt {sz} (bs1 bs2: bits sz) : bool :=
+      lift_comparison Bits.to_N N.compare is_gt bs1 bs2.
+    Definition unsigned_ge {sz} (bs1 bs2: bits sz) : bool :=
+      lift_comparison Bits.to_N N.compare is_ge bs1 bs2.
+
+    Definition signed_lt {sz} (bs1 bs2: bits sz) : bool :=
+      lift_comparison Bits.to_2cZ Z.compare is_lt bs1 bs2.
+    Definition signed_le {sz} (bs1 bs2: bits sz) : bool :=
+      lift_comparison Bits.to_2cZ Z.compare is_le bs1 bs2.
+    Definition signed_gt {sz} (bs1 bs2: bits sz) : bool :=
+      lift_comparison Bits.to_2cZ Z.compare is_gt bs1 bs2.
+    Definition signed_ge {sz} (bs1 bs2: bits sz) : bool :=
+      lift_comparison Bits.to_2cZ Z.compare is_ge bs1 bs2.
+  End Comparisons.
+
+  Section Properties.
+    Lemma single_cons :
+      forall bs, cons (single bs) nil = bs.
+    Proof.
+      destruct bs as [ ? [ ] ]; reflexivity.
+    Qed.
+
+    Lemma cons_inj :
+      forall {sz} b1 b2 (t1 t2: bits sz),
+        cons b1 t1 = cons b2 t2 ->
+        b1 = b2 /\ t1 = t2.
+    Proof.
+      inversion 1; subst; eauto.
+    Qed.
+
+    Lemma single_inj:
+      forall bs1 bs2,
+        single bs1 = single bs2 ->
+        bs1 = bs2.
+    Proof.
+      intros * Heq; rewrite <- (single_cons bs1), <- (single_cons bs2), Heq; reflexivity.
+    Qed.
+  End Properties.
 End Bits.
 
 Notation bits n := (Bits.bits n).
@@ -773,3 +866,11 @@ Global Open Scope bits.
 
 Definition pow2 n :=
   Nat.pow 2 n.
+
+Fixpoint z_range start len :=
+  match len with
+  | O => List.nil
+  | S len => start :: z_range (Z.succ start) len
+  end.
+
+(* Eval simpl in (List.map (fun z => Bits.of_2cZ 4 z) (range (-8) 16)). *)

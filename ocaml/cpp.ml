@@ -232,15 +232,21 @@ let cpp_bits2_fn_name (f: SGA.PrimTyped.fbits2) =
     (match f with
      | And sz -> sprintf "land<%d>" sz
      | Or sz -> sprintf "lor<%d>" sz
+     | Xor sz -> sprintf "lxor<%d>" sz
      | Lsl (bits_sz, shift_sz) -> sprintf "lsl<%d, %d>" bits_sz shift_sz
      | Lsr (bits_sz, shift_sz) -> sprintf "lsr<%d, %d>" bits_sz shift_sz
-     | EqBits sz -> sprintf "eq<%d>" sz
      | Concat (sz1, sz2) -> sprintf "concat<%d, %d>" sz1 sz2
      | Sel sz -> sprintf "sel<%d, %d>" sz (SGALib.SGA.log2 sz)
      | PartSubst (sz, offset, width) -> sprintf "part_subst<%d, %d, %d>" sz offset width
      | IndexedPart (sz, width) -> sprintf "indexed_part<%d, %d, %d>" sz (SGALib.SGA.log2 sz) width
-     | UIntPlus sz -> sprintf "plus<%d>" sz
-     | UIntLt sz -> sprintf "lt<%d>" sz)
+     | Plus sz -> sprintf "plus<%d>" sz
+     | Minus sz -> sprintf "minus<%d>" sz
+     | EqBits sz -> sprintf "eq<%d>" sz
+     | Compare (signed, cmp, sz) ->
+        sprintf "%s%s<%d>"
+          (if signed then "s" else "")
+          (match cmp with CLt -> "lt" | CGt -> "gt" | CLe -> "le" | CGe -> "ge")
+          sz)
 
 let cpp_get_preamble () =
   let inc = open_in "preamble.hpp" in

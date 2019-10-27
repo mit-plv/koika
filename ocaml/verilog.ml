@@ -213,8 +213,12 @@ let assignment_to_string (gensym: int ref) (assignment: assignment) =
        | ZExtL _ | ZExtR _ -> failwith_unlowered ())
    | EBinop (fn, arg1, arg2) ->
       (match fn with
-       | UIntPlus _ -> default_left ^ arg1 ^ " + " ^ arg2
-       | UIntLt _ -> default_left ^ arg1 ^ " < " ^ arg2
+       | Plus _ -> default_left ^ arg1 ^ " + " ^ arg2
+       | Minus _ -> default_left ^ arg1 ^ " - " ^ arg2
+       | Compare (signed, cmp, _sz) ->
+          let cast = Printf.sprintf (if signed then "$signed(%s)" else "%s") in
+          let op = match cmp with CLt -> "<" | CGt -> ">" | CLe -> "<=" | CGe -> ">=" in
+          Printf.sprintf "%s %s %s" (cast arg1) op (cast arg2)
        | Sel _ -> default_left ^ arg1 ^ "[" ^ arg2 ^ "]"
        | PartSubst (sz, offset, slice_sz) ->
           if (offset > 0) then
@@ -233,6 +237,7 @@ let assignment_to_string (gensym: int ref) (assignment: assignment) =
        | IndexedPart (_, slice_sz) -> default_left ^ arg1 ^ "[" ^ arg2 ^ " +: " ^ string_of_int slice_sz ^ "]"
        | And _ ->  default_left ^ arg1 ^ " & " ^ arg2
        | Or _ -> default_left ^ arg1 ^ " | " ^ arg2
+       | Xor _ -> default_left ^ arg1 ^ " ^ " ^ arg2
        | Lsl (_, _) -> default_left ^ arg1 ^ " << " ^ arg2
        | Lsr (_, _) -> default_left ^ arg1 ^ " >> " ^ arg2
        | EqBits _ -> default_left ^ arg1 ^ " == " ^ arg2

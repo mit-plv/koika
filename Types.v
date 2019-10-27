@@ -159,7 +159,7 @@ Proof.
     + cbn.
       intros.
       rewrite (surjective_pairing v).
-      unfold Bits.split, Bits.app.
+      unfold Bits.split.
       rewrite vect_split_app.
       cbn.
       rewrite IH, IHt.

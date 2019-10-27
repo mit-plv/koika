@@ -98,12 +98,12 @@ Proof.
   reflexivity.
 Qed.
 
-Lemma eq_bits_of_value:
+Lemma bits_eq_of_value:
   forall {tau: type} (a1 a2: tau),
-    eq_bits (bits_of_value a1) (bits_of_value a2) =
+    bits_eq (bits_of_value a1) (bits_of_value a2) =
     (if eq_dec a1 a2 then Ob~1 else Ob~0).
 Proof.
-  unfold eq_bits;
+  unfold bits_eq;
     intros; repeat destruct eq_dec;
       try match goal with
           | [ H: bits_of_value _ = bits_of_value _ |- _ ] => apply bits_of_value_inj in H

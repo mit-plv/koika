@@ -29,7 +29,7 @@ Section PrimCompilerCorrectness.
     | [ H: interp_circuit _ = _ |- _ ] => rewrite H
     | [  |- context[match ?d with _ => _ end] ] => is_var d; destruct d
     | [  |- context[eq_rect _ _ _ _ ?pr] ] => destruct pr
-    | _ => apply eq_bits_of_value || apply get_field_bits_part || apply subst_field_bits_part_subst
+    | _ => apply bits_eq_of_value || apply get_field_bits_part || apply subst_field_bits_part_subst
     | _ => solve [eauto]
     end.
 

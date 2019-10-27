@@ -45,6 +45,9 @@ let pp_list pp_elem ppf elems =
 let pp_vector pp_elem ppf elems =
   fprintf ppf "@[<2>vect_of_list %a@]" (pp_list pp_elem) elems
 
+let pp_bool ppf b =
+  fprintf ppf (if b then "true" else "false")
+
 let pp_bit ppf b =
   pp_raw ppf (if b then "~1" else "~0")
 
@@ -206,11 +209,19 @@ and pp_prim_ubits2 ppf (f: SGALib.SGA.PrimUntyped.ubits2) =
   | UIndexedPart width -> pp_app "UIndexedPart" "%d" width
   | UAnd -> pp_raw "UAnd"
   | UOr -> pp_raw "UOr"
+  | UXor -> pp_raw "UXor"
   | ULsl -> pp_raw "ULsl"
   | ULsr -> pp_raw "ULsr"
   | UConcat -> pp_raw "UConcat"
-  | UUIntPlus -> pp_raw "UUIntPlus"
-  | UUIntLt -> pp_raw "UUIntLt"
+  | UPlus -> pp_raw "UPlus"
+  | UMinus -> pp_raw "UMinus"
+  | UCompare (signed, cmp) -> pp_app "UCompare" "%a@ %a" pp_bool signed pp_cmp cmp
+and pp_cmp ppf (cmp: SGALib.SGA.comparison) =
+  match cmp with
+  | SGALib.SGA.CLt -> pp_raw ppf "cLt"
+  | SGALib.SGA.CGt -> pp_raw ppf "cGt"
+  | SGALib.SGA.CLe -> pp_raw ppf "cLe"
+  | SGALib.SGA.CGe -> pp_raw ppf "cGe"
 and pp_prim_ustruct2 ppf (f: SGALib.SGA.PrimUntyped.ustruct2) = match f with
   | USubstField f -> pp_app ppf "USubstField" "%a" pp_coq_quoted f
   | USubstFieldBits (sg, f) -> pp_app ppf "USubstFieldBits" "%a@ %a" pp_sga_struct_name sg pp_coq_quoted f

@@ -1,5 +1,8 @@
 Require Export SGA.Common SGA.Environments SGA.IndexUtils SGA.Types SGA.ErrorReporting.
 
+Inductive comparison :=
+  cLt | cGt | cLe | cGe.
+
 Module PrimUntyped.
   Inductive udisplay :=
   | UDisplayUtf8
@@ -19,14 +22,16 @@ Module PrimUntyped.
   Inductive ubits2 :=
   | UAnd
   | UOr
+  | UXor
   | ULsl
   | ULsr
   | UConcat
   | USel
   | UPartSubst (offset: nat) (width: nat)
   | UIndexedPart (width: nat)
-  | UUIntPlus
-  | UUIntLt.
+  | UPlus
+  | UMinus
+  | UCompare (signed: bool) (c: comparison).
 
   Inductive ustruct1 :=
   | UGetField (f: string)
@@ -65,15 +70,17 @@ Module PrimTyped.
   Inductive fbits2 :=
   | And (sz: nat)
   | Or (sz: nat)
+  | Xor (sz: nat)
   | Lsl (bits_sz: nat) (shift_sz: nat)
   | Lsr (bits_sz: nat) (shift_sz: nat)
-  | EqBits (sz: nat)
   | Concat (sz1 sz2 : nat)
   | Sel (sz: nat)
   | PartSubst (sz: nat) (offset: nat) (width: nat)
   | IndexedPart (sz: nat) (width: nat)
-  | UIntPlus (sz : nat)
-  | UIntLt (sz: nat).
+  | Plus (sz : nat)
+  | Minus (sz : nat)
+  | EqBits (sz: nat)
+  | Compare (signed: bool) (c: comparison) (sz: nat).
 
   Inductive fstruct1 :=
   | GetField.
@@ -167,11 +174,13 @@ Module PrimTypeInference.
                      | UIndexedPart width => IndexedPart sz1 width
                      | UAnd => And sz1
                      | UOr => Or sz1
+                     | UXor => Xor sz1
                      | ULsl => Lsl sz1 sz2
                      | ULsr => Lsr sz1 sz2
                      | UConcat => Concat sz1 sz2
-                     | UUIntPlus => UIntPlus sz1
-                     | UUIntLt => UIntLt sz1
+                     | UPlus => Plus sz1
+                     | UMinus => Minus sz1
+                     | UCompare signed c => Compare signed c sz1
                      end)
     | UStruct2 fn =>
       match fn with
@@ -205,12 +214,14 @@ Module CircuitSignatures.
     | IndexedPart sz width => {$ sz ~> (log2 sz) ~> width $}
     | And sz => {$ sz ~> sz ~> sz $}
     | Or sz => {$ sz ~> sz ~> sz $}
+    | Xor sz => {$ sz ~> sz ~> sz $}
     | Lsl bits_sz shift_sz => {$ bits_sz ~> shift_sz ~> bits_sz $}
     | Lsr bits_sz shift_sz => {$ bits_sz ~> shift_sz ~> bits_sz $}
-    | EqBits sz => {$ sz ~> sz ~> 1 $}
     | Concat sz1 sz2 => {$ sz1 ~> sz2 ~> (sz2 + sz1) $}
-    | UIntPlus sz => {$ sz ~> sz ~> sz $}
-    | UIntLt sz => {$ sz ~> sz ~> 1 $}
+    | EqBits sz => {$ sz ~> sz ~> 1 $}
+    | Plus sz => {$ sz ~> sz ~> sz $}
+    | Minus sz => {$ sz ~> sz ~> sz $}
+    | Compare _ _ sz => {$ sz ~> sz ~> 1 $}
     end.
 End CircuitSignatures.
 
@@ -244,6 +255,9 @@ Module PrimSignatures.
 End PrimSignatures.
 
 Module BitFuns.
+  Definition bitfun_of_predicate {sz} (p: bits sz -> bits sz -> bool) (bs1 bs2: bits sz) :=
+    Ob~(p bs1 bs2).
+
   Definition sel {sz} (bs: bits sz) (idx: bits (log2 sz)) :=
     Ob~match Bits.to_index sz idx with
        | Some idx => Bits.nth bs idx
@@ -256,17 +270,8 @@ Module BitFuns.
   Definition lsr {bits_sz shift_sz} (bs: bits bits_sz) (places: bits shift_sz) :=
     Bits.lsr (Bits.to_nat places) bs.
 
-  Definition eq_bits {sz} (bs1 bs2: bits sz) :=
+  Definition bits_eq {sz} (bs1 bs2: bits sz) :=
     if eq_dec bs1 bs2 then Ob~1 else Ob~0.
-
-  Definition concat {sz1 sz2} (bs1: bits sz1) (bs2: bits sz2) :=
-    Bits.app bs1 bs2.
-
-  Definition uint_plus {sz} (bs1 bs2: bits sz) :=
-    Bits.of_N sz (Bits.to_N bs1 + Bits.to_N bs2)%N.
-
-  Definition uint_lt {sz} (bs1 bs2: bits sz) :=
-    Ob~(Bits.to_N bs1 <? Bits.to_N bs2)%N.
 
   Definition part {sz} (offset: nat) (width: nat) (bs: bits sz) :=
     vect_extend_end_firstn (vect_firstn width (vect_skipn offset bs)) false.
@@ -318,7 +323,7 @@ Module CircuitPrimSpecs.
 
   Definition sigma1 (fn: PrimTyped.fbits1) : CSig_denote (CircuitSignatures.CSigma1 fn) :=
     match fn with
-    | Not _ => fun bs => Bits.map negb bs
+    | Not _ => fun bs => Bits.neg bs
     | ZExtL sz width => fun bs => Bits.extend_end bs width false
     | ZExtR sz width => fun bs => Bits.extend_beginning bs width false
     | Part _ offset width => part offset width
@@ -331,12 +336,21 @@ Module CircuitPrimSpecs.
     | IndexedPart _ width => fun bs offset => part (Bits.to_nat offset) width bs
     | And _ => Bits.map2 andb
     | Or _ => Bits.map2 orb
+    | Xor _ => Bits.map2 xorb
     | Lsl _ _ => lsl
     | Lsr _ _ => lsr
-    | EqBits sz => eq_bits
-    | Concat _ _ => concat
-    | UIntPlus _ => uint_plus
-    | UIntLt _ => uint_lt
+    | Concat _ _ => Bits.app
+    | Plus _ => Bits.plus
+    | Minus _ => Bits.minus
+    | EqBits _ => bits_eq
+    | Compare true cLt _ => bitfun_of_predicate Bits.signed_lt
+    | Compare true cGt _ => bitfun_of_predicate Bits.signed_gt
+    | Compare true cLe _ => bitfun_of_predicate Bits.signed_le
+    | Compare true cGe _ => bitfun_of_predicate Bits.signed_ge
+    | Compare false cLt _ => bitfun_of_predicate Bits.unsigned_lt
+    | Compare false cGt _ => bitfun_of_predicate Bits.unsigned_gt
+    | Compare false cLe _ => bitfun_of_predicate Bits.unsigned_le
+    | Compare false cGe _ => bitfun_of_predicate Bits.unsigned_ge
     end.
 End CircuitPrimSpecs.
 

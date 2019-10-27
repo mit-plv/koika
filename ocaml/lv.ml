@@ -1224,6 +1224,8 @@ let bits_primitives =
    ("&", `Prim0 (binop UAnd));
    ("or", `Prim0 (binop UOr));
    ("|", `Prim0 (binop UOr));
+   ("xor", `Prim0 (binop UXor));
+   ("^", `Prim0 (binop UXor));
    ("not", `Prim0 (unop UNot));
    ("~", `Prim0 (unop UNot));
    ("lsl", `Prim0 (binop ULsl));
@@ -1231,9 +1233,16 @@ let bits_primitives =
    ("lsr", `Prim0 (binop ULsr));
    (">>", `Prim0 (binop ULsr));
    ("concat", `Prim0 (binop UConcat));
-   ("uintplus", `Prim0 (binop UUIntPlus));
-   ("+", `Prim0 (binop UUIntPlus));
-   ("<", `Prim0 (binop UUIntLt));
+   ("+", `Prim0 (binop UPlus));
+   ("-", `Prim0 (binop UMinus));
+   ("<", `Prim0 (binop (UCompare (false, CLt))));
+   (">", `Prim0 (binop (UCompare (false, CGt))));
+   ("<=", `Prim0 (binop (UCompare (false, CLe))));
+   (">=", `Prim0 (binop (UCompare (false, CGe))));
+   ("<s", `Prim0 (binop (UCompare (true, CLt))));
+   (">s", `Prim0 (binop (UCompare (true, CGt))));
+   ("<s=", `Prim0 (binop (UCompare (true, CLe))));
+   (">s=", `Prim0 (binop (UCompare (true, CGe))));
    ("zextl", `Prim1 (fun n -> unop (UZExtL n)));
    ("zextr", `Prim1 (fun n -> unop (UZExtR n)));
    ("indexed-part", `Prim1 (fun n -> binop (UIndexedPart n)));

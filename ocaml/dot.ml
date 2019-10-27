@@ -11,6 +11,13 @@ let bits1_name =
   | ZExtR (_sz, _width) -> "ZExtR"
   | Part (_logsz, _offset, _width) -> "Part"
 
+let comparison_name (cmp: SGALib.SGA.comparison)=
+  match cmp with
+  | CLt -> "lt"
+  | CGt -> "gt"
+  | CLe -> "le"
+  | CGe -> "ge"
+
 let bits2_name =
   let open SGA.PrimTyped in
   function
@@ -19,12 +26,16 @@ let bits2_name =
   | IndexedPart (_logsz, _width) -> "IndexedPart"
   | And _sz -> "And"
   | Or _sz -> "Or"
+  | Xor _sz -> "Xor"
   | Lsl (_sz, _places) -> "Lsl"
   | Lsr (_sz, _places) -> "Lsr"
-  | EqBits _sz -> "EqBits"
   | Concat (_sz1, _sz2) -> "Concat"
-  | UIntPlus _sz -> "Plus"
-  | UIntLt _sz -> "Lt"
+  | Plus _sz -> "Plus"
+  | Minus _sz -> "Minus"
+  | EqBits _sz -> "Eq"
+  | Compare (signed, op, _sz) ->
+     sprintf "%s %s" (if signed then "signed" else "unsigned")
+       (comparison_name op)
 
 let rec label_ptrs tag_to_parents = function
   | CNot c -> Some ("Not", [c], [])
