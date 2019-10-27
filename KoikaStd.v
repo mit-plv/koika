@@ -49,3 +49,41 @@ Module Fifo1 (f: Fifo).
   Instance FiniteType_reg_t : FiniteType reg_t := _.
 
 End Fifo1.
+
+Definition Maybe tau :=
+  {| struct_name := "maybe";
+     struct_fields := ("valid", bits_t 1)
+                        :: ("data", tau)
+                        :: nil |}.
+Notation maybe tau := (struct_t (Maybe tau)).
+
+Module Type Rf_sig.
+  Parameter lastIdx:nat.
+  Parameter T:type.
+  Parameter init: T.
+End Rf_sig.
+
+Module Rf (s:Rf_sig).
+  Definition sz:= S s.lastIdx.
+  Inductive reg_t := rData (n: Vect.index sz).
+
+  Definition R r :=
+    match r with
+    | rData n => s.T
+    end.
+
+  Definition r idx : R idx :=
+    match idx with
+    | rData n => s.init
+    end.
+
+  Definition read : UInternalFunction reg_t empty_ext_fn_t :=
+    function (idx : bits_t (log2 sz)) : s.T :=
+    `UCompleteSwitch (log2 sz) (pred sz) "v"
+     (vect_map (fun idx => {{ read0(rData idx) }}) (all_indices sz))`.
+
+  Definition write : UInternalFunction reg_t empty_ext_fn_t :=
+    function (idx : bits_t (log2 sz), val: s.T) : bits_t 0 :=
+    `UCompleteSwitch (log2 sz) (pred sz) "v"
+     (vect_map (fun idx => {{ write0(rData idx, val) }}) (all_indices sz))`.
+End Rf.
