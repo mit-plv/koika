@@ -1,13 +1,12 @@
 Require Import SGA.Notations.
 
-
 Record demo_package_t :=
   { dp_reg_t : Type;
     dp_rule_name_t : Type;
     dp_ext_fn_t : Type;
-    sga : @sga_package_t pos_t var_t dp_reg_t dp_rule_name_t dp_ext_fn_t;
-    vp : @verilog_package_t pos_t var_t dp_reg_t dp_rule_name_t dp_ext_fn_t;
-    sp : @sim_package_t pos_t var_t dp_reg_t dp_rule_name_t dp_ext_fn_t }.
+    sga : @sga_package_t pos_t var_t dp_rule_name_t dp_reg_t dp_ext_fn_t;
+    vp : @verilog_package_t dp_rule_name_t dp_ext_fn_t;
+    sp : @sim_package_t var_t dp_ext_fn_t }.
 
 Module Ex1.
   Notation var_t := string.
@@ -233,12 +232,10 @@ Module Collatz.
 
   Definition package :=
     {| sga := sga_package;
-       sp := {| sp_pkg := sga_package;
-               sp_var_names x := x;
+       sp := {| sp_var_names x := x;
                sp_ext_fn_names := empty_fn_names;
                sp_extfuns := None |};
-       vp := {| vp_pkg := sga_package;
-               vp_external_rules := List.nil;
+       vp := {| vp_external_rules := List.nil;
                vp_ext_fn_names := empty_fn_names |} |}.
 End Collatz.
 
@@ -337,15 +334,13 @@ Module Decoder (P: Unpacker) (F: Fetcher).
            sga_scheduler := decoder;
            sga_module_name := modname |} in
     let sim :=
-        {| sp_pkg := sga_package;
-           sp_var_names := fun x => x;
+        {| sp_var_names := fun x => x;
            sp_ext_fn_names := F.ext_fn_names;
 
            sp_extfuns := Some "#include ""../extfuns.hpp""
 using extfuns = decoder_extfuns;" |} in
     let verilog :=
-        {| vp_pkg := sga_package;
-           vp_external_rules := List.nil;
+        {| vp_external_rules := List.nil;
            vp_ext_fn_names := F.ext_fn_names |} in
     {| sga := sga_package; sp := sim; vp := verilog |}.
 End Decoder.
@@ -583,13 +578,11 @@ Module Pipeline.
 
   Definition package :=
     {| sga := sga_package;
-       sp := {| sp_pkg := sga_package;
-               sp_var_names := fun x => x;
+       sp := {| sp_var_names := fun x => x;
                sp_ext_fn_names := fn_names;
                sp_extfuns := Some "#include ""../extfuns.hpp""
 using extfuns = pipeline_extfuns;" |};
-       vp := {| vp_pkg := sga_package;
-               vp_external_rules := List.nil;
+       vp := {| vp_external_rules := List.nil;
                vp_ext_fn_names := fn_names |} |}.
 End Pipeline.
 
@@ -694,12 +687,10 @@ Module RegisterFile_Ordered.
 
   Definition package :=
     {| sga := sga_package;
-       sp := {| sp_pkg := sga_package;
-               sp_var_names := fun x => x;
+       sp := {| sp_var_names := fun x => x;
                sp_ext_fn_names := empty_fn_names;
                sp_extfuns := None |};
-       vp := {| vp_pkg := sga_package;
-               vp_external_rules := List.nil;
+       vp := {| vp_external_rules := List.nil;
                vp_ext_fn_names := empty_fn_names |} |}.
 End RegisterFile_Ordered.
 
@@ -778,12 +769,10 @@ Module Enums.
 
   Definition package :=
     {| sga := sga_package;
-       sp := {| sp_pkg := sga_package;
-               sp_var_names := fun x => x;
+       sp := {| sp_var_names := fun x => x;
                sp_ext_fn_names := empty_fn_names;
                sp_extfuns := None |};
-       vp := {| vp_pkg := sga_package;
-               vp_external_rules := List.nil;
+       vp := {| vp_external_rules := List.nil;
                vp_ext_fn_names := empty_fn_names |} |}.
 End Enums.
 
@@ -883,12 +872,10 @@ Module IntCall.
 
   Definition package :=
     {| sga := sga_package;
-       sp := {| sp_pkg := sga_package;
-               sp_var_names := fun x => x;
+       sp := {| sp_var_names := fun x => x;
                sp_ext_fn_names := empty_fn_names;
                sp_extfuns := None |};
-       vp := {| vp_pkg := sga_package;
-               vp_external_rules := List.nil;
+       vp := {| vp_external_rules := List.nil;
                vp_ext_fn_names := empty_fn_names |} |}.
 End IntCall.
 
@@ -975,15 +962,13 @@ Module ExternallyCompiledRule.
            sga_scheduler := bring;
            sga_module_name := "externalMemory" |}.
   Definition sim :=
-        {| sp_pkg := sga_package;
-           sp_var_names := fun x => x;
-           sp_ext_fn_names := empty_fn_names;
-           sp_extfuns := None |}.
+    {| sp_var_names := fun x => x;
+       sp_ext_fn_names := empty_fn_names;
+       sp_extfuns := None |}.
   Definition verilog :=
-        {| vp_pkg := sga_package;
-           vp_external_rules := cons fetch nil;
-           vp_ext_fn_names := empty_fn_names |} .
-  Definition package := {| sga := sga_package; sp := sim; vp := verilog |}.
+    {| vp_external_rules := cons fetch nil;
+       vp_ext_fn_names := empty_fn_names |} .
+  Definition package : demo_package_t := {| sga := sga_package; sp := sim; vp := verilog |}.
 End ExternallyCompiledRule.
 
 Notation zero := (Bits.zeroes _).
@@ -1119,16 +1104,14 @@ Definition gcd_start : uaction reg_t ext_fn_t  :=
 
            sga_scheduler := bring;
            sga_module_name := "externalMemory" |}.
-  Definition sim :=
-        {| sp_pkg := sga_package;
-           sp_var_names := fun x => x;
-           sp_ext_fn_names := empty_fn_names;
-           sp_extfuns := None |}.
-  Definition verilog :=
-        {| vp_pkg := sga_package;
-           vp_external_rules := nil;
-           vp_ext_fn_names := empty_fn_names |} .
-  Definition package := {| sga := sga_package; sp := sim; vp := verilog |}.
+
+  Definition package :=
+    {| sga := sga_package;
+       sp := {| sp_var_names := fun x => x;
+               sp_ext_fn_names := empty_fn_names;
+               sp_extfuns := None |};
+       vp := {| vp_external_rules := nil;
+               vp_ext_fn_names := empty_fn_names |} |}.
 End GcdMachine.
 
 Import ListNotations.

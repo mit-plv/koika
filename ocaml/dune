@@ -22,7 +22,7 @@
 
 (executable
  (name coq_examples)
- (modules coq_examples)
+ (modules CoqInterop coq_examples)
  (libraries common SGALib backends))
 
 (executable

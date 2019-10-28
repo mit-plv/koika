@@ -77,14 +77,12 @@ Section Packages.
         compiler (really a list of circuits, one per register). *)
       cp_circuits: @register_update_circuitry
                     rule_name_t reg_t ext_fn_t
-                    (cp_pkg.(sga_reg_types)) cp_pkg.(sga_ext_fn_types)
+                    (cp_pkg.(sga_reg_types)) (cp_pkg.(sga_ext_fn_types))
                     cp_reg_Env;
     }.
 
   Record verilog_package_t :=
     {
-      vp_pkg: sga_package_t;
-
       (** [vp_ext_fn_names]: A map from custom functions to Verilog
           implementations. *)
       vp_ext_fn_names: forall fn: ext_fn_t, string;
@@ -96,8 +94,6 @@ Section Packages.
 
   Record sim_package_t :=
     {
-      sp_pkg: sga_package_t;
-
       (** [sp_var_names]: These names are used to generate readable code. *)
       sp_var_names: var_t -> string;
 
@@ -106,10 +102,9 @@ Section Packages.
       sp_ext_fn_names: forall fn: ext_fn_t, string;
 
       (** [sp_extfuns]: A piece of C++ code implementing the custom external
-          functions used by the program.  This is only needed if [sp_pkg] has a
-          non-empty [ext_fn_t].  It should implement a class called
-          'extfuns', with public functions named consistently with
-          [sp_ext_fn_names] **)
+          functions used by the program.  This is only needed if [ext_fn_t] is
+          non-empty.  It should implement a class called 'extfuns', with public
+          functions named consistently with [sp_ext_fn_names] **)
       sp_extfuns: option string
     }.
 End Packages.
@@ -194,8 +189,6 @@ Section Compilation.
 
   Definition compile_sga_package
              (s: @sga_package_t pos_t var_t rule_name_t reg_t ext_fn_t) : circuit_package_t :=
-    let FT := s.(sga_reg_finite) in
-    {| cp_pkg := s;
-       cp_reg_Env := ContextEnv;
-       cp_circuits := compile_scheduler s.(sga_rules) s.(sga_scheduler) |}.
+    let _ := s.(sga_reg_finite) in
+    {| cp_circuits := compile_scheduler s.(sga_rules) s.(sga_scheduler) |}.
 End Compilation.

@@ -1031,12 +1031,13 @@ let collect_rules sched =
   | SGA.SPos (_, s) -> loop acc s
   in loop [] sched
 
-let cpp_rule_of_sga_package_rule (s: _ SGALib.SGA.sga_package_t) (rn: Obj.t) =
+let cpp_rule_of_sga_package_rule (s: _ SGALib.SGA.sga_package_t) (rn: 'rule_name_t) =
   cpp_rule_of_action (rn, (`Internal, s.sga_rules rn))
 
-let input_of_sim_package (type ext_fn_t) (sp: (_, _, _, _, ext_fn_t) SGALib.SGA.sim_package_t)
-    : (_, Obj.t, Obj.t, Obj.t, ext_fn_t) cpp_input_t =
-  let sga = sp.sp_pkg in
+let input_of_sim_package
+      (sga: ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) SGALib.SGA.sga_package_t)
+      (sp: ('var_t, 'ext_fn_t) SGALib.SGA.sim_package_t)
+    : ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_input_t =
   let rules = collect_rules sga.sga_scheduler in
   let classname = SGALib.Util.string_of_coq_string sga.sga_module_name in
   let ext_fn_name f = SGALib.Util.string_of_coq_string (sp.sp_ext_fn_names f) in

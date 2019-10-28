@@ -462,9 +462,9 @@ module Graphs = struct
         di_circuits = Compilation.compile cu }
 
   let graph_of_verilog_package (type pos_t var_t rule_name_t reg_t ext_fn_t)
-        (vp: (pos_t, var_t, rule_name_t, reg_t, ext_fn_t) SGA.verilog_package_t)
+        (sga: (pos_t, var_t, rule_name_t, reg_t, ext_fn_t) SGA.sga_package_t)
+        (vp: (rule_name_t, ext_fn_t) SGA.verilog_package_t)
       : circuit_graph =
-    let sga = vp.vp_pkg in
     let di_regs =
       sga.sga_reg_finite.finite_elements in
     let di_circuits =
@@ -477,7 +477,7 @@ module Graphs = struct
     dedup_circuit
       { di_regs;
         di_reg_sigs = Util.reg_sigs_of_sga_package sga;
-        di_rule_names = (fun rln -> Util.string_of_coq_string @@ vp.vp_pkg.sga_rule_names rln);
+        di_rule_names = (fun rln -> Util.string_of_coq_string @@ sga.sga_rule_names rln);
         di_external_rules = vp.vp_external_rules;
         di_fn_sigs;
         di_circuits }
