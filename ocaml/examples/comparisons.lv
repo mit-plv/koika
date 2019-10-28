@@ -1,0 +1,15 @@
+(module test
+  (register r 1'b0)
+
+  (rule r
+    (when (and (< 4'0 4'1)
+               (<= 4'1 4'1)
+               (> 4'1 4'0)
+               (>= 4'1 4'1)
+               (<s 4'b1000 4'b0001)
+               (<s= 4'b1000 4'b1000)
+               (>s 4'b0001 4'b1000)
+               (>s= 4'b1000 4'b1000))
+      (write.0 r 1'b1)))
+
+  (scheduler s (sequence)))

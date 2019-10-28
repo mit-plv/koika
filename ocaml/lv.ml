@@ -1370,6 +1370,25 @@ let resolve_function types fns name (args: unresolved_action locd list)
                     Unbound { kind = "function"; prefix = "";
                               name = name.lcnt; candidates }
 
+let rec assemble_assoc_binop_chain loc (fn: SGALib.SGA.PrimUntyped.ufn2 locd) a1 args =
+  match args with
+  | [] -> a1.lcnt
+  | [a2] -> ResolvedAST.Binop { fn; a1; a2 }
+  | a2 :: args -> ResolvedAST.Binop { fn; a1; a2 = locd_make loc (assemble_assoc_binop_chain loc fn a2 args) }
+
+let assemble_binop_chain name (fn: SGALib.SGA.PrimUntyped.ufn2) args =
+  let bad_arg_count nexpected given =
+    type_error name.lpos @@ BadArgumentCount { fn = name.lcnt; expected = nexpected; given } in
+  let assoc_ops =
+    let open SGALib.SGA.PrimUntyped in
+    [UBits2 UPlus; UBits2 UAnd; UBits2 UOr] in
+  let fn_locd = locd_make name.lpos fn in
+  match args with (* FIXME: expected arg counts should be more flexible *)
+  | a :: args when List.mem fn assoc_ops ->
+     assemble_assoc_binop_chain name.lpos fn_locd a args
+  | a1 :: a2 :: _ -> ResolvedAST.Binop { fn = fn_locd; a1; a2 }
+  | _ -> bad_arg_count 2 0
+
 let assemble_resolved_funcall name (fn: resolved_fn) (args: ResolvedAST.uaction locd list) =
   let given = List.length args in
   let bad_arg_count nexpected =
@@ -1389,9 +1408,7 @@ let assemble_resolved_funcall name (fn: resolved_fn) (args: ResolvedAST.uaction 
       | [arg] -> Unop { fn = addloc fn; arg }
       | _ -> bad_arg_count 1)
   | FnBinop fn ->
-     (match args with
-      | [a1; a2] -> Binop { fn = addloc fn; a1; a2 }
-      | _ -> bad_arg_count 2)
+     assemble_binop_chain name fn args
   | FnStructInit { sg; field_names } ->
      Sugar (StructInit { sg; fields = List.combine field_names args })
 
