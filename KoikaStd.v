@@ -100,3 +100,12 @@ Module Rf (s:Rf_sig).
     `UCompleteSwitch (log2 sz) (pred sz) "v"
      (vect_map (fun idx => {{ write0(rData idx, val) }}) (all_indices sz))`}}.
 End Rf.
+
+Fixpoint signExtend {reg_t} (n:nat) (m:nat) : UInternalFunction reg_t empty_ext_fn_t :=
+  {{
+      fun (arg : bits_t n) : bits_t (m+n) =>
+        `match (m) with
+         | O => {{ arg }}
+         | S m => {{(arg[#(Bits.of_nat (log2 n) n)]) ++ (funcall (signExtend (log2 n) m)(arg))}}
+         end`
+  }}.
