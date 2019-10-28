@@ -158,15 +158,17 @@ Module Collatz.
   Notation one := (Bits.zero logsz).
 
   Definition times_three : UInternalFunction reg_t ext_fn_t :=
-    function (arg1 : bits_t 16) : bits_t 16 :=
-     (arg1 << #Ob~1)  + arg1.
+    {{
+        fun (arg1 : bits_t 16) : bits_t 16 =>
+          (arg1 << Ob~1)  + arg1
+    }}.
 
   Definition _divide : uaction reg_t ext_fn_t :=
   {{
     let v := read0(R0) in
-    let odd := v[#Ob~0~0~0~0] in
+    let odd := v[Ob~0~0~0~0] in
     if !odd then
-      write0(R0,v >> #Ob~1)
+      write0(R0,v >> Ob~1)
     else
       fail
   }}.
@@ -174,9 +176,9 @@ Module Collatz.
   Definition _multiply : uaction reg_t ext_fn_t :=
   {{
     let v := read1(R0) in
-    let odd := v[#Ob~0~0~0~0] in
+    let odd := v[Ob~0~0~0~0] in
     if odd then
-      write1(R0, (funcall times_three (v)) + #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1)
+      write1(R0, (funcall times_three (v)) + Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1)
     else
       fail
   }}.
@@ -290,7 +292,7 @@ Module Decoder (P: Unpacker) (F: Fetcher).
     let pc := read0(Rpc) in
     let encoded := `F.fetch_instr _ "pc"` in
     write0(Rencoded, encoded);
-    write0(Rpc, pc + #Ob~0~0~1)
+    write0(Rpc, pc + Ob~0~0~1)
     }}
   .
 
@@ -506,7 +508,7 @@ Module Pipeline.
        let invalid := read1(invalid) in
        if invalid
        then
-         write1(invalid,`UConstBits Ob~0`);
+         write1(invalid, Ob~0);
          write0(r0,`F[[UVar "v"]]`)
        else
          fail
@@ -519,12 +521,12 @@ Module Pipeline.
       let data := read0(r0) in
       let v := read0(outputReg) in
       write0(outputReg,`Stream[[{{v}}]]`);
-      write0(invalid,`UConstBits Ob~1`);
+      write0(invalid, Ob~1);
       if `G[[UVar "data"]]` == `G[[F[[UVar "v"]]]]`
       then
         `UConstBits Ob`
       else
-        write0(correct,`UConstBits Ob~0`)
+        write0(correct, Ob~0)
     else
       fail
     }}.
@@ -783,9 +785,11 @@ Module IntCall.
     Inductive reg_t := buffer.
 
     Definition swap tau: UInternalFunction reg_t ext_fn_t  :=
-      function (arg1 : tau) : tau :=
-      write0(buffer, arg1);
-      read0(buffer).
+      {{
+          fun (arg1 : tau) : tau =>
+            write0(buffer, arg1);
+            read0(buffer)
+      }}.
 
     Instance FiniteType_reg_t : FiniteType reg_t := _.
   End Delay.
@@ -808,8 +812,10 @@ Module IntCall.
     end.
 
   Definition nor (sz: nat) : UInternalFunction reg_t ext_fn_t :=
-    function  (arg1 : bits_t sz, arg2 : bits_t sz) : bits_t sz :=
-  !(arg1 || arg2).
+    {{
+        fun  (arg1 : bits_t sz) (arg2 : bits_t sz) : bits_t sz =>
+          !(arg1 || arg2)
+    }}.
 
   Definition display :=
     (Display.Printer (ext_fn_t := empty_ext_fn_t) (reg_t := reg_t) (pos_t := pos_t)).
@@ -821,7 +827,7 @@ Module IntCall.
     {{
        let a := read0(rA) in
        let old_a := call rDelay2 swap16 (a) in
-       let old_al := call rDelay1 swap8 (old_a[#Ob~0~0~0~0 :+8])  in
+       let old_al := call rDelay1 swap8 (old_a[Ob~0~0~0~0 :+8])  in
        write0(rA, funcall (nor 16) ((read0(rA)), old_a));
        funcall (display (Display.Str "rA: " :: Display.Value (bits_t 16) :: nil)) (a)
     }}.
@@ -922,8 +928,8 @@ Module ExternallyCompiledRule.
   Definition _ding : uaction reg_t empty_ext_fn_t :=
     {{
        let dequeued := call0 MyFifo Fifo5.deq in
-       if (dequeued == #Ob~0~0~0~1~0) then
-         write0(Rdata, #Ob~0~0~0~0~1)
+       if (dequeued == Ob~0~0~0~1~0) then
+         write0(Rdata, Ob~0~0~0~0~1)
        else
          fail
     }}.
@@ -1013,26 +1019,30 @@ Definition gcd_start : uaction reg_t ext_fn_t  :=
          let data := read0(input_data) in
          write0(gcd_a, get(data, a));
          write0(gcd_b, get(data, b));
-         write0(gcd_busy, #Ob~1);
-         write0(input_valid, #Ob~0)
+         write0(gcd_busy, Ob~1);
+         write0(input_valid, Ob~0)
        else
          fail
            }}.
 
   Definition sub  : UInternalFunction reg_t ext_fn_t :=
-    function (arg1 : bits_t 16, arg2 : bits_t 16) : bits_t 16 :=
-      (arg1 + !arg2 + `UConstBits (Bits.of_nat 16 1)`).
+    {{
+        fun (arg1 : bits_t 16) (arg2 : bits_t 16) : bits_t 16 =>
+          (arg1 + !arg2 + `UConstBits (Bits.of_nat 16 1)`)
+    }} .
 
   Definition lt16 : UInternalFunction reg_t ext_fn_t :=
-    function (arg1 : bits_t 16, arg2 : bits_t 16) : bits_t 1 :=
-      (funcall sub (arg1, arg2))[`UConstBits (Bits.of_nat 4 15)`].
+    {{
+        fun (arg1 : bits_t 16) (arg2 : bits_t 16) : bits_t 1 =>
+          (funcall sub (arg1, arg2))[`UConstBits (Bits.of_nat 4 15)`]
+    }}.
 
   Fixpoint lt (sz: nat) : UInternalFunction reg_t ext_fn_t :=
     match sz with
-    | O => function (arg1 : bits_t 0, arg2 : bits_t 0) : bits_t 0 := #Ob~1
-    | S sz => function (arg1 : bits_t sz, arg2 : bits_t sz) : bits_t sz :=
+    | O => {{ fun (arg1 : bits_t 0) (arg2 : bits_t 0) : bits_t 0 => Ob~1}}
+    | S sz => {{ fun (arg1 : bits_t sz) (arg2 : bits_t sz) : bits_t sz =>
       let subLt := funcall (lt sz) (arg1[#(Bits.of_nat sz 0) :+ sz], arg2[#(Bits.of_nat sz 0) :+ sz]) in
-      arg1[#(Bits.of_nat sz sz)] || arg2[#(Bits.of_nat sz sz)]
+      arg1[#(Bits.of_nat sz sz)] || arg2[#(Bits.of_nat sz sz)]}}
     end.
 
   Definition gcd_compute  : uaction reg_t ext_fn_t :=
@@ -1053,7 +1063,7 @@ Definition gcd_start : uaction reg_t ext_fn_t  :=
       {{
        if ((read1(gcd_a) == #(Bits.of_nat 16 0))
           && read1(gcd_busy)) then
-         write0(gcd_busy, #Ob~0);
+         write0(gcd_busy, Ob~0);
          write0(output_data, read1(gcd_b))
        else
          fail

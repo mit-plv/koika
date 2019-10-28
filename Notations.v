@@ -28,11 +28,26 @@ Declare Custom Entry koika_args.
 Declare Custom Entry koika_var.
 Declare Custom Entry koika_types.
 Declare Custom Entry koika_branches.
+Declare Custom Entry koika_consts.
+
+(* Koika_consts *)
+Notation "bs1 '~' bs2" :=
+  (Bits.app bs2 bs1)
+    (in custom koika_consts at level 7, right associativity, format "bs1 '~' bs2").
+Notation "'1'" :=
+  (Bits.ones 1)
+    (in custom koika_consts at level 0).
+Notation "'0'" :=
+  (Bits.zeroes 1)
+    (in custom koika_consts at level 0).
+Notation "'Ob' ~ number" :=
+  (USugar (UConstBits number))
+    (in custom koika at level 7, number custom koika_consts at level 99, format "'Ob' '~' number").
+
 
 (* Koika_args *)
 Notation "x" := (cons x nil) (in custom koika_args at level 60, x custom koika at level 99).
 Notation "arg1 , arg2" := (app arg1 arg2) (in custom koika_args at level 13, arg1 custom koika_args, arg2 custom koika_args).
-Notation "a '++' b" :=  (UBinop (UBits2 UConcat) a b) (in custom koika at level 80,  right associativity, format "a  '++'  b").
 
 (* Koika_var *)
 Notation "a" := (ident_to_string a) (in custom koika_var at level 0, a constr at level 0, format "'[' a ']'",only parsing).
@@ -40,8 +55,8 @@ Notation "a" := (a) (in custom koika_var at level 0, a constr at level 0, format
 
 (* Koika_types *)
 
-Notation " x ':' y " := (cons (prod_of_argsig {| arg_name := x%string; arg_type := y |}) nil) (in custom koika_types at level 60,x custom koika_var at level 12, y constr at level 12 ).
-Notation "a ',' b" := (app a b)  (in custom koika_types at level 95, a custom koika_types , b custom koika_types, right associativity).
+Notation " '(' x ':' y ')'" := (cons (prod_of_argsig {| arg_name := x%string; arg_type := y |}) nil) (in custom koika_types at level 60,x custom koika_var at level 12, y constr at level 12 ).
+Notation "a  b" := (app a b)  (in custom koika_types at level 95, a custom koika_types , b custom koika_types, right associativity).
 
 (* Koika_branches *)
 Notation "x '=>' a " := (cons (x,a) nil) (in custom koika_branches at level 60, x custom koika at level 99, a custom koika at level 89).
@@ -53,6 +68,7 @@ Notation "'fail'" :=
   (UFail (bits_t 0)) (in custom koika, format "'fail'").
 Notation "'fail' '(' t ')'" :=
   (UFail (bits_t t)) (in custom koika, t constr at level 0 ,format "'fail' '(' t ')'").
+Notation "'pass'" := (USugar (UConstBits Ob)) (in custom koika).
 
 Notation "'True'" := (USugar (UConstBits Ob~1)) (in custom koika).
 Notation "'False'" := (USugar (UConstBits Ob~1)) (in custom koika).
@@ -110,25 +126,26 @@ Notation "a  '>s'  b" := (UBinop (UBits2 (UCompare true cGt) a b)) (in custom ko
 Notation "a  '>='  b" := (UBinop (UBits2 (UCompare false cGe) a b)) (in custom koika at level 79).
 Notation "a  '>s='  b" := (UBinop (UBits2 (UCompare true cGe) a b)) (in custom koika at level 79).
 Notation "'{' a ',' b '}'" := (UBinop (UBits2 UConcat) a b) (in custom koika, format "'{' a ',' b '}'").
+Notation "a '++' b" :=  (UBinop (UBits2 UConcat) a b) (in custom koika at level 80,  right associativity, format "a  '++'  b").
 Notation "a '[' b ']'" := (UBinop (UBits2 USel) a b) (in custom koika at level 75, format "'[' a [ b ] ']'").
 Notation "a '[' b ':+' c ']'" := (UBinop (UBits2 (UIndexedPart c)) a b) (in custom koika at level 75, c constr at level 0, format "'[' a [ b ':+' c ] ']'").
 Notation "'`' a '`'" := ( a) (in custom koika, a constr at level 99).
 
 
 
-Notation "'function' '(' args ')' ':' ret ':=' body" :=
+Notation "'fun' args ':' ret '=>' body" :=
   {| int_name := "";
      int_argspec := args;
      int_retType := ret;
      int_body := body |}
-    (at level 99, args custom koika_types, ret constr at level 0, body custom koika at level 99, format "'[v' 'function' '(' args ')'  ':'  ret  ':=' '/' body ']'").
-
-Notation "'function' ':' ret ':=' body" :=
+    (in custom koika at level 99, args custom koika_types, ret constr at level 0, body custom koika at level 99, format "'[v' 'fun'  args  ':'  ret  '=>' '/' body ']'").
+Notation "'fun' '_' ':' ret '=>' body" :=
   {| int_name := "";
      int_argspec := nil;
      int_retType := ret;
-    int_body := body |}
-    (at level 99, ret constr at level 0, body custom koika at level 99,  format "'[v' 'function'  ':'  ret  ':=' '/' body ']'" ).
+     int_body := body |}
+    (in custom koika at level 99,  ret constr at level 0, body custom koika at level 99, format "'[v' 'fun'  '_'   ':'  ret  '=>' '/' body ']'").
+
 
 
 
@@ -228,17 +245,17 @@ Module Type Tests.
   (* Notation "'{&' a '&}'" := (a) (a custom koika_types at level 200). *)
   (* Definition test_21 := {& "yoyo" : bits_t 2 &}. *)
   (* Definition test_22 := {& "yoyo" : bits_t 2 , "yoyo" : bits_t 2  &}. *)
-  Definition test_23 : InternalFunction string string (uaction reg_t) := function (arg1 : (bits_t 3),  arg2 : (bits_t 2) ) :  bits_t 4 := magic.
-  Definition test_24 : nat -> InternalFunction string string (uaction reg_t) := (fun sz => function  (arg1 : bits_t sz , arg1 : bits_t sz ) : bits_t sz  := magic).
-  Definition test_25 : nat -> InternalFunction string string (uaction reg_t) := (fun sz => function (arg1 : bits_t sz ) : bits_t sz  := let oo := magic >> magic in magic).
-  Definition test_26 : nat -> InternalFunction string string (uaction reg_t) := (fun sz => function : bits_t sz  := magic).
+  Definition test_23 : InternalFunction string string (uaction reg_t) := {{ fun (arg1 : (bits_t 3)) (arg2 : bits_t 2) : bits_t 4 => magic }}.
+  Definition test_24 : nat -> InternalFunction string string (uaction reg_t) :=  (fun sz => {{ fun  (arg1 : bits_t sz) (arg1 : bits_t sz) : bits_t sz  => magic}}).
+  Definition test_25 : nat -> InternalFunction string string (uaction reg_t) := (fun sz => {{fun (arg1 : bits_t sz ) : bits_t sz => let oo := magic >> magic in magic}}).
+  Definition test_26 : nat -> InternalFunction string string (uaction reg_t) := (fun sz => {{ fun _ : bits_t sz  => magic }}).
   Definition test_27 : uaction reg_t :=
     {{
         (if (!read0(data0)) then
-           write0(data0, `UConstBits Ob~1`);
-             let yo := if (dlk == `UConstBits Ob~1` ) then bla else yoyo || foo
+           write0(data0, Ob~1);
+             let yo := if (dlk == Ob~1 ) then bla else yoyo || foo
              in
-             write0(data0,`UConstBits Ob~1`)
+             write0(data0, Ob~1)
          else
            read0(data0));
         fail

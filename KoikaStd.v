@@ -30,21 +30,21 @@ Module Fifo1 (f: Fifo).
 
 
   Definition enq : UInternalFunction reg_t empty_ext_fn_t :=
-    function (data : T) : bits_t 0 :=
+   {{ fun (data : T) : bits_t 0 =>
       if (!read0(valid0)) then
         write0(data0,data);
           write0(valid0,#Ob~1)
       else
-        fail.
+        fail }}.
 
 
   Definition deq :  UInternalFunction reg_t empty_ext_fn_t :=
-    function : T :=
+    {{ fun _ : T =>
       if (read0(valid0)) then
         write0(valid0,`UConstBits Ob~0`);
           read0(data0)
       else
-        fail(5).
+        fail(5)}}.
 
   Instance FiniteType_reg_t : FiniteType reg_t := _.
 
@@ -56,6 +56,19 @@ Definition Maybe tau :=
                         :: ("data", tau)
                         :: nil |}.
 Notation maybe tau := (struct_t (Maybe tau)).
+
+Definition valid {tau reg_t fn} (x:uaction reg_t fn) : uaction reg_t fn :=
+  {{
+      struct (Maybe tau) {|
+               valid := (#(Bits.of_nat 1 1)) ;
+               data := `x`
+             |}
+  }}.
+
+Definition invalid {tau reg_t fn} : uaction reg_t fn :=
+  {{
+      struct (Maybe tau) {| valid := (#(Bits.of_nat 1 0)) |}
+  }}.
 
 Module Type Rf_sig.
   Parameter lastIdx:nat.
@@ -78,12 +91,12 @@ Module Rf (s:Rf_sig).
     end.
 
   Definition read : UInternalFunction reg_t empty_ext_fn_t :=
-    function (idx : bits_t (log2 sz)) : s.T :=
+    {{ fun (idx : bits_t (log2 sz)) : s.T =>
     `UCompleteSwitch (log2 sz) (pred sz) "v"
-     (vect_map (fun idx => {{ read0(rData idx) }}) (all_indices sz))`.
+     (vect_map (fun idx => {{ read0(rData idx) }}) (all_indices sz))`}}.
 
   Definition write : UInternalFunction reg_t empty_ext_fn_t :=
-    function (idx : bits_t (log2 sz), val: s.T) : bits_t 0 :=
+    {{fun (idx : bits_t (log2 sz)) (val: s.T) : bits_t 0 =>
     `UCompleteSwitch (log2 sz) (pred sz) "v"
-     (vect_map (fun idx => {{ write0(rData idx, val) }}) (all_indices sz))`.
+     (vect_map (fun idx => {{ write0(rData idx, val) }}) (all_indices sz))`}}.
 End Rf.
