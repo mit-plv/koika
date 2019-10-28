@@ -270,6 +270,7 @@ module Errors = struct
       | BadChoice of { atom: string; expected: string list }
       | BadLiteral of { atom: string }
       | BadBitsLiteral of { atom: string }
+      | ReservedIdentifier of { kind: string; atom: string }
       | BadIdentifier of { kind: string; atom: string }
       | BadConst of { atom: string }
       | BadKeyword of { kind: string; atom: string }
@@ -315,6 +316,8 @@ module Errors = struct
          sprintf "Expecting a sized literal (e.g. 2'b01 or 8'42), got %a" fquote atom
       | BadIdentifier { kind; atom } ->
          sprintf "Expecting an identifier (%s), got %a" kind fquote atom
+      | ReservedIdentifier { kind; atom } ->
+         sprintf "%a is a reserved; it cannot be used as %s" fquote atom kind
       | BadConst { atom } ->
          sprintf "Expecting a sized literal (e.g. 8'hff) or an enumerator (eg proto::ipv4), got %a" fquote atom
       | BadKeyword { kind; atom } ->
@@ -697,9 +700,14 @@ let mangle name =
 
 let name_re_str = "_\\|_?[a-zA-Z][a-zA-Z0-9_]*"
 let ident_re = Str.regexp (sprintf "^%s$" name_re_str)
+let forbidden_vars = StringSet.of_list ["true"; "false"]
 
 let try_variable var =
-  if Str.string_match ident_re var 0 then Some (mangle var) else None
+  if not (Str.string_match ident_re var 0) then
+    `InvalidIdentifier
+  else if StringSet.mem var forbidden_vars then
+    `ReservedIdentifier
+  else `ValidIdentifier (mangle var)
 
 let bits_const_re = Str.regexp "^\\([0-9]+\\)'\\(b[01]*\\|h[0-9a-fA-F]*\\|[0-9]+\\)$"
 let underscore_re = Str.regexp "_"
@@ -826,13 +834,14 @@ let parse (sexps: Pos.t sexp list) =
              | Some (`Const bs) -> Const (UBits bs)
              | None ->
                 match try_variable a with
-                | Some var -> Var var
-                | None -> syntax_error loc @@ BadLiteral { atom = a } in
+                | `ValidIdentifier var -> Var var
+                | _ -> syntax_error loc @@ BadLiteral { atom = a } in
   let expect_identifier kind v =
     let loc, atom = expect_atom kind v in
     match try_variable atom with
-    | Some v -> locd_make loc v
-    | None -> syntax_error loc @@ BadIdentifier { kind; atom } in
+    | `ValidIdentifier v -> locd_make loc v
+    | `ReservedIdentifier -> syntax_error loc @@ ReservedIdentifier { kind; atom }
+    | `InvalidIdentifier -> syntax_error loc @@ BadIdentifier { kind; atom } in
   let try_bits loc v =
     match try_number loc v with
     | Some (`Const c) -> Some c
@@ -1060,7 +1069,7 @@ let parse (sexps: Pos.t sexp list) =
     (name, expect_actions loc body) in
   let expect_cpp_preamble loc body =
     snd @@ expect_atom "preamble declaration"
-      (expect_single loc "string" "preamble declaration" body) in
+             (expect_single loc "string" "preamble declaration" body) in
   let rec expect_decl d skind expected =
     let d_loc, d = expect_list ("a " ^ skind) d in
     let kind, decl_body = expect_cons d_loc skind d in
@@ -1569,4 +1578,5 @@ let describe_language () =
   let pair k v = list [atom k; atomlist (sort Pervasives.compare v)] in
   list [pair "language-constructs" (keys language_constructs);
         pair "core-primitives" (keys special_primitives @ keys core_primitives);
-        pair "bits-primitives" (keys bits_primitives)]
+        pair "bits-primitives" (keys bits_primitives);
+        pair "reserved-identifiers" (StringSet.elements forbidden_vars)]

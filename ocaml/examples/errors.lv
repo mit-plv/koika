@@ -44,7 +44,7 @@
       (::add (+sss (get :imm1 i) (get :imm2 i)))
       (::lsr (>>> (get :imm1 i) (get :imm2 i)))
       (_ 1)))
-  (rule rl1 (write.2))
+  (rule rl1 (let ((false 1'b1)) (write.2)))
   (rule rl2 (write.0 r1 (+ (read.1 r1) 31'0)))
   (rule rl3 (getinstr (read.0 r1)))
   (rule rl4 (write.0 r1 (getinstr (read.0 r1))))
