@@ -10,6 +10,6 @@
                (<s= 4'b1000 4'b1000)
                (>s 4'b0001 4'b1000)
                (>s= 4'b1000 4'b1000))
-      (write.0 r 1'b1)))
+      (write.0 r true)))
 
   (scheduler s (sequence)))
