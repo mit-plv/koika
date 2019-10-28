@@ -86,7 +86,7 @@ module Mangling = struct
        "try"; "typedef"; "typeid"; "typename"; "union"; "unsigned"; "using";
        "virtual"; "void"; "volatile"; "wchar_t"; "while"; "xor"; "xor_eq"]
 
-  let mangling_prefix = "_renamed"
+  let mangling_prefix = "_renamed_cpp"
   let specials_re = Str.regexp (sprintf "^\\(_[A-Z]\\|%s\\|%s\\)" mangling_prefix gensym_prefix)
   let dunder_re = Str.regexp "__+"
   let dunder_anchored_re = Str.regexp "^.*__"
@@ -123,6 +123,7 @@ module Mangling = struct
   let mangle_unit u =
     { u with (* The prefixes are needed to prevent collisions with ‘prims::’ *)
       cpp_classname = mangle_name ~prefix:"module" u.cpp_classname;
+      cpp_var_names = (fun v -> v |> u.cpp_var_names |> mangle_name);
       cpp_rule_names = (fun rl -> rl |> u.cpp_rule_names |> mangle_name ~prefix:"rule");
       cpp_register_sigs = (fun r -> r |> u.cpp_register_sigs |> mangle_register_sig);
       cpp_ext_sigs = (fun f -> f |> u.cpp_ext_sigs |> mangle_function_sig) }
