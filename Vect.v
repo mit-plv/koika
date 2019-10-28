@@ -857,6 +857,7 @@ Module Bits.
   End Properties.
 End Bits.
 
+Declare Scope bits.
 Notation bits n := (Bits.bits n).
 Notation "'Ob'" := Bits.nil (at level 7) : bits.
 Notation "bs '~' b" := (Bits.cons b bs) (at level 7, left associativity, format "bs '~' b") : bits.

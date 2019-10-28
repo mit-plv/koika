@@ -297,6 +297,7 @@ Section CircuitCompilation.
   Notation CAnnotOpt an c := (CAnnot an (opt _ c)).
   (* Notation CAnnotOpt an c := (CAnnot an c). *)
 
+  Declare Scope circuit.
   Notation "f [ arg ]` an `" :=
     (CAnnotOpt an (CExternal f arg (CConst Ob)))
       (at level 99, arg at level 99, format "f [ arg ]` an `") : circuit.
