@@ -4,6 +4,8 @@ CLI=${OCAML_BUILD_DIR}/cli.exe
 ML=$(wildcard *.ml)
 BEAR=bear -o examples/compile_commands.json
 
+# FIXME: remove the @echo line below once the fix to
+# https://github.com/ocaml/dune/issues/138 is released
 build:
 	dune build coq_examples.bc coq_examples.exe cli.bc cli.exe
 	@echo Leaving directory \`$(abspath $(dir $(lastword $(PWD))))\'
