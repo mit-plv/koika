@@ -81,7 +81,8 @@ let print_errors_and_warnings errs =
 let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
   let open Lv in
   let cli_in_fname =
-    Core.Filename.realpath cli_in_fname in
+    if cli_in_fname = "-" then "-"
+    else Core.Filename.realpath cli_in_fname in
   let read =
     match cli_frontend with
     | `Annotated -> read_annotated_sexps
