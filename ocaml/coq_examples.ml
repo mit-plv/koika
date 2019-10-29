@@ -10,7 +10,7 @@ let mkdir dirname =
   with Unix.Unix_error(Unix.EEXIST, _, _) -> ()
 
 let coq_main (dp: SGALib.SGA.demo_package_t) =
-  CoqInterop.compile_all ~directory:"coq/examples"
+  CoqInterop.compile_all ~directory:"examples/coq"
     dp.sga dp.sp dp.vp
 
 let _ =
