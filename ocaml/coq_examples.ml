@@ -6,7 +6,7 @@ let package_matches filter (p: SGA.demo_package_t) =
   with Not_found -> false
 
 let mkdir dirname =
-  try Unix.mkdir dirname 0o644
+  try Unix.mkdir dirname 0o755
   with Unix.Unix_error(Unix.EEXIST, _, _) -> ()
 
 let coq_main (dp: SGALib.SGA.demo_package_t) =
