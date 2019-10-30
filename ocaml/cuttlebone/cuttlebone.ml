@@ -370,7 +370,7 @@ module Graphs = struct
       && rwdata1.data0 == rwdata2.data0
       && rwdata1.data1 == rwdata2.data1
     let hash c =
-      Hashtbl.hash c
+      Hashtbl.hash c (* FIXME see the hashcons docs to improve this *)
   end
 
   (* CircuitHashcons is used to find duplicate subcircuits *)
@@ -448,6 +448,8 @@ module Graphs = struct
                             root_circuit = dedup c })
                         pkg.di_regs in
     let graph_nodes = list_of_hashcons deduplicated_circuits in
+    let cmp (x: circuit) (y: circuit) = compare x.tag y.tag in
+    let graph_nodes = List.stable_sort cmp graph_nodes in
     { graph_roots; graph_nodes }
 
   let graph_of_compile_unit (cu: 'f Compilation.compile_unit)
