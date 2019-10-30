@@ -1,4 +1,4 @@
-Require Import Koika.Parsing.
+Require Import Koika.Frontend.
 
 Module Type Fifo.
   Parameter T:type.

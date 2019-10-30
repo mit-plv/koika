@@ -1,4 +1,4 @@
-Require Import Koika.Parsing.
+Require Import Koika.Frontend.
 
 Module Ex1.
   Notation var_t := string.
