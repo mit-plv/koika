@@ -109,14 +109,6 @@ Section Packages.
     }.
 End Packages.
 
-Record demo_package_t pos_t var_t :=
-  { dp_reg_t : Type;
-    dp_rule_name_t : Type;
-    dp_ext_fn_t : Type;
-    kp : @koika_package_t pos_t var_t dp_rule_name_t dp_reg_t dp_ext_fn_t;
-    vp : @verilog_package_t dp_rule_name_t dp_ext_fn_t;
-    sp : @sim_package_t var_t dp_ext_fn_t }.
-
 Section TypeConv.
   Fixpoint struct_to_list {A} (f: forall tau: type, type_denote tau -> A)
            (fields: list (string * type)) (v: struct_denote fields): list (string * A) :=
@@ -200,3 +192,35 @@ Section Compilation.
     let _ := s.(koika_reg_finite) in
     {| cp_circuits := compile_scheduler s.(koika_rules) s.(koika_scheduler) |}.
 End Compilation.
+
+Record interop_package_t :=
+  { pos_t := unit;
+    var_t := string;
+    dp_reg_t : Type;
+    dp_rule_name_t : Type;
+    dp_ext_fn_t : Type;
+    ip_koika : @koika_package_t pos_t var_t dp_rule_name_t dp_reg_t dp_ext_fn_t;
+    ip_verilog : @verilog_package_t dp_rule_name_t dp_ext_fn_t;
+    ip_sim : @sim_package_t var_t dp_ext_fn_t }.
+
+Require Import Koika.ExtractionSetup.
+
+Module Backends.
+  Section Backends.
+    Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
+    Notation koika_package_t := (@koika_package_t pos_t var_t rule_name_t reg_t ext_fn_t).
+    Notation verilog_package_t := (@verilog_package_t rule_name_t ext_fn_t).
+    Notation sim_package_t := (@sim_package_t var_t ext_fn_t).
+
+    Axiom compile_circuits: koika_package_t -> verilog_package_t -> unit.
+    Axiom compile_simulation: koika_package_t -> sim_package_t -> unit.
+    Axiom compile_all: interop_package_t -> unit.
+  End Backends.
+
+  Extract Constant compile_circuits =>
+  "fun kp vp -> Koika.Interop.compile_circuits (Obj.magic kp) (Obj.magic vp)".
+  Extract Constant compile_simulation =>
+  "fun kp sp -> Koika.Interop.compile_simulation (Obj.magic kp) (Obj.magic vp)".
+  Extract Constant compile_all =>
+  "fun ip -> Koika.Interop.compile_all (Obj.magic ip)".
+End Backends.

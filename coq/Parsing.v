@@ -371,3 +371,8 @@ Notation tc_rules R Sigma actions :=
 
 Notation tc_scheduler uscheduler :=
   (type_scheduler dummy_pos uscheduler) (only parsing).
+
+Notation compute t :=
+  ltac:(let tt := type of t in
+        let t := (eval vm_compute in t) in
+        exact (t: tt)) (only parsing).

@@ -1,5 +1,4 @@
 Require Import Koika.Parsing.
-Notation demo_package_t := (demo_package_t unit string).
 
 Module Ex1.
   Notation var_t := string.
@@ -124,10 +123,6 @@ Module Ex2.
   Definition tsched_circuits_result :=
     Eval compute in interp_circuits (ContextEnv.(create) r) empty_sigma tsched_circuits.
 End Ex2.
-Notation compute t :=
-  ltac:(let tt := type of t in
-        let t := (eval lazy in t) in
-        exact (t: tt)) (only parsing).
 
 Module Collatz.
   Inductive reg_t := R0.
@@ -226,15 +221,13 @@ Module Collatz.
        koika_module_name := "collatz" |}.
 
   Definition package :=
-    {| kp := koika_package;
-       sp := {| sp_var_names x := x;
-               sp_ext_fn_names := empty_fn_names;
-               sp_extfuns := None |};
-       vp := {| vp_external_rules := List.nil;
-               vp_ext_fn_names := empty_fn_names |} |}.
+    {| ip_koika := koika_package;
+       ip_sim := {| sp_var_names x := x;
+                   sp_ext_fn_names := empty_fn_names;
+                   sp_extfuns := None |};
+       ip_verilog := {| vp_external_rules := List.nil;
+                       vp_ext_fn_names := empty_fn_names |} |}.
 End Collatz.
-
-Require Import Coq.Lists.List.
 
 Module Type Unpacker.
   Axiom unpack : forall reg_t ext_fn_t (source: string), uaction reg_t ext_fn_t.
@@ -337,7 +330,7 @@ using extfuns = decoder_extfuns;" |} in
     let verilog :=
         {| vp_external_rules := List.nil;
            vp_ext_fn_names := F.ext_fn_names |} in
-    {| kp := koika_package; sp := sim; vp := verilog |}.
+    {| ip_koika := koika_package; ip_sim := sim; ip_verilog := verilog |}.
 End Decoder.
 
 Module ManualUnpacker <: Unpacker.
@@ -366,8 +359,6 @@ Module PrimitiveUnpacker <: Unpacker.
 End PrimitiveUnpacker.
 
 Module ManualFetcher <: Fetcher.
-  Import ListNotations.
-
   Definition ext_fn_t := empty_ext_fn_t.
   Definition Sigma := empty_Sigma.
   Definition ext_fn_names := empty_fn_names.
@@ -572,13 +563,13 @@ Module Pipeline.
     |}.
 
   Definition package :=
-    {| kp := koika_package;
-       sp := {| sp_var_names := fun x => x;
-               sp_ext_fn_names := fn_names;
-               sp_extfuns := Some "#include ""../demo.extfuns.hpp""
-using extfuns = pipeline_extfuns;" |};
-       vp := {| vp_external_rules := List.nil;
-               vp_ext_fn_names := fn_names |} |}.
+    {| ip_koika := koika_package;
+       ip_sim := {| sp_var_names := fun x => x;
+                    sp_ext_fn_names := fn_names;
+                    sp_extfuns := Some "#include ""../demo.extfuns.hpp""
+using extfuns = pipeline_extfuns;" |}       ;
+       ip_verilog := {| vp_external_rules := List.nil;
+                        vp_ext_fn_names := fn_names |} |}.
 End Pipeline.
 
 Section CircuitTools.
@@ -681,12 +672,12 @@ Module RegisterFile_Ordered.
     |}.
 
   Definition package :=
-    {| kp := koika_package;
-       sp := {| sp_var_names := fun x => x;
-               sp_ext_fn_names := empty_fn_names;
-               sp_extfuns := None |};
-       vp := {| vp_external_rules := List.nil;
-               vp_ext_fn_names := empty_fn_names |} |}.
+    {| ip_koika := koika_package;
+       ip_sim := {| sp_var_names := fun x => x;
+                    sp_ext_fn_names := empty_fn_names;
+                    sp_extfuns := None |};
+       ip_verilog := {| vp_external_rules := List.nil;
+                        vp_ext_fn_names := empty_fn_names |} |}.
 End RegisterFile_Ordered.
 
 Module Enums.
@@ -694,7 +685,6 @@ Module Enums.
   Definition ext_fn_t := empty_ext_fn_t.
   Inductive rule_name_t := Incr.
 
-  Import ListNotations.
   Definition flag_sig :=
     {| enum_name := "flag";
        enum_bitsize := 3;
@@ -763,12 +753,12 @@ Module Enums.
     |}.
 
   Definition package :=
-    {| kp := koika_package;
-       sp := {| sp_var_names := fun x => x;
-               sp_ext_fn_names := empty_fn_names;
-               sp_extfuns := None |};
-       vp := {| vp_external_rules := List.nil;
-               vp_ext_fn_names := empty_fn_names |} |}.
+    {| ip_koika := koika_package;
+       ip_sim := {| sp_var_names := fun x => x;
+                    sp_ext_fn_names := empty_fn_names;
+                    sp_extfuns := None |};
+       ip_verilog := {| vp_external_rules := List.nil;
+                        vp_ext_fn_names := empty_fn_names |} |}.
 End Enums.
 
 Module IntCall.
@@ -870,12 +860,12 @@ Module IntCall.
     |}.
 
   Definition package :=
-    {| kp := koika_package;
-       sp := {| sp_var_names := fun x => x;
-               sp_ext_fn_names := empty_fn_names;
-               sp_extfuns := None |};
-       vp := {| vp_external_rules := List.nil;
-               vp_ext_fn_names := empty_fn_names |} |}.
+    {| ip_koika := koika_package;
+       ip_sim := {| sp_var_names := fun x => x;
+                    sp_ext_fn_names := empty_fn_names;
+                    sp_extfuns := None |};
+       ip_verilog := {| vp_external_rules := List.nil;
+                        vp_ext_fn_names := empty_fn_names |} |}.
 End IntCall.
 
 Require Import Koika.Std.
@@ -967,7 +957,7 @@ Module ExternallyCompiledRule.
   Definition verilog :=
     {| vp_external_rules := cons fetch nil;
        vp_ext_fn_names := empty_fn_names |} .
-  Definition package : demo_package_t := {| kp := koika_package; sp := sim; vp := verilog |}.
+  Definition package : interop_package_t := {| ip_koika := koika_package; ip_sim := sim; ip_verilog := verilog |}.
 End ExternallyCompiledRule.
 
 Notation zero := (Bits.zeroes _).
@@ -1109,16 +1099,15 @@ Definition gcd_start : uaction reg_t ext_fn_t  :=
            koika_module_name := "externalMemory" |}.
 
   Definition package :=
-    {| kp := koika_package;
-       sp := {| sp_var_names := fun x => x;
-               sp_ext_fn_names := empty_fn_names;
-               sp_extfuns := None |};
-       vp := {| vp_external_rules := nil;
-               vp_ext_fn_names := empty_fn_names |} |}.
+    {| ip_koika := koika_package;
+       ip_sim := {| sp_var_names := fun x => x;
+                   sp_ext_fn_names := empty_fn_names;
+                   sp_extfuns := None |};
+       ip_verilog := {| vp_external_rules := nil;
+                       vp_ext_fn_names := empty_fn_names |} |}.
 End GcdMachine.
 
-Import ListNotations.
-Definition demo_packages : list demo_package_t :=
+Definition demo_packages : list interop_package_t :=
   [ Collatz.package;
     ManualDecoder.package; PrimitiveDecoder.package;
     Pipeline.package;
