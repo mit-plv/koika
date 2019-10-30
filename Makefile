@@ -1,4 +1,5 @@
 BUILD_DIR := _build/default
+PHONY :=
 
 default: examples
 
@@ -16,6 +17,8 @@ coq:
 
 coq-all:
 	dune build @coq/all
+
+PHONY += coq
 
 #########
 # OCaml #
@@ -36,6 +39,8 @@ ocaml-executables: coq
 ${COQ_DEMO_EXE} ${LVC_EXE}: ocaml-executables
 
 ocaml: ${COQ_DEMO_EXE} ${LVC_EXE}
+
+PHONY += ocaml ocaml-executables
 
 ####################
 # Examples & tests #
@@ -67,6 +72,8 @@ tests: ${LV_TESTS_TARGETS}
 clean-tests:
 	rm -rf tests/*.objects/
 
+PHONY += examples clean-examples tests clean-tests
+
 #################
 # Whole project #
 #################
@@ -76,3 +83,6 @@ all: coq ocaml examples tests
 
 clean: clean-tests clean-examples
 	dune clean
+
+PHONY += all clean
+.PHONY: ${PHONY}
