@@ -1,5 +1,6 @@
 (library
  (name cuttlebone)
+ (public_name koika.cuttlebone)
  (libraries common)
  (flags (:standard -w -39)))
 

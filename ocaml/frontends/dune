@@ -1,3 +1,4 @@
 (library
  (name frontends)
+ (public_name koika.frontends)
  (libraries base stdio parsexp zarith common cuttlebone))

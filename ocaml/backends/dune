@@ -1,3 +1,4 @@
 (library
  (name backends)
+ (public_name koika.backends)
  (libraries str unix zarith common cuttlebone frontends))

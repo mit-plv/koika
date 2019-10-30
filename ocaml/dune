@@ -14,3 +14,9 @@
  (name demo)
  (modules demo)
  (libraries interop))
+
+(library
+ (name koika)
+ (public_name koika)
+ (modules koika)
+ (libraries frontends backends cuttlebone interop))
