@@ -12,56 +12,56 @@ type cli_opts = {
     cli_backend: backend option
   }
 
-let exts_to_backends : (string * backend) list =
-  [("coq.v", `Coq);
-   ("verilog.v", `Verilog);
-   ("dot", `Dot);
-   ("hpp", `Hpp);
-   ("cpp", `Cpp);
-   ("exe", `Exe);
-   ("all", `All)]
+let suffixes_to_backends : (string * backend) list =
+  [("_coq.v", `Coq);
+   ("_verilog.v", `Verilog);
+   (".dot", `Dot);
+   (".hpp", `Hpp);
+   (".cpp", `Cpp);
+   (".exe", `Exe);
+   (".all", `All)]
 
-let backends_to_exts =
-  List.map (fun (x, y) -> (y, x)) exts_to_backends
+let backends_to_suffixes =
+  List.map (fun (x, y) -> (y, x)) suffixes_to_backends
 
 let all_backends =
   (* Exe implies Hpp and Cpp *)
   [`Coq; `Verilog; `Dot; `Exe]
 
-let exts, ext_re =
-  let exts = List.map fst exts_to_backends in
-  let cases = String.concat "\\|" exts in
-  exts, Str.regexp (sprintf "^\\(.*\\)\\.\\(%s\\)$" cases)
+let suffixes, suffix_re =
+  let suffixes = List.map (Str.quote << fst) suffixes_to_backends in
+  let cases = String.concat "\\|" suffixes in
+  suffixes, Str.regexp (sprintf "^\\(.*\\)\\(%s\\)$" cases)
 
-let split_extension fname =
+let split_suffix fname =
   let fail () =
-    let exts = String.concat ", " exts in
-    failwith (sprintf "Output file must have one of the following extensions: %s" exts) in
-  if Str.string_match ext_re fname 0 then
+    let suffixes = String.concat ", " suffixes in
+    failwith (sprintf "Output file must have one of the following suffixes: %s" suffixes) in
+  if Str.string_match suffix_re fname 0 then
     (Str.matched_group 1 fname, Str.matched_group 2 fname)
   else fail ()
 
 let backend_of_fname fname =
   if fname = "-" then None
-  else let _, ext = split_extension fname in
-       Some (List.assoc ext exts_to_backends)
+  else let _, suffix = split_suffix fname in
+       Some (List.assoc suffix suffixes_to_backends)
 
-let ext_of_backend backend =
-  List.assoc backend backends_to_exts
+let suffix_of_backend backend =
+  List.assoc backend backends_to_suffixes
 
 let rec run_backend backend out_fname resolved c_unit =
-  let fname_noext, _ = split_extension out_fname in
+  let fname_prefix, _ = split_suffix out_fname in
   match backend with
   | `All ->
-     let new_fname backend = fname_noext ^ "." ^ ext_of_backend backend in
+     let new_fname backend = fname_prefix ^ suffix_of_backend backend in
      let run_one backend = run_backend backend (new_fname backend) resolved c_unit in
      List.iter run_one all_backends
   | `Coq ->
      with_output_to_file out_fname (fun out ->
          Backends.Coq.main out resolved)
   | (`Hpp | `Cpp | `Exe) as kd ->
-     let cls = Core.Filename.basename fname_noext in
-     Backends.Cpp.main fname_noext kd (Backends.Cpp.input_of_compile_unit cls c_unit)
+     let cls = Core.Filename.basename fname_prefix in
+     Backends.Cpp.main fname_prefix kd (Backends.Cpp.input_of_compile_unit cls c_unit)
   | (`Verilog | `Dot) as backend ->
      let graph = Cuttlebone.Graphs.graph_of_compile_unit c_unit in
      with_output_to_file out_fname (fun out ->
