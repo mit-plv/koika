@@ -43,7 +43,7 @@ Module Ex1.
   Definition rules :=
     tc_rules R Sigma uactions.
 
-  Example us1 : uscheduler unit rule_name_t :=
+  Example us1 : uscheduler :=
     UTry r1 UDone UDone.
 
   Definition s1 :=
@@ -109,7 +109,7 @@ Module Ex2.
     | R2 => Ob~1
     end.
 
-  Definition rules : rule_name_t -> rule pos_t var_t R empty_Sigma :=
+  Definition rules : rule_name_t -> rule R empty_Sigma :=
     tc_rules R empty_Sigma
              (fun r => match r with
                     | negate => _negate
@@ -297,7 +297,7 @@ Module Decoder (P: Unpacker) (F: Fetcher).
   (*   __must_typecheck_cbn R Sigma tcres. *)
 
   Notation rulemap_t :=
-    (rule_name_t -> rule pos_t var_t R F.Sigma).
+    (rule_name_t -> rule R F.Sigma).
 
   Definition make_package (modname: string) (rules: rulemap_t) :=
     let koika_package :=
