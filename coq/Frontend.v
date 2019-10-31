@@ -5,11 +5,13 @@ Require Export
         Koika.Semantics
         Koika.Circuits
         Koika.Primitives
+        Koika.UntypedSyntaxTools
         Koika.TypedSyntaxTools
         Koika.Interop
         Koika.Parsing.
 
 Class DummyPos pos_t := { dummy_pos: pos_t }.
+Instance DummyPos_path : DummyPos path := {| dummy_pos := PThis |}.
 Instance DummyPos_unit : DummyPos unit := {| dummy_pos := tt |}.
 
 Declare Scope log_entries.
@@ -79,26 +81,80 @@ Ltac tc_eval_body x :=
   let x := tc_eval x in
   constr:(x: t).
 
-Ltac _must_typecheck x :=
-  let x := tc_eval_body x in
-  lazymatch x with
-  | Success ?tm => tm
-  | Failure {| epos := _; emsg := ?err; esource := ErrSrc ?src |} =>
-    let err := match err with
-               | BasicError ?err => err
-               | ?err => err
-               end in
-    fail "Type error:" err "in term" src
-  | _ => fail "Unexpected term:" x
+Declare Scope error_messages.
+Notation ">>> x <<<" :=
+  (UError {| epos := tt;
+             emsg := ExplicitErrorInAst;
+             esource := ErrSrc (ErrorHere x) |}) : error_messages.
+Global Open Scope error_messages.
+
+Notation desugar_and_tc_action R Sigma uaction :=
+  (let desugared := desugar_action dummy_pos uaction in
+   type_action R Sigma dummy_pos List.nil desugared).
+
+Ltac _must_succeed tc_result :=
+  let tc_result := tc_eval_body tc_result in
+  lazymatch tc_result with
+  | Success ?action => action
+  | _ => fail "Failure"
   end.
 
-Ltac _tc_action R Sigma action :=
-  let maybe_typed :=
-      constr:(let desugared := desugar_action dummy_pos action in
-              type_action R Sigma dummy_pos List.nil desugared) in
-  let typed := _must_typecheck maybe_typed in
+Ltac _tc_action_fast R Sigma uaction :=
+  let result := constr:(desugar_and_tc_action R Sigma uaction) in
+  let typed := _must_succeed result in
   let typed := tc_eval_body (projT2 typed) in
   exact typed.
+
+Arguments place_error_beacon {var_t fn_name_t reg_t ext_fn_t} / rev_target current_path a : assert.
+
+Ltac _report_typechecking_errors uaction tc_result :=
+  let tc_result := tc_eval_body tc_result in
+  lazymatch tc_result with
+  | Success _ =>
+    fail "No error in this program"
+  | Failure {| epos := ?path; emsg := ?err; esource := ErrSrc ?src |} =>
+    let err := lazymatch err with
+              | BasicError ?err => err
+              | ?err => err
+              end in
+    let revpath := constr:(rev_path PThis path) in
+    let beacon_ctx := constr:(place_error_beacon revpath PThis uaction) in
+    let beacon_ctx := eval cbn in beacon_ctx in
+    lazymatch beacon_ctx with
+    | ([], _) =>
+    fail "
+## In term:
+  " src "
+
+## Type error:
+  " err "
+
+## Context unknown; please report this bug"
+    | ([ErrorHere ?beacon], ?context) =>
+    fail "
+## In term:
+  " beacon "
+
+## Type error:
+  " err "
+
+## Context:
+  " context
+    | _ =>
+      fail "Unexpected location:" beacon_ctx
+    end
+  | _ =>
+    fail "Unexpected typechecker output:" tc_result
+  end.
+
+Ltac _tc_illtyped_action R Sigma uaction :=
+  let annotated := constr:(reposition PThis uaction) in
+  let result := constr:(desugar_and_tc_action R Sigma annotated) in
+  _report_typechecking_errors uaction result.
+
+Ltac _tc_action R Sigma uaction :=
+  (_tc_action_fast R Sigma uaction ||
+   _tc_illtyped_action R Sigma uaction).
 
 Notation tc_action R Sigma action :=
   (ltac:(_tc_action R Sigma action)) (only parsing).
