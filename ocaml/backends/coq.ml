@@ -39,6 +39,14 @@ let rec pp_seq pp_sep pp_elem ppf = function
   | [x] -> pp_elem ppf x
   | x :: tl -> pp_elem ppf x; pp_sep ppf; pp_seq pp_sep pp_elem ppf tl
 
+let rec pp_seq_header pp_sep pp_elem ppf = function
+  | [] -> ()
+  | x :: tl -> pp_sep ppf; pp_elem ppf x; pp_seq_header pp_sep pp_elem ppf tl
+
+let rec pp_seq_trailer pp_sep pp_elem ppf = function
+  | [] -> ()
+  | x :: tl -> pp_elem ppf x; pp_sep ppf; pp_seq_trailer pp_sep pp_elem ppf tl
+
 let pp_list pp_elem ppf elems =
   fprintf ppf "[@[%a@]]" (pp_seq (pp_sep "; ") pp_elem) elems
 
@@ -83,8 +91,8 @@ let pp_struct ppf { struct_name; struct_fields } =
   p "Definition %s : type := struct_t %s_sig." struct_name struct_name
 
 let pp_inductive pp_constructor ppf (name, constructors) =
-  fprintf ppf "@[<v>Inductive %s : Set :=@ %a.@]" name
-    (pp_seq (brk 1) (fun ppf c -> fprintf ppf "| %a" pp_constructor c))
+  fprintf ppf "@[<v>Inductive %s : Set :=%a.@]" name
+    (pp_seq_header (brk 1) (fun ppf c -> fprintf ppf "| %a" pp_constructor c))
     constructors
 
 let pp_reg_name ppf r =
@@ -97,8 +105,8 @@ let pp_rule_name_t ppf (rules: (string * _) list) =
   pp_inductive (pp_raw <<< fst) ppf ("rule_name_t", rules)
 
 let pp_match pp_left pp_right ppf (discr, branches) =
-  fprintf ppf "@[<v>match %s with@ %a@ end@]" discr
-    (pp_seq (brk 1) (fun ppf v ->
+  fprintf ppf "@[<v>match %s with%a@ end@]" discr
+    (pp_seq_header (brk 1) (fun ppf v ->
          fprintf ppf "| %a => %a" pp_left v pp_right v))
     branches
 
@@ -337,21 +345,13 @@ let pp_mod ~print_positions ppf ({ name; registers; rules; schedulers; _ }: reso
   pp_rule_name_t ppf rules; brk 2 ppf;
   pp_reg_types ppf registers; brk 2 ppf;
   pp_reg_init_vals ppf registers; brk 2 ppf;
-  pp_seq (brk 2) (pp_rule print_positions) ppf rules; brk 2 ppf;
-  pp_tc_rules ppf rules; brk 2 ppf;
-  pp_seq (brk 2) (pp_scheduler print_positions) ppf schedulers;
+  pp_seq_trailer (brk 2) (pp_rule print_positions) ppf rules;
+  pp_tc_rules ppf rules;
+  pp_seq_header (brk 2) (pp_scheduler print_positions) ppf schedulers;
   fprintf ppf "@]@ End %s.@]" name
 
 let pp_preamble ppf =
-  fprintf ppf "Require Import Koika.Parsing.@ @ ";
-  fprintf ppf "Definition pos_t := string.@ ";
-  fprintf ppf "Definition fn_name_t := string.@ ";
-  fprintf ppf "Definition var_t := string.@ ";
-  fprintf ppf "@[<hv 2>Notation uaction reg_t ext_fn_t :=@ ";
-  fprintf ppf "(uaction pos_t var_t fn_name_t reg_t ext_fn_t).@]@ ";
-  fprintf ppf "@[<hv 2>Notation UInternalFunction reg_t ext_fn_t :=@ ";
-  fprintf ppf "(InternalFunction fn_name_t var_t (uaction reg_t ext_fn_t)).@]@ @ ";
-  fprintf ppf "Instance DummyPos_pos_t : DummyPos pos_t := {| dummy_pos := \"\" |}."
+  fprintf ppf "Require Import Koika.Frontend."
 
 let _ =
   ResolvedAST.debug_printer :=
@@ -375,10 +375,10 @@ let main out ({ r_types; r_fns; r_mods }: resolved_unit) =
 
   fprintf ppf "@[<v>";
   pp_preamble ppf; brk 2 ppf;
-  pp_seq (brk 2) pp_enum ppf enums; brk 2 ppf;
-  pp_seq (brk 2) pp_struct ppf structs; brk 2 ppf;
+  pp_seq_trailer (brk 2) pp_enum ppf enums;
+  pp_seq_trailer (brk 2) pp_struct ppf structs;
   pp_ext_fn_t ppf extfuns; brk 2 ppf;
-  pp_ext_fn_Sigma ppf extfuns; brk 2 ppf;
-  pp_seq (brk 2) (pp_int_fn ~print_positions) ppf intfuns; brk 2 ppf;
-  pp_seq (brk 2) (pp_mod ~print_positions) ppf r_mods;
+  pp_ext_fn_Sigma ppf extfuns;
+  pp_seq_header (brk 2) (pp_int_fn ~print_positions) ppf intfuns;
+  pp_seq_header (brk 2) (pp_mod ~print_positions) ppf r_mods;
   fprintf ppf "@]@.";
