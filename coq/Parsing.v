@@ -101,8 +101,8 @@ Notation "'write1' '(' reg ',' value ')'" :=
     (in custom koika, reg constr at level 13, format "'write1' '(' reg ',' value ')'").
 
 Notation "'if' a 'then' t 'else' f" := (UIf a t f) (in custom koika at level 30, right associativity, format "'[v' 'if'  a '/' 'then'  t '/' 'else'  f ']'").
-Notation "'guard' a 'then' t " := (UIf a t (UFail (bits_t 0))) (in custom koika at level 30, right associativity, format "'[v' 'guard'  a '/' 'then'  t '/' ']'").
-Notation "'when' a 'then' t " := (UIf a t (USugar (UConstBits Ob))) (in custom koika at level 30, right associativity, format "'[v' 'when'  a '/' 'then'  t '/' ']'").
+Notation "'guard' '(' a ')' " := (UIf a (USugar (UConstBits Ob)) (UFail (bits_t 0))) (in custom koika at level 30, right associativity, format "'guard' '(' a ')'").
+Notation "'when' a 'do' t " := (UIf a t (USugar (UConstBits Ob))) (in custom koika at level 91, right associativity, format "'[v' 'when'  a '/' 'do'  t '/' ']'").
 
 Notation "a '&&' b" :=  (UBinop (UBits2 UAnd) a b) (in custom koika at level 80,  right associativity, format "a  '&&'  b").
 Notation "'!' a" := (UUnop (UBits1 UNot) a) (in custom koika at level 75, a custom koika at level 99, format "'!' a").
