@@ -32,8 +32,8 @@ Module Fifo1 (f: Fifo).
   Definition enq : UInternalFunction reg_t empty_ext_fn_t :=
    {{ fun (data : T) : bits_t 0 =>
       if (!read0(valid0)) then
-        write0(data0,data);
-          write0(valid0,#Ob~1)
+        write0(data0, data);
+        write0(valid0, #Ob~1)
       else
         fail }}.
 
@@ -41,10 +41,10 @@ Module Fifo1 (f: Fifo).
   Definition deq :  UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun _ : T =>
       if (read0(valid0)) then
-        write0(valid0,`USugar (UConstBits Ob~0)`);
-          read0(data0)
+        write0(valid0, Ob~0);
+        read0(data0)
       else
-        fail(5)}}.
+        fail@(T)}}.
 
   Instance FiniteType_reg_t : FiniteType reg_t := _.
 
@@ -57,16 +57,16 @@ Definition Maybe tau :=
                         :: nil |}.
 Notation maybe tau := (struct_t (Maybe tau)).
 
-Definition valid {tau reg_t fn} (x:uaction reg_t fn) : uaction reg_t fn :=
-  {{
+Definition valid {reg_t fn} (tau:type) : UInternalFunction reg_t fn :=
+  {{ fun (x: tau) : maybe tau =>
       struct (Maybe tau) {|
                valid := (#(Bits.of_nat 1 1)) ;
-               data := `x`
+               data := x
              |}
   }}.
 
-Definition invalid {tau reg_t fn} : uaction reg_t fn :=
-  {{
+Definition invalid {reg_t fn} (tau:type) : UInternalFunction reg_t fn :=
+  {{ fun _ : maybe tau =>
       struct (Maybe tau) {| valid := (#(Bits.of_nat 1 0)) |}
   }}.
 
@@ -92,12 +92,12 @@ Module Rf (s:Rf_sig).
 
   Definition read : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun (idx : bits_t (log2 sz)) : s.T =>
-    `UCompleteSwitch (log2 sz) (pred sz) "v"
+    `UCompleteSwitch (log2 sz) (pred sz) "idx"
      (vect_map (fun idx => {{ read0(rData idx) }}) (all_indices sz))`}}.
 
   Definition write : UInternalFunction reg_t empty_ext_fn_t :=
     {{fun (idx : bits_t (log2 sz)) (val: s.T) : bits_t 0 =>
-    `UCompleteSwitch (log2 sz) (pred sz) "v"
+    `UCompleteSwitch (log2 sz) (pred sz) "idx"
      (vect_map (fun idx => {{ write0(rData idx, val) }}) (all_indices sz))`}}.
 End Rf.
 
@@ -106,6 +106,6 @@ Fixpoint signExtend {reg_t} (n:nat) (m:nat) : UInternalFunction reg_t empty_ext_
       fun (arg : bits_t n) : bits_t (m+n) =>
         `match (m) with
          | O => {{ arg }}
-         | S m => {{(arg[#(Bits.of_nat (log2 n) n)]) ++ (funcall (signExtend (log2 n) m)(arg))}}
+         | S m => {{(arg[#(Bits.of_nat (log2 n) n)]) ++ {signExtend n m}(arg)}}
          end`
   }}.

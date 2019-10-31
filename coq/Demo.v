@@ -166,7 +166,7 @@ Module Collatz.
     let v := read1(R0) in
     let odd := v[Ob~0~0~0~0] in
     if odd then
-      write1(R0, (funcall times_three (v)) + Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1)
+      write1(R0, times_three(v) + Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1)
     else
       fail
   }}.
@@ -358,7 +358,10 @@ Module PrimitiveUnpacker <: Unpacker.
     (UUnop (UConv (UUnpack (struct_t decoded_sig))) (UVar encoded)).
 End PrimitiveUnpacker.
 
+Require Import Coq.Lists.List.
 Module ManualFetcher <: Fetcher.
+  Import ListNotations.
+
   Definition ext_fn_t := empty_ext_fn_t.
   Definition Sigma := empty_Sigma.
   Definition ext_fn_names := empty_fn_names.
@@ -686,6 +689,7 @@ Module Enums.
   Definition ext_fn_t := empty_ext_fn_t.
   Inductive rule_name_t := Incr.
 
+  Import ListNotations.
   Definition flag_sig :=
     {| enum_name := "flag";
        enum_bitsize := 3;
@@ -810,10 +814,10 @@ Module IntCall.
   Definition _rl : uaction reg_t empty_ext_fn_t :=
     {{
        let a := read0(rA) in
-       let old_a := call rDelay2 swap16 (a) in
-       let old_al := call rDelay1 swap8 (old_a[Ob~0~0~0~0 :+8])  in
-       write0(rA, funcall (nor 16) ((read0(rA)), old_a));
-       funcall (display (Display.Str "rA: " :: Display.Value (bits_t 16) :: nil)) (a)
+       let old_a := rDelay2.(swap16) (a) in
+       let old_al := rDelay1.(swap8)(old_a[Ob~0~0~0~0 :+8])  in
+       write0(rA, {nor 16}(read0(rA), old_a));
+       {display (Display.Str "rA: " :: Display.Value (bits_t 16) :: nil)}(a)
     }}.
 
   (* Ltac __must_typecheck R Sigma tcres ::= *)
@@ -905,13 +909,13 @@ Module ExternallyCompiledRule.
   Definition _fetch :=
     {{
        let memory := read0(Mem) in
-       call MyFifo Fifo5.enq (memory)
+       MyFifo.(Fifo5.enq)(memory)
     }}.
 
 
   Definition _ding : uaction reg_t empty_ext_fn_t :=
     {{
-       let dequeued := call0 MyFifo Fifo5.deq in
+       let dequeued := MyFifo.(Fifo5.deq)() in
        if (dequeued == Ob~0~0~0~1~0) then
          write0(Rdata, Ob~0~0~0~0~1)
        else
@@ -1012,41 +1016,33 @@ Definition gcd_start : uaction reg_t ext_fn_t  :=
   Definition sub  : UInternalFunction reg_t ext_fn_t :=
     {{
         fun (arg1 : bits_t 16) (arg2 : bits_t 16) : bits_t 16 =>
-          (arg1 + !arg2 + `USugar (UConstBits (Bits.of_nat 16 1))`)
+          (arg1 + !arg2 + |16`d1|)
     }} .
 
   Definition lt16 : UInternalFunction reg_t ext_fn_t :=
     {{
         fun (arg1 : bits_t 16) (arg2 : bits_t 16) : bits_t 1 =>
-          (funcall sub (arg1, arg2))[`USugar (UConstBits (Bits.of_nat 4 15))`]
+          sub(arg1, arg2)[|4`d15|]
     }}.
-
-  Fixpoint lt (sz: nat) : UInternalFunction reg_t ext_fn_t :=
-    match sz with
-    | O => {{ fun (arg1 : bits_t 0) (arg2 : bits_t 0) : bits_t 0 => Ob~1}}
-    | S sz => {{ fun (arg1 : bits_t sz) (arg2 : bits_t sz) : bits_t sz =>
-      let subLt := funcall (lt sz) (arg1[#(Bits.of_nat sz 0) :+ sz], arg2[#(Bits.of_nat sz 0) :+ sz]) in
-      arg1[#(Bits.of_nat sz sz)] || arg2[#(Bits.of_nat sz sz)]}}
-    end.
 
   Definition gcd_compute  : uaction reg_t ext_fn_t :=
     {{
        let a := read0(gcd_a) in
        let b := read0(gcd_b) in
-       if !(a == #(Bits.of_nat 16 0)) then
-         if (funcall lt16 (a, b)) then
+       if !(a == |16`d0|) then
+         if lt16(a, b) then
            write0(gcd_b, a);
            write0(gcd_a, b)
          else
-           write0(gcd_a, funcall sub (a,b))
+           write0(gcd_a, sub(a,b))
        else
          fail
     }}.
 
     Definition gcd_getresult : uaction reg_t ext_fn_t :=
       {{
-       if ((read1(gcd_a) == #(Bits.of_nat 16 0))
-          && read1(gcd_busy)) then
+       if (read1(gcd_a) == |16`d0|)
+          && read1(gcd_busy) then
          write0(gcd_busy, Ob~0);
          write0(output_data, read1(gcd_b))
        else
