@@ -41,7 +41,7 @@ Module Fifo1 (f: Fifo).
   Definition deq :  UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun _ : T =>
       if (read0(valid0)) then
-        write0(valid0,`UConstBits Ob~0`);
+        write0(valid0,`USugar (UConstBits Ob~0)`);
           read0(data0)
       else
         fail(5)}}.

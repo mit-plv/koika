@@ -188,7 +188,6 @@ Qed.
 
 (** * Coercions **)
 
-Coercion type_sz : type >-> nat.
 Coercion type_denote : type >-> Sortclass.
 
 (** * Anonymous function signatures **)

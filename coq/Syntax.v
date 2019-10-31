@@ -39,8 +39,6 @@ Section Syntax.
                 (fn: InternalFunction fn_name_t var_t (@uaction module_reg_t module_ext_fn_t))
                 (args: list uaction).
 
-  Coercion USugar: usugar >-> uaction.
-
   Inductive uscheduler :=
   | UDone
   | UTry (r: rule_name_t) (s1 s2: uscheduler)

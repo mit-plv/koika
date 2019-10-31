@@ -367,10 +367,10 @@ Section CircuitCompilation.
   Defined.
 
   Section Action.
-    Definition compile_unop (fn: fn1) (a: circuit (PrimSignatures.Sigma1 fn).(arg1Type)):
-      circuit (PrimSignatures.Sigma1 fn).(retType) :=
-      let cArg1 fn := circuit (arg1Type (PrimSignatures.Sigma1 fn)) in
-      let cRet fn := circuit (retType (PrimSignatures.Sigma1 fn)) in
+    Definition compile_unop (fn: fn1) (a: circuit (type_sz (PrimSignatures.Sigma1 fn).(arg1Type))):
+      circuit (type_sz (PrimSignatures.Sigma1 fn).(retType)) :=
+      let cArg1 fn := circuit (type_sz (PrimSignatures.Sigma1 fn).(arg1Type)) in
+      let cRet fn := circuit (type_sz (PrimSignatures.Sigma1 fn).(retType)) in
       match fn return cArg1 fn -> cRet fn with
       | Display fn => fun _ => CConst Ob
       | Conv tau fn => fun a =>
@@ -398,12 +398,12 @@ Section CircuitCompilation.
       end a.
 
     Definition compile_binop (fn: fn2)
-               (a1: circuit (PrimSignatures.Sigma2 fn).(arg1Type))
-               (a2: circuit (PrimSignatures.Sigma2 fn).(arg2Type)):
-      circuit (PrimSignatures.Sigma2 fn).(retType) :=
-      let cArg1 fn := circuit (arg1Type (PrimSignatures.Sigma2 fn)) in
-      let cArg2 fn := circuit (arg2Type (PrimSignatures.Sigma2 fn)) in
-      let cRet fn := circuit (retType (PrimSignatures.Sigma2 fn)) in
+               (a1: circuit (type_sz (PrimSignatures.Sigma2 fn).(arg1Type)))
+               (a2: circuit (type_sz (PrimSignatures.Sigma2 fn).(arg2Type))):
+      circuit (type_sz (PrimSignatures.Sigma2 fn).(retType)) :=
+      let cArg1 fn := circuit (type_sz (PrimSignatures.Sigma2 fn).(arg1Type)) in
+      let cArg2 fn := circuit (type_sz (PrimSignatures.Sigma2 fn).(arg2Type)) in
+      let cRet fn := circuit (type_sz (PrimSignatures.Sigma2 fn).(retType)) in
       match fn return cArg1 fn -> cArg2 fn -> cRet fn with
       | Eq tau => fun a1 a2 => CBinop (EqBits (type_sz tau)) a1 a2
       | Bits2 fn => fun a1 a2 => CBinop fn a1 a2
@@ -420,8 +420,8 @@ Section CircuitCompilation.
              (Gamma: ccontext sig)
              (a: action pos_t var_t R Sigma sig tau)
              (clog: rwcircuit):
-      @action_circuit tau * (ccontext sig) :=
-      match a in action _ _ _ _ ts tau return ccontext ts -> @action_circuit tau * ccontext ts with
+      @action_circuit (type_sz tau) * (ccontext sig) :=
+      match a in action _ _ _ _ ts tau return ccontext ts -> @action_circuit (type_sz tau) * ccontext ts with
       | Fail tau => fun Gamma =>
         ({| retVal := $`"fail"`Bits.zero (type_sz tau); (* LATER: Question mark here *)
             erwc := {| canFire := $`"fail_cF"` Ob~0;

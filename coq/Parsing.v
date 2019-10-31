@@ -151,7 +151,7 @@ Notation "'funcall' method '(' args ')'" :=
 
 
 Notation "'call0' instance method " :=
-  (UCallModule instance id method nil)
+  (USugar (UCallModule instance id method nil))
     (in custom koika at level 98, instance constr at level 0, method constr at level 0).
 Notation "'funcall0' method " :=
   (UInternalCall method nil)
@@ -227,7 +227,7 @@ Module Type Tests.
   Definition test_16 : uaction reg_t := {{ !read0(data1) && !read0(data1) }}.
   Definition test_17 : uaction reg_t := {{ !read0(data1) && magic}}.
   Definition test_18 : uaction reg_t := {{ !read0(data1) && Yoyo }}.
-  Definition test_19 : uaction reg_t := {{ yoy [ oio && ab ] && `UConstBits Ob~1~0` }}.
+  Definition test_19 : uaction reg_t := {{ yoy [ oio && ab ] && `USugar (UConstBits Ob~1~0)` }}.
   Definition test_20 : uaction reg_t := {{ yoyo [ magic :+ 3 ] && yoyo }}.
   Definition test_20' : uaction reg_t := {{ {yoyo [ magic :+ 3 ], yoyo} && yoyo }}.
   Definition test_20'' : uaction reg_t := {{ { {yoyo [ magic :+ 3 ], yoyo},bla} && yoyo }}.

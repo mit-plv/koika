@@ -35,8 +35,8 @@ Module Ex1.
     | r1 =>
       {{ let x := read0(R0) in
          if (`UExternalCall Even (UVar "x")`)
-         then write0(R1,`UConstBits Ob~1`)
-         else write0(R1,`UConstBits Ob~1`)
+         then write0(R1,`USugar (UConstBits Ob~1)`)
+         else write0(R1,`USugar (UConstBits Ob~1)`)
                        }}
     end.
 
@@ -345,7 +345,7 @@ Module ManualUnpacker <: Unpacker.
         `SCall2 (USubstField "immediate")
          (SCall2 (USubstField "dst")
                  (SCall2 (USubstField "src")
-                         (UUnop (UConv (UUnpack (struct_t decoded_sig))) (UConstBits (Bits.zero 32)))
+                         (UUnop (UConv (UUnpack (struct_t decoded_sig))) (USugar (UConstBits (Bits.zero 32))))
                          {{ src }})
                  {{ dst }})
          {{ imm }}`
@@ -386,8 +386,9 @@ Module ManualFetcher <: Fetcher.
     end.
 
   Definition fetch_instr reg_t pc : uaction reg_t :=
-    Eval compute in (USwitch (UVar pc) (UConstBits (Bits.zero 32))
-                             (all_branches 3 N.zero instructions)).
+    Eval compute in
+      (USugar (USwitch (UVar pc) (USugar (UConstBits (Bits.zero 32)))
+                       (all_branches 3 N.zero instructions))).
 End ManualFetcher.
 
 Module PrimitiveFetcher <: Fetcher.
@@ -508,7 +509,7 @@ Module Pipeline.
       write0(invalid, Ob~1);
       if `G[[UVar "data"]]` == `G[[F[[UVar "v"]]]]`
       then
-        `UConstBits Ob`
+        `USugar (UConstBits Ob)`
       else
         write0(correct, Ob~0)
     else
@@ -628,7 +629,7 @@ Module RegisterFile_Ordered.
   Definition _ReadReg : uaction _ empty_ext_fn_t :=
     {{
     let v := read0(rIndex) in
-    write0(rIndex,v + `UConstBits (Bits.of_nat (log2 nregs) 1)`);
+    write0(rIndex,v + `USugar (UConstBits (Bits.of_nat (log2 nregs) 1))`);
     write0(rOutput,`UCompleteSwitch (log2 nregs) (pred nregs) "v"
                     (vect_map (fun idx => {{ read0(rData idx) }}) (all_indices nregs))`)
     }}.
@@ -707,7 +708,7 @@ Module Enums.
        let bits_a := `UUnop (UConv UPack) {{read0(rA)}}` in
        let bits_b := `UUnop (UConv UPack) {{read0(rB)}}` in
        let neg_a := !bits_a in
-       let succ_b := bits_b + `UConstBits Ob~0~0~1` in
+       let succ_b := bits_b + `USugar (UConstBits Ob~0~0~1)` in
        write0(rA,`UUnop (UConv (UUnpack (enum_t flag_sig))) {{neg_a}}`);
        write0(rB, `UUnop (UConv (UUnpack (enum_t flag_sig))) {{succ_b}}`)
     }}.
@@ -1011,13 +1012,13 @@ Definition gcd_start : uaction reg_t ext_fn_t  :=
   Definition sub  : UInternalFunction reg_t ext_fn_t :=
     {{
         fun (arg1 : bits_t 16) (arg2 : bits_t 16) : bits_t 16 =>
-          (arg1 + !arg2 + `UConstBits (Bits.of_nat 16 1)`)
+          (arg1 + !arg2 + `USugar (UConstBits (Bits.of_nat 16 1))`)
     }} .
 
   Definition lt16 : UInternalFunction reg_t ext_fn_t :=
     {{
         fun (arg1 : bits_t 16) (arg2 : bits_t 16) : bits_t 1 =>
-          (funcall sub (arg1, arg2))[`UConstBits (Bits.of_nat 4 15)`]
+          (funcall sub (arg1, arg2))[`USugar (UConstBits (Bits.of_nat 4 15))`]
     }}.
 
   Fixpoint lt (sz: nat) : UInternalFunction reg_t ext_fn_t :=

@@ -65,9 +65,12 @@ Module Display.
          int_body := USugar USkip |}.
 
     Fixpoint extend_printer f offset (printer: intfun) : intfun :=
-      let display_utf8 s := UUnop (UDisplay UDisplayUtf8) (UConstString s) in
-      let display_value arg := UUnop (UDisplay UDisplayValue) (UVar arg) in
-      let '(Build_InternalFunction int_name int_argspec int_retType int_body) := printer in
+      let display_utf8 s :=
+          UUnop (UDisplay UDisplayUtf8) (USugar (UConstString s)) in
+      let display_value arg :=
+          UUnop (UDisplay UDisplayValue) (UVar arg) in
+      let '(Build_InternalFunction int_name int_argspec int_retType int_body) :=
+          printer in
       match f with
       | Str s =>
         {| int_name := int_name;

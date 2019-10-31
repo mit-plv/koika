@@ -115,7 +115,7 @@ Section TypeInference.
       match e with
       | UError err => Failure err
       | USugar _ => Failure (mkerror pos SugaredConstructorInAst e)
-      | UFail n => Success (EX (Fail (bits_t n)))
+      | UFail tau => Success (EX (Fail tau))
       | UVar var =>
         let/res tau_m := opt_result (assoc var sig) (mkerror pos (UnboundVariable var) e) in
         Success (EX (Var ``tau_m))
