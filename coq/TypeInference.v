@@ -1,7 +1,7 @@
 Require Import
-        SGA.Common SGA.Environments
-        SGA.Syntax SGA.TypedSyntax SGA.SyntaxMacros
-        SGA.Desugaring SGA.ErrorReporting.
+        Koika.Common Koika.Environments
+        Koika.Syntax Koika.TypedSyntax Koika.SyntaxMacros
+        Koika.Desugaring Koika.ErrorReporting.
 Require Import Coq.Lists.List.
 Import ListNotations.
 

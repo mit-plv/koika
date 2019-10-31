@@ -1,5 +1,5 @@
 open Common
-module SGA = SGALib.SGA
+module Extr = Cuttlebone.Extr
 
 (* #line pragmas make the C++ code harder to read, and they cover too-large a
    scope (in particular, the last #line pragma in a program overrides positions
@@ -10,7 +10,7 @@ let add_line_pragmas = false
 type ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_rule_t = {
     rl_name: 'rule_name_t;
     rl_footprint: 'reg_t list;
-    rl_body: ('pos_t, 'var_t, 'reg_t, 'ext_fn_t) SGA.rule;
+    rl_body: ('pos_t, 'var_t, 'reg_t, 'ext_fn_t) Extr.rule;
   }
 
 type ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_input_t = {
@@ -21,7 +21,7 @@ type ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_input_t = {
     cpp_var_names: 'var_t -> string;
     cpp_rule_names: 'rule_name_t -> string;
 
-    cpp_scheduler: ('pos_t, 'rule_name_t) SGA.scheduler;
+    cpp_scheduler: ('pos_t, 'rule_name_t) Extr.scheduler;
     cpp_rules: ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_rule_t list;
 
     cpp_registers: 'reg_t list;
@@ -220,7 +220,7 @@ let cpp_ext_funcall f a =
      comparison. *)
   sprintf "extfuns.template %s(%s)" f a
 
-let cpp_bits1_fn_name (f: SGA.PrimTyped.fbits1) =
+let cpp_bits1_fn_name (f: Extr.PrimTyped.fbits1) =
   sprintf "prims::%s"
     (match f with
      | Not sz -> sprintf "lnot<%d>" sz
@@ -228,7 +228,7 @@ let cpp_bits1_fn_name (f: SGA.PrimTyped.fbits1) =
      | ZExtR (sz, width) -> sprintf "zextr<%d, %d>" sz width
      | Part (sz, offset, width) -> sprintf "part<%d, %d, %d>" sz offset width)
 
-let cpp_bits2_fn_name (f: SGA.PrimTyped.fbits2) =
+let cpp_bits2_fn_name (f: Extr.PrimTyped.fbits2) =
   sprintf "prims::%s"
     (match f with
      | And sz -> sprintf "land<%d>" sz
@@ -237,9 +237,9 @@ let cpp_bits2_fn_name (f: SGA.PrimTyped.fbits2) =
      | Lsl (bits_sz, shift_sz) -> sprintf "lsl<%d, %d>" bits_sz shift_sz
      | Lsr (bits_sz, shift_sz) -> sprintf "lsr<%d, %d>" bits_sz shift_sz
      | Concat (sz1, sz2) -> sprintf "concat<%d, %d>" sz1 sz2
-     | Sel sz -> sprintf "sel<%d, %d>" sz (SGALib.SGA.log2 sz)
+     | Sel sz -> sprintf "sel<%d, %d>" sz (Cuttlebone.Extr.log2 sz)
      | PartSubst (sz, offset, width) -> sprintf "part_subst<%d, %d, %d>" sz offset width
-     | IndexedPart (sz, width) -> sprintf "indexed_part<%d, %d, %d>" sz (SGALib.SGA.log2 sz) width
+     | IndexedPart (sz, width) -> sprintf "indexed_part<%d, %d, %d>" sz (Cuttlebone.Extr.log2 sz) width
      | Plus sz -> sprintf "plus<%d>" sz
      | Minus sz -> sprintf "minus<%d>" sz
      | EqBits sz -> sprintf "eq<%d>" sz
@@ -250,25 +250,25 @@ let cpp_bits2_fn_name (f: SGA.PrimTyped.fbits2) =
           sz)
 
 let cpp_get_preamble () =
-  let inc = open_in "preamble.hpp" in
+  let inc = open_in "backends/preamble.hpp" in
   let preamble = really_input_string inc (in_channel_length inc) in
   close_in inc;
   preamble
 
 let reconstruct_switch action =
   let rec loop v = function
-    | SGA.If (_, _,
-              SGA.Binop (_,
-                         (SGA.PrimTyped.Eq _ | SGA.PrimTyped.Bits2 (SGA.PrimTyped.EqBits _)),
-                         SGA.Var (_, v', _, _m),
-                         SGA.Const (_, ((SGA.Bits_t _ | SGA.Enum_t _) as tau), cst)),
+    | Extr.If (_, _,
+              Extr.Binop (_,
+                         (Extr.PrimTyped.Eq _ | Extr.PrimTyped.Bits2 (Extr.PrimTyped.EqBits _)),
+                         Extr.Var (_, v', _, _m),
+                         Extr.Const (_, ((Extr.Bits_t _ | Extr.Enum_t _) as tau), cst)),
               tbr, fbr) when (match v with
                               | Some v -> v' = v
                               | None -> true) ->
        let default, branches = match loop (Some v') fbr with
          | Some (_, default, branches) -> default, branches
          | None -> fbr, [] in
-       Some (v', default, (SGALib.Util.value_of_sga_value tau cst, tbr) :: branches)
+       Some (v', default, (Cuttlebone.Util.value_of_extr_value tau cst, tbr) :: branches)
     | _ -> None in
   match loop None action with
   | Some (_, _, [_]) | None -> None
@@ -687,17 +687,17 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
         | PureExpr s when List.exists is_impure_expr dependencies -> ImpureExpr s
         | other -> other in
 
-      let p_unop (fn: SGALib.SGA.PrimTyped.fn1) a1 =
-        let open SGALib.SGA.PrimTyped in
+      let p_unop (fn: Cuttlebone.Extr.PrimTyped.fn1) a1 =
+        let open Cuttlebone.Extr.PrimTyped in
         match fn with
         | Display fn ->
            let tau, args = match fn with
              | DisplayUtf8 sz -> Bits_t sz, sprintf "%s, repr_style::utf8" a1
-             | DisplayValue tau -> SGALib.Util.typ_of_sga_type tau, a1 in
+             | DisplayValue tau -> Cuttlebone.Util.typ_of_extr_type tau, a1 in
            ImpureExpr (sprintf "prims::display(%s(%s))" (sp_value_printer tau) args)
         | Conv (tau, fn) ->
            let ns = "prims::" in
-           let tau = SGALib.Util.typ_of_sga_type tau in
+           let tau = Cuttlebone.Util.typ_of_extr_type tau in
            PureExpr (match fn with
                      | Pack -> sp_packer ~ns ~arg:a1 tau
                      | Unpack -> sp_unpacker ~ns ~arg:a1 tau
@@ -706,65 +706,65 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
            PureExpr (sprintf "%s(%s)" (cpp_bits1_fn_name fn) a1)
         | Struct1 (sg, idx) ->
            (* Extraction eliminated the single-constructor struct1 inductive (GetField) *)
-           let fname, _tau = SGALib.Util.list_nth sg.struct_fields idx in
-           let fname = cpp_field_name (SGALib.Util.string_of_coq_string fname) in
+           let fname, _tau = Cuttlebone.Util.list_nth sg.struct_fields idx in
+           let fname = cpp_field_name (Cuttlebone.Util.string_of_coq_string fname) in
            PureExpr (sprintf "%s.%s" a1 fname)
       in
 
-      let p_binop target (fn: SGALib.SGA.PrimTyped.fn2) a1 a2 =
-        let open SGALib.SGA.PrimTyped in
+      let p_binop target (fn: Cuttlebone.Extr.PrimTyped.fn2) a1 a2 =
+        let open Cuttlebone.Extr.PrimTyped in
         match fn with
         | Eq tau ->
-           PureExpr (sp_comparison ~ns:"prims::" (SGALib.Util.typ_of_sga_type tau) a1 a2)
+           PureExpr (sp_comparison ~ns:"prims::" (Cuttlebone.Util.typ_of_extr_type tau) a1 a2)
         | Bits2 fn ->
            PureExpr (sprintf "%s(%s, %s)" (cpp_bits2_fn_name fn) a1 a2)
         | Struct2 (sg, idx) ->
            (* Extraction eliminated the single-constructor struct2 inductive (SusbtField) *)
-           let sg = SGALib.Util.struct_sig_of_sga_struct_sig sg in
-           let fname, _tau = SGALib.Util.list_nth sg.struct_fields idx in
+           let sg = Cuttlebone.Util.struct_sig_of_extr_struct_sig sg in
+           let fname, _tau = Cuttlebone.Util.list_nth sg.struct_fields idx in
            let tinfo = ensure_target (Struct_t sg) target in
            let res = p_assign_expr (VarTarget tinfo) (PureExpr a1) in
            p "%s.%s = %s;" tinfo.name (cpp_field_name fname) a2;
            res in
 
       let assert_no_shadowing sg v tau v_to_string m =
-        if SGALib.Util.member_mentions_shadowed_binding sg v tau m then
+        if Cuttlebone.Util.member_mentions_shadowed_binding sg v tau m then
           failwith (sprintf "Variable %s is shadowed by a later binding, but the program references the original binding." (v_to_string v)) in
 
-      let rec p_action (pos: Pos.t) (target: assignment_target) (rl: (pos_t, var_t, reg_t, _) SGA.action) =
+      let rec p_action (pos: Pos.t) (target: assignment_target) (rl: (pos_t, var_t, reg_t, _) Extr.action) =
         p_pos pos;
         match rl with
-        | SGA.Fail (_, _) ->
+        | Extr.Fail (_, _) ->
            p "return false;";
            (match target with
             | NoTarget -> NotAssigned
             | VarTarget { declared = true; name; _ } -> Assigned name
             | VarTarget { tau; _ } ->
                PureExpr (sprintf "prims::unreachable<%s>()" (cpp_type_of_type tau)))
-        | SGA.Var (sg, v, tau, m) ->
+        | Extr.Var (sg, v, tau, m) ->
            assert_no_shadowing sg v tau hpp.cpp_var_names m;
            PureExpr (hpp.cpp_var_names v)
-        | SGA.Const (_, tau, cst) ->
-           let res = PureExpr (sp_value (SGALib.Util.value_of_sga_value tau cst)) in
+        | Extr.Const (_, tau, cst) ->
+           let res = PureExpr (sp_value (Cuttlebone.Util.value_of_extr_value tau cst)) in
            if cpp_type_needs_allocation tau then
-             let ctarget = gensym_target (SGALib.Util.typ_of_sga_type tau) "cst" in
+             let ctarget = gensym_target (Cuttlebone.Util.typ_of_extr_type tau) "cst" in
              must_expr (p_assign_expr ~prefix:"static const" ctarget res)
            else res
-        | SGA.Assign (sg, v, tau, m, ex) ->
+        | Extr.Assign (sg, v, tau, m, ex) ->
            assert_no_shadowing sg v tau hpp.cpp_var_names m;
-           let vtarget = VarTarget { tau = SGALib.Util.typ_of_sga_type tau;
+           let vtarget = VarTarget { tau = Cuttlebone.Util.typ_of_extr_type tau;
                                      declared = true; name = hpp.cpp_var_names v } in
            p_assign_and_ignore vtarget (p_action pos vtarget ex);
            p_assign_expr target (PureExpr "prims::tt")
-        | SGA.Seq (_, _, a1, a2) ->
+        | Extr.Seq (_, _, a1, a2) ->
            p_assign_and_ignore NoTarget (p_action pos NoTarget a1);
            p_action pos target a2
-        | SGA.Bind (_, tau, _, v, expr, rl) ->
+        | Extr.Bind (_, tau, _, v, expr, rl) ->
            let target = p_declare_target target in
            p_scoped "/* bind */" (fun () ->
                p_bound_var_assign pos tau v expr;
                p_assign_expr target (p_action pos target rl))
-        | SGA.If (_, _, cond, tbr, fbr) ->
+        | Extr.If (_, _, cond, tbr, fbr) ->
            let target = p_declare_target target in
            (match reconstruct_switch rl with
             | Some (var, default, branches) ->
@@ -776,7 +776,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
                   (fun () -> p_assign_and_ignore target (p_action pos target tbr)));
                p_scoped "else"
                  (fun () -> p_assign_expr target (p_action pos target fbr)))
-        | SGA.Read (_, port, reg) ->
+        | Extr.Read (_, port, reg) ->
            let r = hpp.cpp_register_sigs reg in
            let var = p_ensure_declared (ensure_target (reg_type r) target) in
            p_checked (fun () ->
@@ -784,7 +784,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
                | P0 -> pr "log.%s.read0(&%s, state.%s, Log.%s.rwset)" r.reg_name var r.reg_name r.reg_name
                | P1 -> pr "log.%s.read1(&%s, Log.%s.rwset)" r.reg_name var r.reg_name);
            Assigned var
-        | SGA.Write (_, port, reg, expr) ->
+        | Extr.Write (_, port, reg, expr) ->
            let r = hpp.cpp_register_sigs reg in
            let vt = gensym_target (reg_type r) "v" in
            let v = must_value (p_action pos vt expr) in
@@ -795,21 +795,21 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
                pr "log.%s.%s(%s, Log.%s.rwset)"
                  r.reg_name fn_name v r.reg_name);
            p_assign_expr target (PureExpr "prims::tt")
-        | SGA.Unop (_, fn, a) ->
-           let fsig = SGALib.SGA.PrimSignatures.coq_Sigma1 fn in
-           let a = p_action pos (gensym_target (SGALib.Util.argType 1 fsig 0) "x") a in
+        | Extr.Unop (_, fn, a) ->
+           let fsig = Cuttlebone.Extr.PrimSignatures.coq_Sigma1 fn in
+           let a = p_action pos (gensym_target (Cuttlebone.Util.argType 1 fsig 0) "x") a in
            taint [a] (p_unop fn (must_value a))
-        | SGA.Binop (_, fn, a1, a2) ->
-           let fsig = SGALib.SGA.PrimSignatures.coq_Sigma2 fn in
-           let a1 = p_action pos (gensym_target (SGALib.Util.argType 2 fsig 0) "x") a1 in
-           let a2 = p_action pos (gensym_target (SGALib.Util.argType 2 fsig 1) "y") a2 in
+        | Extr.Binop (_, fn, a1, a2) ->
+           let fsig = Cuttlebone.Extr.PrimSignatures.coq_Sigma2 fn in
+           let a1 = p_action pos (gensym_target (Cuttlebone.Util.argType 2 fsig 0) "x") a1 in
+           let a2 = p_action pos (gensym_target (Cuttlebone.Util.argType 2 fsig 1) "y") a2 in
            taint [a1; a2] (p_binop target fn (must_value a1) (must_value a2))
-        | SGA.ExternalCall (_, fn, a) ->
+        | Extr.ExternalCall (_, fn, a) ->
            let ffi = hpp.cpp_ext_sigs fn in
            let a = p_action pos (gensym_target ffi.ffi_argtype "x") a in
            Hashtbl.replace program_info.pi_ext_funcalls ffi ();
            ImpureExpr (cpp_ext_funcall ffi.ffi_name (must_value a))
-        | SGA.APos (_, _, pos, a) ->
+        | Extr.APos (_, _, pos, a) ->
            p_action (hpp.cpp_pos_of_pos pos) target a
       and p_switch pos target var default branches =
         let rec loop = function
@@ -824,8 +824,8 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
         p_scoped (sprintf "switch (%s)" (hpp.cpp_var_names var)) (fun () ->
             loop branches)
       and p_bound_var_assign pos tau v expr =
-        let needs_tmp = SGALib.Util.action_mentions_var v expr in
-        let tau = SGALib.Util.typ_of_sga_type tau in
+        let needs_tmp = Cuttlebone.Util.action_mentions_var v expr in
+        let tau = Cuttlebone.Util.typ_of_extr_type tau in
         let vtarget = VarTarget { tau; declared = false; name = hpp.cpp_var_names v } in
         let expr =
           if needs_tmp then
@@ -855,14 +855,14 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     let rec p_scheduler pos s =
       p_pos pos;
       match s with
-      | SGA.Done -> ()
-      | SGA.Cons (rl_name, s) ->
+      | Extr.Done -> ()
+      | Extr.Cons (rl_name, s) ->
          p "%s();" (hpp.cpp_rule_names rl_name);
          p_scheduler pos s
-      | SGA.Try (rl_name, s1, s2) ->
+      | Extr.Try (rl_name, s1, s2) ->
          p_scoped (sprintf "if (%s())" (hpp.cpp_rule_names rl_name)) (fun () -> p_scheduler pos s1);
          p_scoped "else" (fun () -> p_scheduler pos s2)
-      | SGA.SPos (pos, s) ->
+      | Extr.SPos (pos, s) ->
          p_scheduler (hpp.cpp_pos_of_pos pos) s in
 
     let p_cycle () =
@@ -980,28 +980,28 @@ let action_footprint a =
   let m = Hashtbl.create 25 in
 
   let rec action_footprint = function
-    | SGA.Fail _ -> ()
-    | SGA.Var _ | SGA.Const _ -> ()
-    | SGA.Assign (_, _, _, _, ex) ->
+    | Extr.Fail _ -> ()
+    | Extr.Var _ | Extr.Const _ -> ()
+    | Extr.Assign (_, _, _, _, ex) ->
        action_footprint ex
-    | SGA.If (_, _, _, r1, r2)
-      | SGA.Seq (_, _, r1, r2) ->
+    | Extr.If (_, _, _, r1, r2)
+      | Extr.Seq (_, _, r1, r2) ->
        action_footprint r1;
        action_footprint r2
-    | SGA.Bind (_, _, _, _, ex, a) ->
+    | Extr.Bind (_, _, _, _, ex, a) ->
        action_footprint ex;
        action_footprint a
-    | SGA.Read (_, _, r) -> Hashtbl.replace m r ()
-    | SGA.Write (_, _, r, ex) ->
+    | Extr.Read (_, _, r) -> Hashtbl.replace m r ()
+    | Extr.Write (_, _, r, ex) ->
        Hashtbl.replace m r ();
        action_footprint ex
-    | SGA.Unop (_, _, arg) ->
+    | Extr.Unop (_, _, arg) ->
        action_footprint arg
-    | SGA.Binop (_, _, a1, a2) ->
+    | Extr.Binop (_, _, a1, a2) ->
        action_footprint a1; action_footprint a2
-    | SGA.ExternalCall (_, _, arg) ->
+    | Extr.ExternalCall (_, _, arg) ->
        action_footprint arg
-    | SGA.APos (_, _, _, a) ->
+    | Extr.APos (_, _, _, a) ->
        action_footprint a in
 
   action_footprint a;
@@ -1010,7 +1010,7 @@ let action_footprint a =
 let cpp_rule_of_action (rl_name, (_kind, rl_body)) =
   { rl_name; rl_body; rl_footprint = action_footprint rl_body }
 
-let input_of_compile_unit classname (cu: 'f SGALib.Compilation.compile_unit) =
+let input_of_compile_unit classname (cu: 'f Cuttlebone.Compilation.compile_unit) =
   { cpp_classname = classname;
     cpp_header_name = classname;
     cpp_pos_of_pos = cu.c_pos_of_pos;
@@ -1025,35 +1025,35 @@ let input_of_compile_unit classname (cu: 'f SGALib.Compilation.compile_unit) =
 
 let collect_rules sched =
   let rec loop acc = function
-  | SGA.Done -> List.rev acc
-  | SGA.Cons (rl, s) -> loop (rl :: acc) s
-  | SGA.Try (rl, l, r) -> loop (loop (rl :: acc) l) r
-  | SGA.SPos (_, s) -> loop acc s
+  | Extr.Done -> List.rev acc
+  | Extr.Cons (rl, s) -> loop (rl :: acc) s
+  | Extr.Try (rl, l, r) -> loop (loop (rl :: acc) l) r
+  | Extr.SPos (_, s) -> loop acc s
   in loop [] sched
 
-let cpp_rule_of_sga_package_rule (s: _ SGALib.SGA.sga_package_t) (rn: 'rule_name_t) =
-  cpp_rule_of_action (rn, (`Internal, s.sga_rules rn))
+let cpp_rule_of_koika_package_rule (s: _ Cuttlebone.Extr.koika_package_t) (rn: 'rule_name_t) =
+  cpp_rule_of_action (rn, (`Internal, s.koika_rules rn))
 
 let input_of_sim_package
-      (sga: ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) SGALib.SGA.sga_package_t)
-      (sp: ('var_t, 'ext_fn_t) SGALib.SGA.sim_package_t)
+      (kp: ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) Cuttlebone.Extr.koika_package_t)
+      (sp: ('var_t, 'ext_fn_t) Cuttlebone.Extr.sim_package_t)
     : ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_input_t =
-  let rules = collect_rules sga.sga_scheduler in
-  let classname = SGALib.Util.string_of_coq_string sga.sga_module_name in
-  let ext_fn_name f = SGALib.Util.string_of_coq_string (sp.sp_ext_fn_names f) in
+  let rules = collect_rules kp.koika_scheduler in
+  let classname = Cuttlebone.Util.string_of_coq_string kp.koika_module_name in
+  let ext_fn_name f = Cuttlebone.Util.string_of_coq_string (sp.sp_ext_fn_names f) in
   { cpp_classname = classname;
     cpp_header_name = classname;
     cpp_pos_of_pos = (fun _ -> Pos.Unknown);
-    cpp_var_names = (fun x -> SGALib.Util.string_of_coq_string (sp.sp_var_names x));
-    cpp_rule_names = (fun rn -> SGALib.Util.string_of_coq_string (sga.sga_rule_names rn));
-    cpp_scheduler = sga.sga_scheduler;
-    cpp_rules = List.map (cpp_rule_of_sga_package_rule sga) rules;
-    cpp_registers = sga.sga_reg_finite.finite_elements;
-    cpp_register_sigs = SGALib.Util.reg_sigs_of_sga_package sga;
-    cpp_ext_sigs = (fun f -> SGALib.Util.ffi_sig_of_sga_external_sig (ext_fn_name f) (sga.sga_ext_fn_types f));
+    cpp_var_names = (fun x -> Cuttlebone.Util.string_of_coq_string (sp.sp_var_names x));
+    cpp_rule_names = (fun rn -> Cuttlebone.Util.string_of_coq_string (kp.koika_rule_names rn));
+    cpp_scheduler = kp.koika_scheduler;
+    cpp_rules = List.map (cpp_rule_of_koika_package_rule kp) rules;
+    cpp_registers = kp.koika_reg_finite.finite_elements;
+    cpp_register_sigs = Cuttlebone.Util.reg_sigs_of_koika_package kp;
+    cpp_ext_sigs = (fun f -> Cuttlebone.Util.ffi_sig_of_extr_external_sig (ext_fn_name f) (kp.koika_ext_fn_types f));
     cpp_extfuns = (match sp.sp_extfuns with
                    | None -> None
-                   | Some s -> Some (SGALib.Util.string_of_coq_string s)); }
+                   | Some s -> Some (Cuttlebone.Util.string_of_coq_string s)); }
 
 let command ?(verbose=false) exe args =
   (* FIXME use Unix.open_process_args instead of Filename.quote (OCaml 4.08) *)

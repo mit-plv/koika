@@ -1,4 +1,4 @@
-Require Export SGA.Common SGA.Environments SGA.IndexUtils SGA.Types SGA.ErrorReporting.
+Require Export Koika.Common Koika.Environments Koika.IndexUtils Koika.Types Koika.ErrorReporting.
 
 Inductive comparison :=
   cLt | cGt | cLe | cGe.

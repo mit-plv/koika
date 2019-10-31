@@ -1,7 +1,7 @@
 Require Import Coq.Lists.List.
 Require Import Coq.omega.Omega.
 Require Export Coq.NArith.NArith.          (* Coq bug: If this isn't exported, other files can't import Vect.vo *)
-Require Import SGA.EqDec.
+Require Import Koika.EqDec.
 
 Inductive index' {A} := thisone | anotherone (a: A).
 Arguments index': clear implicits.

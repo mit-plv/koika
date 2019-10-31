@@ -30,8 +30,7 @@
   (register rinstr 32'0)
   (register routput 32'0)
 
-  (cpp-preamble "#include \"../extfuns.hpp\"
-using extfuns = datatypes_lv_extfuns;")
+  (cpp-preamble "#include \"../datatypes.extfuns.hpp\"")
 
   (rule readinstr
     (write.0 raddr (+ (read.0 raddr) 32'1))

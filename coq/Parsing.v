@@ -1,21 +1,21 @@
 Require Export
-        SGA.Common
-        SGA.Syntax
-        SGA.SyntaxMacros
-        SGA.Desugaring
-        SGA.TypeInference
-        SGA.Semantics
-        SGA.Circuits
-        SGA.Primitives
-        SGA.Interop
-        SGA.SyntaxTools.
+        Koika.Common
+        Koika.Syntax
+        Koika.SyntaxMacros
+        Koika.Desugaring
+        Koika.TypeInference
+        Koika.Semantics
+        Koika.Circuits
+        Koika.Primitives
+        Koika.Interop
+        Koika.TypedSyntaxTools.
 
 Export SigNotations.
 Export PrimUntyped.
 
 Require Coq.Lists.List.
 Require Import Coq.Strings.String.
-Require Import SGA.IdentParsing.
+Require Import Koika.IdentParsing.
 Export Coq.Lists.List.ListNotations.
 Open Scope list_scope.
 Open Scope string_scope.

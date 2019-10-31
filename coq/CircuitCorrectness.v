@@ -4,9 +4,9 @@ Require Import Coq.Lists.List.
 Import ListNotations.
 
 Require Import
-        SGA.Common SGA.Environments SGA.Syntax
-        SGA.SemanticProperties SGA.CircuitProperties SGA.PrimitiveProperties
-        SGA.Interop.
+        Koika.Common Koika.Environments Koika.Syntax
+        Koika.SemanticProperties Koika.CircuitProperties Koika.PrimitiveProperties
+        Koika.Interop.
 
 Section PrimCompilerCorrectness.
   Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.

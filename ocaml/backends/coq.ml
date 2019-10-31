@@ -1,5 +1,5 @@
 open Common
-open Lv
+open Frontends.Lv
 open Format
 
 (* FIXME quote names *)
@@ -23,7 +23,7 @@ let pp_quoted ppf s =
   fprintf ppf "\"%s\"" s
 
 let pp_coq_quoted =
-  pp_quoted <<< SGALib.Util.string_of_coq_string
+  pp_quoted <<< Cuttlebone.Util.string_of_coq_string
 
 let pp_sep s ppf =
   fprintf ppf "%s@ " s
@@ -162,29 +162,29 @@ let pp_signame ppf signame =
 let pp_struct_name ppf sg =
   pp_signame ppf sg.struct_name
 
-let pp_sga_struct_name ppf (sg: _ SGALib.SGA.struct_sig') =
-  pp_signame ppf (SGALib.Util.string_of_coq_string sg.struct_name)
+let pp_extr_struct_name ppf (sg: _ Cuttlebone.Extr.struct_sig') =
+  pp_signame ppf (Cuttlebone.Util.string_of_coq_string sg.struct_name)
 
 let pp_app ppf fn fmt =
   fprintf ppf "(@[<2>%s@ " fn;
   kfprintf (fun ppf -> fprintf ppf "@])") ppf fmt
 
-let pp_sga_type ppf tau =
-  pp_type ~wrap:true ppf (SGALib.Util.typ_of_sga_type tau)
+let pp_extr_type ppf tau =
+  pp_type ~wrap:true ppf (Cuttlebone.Util.typ_of_extr_type tau)
 
-let rec pp_prim_ufn1 ppf (f: SGALib.SGA.PrimUntyped.ufn1) = match f with
+let rec pp_prim_ufn1 ppf (f: Cuttlebone.Extr.PrimUntyped.ufn1) = match f with
   | UDisplay f -> pp_app ppf "UDisplay" "%a" pp_prim_display_ufn f
   | UConv f -> pp_app ppf "UConv" "%a" pp_prim_uconv f
   | UBits1 f -> pp_app ppf "UBits1" "%a" pp_prim_ubits1 f
   | UStruct1 f -> pp_app ppf "UStruct1" "%a" pp_prim_ustruct1 f
-and pp_prim_display_ufn ppf (f: SGALib.SGA.PrimUntyped.udisplay) = match f with
+and pp_prim_display_ufn ppf (f: Cuttlebone.Extr.PrimUntyped.udisplay) = match f with
   | UDisplayUtf8 -> pp_raw ppf "UDisplayUtf8"
   | UDisplayValue -> pp_raw ppf "UDisplayValue"
-and pp_prim_uconv ppf (f: SGALib.SGA.PrimUntyped.uconv) = match f with
+and pp_prim_uconv ppf (f: Cuttlebone.Extr.PrimUntyped.uconv) = match f with
   | UPack -> pp_raw ppf "UPack"
-  | UUnpack tau -> pp_app ppf "UUnpack" "%a" pp_sga_type tau
+  | UUnpack tau -> pp_app ppf "UUnpack" "%a" pp_extr_type tau
   | UIgnore -> pp_raw ppf "UIgnore"
-and pp_prim_ubits1 ppf (f: SGALib.SGA.PrimUntyped.ubits1) =
+and pp_prim_ubits1 ppf (f: Cuttlebone.Extr.PrimUntyped.ubits1) =
   let pp_raw = pp_raw ppf in
   let pp_app fmt = pp_app ppf fmt in
   match f with
@@ -192,15 +192,15 @@ and pp_prim_ubits1 ppf (f: SGALib.SGA.PrimUntyped.ubits1) =
   | UZExtL width -> pp_app "UZExtL" "%d" width
   | UZExtR width -> pp_app "UZExtR" "%d" width
   | UPart (offset, width) -> pp_app "UPart" "%d@ %d" offset width
-and pp_prim_ustruct1 ppf (f: SGALib.SGA.PrimUntyped.ustruct1) = match f with
+and pp_prim_ustruct1 ppf (f: Cuttlebone.Extr.PrimUntyped.ustruct1) = match f with
   | UGetField f -> pp_app ppf "UGetField" "%a" pp_coq_quoted f
-  | UGetFieldBits (sg, f) -> pp_app ppf "UGetFieldBits" "%a@ %a" pp_sga_struct_name sg pp_coq_quoted f
+  | UGetFieldBits (sg, f) -> pp_app ppf "UGetFieldBits" "%a@ %a" pp_extr_struct_name sg pp_coq_quoted f
 
-let rec pp_prim_ufn2 ppf (f: SGALib.SGA.PrimUntyped.ufn2) = match f with
+let rec pp_prim_ufn2 ppf (f: Cuttlebone.Extr.PrimUntyped.ufn2) = match f with
   | UEq -> pp_raw ppf "UEq"
   | UBits2 f -> pp_app ppf "UBits2" "%a" pp_prim_ubits2 f
   | UStruct2 f -> pp_app ppf "UStruct2" "%a" pp_prim_ustruct2 f
-and pp_prim_ubits2 ppf (f: SGALib.SGA.PrimUntyped.ubits2) =
+and pp_prim_ubits2 ppf (f: Cuttlebone.Extr.PrimUntyped.ubits2) =
   let pp_raw = pp_raw ppf in
   let pp_app fmt = pp_app ppf fmt in
   match f with
@@ -216,15 +216,15 @@ and pp_prim_ubits2 ppf (f: SGALib.SGA.PrimUntyped.ubits2) =
   | UPlus -> pp_raw "UPlus"
   | UMinus -> pp_raw "UMinus"
   | UCompare (signed, cmp) -> pp_app "UCompare" "%a@ %a" pp_bool signed pp_cmp cmp
-and pp_cmp ppf (cmp: SGALib.SGA.comparison) =
+and pp_cmp ppf (cmp: Cuttlebone.Extr.comparison) =
   match cmp with
-  | SGALib.SGA.CLt -> pp_raw ppf "cLt"
-  | SGALib.SGA.CGt -> pp_raw ppf "cGt"
-  | SGALib.SGA.CLe -> pp_raw ppf "cLe"
-  | SGALib.SGA.CGe -> pp_raw ppf "cGe"
-and pp_prim_ustruct2 ppf (f: SGALib.SGA.PrimUntyped.ustruct2) = match f with
+  | Cuttlebone.Extr.CLt -> pp_raw ppf "cLt"
+  | Cuttlebone.Extr.CGt -> pp_raw ppf "cGt"
+  | Cuttlebone.Extr.CLe -> pp_raw ppf "cLe"
+  | Cuttlebone.Extr.CGe -> pp_raw ppf "cGe"
+and pp_prim_ustruct2 ppf (f: Cuttlebone.Extr.PrimUntyped.ustruct2) = match f with
   | USubstField f -> pp_app ppf "USubstField" "%a" pp_coq_quoted f
-  | USubstFieldBits (sg, f) -> pp_app ppf "USubstFieldBits" "%a@ %a" pp_sga_struct_name sg pp_coq_quoted f
+  | USubstFieldBits (sg, f) -> pp_app ppf "USubstFieldBits" "%a@ %a" pp_extr_struct_name sg pp_coq_quoted f
 
 let pp_pos ppf pos =
   pp_quoted ppf (Pos.to_string pos)
@@ -233,12 +233,12 @@ let pp_maybe_pos print_positions constructor pp ppf a =
   if print_positions then pp_app ppf constructor "%a@ %a" pp_pos a.lpos pp a.lcnt
   else pp ppf a.lcnt
 
-let rec pp_action print_positions ppf (a: Lv.ResolvedAST.uaction locd) =
+let rec pp_action print_positions ppf (a: ResolvedAST.uaction locd) =
   let pp_action =
     pp_action print_positions in
   let pp_binding =
     pp_pair (pp_quoted <<< lcnt) pp_action in
-  let rec pp ppf (a: Lv.ResolvedAST.uaction) =
+  let rec pp ppf (a: ResolvedAST.uaction) =
     let pp_app fn fmt = pp_app ppf fn fmt in
     match a with
     | Fail tau -> pp_app "UFail" "%a" pp_type_wrapped tau
@@ -293,8 +293,8 @@ let pp_rule position_printer ppf (name, action) =
     name (pp_action position_printer) action
 
 let pp_scheduler print_positions ppf (name, scheduler) =
-  let rec loop ppf (s: Lv.ResolvedAST.uscheduler locd) =
-    let pp ppf (s: Lv.ResolvedAST.uscheduler) = match s with
+  let rec loop ppf (s: ResolvedAST.uscheduler locd) =
+    let pp ppf (s: ResolvedAST.uscheduler) = match s with
       | Done ->
          pp_raw ppf "UDone"
       | Cons (r, s) ->
@@ -303,10 +303,10 @@ let pp_scheduler print_positions ppf (name, scheduler) =
          pp_app ppf "UTry" "%a@ @[<v>%a@ %a@]"
            pp_raw r.lcnt loop s1 loop s2 in
     pp_maybe_pos print_positions "USPos" pp ppf s in
-  fprintf ppf "@[<2>Definition %s : scheduler pos_t rule_name_t :=@ tc_scheduler @[%a@]@]."
+  fprintf ppf "@[<2>Definition %s : scheduler :=@ tc_scheduler @[%a@]@]."
     name loop scheduler;
   brk 2 ppf;
-  fprintf ppf "@[<2>Definition %s_circuit : state_transition_circuit rule_name_t R Sigma ContextEnv :=@ " name;
+  fprintf ppf "@[<2>Definition %s_circuit : register_update_circuitry R Sigma :=@ " name;
   fprintf ppf "@[<2>compile_scheduler@ rules@ %s@].@]" name;
   brk 2 ppf;
   fprintf ppf "@[<2>Definition %s_eval (sigma: forall f, Sigma f)@ : Log R ContextEnv :=@ " name;
@@ -343,7 +343,7 @@ let pp_mod ~print_positions ppf ({ name; registers; rules; schedulers; _ }: reso
   fprintf ppf "@]@ End %s.@]" name
 
 let pp_preamble ppf =
-  fprintf ppf "Require Import SGA.Notations.@ @ ";
+  fprintf ppf "Require Import Koika.Parsing.@ @ ";
   fprintf ppf "Definition pos_t := string.@ ";
   fprintf ppf "Definition fn_name_t := string.@ ";
   fprintf ppf "Definition var_t := string.@ ";
@@ -354,7 +354,7 @@ let pp_preamble ppf =
   fprintf ppf "Instance DummyPos_pos_t : DummyPos pos_t := {| dummy_pos := \"\" |}."
 
 let _ =
-  Lv.ResolvedAST.debug_printer :=
+  ResolvedAST.debug_printer :=
     { debug_print = (fun a ->
         fprintf (formatter_of_out_channel stderr) "%a@."
           (pp_action false) (locd_make (Pos.StrPos "") a)) }
@@ -366,7 +366,7 @@ let partition_fns (fns: (string * resolved_fndecl) list) =
       | InternalDecl fn -> (extf, (name, fn) :: intf))
   fns ([], [])
 
-let main out ({ r_types; r_fns; r_mods }: Lv.resolved_unit) =
+let main out ({ r_types; r_fns; r_mods }: resolved_unit) =
   let types = topo_sort_types (List.map snd (StringMap.bindings r_types.td_all)) in
   let enums, structs = partition_types types in
   let extfuns, intfuns = partition_fns r_fns.fn_ordered in

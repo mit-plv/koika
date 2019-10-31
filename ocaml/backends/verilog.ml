@@ -1,7 +1,7 @@
 open Common
-open SGALib
-open SGALib.Util
-open SGALib.Graphs
+open Cuttlebone
+open Cuttlebone.Util
+open Cuttlebone.Graphs
 
 (* TODO: What to do with bit 0?
  *)
@@ -141,11 +141,11 @@ let internal_decl_for_net
      Wire(name ^ name_net, n) (* Prefix with the name given by the user *)
   | CConst l -> Wire(name_net, Array.length l)
   | CUnop (fn, _) ->
-     let fsig = SGALib.SGA.PrimSignatures.coq_Sigma1 (Bits1 fn) in
-     Wire(name_net, typ_sz (SGALib.Util.retType fsig))
+     let fsig = Cuttlebone.Extr.PrimSignatures.coq_Sigma1 (Bits1 fn) in
+     Wire(name_net, typ_sz (Cuttlebone.Util.retType fsig))
   | CBinop (fn, _, _) ->
-     let fsig = SGALib.SGA.PrimSignatures.coq_Sigma2 (Bits2 fn) in
-     Wire(name_net, typ_sz (SGALib.Util.retType fsig))
+     let fsig = Cuttlebone.Extr.PrimSignatures.coq_Sigma2 (Bits2 fn) in
+     Wire(name_net, typ_sz (Cuttlebone.Util.retType fsig))
   | CExternal (ffi_sig, _) -> Wire(name_net, typ_sz ffi_sig.ffi_rettype)
   | CReadRegister r_sig -> Wire(name_net, typ_sz (reg_type r_sig))
   | CBundle (_,_) -> Nothing
@@ -184,8 +184,8 @@ type expression =
   | EMux of size_t * string * string * string
   | EIO of string
   | EConst of string
-  | EUnop of SGA.PrimTyped.fbits1 * string
-  | EBinop of SGA.PrimTyped.fbits2 * string * string
+  | EUnop of Extr.PrimTyped.fbits1 * string
+  | EBinop of Extr.PrimTyped.fbits2 * string * string
   | EExternal of ffi_signature * string
   | EReadRegister of string
   | EAnnot of size_t * string * string
@@ -352,7 +352,7 @@ let statements
   =
   List.map (fun root ->
       let reg_name = root.root_reg.reg_name in
-      let reg_init = string_of_bits (SGALib.Util.bits_of_value root.root_reg.reg_init) in
+      let reg_init = string_of_bits (Cuttlebone.Util.bits_of_value root.root_reg.reg_init) in
       let reg_wire_update = Hashtbl.find environment root.root_circuit.tag in
       Update (reg_name, reg_init, reg_wire_update))
     (circuit.graph_roots)

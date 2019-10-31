@@ -1,17 +1,17 @@
 open Common
-open SGALib
-open SGALib.Graphs
+open Cuttlebone
+open Cuttlebone.Graphs
 open Printf
 
 let bits1_name =
-  let open SGA.PrimTyped in
+  let open Extr.PrimTyped in
   function
   | Not _sz -> "Not"
   | ZExtL (_sz, _width) -> "ZExtL"
   | ZExtR (_sz, _width) -> "ZExtR"
   | Part (_logsz, _offset, _width) -> "Part"
 
-let comparison_name (cmp: SGALib.SGA.comparison)=
+let comparison_name (cmp: Cuttlebone.Extr.comparison)=
   match cmp with
   | CLt -> "lt"
   | CGt -> "gt"
@@ -19,7 +19,7 @@ let comparison_name (cmp: SGALib.SGA.comparison)=
   | CGe -> "ge"
 
 let bits2_name =
-  let open SGA.PrimTyped in
+  let open Extr.PrimTyped in
   function
   | Sel _logsz -> "Sel"
   | PartSubst (_logsz, _offset, _width) -> "PartSubst"

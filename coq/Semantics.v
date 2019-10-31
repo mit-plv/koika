@@ -1,5 +1,5 @@
 Require Import Coq.Lists.List Coq.Bool.Bool.
-Require Export SGA.Common SGA.Environments SGA.Vect SGA.Syntax SGA.TypedSyntax.
+Require Export Koika.Common Koika.Environments Koika.Vect Koika.Syntax Koika.TypedSyntax.
 Import ListNotations.
 
 Section Logs.

@@ -1,5 +1,6 @@
 open Common
 open Printf
+open Frontends
 
 type backend =
   [`Coq | `Verilog | `Dot | `Hpp | `Cpp | `Exe | `All]
@@ -62,7 +63,7 @@ let rec run_backend backend out_fname resolved c_unit =
      let cls = Core.Filename.basename fname_noext in
      Backends.Cpp.main fname_noext kd (Backends.Cpp.input_of_compile_unit cls c_unit)
   | (`Verilog | `Dot) as backend ->
-     let graph = SGALib.Graphs.graph_of_compile_unit c_unit in
+     let graph = Cuttlebone.Graphs.graph_of_compile_unit c_unit in
      with_output_to_file out_fname (fun out ->
          (match backend with
           | `Dot -> Backends.Dot.main

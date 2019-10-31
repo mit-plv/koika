@@ -1,0 +1,12 @@
+(library
+ (name cuttlebone)
+ (libraries common)
+ (flags (:standard -w -39)))
+
+;; (rule
+;;  (targets "coq.ml" "coq.mli")
+;;  (deps "../../coq/Extraction.vo")
+;;  (action
+;;   (progn
+;;    (run cp "../../coq/extracted.ml" "./coq.ml")
+;;    (run cp "../../coq/extracted.mli" "./coq.mli"))))

@@ -1,7 +1,7 @@
 Require Import Coq.Lists.List Coq.Bool.Bool Coq.Strings.String.
 Require Export Coq.omega.Omega.
 Import ListNotations.
-Require Export SGA.EqDec SGA.Vect SGA.FiniteType.
+Require Export Koika.EqDec Koika.Vect Koika.FiniteType.
 
 (* https://coq-club.inria.narkive.com/HeWqgvKm/boolean-simplification *)
 Hint Rewrite

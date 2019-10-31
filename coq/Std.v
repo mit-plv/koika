@@ -1,4 +1,4 @@
-Require Import SGA.Notations.
+Require Import Koika.Parsing.
 
 Module Type Fifo.
   Parameter T:type.

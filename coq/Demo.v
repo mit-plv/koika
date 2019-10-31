@@ -1,12 +1,5 @@
-Require Import SGA.Notations.
-
-Record demo_package_t :=
-  { dp_reg_t : Type;
-    dp_rule_name_t : Type;
-    dp_ext_fn_t : Type;
-    sga : @sga_package_t pos_t var_t dp_rule_name_t dp_reg_t dp_ext_fn_t;
-    vp : @verilog_package_t dp_rule_name_t dp_ext_fn_t;
-    sp : @sim_package_t var_t dp_ext_fn_t }.
+Require Import Koika.Parsing.
+Notation demo_package_t := (demo_package_t unit string).
 
 Module Ex1.
   Notation var_t := string.
@@ -212,28 +205,28 @@ Module Collatz.
 
   Definition circuits_result :=
     Eval compute in interp_circuits (ContextEnv.(create) r) empty_sigma circuits.
-  Definition sga_package :=
-    {| sga_reg_types := R;
-       sga_reg_init := r;
-       sga_reg_finite := _;
+  Definition koika_package :=
+    {| koika_reg_types := R;
+       koika_reg_init := r;
+       koika_reg_finite := _;
 
-       sga_ext_fn_types := empty_Sigma;
+       koika_ext_fn_types := empty_Sigma;
 
-       sga_reg_names r := match r with
+       koika_reg_names r := match r with
                          | R0 => "r0"
                          end;
 
-       sga_rules := rules;
-       sga_rule_names r := match r with
+       koika_rules := rules;
+       koika_rule_names r := match r with
                          | divide => "divide"
                          | multiply => "multiply"
                          end;
 
-       sga_scheduler := collatz;
-       sga_module_name := "collatz" |}.
+       koika_scheduler := collatz;
+       koika_module_name := "collatz" |}.
 
   Definition package :=
-    {| sga := sga_package;
+    {| kp := koika_package;
        sp := {| sp_var_names x := x;
                sp_ext_fn_names := empty_fn_names;
                sp_extfuns := None |};
@@ -314,37 +307,37 @@ Module Decoder (P: Unpacker) (F: Fetcher).
     (rule_name_t -> rule pos_t var_t R F.Sigma).
 
   Definition make_package (modname: string) (rules: rulemap_t) :=
-    let sga_package :=
-        {| sga_reg_types := R;
-           sga_reg_init := r;
-           sga_reg_finite := _;
+    let koika_package :=
+        {| koika_reg_types := R;
+           koika_reg_init := r;
+           koika_reg_finite := _;
 
-           sga_ext_fn_types := F.Sigma;
+           koika_ext_fn_types := F.Sigma;
 
-           sga_reg_names r := match r with
+           koika_reg_names r := match r with
                              | Rpc => "Rpc"
                              | Rencoded => "Rencoded"
                              | Rdecoded => "Rdecoded"
                              end;
 
-           sga_rules := rules;
-           sga_rule_names r := match r with
+           koika_rules := rules;
+           koika_rule_names r := match r with
                              | decode => "decode"
                              | fetch => "fetch"
                              end;
 
-           sga_scheduler := decoder;
-           sga_module_name := modname |} in
+           koika_scheduler := decoder;
+           koika_module_name := modname |} in
     let sim :=
         {| sp_var_names := fun x => x;
            sp_ext_fn_names := F.ext_fn_names;
 
-           sp_extfuns := Some "#include ""../extfuns.hpp""
+           sp_extfuns := Some "#include ""../demo.extfuns.hpp""
 using extfuns = decoder_extfuns;" |} in
     let verilog :=
         {| vp_external_rules := List.nil;
            vp_ext_fn_names := F.ext_fn_names |} in
-    {| sga := sga_package; sp := sim; vp := verilog |}.
+    {| kp := koika_package; sp := sim; vp := verilog |}.
 End Decoder.
 
 Module ManualUnpacker <: Unpacker.
@@ -554,11 +547,11 @@ Module Pipeline.
     | G => "g"
     end.
 
-  Definition sga_package :=
-    {| sga_reg_types := R;
-       sga_reg_init reg := r reg;
-       sga_reg_finite := _;
-       sga_reg_names reg := match reg with
+  Definition koika_package :=
+    {| koika_reg_types := R;
+       koika_reg_init reg := r reg;
+       koika_reg_finite := _;
+       koika_reg_names reg := match reg with
                            | r0 => "r0"
                            | outputReg => "outputReg"
                            | inputReg => "inputReg"
@@ -566,23 +559,23 @@ Module Pipeline.
                            | correct => "correct"
                            end;
 
-       sga_ext_fn_types := Sigma;
+       koika_ext_fn_types := Sigma;
 
-       sga_rules := rules;
-       sga_rule_names r := match r with
+       koika_rules := rules;
+       koika_rule_names r := match r with
                           | doF => "doF"
                           | doG => "doG"
                           end;
 
-       sga_scheduler := Pipeline;
-       sga_module_name := "pipeline"
+       koika_scheduler := Pipeline;
+       koika_module_name := "pipeline"
     |}.
 
   Definition package :=
-    {| sga := sga_package;
+    {| kp := koika_package;
        sp := {| sp_var_names := fun x => x;
                sp_ext_fn_names := fn_names;
-               sp_extfuns := Some "#include ""../extfuns.hpp""
+               sp_extfuns := Some "#include ""../demo.extfuns.hpp""
 using extfuns = pipeline_extfuns;" |};
        vp := {| vp_external_rules := List.nil;
                vp_ext_fn_names := fn_names |} |}.
@@ -666,29 +659,29 @@ Module RegisterFile_Ordered.
   (* Definition circuits_result := *)
   (*   Eval native_compute in interp_circuits (ContextEnv.(create) r) empty_sigma circuits. *)
 
-  Definition sga_package :=
-    {| sga_reg_types := R;
-       sga_reg_init reg := r reg;
-       sga_reg_finite := _;
-       sga_reg_names reg := match reg with
+  Definition koika_package :=
+    {| koika_reg_types := R;
+       koika_reg_init reg := r reg;
+       koika_reg_finite := _;
+       koika_reg_names reg := match reg with
                            | rIndex => "rIndex"
                            | rData n => String.append "rData" (string_of_nat (index_to_nat n))
                            | rOutput => "rOutput"
                            end;
 
-       sga_ext_fn_types := empty_Sigma;
+       koika_ext_fn_types := empty_Sigma;
 
-       sga_rules := rules;
-       sga_rule_names r := match r with
+       koika_rules := rules;
+       koika_rule_names r := match r with
                           | _ReadReg => "read_reg"
                           end;
 
-       sga_scheduler := regfile;
-       sga_module_name := "regfile_ordered"
+       koika_scheduler := regfile;
+       koika_module_name := "regfile_ordered"
     |}.
 
   Definition package :=
-    {| sga := sga_package;
+    {| kp := koika_package;
        sp := {| sp_var_names := fun x => x;
                sp_ext_fn_names := empty_fn_names;
                sp_extfuns := None |};
@@ -749,28 +742,28 @@ Module Enums.
   Definition circuits_result :=
     Eval compute in interp_circuits (ContextEnv.(create) r) empty_sigma circuits.
 
-  Definition sga_package :=
-    {| sga_reg_types := R;
-       sga_reg_init := r;
-       sga_reg_finite := _;
-       sga_reg_names r := match r with
+  Definition koika_package :=
+    {| koika_reg_types := R;
+       koika_reg_init := r;
+       koika_reg_finite := _;
+       koika_reg_names r := match r with
                          | rA => "rA"
                          | rB => "rB"
                          end;
 
-       sga_ext_fn_types := empty_Sigma;
+       koika_ext_fn_types := empty_Sigma;
 
-       sga_rules := rules;
-       sga_rule_names r := match r with
+       koika_rules := rules;
+       koika_rule_names r := match r with
                           | _Incr => "incr"
                           end;
 
-       sga_scheduler := enum_scheduler;
-       sga_module_name := "enums"
+       koika_scheduler := enum_scheduler;
+       koika_module_name := "enums"
     |}.
 
   Definition package :=
-    {| sga := sga_package;
+    {| kp := koika_package;
        sp := {| sp_var_names := fun x => x;
                sp_ext_fn_names := empty_fn_names;
                sp_extfuns := None |};
@@ -855,29 +848,29 @@ Module IntCall.
   Definition sched_result :=
     Eval compute in interp_scheduler (ContextEnv.(create) r) empty_sigma rules sched.
 
-  Definition sga_package :=
-    {| sga_reg_types := R;
-       sga_reg_init := r;
-       sga_reg_finite := _;
-       sga_reg_names r := match r with
+  Definition koika_package :=
+    {| koika_reg_types := R;
+       koika_reg_init := r;
+       koika_reg_finite := _;
+       koika_reg_names r := match r with
                          | rA => "rA"
                          | rDelay1 buffer => "rd1_buffer"
                          | rDelay2 buffer => "rd2_buffer"
                          end;
 
-       sga_ext_fn_types := empty_Sigma;
+       koika_ext_fn_types := empty_Sigma;
 
-       sga_rules := rules;
-       sga_rule_names r := match r with
+       koika_rules := rules;
+       koika_rule_names r := match r with
                           | _rl => "rl"
                           end;
 
-       sga_scheduler := sched;
-       sga_module_name := "intfn"
+       koika_scheduler := sched;
+       koika_module_name := "intfn"
     |}.
 
   Definition package :=
-    {| sga := sga_package;
+    {| kp := koika_package;
        sp := {| sp_var_names := fun x => x;
                sp_ext_fn_names := empty_fn_names;
                sp_extfuns := None |};
@@ -885,7 +878,7 @@ Module IntCall.
                vp_ext_fn_names := empty_fn_names |} |}.
 End IntCall.
 
-Require Import KoikaStd.
+Require Import Koika.Std.
 
 Module ExternallyCompiledRule.
 
@@ -946,27 +939,27 @@ Module ExternallyCompiledRule.
   Definition bring : scheduler :=
     tc_scheduler (fetch |> ding |> done).
 
-  Definition sga_package :=
-        {| sga_reg_types := R;
-           sga_reg_init := r;
-           sga_reg_finite := _;
+  Definition koika_package :=
+        {| koika_reg_types := R;
+           koika_reg_init := r;
+           koika_reg_finite := _;
 
-           sga_ext_fn_types := empty_Sigma;
+           koika_ext_fn_types := empty_Sigma;
 
-           sga_reg_names r := match r with
+           koika_reg_names r := match r with
                               | Rdata => "Rdata"
                               | Mem => "Mem"
                               | MyFifo s => String.append "MyFifo" (Fifo5.name_reg s)
                              end;
 
-           sga_rules := rules;
-           sga_rule_names r := match r with
+           koika_rules := rules;
+           koika_rule_names r := match r with
                              | ding => "ding"
                              | fetch => "fetch"
                              end;
 
-           sga_scheduler := bring;
-           sga_module_name := "externalMemory" |}.
+           koika_scheduler := bring;
+           koika_module_name := "externalMemory" |}.
   Definition sim :=
     {| sp_var_names := fun x => x;
        sp_ext_fn_names := empty_fn_names;
@@ -974,7 +967,7 @@ Module ExternallyCompiledRule.
   Definition verilog :=
     {| vp_external_rules := cons fetch nil;
        vp_ext_fn_names := empty_fn_names |} .
-  Definition package : demo_package_t := {| sga := sga_package; sp := sim; vp := verilog |}.
+  Definition package : demo_package_t := {| kp := koika_package; sp := sim; vp := verilog |}.
 End ExternallyCompiledRule.
 
 Notation zero := (Bits.zeroes _).
@@ -1083,14 +1076,14 @@ Definition gcd_start : uaction reg_t ext_fn_t  :=
   Definition bring : scheduler :=
     tc_scheduler (start |> step_compute |> get_result |> done).
 
-  Definition sga_package :=
-        {| sga_reg_types := R;
-           sga_reg_init := init_r;
-           sga_reg_finite := _;
+  Definition koika_package :=
+        {| koika_reg_types := R;
+           koika_reg_init := init_r;
+           koika_reg_finite := _;
 
-           sga_ext_fn_types := empty_Sigma;
+           koika_ext_fn_types := empty_Sigma;
 
-           sga_reg_names r := match r with
+           koika_reg_names r := match r with
                               | input_data =>
                                 "input_data"
                               | input_valid =>
@@ -1105,18 +1098,18 @@ Definition gcd_start : uaction reg_t ext_fn_t  :=
                                 "output_data"
                              end;
 
-           sga_rules := rules;
-           sga_rule_names r := match r with
+           koika_rules := rules;
+           koika_rule_names r := match r with
                                | start => "start"
                                | step_compute => "step"
                                | get_result => "gcd_getresult" end;
 
 
-           sga_scheduler := bring;
-           sga_module_name := "externalMemory" |}.
+           koika_scheduler := bring;
+           koika_module_name := "externalMemory" |}.
 
   Definition package :=
-    {| sga := sga_package;
+    {| kp := koika_package;
        sp := {| sp_var_names := fun x => x;
                sp_ext_fn_names := empty_fn_names;
                sp_extfuns := None |};

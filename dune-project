@@ -4,15 +4,15 @@
 (generate_opam_files true)
 (allow_approximate_merlin)
 
-(name sga)
+(name koika)
 (version 0.0.1)
-(source (github mit-plv/sga))
-(authors "Clément Pit-Claudel <cpitclaudel@live.com>, Thomas Bourgeat <…>")
-(maintainers "Clément Pit-Claudel <cpitclaudel@live.com>, Thomas Bourgeat <…>")
-(documentation "https://github.com/mit-plv/sga/")
+(source (github mit-plv/koika))
+(authors "Thomas Bourgeat <bthom@mit.edu>, Clément Pit-Claudel <clement.pitclaudel@live.com>")
+(maintainers "Clément Pit-Claudel <clement.pitclaudel@live.com>, Thomas Bourgeat <bthom@mit.edu>")
+(documentation "https://github.com/mit-plv/koika/")
 
 (package
- (name sga)
+ (name koika)
  (depends
   (ocaml (>= 4.02.3))
   (dune (and :build (>= 1.10)))
@@ -25,5 +25,5 @@
   (ppx_jane (>= 0.9.0))
   (stdio (>= 0.9.0))
   (zarith (>= 1.7)))
- (synopsis "sga")
+ (synopsis "koika")
  (description ""))

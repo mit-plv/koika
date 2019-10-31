@@ -1,5 +1,5 @@
 Require Import Coq.Lists.List.
-Require Import SGA.Primitives.
+Require Import Koika.Primitives.
 
 Import BitFuns.
 Import ListNotations.

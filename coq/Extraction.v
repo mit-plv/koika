@@ -1,14 +1,14 @@
 Require Import Coq.extraction.Extraction.
 Require Import Coq.extraction.ExtrOcamlBasic Coq.extraction.ExtrOcamlString Coq.extraction.ExtrOcamlNatInt.
 
-Require SGA.Common
-        SGA.Environments
-        SGA.TypedSyntax
-        SGA.TypeInference
-        SGA.SyntaxTools
-        SGA.Circuits
-        SGA.Interop
-        SGA.Demo.
+Require Koika.Common
+        Koika.Environments
+        Koika.TypedSyntax
+        Koika.TypeInference
+        Koika.TypedSyntaxTools
+        Koika.Circuits
+        Koika.Interop
+        Koika.Demo.
 
 (* These prevent assertion errors: *)
 Extraction Inline Circuits.retVal.
@@ -30,7 +30,7 @@ Extraction Inline Types.argTypes Types.argSizes.
 
 Set Extraction KeepSingleton.
 
-Extraction "SGA.ml"
+Extraction "extracted.ml"
            EqDec.EqDec
            FiniteType.FiniteType Member.mem Member.mmap
            IndexUtils.List_nth
@@ -39,10 +39,10 @@ Extraction "SGA.ml"
            Syntax.uscheduler
            Desugaring.desugar_action
            TypeInference.type_action TypeInference.type_rule TypeInference.type_scheduler
-           SyntaxTools.action_mentions_var SyntaxTools.member_mentions_shadowed_binding
-           SyntaxTools.action_footprint
+           TypedSyntaxTools.action_mentions_var TypedSyntaxTools.member_mentions_shadowed_binding
+           TypedSyntaxTools.action_footprint
            Circuits.compile_scheduler
-           Interop.sga_package_t Interop.circuit_package_t Interop.sim_package_t
+           Interop.koika_package_t Interop.circuit_package_t Interop.sim_package_t Interop.verilog_package_t Interop.demo_package_t
            Interop.struct_of_list Interop.struct_to_list
-           Interop.compile_sga_package
+           Interop.compile_koika_package
            Demo.demo_packages.

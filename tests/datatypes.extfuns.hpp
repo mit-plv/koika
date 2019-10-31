@@ -1,8 +1,6 @@
 #ifndef _EXTFUNS_HPP
 #define _EXTFUNS_HPP
 
-// #include "../preamble.hpp"
-
 static constexpr bits<32> instructions[8] = {
   0b11011000001011000000011111001101,
   0b01101011101010101001010001010101,
@@ -14,25 +12,10 @@ static constexpr bits<32> instructions[8] = {
   0b11000001011111000110001001111001
 };
 
-class decoder_extfuns {
+class extfuns {
 public:
-  bits<32> fetch_instr(const bits<3> idx) {
-    return instructions[idx];
-  }
-};
-
-class pipeline_extfuns {
-public:
-  static bits<32> stream(bits<32> lfsr) {
-    return lfsr + 1u;
-  }
-
-  static bits<32> f(bits<32> x) {
-    return ~(x << 2u) - 1u;
-  }
-
-  static bits<32> g(bits<32> x) {
-    return 5u * ((x + 1u) >> 1u);
+  bits<32> getinstr(const bits<32> idx) {
+    return instructions[idx % 8];
   }
 };
 #endif

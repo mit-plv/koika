@@ -65,7 +65,7 @@ module UnresolvedAST = struct
 end
 
 module ResolvedAST = struct
-  open SGALib
+  open Cuttlebone
   open Compilation
 
   type uaction =
@@ -76,8 +76,8 @@ module ResolvedAST = struct
     | If of uaction locd * uaction locd * uaction locd
     | Read of port_t * reg_signature locd
     | Write of port_t * reg_signature locd * uaction locd
-    | Unop of { fn: (SGA.PrimUntyped.ufn1) locd; arg: uaction locd }
-    | Binop of { fn: (SGA.PrimUntyped.ufn2) locd; a1: uaction locd; a2: uaction locd }
+    | Unop of { fn: (Extr.PrimUntyped.ufn1) locd; arg: uaction locd }
+    | Binop of { fn: (Extr.PrimUntyped.ufn2) locd; a1: uaction locd; a2: uaction locd }
     | ExternalCall of { fn: (ffi_signature) locd; arg: uaction locd }
     | InternalCall of { fn: uaction locd internal_function; args: uaction locd list }
     | Sugar of usugar
@@ -94,24 +94,24 @@ module ResolvedAST = struct
 
   type uscheduler = UnresolvedAST.unresolved_scheduler
 
-  let rec translate_action ({ lpos; lcnt }: uaction locd) : Pos.t sga_uaction =
-    SGA.UAPos
+  let rec translate_action ({ lpos; lcnt }: uaction locd) : Pos.t extr_uaction =
+    Extr.UAPos
       (lpos,
        match lcnt with
-       | Fail tau -> UFail (Util.sga_type_of_typ tau)
+       | Fail tau -> UFail (Util.extr_type_of_typ tau)
        | Var v -> UVar v
-       | Const v -> let tau, v = Util.sga_value_of_value v in UConst (tau, v)
-       | Assign (v, expr) -> SGA.UAssign (v.lcnt, translate_action expr)
-       | If (e, l, r) -> SGA.UIf (translate_action e, translate_action l, translate_action r)
-       | Read (port, reg) -> SGA.URead (translate_port port, reg.lcnt)
-       | Write (port, reg, v) -> SGA.UWrite (translate_port port, reg.lcnt, translate_action v)
+       | Const v -> let tau, v = Util.extr_value_of_value v in UConst (tau, v)
+       | Assign (v, expr) -> Extr.UAssign (v.lcnt, translate_action expr)
+       | If (e, l, r) -> Extr.UIf (translate_action e, translate_action l, translate_action r)
+       | Read (port, reg) -> Extr.URead (translate_port port, reg.lcnt)
+       | Write (port, reg, v) -> Extr.UWrite (translate_port port, reg.lcnt, translate_action v)
        | Unop { fn; arg } -> UUnop (fn.lcnt, translate_action arg)
        | Binop { fn; a1; a2 } -> UBinop (fn.lcnt, translate_action a1, translate_action a2)
        | InternalCall { fn; args } ->
-          SGA.UInternalCall (Util.sga_intfun_of_intfun translate_action fn, List.map translate_action args)
+          Extr.UInternalCall (Util.extr_intfun_of_intfun translate_action fn, List.map translate_action args)
        | ExternalCall { fn; arg } -> UExternalCall (fn.lcnt, translate_action arg)
        | Sugar u ->
-          SGA.USugar
+          Extr.USugar
             (match u with
              | AstError -> UErrorInAst
              | Skip -> USkip
@@ -127,22 +127,22 @@ module ResolvedAST = struct
                 USwitch (translate_action operand, translate_action default, branches)
              | StructInit { sg; fields } ->
                 let fields = List.map (fun (nm, v) -> Util.coq_string_of_string nm.lcnt, translate_action v) fields in
-                UStructInit (Util.sga_struct_sig_of_struct_sig sg, fields)))
+                UStructInit (Util.extr_struct_sig_of_struct_sig sg, fields)))
 
   let rec translate_scheduler ({ lpos; lcnt }: uscheduler locd) =
-    SGA.USPos
+    Extr.USPos
       (lpos,
        match lcnt with
-       | Done -> SGA.UDone
+       | Done -> Extr.UDone
        | Cons (r, s) ->
-          SGA.UCons (r.lcnt, translate_scheduler s)
+          Extr.UCons (r.lcnt, translate_scheduler s)
        | Try (r, s1, s2) ->
-          SGA.UTry (r.lcnt, translate_scheduler s1, translate_scheduler s2))
+          Extr.UTry (r.lcnt, translate_scheduler s1, translate_scheduler s2))
 
-  let typecheck_scheduler (raw_ast: uscheduler locd) : (Pos.t, rule_name_t) SGA.scheduler =
+  let typecheck_scheduler (raw_ast: uscheduler locd) : (Pos.t, rule_name_t) Extr.scheduler =
     typecheck_scheduler raw_ast.lpos (translate_scheduler raw_ast)
 
-  let typecheck_rule (raw_ast: uaction locd) : (Pos.t sga_action, (Pos.t * _)) result =
+  let typecheck_rule (raw_ast: uaction locd) : (Pos.t extr_action, (Pos.t * _)) result =
     typecheck_rule raw_ast.lpos (translate_action raw_ast)
 
   type debug_printer = { debug_print: uaction -> unit }
@@ -194,8 +194,8 @@ type resolved_defun =
 type resolved_fn =
   | FnExternal of ffi_signature
   | FnInternal of resolved_defun
-  | FnUnop of SGALib.SGA.PrimUntyped.ufn1
-  | FnBinop of SGALib.SGA.PrimUntyped.ufn2
+  | FnUnop of Cuttlebone.Extr.PrimUntyped.ufn1
+  | FnBinop of Cuttlebone.Extr.PrimUntyped.ufn2
   | FnStructInit of { sg: struct_sig; field_names: string locd list }
 
 type resolved_fndecl =
@@ -393,7 +393,7 @@ module Errors = struct
   end
 
   module TypeInferenceErrors = struct
-    type t = string SGALib.Util.sga_error_message
+    type t = string Cuttlebone.Util.extr_error_message
 
     let classify (msg: t) =
       match msg with
@@ -1210,7 +1210,7 @@ let special_primitives =
   |> StringMap.of_list
 
 let core_primitives =
-  let open SGALib.SGA.PrimUntyped in
+  let open Cuttlebone.Extr.PrimUntyped in
   let unop fn = FnUnop fn in
   let binop fn = FnBinop fn in
   [("eq", `Fn (binop UEq));
@@ -1225,7 +1225,7 @@ let core_primitives =
   |> StringMap.of_list
 
 let bits_primitives =
-  let open SGALib.SGA.PrimUntyped in
+  let open Cuttlebone.Extr.PrimUntyped in
   let unop fn = FnUnop (UBits1 fn) in
   let binop fn = FnBinop (UBits2 fn) in
   [("sel", `Prim0 (binop USel));
@@ -1314,11 +1314,11 @@ let rexpect_type loc types (args: unresolved_action locd list) =
 
 let try_resolve_primitive types name args =
   let must_struct_t loc name = function
-    | Struct_t sg -> SGALib.Util.sga_struct_sig_of_struct_sig sg
+    | Struct_t sg -> Cuttlebone.Util.extr_struct_sig_of_struct_sig sg
     | tau -> type_error loc @@ BadKind { name; actual_type = tau; expected = "a struct" } in
   let rexpect_field args =
     let (_, f), args = rexpect_param (rexpect_keyword "a struct field") name.lpos args in
-    SGALib.Util.coq_string_of_string f, args in
+    Cuttlebone.Util.coq_string_of_string f, args in
   match StringMap.find_opt name.lcnt core_primitives with
   | Some fn ->
      Some (match fn with
@@ -1326,7 +1326,7 @@ let try_resolve_primitive types name args =
               (fn, args)
            | `TypeFn fn ->
               let _, _, t, args = rexpect_type name.lpos types args in
-              (fn (SGALib.Util.sga_type_of_typ t), args)
+              (fn (Cuttlebone.Util.extr_type_of_typ t), args)
            | `FieldFn fn ->
               let f, args = rexpect_field args in
               (fn f, args)
@@ -1342,8 +1342,8 @@ let try_resolve_special_primitive types name (args: unresolved_action locd list)
   match StringMap.find_opt name.lcnt special_primitives with
   | Some `Init ->
      let loc, nm, tau, args = rexpect_type name.lpos types args in
-     let sga_tau = SGALib.Util.sga_type_of_typ tau in
-     let uunpack = SGALib.SGA.PrimUntyped.(UConv (UUnpack sga_tau)) in
+     let extr_tau = Cuttlebone.Util.extr_type_of_typ tau in
+     let uunpack = Cuttlebone.Extr.PrimUntyped.(UConv (UUnpack extr_tau)) in
      let zero = { lpos = loc; lcnt = literal_zero (typ_sz tau) } in
      let uinit_call = FnUnop uunpack, [zero] in
      (match tau with
@@ -1379,17 +1379,17 @@ let resolve_function types fns name (args: unresolved_action locd list)
                     Unbound { kind = "function"; prefix = "";
                               name = name.lcnt; candidates }
 
-let rec assemble_assoc_binop_chain loc (fn: SGALib.SGA.PrimUntyped.ufn2 locd) a1 args =
+let rec assemble_assoc_binop_chain loc (fn: Cuttlebone.Extr.PrimUntyped.ufn2 locd) a1 args =
   match args with
   | [] -> a1.lcnt
   | [a2] -> ResolvedAST.Binop { fn; a1; a2 }
   | a2 :: args -> ResolvedAST.Binop { fn; a1; a2 = locd_make loc (assemble_assoc_binop_chain loc fn a2 args) }
 
-let assemble_binop_chain name (fn: SGALib.SGA.PrimUntyped.ufn2) args =
+let assemble_binop_chain name (fn: Cuttlebone.Extr.PrimUntyped.ufn2) args =
   let bad_arg_count nexpected given =
     type_error name.lpos @@ BadArgumentCount { fn = name.lcnt; expected = nexpected; given } in
   let assoc_ops =
-    let open SGALib.SGA.PrimUntyped in
+    let open Cuttlebone.Extr.PrimUntyped in
     [UBits2 UPlus; UBits2 UAnd; UBits2 UOr] in
   let fn_locd = locd_make name.lpos fn in
   match args with (* FIXME: expected arg counts should be more flexible *)
@@ -1554,7 +1554,7 @@ let check_result = function
   | Error (epos, emsg) -> type_inference_error epos emsg
 
 let typecheck_module { name; cpp_preamble; registers; rules; schedulers }
-  : Pos.t SGALib.Compilation.compile_unit =
+  : Pos.t Cuttlebone.Compilation.compile_unit =
   let tc_rule (nm, r) = (nm, (`InternalRule, check_result (ResolvedAST.typecheck_rule r))) in
   let c_rules = Delay.map tc_rule rules in
   let schedulers = Delay.map (ResolvedAST.typecheck_scheduler << snd) schedulers in

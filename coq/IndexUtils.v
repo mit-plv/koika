@@ -1,6 +1,6 @@
 Require Coq.Logic.FinFun.
 Require Import Coq.Lists.List.
-Require Import SGA.Common SGA.Vect SGA.Member.
+Require Import Koika.Common Koika.Vect Koika.Member.
 
 Import ListNotations.
 

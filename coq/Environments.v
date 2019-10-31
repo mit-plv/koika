@@ -1,6 +1,6 @@
 Require Import Coq.Strings.String Coq.Lists.List.
-Require Import SGA.Common.
-Require Export SGA.Member.
+Require Import Koika.Common.
+Require Export Koika.Member.
 Import ListNotations.
 
 Section Contexts.

@@ -1,8 +1,8 @@
 Require Import Coq.Bool.Bool Coq.Lists.List.
-Require Import SGA.Member SGA.TypedSyntax.
+Require Import Koika.Member Koika.TypedSyntax.
 Import ListNotations.
 
-Section SyntaxTools.
+Section TypedSyntaxTools.
   Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
   Context {R: reg_t -> type}
           {Sigma: ext_fn_t -> ExternalSignature}.
@@ -130,4 +130,4 @@ Section SyntaxTools.
                                | @Var _ _ _ _ _ _ _ k' _ m => beq_dec k k'
                                | _ => false
                                end) a.
-End SyntaxTools.
+End TypedSyntaxTools.

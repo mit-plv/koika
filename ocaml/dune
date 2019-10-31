@@ -1,36 +1,16 @@
-(library
- (name common)
- (libraries hashcons)
- (modules common))
-
-(library
- (name SGALib)
- (modules SGA SGALib)
- (libraries common)
- (flags (:standard -w -39)))
-
-(library
- (name lv)
- (modules lv)
- (libraries base core stdio parsexp common SGALib zarith)
- (preprocess (pps bisect_ppx --conditional)))
-
-(library
- (name backends)
- (modules verilog dot cpp coq)
- (libraries str common SGALib lv zarith))
-
 (executable
- (name coq_examples)
- (modules CoqInterop coq_examples)
- (libraries common SGALib backends))
-
-(executable
- (name cli)
- (modules cli)
+ (name lvc)
+ (modules lvc)
  (preprocess (pps ppx_jane))
- (libraries str zarith SGALib common lv backends))
+ (libraries str zarith core common cuttlebone frontends backends))
 
-(env
- (dev
-  (flags (:standard -warn-error -A \ -short-paths))))
+(library
+ (name interop)
+ (public_name koika.interop)
+ (modules interop)
+ (libraries backends))
+
+(executable
+ (name demo)
+ (modules demo)
+ (libraries interop))

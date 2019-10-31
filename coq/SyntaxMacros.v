@@ -1,5 +1,5 @@
 Require Import Coq.Lists.List.
-Require Import SGA.Syntax SGA.TypedSyntax SGA.Primitives SGA.Interop.
+Require Import Koika.Syntax Koika.TypedSyntax Koika.Primitives Koika.Interop.
 Import ListNotations.
 
 Import PrimUntyped.

@@ -1,1 +1,3 @@
--R _build/default/ SGA
+-R _build/default/coq/ Koika
+-R _build/default/examples/ Koika.Examples
+-R _build/default/tests/ Koika.Tests

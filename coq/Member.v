@@ -1,5 +1,5 @@
 Require Import Coq.Strings.String Coq.Lists.List.
-Require Import SGA.Common.
+Require Import Koika.Common.
 
 Import ListNotations.
 

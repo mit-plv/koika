@@ -1,5 +1,5 @@
 Require Export Coq.Strings.String.
-Require Export SGA.Common SGA.Vect SGA.IndexUtils.
+Require Export Koika.Common Koika.Vect Koika.IndexUtils.
 Require Import Coq.Lists.List.
 Import ListNotations.
 

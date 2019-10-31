@@ -1,5 +1,5 @@
-Require Export SGA.Common SGA.Environments.
-Require Import SGA.Syntax SGA.TypedSyntax.
+Require Export Koika.Common Koika.Environments.
+Require Import Koika.Syntax Koika.TypedSyntax.
 Require Import Coq.Strings.String.
 Open Scope string_scope.
 

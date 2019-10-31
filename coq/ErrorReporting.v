@@ -1,4 +1,4 @@
-Require Import SGA.Common SGA.Types.
+Require Import Koika.Common Koika.Types.
 
 Section TypeErrors.
   Context {pos_t var_t fn_name_t: Type}.

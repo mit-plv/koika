@@ -1,4 +1,4 @@
-Require Import SGA.Common SGA.Syntax SGA.TypedSyntax SGA.SemanticProperties.
+Require Import Koika.Common Koika.Syntax Koika.TypedSyntax Koika.SemanticProperties.
 Require Import Coq.setoid_ring.Ring_theory Coq.setoid_ring.Ring Coq.setoid_ring.Ring.
 Require Import Coq.Lists.List.
 

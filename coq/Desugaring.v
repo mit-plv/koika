@@ -1,4 +1,4 @@
-Require Import SGA.Common SGA.Environments SGA.Syntax SGA.TypedSyntax SGA.ErrorReporting SGA.SyntaxMacros SGA.Interop.
+Require Import Koika.Common Koika.Environments Koika.Syntax Koika.TypedSyntax Koika.ErrorReporting Koika.SyntaxMacros Koika.Interop.
 Require Import Coq.Lists.List.
 Import ListNotations.
 

@@ -1,6 +1,6 @@
 Require Export Coq.Bool.Bool Coq.Lists.List.
-Require Export SGA.Circuits.
-Require Import SGA.Common SGA.Environments SGA.Types.
+Require Export Koika.Circuits.
+Require Import Koika.Common Koika.Environments Koika.Types.
 
 Section Bools.
   Definition bool_lt b1 b2 :=

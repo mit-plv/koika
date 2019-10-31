@@ -1,4 +1,4 @@
-Require Export SGA.Common SGA.Primitives SGA.Types SGA.ErrorReporting.
+Require Export Koika.Common Koika.Primitives Koika.Types Koika.ErrorReporting.
 
 Section Syntax.
   Context {pos_t var_t rule_name_t fn_name_t: Type}.

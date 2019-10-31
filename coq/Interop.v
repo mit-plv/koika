@@ -1,6 +1,6 @@
 Require Import Coq.Strings.String Coq.Lists.List.
-Require Import SGA.Environments SGA.Types SGA.TypedSyntax SGA.Circuits.
-Require Export SGA.Primitives.
+Require Import Koika.Environments Koika.Types Koika.TypedSyntax Koika.Circuits.
+Require Export Koika.Primitives.
 Import ListNotations.
 
 Inductive empty_ext_fn_t :=.
@@ -36,37 +36,37 @@ Section Packages.
       Typically an inductive. *)
   Context {ext_fn_t: Type}.
 
-  Record sga_package_t :=
+  Record koika_package_t :=
     {
-      (** [sga_reg_names]: These names are used to generate readable code. *)
-      sga_reg_names: reg_t -> string;
-      (** [sga_reg_types]: The type of data stored in each register. *)
-      sga_reg_types: reg_t -> type;
-      (** [sga_reg_init]: The initial value stored in each register. *)
-      sga_reg_init: forall r: reg_t, sga_reg_types r;
-      (** [sga_reg_finite]: We need to be able to enumerate the set of registers
+      (** [koika_reg_names]: These names are used to generate readable code. *)
+      koika_reg_names: reg_t -> string;
+      (** [koika_reg_types]: The type of data stored in each register. *)
+      koika_reg_types: reg_t -> type;
+      (** [koika_reg_init]: The initial value stored in each register. *)
+      koika_reg_init: forall r: reg_t, koika_reg_types r;
+      (** [koika_reg_finite]: We need to be able to enumerate the set of registers
           that the program uses. *)
-      sga_reg_finite: FiniteType reg_t;
+      koika_reg_finite: FiniteType reg_t;
 
-      (** [sga_ext_fn_types]: The signature of each function. *)
-      sga_ext_fn_types: forall fn: ext_fn_t, ExternalSignature;
+      (** [koika_ext_fn_types]: The signature of each function. *)
+      koika_ext_fn_types: forall fn: ext_fn_t, ExternalSignature;
 
-      (** [sga_rules]: The rules of the program. **)
-      sga_rules: forall _: rule_name_t,
-          TypedSyntax.rule pos_t var_t sga_reg_types sga_ext_fn_types;
-      (** [sga_rule_names]: These names are used to generate readable code. **)
-      sga_rule_names: rule_name_t -> string;
+      (** [koika_rules]: The rules of the program. **)
+      koika_rules: forall _: rule_name_t,
+          TypedSyntax.rule pos_t var_t koika_reg_types koika_ext_fn_types;
+      (** [koika_rule_names]: These names are used to generate readable code. **)
+      koika_rule_names: rule_name_t -> string;
 
-      (** [sga_scheduler]: The scheduler. **)
-      sga_scheduler: TypedSyntax.scheduler pos_t rule_name_t;
+      (** [koika_scheduler]: The scheduler. **)
+      koika_scheduler: TypedSyntax.scheduler pos_t rule_name_t;
 
-      (** [sga_module_name]: The name of the current package. **)
-      sga_module_name: string
+      (** [koika_module_name]: The name of the current package. **)
+      koika_module_name: string
     }.
 
   Record circuit_package_t :=
     {
-      cp_pkg: sga_package_t;
+      cp_pkg: koika_package_t;
 
       (** [cp_reg_env]: This describes how the program concretely stores maps
         keyed by registers (this is used in the type of [cp_circuits], which is
@@ -77,7 +77,7 @@ Section Packages.
         compiler (really a list of circuits, one per register). *)
       cp_circuits: @register_update_circuitry
                     rule_name_t reg_t ext_fn_t
-                    (cp_pkg.(sga_reg_types)) (cp_pkg.(sga_ext_fn_types))
+                    (cp_pkg.(koika_reg_types)) (cp_pkg.(koika_ext_fn_types))
                     cp_reg_Env;
     }.
 
@@ -108,6 +108,14 @@ Section Packages.
       sp_extfuns: option string
     }.
 End Packages.
+
+Record demo_package_t pos_t var_t :=
+  { dp_reg_t : Type;
+    dp_rule_name_t : Type;
+    dp_ext_fn_t : Type;
+    kp : @koika_package_t pos_t var_t dp_rule_name_t dp_reg_t dp_ext_fn_t;
+    vp : @verilog_package_t dp_rule_name_t dp_ext_fn_t;
+    sp : @sim_package_t var_t dp_ext_fn_t }.
 
 Section TypeConv.
   Fixpoint struct_to_list {A} (f: forall tau: type, type_denote tau -> A)
@@ -187,8 +195,8 @@ End TypeConv.
 Section Compilation.
   Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
 
-  Definition compile_sga_package
-             (s: @sga_package_t pos_t var_t rule_name_t reg_t ext_fn_t) : circuit_package_t :=
-    let _ := s.(sga_reg_finite) in
-    {| cp_circuits := compile_scheduler s.(sga_rules) s.(sga_scheduler) |}.
+  Definition compile_koika_package
+             (s: @koika_package_t pos_t var_t rule_name_t reg_t ext_fn_t) : circuit_package_t :=
+    let _ := s.(koika_reg_finite) in
+    {| cp_circuits := compile_scheduler s.(koika_rules) s.(koika_scheduler) |}.
 End Compilation.
