@@ -56,7 +56,31 @@ Notation InternalFunction R Sigma sig tau := (InternalFunction fn_name_t var_t (
 
 Notation register_update_circuitry R Sigma := (register_update_circuitry _ R Sigma ContextEnv).
 
-Ltac __must_typecheck_extract_result x :=
+Ltac eval_cbn x :=
+  let x := (eval cbn in x) in constr:(x).
+
+Ltac eval_hnf x :=
+  let x := (eval hnf in x) in constr:(x).
+
+Ltac eval_cvb x :=
+  let x := (eval cbv in x) in constr:(x).
+
+Ltac eval_vm_compute x :=
+  let x := (eval vm_compute in x) in constr:(x).
+
+Ltac eval_native_compute x :=
+  let x := (eval native_compute in x) in constr:(x).
+
+Ltac tc_eval x :=
+  eval_vm_compute x.
+
+Ltac tc_eval_body x :=
+  let t := type of x in
+  let x := tc_eval x in
+  constr:(x: t).
+
+Ltac _must_typecheck x :=
+  let x := tc_eval_body x in
   lazymatch x with
   | Success ?tm => tm
   | Failure {| epos := _; emsg := ?err; esource := ErrSrc ?src |} =>
@@ -65,25 +89,15 @@ Ltac __must_typecheck_extract_result x :=
                | ?err => err
                end in
     fail "Type error:" err "in term" src
+  | _ => fail "Unexpected term:" x
   end.
 
-Ltac __must_typecheck_cbn tcres :=
-  let tcres := (eval hnf in tcres) in
-  __must_typecheck_extract_result tcres.
-
-(* This version is much faster, but it unfolds everything *)
-Ltac __must_typecheck_vmc tcres :=
-  let tcres := (eval vm_compute in tcres) in
-  __must_typecheck_extract_result tcres.
-
-Ltac __must_typecheck tcres :=
-  __must_typecheck_vmc tcres.
-
 Ltac _tc_action R Sigma action :=
-  let desugared := constr:(desugar_action dummy_pos action) in
-  let maybe_typed := constr:(type_action R Sigma dummy_pos List.nil desugared) in
-  let typed := __must_typecheck maybe_typed in
-  let typed := (eval cbn in (projT2 typed)) in
+  let maybe_typed :=
+      constr:(let desugared := desugar_action dummy_pos action in
+              type_action R Sigma dummy_pos List.nil desugared) in
+  let typed := _must_typecheck maybe_typed in
+  let typed := tc_eval_body (projT2 typed) in
   exact typed.
 
 Notation tc_action R Sigma action :=
@@ -98,7 +112,7 @@ Ltac _tc_rules R Sigma actions :=
                                | [ H: _ = ?rr |- _ ] =>
                                  _tc_action R Sigma (actions rr)
                                end)) in
-    let res := (eval cbn in res) in
+    let res := tc_eval_body res in
     exact res
   end.
 
@@ -108,7 +122,6 @@ Notation tc_rules R Sigma actions :=
 Notation tc_scheduler uscheduler :=
   (type_scheduler dummy_pos uscheduler) (only parsing).
 
-Notation compute t :=
-  ltac:(let tt := type of t in
-        let t := (eval vm_compute in t) in
-        exact (t: tt)) (only parsing).
+Notation tc_compute t :=
+  ltac:(let t := tc_eval_body t in
+        exact t) (only parsing).

@@ -185,15 +185,15 @@ Module Collatz.
                     end).
 
   Definition result :=
-    compute (interp_scheduler cr empty_sigma rules collatz).
+    tc_compute (interp_scheduler cr empty_sigma rules collatz).
 
   Definition divide_result :=
-    compute (interp_action cr empty_sigma CtxEmpty log_empty log_empty
-                           (rules divide)).
+    tc_compute (interp_action cr empty_sigma CtxEmpty log_empty log_empty
+                              (rules divide)).
 
   Definition multiply_result :=
-    compute (interp_action cr empty_sigma CtxEmpty log_empty log_empty
-                           (rules multiply)).
+    tc_compute (interp_action cr empty_sigma CtxEmpty log_empty log_empty
+                              (rules multiply)).
 
   Definition circuits :=
     compile_scheduler rules collatz.
