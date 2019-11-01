@@ -98,7 +98,7 @@ Proof.
   - eauto using finite_index_injective.
   - right; intro Habs; apply (f_equal finite_index) in Habs.
     contradiction.
-Qed.
+Defined.
 
 Definition opt_bind {A B} (o: option A) (f: A -> option B) :=
   match o with

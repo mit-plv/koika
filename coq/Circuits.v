@@ -1,5 +1,5 @@
 Require Export Koika.Common Koika.Environments.
-Require Import Koika.Syntax Koika.TypedSyntax.
+Require Import Koika.Syntax Koika.TypedSyntax Koika.TypedSyntaxTools.
 Require Import Coq.Strings.String.
 Open Scope string_scope.
 
@@ -593,9 +593,10 @@ Section CircuitCompilation.
     {| canFire := CBundleRef rl rs bundle rwcircuit_canfire erwc.(canFire);
        regs := bundleref_wrap_rwset rl rs bundle erwc.(regs) |}.
 
-  Definition bundleref_wrap_action_circuit {tau} (input: rwset) (rl: @action_circuit tau) (rl_name: rule_name_t)
+  Definition bundleref_wrap_action_circuit
+             {tau} (rs: list reg_t)
+             (input: rwset) (rl: @action_circuit tau) (rl_name: rule_name_t)
     : @action_circuit tau :=
-    let rs := finite_elements (FiniteType := REnv.(finite_keys)) in
     let bundle := ccreate rs (fun r _ => REnv.(getenv) input r) in
     {| erwc := bundleref_wrap_erwc rl_name rs bundle rl.(erwc);
        retVal := rl.(retVal) |}.
@@ -606,19 +607,24 @@ Section CircuitCompilation.
            (s: scheduler pos_t rule_name_t)
            (input: scheduler_circuit):
     scheduler_circuit :=
+    let compile_action rl_name :=
+      let rule := rules rl_name in
+      let ft := REnv.(finite_keys) in
+      let rs := action_registers (EQ := EqDec_FiniteType) rule in
+      let (rl, _) := compile_action CtxEmpty rule (adapter input) in
+      let rl := bundleref_wrap_action_circuit rs input rl rl_name in
+      let acc := update_accumulated_rwset rl.(erwc).(regs) input in
+      (rl, acc) in
     match s with
     | Done =>
       input
     | Cons rl_name s =>
-      let (rl, Gamma) := compile_action CtxEmpty (rules rl_name) (adapter input) in
-      let rl := bundleref_wrap_action_circuit input rl rl_name in
-      let acc := update_accumulated_rwset rl.(erwc).(regs) input in
+      let (rl, acc) := compile_action rl_name in
       let will_fire := willFire_of_canFire rl.(erwc) input in
       let input := mux_rwsets "mux_input" will_fire acc input in
       compile_scheduler_circuit s input
-    | Try rl st sf =>
-      let (rl, Gamma) := compile_action CtxEmpty (rules rl) (adapter input) in
-      let acc := update_accumulated_rwset rl.(erwc).(regs) input in
+    | Try rl_name st sf =>
+      let (rl, acc) := compile_action rl_name in
       let st := compile_scheduler_circuit st acc in
       let sf := compile_scheduler_circuit sf input in
       let will_fire := willFire_of_canFire rl.(erwc) input in

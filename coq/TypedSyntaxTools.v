@@ -32,6 +32,18 @@ Section TypedSyntaxTools.
       | APos _ a => action_footprint acc a
       end.
 
+    Fixpoint dedup {A} {EQ: EqDec A} (acc: list A) (l: list A) :=
+      match l with
+      | [] => acc
+      | a :: l =>
+        let already_seen := List.in_dec eq_dec a acc in
+        let acc := if already_seen then acc else a :: acc in
+        dedup acc l
+      end.
+
+    Fixpoint action_registers {sig tau} {EQ: EqDec reg_t} (a: action sig tau) : list reg_t :=
+      dedup [] (List.map (fun '(rs, _) => rs) (action_footprint [] a)).
+
     Fixpoint all_scheduler_paths (s: scheduler) : list (list rule_name_t) :=
       let cons r s := List.map (fun rs => r :: rs) (all_scheduler_paths s) in
       match s with
