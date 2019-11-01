@@ -20,7 +20,6 @@ Module Scoreboard (s:Scoreboard_sig).
   Module Rf := Rf Rf_params.
 
   Inductive reg_t := Scores (state: Rf.reg_t).
-
   Definition R r :=
     match r with
     | Scores n => Rf.R n
@@ -31,8 +30,11 @@ Module Scoreboard (s:Scoreboard_sig).
     | Scores n => Rf.r n
     end.
 
+  Definition name_reg r :=
+    match r with
+    | Scores n => String.append "rf" (Rf.name_reg n)
+    end.
   (* Internal functions *)
-
   Definition sat_incr : UInternalFunction reg_t empty_ext_fn_t :=
     {{
         fun (a: bits_t logScore) : bits_t logScore =>
@@ -40,22 +42,6 @@ Module Scoreboard (s:Scoreboard_sig).
           else a + #(Bits.of_nat logScore 1)
     }}.
 
-  (* Definition sub (n:nat) : UInternalFunction reg_t empty_ext_fn_t := *)
-  (*   {{ *)
-  (*       fun (arg1 : bits_t n) (arg2 : bits_t n) : bits_t n => *)
-  (*         (arg1 + !arg2 + |32`d1|) *)
-  (*   }}. *)
-
-  Definition insert : UInternalFunction reg_t empty_ext_fn_t :=
-    {{
-        fun (idx: bits_t (log2 sz)) : bits_t 0 =>
-          let old_score := Scores.(Rf.read)(idx) in
-          let new_score := sat_incr(old_score) in
-          Scores.(Rf.write)(idx, new_score)
-    }}.
-
-
-  Definition bla (n:nat) : nat := 0.
   Definition sat_decr : UInternalFunction reg_t empty_ext_fn_t :=
     {{
         fun (a: bits_t logScore) : bits_t logScore =>
@@ -64,6 +50,13 @@ Module Scoreboard (s:Scoreboard_sig).
     }}.
 
   (* Interface: *)
+  Definition insert : UInternalFunction reg_t empty_ext_fn_t :=
+    {{
+        fun (idx: bits_t (log2 sz)) : bits_t 0 =>
+          let old_score := Scores.(Rf.read)(idx) in
+          let new_score := sat_incr(old_score) in
+          Scores.(Rf.write)(idx, new_score)
+    }}.
 
   Definition remove : UInternalFunction reg_t empty_ext_fn_t :=
     {{
