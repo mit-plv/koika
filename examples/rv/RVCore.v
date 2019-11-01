@@ -299,9 +299,6 @@ Section RV32IHelpers.
           (imm_val : bits_t 32)
           (pc      : bits_t 32)
           : bits_t 32 =>
-          (* // isAUIPCorLUI = inst[2] *)
-          (* // isLUI = inst[5] *)
-          (* // isNotIMM = inst[5] *)
           let isLUI := (inst[|5`d2|] == Ob~1) && (inst[|5`d5|] == Ob~1) in
           let isAUIPC := (inst[|5`d2|] == Ob~1) && (inst[|5`d5|] == Ob~0) in
           let isIMM := (inst[|5`d5|] == Ob~0) in
@@ -518,6 +515,9 @@ Module  RV32ICore.
         f2d.(fromFetch.enq)(fetch_bookkeeping)
     }}.
 
+  Definition tc_fetch :=
+    tc_action R empty_Sigma fetch .
+
   (* This rule is interesting because maybe we want to write it *)
   (* differently than Bluespec if we care about simulation *)
   (* performance. Moreover, we could read unconditionaly to avoid potential *)
@@ -618,7 +618,7 @@ Module  RV32ICore.
           pass
     }}.
 
-  Time Definition rule_execute :=
+  Time Definition tc_execute :=
     tc_action R empty_Sigma execute.
 
   Definition writeback : uaction reg_t empty_ext_fn_t :=
@@ -640,7 +640,79 @@ Module  RV32ICore.
           pass
     }}.
 
-  Time Definition ruleWb :=
+  Time Definition tc_writeback :=
     tc_action R empty_Sigma writeback.
+
+  (* Inductive rules_core := Fetch | Decode | Execute | Writeback. *)
+
+  Definition rules (rl:nat) : rule R empty_Sigma:=
+    match rl with
+    | O => tc_fetch
+    | 1 => tc_decode
+    | 2 => tc_execute
+    | _ => tc_writeback
+    end.
+
+  Definition rv_core : scheduler :=
+    tc_scheduler (3 |> 2 |> 1 |> 0 |> done).
+
+  Instance FiniteType_toIMem : FiniteType MemReq.reg_t := _.
+  Instance FiniteType_fromIMem : FiniteType MemResp.reg_t := _.
+  Instance FiniteType_toDMem : FiniteType MemReq.reg_t := _.
+  Instance FiniteType_fromDMem : FiniteType MemResp.reg_t := _.
+  Instance FiniteType_f2d : FiniteType fromFetch.reg_t := _.
+  Instance FiniteType_d2e : FiniteType fromDecode.reg_t := _.
+  Instance FiniteType_e2w : FiniteType fromExecute.reg_t := _.
+  Instance FiniteType_rf : FiniteType Rf.reg_t := _.
+  Instance FiniteType_scoreboard_rf : FiniteType Scoreboard.Rf.reg_t := _.
+  Instance FiniteType_scoreboard : FiniteType Scoreboard.reg_t := _.
+  Instance FiniteType_reg_t : FiniteType reg_t := _.
+
+  Definition cr := ContextEnv.(create) r.
+
+  Definition circuits :=
+    compile_scheduler rules rv_core.
+
+  Definition koika_package :=
+    {| koika_reg_types := R;
+       koika_reg_init := r;
+       koika_reg_finite := _;
+       koika_ext_fn_types := empty_Sigma;
+       koika_reg_names r := match r with
+                            (* Declare state *)
+                            | toIMem s => String.append "toIMem_" (MemReq.name_reg s)
+                            | fromIMem s => String.append "fromIMem_" (MemResp.name_reg s)
+                            | toDMem s => String.append "toDMem_" (MemReq.name_reg s)
+                            | fromDMem s => String.append "fromDMem_" (MemResp.name_reg s)
+                            | f2d s => String.append "f2d_" (fromFetch.name_reg s)
+                            | d2e s => String.append "d2e_" (fromDecode.name_reg s)
+                            | e2w s => String.append "e2w_" (fromExecute.name_reg s)
+                            | rf s => String.append "rf_" (Rf.name_reg s)
+                            | scoreboard s => String.append "scoreboard_" (Scoreboard.name_reg s)
+                            | pc => "pc"
+                            | epoch => "epoch"
+                            end;
+       koika_rules := rules;
+       koika_rule_names r := match r with
+                             | O => "fetch"
+                             | 1 => "decode"
+                             | 2 => "execute"
+                             | _ => "writeback"
+                         end;
+       koika_scheduler := rv_core;
+       koika_module_name := "rv_core" |}.
+
+  Definition package :=
+    {| ip_koika := koika_package;
+       ip_sim := {| sp_var_names x := x;
+                   sp_ext_fn_names := empty_fn_names;
+                   sp_extfuns := None |};
+       ip_verilog := {| vp_external_rules := List.nil;
+                       vp_ext_fn_names := empty_fn_names |} |}.
+
 End RV32ICore.
+
+Definition prog := Interop.Backends.compile_all RV32ICore.package.
+Extraction "rv32icore.ml" prog.
+
 (* TODO check execCOntrol32 *)
