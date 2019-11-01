@@ -486,7 +486,7 @@ Section CompilerCorrectness.
 
   Transparent Circuits.willFire_of_canFire'.
 
-  Definition rwdata_circuit_lt_invariant {idx} (rwd1 rwd2: rwdata (R idx)) :=
+  Definition rwdata_circuit_lt_invariant {idx} (rwd1 rwd2: rwdata (CR idx)) :=
       circuit_lt (rwd1.(read0)) (rwd2.(read0)) /\
       circuit_lt (rwd1.(write0)) (rwd2.(write0)) /\
       circuit_lt (rwd1.(read1)) (rwd2.(read1)) /\
@@ -630,7 +630,7 @@ Section CompilerCorrectness.
   Qed.
 
   Lemma circuit_lt_willFire_of_canFire':
-    forall idx (rwd0 rwd1 rwd2: rwdata (R idx)),
+    forall idx (rwd0 rwd1 rwd2: rwdata (CR idx)),
       rwdata_circuit_lt_invariant rwd1 rwd0 ->
       circuit_lt (willFire_of_canFire' rwd0 rwd2) (willFire_of_canFire' rwd1 rwd2).
   Proof.
@@ -705,7 +705,7 @@ Section CompilerCorrectness.
   Lemma circuit_gamma_equiv_CtxCons {sig}:
     forall Gamma gamma,
       circuit_gamma_equiv (Gamma: vcontext sig) (gamma: ccontext sig) ->
-      forall (tau : type) (var : var_t) (t: tau) (c : circuit tau),
+      forall (tau : type) (var : var_t) (t: tau) (c : circuit (type_sz tau)),
         interp_circuit c = bits_of_value t ->
         circuit_gamma_equiv (CtxCons (var, tau) t Gamma) (CtxCons (var, tau) c gamma).
   Proof.
@@ -728,8 +728,8 @@ Section CompilerCorrectness.
            end.
 
   Lemma interp_circuit_willFire_of_canFire_read0:
-    forall {tau} (rwd : rwdata tau) cLog
-      cOne (cdata0 cdata1 : circuit tau),
+    forall {sz} (rwd : rwdata sz) cLog
+      cOne (cdata0 cdata1 : circuit sz),
       interp_circuit cOne = Ob~1 ->
       interp_circuit
         (willFire_of_canFire'
@@ -747,8 +747,8 @@ Section CompilerCorrectness.
   Qed.
 
   Lemma interp_circuit_willFire_of_canFire_read1:
-    forall {tau} (rwd : rwdata tau) cLog
-      cOne (cdata0 cdata1 : circuit tau),
+    forall {sz} (rwd : rwdata sz) cLog
+      cOne (cdata0 cdata1 : circuit sz),
       interp_circuit cOne = Ob~1 ->
       interp_circuit
         (willFire_of_canFire'
@@ -765,8 +765,8 @@ Section CompilerCorrectness.
   Qed.
 
   Lemma interp_circuit_willFire_of_canFire_write0:
-    forall {tau} (rwd : rwdata tau) cLog
-      cOne (cdata0 cdata1 : circuit tau),
+    forall {sz} (rwd : rwdata sz) cLog
+      cOne (cdata0 cdata1 : circuit sz),
       interp_circuit cOne = Ob~1 ->
       interp_circuit
         (willFire_of_canFire'
@@ -785,8 +785,8 @@ Section CompilerCorrectness.
   Qed.
 
   Lemma interp_circuit_willFire_of_canFire_write1:
-    forall {tau} (rwd : rwdata tau) cLog
-      cOne (cdata0 cdata1 : circuit tau),
+    forall {sz} (rwd : rwdata sz) cLog
+      cOne (cdata0 cdata1 : circuit sz),
       interp_circuit cOne = Ob~1 ->
       interp_circuit
         (willFire_of_canFire'
@@ -805,7 +805,7 @@ Section CompilerCorrectness.
   Arguments Circuits.willFire_of_canFire' : simpl never.
 
   Lemma interp_circuit_willFire_of_canFire'_mux_rwdata:
-    forall (idx : reg_t) s (rwd1 rwd2 : rwdata (R idx)) (cCond : circuit 1) (rwdL : rwdata (R idx)),
+    forall (idx : reg_t) s (rwd1 rwd2 : rwdata (CR idx)) (cCond : circuit 1) (rwdL : rwdata (CR idx)),
       interp_circuit (willFire_of_canFire' (mux_rwdata s cCond rwd1 rwd2) rwdL) =
       if Bits.single (interp_circuit cCond) then
         interp_circuit (willFire_of_canFire' rwd1 rwdL)
@@ -926,7 +926,7 @@ Section CompilerCorrectness.
            end.
 
   Lemma circuit_gamma_equiv_CtxCons_rev {sig}:
-    forall (k: var_t) (tau: type) (Gamma: vcontext sig) (gamma: ccontext sig) v (c: circuit tau),
+    forall (k: var_t) (tau: type) (Gamma: vcontext sig) (gamma: ccontext sig) v (c: circuit (type_sz tau)),
       circuit_gamma_equiv (CtxCons (k, tau) v Gamma) (CtxCons (k, tau) c gamma) ->
       circuit_gamma_equiv Gamma gamma.
   Proof.
@@ -946,7 +946,7 @@ Section CompilerCorrectness.
   Lemma circuit_gamma_equiv_creplace:
     forall (sig : tsig var_t) (k : var_t) (tau : type)
       (m : member (k, tau) sig) (vGamma : vcontext sig)
-      (a : action_circuit R Sigma REnv tau) (cGamma : ccontext sig) t,
+      (a : action_circuit R Sigma REnv (type_sz tau)) (cGamma : ccontext sig) t,
       interp_circuit (retVal a) = bits_of_value t ->
       circuit_gamma_equiv vGamma cGamma -> circuit_gamma_equiv (creplace m t vGamma) (creplace m (retVal a) cGamma).
   Proof.

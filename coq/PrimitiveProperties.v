@@ -129,7 +129,7 @@ Qed.
 
 Lemma subst_field_bits_part_subst:
   forall {sig} (f : struct_index sig) (a1 : type_denote (struct_t sig)) (a2 : field_type sig f),
-    part_subst (field_offset_right sig f) (field_type sig f) (bits_of_value a1) (bits_of_value a2) =
+    part_subst (field_offset_right sig f) (field_sz sig f) (bits_of_value a1) (bits_of_value a2) =
     bits_of_value (tau := struct_t _) (subst_field (struct_fields sig) a1 f a2).
 Proof.
   intro sig;
