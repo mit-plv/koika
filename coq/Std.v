@@ -90,6 +90,11 @@ Module Rf (s:Rf_sig).
     | rData n => s.init
     end.
 
+  Definition name_reg r :=
+    match r with
+    | rData n => String.append "rData_" (string_of_nat (index_to_nat n))
+    end.
+
   Definition read : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun (idx : bits_t (log2 sz)) : s.T =>
     `UCompleteSwitch (log2 sz) (pred sz) "idx"
