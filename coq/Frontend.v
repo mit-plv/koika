@@ -64,7 +64,7 @@ Ltac eval_cbn x :=
 Ltac eval_hnf x :=
   let x := (eval hnf in x) in constr:(x).
 
-Ltac eval_cvb x :=
+Ltac eval_cbv x :=
   let x := (eval cbv in x) in constr:(x).
 
 Ltac eval_vm_compute x :=
@@ -92,17 +92,24 @@ Notation desugar_and_tc_action R Sigma uaction :=
   (let desugared := desugar_action dummy_pos uaction in
    type_action R Sigma dummy_pos List.nil desugared).
 
-Ltac _must_succeed tc_result :=
-  let tc_result := tc_eval_body tc_result in
-  lazymatch tc_result with
-  | Success ?action => action
-  | _ => fail "Failure"
+Definition is_success {S F} (r: result S F) :=
+  match r with
+  | Success s => true
+  | Failure f => false
   end.
+
+Definition extract_success {S F} (r: result S F) (pr: is_success r = true) :=
+  match r return is_success r = true -> S with
+  | Success s => fun _ => s
+  | Failure f => fun pr => match Bool.diff_false_true pr with end
+  end pr.
+
+Notation _must_succeed r :=
+  (extract_success r (@eq_refl bool true <: is_success r = true)).
 
 Ltac _tc_action_fast R Sigma uaction :=
   let result := constr:(desugar_and_tc_action R Sigma uaction) in
-  let typed := _must_succeed result in
-  let typed := tc_eval_body (projT2 typed) in
+  let typed := constr:(projT2 (_must_succeed result)) in
   exact typed.
 
 Arguments place_error_beacon {var_t fn_name_t reg_t ext_fn_t} / rev_target current_path a : assert.
@@ -166,9 +173,11 @@ Ltac _tc_rules R Sigma actions :=
                          ltac:(destruct r eqn:? ;
                                lazymatch goal with
                                | [ H: _ = ?rr |- _ ] =>
-                                 _tc_action R Sigma (actions rr)
+                                 (* FIXME: why does the ‘<:’ above need this hnf? *)
+                                 let action := constr:(actions rr) in
+                                 let action := (eval hnf in action) in
+                                 _tc_action R Sigma action
                                end)) in
-    let res := tc_eval_body res in
     exact res
   end.
 
