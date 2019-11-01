@@ -59,19 +59,19 @@ Notation InternalFunction R Sigma sig tau := (InternalFunction fn_name_t var_t (
 Notation register_update_circuitry R Sigma := (register_update_circuitry _ R Sigma ContextEnv).
 
 Ltac eval_cbn x :=
-  let x := (eval cbn in x) in constr:(x).
+  eval cbn in x.
 
 Ltac eval_hnf x :=
-  let x := (eval hnf in x) in constr:(x).
+  eval hnf in x.
 
 Ltac eval_cbv x :=
-  let x := (eval cbv in x) in constr:(x).
+  eval cbv in x.
 
 Ltac eval_vm_compute x :=
-  let x := (eval vm_compute in x) in constr:(x).
+  eval vm_compute in x.
 
 Ltac eval_native_compute x :=
-  let x := (eval native_compute in x) in constr:(x).
+  eval native_compute in x.
 
 Ltac tc_eval x :=
   eval_vm_compute x.
