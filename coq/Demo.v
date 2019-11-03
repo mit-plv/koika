@@ -293,9 +293,6 @@ Module Decoder (P: Unpacker) (F: Fetcher).
   Definition decoder : scheduler :=
     tc_scheduler (fetch |> decode |> done).
 
-  (* Ltac __must_typecheck R Sigma tcres ::= *)
-  (*   __must_typecheck_cbn R Sigma tcres. *)
-
   Notation rulemap_t :=
     (rule_name_t -> rule R F.Sigma).
 
