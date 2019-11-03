@@ -10,6 +10,9 @@ Require Export
         Koika.Interop
         Koika.Parsing.
 
+Notation compile_scheduler :=
+  (compile_scheduler opt_constprop).
+
 Class DummyPos pos_t := { dummy_pos: pos_t }.
 Instance DummyPos_path : DummyPos path := {| dummy_pos := PThis |}.
 Instance DummyPos_unit : DummyPos unit := {| dummy_pos := tt |}.

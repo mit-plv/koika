@@ -1631,6 +1631,11 @@ Section Thm.
 
   Context (r: ContextEnv.(env_t) R).
   Context (sigma: forall f, Sigma f).
+  Context (lco: (@local_circuit_optimizer
+                   rule_name_t reg_t ext_fn_t
+                   (CR_of_R R) (CSigma_of_Sigma Sigma)
+                   (rwdata (rule_name_t := rule_name_t) R Sigma)
+                   (csigma_of_sigma sigma))).
 
   Context (s: scheduler pos_t rule_name_t).
 
@@ -1639,15 +1644,12 @@ Section Thm.
 
     Theorem scheduler_compiler_correct:
       let spec_results := commit_update r (interp_scheduler r sigma rules s) in
-      let circuits := compile_scheduler rules s in
+      let circuits := compile_scheduler lco rules s in
       forall reg,
         interp_circuit (cr_of_r r) (csigma_of_sigma sigma) (ContextEnv.(getenv) circuits reg) =
         bits_of_value (ContextEnv.(getenv) spec_results reg).
     Proof.
-      intros;
-        unshelve eapply (compile_scheduler'_correct _ _ _ bool_simpl_lco);
-        eauto using circuit_env_equiv_CReadRegister,
-        csigma_spec_csigma_of_sigma.
+      eauto using compile_scheduler'_correct, circuit_env_equiv_CReadRegister, csigma_spec_csigma_of_sigma.
     Qed.
   End Standalone.
 End Thm.

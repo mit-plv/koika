@@ -271,11 +271,17 @@ module Compilation = struct
     Extr.type_rule Util.string_eq_dec _R _Sigma pos (Extr.desugar_action pos ast)
     |> result_of_type_result
 
+  let opt _R _Sigma =
+    let open Extr in
+    let eqb _ c1 c2 = c1 == c2 in
+    let cR, cSigma = cR_of_R _R, cSigma_of_Sigma _Sigma in
+    lco_opt_compose cR cSigma (opt_constprop cR cSigma) (opt_muxelim cR cSigma eqb)
+
   let compile (cu: 'f compile_unit) : (reg_signature -> compiled_circuit) =
     let finiteType = finiteType_of_register_list cu.c_registers in
     let rules r = List.assoc r cu.c_rules |> snd in
     let rEnv = Extr.contextEnv finiteType in
-    let env = Extr.compile_scheduler _R _Sigma finiteType rules cu.c_scheduler in
+    let env = Extr.compile_scheduler _R _Sigma finiteType (opt _R _Sigma) rules cu.c_scheduler in
     (fun r -> Extr.getenv rEnv env r)
 end
 
@@ -470,7 +476,7 @@ module Graphs = struct
     let di_regs =
       kp.koika_reg_finite.finite_elements in
     let di_circuits =
-      let cp = Extr.compile_koika_package kp in
+      let cp = Extr.compile_koika_package kp (Compilation.opt kp.koika_reg_types kp.koika_ext_fn_types) in
       fun r -> Extr.getenv cp.cp_reg_Env cp.cp_circuits r in
     let di_fn_sigs f =
       let fn_name = Util.string_of_coq_string (vp.vp_ext_fn_names f) in

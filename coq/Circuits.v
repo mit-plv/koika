@@ -121,12 +121,49 @@ Section CircuitOptimizer.
     | c => c
     end.
 
-  Fixpoint asconst {sz} (c: circuit sz) : option (list bool) :=
-    match c return option (list bool) with
-    | CAnnot annot c =>
-      asconst c
-    | CConst cst =>
-      Some (vect_to_list cst)
+  Lemma unannot_sound {REnv cr sz} :
+    forall (c: circuit sz),
+      interp_circuit (REnv := REnv) cr csigma c =
+      interp_circuit (REnv := REnv) cr csigma (unannot c).
+  Proof. induction c; eauto. Qed.
+
+Section MuxElim.
+  (** This pass implements the Mux(s, c1, c1) → c1 simplification.
+    [eqb] needs to be sound, but does not need to be complete
+    (comparing two circuits can be very costly). **)
+  Context (eqb: forall {sz}, circuit sz -> circuit sz -> bool).
+  Context (eqb_sound: forall {sz} (c1 c2: circuit sz), eqb _ c1 c2 = true -> c1 = c2).
+
+  Context {REnv: Env reg_t}.
+  Context (cr: REnv.(env_t) (fun idx => bits (CR idx))).
+
+  Definition opt_muxelim {sz} (c: circuit sz): circuit sz :=
+    match c in Circuit _ _ sz return circuit sz -> circuit sz with
+    | CMux _ c1 c2 =>
+      fun c0 => if eqb _ (unannot c1) (unannot c2) then c1 else c0
+    | _ => fun c0 => c0
+    end c.
+
+  Lemma opt_muxelim_correct :
+    forall {sz} (c: circuit sz),
+      interp_circuit cr csigma (opt_muxelim c) = interp_circuit cr csigma c.
+  Proof.
+    destruct c; simpl; try reflexivity.
+    destruct eqb eqn:Heqb.
+    - apply eqb_sound in Heqb.
+      rewrite (unannot_sound c2), (unannot_sound c3), Heqb.
+      destruct Bits.single; reflexivity.
+    - reflexivity.
+  Qed.
+End MuxElim.
+
+Section ConstProp.
+  Context {REnv: Env reg_t}.
+  Context (cr: REnv.(env_t) (fun idx => bits (CR idx))).
+
+  Definition asconst {sz} (c: circuit sz) : option (list bool) :=
+    match unannot c with
+    | CConst cst => Some (vect_to_list cst)
     | c => None
     end.
 
@@ -135,7 +172,7 @@ Section CircuitOptimizer.
 
   Instance EqDec_ListBool : EqDec (list bool) := _.
 
-  Definition simplify_bool_1' {sz} (c: circuit sz): circuit sz :=
+  Definition opt_constprop' {sz} (c: circuit sz): circuit sz :=
     match c in Circuit _ _ sz return circuit sz with
     | (CNot c) as c0 =>
       match asconst c with
@@ -171,14 +208,11 @@ Section CircuitOptimizer.
     | c => c
     end.
 
-  Definition simplify_bool_1 {sz} (c: circuit sz): circuit sz :=
+  Definition opt_constprop {sz} (c: circuit sz): circuit sz :=
     match sz as n return (circuit n -> circuit n) with
     | 0 => fun c => CConst Bits.nil
-    | _ => fun c => simplify_bool_1' c
+    | _ => fun c => opt_constprop' c
     end c.
-
-  Context {REnv: Env reg_t}.
-  Context (cr: REnv.(env_t) (fun idx => bits (CR idx))).
 
   Lemma asconst_Some :
     forall {sz} (c: circuit sz) bs,
@@ -196,12 +230,12 @@ Section CircuitOptimizer.
     apply IHc; eassumption.
   Qed.
 
-  Arguments simplify_bool_1 sz !c : assert.
+  Arguments opt_constprop sz !c : assert.
 
   Arguments EqDec_ListBool: simpl never.
-  Lemma simplify_bool_1'_correct :
+  Lemma opt_constprop'_correct :
     forall {sz} (c: circuit sz),
-      interp_circuit cr csigma (simplify_bool_1' c) = interp_circuit cr csigma c.
+      interp_circuit cr csigma (opt_constprop' c) = interp_circuit cr csigma c.
   Proof.
     induction c; cbn.
     Ltac t := match goal with
@@ -224,24 +258,29 @@ Section CircuitOptimizer.
     all: repeat t.
   Qed.
 
-  Lemma simplify_bool_1_correct :
+  Lemma opt_constprop_correct :
     forall {sz} (c: circuit sz),
-      interp_circuit cr csigma (simplify_bool_1 c) = interp_circuit cr csigma c.
+      interp_circuit cr csigma (opt_constprop c) = interp_circuit cr csigma c.
   Proof.
-    unfold simplify_bool_1; destruct sz.
+    unfold opt_constprop; destruct sz.
     - cbn; intros.
       destruct interp_circuit; reflexivity.
-    - eauto using simplify_bool_1'_correct.
+    - eauto using opt_constprop'_correct.
   Qed.
+End ConstProp.
 End CircuitOptimizer.
 
-Arguments simplify_bool_1 {rule_name_t reg_t ext_fn_t CR CSigma rwdata} [sz] c : assert.
-Arguments simplify_bool_1_correct {rule_name_t reg_t ext_fn_t CR CSigma rwdata} csigma [REnv] cr [sz] c : assert.
-Arguments lco_fn {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} l {sz} c : assert.
+Arguments opt_constprop {rule_name_t reg_t ext_fn_t CR CSigma rwdata} [sz] c : assert.
+Arguments opt_constprop_correct {rule_name_t reg_t ext_fn_t CR CSigma rwdata} csigma [REnv] cr [sz] c : assert.
+
+Arguments opt_muxelim {rule_name_t reg_t ext_fn_t CR CSigma rwdata} eqb [sz] c : assert.
+Arguments opt_muxelim_correct {rule_name_t reg_t ext_fn_t CR CSigma rwdata} csigma {eqb} eqb_sound [REnv] cr [sz] c : assert.
+
+Arguments lco_fn {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} l [sz] c : assert.
 Arguments lco_proof {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} l {REnv} cr [sz] c : assert.
 Arguments lco_compose {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} l1 l2 : assert.
 
-Section BoolLCO.
+Section LCO.
   Context {rule_name_t reg_t ext_fn_t: Type}.
 
   Context {CR: reg_t -> nat}.
@@ -250,12 +289,18 @@ Section BoolLCO.
   Context {rwdata: nat -> Type}.
   Context (csigma: forall f, CSig_denote (CSigma f)).
 
-  Definition bool_simpl_lco: @local_circuit_optimizer rule_name_t _ _ CR _ rwdata csigma :=
-    {| lco_fn := simplify_bool_1;
-       lco_proof := simplify_bool_1_correct csigma |}.
-End BoolLCO.
+  Definition lco_constprop: @local_circuit_optimizer rule_name_t _ _ CR _ rwdata csigma :=
+    {| lco_fn := opt_constprop;
+       lco_proof := opt_constprop_correct csigma |}.
 
-Arguments bool_simpl_lco {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} : assert.
+  Definition lco_muxelim eqb eqb_sound
+    : @local_circuit_optimizer rule_name_t _ _ CR _ rwdata csigma :=
+    {| lco_fn := opt_muxelim eqb;
+       lco_proof := opt_muxelim_correct csigma eqb_sound |}.
+End LCO.
+
+Arguments lco_constprop {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} : assert.
+Arguments lco_muxelim {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} {eqb} eqb_sound : assert.
 
 Section CircuitCompilation.
   Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
@@ -680,12 +725,18 @@ Section Helpers.
   Context {Sigma: ext_fn_t -> ExternalSignature}.
   Context {FiniteType_reg_t: FiniteType reg_t}.
 
+  Notation circuit :=
+    (circuit (rule_name_t := rule_name_t)
+             (rwdata := rwdata (rule_name_t := rule_name_t) R Sigma)
+             (CR_of_R R) (CSigma_of_Sigma Sigma)).
+  Context (opt: forall {sz}, circuit sz -> circuit sz).
+
   Definition compile_scheduler
              (rules: rule_name_t -> rule pos_t var_t R Sigma)
              (s: scheduler pos_t rule_name_t)
     : register_update_circuitry rule_name_t R Sigma _ :=
     let cr := ContextEnv.(create) (readRegisters R Sigma) in
-    compile_scheduler' simplify_bool_1 cr rules s.
+    compile_scheduler' opt cr rules s.
 
   Context {REnv: Env reg_t}.
   Context (r: REnv.(env_t) R).

@@ -188,9 +188,13 @@ Section Compilation.
   Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
 
   Definition compile_koika_package
-             (s: @koika_package_t pos_t var_t rule_name_t reg_t ext_fn_t) : circuit_package_t :=
+             (s: @koika_package_t pos_t var_t rule_name_t reg_t ext_fn_t)
+             (opt: let circuit sz := circuit (CR_of_R s.(koika_reg_types))
+                                            (CSigma_of_Sigma s.(koika_ext_fn_types)) sz in
+                   forall {sz}, circuit sz -> circuit sz)
+    : circuit_package_t :=
     let _ := s.(koika_reg_finite) in
-    {| cp_circuits := compile_scheduler s.(koika_rules) s.(koika_scheduler) |}.
+    {| cp_circuits := compile_scheduler opt s.(koika_rules) s.(koika_scheduler) |}.
 End Compilation.
 
 Record interop_package_t :=

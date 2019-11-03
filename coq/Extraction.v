@@ -21,6 +21,7 @@ Extraction "extracted.ml"
            TypedSyntaxTools.action_mentions_var TypedSyntaxTools.member_mentions_shadowed_binding
            TypedSyntaxTools.action_footprint
            Circuits.compile_scheduler
+           Circuits.lco_opt_compose Circuits.opt_constprop Circuits.opt_muxelim
            Interop.koika_package_t Interop.circuit_package_t Interop.sim_package_t Interop.verilog_package_t Interop.interop_package_t
            Interop.struct_of_list Interop.struct_to_list
            Interop.compile_koika_package
