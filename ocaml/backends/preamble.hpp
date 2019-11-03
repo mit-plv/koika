@@ -214,22 +214,22 @@ namespace prims {
 
   template<std::size_t sz>
   bits<1> slt(const bits<sz> x, const bits<sz> y) {
-    return shifted_sbits_of_bits(x) < shifted_sbits_of_bits(y);
+    return shifted_sbits_of_bits<sz>(x) < shifted_sbits_of_bits<sz>(y);
   }
 
   template<std::size_t sz>
   bits<1> sgt(const bits<sz> x, const bits<sz> y) {
-    return shifted_sbits_of_bits(x) > shifted_sbits_of_bits(y);
+    return shifted_sbits_of_bits<sz>(x) > shifted_sbits_of_bits<sz>(y);
   }
 
   template<std::size_t sz>
   bits<1> sle(const bits<sz> x, const bits<sz> y) {
-    return shifted_sbits_of_bits(x) <= shifted_sbits_of_bits(y);
+    return shifted_sbits_of_bits<sz>(x) <= shifted_sbits_of_bits<sz>(y);
   }
 
   template<std::size_t sz>
   bits<1> sge(const bits<sz> x, const bits<sz> y) {
-    return shifted_sbits_of_bits(x) >= shifted_sbits_of_bits(y);
+    return shifted_sbits_of_bits<sz>(x) >= shifted_sbits_of_bits<sz>(y);
   }
 
   template<std::size_t sz1, std::size_t sz2>
