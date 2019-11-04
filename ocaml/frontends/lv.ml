@@ -236,18 +236,26 @@ let in_scope_str candidates =
   | _ -> let candidates = candidates |> List.map quote |> String.concat ", " in
          sprintf "in scope: %s" candidates
 
+type 'f sexp =
+  | Atom of { loc: 'f; atom: string }
+  | List of { loc: 'f; elements: 'f sexp list }
+
+let sexp_pos = function
+  | Atom { loc; _ } | List { loc; _ } -> loc
+
 module Errors = struct
   module ParseErrors = struct
     type t =
+      | BadPosAnnot
       | SexpError of { msg: string }
-      | BadPosAnnot of { sexp: Base.Sexp.t }
       | BadBitsSize of { size: string }
       | Overflow of { numstr: string; bits: string; size: int }
 
     let to_string = function
-      | SexpError { msg } -> String.capitalize_ascii msg
-      | BadPosAnnot { sexp } ->
-         sprintf "Bad use of <>: %s" (Base.Sexp.to_string sexp)
+      | BadPosAnnot ->
+         "Bad use of <>"
+      | SexpError { msg } ->
+         String.capitalize_ascii msg
       | BadBitsSize { size } ->
          sprintf "Unparseable size annotation: %s" (quote size)
       | Overflow { numstr; bits; size } ->
@@ -618,13 +626,6 @@ let rec gather_pairs = function
 let rec list_const n x =
   if n = 0 then [] else x :: list_const (n - 1) x
 
-type 'f sexp =
-  | Atom of { loc: 'f; atom: string }
-  | List of { loc: 'f; elements: 'f sexp list }
-
-let sexp_pos = function
-  | Atom { loc; _ } | List { loc; _ } -> loc
-
 let read_all fname =
   if fname = "-" then Stdio.In_channel.input_all Stdio.stdin
   else Stdio.In_channel.read_all fname
@@ -657,33 +658,39 @@ end
 module DelayedReader_plain = DelayedReader (Parsexp.Eager)
 module DelayedReader_cst = DelayedReader (Parsexp.Eager_cst)
 
-let read_cst_sexps fname =
+let read_sexps fname =
+  let open Parsexp in
   let wrap_loc loc =
     Pos.Range (fname, range_of_sexp_range loc) in
-  let rec drop_comments (s: Parsexp.Cst.t_or_comment) =
+  let rec translate_ast (s: Cst.t_or_comment) =
     match s with
-    | Parsexp.Cst.Sexp (Parsexp.Cst.Atom { loc; atom; _ }) ->
+    | Comment _ -> None
+    | Sexp (Atom { loc; atom; _ }) ->
        Some (Atom { loc = wrap_loc loc; atom })
-    | Parsexp.Cst.Sexp (Parsexp.Cst.List { loc; elements }) ->
+    | Sexp (List { loc; elements }) ->
        Some (List { loc = wrap_loc loc;
-                    elements = Base.List.filter_map ~f:drop_comments elements })
-    | Parsexp.Cst.Comment _ -> None in
+                    elements = Base.List.filter_map ~f:translate_ast elements }) in
+  let commit_annotation annot (sexp: Pos.t sexp) =
+    match annot with
+    | None -> sexp
+    | Some loc ->
+       match sexp with
+       | Atom { atom; _ } -> Atom { loc; atom }
+       | List { elements; _ } -> List { loc; elements } in
+  let rec commit_annotations ?(annot: Pos.t option) (sexp: Pos.t sexp) =
+    commit_annotation annot
+      (match sexp with
+       | Atom _ -> sexp
+       | List { elements = [Atom { atom = "<>"; _ }; Atom { atom = annot; _ }; body]; _ } ->
+          commit_annotations ~annot:(Pos.StrPos annot) body
+       | List { elements = (Atom { atom = "<>"; _ } :: _); loc } ->
+          parse_error loc @@ BadPosAnnot
+       | List { loc; elements } ->
+          List { loc; elements = List.map (commit_annotations ?annot) elements })
+  in
   DelayedReader_cst.parse_string fname (read_all fname)
-  |> Base.List.filter_map ~f:drop_comments
-
-let read_annotated_sexps fname =
-  let rec commit_annots loc (sexp: Base.Sexp.t) =
-    match sexp with
-    | Atom atom ->
-       Atom { loc; atom }
-    | List [Atom "<>"; Atom annot; body] ->
-       commit_annots (Pos.StrPos annot) body
-    | List (Atom "<>" :: _) ->
-       parse_error (Pos.Filename fname) @@ BadPosAnnot { sexp }
-    | List elements ->
-       List { loc; elements = List.map (commit_annots loc) elements } in
-  DelayedReader_plain.parse_string fname (read_all fname)
-  |> Delay.map (commit_annots (Pos.Filename fname))
+  |> Base.List.filter_map ~f:translate_ast
+  |> Base.List.map ~f:commit_annotations
 
 let keys s =
   StringMap.fold (fun k _ acc -> k :: acc) s [] |> List.rev

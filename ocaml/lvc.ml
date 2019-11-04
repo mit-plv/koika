@@ -8,7 +8,7 @@ type backend =
 type cli_opts = {
     cli_in_fname: string;
     cli_out_fname: string;
-    cli_frontend: [`Sexps | `Annotated];
+    cli_frontend: [`LV];
     cli_backend: backend option
   }
 
@@ -84,14 +84,10 @@ let run { cli_in_fname; cli_out_fname; cli_frontend; cli_backend } : unit =
   let cli_in_fname =
     if cli_in_fname = "-" then "-"
     else Core.Filename.realpath cli_in_fname in
-  let read =
-    match cli_frontend with
-    | `Annotated -> read_annotated_sexps
-    | `Sexps -> read_cst_sexps in
   try
     let resolved, typechecked =
       Delay.with_delayed_errors (fun () ->
-          let resolved =  resolve (parse (read cli_in_fname)) in
+          let resolved =  resolve (parse (read_sexps cli_in_fname)) in
           resolved, typecheck resolved) in
     let c_unit = first_compile_unit cli_in_fname typechecked in
     print_errors_and_warnings [];
@@ -110,13 +106,12 @@ let cli =
     let%map_open
         cli_in_fname = anon ("input" %: string)
     and cli_out_fname = anon ("output" %: string)
-    and annotated = flag "--annotated" no_arg ~doc:"Recognize '<>' annotations"
     in fun () ->
        run { cli_in_fname; cli_out_fname;
-             cli_frontend = if annotated then `Annotated else `Sexps;
+             cli_frontend = `LV;
              cli_backend = backend_of_fname cli_out_fname })
 
 let _ =
   (* run { cli_in_fname = "collatz.lv"; cli_out_fname = "collatz.v";
-   *       cli_frontend = `Sexps; cli_backend = `Verilog } *)
+   *       cli_frontend = `LV; cli_backend = `Verilog } *)
   Core.Command.run cli
