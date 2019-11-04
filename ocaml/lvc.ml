@@ -67,7 +67,7 @@ let rec run_backend backend out_fname resolved c_unit =
      with_output_to_file out_fname (fun out ->
          (match backend with
           | `Dot -> Backends.Dot.main
-          | `Verilog -> Backends.Verilog.main) out graph)
+          | `Verilog -> (Backends.Verilog.main fname_prefix)) out graph)
 
 let first_compile_unit in_fname mods =
   match mods with

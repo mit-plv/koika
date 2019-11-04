@@ -15,7 +15,7 @@ let compile_simulation ?directory (kp: _ Extr.koika_package_t) (sp: _ Extr.sim_p
 let compile_circuits ?directory (kp: _ Extr.koika_package_t) (vp: _ Extr.verilog_package_t) =
   let circuit = Graphs.graph_of_verilog_package kp vp in
   writeout (fname ?directory kp ".dot") Backends.Dot.main circuit;
-  writeout (fname ?directory kp ".v") Backends.Verilog.main circuit
+  writeout (fname ?directory kp ".v") (Backends.Verilog.main (Util.string_of_coq_string kp.koika_module_name)) circuit
 
 let compile_all ?directory
       ({ ip_koika; ip_verilog; ip_sim }: Extr.interop_package_t) =

@@ -35,14 +35,15 @@ let io_decl_to_string (io_decl:io_decl) =
 
 type io_decls = io_decl list
 
-let io_from_reg (root: circuit_root) : io_decls =
+let io_from_reg ?(debug=false) (root: circuit_root) : io_decls =
   let reg_name = root.root_reg.reg_name in
   let reg_type = reg_type root.root_reg in
-  [
-    Input (reg_name ^ "__overwrite_data", typ_sz reg_type);
-    Input (reg_name ^ "__overwrite", 1);
-    Output (reg_name ^ "__data", typ_sz reg_type)
-  ]
+  if debug
+  then [Input (reg_name ^ "__overwrite_data", typ_sz reg_type);
+        Input (reg_name ^ "__overwrite", 1);
+        Output (reg_name ^ "__data", typ_sz reg_type) ]
+        else []
+
 let clock_and_reset : io_decls =
   [
     Input ("clock", 1);
@@ -303,16 +304,23 @@ let assignment_node
      end
 
 let continous_assignments
+      ?(debug=false)
       (environment: (int, string) Hashtbl.t)
       (circuit: circuit_graph)
     : continous_assignments
   =
-  (List.map (fun root -> (root.root_reg.reg_name ^ "__data", EReadRegister root.root_reg.reg_name))
-     (circuit.graph_roots)) (* Add output peek into registers *)
-    @ List.flatten @@ List.map
-      (assignment_node
-         environment)
-      circuit.graph_nodes
+  let maybe_debug = if debug then
+                      (List.map (fun root ->
+                           (root.root_reg.reg_name ^ "__data",
+                            EReadRegister root.root_reg.reg_name))
+                         (circuit.graph_roots))
+                    else []
+  in
+  maybe_debug @
+    List.flatten @@ List.map
+                      (assignment_node
+                         environment)
+                      circuit.graph_nodes
 
 
 (* Phase IV: Update of register
@@ -329,16 +337,16 @@ let continous_assignments
 type statement = Update of string  * string  * string
 (* name register, init value, net obtained by looking up the root of the register *)
 
-let statement_to_string ?(add_overwrite_finegrain=false) (statement: statement) =
+let statement_to_string ?(debug=false) (statement: statement) =
   let Update (reg, initvalue, net_update) = statement in (* Really we can do that? That's cool *)
   (* So we should compensate with something less cool: *)
-  if add_overwrite_finegrain then
+  if debug then
   "\talways @(posedge clock) begin\n\t\tif (reset) begin\n\t\t\t" ^ reg ^ " <= " ^ initvalue ^ ";\n" ^
     "\t\tend else begin\n" ^ "\t\t\tif (" ^ reg ^ "__overwrite" ^ ") begin\n" ^
       "\t\t\t\t" ^ reg ^ " <= " ^ reg ^ "__overwrite_data" ^ ";\n\t\t\tend else begin\n" ^
         "\t\t\t\t" ^ reg ^ " <= " ^ net_update ^ ";\n\t\t\tend\n\t\tend\n\tend"
   else
-    "\talways @(posedge clock) begin\n\t\tif (reset) begin\n\t\t\t" ^ reg ^ " <= " ^ reg ^ "__overwrite_data" ^ ";\n" ^
+    "\talways @(posedge clock) begin\n\t\tif (reset) begin\n\t\t\t" ^ reg ^ " <= " ^ initvalue ^ ";\n" ^
     "\t\tend else begin\n" ^
         "\t\t\t\t" ^ reg ^ " <= " ^ net_update ^ ";\n\t\t\tend\n\t\tend\n"
 
@@ -357,7 +365,7 @@ let statements
       Update (reg_name, reg_init, reg_wire_update))
     (circuit.graph_roots)
 
-let main out (circuit: circuit_graph) =
+let main (module_name: string) out (circuit: circuit_graph) =
   let environment = Hashtbl.create 50 in
   let instance_external_gensym = ref 0 in
   let io_decls = io_declarations circuit in
@@ -365,7 +373,7 @@ let main out (circuit: circuit_graph) =
   let continous_assignments = continous_assignments environment circuit in
   let string_io_decls = (List.map io_decl_to_string io_decls) in
   let statements = statements environment circuit in
-  let string_prologue = "module CompilerTest(" ^ (String.concat ",\n\t" string_io_decls) ^ ");" in (* TODO pass a name here *)
+  let string_prologue = "module " ^ module_name ^ "(" ^ (String.concat ",\n\t" string_io_decls) ^ ");" in (* TODO pass a name here *)
   let string_internal_decls = String.concat "\n" (List.map internal_decl_to_string internal_decls) in
   let string_continous_assignments = String.concat "\n" (List.map (assignment_to_string instance_external_gensym)  continous_assignments) in
   let string_statements = String.concat "\n" (List.map statement_to_string statements) in
