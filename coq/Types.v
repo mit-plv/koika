@@ -131,6 +131,18 @@ Fixpoint value_of_bits {tau: type} (bs: bits (type_sz tau)) {struct tau}: type_d
   | struct_t sig => fun bs => value_of_struct_bits bs
   end bs.
 
+Example ex__bits_of_value :=
+  Eval simpl in
+    let t := struct_t {| struct_name := "xyz";
+                        struct_fields := [("mm_typ", bits_t 2);
+                                           ("addr", bits_t 8);
+                                           ("data", bits_t 8)]%string |} in
+    let mm_typ := Ob~0~1 in
+    let mm_addr := Ob~1~1~1~1~0~0~0~0 in
+    let mm_data := Ob~1~1~0~0~1~1~0~0 in
+    bits_of_value ((mm_typ, (mm_addr, (mm_data, tt))): type_denote t).
+(* [ex__bits_of_value = Ob~0~1~1~1~1~1~0~0~0~0~1~1~0~0~1~1~0~0 : bits 18] *)
+
 Definition bits_of_value_of_bits :
   forall tau (bs: bits (type_sz tau)),
     bits_of_value (value_of_bits bs) = bs.
