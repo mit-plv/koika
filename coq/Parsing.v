@@ -68,9 +68,6 @@ Notation "'fail' '(' t ')'" :=
 Notation "'fail' '@(' t ')'" :=
   (UFail t) (in custom koika, t constr at level 0 ,format "'fail' '@(' t ')'").
 Notation "'pass'" := (USugar (UConstBits Ob)) (in custom koika).
-
-Notation "'True'" := (USugar (UConstBits Ob~1)) (in custom koika).
-Notation "'False'" := (USugar (UConstBits Ob~1)) (in custom koika).
 Notation "'magic'" := (USugar UErrorInAst) (in custom koika).
 
 Notation "'let' a ':=' b 'in' c" := (UBind a b c) (in custom koika at level 91, a custom koika_var at level 1, right associativity, format "'[v' 'let'  a  ':='  b  'in' '/' c ']'").
