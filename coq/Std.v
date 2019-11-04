@@ -111,6 +111,6 @@ Fixpoint signExtend {reg_t} (n:nat) (m:nat) : UInternalFunction reg_t empty_ext_
       fun (arg : bits_t n) : bits_t (m+n) =>
         `match (m) with
          | O => {{ arg }}
-         | S m => {{(arg[#(Bits.of_nat (log2 n) n)]) ++ {signExtend n m}(arg)}}
+         | S m => {{(arg[#(Bits.of_nat (log2 (pred n)) (pred n))]) ++ {signExtend n m}(arg)}}
          end`
   }}.
