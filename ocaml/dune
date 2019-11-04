@@ -1,6 +1,6 @@
 (executable
- (name lvc)
- (modules lvc)
+ (name cuttlec)
+ (modules cuttlec)
  (preprocess (pps ppx_jane))
  (libraries str zarith core common cuttlebone frontends backends))
 

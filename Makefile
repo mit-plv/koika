@@ -25,20 +25,20 @@ PHONY += coq coq-all
 #########
 
 COQ_DEMO_EXE := ${BUILD_DIR}/ocaml/demo.exe
-LVC_EXE := ${BUILD_DIR}/ocaml/lvc.exe
+CUTTLEC_EXE := ${BUILD_DIR}/ocaml/cuttlec.exe
 
 # FIXME: remove the @echo line below once the fix to
 # https://github.com/ocaml/dune/issues/138 is released
 # FIXME: The coq dependency is because dune doesn't track the dependency on
 # Extraction.vo at the moment.
 ocaml-executables: coq
-	dune build ocaml/demo.exe ocaml/demo.bc ocaml/lvc.exe ocaml/lvc.bc
+	dune build ocaml/demo.exe ocaml/demo.bc ocaml/cuttlec.exe ocaml/cuttlec.bc
 	@echo Leaving directory \`$(abspath $(dir $(lastword $(PWD))))\'
 
 # This prevents make from running two instances of Dune in parallel
-${COQ_DEMO_EXE} ${LVC_EXE}: ocaml-executables;
+${COQ_DEMO_EXE} ${CUTTLEC_EXE}: ocaml-executables;
 
-ocaml: ${COQ_DEMO_EXE} ${LVC_EXE}
+ocaml: ${COQ_DEMO_EXE} ${CUTTLEC_EXE}
 
 PHONY += ocaml ocaml-executables
 
@@ -54,11 +54,11 @@ LV_TESTS_TARGETS := $(patsubst %.lv,%.lv.objects/${COOKIE},${LV_TESTS})
 COQ_DEMO_TARGET := examples/demo.v.objects
 
 # ‘cd ocaml’ because cpp.ml needs to run from one specific directory
-%.lv.objects/${COOKIE}: %.lv ${LVC_EXE}
+%.lv.objects/${COOKIE}: %.lv ${CUTTLEC_EXE}
 	mkdir -p "$<.objects"
 	cd ocaml/; \
 		> "../$<.objects/stderr" \
-		../${LVC_EXE} "../$<" "../$<.objects/$(notdir $*).all" || true
+		../${CUTTLEC_EXE} "../$<" "../$<.objects/$(notdir $*).all" || true
 	touch "$<.objects/${COOKIE}"
 
 ${COQ_DEMO_TARGET}: ${COQ_DEMO_EXE}
