@@ -218,7 +218,7 @@ let assignment_to_string (gensym: int ref) (assignment: assignment) =
        | Compare (signed, cmp, _sz) ->
           let cast = Printf.sprintf (if signed then "$signed(%s)" else "%s") in
           let op = match cmp with CLt -> "<" | CGt -> ">" | CLe -> "<=" | CGe -> ">=" in
-          Printf.sprintf "%s %s %s" (cast arg1) op (cast arg2)
+          Printf.sprintf "\tassign %s = %s %s %s" lhs (cast arg1) op (cast arg2)
        | Sel _ -> default_left ^ arg1 ^ "[" ^ arg2 ^ "]"
        | PartSubst (sz, offset, slice_sz) ->
           if (offset > 0) then
