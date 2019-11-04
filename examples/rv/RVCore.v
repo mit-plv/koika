@@ -378,9 +378,9 @@ Module  RV32ICore.
   (* Define types *)
   Definition mem_op :=
     {| enum_name := "mem_op";
-       enum_bitsize := 2;
+       enum_bitsize := 1;
        enum_members := vect_of_list ["Ld"; "St"];
-       enum_bitpatterns := vect_of_list [Bits.of_nat 2 0; Bits.of_nat 2 1]
+       enum_bitpatterns := vect_of_list [Bits.of_nat 1 0; Bits.of_nat 1 1]
     |}.
 
   Definition mem_req :=
@@ -643,18 +643,28 @@ Module  RV32ICore.
   Time Definition tc_writeback :=
     tc_action R empty_Sigma writeback.
 
-  (* Inductive rules_core := Fetch | Decode | Execute | Writeback. *)
+  Definition external_environment : uaction reg_t empty_ext_fn_t :=
+    {{
+        let readRequestI := toIMem.(MemReq.deq)() in
+        let readRequestD := toDMem.(MemReq.deq)() in
+        fromIMem.(MemResp.enq)(struct mem_resp {|type := enum mem_op {| Ld |} ; addr := |32`d0|; data := |32`d0| |});
+        fromDMem.(MemResp.enq)(struct mem_resp {|type := enum mem_op {| Ld |} ; addr := |32`d0|; data := |32`d0| |})
+    }}.
+
+  Time Definition tc_external :=
+    tc_action R empty_Sigma external_environment.
 
   Definition rules (rl:nat) : rule R empty_Sigma:=
     match rl with
     | O => tc_fetch
     | 1 => tc_decode
     | 2 => tc_execute
-    | _ => tc_writeback
+    | 3 => tc_writeback
+    | _ => tc_external
     end.
 
   Definition rv_core : scheduler :=
-    tc_scheduler (3 |> 2 |> 1 |> 0 |> done).
+    tc_scheduler (4 |> 3 |> 2 |> 1 |> 0 |>  done).
 
   Instance FiniteType_toIMem : FiniteType MemReq.reg_t := _.
   Instance FiniteType_fromIMem : FiniteType MemResp.reg_t := _.
@@ -667,7 +677,7 @@ Module  RV32ICore.
   Instance FiniteType_scoreboard_rf : FiniteType Scoreboard.Rf.reg_t := _.
   Instance FiniteType_scoreboard : FiniteType Scoreboard.reg_t := _.
   Instance FiniteType_reg_t : FiniteType reg_t := _.
-
+  Definition test := Eval compute in  action_registers (EQ := EqDec_FiniteType) tc_external.
   Definition cr := ContextEnv.(create) r.
 
   Definition circuits :=
@@ -697,7 +707,8 @@ Module  RV32ICore.
                              | O => "fetch"
                              | 1 => "decode"
                              | 2 => "execute"
-                             | _ => "writeback"
+                             | 3 => "writeback"
+                             | _ => "external"
                          end;
        koika_scheduler := rv_core;
        koika_module_name := "rv_core" |}.
@@ -707,8 +718,8 @@ Module  RV32ICore.
        ip_sim := {| sp_var_names x := x;
                    sp_ext_fn_names := empty_fn_names;
                    sp_extfuns := None |};
-       ip_verilog := {| vp_external_rules := List.nil;
-                       vp_ext_fn_names := empty_fn_names |} |}.
+       ip_verilog := {| vp_external_rules := [4];
+                        vp_ext_fn_names := empty_fn_names |} |}.
 
 End RV32ICore.
 
