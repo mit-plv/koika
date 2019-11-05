@@ -22,7 +22,7 @@ Declare Custom Entry koika_consts.
 
 (* Koika_consts *)
 Notation "bs1 '~' bs2" :=
-  (Bits.app bs2 bs1)
+  (Bits.app bs1 bs2)
     (in custom koika_consts at level 7, right associativity, format "bs1 '~' bs2").
 Notation "'1'" :=
   (Bits.ones 1)
