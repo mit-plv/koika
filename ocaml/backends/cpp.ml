@@ -838,7 +838,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
       and p_assign_and_ignore target expr =
         ignore (p_assign_expr target expr) in
 
-      p_fn ~typ:"bool" ~name:(hpp.cpp_rule_names rule.rl_name) (fun () ->
+      p_fn ~typ:"virtual bool" ~name:(hpp.cpp_rule_names rule.rl_name) (fun () ->
           p_reset ();
           nl ();
           p_assign_and_ignore NoTarget (p_action Pos.Unknown NoTarget rule.rl_body);
@@ -887,7 +887,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
         p_state_t ();
         nl ();
 
-        p "private:";
+        p "protected:";
         p_log_t ();
         nl ();
         p "log_t Log;";
