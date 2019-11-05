@@ -249,11 +249,9 @@ let cpp_bits2_fn_name (f: Extr.PrimTyped.fbits2) =
           (match cmp with CLt -> "lt" | CGt -> "gt" | CLe -> "le" | CGe -> "ge")
           sz)
 
-let cpp_get_preamble () =
-  let inc = open_in "backends/preamble.hpp" in
-  let preamble = really_input_string inc (in_channel_length inc) in
-  close_in inc;
-  preamble
+let cpp_preamble =
+  (* cppPreamble.ml is auto-generated from preamble.hpp *)
+  CppPreamble.preamble
 
 let reconstruct_switch action =
   let rec loop v = function
@@ -560,7 +558,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     if program_info.pi_needs_multiprecision then (
       p "#define NEEDS_BOOST_MULTIPRECISION";
       nl ());
-    p "%s" (cpp_get_preamble ());
+    p "%s" cpp_preamble;
   in
 
   let iter_registers f regs =

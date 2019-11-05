@@ -2,3 +2,8 @@
  (name backends)
  (public_name koika.backends)
  (libraries str unix zarith common cuttlebone frontends))
+
+(rule
+ (deps preamble.hpp gen.ml)
+ (targets cppPreamble.ml)
+ (action (run ocaml str.cma gen.ml)))
