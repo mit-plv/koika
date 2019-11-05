@@ -65,7 +65,7 @@ Section RV32IHelpers.
                               funct3 := inst[|5`d12| :+ 3];
                               funct7 := inst[|5`d25| :+ 7];
                               funct5 := inst[|5`d27| :+ 5];
-                              funct2 := inst[|5`d26| :+ 2];
+                              funct2 := inst[|5`d25| :+ 2];
                               rd     := inst[|5`d7| :+ 5];
                               rs1    := inst[|5`d15| :+ 5];
                               rs2    := inst[|5`d20| :+ 5];
@@ -97,11 +97,11 @@ Section RV32IHelpers.
           match get(fields, opcode) with
           | #opcode_LOAD =>
             match get(fields, funct3) with
-            | #funct3_LB  => Ob~1
-            | #funct3_LH  => Ob~1
+            (* | #funct3_LB  => Ob~1 *)
+            (* | #funct3_LH  => Ob~1 *)
             | #funct3_LW  => Ob~1
-            | #funct3_LBU => Ob~1
-            | #funct3_LHU => Ob~1
+            (* | #funct3_LBU => Ob~1 *)
+            (* | #funct3_LHU => Ob~1 *)
             return default: Ob~0
             end
           | #opcode_OP_IMM =>
@@ -124,8 +124,8 @@ Section RV32IHelpers.
           | #opcode_AUIPC => Ob~1
           | #opcode_STORE =>
             match get(fields, funct3) with
-            | #funct3_SB => Ob~1
-            | #funct3_SH => Ob~1
+            (* | #funct3_SB => Ob~1 *)
+            (* | #funct3_SH => Ob~1 *)
             | #funct3_SW => Ob~1
             return default: Ob~0
             end
@@ -177,14 +177,11 @@ Section RV32IHelpers.
         fun (inst : bits_t 32) : maybe (enum_t imm_type) =>
           match (inst[|5`d2|:+5]) with
           | #opcode_LOAD[|3`d2|:+5]      => {valid (enum_t imm_type)}(enum imm_type {| ImmI |})
-          | #opcode_LOAD_FP[|3`d2|:+5]   => {valid (enum_t imm_type)}(enum imm_type {| ImmI |})
           | #opcode_OP_IMM[|3`d2|:+5]    => {valid (enum_t imm_type)}(enum imm_type {| ImmI |})
-          | #opcode_OP_IMM_32[|3`d2|:+5] => {valid (enum_t imm_type)}(enum imm_type {| ImmI |})
           | #opcode_JALR[|3`d2|:+5]      => {valid (enum_t imm_type)}(enum imm_type {| ImmI |})
           | #opcode_AUIPC[|3`d2|:+5]     => {valid (enum_t imm_type)}(enum imm_type {| ImmU |})
           | #opcode_LUI[|3`d2|:+5]       => {valid (enum_t imm_type)}(enum imm_type {| ImmU |})
           | #opcode_STORE[|3`d2|:+5]     => {valid (enum_t imm_type)}(enum imm_type {| ImmS |})
-          | #opcode_STORE_FP[|3`d2|:+5]  => {valid (enum_t imm_type)}(enum imm_type {| ImmS |})
           | #opcode_BRANCH[|3`d2|:+5]    => {valid (enum_t imm_type)}(enum imm_type {| ImmB |})
           | #opcode_JAL[|3`d2|:+5]       => {valid (enum_t imm_type)}(enum imm_type {| ImmJ |})
           return default: {invalid (enum_t imm_type)}()
@@ -233,7 +230,7 @@ Section RV32IHelpers.
           end
     }}.
 
-  Definition decode : UInternalFunction reg_t empty_ext_fn_t :=
+  Definition decode_fun : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun (arg_inst : bits_t 32) : struct_t decoded_sig =>
            struct decoded_sig {|
                     valid_rs1     := usesRS1 (arg_inst);
@@ -341,7 +338,7 @@ Section RV32IHelpers.
           let funct3    := get(getFields(inst), funct3) in
           let taken     := Ob~1 in  (* // for JAL and JALR *)
           let nextPC    := incPC in
-          (if (!isControl) then
+          if (!isControl) then
              set taken  := Ob~0;
              set nextPC := incPC
           else
@@ -353,7 +350,7 @@ Section RV32IHelpers.
                 set taken  := Ob~1;
                 set nextPC := ((rs1_val + imm_val) && !|32`d1|)
               else
-                set taken := match (funct3) with
+                ((set taken := match (funct3) with
                              | #funct3_BEQ  => (rs1_val == rs2_val)
                              | #funct3_BNE  => !(rs1_val == rs2_val)
                              | #funct3_BLT  => rs1_val <s rs2_val
@@ -362,10 +359,10 @@ Section RV32IHelpers.
                              | #funct3_BGEU => !(rs1_val < rs2_val)
                              return default: Ob~0
                              end);
-        (if (taken) then
-          set nextPC := (pc + imm_val)
-        else
-          set nextPC := incPC);
+                 if (taken) then
+                   set nextPC := (pc + imm_val)
+                 else
+                   set nextPC := incPC);
         struct control_result {| taken  := taken;
                                  nextPC := nextPC |}
     }}.
@@ -495,7 +492,7 @@ Module  RV32ICore.
     | d2e s => fromDecode.r s
     | e2w s => fromExecute.r s
     | scoreboard s => Scoreboard.r s
-    | pc => Bits.zeroes _
+    | pc => Ob~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0
     | epoch => Bits.zeroes _
     end.
 
@@ -512,6 +509,7 @@ Module  RV32ICore.
                                           epoch := read0(epoch)
                                         |} in
         toIMem.(MemReq.enq)(req);
+        write0(pc, pc + |32`d4|);
         f2d.(fromFetch.enq)(fetch_bookkeeping)
     }}.
 
@@ -527,7 +525,7 @@ Module  RV32ICore.
         let instr := fromIMem.(MemResp.deq)() in
         let instr := get(instr,data) in
         let fetched_bookeeping := f2d.(fromFetch.deq)() in
-        let decodedInst := decode(instr) in
+        let decodedInst := decode_fun(instr) in
         when (get(fetched_bookeeping, epoch) == read0(epoch)) do
              (let rs1_idx := get(getFields(instr), rs1) in
              let rs2_idx := get(getFields(instr), rs2) in
@@ -539,20 +537,20 @@ Module  RV32ICore.
                  set score := (score + scoreboard.(Scoreboard.search)(rs2_idx))
                else pass;
              guard (score == Ob~0~0);
-             when (get(decodedInst, valid_rd)) do
+             (when (get(decodedInst, valid_rd)) do
                   let rd_idx := get(getFields(instr), rd) in
-                  scoreboard.(Scoreboard.insert)(rd_idx);
-                  let rs1 := rf.(Rf.read)(rs1_idx) in
-                  let rs2 := rf.(Rf.read)(rs2_idx) in
-                  let decode_bookkeeping := struct decode_bookkeeping {|
-                                                     pc    := get(fetched_bookeeping, pc);
-                                                     ppc   := get(fetched_bookeeping, ppc);
-                                                     epoch := get(fetched_bookeeping, epoch);
-                                                     dInst := decodedInst;
-                                                     rval1   := rs1;
-                                                     rval2   := rs2
-                                                   |} in
-                  d2e.(fromDecode.enq)(decode_bookkeeping))
+                  scoreboard.(Scoreboard.insert)(rd_idx));
+             let rs1 := rf.(Rf.read)(rs1_idx) in
+             let rs2 := rf.(Rf.read)(rs2_idx) in
+             let decode_bookkeeping := struct decode_bookkeeping {|
+                                                pc    := get(fetched_bookeeping, pc);
+                                                ppc   := get(fetched_bookeeping, ppc);
+                                                epoch := get(fetched_bookeeping, epoch);
+                                                dInst := decodedInst;
+                                                rval1 := rs1;
+                                                rval2 := rs2
+                                              |} in
+             d2e.(fromDecode.enq)(decode_bookkeeping))
     }}.
 
   Definition tc_decode:=
@@ -594,11 +592,18 @@ Module  RV32ICore.
              if (isMemoryInst(dInst)) then
                let addr := rs1_val + imm in
                set data := rs2_val;
-                           let req := struct mem_req {|
-                                               type := enum mem_op {| Ld |};
-                                               addr := addr;
-                                               data := data |} in
-                           toDMem.(MemReq.enq)(req)
+               if (!(addr[|5`d0| :+ 2] == Ob~0~0)) then
+                 fail
+               else
+                 pass;
+               let type_mem := if (fInst[|5`d5|] == Ob~1)
+                              then enum mem_op {| St |}
+                              else enum mem_op {| Ld |} in
+               let req := struct mem_req {|
+                                   type := type_mem;
+                                   addr := addr;
+                                   data := data |} in
+               toDMem.(MemReq.enq)(req)
              else if (isControlInst(dInst)) then
                     set data := (pc + |32`d4|)     (* For jump and link *)
                   else pass;
@@ -635,7 +640,9 @@ Module  RV32ICore.
         if get(dInst,valid_rd) then
           let rd_idx := get(fields,rd) in
           scoreboard.(Scoreboard.remove)(rd_idx);
-          rf.(Rf.write)(rd_idx,data)
+          if (rd_idx == |5`d0|)
+          then pass
+          else rf.(Rf.write)(rd_idx,data)
         else
           pass
     }}.
@@ -643,16 +650,27 @@ Module  RV32ICore.
   Time Definition tc_writeback :=
     tc_action R empty_Sigma writeback.
 
-  Definition external_environment : uaction reg_t empty_ext_fn_t :=
+  Definition externalI_environment : uaction reg_t empty_ext_fn_t :=
     {{
         let readRequestI := toIMem.(MemReq.deq)() in
-        let readRequestD := toDMem.(MemReq.deq)() in
-        fromIMem.(MemResp.enq)(struct mem_resp {|type := enum mem_op {| Ld |} ; addr := |32`d0|; data := |32`d0| |});
-        fromDMem.(MemResp.enq)(struct mem_resp {|type := enum mem_op {| Ld |} ; addr := |32`d0|; data := |32`d0| |})
+        let IAddress := get(readRequestI, addr) in
+        let IType := get(readRequestI, type) in
+        fromIMem.(MemResp.enq)(struct mem_resp {|type := IType ; addr := IAddress; data := |32`d0| |})
     }}.
 
-  Time Definition tc_external :=
-    tc_action R empty_Sigma external_environment.
+  Time Definition tc_externalI :=
+    tc_action R empty_Sigma externalI_environment.
+
+  Definition externalD_environment : uaction reg_t empty_ext_fn_t :=
+    {{
+        let readRequestD := toDMem.(MemReq.deq)() in
+        let DAddress := get(readRequestD, addr) in
+        let DType := get(readRequestD, type) in
+        fromDMem.(MemResp.enq)(struct mem_resp {|type := DType ; addr := DAddress; data := |32`d0| |})
+    }}.
+
+  Time Definition tc_externalD :=
+    tc_action R empty_Sigma externalD_environment.
 
   Definition rules (rl:nat) : rule R empty_Sigma:=
     match rl with
@@ -660,11 +678,12 @@ Module  RV32ICore.
     | 1 => tc_decode
     | 2 => tc_execute
     | 3 => tc_writeback
-    | _ => tc_external
+    | 4 => tc_externalI
+    | _ => tc_externalD
     end.
 
   Definition rv_core : scheduler :=
-    tc_scheduler (4 |> 3 |> 2 |> 1 |> 0 |>  done).
+    tc_scheduler (5 |> 4 |> 3 |> 2 |> 1 |> 0 |>  done).
 
   Instance FiniteType_toIMem : FiniteType MemReq.reg_t := _.
   Instance FiniteType_fromIMem : FiniteType MemResp.reg_t := _.
@@ -677,8 +696,14 @@ Module  RV32ICore.
   Instance FiniteType_scoreboard_rf : FiniteType Scoreboard.Rf.reg_t := _.
   Instance FiniteType_scoreboard : FiniteType Scoreboard.reg_t := _.
   Instance FiniteType_reg_t : FiniteType reg_t := _.
-  Definition test := Eval compute in  action_registers (EQ := EqDec_FiniteType) tc_external.
   Definition cr := ContextEnv.(create) r.
+
+
+  Definition debug a :uaction reg_t empty_ext_fn_t:= a.
+
+  (* Definition tc_debug :=  tc_action R empty_Sigma (debug {{ Ob~1~1 }} ). *)
+  (*   Eval vm_compute in (interp_action *)
+  (*                        cr empty_sigma CtxEmpty log_empty log_empty tc_debug). *)
 
   Definition circuits :=
     compile_scheduler rules rv_core.
@@ -708,7 +733,8 @@ Module  RV32ICore.
                              | 1 => "decode"
                              | 2 => "execute"
                              | 3 => "writeback"
-                             | _ => "external"
+                             | 4 => "externalI"
+                             | _ => "externalD"
                          end;
        koika_scheduler := rv_core;
        koika_module_name := "rv_core" |}.
@@ -725,5 +751,3 @@ End RV32ICore.
 
 Definition prog := Interop.Backends.compile_all RV32ICore.package.
 Extraction "rv32icore.ml" prog.
-
-(* TODO check execCOntrol32 *)
