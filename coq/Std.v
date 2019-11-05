@@ -92,7 +92,7 @@ Module Rf (s:Rf_sig).
 
   Definition name_reg r :=
     match r with
-    | rData n => String.append "rData_" (string_of_nat (index_to_nat n))
+    | rData n => String.append "rData_" (show n)
     end.
 
   Definition read : UInternalFunction reg_t empty_ext_fn_t :=

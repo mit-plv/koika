@@ -8,7 +8,8 @@ Require Export
         Koika.UntypedSyntaxTools
         Koika.TypedSyntaxTools
         Koika.Interop
-        Koika.Parsing.
+        Koika.Parsing
+        Koika.DeriveShow.
 
 Notation compile_scheduler :=
   (compile_scheduler opt_constprop).

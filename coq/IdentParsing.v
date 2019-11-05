@@ -11,15 +11,6 @@ Open Scope list.
 Ltac2 compute c :=
   Std.eval_vm None c.
 
-Ltac2 rec coq_list_of_list fn ls :=
-  match ls with
-  | [] => constr:(@List.nil bool)
-  | h :: t =>
-    let ch := fn h in
-    let ct := coq_list_of_list fn t in
-    constr:($ch :: $ct)
-  end.
-
 Ltac2 rec array_blit_list pos ls arr :=
   match ls with
   | [] => ()
@@ -43,7 +34,7 @@ Module Safe.
         end in
     to_list (constr:(@List.nil $type)) (String.length s).
 
-  Ltac2 coq_string_of_string coq_string_of_coq_list type coq_of_char s :=
+  Ltac2 coq_string_of_string' coq_string_of_coq_list type coq_of_char s :=
     let bs := string_to_coq_list type coq_of_char s in
     compute constr:($coq_string_of_coq_list $bs).
 End Safe.
@@ -67,7 +58,7 @@ Module Unsafe.
     | Err exn => Control.throw exn
     end.
 
-  Ltac2 coq_string_of_string coq_string_of_coq_list type coq_of_char s :=
+  Ltac2 coq_string_of_string' coq_string_of_coq_list type coq_of_char s :=
     let bs := string_to_coq_list type coq_of_char s in
     compute constr:($coq_string_of_coq_list $bs).
 End Unsafe.
@@ -92,7 +83,7 @@ Module Linear.
     String.string_of_list_ascii (List.map Ascii.ascii_of_N list_N).
 
   Ltac2 coq_string_of_string s :=
-    coq_string_of_string constr:(string_of_list_N) constr:(N) (fun c => int_to_coq_N (Char.to_int c)) s.
+    coq_string_of_string' constr:(string_of_list_N) constr:(N) (fun c => int_to_coq_N (Char.to_int c)) s.
 End Linear.
 
 Module TestBits.
@@ -149,7 +140,7 @@ Module TestBitsBytes.
          compute constr:(Byte.of_bits ($b7, ($b6, ($b5, ($b4, ($b3, ($b2, ($b1, $b0))))))))).
 
   Ltac2 coq_string_of_string s :=
-    coq_string_of_string constr:(string_of_list_byte) constr:(Byte.byte) coq_byte_of_char s.
+    coq_string_of_string' constr:(string_of_list_byte) constr:(Byte.byte) coq_byte_of_char s.
 End TestBitsBytes.
 
 Module TestBitsAscii.
@@ -162,7 +153,7 @@ Module TestBitsAscii.
          constr:(Ascii.Ascii $b0 $b1 $b2 $b3 $b4 $b5 $b6 $b7)).
 
   Ltac2 coq_string_of_string s :=
-    coq_string_of_string constr:(string_of_list_ascii) constr:(Ascii.ascii) coq_ascii_of_char s.
+    coq_string_of_string' constr:(string_of_list_ascii) constr:(Ascii.ascii) coq_ascii_of_char s.
 End TestBitsAscii.
 
 Module LookupTable.
@@ -242,7 +233,7 @@ Module LookupTable.
 
   Ltac2 coq_string_of_string s :=
     let table := bytes_table () in
-    coq_string_of_string constr:(string_of_list_byte) constr:(Byte.byte) (byte_of_char table) s.
+    coq_string_of_string' constr:(string_of_list_byte) constr:(Byte.byte) (byte_of_char table) s.
 End LookupTable.
 
 Module Benchmarking.
@@ -276,11 +267,13 @@ Inductive __Ltac2_IdentMarker := __Ltac2_Mark.
 
 Ltac2 Type exn ::= [ NoIdentInContext ].
 
+Ltac2 coq_string_of_string := LookupTable.coq_string_of_string.
+Ltac2 coq_string_of_ident x := LookupTable.coq_string_of_string (Ident.to_string x).
+
 Ltac serialize_ident_in_context :=
   ltac2:(match! goal with
   | [ h: __Ltac2_IdentMarker |- _ ] =>
-    let ident_string := Ident.to_string h in
-    let coq_string := LookupTable.coq_string_of_string ident_string in
+    let coq_string := coq_string_of_ident h in
     exact ($coq_string)
   | [  |- _ ] => Control.throw NoIdentInContext
   end).

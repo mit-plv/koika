@@ -200,6 +200,7 @@ Module Collatz.
 
   Definition circuits_result :=
     Eval compute in interp_circuits (ContextEnv.(create) r) empty_sigma circuits.
+
   Definition koika_package :=
     {| koika_reg_types := R;
        koika_reg_init := r;
@@ -207,15 +208,10 @@ Module Collatz.
 
        koika_ext_fn_types := empty_Sigma;
 
-       koika_reg_names r := match r with
-                         | R0 => "r0"
-                         end;
+       koika_reg_names := show;
 
        koika_rules := rules;
-       koika_rule_names r := match r with
-                         | divide => "divide"
-                         | multiply => "multiply"
-                         end;
+       koika_rule_names := show;
 
        koika_scheduler := collatz;
        koika_module_name := "collatz" |}.
@@ -304,22 +300,15 @@ Module Decoder (P: Unpacker) (F: Fetcher).
 
            koika_ext_fn_types := F.Sigma;
 
-           koika_reg_names r := match r with
-                             | Rpc => "Rpc"
-                             | Rencoded => "Rencoded"
-                             | Rdecoded => "Rdecoded"
-                             end;
+           koika_reg_names := show;
 
            koika_rules := rules;
-           koika_rule_names r := match r with
-                             | decode => "decode"
-                             | fetch => "fetch"
-                             end;
+           koika_rule_names := show;
 
            koika_scheduler := decoder;
            koika_module_name := modname |} in
     let sim :=
-        {| sp_var_names := fun x => x;
+        {| sp_var_names x := x;
            sp_ext_fn_names := F.ext_fn_names;
 
            sp_extfuns := Some "#include ""../demo.extfuns.hpp""
@@ -543,21 +532,12 @@ Module Pipeline.
     {| koika_reg_types := R;
        koika_reg_init reg := r reg;
        koika_reg_finite := _;
-       koika_reg_names reg := match reg with
-                           | r0 => "r0"
-                           | outputReg => "outputReg"
-                           | inputReg => "inputReg"
-                           | invalid => "invalid"
-                           | correct => "correct"
-                           end;
+       koika_reg_names := show;
 
        koika_ext_fn_types := Sigma;
 
        koika_rules := rules;
-       koika_rule_names r := match r with
-                          | doF => "doF"
-                          | doG => "doG"
-                          end;
+       koika_rule_names := show;
 
        koika_scheduler := Pipeline;
        koika_module_name := "pipeline"
@@ -565,7 +545,7 @@ Module Pipeline.
 
   Definition package :=
     {| ip_koika := koika_package;
-       ip_sim := {| sp_var_names := fun x => x;
+       ip_sim := {| sp_var_names x := x;
                     sp_ext_fn_names := fn_names;
                     sp_extfuns := Some "#include ""../demo.extfuns.hpp""
 using extfuns = pipeline_extfuns;" |}       ;
@@ -655,18 +635,12 @@ Module RegisterFile_Ordered.
     {| koika_reg_types := R;
        koika_reg_init reg := r reg;
        koika_reg_finite := _;
-       koika_reg_names reg := match reg with
-                           | rIndex => "rIndex"
-                           | rData n => String.append "rData" (string_of_nat (index_to_nat n))
-                           | rOutput => "rOutput"
-                           end;
+       koika_reg_names := show;
 
        koika_ext_fn_types := empty_Sigma;
 
        koika_rules := rules;
-       koika_rule_names r := match r with
-                          | _ReadReg => "read_reg"
-                          end;
+       koika_rule_names := show;
 
        koika_scheduler := regfile;
        koika_module_name := "regfile_ordered"
@@ -674,11 +648,11 @@ Module RegisterFile_Ordered.
 
   Definition package :=
     {| ip_koika := koika_package;
-       ip_sim := {| sp_var_names := fun x => x;
+       ip_sim := {| sp_var_names x := x;
                     sp_ext_fn_names := empty_fn_names;
                     sp_extfuns := None |};
        ip_verilog := {| vp_external_rules := List.nil;
-                        vp_ext_fn_names := empty_fn_names |} |}.
+                       vp_ext_fn_names := empty_fn_names |} |}.
 End RegisterFile_Ordered.
 
 Module Enums.
@@ -738,17 +712,12 @@ Module Enums.
     {| koika_reg_types := R;
        koika_reg_init := r;
        koika_reg_finite := _;
-       koika_reg_names r := match r with
-                         | rA => "rA"
-                         | rB => "rB"
-                         end;
+       koika_reg_names := show;
 
        koika_ext_fn_types := empty_Sigma;
 
        koika_rules := rules;
-       koika_rule_names r := match r with
-                          | _Incr => "incr"
-                          end;
+       koika_rule_names := show;
 
        koika_scheduler := enum_scheduler;
        koika_module_name := "enums"
@@ -756,7 +725,7 @@ Module Enums.
 
   Definition package :=
     {| ip_koika := koika_package;
-       ip_sim := {| sp_var_names := fun x => x;
+       ip_sim := {| sp_var_names x := x;
                     sp_ext_fn_names := empty_fn_names;
                     sp_extfuns := None |};
        ip_verilog := {| vp_external_rules := List.nil;
@@ -844,18 +813,12 @@ Module IntCall.
     {| koika_reg_types := R;
        koika_reg_init := r;
        koika_reg_finite := _;
-       koika_reg_names r := match r with
-                         | rA => "rA"
-                         | rDelay1 buffer => "rd1_buffer"
-                         | rDelay2 buffer => "rd2_buffer"
-                         end;
+       koika_reg_names := show;
 
        koika_ext_fn_types := empty_Sigma;
 
        koika_rules := rules;
-       koika_rule_names r := match r with
-                          | _rl => "rl"
-                          end;
+       koika_rule_names := show;
 
        koika_scheduler := sched;
        koika_module_name := "intfn"
@@ -863,7 +826,7 @@ Module IntCall.
 
   Definition package :=
     {| ip_koika := koika_package;
-       ip_sim := {| sp_var_names := fun x => x;
+       ip_sim := {| sp_var_names x := x;
                     sp_ext_fn_names := empty_fn_names;
                     sp_extfuns := None |};
        ip_verilog := {| vp_external_rules := List.nil;
@@ -938,22 +901,15 @@ Module ExternallyCompiledRule.
 
            koika_ext_fn_types := empty_Sigma;
 
-           koika_reg_names r := match r with
-                              | Rdata => "Rdata"
-                              | Mem => "Mem"
-                              | MyFifo s => String.append "MyFifo" (Fifo5.name_reg s)
-                             end;
+           koika_reg_names := show;
 
            koika_rules := rules;
-           koika_rule_names r := match r with
-                             | ding => "ding"
-                             | fetch => "fetch"
-                             end;
+           koika_rule_names := show;
 
            koika_scheduler := bring;
            koika_module_name := "externalMemory" |}.
   Definition sim :=
-    {| sp_var_names := fun x => x;
+    {| sp_var_names x := x;
        sp_ext_fn_names := empty_fn_names;
        sp_extfuns := None |}.
   Definition verilog :=
@@ -1067,34 +1023,17 @@ Definition gcd_start : uaction reg_t ext_fn_t  :=
 
            koika_ext_fn_types := empty_Sigma;
 
-           koika_reg_names r := match r with
-                              | input_data =>
-                                "input_data"
-                              | input_valid =>
-                                "input_valid"
-                              | gcd_busy =>
-                                "gcd_busy"
-                              | gcd_a =>
-                                "gcd_a"
-                              | gcd_b =>
-                                "gcd_b"
-                              | output_data =>
-                                "output_data"
-                             end;
+           koika_reg_names := show;
 
            koika_rules := rules;
-           koika_rule_names r := match r with
-                               | start => "start"
-                               | step_compute => "step"
-                               | get_result => "gcd_getresult" end;
-
+           koika_rule_names := show;
 
            koika_scheduler := bring;
            koika_module_name := "externalMemory" |}.
 
   Definition package :=
     {| ip_koika := koika_package;
-       ip_sim := {| sp_var_names := fun x => x;
+       ip_sim := {| sp_var_names x := x;
                    sp_ext_fn_names := empty_fn_names;
                    sp_extfuns := None |};
        ip_verilog := {| vp_external_rules := nil;

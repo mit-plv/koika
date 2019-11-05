@@ -147,3 +147,6 @@ Proof.
   - cbn; omega.
   - specialize (IHl a0); unfold list_sum, list_sum' in *; cbn; omega.
 Qed.
+
+Instance ShowIndex (n: nat) : Show (index n) :=
+  { show x := show (index_to_nat x) }.

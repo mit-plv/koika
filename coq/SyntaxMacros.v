@@ -1,5 +1,5 @@
 Require Import Coq.Lists.List.
-Require Import Koika.Syntax Koika.TypedSyntax Koika.Primitives.
+Require Import Koika.Common Koika.Syntax Koika.TypedSyntax Koika.Primitives.
 Import ListNotations.
 
 Import PrimUntyped.
@@ -64,7 +64,7 @@ Module Display.
          int_retType := unit_t;
          int_body := USugar USkip |}.
 
-    Fixpoint extend_printer f offset (printer: intfun) : intfun :=
+    Fixpoint extend_printer f (offset: nat) (printer: intfun) : intfun :=
       let display_utf8 s :=
           UUnop (UDisplay UDisplayUtf8) (USugar (UConstString s)) in
       let display_value arg :=
@@ -78,7 +78,7 @@ Module Display.
            int_retType := int_retType;
            int_body := (USeq (display_utf8 s) int_body) |}
       | Value tau =>
-        let arg := "arg" ++ string_of_nat offset in
+        let arg := "arg" ++ show offset in
         {| int_name := int_name;
            int_argspec := (arg, tau) :: int_argspec;
            int_retType := unit_t;
