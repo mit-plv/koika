@@ -18,7 +18,7 @@ coq:
 coq-all:
 	dune build @coq/all
 
-PHONY += coq
+PHONY += coq coq-all
 
 #########
 # OCaml #
@@ -85,4 +85,6 @@ clean: clean-tests clean-examples
 	dune clean
 
 PHONY += all clean
+
 .PHONY: ${PHONY}
+.SUFFIXES:
