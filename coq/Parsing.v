@@ -44,9 +44,8 @@ Notation "x" := [x] (in custom koika_middle_args at level 0, x custom koika at l
 Notation "x ',' y" := (app x y) (in custom koika_middle_args at level 1, x custom koika_middle_args, y custom koika_middle_args, right associativity).
 
 Notation "'()'"  := nil (in custom koika_args).
-Notation "'( )'"  := nil (in custom koika_args).
+(* Notation "'( )'"  := nil (in custom koika_args). *)
 Notation "'(' x ')'"  := x (in custom koika_args, x custom koika_middle_args).
-
 (* Koika_var *)
 Notation "a" := (ident_to_string a) (in custom koika_var at level 0, a constr at level 0, format "'[' a ']'",only parsing).
 Notation "a" := (a) (in custom koika_var at level 0, a constr at level 0, format "'[' a ']'",only printing).
