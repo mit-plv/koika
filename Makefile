@@ -36,7 +36,7 @@ ocaml-executables: coq
 	@echo Leaving directory \`$(abspath $(dir $(lastword $(PWD))))\'
 
 # This prevents make from running two instances of Dune in parallel
-${COQ_DEMO_EXE} ${LVC_EXE}: ocaml-executables
+${COQ_DEMO_EXE} ${LVC_EXE}: ocaml-executables;
 
 ocaml: ${COQ_DEMO_EXE} ${LVC_EXE}
 
