@@ -379,27 +379,27 @@ struct reg_log_t {
   unsigned : 0;
   T data1;
 
-  bool read0(T* const target, const T data, const rwset_t rLset) {
+  [[nodiscard]] bool read0(T* const target, const T data, const rwset_t rLset) {
     bool ok = rwset.may_read0(rLset);
     *target = data;
     return ok;
   }
 
-  bool read1(T* const target, const rwset_t rLset) {
+  [[nodiscard]] bool read1(T* const target, const rwset_t rLset) {
     bool ok = rwset.may_read1(rLset);
     *target = data0;
     rwset.r1 = true;
     return ok;
   }
 
-  bool write0(const T val, const rwset_t rLset) {
+  [[nodiscard]] bool write0(const T val, const rwset_t rLset) {
     bool ok = rwset.may_write0(rLset);
     data0 = val;
     rwset.w0 = true;
     return ok;
   }
 
-  bool write1(const T val, const rwset_t rLset) {
+  [[nodiscard]] bool write1(const T val, const rwset_t rLset) {
     bool ok = rwset.may_write1(rLset);
     data1 = val;
     rwset.w1 = true;
