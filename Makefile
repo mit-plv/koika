@@ -3,7 +3,7 @@ COQ_BUILD_DIR := ${BUILD_DIR}/coq
 OCAML_BUILD_DIR := ${BUILD_DIR}/ocaml
 PHONY :=
 
-default: examples
+default: all
 
 #######
 # Coq #
@@ -46,28 +46,51 @@ PHONY += ocaml
 # Examples & tests #
 ####################
 
-COOKIE:=_built
-LV_EXAMPLES := $(wildcard examples/*.lv)
-LV_EXAMPLES_TARGETS := $(patsubst %.lv,%.lv.objects/${COOKIE},${LV_EXAMPLES})
-LV_TESTS := $(wildcard tests/*.lv)
-LV_TESTS_TARGETS := $(patsubst %.lv,%.lv.objects/${COOKIE},${LV_TESTS})
-COQ_DEMO_TARGET := examples/demo.v.objects
+TESTS := $(wildcard tests/*.lv) $(wildcard tests/*.v)
+EXAMPLES := $(wildcard examples/*.lv) examples/collatz.lv
 
-%.lv.objects/${COOKIE}: %.lv ${CUTTLEC_EXE}
+TESTS_TARGETS := $(patsubst %,%.objects/,${TESTS})
+EXAMPLES_TARGETS := $(patsubst %,%.objects/,${EXAMPLES})
+
+%.lv.objects/: %.lv ${CUTTLEC_EXE}
 	mkdir -p "$<.objects"
-	${CUTTLEC_EXE} > "$<.objects/stderr" "$<" "$<.objects/$(notdir $*).all" || true
+	${CUTTLEC_EXE} 2> "$@stderr" "$<" -T all -o "$@" || true
 	touch "$@"
 
-${COQ_DEMO_TARGET}: ${COQ_DEMO_EXE}
+%.v.objects/: %.v coq ${CUTTLEC_EXE}
+# Set up variables                                               @# examples/rv/xyz.v.objects/_built
+	$(eval MODNAME := $(notdir $*))                              @# xyz
+	$(eval BUILT_VO := ${BUILD_DIR}/$*.vo)                       @# _build/default/examples/rv/xyz.vo
+	$(eval BUILT_ML := ${BUILD_DIR}/$*.ml)                       @# _build/default/examples/rv/xyz.ml
+	$(eval EXTRACTED_DIR := $(dir $*)extracted)                 @# examples/rv/extracted
+	$(eval BUILD_EXTRACTED_DIR := ${BUILD_DIR}/${EXTRACTED_DIR}) @# _build/default/examples/rv/extracted
+	$(eval BUILT_CMXS := ${BUILD_EXTRACTED_DIR}/${MODNAME}.cmxs) @# _build/default/examples/rv/extracted/xyz.cmxs
+	mkdir -p "$@" "${EXTRACTED_DIR}"
+# Generate xyz.ml
+	rm -f "${BUILT_VO}"; dune build "$*.vo"
+	mv "${BUILT_ML}"* "${EXTRACTED_DIR}/"
+# Generate a fresh dune file to build xyz.ml
+	ocaml etc/gen_dune.ml "${EXTRACTED_DIR}" > "${EXTRACTED_DIR}/dune"
+# Generate xyz.cmxs
+	dune build "${EXTRACTED_DIR}/${MODNAME}.cmxs"
+# Compile to circuits
+	${CUTTLEC_EXE} 2> "$@stderr" "${BUILT_CMXS}" -T all -o "$@" || true
+# Clean up
+	rm "${EXTRACTED_DIR}/dune" # Prevent errors if extracted ml files are later deleted
+	touch "$@"
+
+examples/demo.v.objects/: ${COQ_DEMO_EXE}
+	mkdir -p "$@"
 	${COQ_DEMO_EXE}
+	touch "$@"
 
-examples: ${LV_EXAMPLES_TARGETS} ${COQ_DEMO_TARGET}
+examples: ${EXAMPLES_TARGETS} ${COQ_DEMO_TARGET}
 clean-examples:
-	rm -rf examples/*.objects/
+	find examples/ -type d \( -name *.objects -or -name extracted \) -exec rm -r {} +
 
-tests: ${LV_TESTS_TARGETS}
+tests: ${TESTS_TARGETS}
 clean-tests:
-	rm -rf tests/*.objects/
+	find tests/ -type d \( -name *.objects -or -name extracted \) -exec rm -r {} +
 
 PHONY += examples clean-examples tests clean-tests
 

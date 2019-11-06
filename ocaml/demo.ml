@@ -8,11 +8,10 @@ let mkdir dirname =
   with Unix.Unix_error(Unix.EEXIST, _, _) -> ()
 
 let coq_main (ip: Cuttlebone.Extr.interop_package_t) =
-  Interop.compile_all ~directory:"../examples/demo.v.objects" ip
+  Interop.compile_all ~directory:"examples/demo.v.objects" ip
 
 let _ =
   let open Cuttlebone.Extr in
-  mkdir "../examples"; mkdir "../examples/demo.v.objects";
   let filter = Str.regexp (try Sys.argv.(1) with Invalid_argument _ -> "") in
   let packages = List.filter (package_matches filter) demo_packages in
   List.iter coq_main packages

@@ -30,6 +30,4 @@ setup.log
 _opam/
 
 # Other
-*.exe
-*.objects/
-*.built
+.local/

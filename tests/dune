@@ -1,5 +1,5 @@
 (coq.theory
- (name Examples)
+ (name Tests)
  (modules :standard)
  (flags -R ../coq/ Koika))
 
