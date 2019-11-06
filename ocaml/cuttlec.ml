@@ -91,8 +91,8 @@ let abort fmt =
 
 let run_backend backend cnf pkg =
   try run_backend' backend cnf pkg
-  with UnsupportedOutput msg ->
-    abort "%s" msg
+  with UnsupportedOutput msg -> abort "%s" msg
+     | Backends.Cpp.CppCompilationError -> abort "Compilation failed"
 
 let run_backends backends cnf pkg =
   List.iter (fun b -> run_backend b cnf pkg) backends
@@ -140,7 +140,7 @@ let run (frontend: frontend) (backends: backend list) (cnf: config) =
         let run_one (ip: Cuttlebone.Extr.interop_package_t) =
           run_backends backends cnf
             { pkg_modname = Cuttlebone.Util.string_of_coq_string ip.ip_koika.koika_module_name;
-              pkg_lv = lazy (raise (UnsupportedOutput "Coq output is only supported from LV input."));
+              pkg_lv = lazy (raise (UnsupportedOutput "Coq output is only supported from LV input"));
               pkg_cpp = lazy (Backends.Cpp.input_of_sim_package ip.ip_koika ip.ip_sim);
               pkg_graph = lazy (Cuttlebone.Graphs.graph_of_verilog_package ip.ip_koika ip.ip_verilog) } in
         List.iter run_one ips

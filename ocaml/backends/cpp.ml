@@ -1053,13 +1053,15 @@ let input_of_sim_package
                    | None -> None
                    | Some s -> Some (Cuttlebone.Util.string_of_coq_string s)); }
 
+exception CppCompilationError
+
 let command ?(verbose=false) exe args =
   (* FIXME use Unix.open_process_args instead of Filename.quote (OCaml 4.08) *)
   let qargs = List.map Filename.quote (exe :: args) in
   let cmd = String.concat " " qargs in
   let time = Unix.gettimeofday () in
   if verbose then Printf.eprintf ">> %s\n%!" cmd;
-  ignore (Sys.command cmd);
+  if Sys.command cmd <> 0 then raise CppCompilationError;
   if verbose then Printf.eprintf "   (%.2f s)\n%!" (Unix.gettimeofday () -. time)
 
 let clang_format fname =
