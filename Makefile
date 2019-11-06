@@ -57,6 +57,14 @@ EXAMPLES_TARGETS := $(patsubst %,%.objects/,${EXAMPLES})
 	${CUTTLEC_EXE} 2> "$@stderr" "$<" -T all -o "$@" || true
 	touch "$@"
 
+# The complexity below is due to lack of support in dune for OCaml files
+# extracted from Coq, and the complexities of dependency tracking across folders
+# in one repo.  Code written against a packaged version of Koika (e.g. installed
+# using OPAM) don't need to use these tricks; instead, you can just use the
+# following commands:
+#   ocamlfind ocamlopt -package koika.registry extracted.mli extracted.ml -shared -o extracted.cmxs
+#   cuttlec extracted.cmxs -T verilog -o directory
+
 %.v.objects/: %.v coq ${CUTTLEC_EXE}
 # Set up variables                                               @# examples/rv/xyz.v.objects/_built
 	$(eval MODNAME := $(notdir $*))                              @# xyz
