@@ -1,6 +1,4 @@
-(executable
- (name rv32icore)
- (modules rv32icore)
- (libraries koika))
-
-(include_subdirs no)
+(coq.theory
+ (name RV)
+ (modules :standard \ TopLevel)
+ (flags -R ../../coq/ Koika))

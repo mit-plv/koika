@@ -2,8 +2,8 @@ Require Import Koika.Frontend.
 Require Import Coq.Lists.List.
 
 Require Import Koika.Std.
-Require Import Examples.rv.RVEncoding.
-Require Import Examples.rv.Scoreboard.
+Require Import RV.RVEncoding.
+Require Import RV.Scoreboard.
 
 
 Section RV32IHelpers.
@@ -749,5 +749,5 @@ Module  RV32ICore.
 
 End RV32ICore.
 
-Definition prog := Interop.Backends.compile_all RV32ICore.package.
-Extraction "rv32icore.ml" prog.
+Definition prog := Interop.Backends.register RV32ICore.package.
+Extraction "RVCore.ml" prog.
