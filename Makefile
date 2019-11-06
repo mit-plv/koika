@@ -57,7 +57,7 @@ EXAMPLES_TARGETS := $(patsubst %,%.objects/,${EXAMPLES})
 	@printf "\n-- Compiling %s --\n" "$<"
 	@mkdir -p "$@"
 	${CUTTLEC_EXE} "$<" \
-		-T all -o "$@" 2> "$@stderr" || true
+		-T all -o "$@" $(if $(findstring .1.,$<),--expect-errors 2> "$@stderr")
 	@touch "$@"
 
 # The complexity below is due to lack of support in dune for OCaml files
@@ -94,7 +94,7 @@ EXAMPLES_TARGETS := $(patsubst %,%.objects/,${EXAMPLES})
 	dune build "${EXTRACTED_DIR}/${MODNAME}.cmxs"
 # Compile to circuits
 	${CUTTLEC_EXE} "${BUILT_CMXS}" \
-		-T all -o "$@" 2> "$@stderr" || true
+		-T all -o "$@"
 # Remove the generated dune file to prevent errors if extracted ml files are later deleted
 	@rm "${EXTRACTED_DIR}/dune"
 	@touch "$@"

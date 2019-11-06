@@ -1,9 +1,15 @@
 (extfun impure () (bits 5))
 
-(module pure
-  (rule keep_ignores
-    (let ((x 5'0))
-      (ignore x)))
+(module taint
+  (cpp-preamble "
+class extfuns {
+  bits<5> state = UINT8(0);
+public:
+  bits<5> impure(const unit& /*ignored*/) {
+    state = prims::plus<5>(state, 1);
+    return state;
+  }
+};")
 
   (rule keep_impure_exprs
     (ignore (+ (impure) (impure))))
