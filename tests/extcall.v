@@ -59,7 +59,12 @@ Definition package :=
                    koika_module_name := "extcall" |};
      ip_sim := {| sp_var_names x := x;
                  sp_ext_fn_names := show;
-                 sp_extfuns := Some "#include ""../extcall.extfuns.hpp""" |};
+                 sp_extfuns := Some "class extfuns {
+public:
+  bits<3> f0(const bits<3> arg) {
+    return prims::lnot<3>(arg);
+  }
+};" |};
      ip_verilog := {| vp_external_rules := List.nil;
                      vp_ext_fn_names := show |} |}.
 
