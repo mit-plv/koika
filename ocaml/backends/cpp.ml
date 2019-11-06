@@ -558,7 +558,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     if program_info.pi_needs_multiprecision then (
       p "#define NEEDS_BOOST_MULTIPRECISION";
       nl ());
-    p "%s" cpp_preamble;
+    p "#include \"%s.preamble.hpp\"" hpp.cpp_header_name
   in
 
   let iter_registers f regs =
@@ -1071,17 +1071,22 @@ let compile_cpp fname =
   let flags = ["-O3"; "--std=c++14"; "-Wall"; "-Wextra"; "-fno-stack-protector"] in
   command ~verbose:true "g++" (flags @ [srcname; "-o"; exename])
 
-let write_cpp fpath_noext ext buf =
+let write_formatted fpath_noext ext buf =
   let fname = fpath_noext ^ ext in
   Common.with_output_to_file fname Buffer.output_buffer buf;
   clang_format fname
 
+let write_preamble fpath_noext =
+  Common.with_output_to_file (fpath_noext ^ ".preamble.hpp")
+    output_string cpp_preamble
+
 let main target_dpath (kind: [> `Cpp | `Hpp | `Exe]) (cu: _ cpp_input_t) =
   let hpp, cpp = compile cu in
   let fpath_noext = Filename.concat target_dpath cu.cpp_classname in
-  if kind = `Hpp || kind = `Exe then
-    write_cpp fpath_noext ".hpp" hpp;
+  if kind = `Hpp || kind = `Exe then begin
+      write_preamble fpath_noext;
+      write_formatted fpath_noext ".hpp" hpp end;
   if kind = `Cpp || kind = `Exe then
-    write_cpp fpath_noext ".cpp" cpp;
+    write_formatted fpath_noext ".cpp" cpp;
   if kind = `Exe then
     compile_cpp fpath_noext
