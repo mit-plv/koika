@@ -82,13 +82,17 @@ let run_backend' backend cnf pkg =
 let pstderr fmt =
   Printf.kfprintf (fun out -> fprintf out "\n") stderr fmt
 
-let quit fmt =
-  Printf.kfprintf (fun out -> fprintf out "\n"; exit 1) stderr fmt
+let expect_success = ref false
+let exit success =
+  exit (if success = !expect_success then 0 else 1)
+
+let abort fmt =
+  Printf.kfprintf (fun out -> fprintf out "\n"; exit false) stderr fmt
 
 let run_backend backend cnf pkg =
   try run_backend' backend cnf pkg
   with UnsupportedOutput msg ->
-    quit "%s" msg
+    abort "%s" msg
 
 let run_backends backends cnf pkg =
   List.iter (fun b -> run_backend b cnf pkg) backends
@@ -107,7 +111,7 @@ let dynlink_interop_packages in_path : Cuttlebone.Extr.interop_package_t list =
   (try
      Dynlink.loadfile_private in_path;
    with Dynlink.Error err ->
-     quit "Dynlink error: %s" (Dynlink.error_message err));
+     abort "Dynlink error: %s" (Dynlink.error_message err));
   Registry.reset ()
 
 let run (frontend: frontend) (backends: backend list) (cnf: config) =
@@ -128,10 +132,10 @@ let run (frontend: frontend) (backends: backend list) (cnf: config) =
            pkg_graph = lazy (Cuttlebone.Graphs.graph_of_compile_unit c_unit) }
      with Lv.Errors.Errors errs ->
        print_errors_and_warnings errs;
-       exit 1)
+       exit false)
   | `CoqPkg ->
      match dynlink_interop_packages cnf.cnf_src_fpath with
-     | [] -> quit "Package %s does not export Koika modules" cnf.cnf_src_fpath
+     | [] -> abort "Package %s does not export Koika modules" cnf.cnf_src_fpath
      | ips ->
         let run_one (ip: Cuttlebone.Extr.interop_package_t) =
           run_backends backends cnf
@@ -148,7 +152,7 @@ let backends_of_spec frontend spec =
     List.assoc frontend all_backends
   else
     match Core.List.find_map backends ~f:found with
-    | None -> quit "Unexpected output format: %s" spec
+    | None -> abort "Unexpected output format: %s" spec
     | Some backend -> [backend]
 
 let parse_output_spec frontend spec =
@@ -160,13 +164,15 @@ let resolve_srcpath = function
   | "-" -> "-"
   | pth -> Core.Filename.realpath pth
 
-let run_cli src_fpath dst_dpath output_specs =
+let run_cli expect_errors src_fpath dst_dpath output_specs =
+  expect_success := not expect_errors;
   let src_fpath = resolve_srcpath src_fpath in
   let _, frontend = frontend_of_path src_fpath in
   let backends = Core.List.concat_map ~f:(parse_output_spec frontend) output_specs in
   let dst_dpath = Core.Option.value dst_dpath ~default:(Filename.dirname src_fpath) in
   run frontend backends { cnf_src_fpath = src_fpath;
-                          cnf_dst_dpath = dst_dpath }
+                          cnf_dst_dpath = dst_dpath };
+  exit true
 
 let cli =
   let open Core in
@@ -174,10 +180,11 @@ let cli =
     ~summary:"Compile Koika programs"
     Command.Let_syntax.(
     let%map_open
-        src_fpath = anon ("input" %: Filename.arg_type)
-    and output_specs = flag "-T" (listed string) ~doc:"fmt output in this format"
+        expect_errors = flag "--expect-errors" no_arg ~doc:"flip the exit code (1 for success, 0 for errors)"
+    and src_fpath = anon ("input" %: Filename.arg_type)
     and dst_dpath = flag "-o" (optional string) ~doc:"dir output to this directory"
-    in fun () -> run_cli src_fpath dst_dpath output_specs)
+    and output_specs = flag "-T" (listed string) ~doc:"fmt output in this format"
+    in fun () -> run_cli expect_errors src_fpath dst_dpath output_specs)
 
 let _ =
   Core.Command.run cli
