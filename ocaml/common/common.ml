@@ -185,9 +185,9 @@ type 'action internal_function = {
     int_body: 'action
   }
 
-let with_output_to_file fname (f: out_channel -> unit) =
+let with_output_to_file fname (f: out_channel -> 'a -> unit) (data: 'a) =
   let out = open_out fname in
-  try f out; close_out_noerr out
+  try f out data; close_out_noerr out
   with e -> (close_out_noerr out; raise e)
 
 let make_gensym gensym_prefix =

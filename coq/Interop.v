@@ -219,6 +219,7 @@ Module Backends.
     Axiom compile_circuits: koika_package_t -> verilog_package_t -> unit.
     Axiom compile_simulation: koika_package_t -> sim_package_t -> unit.
     Axiom compile_all: interop_package_t -> unit.
+    Axiom register: interop_package_t -> unit.
   End Backends.
 
   Extract Constant compile_circuits =>
@@ -227,4 +228,6 @@ Module Backends.
   "fun kp sp -> Koika.Interop.compile_simulation (Obj.magic kp) (Obj.magic vp)".
   Extract Constant compile_all =>
   "fun ip -> Koika.Interop.compile_all (Obj.magic ip)".
+  Extract Constant register =>
+  "fun ip -> Registry.register (Obj.magic ip)".
 End Backends.

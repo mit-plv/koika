@@ -1,8 +1,14 @@
+(library
+ (name registry)
+ (public_name koika.registry)
+ (modules registry)
+ (libraries cuttlebone))
+
 (executable
  (name cuttlec)
  (modules cuttlec)
  (preprocess (pps ppx_jane))
- (libraries str zarith core common cuttlebone frontends backends))
+ (libraries str zarith dynlink core common cuttlebone frontends backends registry))
 
 (library
  (name interop)
@@ -19,4 +25,4 @@
  (name koika)
  (public_name koika)
  (modules koika)
- (libraries frontends backends cuttlebone interop))
+ (libraries frontends backends cuttlebone interop registry))

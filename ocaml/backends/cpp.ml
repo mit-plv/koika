@@ -1073,7 +1073,7 @@ let compile_cpp fname =
 
 let write_cpp fname ext buf =
   let fname = fname ^ ext in
-  Common.with_output_to_file fname (fun out -> Buffer.output_buffer out buf);
+  Common.with_output_to_file fname Buffer.output_buffer buf;
   clang_format fname
 
 let main target_fname (kind: [> `Cpp | `Hpp | `Exe]) (cu: _ cpp_input_t) =

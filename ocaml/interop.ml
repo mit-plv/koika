@@ -1,8 +1,5 @@
 open Cuttlebone
 
-let writeout fname fn circuit =
-  Common.with_output_to_file fname (fun out -> fn out circuit)
-
 let fname ?directory (pkg: _ Extr.koika_package_t) ext =
   let modname = Util.string_of_coq_string pkg.koika_module_name in
   let dirname = match directory with Some d -> [d] | None -> [] in
@@ -14,8 +11,8 @@ let compile_simulation ?directory (kp: _ Extr.koika_package_t) (sp: _ Extr.sim_p
 
 let compile_circuits ?directory (kp: _ Extr.koika_package_t) (vp: _ Extr.verilog_package_t) =
   let circuit = Graphs.graph_of_verilog_package kp vp in
-  writeout (fname ?directory kp ".dot") Backends.Dot.main circuit;
-  writeout (fname ?directory kp ".v") (Backends.Verilog.main (Util.string_of_coq_string kp.koika_module_name)) circuit
+  Common.with_output_to_file (fname ?directory kp ".dot") Backends.Dot.main circuit;
+  Common.with_output_to_file (fname ?directory kp ".v") (Backends.Verilog.main (Util.string_of_coq_string kp.koika_module_name)) circuit
 
 let compile_all ?directory
       ({ ip_koika; ip_verilog; ip_sim }: Extr.interop_package_t) =
