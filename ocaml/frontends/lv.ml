@@ -1566,7 +1566,8 @@ let typecheck_module { name; cpp_preamble; registers; rules; schedulers }
   let c_rules = Delay.map tc_rule rules in
   let schedulers = Delay.map (ResolvedAST.typecheck_scheduler << snd) schedulers in
   if schedulers = [] then name_error name.lpos @@ MissingScheduler { modname = name.lcnt };
-  { c_registers = registers;
+  { c_modname = name.lcnt;
+    c_registers = registers;
     c_rules;
     c_scheduler = List.hd schedulers;
     c_cpp_preamble = (match cpp_preamble with

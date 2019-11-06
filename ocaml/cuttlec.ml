@@ -8,9 +8,10 @@ type frontend =
 type backend =
   [`Coq | `Verilog | `Dot | `Hpp | `Cpp | `Exe]
 
-let all_backends =
+let all_backends : (frontend * backend list) list =
   (* Exe implies Hpp and Cpp *)
-  [`Coq; `Verilog; `Dot; `Exe]
+  [(`CoqPkg, [`Verilog; `Dot; `Exe]);
+   (`LV, [`Coq; `Verilog; `Dot; `Exe])]
 
 let backends : (backend * (string * string)) list =
   [(`Dot, ("dot", ".dot"));
@@ -47,12 +48,12 @@ let frontend_of_path fpath =
   assoc_suffix "frontend" suffixes_to_frontends `LV fpath
 
 type config = {
-    cnf_modname: string;
-    cnf_src_path: string;
-    cnf_dst_prefix: string;
+    cnf_src_fpath: string;
+    cnf_dst_dpath: string;
   }
 
 type ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) package = {
+    pkg_modname: string;
     pkg_lv: Lv.resolved_unit lazy_t;
     pkg_cpp: ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) Backends.Cpp.cpp_input_t lazy_t;
     pkg_graph: Cuttlebone.Graphs.circuit_graph lazy_t;
@@ -60,23 +61,23 @@ type ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) package = {
 
 exception UnsupportedOutput of string
 
-let output_fname backend cnf =
-  cnf.cnf_dst_prefix ^ suffix_of_backend backend
+let output_fname backend { cnf_dst_dpath; _ } { pkg_modname; _ } =
+  Filename.concat cnf_dst_dpath (pkg_modname ^ suffix_of_backend backend)
 
 let run_backend' backend cnf pkg =
   match backend with
   | `Coq ->
      let lv = Lazy.force pkg.pkg_lv in
-     with_output_to_file (output_fname backend cnf) Backends.Coq.main lv
+     with_output_to_file (output_fname backend cnf pkg) Backends.Coq.main lv
   | (`Hpp | `Cpp | `Exe) as kd ->
      let cpp = Lazy.force pkg.pkg_cpp in
-     Backends.Cpp.main cnf.cnf_dst_prefix kd cpp
+     Backends.Cpp.main cnf.cnf_dst_dpath kd cpp
   | (`Verilog | `Dot) as backend ->
      let graph = Lazy.force pkg.pkg_graph in
-     with_output_to_file (output_fname backend cnf)
+     with_output_to_file (output_fname backend cnf pkg)
        (match backend with
         | `Dot -> Backends.Dot.main
-        | `Verilog -> Backends.Verilog.main cnf.cnf_modname) graph
+        | `Verilog -> Backends.Verilog.main pkg.pkg_modname) graph
 
 let pstderr fmt =
   Printf.kfprintf (fun out -> fprintf out "\n") stderr fmt
@@ -116,46 +117,56 @@ let run (frontend: frontend) (backends: backend list) (cnf: config) =
      (try
        let resolved, typechecked =
          Delay.with_delayed_errors (fun () ->
-             let resolved =  resolve (parse (read_sexps cnf.cnf_src_path)) in
+             let resolved =  resolve (parse (read_sexps cnf.cnf_src_fpath)) in
              resolved, typecheck resolved) in
-       let c_unit = first_compile_unit cnf.cnf_src_path typechecked in
+       let c_unit = first_compile_unit cnf.cnf_src_fpath typechecked in
        print_errors_and_warnings [];
        run_backends backends cnf
-         { pkg_lv = lazy resolved;
-           pkg_cpp = lazy (Backends.Cpp.input_of_compile_unit cnf.cnf_modname c_unit);
+         { pkg_modname = c_unit.c_modname;
+           pkg_lv = lazy resolved;
+           pkg_cpp = lazy (Backends.Cpp.input_of_compile_unit c_unit);
            pkg_graph = lazy (Cuttlebone.Graphs.graph_of_compile_unit c_unit) }
      with Lv.Errors.Errors errs ->
        print_errors_and_warnings errs;
        exit 1)
   | `CoqPkg ->
-     match dynlink_interop_packages cnf.cnf_src_path with
-     | [] -> quit "Package %s does not export Koika modules" cnf.cnf_src_path
-     | ip :: _ ->
-        run_backends backends cnf
-          { pkg_lv = lazy (raise (UnsupportedOutput "Coq output is only supported from LV input."));
-            pkg_cpp = lazy (Backends.Cpp.input_of_sim_package ip.ip_koika ip.ip_sim);
-            pkg_graph = lazy (Cuttlebone.Graphs.graph_of_verilog_package ip.ip_koika ip.ip_verilog) }
+     match dynlink_interop_packages cnf.cnf_src_fpath with
+     | [] -> quit "Package %s does not export Koika modules" cnf.cnf_src_fpath
+     | ips ->
+        let run_one (ip: Cuttlebone.Extr.interop_package_t) =
+          run_backends backends cnf
+            { pkg_modname = Cuttlebone.Util.string_of_coq_string ip.ip_koika.koika_module_name;
+              pkg_lv = lazy (raise (UnsupportedOutput "Coq output is only supported from LV input."));
+              pkg_cpp = lazy (Backends.Cpp.input_of_sim_package ip.ip_koika ip.ip_sim);
+              pkg_graph = lazy (Cuttlebone.Graphs.graph_of_verilog_package ip.ip_koika ip.ip_verilog) } in
+        List.iter run_one ips
 
-let backend_of_spec spec =
+let backends_of_spec frontend spec =
   let found (backend, (spec', _)) =
     if spec' = spec then Some backend else None in
-  match Core.List.find_map backends ~f:found with
-  | None -> quit "Unexpected output format: %s" spec
-  | Some backend -> backend
+  if spec = "all" then
+    List.assoc frontend all_backends
+  else
+    match Core.List.find_map backends ~f:found with
+    | None -> quit "Unexpected output format: %s" spec
+    | Some backend -> [backend]
 
-let parse_output_spec spec =
-  List.map backend_of_spec (String.split_on_char ',' spec)
+let parse_output_spec frontend spec =
+  Core.List.concat_map
+    ~f:(backends_of_spec frontend)
+    (String.split_on_char ',' spec)
 
-let run_cli src_path output_specs =
-  let modpath, frontend = frontend_of_path src_path in
-  let modname = Core.Filename.basename modpath in
-  let backends = Core.List.concat_map ~f:parse_output_spec output_specs in
-  let src_path = match src_path with
-    | "-" -> "-"
-    | _ -> Core.Filename.realpath src_path in
-  run frontend backends { cnf_modname = modname;
-                          cnf_src_path = src_path;
-                          cnf_dst_prefix = modpath }
+let resolve_srcpath = function
+  | "-" -> "-"
+  | pth -> Core.Filename.realpath pth
+
+let run_cli src_fpath dst_dpath output_specs =
+  let src_fpath = resolve_srcpath src_fpath in
+  let _, frontend = frontend_of_path src_fpath in
+  let backends = Core.List.concat_map ~f:(parse_output_spec frontend) output_specs in
+  let dst_dpath = Core.Option.value dst_dpath ~default:(Filename.dirname src_fpath) in
+  run frontend backends { cnf_src_fpath = src_fpath;
+                          cnf_dst_dpath = dst_dpath }
 
 let cli =
   let open Core in
@@ -163,9 +174,10 @@ let cli =
     ~summary:"Compile Koika programs"
     Command.Let_syntax.(
     let%map_open
-        src_path = anon ("input" %: Filename.arg_type)
+        src_fpath = anon ("input" %: Filename.arg_type)
     and output_specs = flag "-T" (listed string) ~doc:"fmt output in this format"
-    in fun () -> run_cli src_path output_specs)
+    and dst_dpath = flag "-o" (optional string) ~doc:"dir output to this directory"
+    in fun () -> run_cli src_fpath dst_dpath output_specs)
 
 let _ =
   Core.Command.run cli

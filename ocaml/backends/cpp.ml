@@ -1008,9 +1008,9 @@ let action_footprint a =
 let cpp_rule_of_action (rl_name, (_kind, rl_body)) =
   { rl_name; rl_body; rl_footprint = action_footprint rl_body }
 
-let input_of_compile_unit classname (cu: 'f Cuttlebone.Compilation.compile_unit) =
-  { cpp_classname = classname;
-    cpp_header_name = classname;
+let input_of_compile_unit (cu: 'f Cuttlebone.Compilation.compile_unit) =
+  { cpp_classname = cu.c_modname;
+    cpp_header_name = cu.c_modname;
     cpp_pos_of_pos = cu.c_pos_of_pos;
     cpp_var_names = (fun x -> x);
     cpp_rule_names = (fun rl -> rl);
@@ -1071,16 +1071,17 @@ let compile_cpp fname =
   let flags = ["-O3"; "--std=c++14"; "-Wall"; "-Wextra"; "-fno-stack-protector"] in
   command ~verbose:true "g++" (flags @ [srcname; "-o"; exename])
 
-let write_cpp fname ext buf =
-  let fname = fname ^ ext in
+let write_cpp fpath_noext ext buf =
+  let fname = fpath_noext ^ ext in
   Common.with_output_to_file fname Buffer.output_buffer buf;
   clang_format fname
 
-let main target_fname (kind: [> `Cpp | `Hpp | `Exe]) (cu: _ cpp_input_t) =
+let main target_dpath (kind: [> `Cpp | `Hpp | `Exe]) (cu: _ cpp_input_t) =
   let hpp, cpp = compile cu in
+  let fpath_noext = Filename.concat target_dpath cu.cpp_classname in
   if kind = `Hpp || kind = `Exe then
-    write_cpp target_fname ".hpp" hpp;
+    write_cpp fpath_noext ".hpp" hpp;
   if kind = `Cpp || kind = `Exe then
-    write_cpp target_fname ".cpp" cpp;
+    write_cpp fpath_noext ".cpp" cpp;
   if kind = `Exe then
-    compile_cpp target_fname
+    compile_cpp fpath_noext

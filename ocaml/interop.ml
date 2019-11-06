@@ -7,7 +7,8 @@ let fname ?directory (pkg: _ Extr.koika_package_t) ext =
   String.concat "/" (dirname @ [fname])
 
 let compile_simulation ?directory (kp: _ Extr.koika_package_t) (sp: _ Extr.sim_package_t) =
-  Backends.Cpp.main (fname ?directory kp "") `Exe (Backends.Cpp.input_of_sim_package kp sp)
+  let directory = match directory with Some dir -> dir | None -> "." in
+  Backends.Cpp.main directory `Exe (Backends.Cpp.input_of_sim_package kp sp)
 
 let compile_circuits ?directory (kp: _ Extr.koika_package_t) (vp: _ Extr.verilog_package_t) =
   let circuit = Graphs.graph_of_verilog_package kp vp in

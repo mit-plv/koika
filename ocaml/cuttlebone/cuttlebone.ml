@@ -251,7 +251,8 @@ module Compilation = struct
 
   (* FIXME hashmaps, not lists *)
   type 'f compile_unit =
-    { c_registers: reg_signature list;
+    { c_modname: string;
+      c_registers: reg_signature list;
       c_scheduler: ('f, string) Extr.scheduler;
       c_rules: (rule_name_t * 'f extr_rule) list;
       c_cpp_preamble: string option;
