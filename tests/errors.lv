@@ -1,8 +1,5 @@
 ;;; Parse errors
 
-(<>)
-
-
 (enum bool
   ::true  1'b1
   ::false 1'b0)

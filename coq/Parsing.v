@@ -144,6 +144,9 @@ Notation "'call' instance method args" :=
 Notation "'funcall' method args" :=
   (UInternalCall method args)
     (in custom koika at level 98, method constr at level 0, args custom koika_args).
+Notation "'extcall' method '(' arg ')'" :=
+  (UExternalCall method arg)
+    (in custom koika at level 98, method constr at level 0, arg custom koika).
 Notation "'call0' instance method " :=
   (UCallModule instance id method nil)
     (in custom koika at level 98, instance constr at level 0, method constr).

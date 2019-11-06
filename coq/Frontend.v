@@ -167,23 +167,34 @@ Ltac _tc_action R Sigma uaction :=
   (_tc_action_fast R Sigma uaction ||
    _tc_illtyped_action R Sigma uaction).
 
-Notation tc_action R Sigma action :=
-  (ltac:(_tc_action R Sigma action)) (only parsing).
+Definition annotate_uaction_type {reg_t ext_fn_t}
+           (R: reg_t -> type) (Sigma: ext_fn_t -> Sig 1)
+           (ua: uaction reg_t ext_fn_t) :=
+  ua : uaction reg_t ext_fn_t.
 
-Ltac _tc_rules R Sigma actions :=
-  lazymatch type of actions with
-  | (?rule_name_t -> _) =>
-    let res := constr:(fun r: rule_name_t =>
-                         ltac:(destruct r eqn:? ;
-                               lazymatch goal with
-                               | [ H: _ = ?rr |- _ ] =>
-                                 (* FIXME: why does the ‘<:’ above need this hnf? *)
-                                 let action := constr:(actions rr) in
-                                 let action := (eval hnf in action) in
-                                 _tc_action R Sigma action
-                               end)) in
-    exact res
+Ltac _arg_type R :=
+  match type of R with
+  | ?t -> _ => t
   end.
+
+(* FIXME: Find a way to propagate reg_t and ext_fn_t from R and Sigma to ua.
+   With this users could write [tc_action R Sigma {{ skip }}] directly, without
+   having to annotate the [{{ skip }}]. *)
+Notation tc_action R Sigma ua :=
+  (ltac:(_tc_action R Sigma ua)) (only parsing).
+
+Ltac _tc_rules R Sigma uactions :=
+  let rule_name_t := _arg_type uactions in
+  let res := constr:(fun r: rule_name_t =>
+                      ltac:(destruct r eqn:? ;
+                            lazymatch goal with
+                            | [ H: _ = ?rr |- _ ] =>
+                              (* FIXME: why does the ‘<:’ above need this hnf? *)
+                              let ua := constr:(uactions rr) in
+                              let ua := (eval hnf in ua) in
+                              _tc_action R Sigma ua
+                            end)) in
+  exact res.
 
 Notation tc_rules R Sigma actions :=
   (ltac:(_tc_rules R Sigma actions)) (only parsing).
