@@ -35,8 +35,8 @@ Definition R r :=
 Definition r reg : R reg :=
   match reg with
   | rA => Bits.of_N _ 12
-  | rDelay1 buffer => Bits.zero _
-  | rDelay2 buffer => Bits.zero _
+  | rDelay1 buffer => Bits.zero
+  | rDelay2 buffer => Bits.zero
   end.
 
 (* Declaration of a family of Koika function indexed by a coq integer *)

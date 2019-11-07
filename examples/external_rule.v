@@ -1,35 +1,35 @@
 Require Import Koika.Frontend.
-Require Import Koika.Std.
+Require Koika.Std.
 
-(* Fifo1 of the Koika.Std is a polymorphic one element fifo.
+(* Koika.Std.Fifo1 is a polymorphic one-element fifo.
 
-The type of the fifo is indexed by the type of the data it holds, here
-we specialize the type of the fifo to fifo that holds t bits values. *)
-Module FifoBit5 <: Fifo.
-  Definition T:= bits_t 5.
-End FifoBit5.
-Module Fifo5 := Fifo1 FifoBit5.
+  The type of the fifo is indexed by the type of the data it holds, here we
+  specialize the type of the fifo to fifo that holds [bits_t 5] values. *)
 
-(* Define an instance for that fifo *)
-Inductive reg_t := MyFifo (fifof2state:Fifo5.reg_t) | Mem | Rdata .
+Module FifoParams <: Std.Fifo.
+  Definition T := bits_t 5.
+End FifoParams.
 
-Definition logsz := 5.
-Notation sz := (pow2 logsz).
+Module Bits5Fifo := Std.Fifo1 FifoParams.
 
-(* Register types *)
+(* FifoSt is the state of an instant of Bits5Fifo *)
+Inductive reg_t :=
+| FifoSt (_: Bits5Fifo.reg_t)
+| Mem
+| Rdata.
+
 Definition R r :=
   match r with
-  | MyFifo f => Fifo5.R f
+  | FifoSt f => Bits5Fifo.R f
   | Mem => bits_t 5
   | Rdata => bits_t 5
   end.
 
-(* Register's init value *)
 Definition r idx : R idx :=
   match idx with
-  | MyFifo f => Fifo5.r f
-  | Mem => Bits.zeroes _
-  | Rdata => Bits.zeroes _
+  | FifoSt f => Bits5Fifo.r f
+  | Mem => Bits.zero
+  | Rdata => Bits.zero
   end.
 
 (* Rules *)
@@ -40,12 +40,12 @@ delegate the work that this rule should do to an external circuit *)
 Definition _fetch :=
   {{
       let memory := read0(Mem) in
-      MyFifo.(Fifo5.enq)(memory)
+      FifoSt.( Bits5Fifo.enq)(memory)
   }}.
 
 Definition _receive : uaction reg_t empty_ext_fn_t :=
   {{
-      let dequeued := MyFifo.(Fifo5.deq)() in
+      let dequeued := FifoSt.( Bits5Fifo.deq)() in
       if (dequeued == Ob~0~0~0~1~0) then
         write0(Rdata, Ob~0~0~0~0~1)
       else
