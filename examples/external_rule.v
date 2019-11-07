@@ -12,7 +12,7 @@ End FifoParams.
 
 Module Bits5Fifo := Std.Fifo1 FifoParams.
 
-(* FifoSt is the state of an instant of Bits5Fifo *)
+(* FifoSt is the state of an instance of Bits5Fifo *)
 Inductive reg_t :=
 | FifoSt (_: Bits5Fifo.reg_t)
 | Mem
@@ -34,9 +34,10 @@ Definition r idx : R idx :=
 
 (* Rules *)
 
-(* This _fetch rule is going to be declared external, so removed from the
-generated verilog, instead inputs and output will be generated to
-delegate the work that this rule should do to an external circuit *)
+(* This [_fetch] rule is going to be declared external.  No circuitry will be
+   generated for it when compiling to Verilog; instead, it will be removed and
+   inputs and outputs will be generated to delegate its work to an external
+   circuit *)
 Definition _fetch :=
   {{
       let memory := read0(Mem) in
@@ -45,17 +46,15 @@ Definition _fetch :=
 
 Definition _receive : uaction reg_t empty_ext_fn_t :=
   {{
-      let dequeued := FifoSt.( Bits5Fifo.deq)() in
+      let dequeued := FifoSt.(Bits5Fifo.deq)() in
       if (dequeued == Ob~0~0~0~1~0) then
         write0(Rdata, Ob~0~0~0~0~1)
       else
         fail
   }}.
 
-
-Definition cr := ContextEnv.(create) r.
-
-Inductive name_t := fetch | receive.
+Inductive rule_name_t :=
+  fetch | receive.
 
 Definition rules :=
   tc_rules R empty_Sigma
@@ -67,29 +66,29 @@ Definition rules :=
 Definition bring : scheduler :=
   tc_scheduler (fetch |> receive |> done).
 
-Definition koika_package :=
-  {| koika_reg_types := R;
-     koika_reg_init := r;
-     koika_reg_finite := _;
+Definition package : interop_package_t :=
+  {| ip_koika := {| koika_reg_names := show;
+                   koika_reg_types := R;
+                   koika_reg_init := r;
 
-     koika_ext_fn_types := empty_Sigma;
+                   koika_ext_fn_types := empty_Sigma;
 
-     koika_reg_names := show;
+                   koika_rules := rules;
+                   koika_rule_names := show;
 
-     koika_rules := rules;
-     koika_rule_names := show;
+                   koika_scheduler := bring;
 
-     koika_scheduler := bring;
-     koika_module_name := "externalMemory" |}.
-Definition sim :=
-  {| sp_var_names x := x;
-     sp_ext_fn_names := empty_fn_names;
-     sp_extfuns := None |}.
-Definition verilog :=
-  {| vp_external_rules := cons fetch nil;
-     (* Here we declared the rule that is going to be removed by the verilog backend to let us insert an external circuit *)
-     vp_ext_fn_names := empty_fn_names |} .
-Definition package : interop_package_t := {| ip_koika := koika_package; ip_sim := sim; ip_verilog := verilog |}.
+                   koika_module_name := "external_rule" |};
+
+     ip_sim := {| sp_var_names x := x;
+                 sp_ext_fn_names := empty_fn_names;
+                 sp_extfuns := None |};
+
+     (* Including [fetch] in [vp_external_rules] below indicates that the
+        corresponding rule should be removed by the Verilog backend to let us
+        insert an external circuit. *)
+     ip_verilog := {| vp_external_rules := [fetch];
+                     vp_ext_fn_names := empty_fn_names |} |}.
 
 Definition prog := Interop.Backends.register package.
 Extraction "external_rule.ml" prog.
