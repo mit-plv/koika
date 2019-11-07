@@ -104,6 +104,8 @@ Notation "a '&&' b" :=  (UBinop (UBits2 UAnd) a b) (in custom koika at level 80,
 Notation "'!' a" := (UUnop (UBits1 UNot) a) (in custom koika at level 75, a custom koika at level 99, format "'!' a").
 Notation "a '||' b" :=  (UBinop (UBits2 UOr) a b) (in custom koika at level 85, format "a  '||'  b").
 Notation "'zeroExtend(' a ',' b ')'" :=  (UUnop (UBits1 (UZExtL b)) a) (in custom koika, b constr at level 0, format "'zeroExtend(' a ',' b ')'").
+Notation "'pack(' a ')'" :=  (UUnop (UConv UPack) a) (in custom koika, a custom koika).
+Notation "'unpack(' t ',' v ')'" :=  (UUnop (UConv (UUnpack (struct_t t))) v) (in custom koika, t constr at level 11, v custom koika).
 Notation "a '^' b" :=  (UBinop (UBits2 UXor) a b) (in custom koika at level 85, format "a  '^'  b").
 Notation "a '+' b" :=  (UBinop (UBits2 UPlus) a b) (in custom koika at level 85, format "a  '+'  b").
 Notation "a '-' b" :=  (UBinop (UBits2 UMinus) a b) (in custom koika at level 85, format "a  '-'  b").
@@ -260,9 +262,14 @@ Module Type Tests.
         struct mem_req {| foo := upu[#(Bits.of_nat 3 0) :+ 2] ; bar := |32`d98| |}
     }}.
 
-  Definition test_29 : uaction reg_t :=
+  Definition test_31'' : uaction reg_t :=
     {{
-        struct mem_req {| foo := upu; bar := magic |}
+        pack(a)
     }}.
 
+  Definition test_31' : uaction reg_t :=
+    {{
+        let a := struct mem_req {| foo := upu[#(Bits.of_nat 3 0) :+ 2] ; bar := |32`d98| |} in
+        unpack(mem_req, pack(a))
+    }}.
 End Tests.
