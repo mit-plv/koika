@@ -151,8 +151,13 @@ Ltac _report_typechecking_errors uaction tc_result :=
 
 ## Context:
   " context
-    | _ =>
-      fail "Unexpected location:" beacon_ctx
+    | (_, ?context) =>
+    fail "
+## Type error:
+  " err "
+
+## Context:
+  " context
     end
   | _ =>
     fail "Unexpected typechecker output:" tc_result

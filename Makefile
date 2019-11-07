@@ -48,7 +48,7 @@ PHONY += ocaml
 ####################
 
 TESTS := $(wildcard tests/*.lv) $(wildcard tests/*.v)
-EXAMPLES := $(wildcard examples/*.lv) examples/collatz.v examples/rv/RVCore.v
+EXAMPLES := $(wildcard examples/*.lv) $(wildcard examples/*.v) examples/rv/RVCore.v
 
 TESTS_TARGETS := $(patsubst %,%.objects/,${TESTS})
 EXAMPLES_TARGETS := $(patsubst %,%.objects/,${EXAMPLES})

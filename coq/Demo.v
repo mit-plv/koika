@@ -353,13 +353,6 @@ Module RegisterFile_Ordered.
   Definition nregs := 2.
   Definition reg_sz := 32.
 
-  (* Definition instr_sig := *)
-  (*   {| struct_name := "instr"; *)
-  (*      struct_fields := ("next_reg", bits_t (log2 nregs)) *)
-  (*                        :: ("val", bits_t 8) *)
-  (*                        :: ("immediate", bits_t 16) *)
-  (*                        :: nil |}. *)
-
   Inductive reg_t := rIndex | rData (n: Vect.index nregs) | rOutput.
   Definition ext_fn_t := empty_ext_fn_t.
   Inductive rule_name_t := ReadReg.
@@ -428,85 +421,7 @@ Module RegisterFile_Ordered.
                        vp_ext_fn_names := empty_fn_names |} |}.
 End RegisterFile_Ordered.
 
-Module Enums.
-  Inductive reg_t := rA | rB.
-  Definition ext_fn_t := empty_ext_fn_t.
-  Inductive rule_name_t := Incr.
-
-  Import ListNotations.
-  Definition flag_sig :=
-    {| enum_name := "flag";
-       enum_bitsize := 3;
-       enum_members := vect_of_list ["ABC"; "DEF"];
-       enum_bitpatterns := vect_of_list [Ob~1~1~0; Ob~0~0~1] |}.
-
-  Definition R r :=
-    match r with
-    | rA | rB => enum_t flag_sig
-    end.
-
-  Definition r reg : R reg :=
-    match reg with
-    | rA => Ob~1~1~0
-    | rB => Bits.zero
-    end.
-
-  Definition _Incr : uaction _ empty_ext_fn_t :=
-    {{
-       let bits_a := `UUnop (UConv UPack) {{read0(rA)}}` in
-       let bits_b := `UUnop (UConv UPack) {{read0(rB)}}` in
-       let neg_a := !bits_a in
-       let succ_b := bits_b + `USugar (UConstBits Ob~0~0~1)` in
-       write0(rA,`UUnop (UConv (UUnpack (enum_t flag_sig))) {{neg_a}}`);
-       write0(rB, `UUnop (UConv (UUnpack (enum_t flag_sig))) {{succ_b}}`)
-    }}.
-
-  (* Ltac __must_typecheck R Sigma tcres ::= *)
-  (*   __must_typecheck_cbn R Sigma tcres. *)
-
-  Definition rules :=
-    tc_rules R empty_Sigma
-             (fun rl => match rl with
-                     | Incr => _Incr
-                     end).
-
-  Definition enum_scheduler : scheduler :=
-    tc_scheduler (Incr |> done).
-
-  Instance FiniteType_reg_t : FiniteType reg_t := _.
-
-  Definition circuits :=
-    compile_scheduler rules enum_scheduler.
-
-  Definition circuits_result :=
-    Eval compute in interp_circuits (ContextEnv.(create) r) empty_sigma circuits.
-
-  Definition koika_package :=
-    {| koika_reg_types := R;
-       koika_reg_init := r;
-       koika_reg_finite := _;
-       koika_reg_names := show;
-
-       koika_ext_fn_types := empty_Sigma;
-
-       koika_rules := rules;
-       koika_rule_names := show;
-
-       koika_scheduler := enum_scheduler;
-       koika_module_name := "enums"
-    |}.
-
-  Definition package :=
-    {| ip_koika := koika_package;
-       ip_sim := {| sp_var_names x := x;
-                    sp_ext_fn_names := empty_fn_names;
-                    sp_extfuns := None |};
-       ip_verilog := {| vp_external_rules := List.nil;
-                        vp_ext_fn_names := empty_fn_names |} |}.
-End Enums.
-
 Definition demo_packages : list interop_package_t :=
   [ ManualDecoder.package; PrimitiveDecoder.package;
     Pipeline.package;
-    RegisterFile_Ordered.package;
-    Enums.package].
+    RegisterFile_Ordered.package].
