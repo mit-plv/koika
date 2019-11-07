@@ -58,10 +58,10 @@ module Util = struct
       enum_members = Extr.vect_of_list (List.map (fun (nm, _) -> coq_string_of_string nm) enum_members);
       enum_bitpatterns = Extr.vect_of_list (List.map (fun (_, bs) -> extr_bits_of_bits_const bs) enum_members) }
 
-  let argType nargs (fsig: Extr.sig1) idx : typ =
+  let argType nargs (fsig: Extr.sig0) idx : typ =
     typ_of_extr_type @@ List.nth (Extr.vect_to_list nargs fsig.argTypes) idx
 
-  let retType (fsig: Extr.sig1) : typ =
+  let retType (fsig: Extr.sig0) : typ =
     typ_of_extr_type fsig.retType
 
   let ffi_sig_of_extr_external_sig ffi_name fsig =
