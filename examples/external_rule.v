@@ -12,7 +12,7 @@ End FifoParams.
 
 Module Bits5Fifo := Std.Fifo1 FifoParams.
 
-(* FifoSt is the state of an instance of Bits5Fifo *)
+(* fromIO is the state of an instance of Bits5Fifo *)
 Inductive reg_t :=
 | fromIO (_: Bits5Fifo.reg_t)
 | ioPin
