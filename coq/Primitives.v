@@ -25,6 +25,7 @@ Module PrimUntyped.
   | UXor
   | ULsl
   | ULsr
+  | UAsr
   | UConcat
   | USel
   | UPartSubst (offset: nat) (width: nat)
@@ -73,6 +74,7 @@ Module PrimTyped.
   | Xor (sz: nat)
   | Lsl (bits_sz: nat) (shift_sz: nat)
   | Lsr (bits_sz: nat) (shift_sz: nat)
+  | Asr (bits_sz: nat) (shift_sz: nat)
   | Concat (sz1 sz2 : nat)
   | Sel (sz: nat)
   | PartSubst (sz: nat) (offset: nat) (width: nat)
@@ -177,6 +179,7 @@ Module PrimTypeInference.
                      | UXor => Xor sz1
                      | ULsl => Lsl sz1 sz2
                      | ULsr => Lsr sz1 sz2
+                     | UAsr => Asr sz1 sz2
                      | UConcat => Concat sz1 sz2
                      | UPlus => Plus sz1
                      | UMinus => Minus sz1
@@ -217,6 +220,7 @@ Module CircuitSignatures.
     | Xor sz => {$ sz ~> sz ~> sz $}
     | Lsl bits_sz shift_sz => {$ bits_sz ~> shift_sz ~> bits_sz $}
     | Lsr bits_sz shift_sz => {$ bits_sz ~> shift_sz ~> bits_sz $}
+    | Asr bits_sz shift_sz => {$ bits_sz ~> shift_sz ~> bits_sz $}
     | Concat sz1 sz2 => {$ sz1 ~> sz2 ~> (sz2 + sz1) $}
     | EqBits sz => {$ sz ~> sz ~> 1 $}
     | Plus sz => {$ sz ~> sz ~> sz $}
@@ -269,6 +273,9 @@ Module BitFuns.
 
   Definition lsr {bits_sz shift_sz} (bs: bits bits_sz) (places: bits shift_sz) :=
     Bits.lsr (Bits.to_nat places) bs.
+
+  Definition asr {bits_sz shift_sz} (bs: bits bits_sz) (places: bits shift_sz) :=
+    Bits.asr (Bits.to_nat places) bs.
 
   Definition bits_eq {sz} (bs1 bs2: bits sz) :=
     if eq_dec bs1 bs2 then Ob~1 else Ob~0.
@@ -339,6 +346,7 @@ Module CircuitPrimSpecs.
     | Xor _ => Bits.map2 xorb
     | Lsl _ _ => lsl
     | Lsr _ _ => lsr
+    | Asr _ _ => asr
     | Concat _ _ => Bits.app
     | Plus _ => Bits.plus
     | Minus _ => Bits.minus

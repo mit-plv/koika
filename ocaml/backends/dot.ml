@@ -29,6 +29,7 @@ let bits2_name =
   | Xor _sz -> "Xor"
   | Lsl (_sz, _places) -> "Lsl"
   | Lsr (_sz, _places) -> "Lsr"
+  | Asr (_sz, _places) -> "Asr"
   | Concat (_sz1, _sz2) -> "Concat"
   | Plus _sz -> "Plus"
   | Minus _sz -> "Minus"

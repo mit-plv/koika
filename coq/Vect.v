@@ -709,6 +709,11 @@ Module Bits.
   Definition neg {sz} (b: bits sz) :=
     map negb b.
 
+  Definition asr1 {sz} (b: bits sz) :=
+    match sz return bits sz -> bits sz with
+    | 0 => fun b => b
+    | S _ => fun b => vect_snoc (msb b) (vect_tl b)
+    end b.
   Definition lsr1 {sz} (b: bits sz) :=
     match sz return bits sz -> bits sz with
     | 0 => fun b => b
@@ -720,6 +725,8 @@ Module Bits.
     | S _ => fun b => vect_cons false (snd (vect_unsnoc b))
     end b.
 
+  Definition asr {sz} nplaces (b: bits sz) :=
+    vect_repeat asr1 nplaces b.
   Definition lsr {sz} nplaces (b: bits sz) :=
     vect_repeat lsr1 nplaces b.
   Definition lsl {sz} nplaces (b: bits sz) :=

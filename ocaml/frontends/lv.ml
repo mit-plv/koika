@@ -1248,6 +1248,8 @@ let bits_primitives =
    ("<<", `Prim0 (binop ULsl));
    ("lsr", `Prim0 (binop ULsr));
    (">>", `Prim0 (binop ULsr));
+   ("asr", `Prim0 (binop ULsr));
+   (">>>", `Prim0 (binop ULsr));
    ("concat", `Prim0 (binop UConcat));
    ("+", `Prim0 (binop UPlus));
    ("-", `Prim0 (binop UMinus));
