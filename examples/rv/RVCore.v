@@ -493,7 +493,7 @@ Module  RV32ICore.
     | e2w s => fromExecute.r s
     | scoreboard s => Scoreboard.r s
     | pc => Ob~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0
-    | epoch => Bits.zeroes _
+    | epoch => Bits.zero
     end.
 
   Definition fetch : uaction reg_t empty_ext_fn_t :=

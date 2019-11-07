@@ -783,14 +783,14 @@ Module Bits.
   End Casts.
 
   Section Arithmetic.
-    Definition zero sz : bits sz := of_N sz N.zero.
-    Definition one sz : bits sz := of_N sz N.one.
+    Definition zero {sz} : bits sz := of_N sz N.zero.
+    Definition one {sz} : bits sz := of_N sz N.one.
 
     Definition plus {sz} (bs1 bs2: bits sz) :=
       Bits.of_N sz (Bits.to_N bs1 + Bits.to_N bs2)%N.
 
     Definition minus {sz} (bs1 bs2: bits sz) :=
-      plus (plus bs1 (neg bs2)) (one sz).
+      plus (plus bs1 (neg bs2)) (@one sz).
   End Arithmetic.
 
   Section Comparisons.

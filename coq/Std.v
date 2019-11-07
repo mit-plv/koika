@@ -14,12 +14,10 @@ Module Fifo1 (f: Fifo).
     | valid0 => bits_t 1
     end.
 
-  Notation zero := (Bits.zeroes _).
-
   Definition r idx : R idx :=
     match idx with
-    | data0 => value_of_bits zero
-    | valid0 => zero
+    | data0 => value_of_bits Bits.zero
+    | valid0 => Bits.zero
     end.
 
   Definition name_reg r :=

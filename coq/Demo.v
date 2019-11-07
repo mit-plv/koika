@@ -35,13 +35,11 @@ Module Decoder (P: Unpacker) (F: Fetcher).
     | Rdecoded => struct_t decoded_sig
     end.
 
-  Notation zero := (Bits.zeroes _).
-
   Definition r idx : R idx :=
     match idx with
-    | Rpc => zero
-    | Rencoded => zero
-    | Rdecoded => (zero, (zero, (zero, tt)))
+    | Rpc => Bits.zero
+    | Rencoded => Bits.zero
+    | Rdecoded => (Bits.zero, (Bits.zero, (Bits.zero, tt)))
     end.
 
   Definition _fetch : uaction reg_t ext_fn_t :=
@@ -106,7 +104,7 @@ Module ManualUnpacker <: Unpacker.
         `SCall2 (USubstField "immediate")
          (SCall2 (USubstField "dst")
                  (SCall2 (USubstField "src")
-                         (UUnop (UConv (UUnpack (struct_t decoded_sig))) (USugar (UConstBits (Bits.zero 32))))
+                         (UUnop (UConv (UUnpack (struct_t decoded_sig))) (USugar (UConstBits (Bits.zeroes 32))))
                          {{ src }})
                  {{ dst }})
          {{ imm }}`
@@ -151,7 +149,7 @@ Module ManualFetcher <: Fetcher.
 
   Definition fetch_instr reg_t pc : uaction reg_t :=
     Eval compute in
-      (USugar (USwitch (UVar pc) (USugar (UConstBits (Bits.zero 32)))
+      (USugar (USwitch (UVar pc) (USugar (UConstBits (Bits.zeroes 32)))
                        (all_branches 3 N.zero instructions))).
 End ManualFetcher.
 
@@ -375,9 +373,9 @@ Module RegisterFile_Ordered.
 
   Definition r reg : R reg :=
     match reg with
-    | rIndex => Bits.zero _
+    | rIndex => Bits.zero
     | rData n => Bits.of_nat _ (index_to_nat n)
-    | rOutput => Bits.zero _
+    | rOutput => Bits.zero
     end.
 
 
@@ -450,7 +448,7 @@ Module Enums.
   Definition r reg : R reg :=
     match reg with
     | rA => Ob~1~1~0
-    | rB => Bits.zero _
+    | rB => Bits.zero
     end.
 
   Definition _Incr : uaction _ empty_ext_fn_t :=

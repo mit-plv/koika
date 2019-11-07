@@ -429,10 +429,10 @@ Section CircuitCompilation.
         | Not sz => fun a c => c
         | ZExtL sz width => fun a c =>
                              ltac:(subst cRet; simpl; rewrite <- vect_extend_end_cast;
-                                   exact (CBinop (Concat _ _) (CConst (Bits.zeroes _)) a))
+                                   exact (CBinop (Concat _ _) (CConst Bits.zero) a))
         | ZExtR sz width => fun a c =>
                              ltac:(subst cRet; simpl; rewrite <- vect_extend_beginning_cast;
-                                   exact (CBinop (Concat _ _) a (CConst (Bits.zeroes _))))
+                                   exact (CBinop (Concat _ _) a (CConst Bits.zero)))
         | Part sz offset width => fun a c => c
         end a (CUnop fn a)
       | Struct1 fn sig f => fun a =>
@@ -468,7 +468,7 @@ Section CircuitCompilation.
       @action_circuit (type_sz tau) * (ccontext sig) :=
       match a in action _ _ _ _ ts tau return ccontext ts -> @action_circuit (type_sz tau) * ccontext ts with
       | Fail tau => fun Gamma =>
-        ({| retVal := $`"fail"`Bits.zero (type_sz tau); (* LATER: Question mark here *)
+        ({| retVal := $`"fail"`Bits.zeroes (type_sz tau); (* LATER: Question mark here *)
             erwc := {| canFire := $`"fail_cF"` Ob~0;
                        regs := clog.(regs) |} |},
          Gamma)
@@ -693,7 +693,7 @@ Section CircuitCompilation.
        write0 := $`"sched_init_no_write0"` Ob~0;
        write1 := $`"sched_init_no_write1"` Ob~0;
        data0 := CAnnotOpt "sched_init_data0_is_reg" (REnv.(getenv) cr idx);
-       data1 := CAnnotOpt "sched_init_no_data1" (CConst (Bits.zeroes _)) |}.
+       data1 := CAnnotOpt "sched_init_no_data1" (CConst Bits.zero) |}.
 
   Definition init_scheduler_circuit : scheduler_circuit :=
     REnv.(create) init_scheduler_rwdata.
