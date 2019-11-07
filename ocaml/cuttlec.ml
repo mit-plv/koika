@@ -114,6 +114,47 @@ let dynlink_interop_packages in_path : Cuttlebone.Extr.interop_package_t list =
      abort "Dynlink error: %s" (Dynlink.error_message err));
   Registry.reset ()
 
+(* https://github.com/janestreet/core/issues/136 *)
+module RelPath = struct
+  open Core
+
+  let split_common_prefix l1 l2 =
+    let rec loop acc l1 l2 =
+      match l1, l2 with
+      | h1 :: t1, h2 :: t2 when h1 = h2 -> loop (h1 :: acc) t1 t2
+      | _ -> List.rev acc, l1, l2 in
+    loop [] l1 l2
+
+  let abspath (path: string) =
+    if Filename.is_relative path then
+      Filename.concat (Sys.getcwd ()) path
+    else path
+
+  let rec skip_common_prefix l1 l2 =
+    match l1, l2 with
+    | h1 :: t1, h2 :: t2 when h1 = h2 -> skip_common_prefix t1 t2
+    | _ -> l1, l2
+
+  let relpath (path: string) (start: string) =
+    let open Core.Filename in
+    let pparts = parts (abspath path) in
+    let sparts = parts (abspath start) in
+    let ponly, sonly = skip_common_prefix pparts sparts in
+    let go_up = List.map ~f:(fun _ -> parent_dir_name) sonly in
+    match go_up @ ponly with
+    | [] -> current_dir_name
+    | relpath -> of_parts relpath
+end
+
+let adjust_pos target_dpath (p: Pos.t) : Pos.t =
+  match p with
+  | Filename fname -> Filename (RelPath.relpath fname target_dpath)
+  | Range (fname, rng) -> Range (RelPath.relpath fname target_dpath, rng)
+  | Unknown | StrPos _ -> p
+
+let adjust_positions dst_dpath (cu: Pos.t Cuttlebone.Compilation.compile_unit) =
+  { cu with c_pos_of_pos = adjust_pos dst_dpath << cu.c_pos_of_pos }
+
 let run (frontend: frontend) (backends: backend list) (cnf: config) =
   match frontend with
   | `LV ->
@@ -124,6 +165,7 @@ let run (frontend: frontend) (backends: backend list) (cnf: config) =
              let resolved =  resolve (parse (read_sexps cnf.cnf_src_fpath)) in
              resolved, typecheck resolved) in
        let c_unit = first_compile_unit cnf.cnf_src_fpath typechecked in
+       let c_unit = adjust_positions cnf.cnf_dst_dpath c_unit in
        print_errors_and_warnings [];
        run_backends backends cnf
          { pkg_modname = c_unit.c_modname;
@@ -160,13 +202,8 @@ let parse_output_spec frontend spec =
     ~f:(backends_of_spec frontend)
     (String.split_on_char ',' spec)
 
-let resolve_srcpath = function
-  | "-" -> "-"
-  | pth -> Core.Filename.realpath pth
-
 let run_cli expect_errors src_fpath dst_dpath output_specs =
   expect_success := not expect_errors;
-  let src_fpath = resolve_srcpath src_fpath in
   let _, frontend = frontend_of_path src_fpath in
   let backends = Core.List.concat_map ~f:(parse_output_spec frontend) output_specs in
   let dst_dpath = Core.Option.value dst_dpath ~default:(Filename.dirname src_fpath) in
@@ -176,15 +213,15 @@ let run_cli expect_errors src_fpath dst_dpath output_specs =
 
 let cli =
   let open Core in
+  let open Command.Let_syntax in
   Command.basic
     ~summary:"Compile Koika programs"
-    Command.Let_syntax.(
-    let%map_open
+    (let%map_open
         expect_errors = flag "--expect-errors" no_arg ~doc:"flip the exit code (1 for success, 0 for errors)"
-    and src_fpath = anon ("input" %: Filename.arg_type)
-    and dst_dpath = flag "-o" (optional string) ~doc:"dir output to this directory"
-    and output_specs = flag "-T" (listed string) ~doc:"fmt output in this format"
-    in fun () -> run_cli expect_errors src_fpath dst_dpath output_specs)
+     and src_fpath = anon ("input" %: Filename.arg_type)
+     and dst_dpath = flag "-o" (optional string) ~doc:"dir output to this directory"
+     and output_specs = flag "-T" (listed string) ~doc:"fmt output in this format"
+     in fun () -> run_cli expect_errors src_fpath dst_dpath output_specs)
 
 let _ =
   Core.Command.run cli
