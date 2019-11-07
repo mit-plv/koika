@@ -1,15 +1,23 @@
+;;; Unit tests for comparison operators
+
 (module test
-  (register r 1'b0)
+  (register rlt 1'b0)
+  (register rle 1'b0)
+  (register rgt 1'b0)
+  (register rge 1'b0)
+  (register rslt 1'b0)
+  (register rsle 1'b0)
+  (register rsgt 1'b0)
+  (register rsge 1'b0)
 
   (rule r
-    (when (and (< 4'0 4'1)
-               (<= 4'1 4'1)
-               (> 4'1 4'0)
-               (>= 4'1 4'1)
-               (<s 4'b1000 4'b0001)
-               (<s= 4'b1000 4'b1000)
-               (>s 4'b0001 4'b1000)
-               (>s= 4'b1000 4'b1000))
-      (write.0 r true)))
+    (write.0 rlt (< 4'0 4'1))
+    (write.0 rle (<= 4'1 4'1))
+    (write.0 rgt (> 4'1 4'0))
+    (write.0 rge (>= 4'1 4'1))
+    (write.0 rslt (<s 4'b1000 4'b0001))
+    (write.0 rsle (<s= 4'b1000 4'b1000))
+    (write.0 rsgt (>s 4'b0001 4'b1000))
+    (write.0 rsge (>s= 4'b1000 4'b1000)))
 
   (scheduler s (sequence)))

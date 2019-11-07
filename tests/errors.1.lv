@@ -1,4 +1,4 @@
-;;; Parse errors
+;;; Syntax and typing errors in LV
 
 (enum bool
   ::true  1'b1

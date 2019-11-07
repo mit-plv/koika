@@ -1,3 +1,5 @@
+;;; Simple uses of structs and enums
+
 (enum ternary
   ::false   2'b00
   ::true    2'b01
@@ -11,6 +13,12 @@
   :kind 'kind
   :imm1 (bits 12)
   :imm2 (bits 12))
+
+(enum has_x_1
+  ::x 5'b0)
+
+(enum has_x_2
+  ::x 5'b0)
 
 (extfun getinstr ((idx (bits 32))) (bits 32))
 
@@ -61,5 +69,13 @@ public:
       (write.0 routput
         (zextl 32 (+ (eval i) (eval i2))))))
 
+  (register scratch 1'b0)
+
+  (rule test_name_resolution
+    (progn
+      (write.0 scratch (eq (unpack 'has_x_1 5'0) has_x_1::x))
+      (write.0 scratch (eq (unpack 'has_x_2 5'0) has_x_2::x))
+      (write.0 scratch (eq (unpack 'has_x_2 5'0) ::x))))
+
   (scheduler main
-    (sequence readinstr runinstr)))
+    (sequence test_name_resolution readinstr runinstr)))

@@ -1,3 +1,4 @@
+(*;;; Syntax and typing errors *)
 Require Import Koika.Frontend.
 
 Inductive reg_t := R0.

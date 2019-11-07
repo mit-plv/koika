@@ -1,4 +1,6 @@
-(module tests
+;;; Shadowing unit tests
+
+(module shadowing
   (register r 32'0)
 
   (rule shadowing
@@ -12,5 +14,5 @@
           (write.0 r (+ r s))))
       (write.1 r r)))
 
-  (scheduler main
+  (scheduler _
     (sequence shadowing)))

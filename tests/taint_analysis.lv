@@ -1,3 +1,5 @@
+;;; Unit tests to ensure that impure functions are not optimized out
+
 (extfun impure () (bits 5))
 
 (module taint

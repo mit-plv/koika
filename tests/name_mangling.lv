@@ -1,3 +1,5 @@
+;;; Name mangling unit tests
+
 (enum lv_gensym_collisions
   ::_lvs_0 2'0
   ::_lvs_1 2'1)
