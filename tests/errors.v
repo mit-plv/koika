@@ -46,7 +46,7 @@ Definition package :=
      ip_sim := {| sp_var_names x := x;
                  sp_ext_fn_names := show;
                  sp_extfuns := None |};
-     ip_verilog := {| vp_external_rules := List.nil;
+     ip_verilog := {| vp_external_rules := [];
                      vp_ext_fn_names := show |} |}.
 
 Definition prog := Interop.Backends.register package.

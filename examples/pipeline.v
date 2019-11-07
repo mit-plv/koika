@@ -114,7 +114,7 @@ Definition package :=
                  sp_ext_fn_names := ext_fn_names;
                  sp_extfuns := Some cpp_extfuns |};
 
-     ip_verilog := {| vp_external_rules := List.nil;
+     ip_verilog := {| vp_external_rules := [];
                      vp_ext_fn_names := ext_fn_names |} |}.
 
 Definition prog := Interop.Backends.register package.
