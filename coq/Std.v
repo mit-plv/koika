@@ -69,23 +69,23 @@ Definition invalid {reg_t fn} (tau:type) : UInternalFunction reg_t fn :=
   }}.
 
 Module Type Rf_sig.
-  Parameter lastIdx:nat.
-  Parameter T:type.
+  Parameter idx_sz: nat.
+  Parameter T: type.
   Parameter init: T.
 End Rf_sig.
 
-Module Rf (s:Rf_sig).
-  Definition sz:= S s.lastIdx.
+Module Rf (s: Rf_sig).
+  Definition sz := pow2 s.idx_sz.
   Inductive reg_t := rData (n: Vect.index sz).
 
   Definition R r :=
     match r with
-    | rData n => s.T
+    | rData _ => s.T
     end.
 
   Definition r idx : R idx :=
     match idx with
-    | rData n => s.init
+    | rData _ => s.init
     end.
 
   Definition name_reg r :=
@@ -94,14 +94,12 @@ Module Rf (s:Rf_sig).
     end.
 
   Definition read : UInternalFunction reg_t empty_ext_fn_t :=
-    {{ fun (idx : bits_t (log2 sz)) : s.T =>
-    `UCompleteSwitch (log2 sz) (pred sz) "idx"
-     (vect_map (fun idx => {{ read0(rData idx) }}) (all_indices sz))`}}.
+    {{ fun (idx : bits_t s.idx_sz) : s.T =>
+         `UCompleteSwitch s.idx_sz "idx" (fun idx => {{ read0(rData idx) }})` }}.
 
   Definition write : UInternalFunction reg_t empty_ext_fn_t :=
-    {{fun (idx : bits_t (log2 sz)) (val: s.T) : bits_t 0 =>
-    `UCompleteSwitch (log2 sz) (pred sz) "idx"
-     (vect_map (fun idx => {{ write0(rData idx, val) }}) (all_indices sz))`}}.
+    {{ fun (idx : bits_t s.idx_sz) (val: s.T) : unit_t =>
+         `UCompleteSwitch s.idx_sz "idx" (fun idx => {{ write0(rData idx, val) }})` }}.
 End Rf.
 
 Fixpoint signExtend {reg_t} (n:nat) (m:nat) : UInternalFunction reg_t empty_ext_fn_t :=

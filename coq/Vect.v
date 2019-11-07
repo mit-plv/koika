@@ -777,6 +777,9 @@ Module Bits.
     Definition of_nat sz (n: nat) : bits sz :=
       of_N sz (N.of_nat n).
 
+    Definition of_index sz {n} (idx: index n) : bits sz :=
+      of_nat sz (index_to_nat idx).
+
     Definition of_2cZ sz (z: Z) : bits sz :=
       match sz with
       | 0 => zeroes 0
@@ -872,8 +875,18 @@ Notation "bs '~' 0" := (Bits.cons false bs) (at level 7, left associativity, for
 Notation "bs '~' 1" := (Bits.cons true bs) (at level 7, left associativity, format "bs '~' 1") : bits.
 Global Open Scope bits.
 
+(* The S (pred …) makes it clear to the typechecher that the result is nonzero *)
 Definition pow2 n :=
-  Nat.pow 2 n.
+  S (pred (Nat.pow 2 n)).
+
+Arguments pow2 / !n : assert.
+
+Lemma pow2_correct : forall n, pow2 n = Nat.pow 2 n.
+Proof.
+  unfold pow2; induction n; simpl.
+  - reflexivity.
+  - destruct (Nat.pow 2 n); simpl; (discriminate || reflexivity).
+Qed.
 
 Fixpoint z_range start len :=
   match len with

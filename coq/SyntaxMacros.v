@@ -33,13 +33,10 @@ Section SyntaxMacros.
           branch (gen_switch var (vect_tl branches))
     end branches.
 
-  Definition UCompleteSwitch
-             sz bound
-             (var: var_t)
-             (branches: vect uaction (S bound)) :=
+  Definition UCompleteSwitch sz (var: var_t) (branches: index (pow2 sz) -> uaction) :=
     gen_switch (tau := bits_t sz) var
-               (vect_map2 (fun n a => (Bits.of_nat sz (index_to_nat n), a))
-                          (all_indices (S bound)) branches).
+               (vect_map (fun idx => (Bits.of_index sz idx, branches idx))
+                         (all_indices (pow2 sz))).
 End SyntaxMacros.
 
 Module Display.

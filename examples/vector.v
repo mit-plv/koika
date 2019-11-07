@@ -22,12 +22,10 @@ Definition r reg : R reg :=
   | rOutput => Bits.zero
   end.
 
-(* This macro expands into a switch that reads the n-th register
-     in rData *)
-Definition read_vect n : uaction reg_t empty_ext_fn_t :=
-  UCompleteSwitch
-    index_sz (pred nregs) n
-    (vect_map (fun idx => {{ read0(rData idx) }}) (all_indices nregs)).
+(* This macro expands into a switch that branches on the value of [idx] to return
+   the idx-th register in rData. *)
+Definition read_vect idx : uaction reg_t empty_ext_fn_t :=
+  UCompleteSwitch index_sz idx (fun idx => {{ read0(rData idx) }}).
 
 Definition _read_reg : uaction reg_t empty_ext_fn_t :=
   {{
