@@ -241,6 +241,7 @@ let assignment_to_string (gensym: int ref) (assignment: assignment) =
        | Xor _ -> default_left ^ arg1 ^ " ^ " ^ arg2
        | Lsl (_, _) -> default_left ^ arg1 ^ " << " ^ arg2
        | Lsr (_, _) -> default_left ^ arg1 ^ " >> " ^ arg2
+       | Asr (_, _) -> default_left ^ "$signed(" ^ arg1 ^ ")" ^ " >>> " ^ arg2
        | EqBits _ -> default_left ^ arg1 ^ " == " ^ arg2
        | Concat (_, _) -> default_left ^ "{" ^ arg1 ^ ", " ^ arg2 ^ "}")
    | EExternal (ffi, arg) ->

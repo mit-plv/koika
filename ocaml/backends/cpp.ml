@@ -236,6 +236,7 @@ let cpp_bits2_fn_name (f: Extr.PrimTyped.fbits2) =
      | Xor sz -> sprintf "lxor<%d>" sz
      | Lsl (bits_sz, shift_sz) -> sprintf "lsl<%d, %d>" bits_sz shift_sz
      | Lsr (bits_sz, shift_sz) -> sprintf "lsr<%d, %d>" bits_sz shift_sz
+     | Asr (bits_sz, shift_sz) -> sprintf "asr<%d, %d>" bits_sz shift_sz
      | Concat (sz1, sz2) -> sprintf "concat<%d, %d>" sz1 sz2
      | Sel sz -> sprintf "sel<%d, %d>" sz (Cuttlebone.Extr.log2 sz)
      | PartSubst (sz, offset, width) -> sprintf "part_subst<%d, %d, %d>" sz offset width

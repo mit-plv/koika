@@ -106,12 +106,13 @@ Notation "a '||' b" :=  (UBinop (UBits2 UOr) a b) (in custom koika at level 85, 
 Notation "'zeroExtend(' a ',' b ')'" :=  (UUnop (UBits1 (UZExtL b)) a) (in custom koika, b constr at level 0, format "'zeroExtend(' a ',' b ')'").
 Notation "'pack(' a ')'" :=  (UUnop (UConv UPack) a) (in custom koika, a custom koika).
 Notation "'unpack(' t ',' v ')'" :=  (UUnop (UConv (UUnpack (struct_t t))) v) (in custom koika, t constr at level 11, v custom koika).
-Notation "a '^' b" :=  (UBinop (UBits2 UXor) a b) (in custom koika at level 85, format "a  '^'  b").
-Notation "a '+' b" :=  (UBinop (UBits2 UPlus) a b) (in custom koika at level 85, format "a  '+'  b").
-Notation "a '-' b" :=  (UBinop (UBits2 UMinus) a b) (in custom koika at level 85, format "a  '-'  b").
-Notation "a '==' b" :=  (UBinop UEq a b) (in custom koika at level 79, format "a  '=='  b").
-Notation "a '>>' b" :=  (UBinop (UBits2 ULsr) a b) (in custom koika at level 79, format "a  '>>'  b").
-Notation "a '<<' b" :=  (UBinop (UBits2 ULsl) a b) (in custom koika at level 79, format "a  '<<'  b").
+Notation "a  '^'  b" :=  (UBinop (UBits2 UXor) a b) (in custom koika at level 85).
+Notation "a  '+'  b" :=  (UBinop (UBits2 UPlus) a b) (in custom koika at level 85).
+Notation "a  '-'  b" :=  (UBinop (UBits2 UMinus) a b) (in custom koika at level 85).
+Notation "a  '=='  b" :=  (UBinop UEq a b) (in custom koika at level 79).
+Notation "a  '>>'  b" :=  (UBinop (UBits2 ULsr) a b) (in custom koika at level 79).
+Notation "a  '>>>'  b" :=  (UBinop (UBits2 UAsr) a b) (in custom koika at level 79).
+Notation "a  '<<'  b" :=  (UBinop (UBits2 ULsl) a b) (in custom koika at level 79).
 Notation "a  '<'  b" := (UBinop (UBits2 (UCompare false cLt)) a b) (in custom koika at level 79).
 Notation "a  '<s'  b" := (UBinop (UBits2 (UCompare true cLt)) a b) (in custom koika at level 79).
 Notation "a  '<='  b" := (UBinop (UBits2 (UCompare false cLe)) a b) (in custom koika at level 79).

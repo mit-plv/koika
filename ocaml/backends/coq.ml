@@ -220,6 +220,7 @@ and pp_prim_ubits2 ppf (f: Cuttlebone.Extr.PrimUntyped.ubits2) =
   | UXor -> pp_raw "UXor"
   | ULsl -> pp_raw "ULsl"
   | ULsr -> pp_raw "ULsr"
+  | UAsr -> pp_raw "UAsr"
   | UConcat -> pp_raw "UConcat"
   | UPlus -> pp_raw "UPlus"
   | UMinus -> pp_raw "UMinus"

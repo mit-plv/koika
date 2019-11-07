@@ -101,6 +101,33 @@ namespace prims {
   }
 
   template<std::size_t sz>
+  sbits<sz> sbits_of_bits(const bits<sz> x) {
+    sbits<sz> sx; // FIXME does this work with multiprecision?
+    std::memcpy(&sx, &x, sizeof x);
+    return sx;
+  }
+
+  template<std::size_t sz>
+  bits<sz> bits_of_sbits(const sbits<sz> sx) {
+    bits<sz> x; // FIXME does this work with multiprecision?
+    std::memcpy(&x, &sx, sizeof x);
+    return x;
+  }
+
+  template<std::size_t sz>
+  sbits<sz> shifted_sbits_of_bits(const bits<sz> x) {
+    // This constructs an int of the same bitsize as x, with the same
+    // bitpattern, except that it uses the high bits of the storage type instead
+    // of the low ones (e.g. 4'b1101 is represented as 8'b11010000).
+    return sbits_of_bits<sz>(x) << padding_width<sz>();
+  }
+
+  template<std::size_t sz>
+  bits<sz> bits_of_shifted_sbits(const sbits<sz> sx) {
+    return bits_of_sbits<sz>(sx) >> padding_width<sz>();
+  }
+
+  template<std::size_t sz>
   bits<sz> ones() {
     // GCC and Clang are smart enough to elide the shift when digits == sz
     return std::numeric_limits<bits<sz>>::max() >> padding_width<sz>();
@@ -158,6 +185,11 @@ namespace prims {
   }
 
   template<std::size_t sz1, std::size_t sz2>
+  bits<sz1> asr(const bits<sz1> data, const bits<sz2> shift) {
+    return bits_of_shifted_sbits<sz1>(shifted_sbits_of_bits<sz1>(data) >> shift);
+  }
+
+  template<std::size_t sz1, std::size_t sz2>
   bits<sz1> lsr(const bits<sz1> data, const bits<sz2> shift) {
     return data >> shift;
   }
@@ -200,16 +232,6 @@ namespace prims {
   template<std::size_t sz>
   bits<1> ge(const bits<sz> x, const bits<sz> y) {
     return x >= y;
-  }
-
-  template<std::size_t sz>
-  bits<sz> shifted_sbits_of_bits(const bits<sz> x) {
-    // This constructs an int of the same bitsize as x, with the same
-    // bitpattern, except that it uses the high bits of the storage type instead
-    // of the low ones (e.g. 4'b1101 is represented as 8'b11010000).
-    sbits<sz> sx; // FIXME does this work with multiprecision?
-    std::memcpy(&sx, &x, sizeof x);
-    return sx << padding_width<sz>();
   }
 
   template<std::size_t sz>
