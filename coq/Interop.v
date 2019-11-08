@@ -200,12 +200,12 @@ End Compilation.
 Record interop_package_t :=
   { pos_t := unit;
     var_t := string;
-    dp_reg_t : Type;
-    dp_rule_name_t : Type;
-    dp_ext_fn_t : Type;
-    ip_koika : @koika_package_t pos_t var_t dp_rule_name_t dp_reg_t dp_ext_fn_t;
-    ip_verilog : @verilog_package_t dp_rule_name_t dp_ext_fn_t;
-    ip_sim : @sim_package_t var_t dp_ext_fn_t }.
+    ip_reg_t : Type;
+    ip_rule_name_t : Type;
+    ip_ext_fn_t : Type;
+    ip_koika : @koika_package_t pos_t var_t ip_rule_name_t ip_reg_t ip_ext_fn_t;
+    ip_verilog : @verilog_package_t ip_rule_name_t ip_ext_fn_t;
+    ip_sim : @sim_package_t var_t ip_ext_fn_t }.
 
 Require Import Koika.ExtractionSetup.
 
