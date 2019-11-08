@@ -157,12 +157,22 @@ Notation "'funcall0' method " :=
   (UInternalCall method nil)
     (in custom koika at level 98,  method constr at level 0).
 
-Notation "'get' '(' t ',' f ')'" :=
-  (UUnop (UStruct1 (UGetField f)) t)
-    (in custom koika, t custom koika at level 13, f custom koika_var at level 0, format "'get' '(' t ','  f ')'").
-Notation "'subst' '(' t ',' f ',' a ')'" :=
-  (UBinop (UStruct2 (USubstField f)) t a)
-    (in custom koika, t custom koika at level 13, a custom koika at level 13, f custom koika_var at level 0, format "'subst' '(' t ','  f ',' a ')'").
+Notation "'get' '(' v ',' f ')'" :=
+  (UUnop (UStruct1 (UGetField f)) v)
+    (in custom koika, v custom koika at level 13, f custom koika_var at level 0, format "'get' '(' v ','  f ')'").
+Notation "'getbits' '(' t ',' v ',' f ')'" :=
+  (UUnop (UStruct1 (UGetFieldBits t f)) v)
+    (in custom koika, t constr at level 11, v custom koika at level 13,
+        f custom koika_var at level 0,
+        format "'getbits' '(' t ','  v ','  f ')'").
+Notation "'subst' '(' v ',' f ',' a ')'" :=
+  (UBinop (UStruct2 (USubstField f)) v a)
+    (in custom koika, v custom koika at level 13, a custom koika at level 13, f custom koika_var at level 0, format "'subst' '(' v ','  f ',' a ')'").
+Notation "'substbits' '(' t ',' v ',' f ',' a ')'" :=
+  (UBinop (UStruct2 (USubstFieldBits t f)) v a)
+    (in custom koika, t constr at level 11, v custom koika at level 13,
+        a custom koika at level 13, f custom koika_var at level 0,
+        format "'substbits' '(' t ','  v ','  f ',' a ')'").
 
 Declare Custom Entry koika_structs_init.
 
