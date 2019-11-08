@@ -97,11 +97,11 @@ Section RV32IHelpers.
           match get(fields, opcode) with
           | #opcode_LOAD =>
             match get(fields, funct3) with
-            (* | #funct3_LB  => Ob~1 *)
-            (* | #funct3_LH  => Ob~1 *)
+            | #funct3_LB  => Ob~1
+            | #funct3_LH  => Ob~1
             | #funct3_LW  => Ob~1
-            (* | #funct3_LBU => Ob~1 *)
-            (* | #funct3_LHU => Ob~1 *)
+            | #funct3_LBU => Ob~1
+            | #funct3_LHU => Ob~1
             return default: Ob~0
             end
           | #opcode_OP_IMM =>
@@ -124,8 +124,8 @@ Section RV32IHelpers.
           | #opcode_AUIPC => Ob~1
           | #opcode_STORE =>
             match get(fields, funct3) with
-            (* | #funct3_SB => Ob~1 *)
-            (* | #funct3_SH => Ob~1 *)
+            | #funct3_SB => Ob~1
+            | #funct3_SH => Ob~1
             | #funct3_SW => Ob~1
             return default: Ob~0
             end
@@ -260,13 +260,6 @@ Section RV32IHelpers.
             |32`d0|
     }}.
 
-  Definition signedShiftRight : UInternalFunction reg_t empty_ext_fn_t :=
-    (* TODO write a barrel-shifter *)
-    {{
-        fun (arg : bits_t 32) (shamt : bits_t 5) : bits_t 32 =>
-          arg
-    }}.
-
   Definition alu32 : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun (funct3  : bits_t 3)
          (inst_30 : bits_t 1)
@@ -280,7 +273,7 @@ Section RV32IHelpers.
          | #funct3_SLT  => zeroExtend(a <s b, 32)
          | #funct3_SLTU => zeroExtend(a < b, 32)
          | #funct3_XOR  => a ^ b
-         | #funct3_SRL  => if (inst_30 == Ob~1) then signedShiftRight(a, shamt) else (a >> shamt)
+         | #funct3_SRL  => if (inst_30 == Ob~1) then a >>> shamt else (a >> shamt)
          | #funct3_OR   => a || b
          | #funct3_AND  => a && b
          return default: #(Bits.of_nat 32 0)
@@ -372,22 +365,14 @@ End RV32IHelpers.
 Module  RV32ICore.
   Import ListNotations.
 
-  (* Define types *)
-  Definition mem_op :=
-    {| enum_name := "mem_op";
-       enum_bitsize := 1;
-       enum_members := vect_of_list ["Ld"; "St"];
-       enum_bitpatterns := vect_of_list [Bits.of_nat 1 0; Bits.of_nat 1 1]
-    |}.
-
   Definition mem_req :=
     {| struct_name := "mem_req";
-       struct_fields := [("type", enum_t mem_op);
-                           ("addr", bits_t 32);
-                           ("data", bits_t 32)] |}.
+       struct_fields := [("byte_en" , bits_t 4);
+                         ("addr"     , bits_t 32);
+                         ("data"     , bits_t 32)] |}.
   Definition mem_resp :=
     {| struct_name := "mem_resp";
-       struct_fields := [("type", enum_t mem_op); ("addr", bits_t 32); ("data", bits_t 32)] |}.
+       struct_fields := [("byte_en", bits_t 4); ("addr", bits_t 32); ("data", bits_t 32)] |}.
 
   Definition fetch_bookkeeping :=
     {| struct_name := "fetch_bookkeeping";
@@ -406,7 +391,8 @@ Module  RV32ICore.
 
   Definition execute_bookkeeping :=
     {| struct_name := "execute_bookkeeping";
-       struct_fields := [("newrd" , bits_t 32);
+       struct_fields := [("isUnsigned" , bits_t 1);
+                         ("newrd" , bits_t 32);
                          ("dInst"    , struct_t decoded_sig)]|}.
 
 
@@ -500,7 +486,7 @@ Module  RV32ICore.
     {{
         let pc := read0(pc) in
         let req := struct mem_req {|
-                              type := enum mem_op {| Ld |};
+                              byte_en := |4`d0|; (* Load *)
                               addr := pc;
                               data := |32`d0| |} in
         let fetch_bookkeeping := struct fetch_bookkeeping {|
@@ -574,7 +560,7 @@ Module  RV32ICore.
   Definition execute : uaction reg_t empty_ext_fn_t :=
     {{
         let decoded_bookeeping := d2e.(fromDecode.deq)() in
-        if (get(decoded_bookeeping, epoch) == read0(epoch)) then
+        if get(decoded_bookeeping, epoch) == read0(epoch) then
           (* By then we guarantee that this instruction is correct-path *)
           let dInst := get(decoded_bookeeping, dInst) in
           if get(dInst, legal) == Ob~0 then
@@ -589,18 +575,27 @@ Module  RV32ICore.
              let rs1_val := get(decoded_bookeeping, rval1) in
              let rs2_val := get(decoded_bookeeping, rval2) in
              let data := execALU32(fInst, rs1_val, rs2_val, imm, pc) in
+             let isUnsigned := Ob~0 in
              if (isMemoryInst(dInst)) then
                let addr := rs1_val + imm in
-               set data := rs2_val;
-               if (!(addr[|5`d0| :+ 2] == Ob~0~0)) then
-                 fail
-               else
-                 pass;
+               let offset := addr[|5`d0| :+ 2] in
+               let funct3 := get(getFields(fInst), funct3) in
+               let size := funct3[|2`d0| :+ 2] in
+               let shift_amount := offset ++ |3`d0| in
+               let byte_en := match size with
+                              | Ob~0~0 => Ob~0~0~0~1
+                              | Ob~0~1 => Ob~0~0~1~1
+                              | Ob~1~0 => Ob~1~1~1~1
+                              return default: fail
+                              end << offset in
+               set data := (rs2_val << shift_amount);
+               set addr := (addr[|5`d2| :+ 30 ] ++ |2`d0|);
+               set isUnsigned := funct3[|2`d2|];
                let type_mem := if (fInst[|5`d5|] == Ob~1)
-                              then enum mem_op {| St |}
-                              else enum mem_op {| Ld |} in
+                              then byte_en
+                              else Ob~0~0~0~0 in
                let req := struct mem_req {|
-                                   type := type_mem;
+                                   byte_en := type_mem;
                                    addr := addr;
                                    data := data |} in
                toDMem.(MemReq.enq)(req)
@@ -615,6 +610,7 @@ Module  RV32ICore.
              else
                pass;
              let execute_bookkeeping := struct execute_bookkeeping {|
+                                                 isUnsigned := isUnsigned;
                                                  newrd := data;
                                                  dInst := get(decoded_bookeeping, dInst)
                                                |} in
@@ -654,8 +650,8 @@ Module  RV32ICore.
     {{
         let readRequestI := toIMem.(MemReq.deq)() in
         let IAddress := get(readRequestI, addr) in
-        let IType := get(readRequestI, type) in
-        fromIMem.(MemResp.enq)(struct mem_resp {|type := IType ; addr := IAddress; data := |32`d0| |})
+        let IEn := get(readRequestI, byte_en) in
+        fromIMem.(MemResp.enq)(struct mem_resp {|byte_en := IEn ; addr := IAddress; data := |32`d0| |})
     }}.
 
   Time Definition tc_externalI :=
@@ -665,8 +661,8 @@ Module  RV32ICore.
     {{
         let readRequestD := toDMem.(MemReq.deq)() in
         let DAddress := get(readRequestD, addr) in
-        let DType := get(readRequestD, type) in
-        fromDMem.(MemResp.enq)(struct mem_resp {|type := DType ; addr := DAddress; data := |32`d0| |})
+        let DEn := get(readRequestD, byte_en) in
+        fromDMem.(MemResp.enq)(struct mem_resp {|byte_en := DEn ; addr := DAddress; data := |32`d0| |})
     }}.
 
   Time Definition tc_externalD :=
