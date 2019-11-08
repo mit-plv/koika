@@ -29,17 +29,16 @@ PHONY += coq coq-all
 #########
 
 KOIKA_LIB := ${OCAML_BUILD_DIR}/koika.cmxa
-COQ_DEMO_EXE := ${OCAML_BUILD_DIR}/demo.exe
 CUTTLEC_EXE := ${OCAML_BUILD_DIR}/cuttlec.exe
 
 # FIXME: The ‘coq’ dependency is because dune doesn't track the dependency on
 # Extraction.vo at the moment.  See https://github.com/ocaml/dune/issues/2178.
 ocaml: coq
 	@printf "\n== Building OCaml library and executables ==\n"
-	dune build ocaml/demo.exe ocaml/demo.bc ocaml/cuttlec.exe ocaml/cuttlec.bc ocaml/koika.cma ocaml/koika.cmxa
+	dune build ocaml/cuttlec.exe ocaml/cuttlec.bc ocaml/koika.cma ocaml/koika.cmxa
 
 # This prevents make from running two instances of Dune in parallel
-${COQ_DEMO_EXE} ${CUTTLEC_EXE}: ocaml;
+${KOIKA_LIB} ${CUTTLEC_EXE}: ocaml;
 
 PHONY += ocaml
 
@@ -99,13 +98,7 @@ EXAMPLES_TARGETS := $(patsubst %,%.objects/,${EXAMPLES})
 	@rm "${EXTRACTED_DIR}/dune"
 	@touch "$@"
 
-examples/demo.v.objects/: ${COQ_DEMO_EXE}
-	@printf "\n-- Compiling %s --\n" "$<"
-	@mkdir -p "$@"
-	${COQ_DEMO_EXE}
-	@touch "$@"
-
-examples: ${EXAMPLES_TARGETS} ${COQ_DEMO_TARGET};
+examples: ${EXAMPLES_TARGETS};
 clean-examples:
 	find examples/ -type d \( -name *.objects -or -name extracted \) -exec rm -r {} +
 

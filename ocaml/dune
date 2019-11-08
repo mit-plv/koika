@@ -16,11 +16,6 @@
  (modules interop)
  (libraries backends))
 
-(executable
- (name demo)
- (modules demo)
- (libraries interop))
-
 (library
  (name koika)
  (public_name koika)

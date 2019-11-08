@@ -6,8 +6,7 @@ Require Koika.Common
         Koika.TypeInference
         Koika.TypedSyntaxTools
         Koika.Circuits
-        Koika.Interop
-        Koika.Demo.
+        Koika.Interop.
 
 Extraction "extracted.ml"
            EqDec.EqDec
@@ -24,5 +23,4 @@ Extraction "extracted.ml"
            Circuits.lco_opt_compose Circuits.opt_constprop Circuits.opt_muxelim
            Interop.koika_package_t Interop.circuit_package_t Interop.sim_package_t Interop.verilog_package_t Interop.interop_package_t
            Interop.struct_of_list Interop.struct_to_list
-           Interop.compile_koika_package
-           Demo.demo_packages.
+           Interop.compile_koika_package.
