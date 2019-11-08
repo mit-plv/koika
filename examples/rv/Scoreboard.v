@@ -4,16 +4,16 @@ Require Import Koika.Frontend.
 Require Import Koika.Std.
 
 Module Type Scoreboard_sig.
-  Parameter lastIdx:nat.
+  Parameter idx_sz: nat.
   Parameter maxScore:nat. (* Usually  maxScore ~= 3/4 *)
 End Scoreboard_sig.
 
-Module Scoreboard (s:Scoreboard_sig).
-  Definition sz:= S s.lastIdx.
+Module Scoreboard (s: Scoreboard_sig).
+  Definition sz := pow2 s.idx_sz.
   Definition logScore := log2 s.maxScore.
 
   Module Rf_params <: Rf_sig.
-    Definition lastIdx := s.lastIdx.
+    Definition idx_sz := s.idx_sz.
     Definition T := bits_t logScore.
     Definition init := Bits.zeroes logScore.
   End Rf_params.

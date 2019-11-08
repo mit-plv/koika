@@ -437,14 +437,14 @@ Module  RV32ICore.
   Module fromExecute := Fifo1 FifoExecute.
 
   Module Rf_32 <: Rf_sig.
-    Definition lastIdx := 31.
+    Definition idx_sz := log2 32.
     Definition T := bits_t 32.
     Definition init := Bits.zeroes 32.
   End Rf_32.
   Module Rf := Rf Rf_32.
 
   Module Scoreboard_32reg <: Scoreboard_sig.
-    Definition lastIdx  :=31.
+    Definition idx_sz := log2 32.
     Definition maxScore := 3.
   End Scoreboard_32reg.
   Module Scoreboard := Scoreboard Scoreboard_32reg.
