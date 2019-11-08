@@ -21,16 +21,17 @@ Declare Custom Entry koika_branches.
 Declare Custom Entry koika_consts.
 
 (* Koika_consts *)
-Notation "bs1 '~' bs2" :=
-  (Bits.app bs1 bs2)
-    (in custom koika_consts at level 7, right associativity, format "bs1 '~' bs2").
 Notation "'1'" :=
-  (Bits.ones 1)
+  (Ob~1)
     (in custom koika_consts at level 0).
 Notation "'0'" :=
-  (Bits.zeroes 1)
+  (Ob~0)
     (in custom koika_consts at level 0).
-Notation "'Ob' ~ number" :=
+
+Notation "bs '~' '0'" := (Bits.cons false bs) (in custom koika_consts at level 7, left associativity, format "bs '~' '0'").
+Notation "bs '~' '1'" := (Bits.cons true bs) (in custom koika_consts at level 7, left associativity, format "bs '~' '1'").
+
+Notation "'Ob' '~' number" :=
   (USugar (UConstBits number))
     (in custom koika at level 7, number custom koika_consts at level 99, format "'Ob' '~' number").
 
@@ -60,6 +61,7 @@ Notation "arg1 '|' arg2" := (app arg1 arg2) (in custom koika_branches at level 1
 
 (* Koika *)
 Notation "'{{' e '}}'" := (e) (e custom koika at level 200, format "'{{' '[v' '/' e '/' ']' '}}'").
+
 Notation "'fail'" :=
   (UFail (bits_t 0)) (in custom koika, format "'fail'").
 Notation "'fail' '(' t ')'" :=
@@ -177,7 +179,7 @@ Notation "'substbits' '(' t ',' v ',' f ',' a ')'" :=
 Declare Custom Entry koika_structs_init.
 
 Notation "f ':=' expr" := (cons (f,expr) nil) (in custom koika_structs_init at level 20, f custom koika_var at level 0, expr custom koika at level 88).
-Notation "a ';' b" := (app a b) (in custom koika_structs_init at level 99, a custom koika_structs_init).
+Notation "a ';' b" := (app a b) (in custom koika_structs_init at level 91, a custom koika_structs_init).
 Notation "'struct' structtype '{|' fields '|}'" :=
   (USugar (UStructInit structtype fields)) (in custom koika, structtype constr at level 0, fields custom koika_structs_init at level 92).
 
@@ -193,7 +195,7 @@ Notation "'match' var 'with' '|' branches 'return' 'default' ':' default 'end'" 
         default custom koika ,
         format "'match'  var  'with' '/' '[v'  '|'  branches '/' 'return'  'default' ':' default ']' 'end'").
 
-Notation "'#' s" := (USugar (UConstBits s)) (in custom koika at level 98, s constr at level 0 ).
+Notation "'#' s" := (USugar (UConstBits s)) (in custom koika at level 98, s constr at level 0, only parsing).
 
 
 Notation "r '|>' s" :=
@@ -284,3 +286,4 @@ Module Type Tests.
         unpack(struct_t mem_req, pack(a))
     }}.
 End Tests.
+
