@@ -422,15 +422,15 @@ Module  RV32ICore.
   End FifoExecute.
   Module fromExecute := Fifo1 FifoExecute.
 
-  Module Rf_32 <: Rf_sig.
+  Module Rf_32 <: RfPow2_sig.
     Definition idx_sz := log2 32.
     Definition T := bits_t 32.
     Definition init := Bits.zeroes 32.
   End Rf_32.
-  Module Rf := Rf Rf_32.
+  Module Rf := RfPow2 Rf_32.
 
   Module Scoreboard_32reg <: Scoreboard_sig.
-    Definition idx_sz := log2 32.
+    Definition lastIdx := 31.
     Definition maxScore := 3.
   End Scoreboard_32reg.
   Module Scoreboard := Scoreboard Scoreboard_32reg.
@@ -576,7 +576,7 @@ Module  RV32ICore.
              let rs2_val := get(decoded_bookeeping, rval2) in
              let data := execALU32(fInst, rs1_val, rs2_val, imm, pc) in
              let isUnsigned := Ob~0 in
-             if (isMemoryInst(dInst)) then
+             if isMemoryInst(dInst) then
                let addr := rs1_val + imm in
                let offset := addr[|5`d0| :+ 2] in
                let funct3 := get(getFields(fInst), funct3) in
@@ -586,14 +586,14 @@ Module  RV32ICore.
                               | Ob~0~0 => Ob~0~0~0~1
                               | Ob~0~1 => Ob~0~0~1~1
                               | Ob~1~0 => Ob~1~1~1~1
-                              return default: fail
+                              return default: fail(4)
                               end << offset in
                set data := (rs2_val << shift_amount);
                set addr := (addr[|5`d2| :+ 30 ] ++ |2`d0|);
                set isUnsigned := funct3[|2`d2|];
                let type_mem := if (fInst[|5`d5|] == Ob~1)
-                              then byte_en
-                              else Ob~0~0~0~0 in
+                               then byte_en
+                               else Ob~0~0~0~0 in
                let req := struct mem_req {|
                                    byte_en := type_mem;
                                    addr := addr;
