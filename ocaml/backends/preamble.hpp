@@ -153,6 +153,16 @@ namespace prims {
     template<std::size_t idx_sz>
     bits<1> operator[](const bits<idx_sz> idx) const;
 
+    bits<sz>& operator&=(const bits<sz> arg);
+    bits<sz>& operator|=(const bits<sz> arg);
+    bits<sz>& operator^=(const bits<sz> arg);
+    bits<sz>& operator+=(const bits<sz> arg);
+    bits<sz>& operator-=(const bits<sz> arg);
+    bits<sz>& operator<<=(const std::size_t shift);
+    bits<sz>& operator>>=(const std::size_t shift);
+    template<std::size_t shift_sz> bits<sz>& operator<<=(const bits<shift_sz> shift);
+    template<std::size_t shift_sz> bits<sz>& operator>>=(const bits<shift_sz> shift);
+
     /// Constructors
 
     template<typename T>
@@ -324,6 +334,25 @@ namespace prims {
   bits<width> part(const bits<sz1> data) {
     return truncate<width, sz1>(data >> idx);
   }
+
+  template<std::size_t sz>
+  bits<sz>& bits<sz>::operator&=(const bits<sz> arg) { return (*this = *this & arg); }
+  template<std::size_t sz>
+  bits<sz>& bits<sz>::operator|=(const bits<sz> arg) { return (*this = *this | arg); }
+  template<std::size_t sz>
+  bits<sz>& bits<sz>::operator^=(const bits<sz> arg) { return (*this = *this ^ arg); }
+  template<std::size_t sz>
+  bits<sz>& bits<sz>::operator+=(const bits<sz> arg) { return (*this = *this + arg); }
+  template<std::size_t sz>
+  bits<sz>& bits<sz>::operator-=(const bits<sz> arg) { return (*this = *this - arg); }
+  template<std::size_t sz>
+  bits<sz>& bits<sz>::operator<<=(const std::size_t shift) { return (*this = *this << shift); }
+  template<std::size_t sz>
+  bits<sz>& bits<sz>::operator>>=(const std::size_t shift) { return (*this = *this >> shift); }
+  template<std::size_t sz> template<std::size_t shift_sz>
+  bits<sz>& bits<sz>::operator<<=(const bits<shift_sz> shift) { return (*this = *this << shift); }
+  template<std::size_t sz> template<std::size_t shift_sz>
+  bits<sz>& bits<sz>::operator>>=(const bits<shift_sz> shift) { return (*this = *this >> shift); }
 
   static _unused unit display(_unused const std::string& msg) {
 #ifndef SIM_MINIMAL

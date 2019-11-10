@@ -528,8 +528,8 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
               let fname = cpp_field_name fname in
               let fval = sprintf "%s.%s" v_arg fname in
               let fpacked = sp_packer ftau ~arg:fval in
-              if idx <> 0 then p "%s = %s << %d;" var var sz;
-              p "%s = %s | prims::widen<%d, %d>(%s);" var var v_sz sz fpacked)
+              if idx <> 0 then p "%s <<= %d;" var sz;
+              p "%s |= prims::widen<%d, %d>(%s);" var v_sz sz fpacked)
             sg.struct_fields;
           p "return %s;" var) in
 
