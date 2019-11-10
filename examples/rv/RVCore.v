@@ -392,6 +392,8 @@ Module  RV32ICore.
   Definition execute_bookkeeping :=
     {| struct_name := "execute_bookkeeping";
        struct_fields := [("isUnsigned" , bits_t 1);
+                         ("size", bits_t 2);
+                         ("offset", bits_t 2);
                          ("newrd" , bits_t 32);
                          ("dInst"    , struct_t decoded_sig)]|}.
 
@@ -576,11 +578,11 @@ Module  RV32ICore.
              let rs2_val := get(decoded_bookeeping, rval2) in
              let data := execALU32(fInst, rs1_val, rs2_val, imm, pc) in
              let isUnsigned := Ob~0 in
+             let funct3 := get(getFields(fInst), funct3) in
+             let size := funct3[|2`d0| :+ 2] in
+             let addr := rs1_val + imm in
+             let offset := addr[|5`d0| :+ 2] in
              if isMemoryInst(dInst) then
-               let addr := rs1_val + imm in
-               let offset := addr[|5`d0| :+ 2] in
-               let funct3 := get(getFields(fInst), funct3) in
-               let size := funct3[|2`d0| :+ 2] in
                let shift_amount := offset ++ |3`d0| in
                let byte_en := match size with
                               | Ob~0~0 => Ob~0~0~0~1
@@ -611,6 +613,8 @@ Module  RV32ICore.
                pass;
              let execute_bookkeeping := struct execute_bookkeeping {|
                                                  isUnsigned := isUnsigned;
+                                                 size := size;
+                                                 offset := offset;
                                                  newrd := data;
                                                  dInst := get(decoded_bookeeping, dInst)
                                                |} in
@@ -629,8 +633,18 @@ Module  RV32ICore.
         let data := get(execute_bookeeping, newrd) in
         let fields := getFields(get(dInst, inst)) in
         if isMemoryInst(dInst) then (* // write_val *)
+          (* Byte enable shifting back *)
           let resp := fromDMem.(MemResp.deq)() in
-          set data := get(resp,data)
+          let mem_data := get(resp,data) in
+          set mem_data := mem_data >> (get(execute_bookeeping,offset) ++ Ob~0~0);
+          match (get(execute_bookeeping,isUnsigned)++get(execute_bookeeping,size)) with
+          | Ob~1~0~0 => set data := {signExtend 8  24}(mem_data[|5`d0|:+8])  (* Unsigned Byte *)
+          | Ob~1~0~1 => set data := {signExtend 16 16}(mem_data[|5`d0|:+16]) (* Unsigned Half *)
+          | Ob~0~0~0 => set data := zeroExtend(mem_data[|5`d0|:+8],32)       (* Load Byte *)
+          | Ob~0~0~1 => set data := zeroExtend(mem_data[|5`d0|:+16],32)      (* Load Half *)
+          | Ob~0~1~0 => set data := mem_data      (* Load Word *)
+          return default: fail                   (* Load Double or Signed Word *)
+          end
         else
           pass;
         if get(dInst,valid_rd) then

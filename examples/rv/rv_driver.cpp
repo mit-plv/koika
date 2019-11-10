@@ -90,8 +90,7 @@ public:
   }
 
 protected:
-
-   virtual bool rule_externalD() {
+  bool rule_externalD() {
     log.fromDMem_valid0.reset(Log.fromDMem_valid0);
     log.fromDMem_data0.reset(Log.fromDMem_data0);
     log.toDMem_data0.reset(Log.toDMem_data0);
@@ -101,45 +100,61 @@ protected:
       struct_mem_req readRequestD;
       bits<1> _c0;
       CHECK_RETURN(log.toDMem_valid0.read0(&_c0, state.toDMem_valid0,
-					   Log.toDMem_valid0.rwset));
+                                           Log.toDMem_valid0.rwset));
       if (bool(_c0)) {
-	CHECK_RETURN(
-	    log.toDMem_valid0.write0(UINT8(0x0), Log.toDMem_valid0.rwset));
-	CHECK_RETURN(log.toDMem_data0.read0(&readRequestD, state.toDMem_data0,
-					    Log.toDMem_data0.rwset));
+        CHECK_RETURN(log.toDMem_valid0.write0(1'0_b, Log.toDMem_valid0.rwset));
+        CHECK_RETURN(log.toDMem_data0.read0(&readRequestD, state.toDMem_data0,
+                                            Log.toDMem_data0.rwset));
       } else {
-	return false;
+        return false;
       }
       /* bind */ {
-	bits<32> DAddress = readRequestD.addr;
-	/* bind */ {
-	  enum_mem_op DType = readRequestD.type;
-	  /* bind */ {
-	    struct_mem_resp _x3 =
-		prims::unpack<struct_mem_resp, 65>(UINT128(0x000000000));
-	    _x3.type = DType;
-	    struct_mem_resp _x2 = _x3;
-	    _x2.addr = DAddress;
-	    struct_mem_resp data = _x2;
-	    if (DType == enum_mem_op::Ld) {
-	      data.data = dmem[prims::lsr<32,4>(DAddress,2)];
-	    } else {
-	      dmem[prims::lsr<32,4>(DAddress,2)] = readRequestD.data;
-	      data.data = UINT32(0x0000);
+        bits<32> DAddress = readRequestD.addr;
+        /* bind */ {
+          bits<4> DEn = readRequestD.byte_en;
+          /* bind */ {
+            struct_mem_resp _x3 =
+                prims::unpack<struct_mem_resp, 68>(0x68'000000000_x);
+            _x3.byte_en = DEn;
+            struct_mem_resp _x2 = _x3;
+            _x2.addr = DAddress;
+            struct_mem_resp data = _x2;
+	    bits<32> current_value = dmem[DAddress.v >> 2];
+	    if (DAddress.v == 0xfff0) { // PutChar  && DEn.v == 0xf
+	      printf("Yoyo %c", (char) readRequestD.data.v);
 	    }
-	    bits<1> _x6;
-	    CHECK_RETURN(log.fromDMem_valid0.read0(&_x6, state.fromDMem_valid0,
-						   Log.fromDMem_valid0.rwset));
-	    if (bool(prims::lnot<1>(_x6))) {
-	      CHECK_RETURN(
-		  log.fromDMem_data0.write0(data, Log.fromDMem_data0.rwset));
-	      CHECK_RETURN(log.fromDMem_valid0.write0(
-		  UINT8(0x1), Log.fromDMem_valid0.rwset));
-	    } else {
-	      return false;
+	    if (DAddress.v == 0xfff4 && DEn.v == 0) { // GetChar
+	      scanf("%c", (char *) &data.data.v);
 	    }
-	  }
-	}
+	    else {
+	      data.data = current_value;
+	    }
+
+	    bits<32> mask0 = 0x32'000000ff_x;
+	    bits<32> mask1 = 0x32'0000ff00_x;
+	    bits<32> mask2 = 0x32'00ff0000_x;
+	    bits<32> mask3 = 0x32'ff000000_x;
+	    dmem[DAddress.v >> 2] = (DEn[2'0_d].v == 1 ? (readRequestD.data & mask0) : (current_value & mask0))
+	      | (DEn[2'1_d].v == 1 ? (readRequestD.data & mask1) : (current_value & mask1))
+	      | (DEn[2'2_d].v == 1 ? (readRequestD.data & mask2) : (current_value & mask2))
+	      | (DEn[2'3_d].v == 1 ? (readRequestD.data & mask3) : (current_value & mask3));
+            bits<1> _x6;
+	    int* PUT_ADDR = (int *)0x000fff0;
+	    int* GET_ADDR = (int *)0x000fff4;
+
+
+            CHECK_RETURN(log.fromDMem_valid0.read0(&_x6, state.fromDMem_valid0,
+                                                   Log.fromDMem_valid0.rwset));
+            if (bool(~(_x6))) {
+              CHECK_RETURN(
+                  log.fromDMem_data0.write0(data, Log.fromDMem_data0.rwset));
+              CHECK_RETURN(
+                  log.fromDMem_valid0.write0(1'1_b, Log.fromDMem_valid0.rwset));
+            } else {
+              return false;
+            }
+          }
+        }
       }
     }
 
@@ -150,7 +165,7 @@ protected:
     return true;
   }
 
-  virtual bool rule_externalI() {
+  bool rule_externalI() {
     log.fromIMem_data0.reset(Log.fromIMem_data0);
     log.toIMem_data0.reset(Log.toIMem_data0);
     log.fromIMem_valid0.reset(Log.fromIMem_valid0);
@@ -160,41 +175,48 @@ protected:
       struct_mem_req readRequestI;
       bits<1> _c0;
       CHECK_RETURN(log.toIMem_valid0.read0(&_c0, state.toIMem_valid0,
-					   Log.toIMem_valid0.rwset));
+                                           Log.toIMem_valid0.rwset));
       if (bool(_c0)) {
-	CHECK_RETURN(
-	    log.toIMem_valid0.write0(UINT8(0x0), Log.toIMem_valid0.rwset));
-	CHECK_RETURN(log.toIMem_data0.read0(&readRequestI, state.toIMem_data0,
-					    Log.toIMem_data0.rwset));
+        CHECK_RETURN(log.toIMem_valid0.write0(1'0_b, Log.toIMem_valid0.rwset));
+        CHECK_RETURN(log.toIMem_data0.read0(&readRequestI, state.toIMem_data0,
+                                            Log.toIMem_data0.rwset));
       } else {
-	return false;
+        return false;
       }
       /* bind */ {
-	bits<32> IAddress = readRequestI.addr;
-	/* bind */ {
-	  enum_mem_op IType = readRequestI.type;
-	  /* bind */ {
-	    struct_mem_resp _x3 =
-		prims::unpack<struct_mem_resp, 65>(UINT128(0x000000000));
-	    _x3.type = IType;
-	    struct_mem_resp _x2 = _x3;
-	    _x2.addr = IAddress;
-	    struct_mem_resp data = _x2;
-	    assert (IType == enum_mem_op::Ld);
-	    data.data = imem[prims::lsr<32,4>(IAddress,2)];
-	    bits<1> _x6;
-	    CHECK_RETURN(log.fromIMem_valid0.read0(&_x6, state.fromIMem_valid0,
-						   Log.fromIMem_valid0.rwset));
-	    if (bool(prims::lnot<1>(_x6))) {
-	      CHECK_RETURN(
-		  log.fromIMem_data0.write0(data, Log.fromIMem_data0.rwset));
-	      CHECK_RETURN(log.fromIMem_valid0.write0(
-		  UINT8(0x1), Log.fromIMem_valid0.rwset));
-	    } else {
-	      return false;
-	    }
-	  }
-	}
+        bits<32> IAddress = readRequestI.addr;
+        /* bind */ {
+          bits<4> IEn = readRequestI.byte_en;
+          /* bind */ {
+            struct_mem_resp _x3 =
+                prims::unpack<struct_mem_resp, 68>(0x68'000000000_x);
+            _x3.byte_en = IEn;
+            struct_mem_resp _x2 = _x3;
+            _x2.addr = IAddress;
+            struct_mem_resp data = _x2;
+	    bits<32> current_value = imem[IAddress.v >> 2];
+	    data.data = current_value;
+	    bits<32> mask0 = 0x32'000000ff_x;
+	    bits<32> mask1 = 0x32'0000ff00_x;
+	    bits<32> mask2 = 0x32'00ff0000_x;
+	    bits<32> mask3 = 0x32'ff000000_x;
+	    // imem[IAddress.v >> 2] = (IEn[2'0_d].v == 1 ? (readRequestI.data & mask0) : (current_value & mask0))
+	    //   | (IEn[2'1_d].v == 1 ? (readRequestI.data & mask1) : (current_value & mask1))
+	    //   | (IEn[2'2_d].v == 1 ? (readRequestI.data & mask2) : (current_value & mask2))
+	    //   | (IEn[2'3_d].v == 1 ? (readRequestI.data & mask3) : (current_value & mask3));
+            bits<1> _x6;
+            CHECK_RETURN(log.fromIMem_valid0.read0(&_x6, state.fromIMem_valid0,
+                                                   Log.fromIMem_valid0.rwset));
+            if (bool(~(_x6))) {
+              CHECK_RETURN(
+                  log.fromIMem_data0.write0(data, Log.fromIMem_data0.rwset));
+              CHECK_RETURN(
+                  log.fromIMem_valid0.write0(1'1_b, Log.fromIMem_valid0.rwset));
+            } else {
+              return false;
+            }
+          }
+        }
       }
     }
 
@@ -204,107 +226,116 @@ protected:
     Log.toIMem_valid0 = log.toIMem_valid0;
     return true;
   }
+
 };
 
 
 sim_t::state_t init_and_run(char* filename, unsigned long long int ncycles) {
-  sim_t::state_t init = {
+    sim_t::state_t init = {
       .toIMem_data0 =
-	  struct_mem_req{enum_mem_op::Ld, UINT32(0x0000), UINT32(0x0000)},
-      .toIMem_valid0 = UINT8(0x0),
+          struct_mem_req{4'0000_b, 32'00000000000000000000000000000000_b,
+                         32'00000000000000000000000000000000_b},
+      .toIMem_valid0 = 1'0_b,
       .fromIMem_data0 =
-	  struct_mem_resp{enum_mem_op::Ld, UINT32(0x0000), UINT32(0x0000)},
-      .fromIMem_valid0 = UINT8(0x0),
+          struct_mem_resp{4'0000_b, 32'00000000000000000000000000000000_b,
+                          32'00000000000000000000000000000000_b},
+      .fromIMem_valid0 = 1'0_b,
       .toDMem_data0 =
-	  struct_mem_req{enum_mem_op::Ld, UINT32(0x0000), UINT32(0x0000)},
-      .toDMem_valid0 = UINT8(0x0),
+          struct_mem_req{4'0000_b, 32'00000000000000000000000000000000_b,
+                         32'00000000000000000000000000000000_b},
+      .toDMem_valid0 = 1'0_b,
       .fromDMem_data0 =
-	  struct_mem_resp{enum_mem_op::Ld, UINT32(0x0000), UINT32(0x0000)},
-      .fromDMem_valid0 = UINT8(0x0),
+          struct_mem_resp{4'0000_b, 32'00000000000000000000000000000000_b,
+                          32'00000000000000000000000000000000_b},
+      .fromDMem_valid0 = 1'0_b,
       .f2d_data0 =
-	  struct_fetch_bookkeeping{UINT32(0x0000), UINT32(0x0000), UINT8(0x0)},
-      .f2d_valid0 = UINT8(0x0),
+          struct_fetch_bookkeeping{32'00000000000000000000000000000000_b,
+                                   32'00000000000000000000000000000000_b,
+                                   1'0_b},
+      .f2d_valid0 = 1'0_b,
       .d2e_data0 =
-	  struct_decode_bookkeeping{
-	      UINT32(0x0000), UINT32(0x0000), UINT8(0x0),
-	      struct_decodedInst{UINT8(0x0), UINT8(0x0), UINT8(0x0), UINT8(0x0),
-				 UINT32(0x0000),
-				 struct_maybe{UINT8(0x0), enum_immType::ImmI}},
-	      UINT32(0x0000), UINT32(0x0000)},
-      .d2e_valid0 = UINT8(0x0),
+          struct_decode_bookkeeping{
+              32'00000000000000000000000000000000_b,
+              32'00000000000000000000000000000000_b, 1'0_b,
+              struct_decodedInst{1'0_b, 1'0_b, 1'0_b, 1'0_b,
+                                 32'00000000000000000000000000000000_b,
+                                 struct_maybe{1'0_b, enum_immType::ImmI}},
+              32'00000000000000000000000000000000_b,
+              32'00000000000000000000000000000000_b},
+      .d2e_valid0 = 1'0_b,
       .e2w_data0 =
-	  struct_execute_bookkeeping{
-	      UINT32(0x0000),
-	      struct_decodedInst{UINT8(0x0), UINT8(0x0), UINT8(0x0), UINT8(0x0),
-				 UINT32(0x0000),
-				 struct_maybe{UINT8(0x0), enum_immType::ImmI}}},
-      .e2w_valid0 = UINT8(0x0),
-      .rf_rData_0 = UINT32(0x0000),
-      .rf_rData_1 = UINT32(0x0000),
-      .rf_rData_2 = UINT32(0x0000),
-      .rf_rData_3 = UINT32(0x0000),
-      .rf_rData_4 = UINT32(0x0000),
-      .rf_rData_5 = UINT32(0x0000),
-      .rf_rData_6 = UINT32(0x0000),
-      .rf_rData_7 = UINT32(0x0000),
-      .rf_rData_8 = UINT32(0x0000),
-      .rf_rData_9 = UINT32(0x0000),
-      .rf_rData_10 = UINT32(0x0000),
-      .rf_rData_11 = UINT32(0x0000),
-      .rf_rData_12 = UINT32(0x0000),
-      .rf_rData_13 = UINT32(0x0000),
-      .rf_rData_14 = UINT32(0x0000),
-      .rf_rData_15 = UINT32(0x0000),
-      .rf_rData_16 = UINT32(0x0000),
-      .rf_rData_17 = UINT32(0x0000),
-      .rf_rData_18 = UINT32(0x0000),
-      .rf_rData_19 = UINT32(0x0000),
-      .rf_rData_20 = UINT32(0x0000),
-      .rf_rData_21 = UINT32(0x0000),
-      .rf_rData_22 = UINT32(0x0000),
-      .rf_rData_23 = UINT32(0x0000),
-      .rf_rData_24 = UINT32(0x0000),
-      .rf_rData_25 = UINT32(0x0000),
-      .rf_rData_26 = UINT32(0x0000),
-      .rf_rData_27 = UINT32(0x0000),
-      .rf_rData_28 = UINT32(0x0000),
-      .rf_rData_29 = UINT32(0x0000),
-      .rf_rData_30 = UINT32(0x0000),
-      .rf_rData_31 = UINT32(0x0000),
-      .scoreboard_rfrData_0 = UINT8(0x0),
-      .scoreboard_rfrData_1 = UINT8(0x0),
-      .scoreboard_rfrData_2 = UINT8(0x0),
-      .scoreboard_rfrData_3 = UINT8(0x0),
-      .scoreboard_rfrData_4 = UINT8(0x0),
-      .scoreboard_rfrData_5 = UINT8(0x0),
-      .scoreboard_rfrData_6 = UINT8(0x0),
-      .scoreboard_rfrData_7 = UINT8(0x0),
-      .scoreboard_rfrData_8 = UINT8(0x0),
-      .scoreboard_rfrData_9 = UINT8(0x0),
-      .scoreboard_rfrData_10 = UINT8(0x0),
-      .scoreboard_rfrData_11 = UINT8(0x0),
-      .scoreboard_rfrData_12 = UINT8(0x0),
-      .scoreboard_rfrData_13 = UINT8(0x0),
-      .scoreboard_rfrData_14 = UINT8(0x0),
-      .scoreboard_rfrData_15 = UINT8(0x0),
-      .scoreboard_rfrData_16 = UINT8(0x0),
-      .scoreboard_rfrData_17 = UINT8(0x0),
-      .scoreboard_rfrData_18 = UINT8(0x0),
-      .scoreboard_rfrData_19 = UINT8(0x0),
-      .scoreboard_rfrData_20 = UINT8(0x0),
-      .scoreboard_rfrData_21 = UINT8(0x0),
-      .scoreboard_rfrData_22 = UINT8(0x0),
-      .scoreboard_rfrData_23 = UINT8(0x0),
-      .scoreboard_rfrData_24 = UINT8(0x0),
-      .scoreboard_rfrData_25 = UINT8(0x0),
-      .scoreboard_rfrData_26 = UINT8(0x0),
-      .scoreboard_rfrData_27 = UINT8(0x0),
-      .scoreboard_rfrData_28 = UINT8(0x0),
-      .scoreboard_rfrData_29 = UINT8(0x0),
-      .scoreboard_rfrData_30 = UINT8(0x0),
-      .scoreboard_rfrData_31 = UINT8(0x0),
-      .pc = UINT32(0x80000000),
-      .epoch = UINT8(0x0),
+          struct_execute_bookkeeping{
+              1'0_b, 2'00_b, 2'00_b, 32'00000000000000000000000000000000_b,
+              struct_decodedInst{1'0_b, 1'0_b, 1'0_b, 1'0_b,
+                                 32'00000000000000000000000000000000_b,
+                                 struct_maybe{1'0_b, enum_immType::ImmI}}},
+      .e2w_valid0 = 1'0_b,
+      .rf_rData_0 = 32'00000000000000000000000000000000_b,
+      .rf_rData_1 = 32'00000000000000000000000000000000_b,
+      .rf_rData_2 = 32'00000000000000000000000000000000_b,
+      .rf_rData_3 = 32'00000000000000000000000000000000_b,
+      .rf_rData_4 = 32'00000000000000000000000000000000_b,
+      .rf_rData_5 = 32'00000000000000000000000000000000_b,
+      .rf_rData_6 = 32'00000000000000000000000000000000_b,
+      .rf_rData_7 = 32'00000000000000000000000000000000_b,
+      .rf_rData_8 = 32'00000000000000000000000000000000_b,
+      .rf_rData_9 = 32'00000000000000000000000000000000_b,
+      .rf_rData_10 = 32'00000000000000000000000000000000_b,
+      .rf_rData_11 = 32'00000000000000000000000000000000_b,
+      .rf_rData_12 = 32'00000000000000000000000000000000_b,
+      .rf_rData_13 = 32'00000000000000000000000000000000_b,
+      .rf_rData_14 = 32'00000000000000000000000000000000_b,
+      .rf_rData_15 = 32'00000000000000000000000000000000_b,
+      .rf_rData_16 = 32'00000000000000000000000000000000_b,
+      .rf_rData_17 = 32'00000000000000000000000000000000_b,
+      .rf_rData_18 = 32'00000000000000000000000000000000_b,
+      .rf_rData_19 = 32'00000000000000000000000000000000_b,
+      .rf_rData_20 = 32'00000000000000000000000000000000_b,
+      .rf_rData_21 = 32'00000000000000000000000000000000_b,
+      .rf_rData_22 = 32'00000000000000000000000000000000_b,
+      .rf_rData_23 = 32'00000000000000000000000000000000_b,
+      .rf_rData_24 = 32'00000000000000000000000000000000_b,
+      .rf_rData_25 = 32'00000000000000000000000000000000_b,
+      .rf_rData_26 = 32'00000000000000000000000000000000_b,
+      .rf_rData_27 = 32'00000000000000000000000000000000_b,
+      .rf_rData_28 = 32'00000000000000000000000000000000_b,
+      .rf_rData_29 = 32'00000000000000000000000000000000_b,
+      .rf_rData_30 = 32'00000000000000000000000000000000_b,
+      .rf_rData_31 = 32'00000000000000000000000000000000_b,
+      .scoreboard_rfrData_0 = 2'00_b,
+      .scoreboard_rfrData_1 = 2'00_b,
+      .scoreboard_rfrData_2 = 2'00_b,
+      .scoreboard_rfrData_3 = 2'00_b,
+      .scoreboard_rfrData_4 = 2'00_b,
+      .scoreboard_rfrData_5 = 2'00_b,
+      .scoreboard_rfrData_6 = 2'00_b,
+      .scoreboard_rfrData_7 = 2'00_b,
+      .scoreboard_rfrData_8 = 2'00_b,
+      .scoreboard_rfrData_9 = 2'00_b,
+      .scoreboard_rfrData_10 = 2'00_b,
+      .scoreboard_rfrData_11 = 2'00_b,
+      .scoreboard_rfrData_12 = 2'00_b,
+      .scoreboard_rfrData_13 = 2'00_b,
+      .scoreboard_rfrData_14 = 2'00_b,
+      .scoreboard_rfrData_15 = 2'00_b,
+      .scoreboard_rfrData_16 = 2'00_b,
+      .scoreboard_rfrData_17 = 2'00_b,
+      .scoreboard_rfrData_18 = 2'00_b,
+      .scoreboard_rfrData_19 = 2'00_b,
+      .scoreboard_rfrData_20 = 2'00_b,
+      .scoreboard_rfrData_21 = 2'00_b,
+      .scoreboard_rfrData_22 = 2'00_b,
+      .scoreboard_rfrData_23 = 2'00_b,
+      .scoreboard_rfrData_24 = 2'00_b,
+      .scoreboard_rfrData_25 = 2'00_b,
+      .scoreboard_rfrData_26 = 2'00_b,
+      .scoreboard_rfrData_27 = 2'00_b,
+      .scoreboard_rfrData_28 = 2'00_b,
+      .scoreboard_rfrData_29 = 2'00_b,
+      .scoreboard_rfrData_30 = 2'00_b,
+      .scoreboard_rfrData_31 = 2'00_b,
+      .pc = 32'10000000000000000000000000000000_b,
+      .epoch = 1'0_b,
   };
 
   rv_core simulator(init);
@@ -317,6 +348,7 @@ sim_t::state_t init_and_run(char* filename, unsigned long long int ncycles) {
 #ifndef SIM_MINIMAL
 int main(int argc, char **argv) {
 
+  bits<32> mask0 = 0x32'000000ff_x;
   unsigned long long int ncycles = 1000;
   char* filename;
   if (argc >= 3) {
