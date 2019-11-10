@@ -99,15 +99,31 @@ namespace prims {
     __builtin_unreachable();
   }
 
+  static _unused void assume(bool condition) {
+    if (!condition) { unreachable<void>(); }
+  }
+
   template<std::size_t sz>
   struct bits {
     bits_t<sz> v;
 
-    /// Casts
+    /// Representation invariant
 
-    static constexpr int padding_width() {
-      return std::numeric_limits<bits_t<sz>>::digits - sz;
+    static constexpr int padding_width =
+      std::numeric_limits<bits_t<sz>>::digits - sz;
+
+    // Not constexpr because Boost's >> isn't constexpr
+    static const bits_t<sz> bitmask() {
+      return std::numeric_limits<bits_t<sz>>::max() >> bits<sz>::padding_width;
     }
+
+    void invariant() const {
+      // Knowing this invariant can sometimes help the compiler; it does in
+      // particular in operator bool().
+      assume(v <= bitmask());
+    }
+
+    /// Casts
 
     sbits_t<sz> to_sbits() const {
       sbits_t<sz> sx; // FIXME does this work with multiprecision?
@@ -122,28 +138,27 @@ namespace prims {
     }
 
     sbits_t<sz> to_shifted_sbits() const {
-      return to_sbits() << bits<sz>::padding_width();
+      return to_sbits() << bits<sz>::padding_width;
     }
 
     static bits<sz> of_shifted_sbits(sbits_t<sz> sx) {
       // This constructs an int of the same bitsize as x, with the same
       // bitpattern, except that it uses the high bits of the storage type instead
       // of the low ones (e.g. 4'b1101 is represented as 8'b11010000).
-      return of_sbits(sx) >> bits<sz>::padding_width();
+      return of_sbits(sx) >> bits<sz>::padding_width;
     }
 
     /// Constants
 
-    static constexpr bits<sz>
-    ones() {
-      // GCC and Clang are smart enough to elide the shift when digits == sz
-      return bits<sz>::mk(std::numeric_limits<bits_t<sz>>::max() >> bits<sz>::padding_width());
+    static const bits<sz> ones() {
+      return bits<sz>::mk(bits<sz>::bitmask());
     }
 
     /// Member functions
 
     explicit operator bool() const {
-      return bool(v);
+      invariant(); // Knowing this invariant helps GCC generate better code
+      return bool(v); // Writing bool(v & bitmask()) works just as well
     }
 
     explicit operator bits_t<sz>() const {
