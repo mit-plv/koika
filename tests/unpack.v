@@ -43,9 +43,6 @@ Definition _unpack_unpack : uaction reg_t ext_fn_t :=
       write1(Runpacked, unpacked)
   }}.
 
-Definition scheduler : scheduler :=
-  tc_scheduler (unpack_manual |> unpack_unpack |> done).
-
 Definition rules :=
   tc_rules R empty_Sigma
            (fun rl => match rl with
@@ -53,27 +50,29 @@ Definition rules :=
             | unpack_unpack => _unpack_unpack
             end).
 
+Definition sched : scheduler :=
+  tc_scheduler (unpack_manual |> unpack_unpack |> done).
+
 Definition package :=
   {| ip_koika := {| koika_reg_names := show;
-                    koika_reg_types := R;
-                    koika_reg_init := r;
+                   koika_reg_types := R;
+                   koika_reg_init := r;
 
-                    koika_ext_fn_types := empty_Sigma;
+                   koika_ext_fn_types := empty_Sigma;
 
-                    koika_rules := rules;
-                    koika_rule_names := show;
+                   koika_rules := rules;
+                   koika_rule_names := show;
 
-                    koika_scheduler := scheduler;
+                   koika_scheduler := sched;
 
-                    koika_module_name := "unpack" |};
+                   koika_module_name := "unpack" |};
 
      ip_sim := {| sp_var_names x := x;
-                  sp_ext_fn_names := show;
-                  sp_extfuns := None |};
+                 sp_ext_fn_names := empty_fn_names;
+                 sp_extfuns := None |};
 
      ip_verilog := {| vp_external_rules := [];
-                      vp_ext_fn_names := show |} |}.
+                     vp_ext_fn_names := empty_fn_names |} |}.
 
 Definition prog := Interop.Backends.register package.
 Extraction "unpack.ml" prog.
-
