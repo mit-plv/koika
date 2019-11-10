@@ -63,7 +63,7 @@ Definition package :=
                  sp_extfuns := Some "class extfuns {
 public:
   bits<3> f0(const bits<3> arg) {
-    return prims::lnot<3>(arg);
+    return ~arg;
   }
 };" |};
      ip_verilog := {| vp_external_rules := [];

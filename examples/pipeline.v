@@ -77,15 +77,15 @@ Definition circuits_result sigma :=
 Definition cpp_extfuns := "class extfuns {
 public:
   static bits<32> stream(bits<32> lfsr) {
-    return lfsr + 1u;
+    return lfsr + BITS(32, 1);
   }
 
   static bits<32> f(bits<32> x) {
-    return ~(x << 2u) - 1u;
+    return ~(x << BITS(32, 2)) - BITS(32, 1);
   }
 
   static bits<32> g(bits<32> x) {
-    return 5u * ((x + 1u) >> 1u);
+    return BITS(32, 5) + ((x + BITS(32, 1)) >> BITS(32, 1));
   }
 };".
 

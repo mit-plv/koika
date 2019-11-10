@@ -137,20 +137,29 @@ let cpp_struct_name pi sg =
   let name = Mangling.mangle_name ~prefix:"struct" sg.struct_name in
   register_type pi sg.struct_name (Struct_t sg); name
 
+let cpp_type_of_size
+      (pi: program_info)
+      (stem: string) (sz: int) =
+  assert (sz >= 0);
+  if sz > 64 then
+    request_multiprecision pi;
+  if sz = 0 then
+    "unit"
+  else if sz <= 1024 then
+    sprintf "%s<%d>" stem sz
+  else
+    failwith (sprintf "Unsupported size: %d" sz)
+
+let cpp_value_type_of_size
+      (pi: program_info)
+      (sz: int) =
+  cpp_type_of_size pi "bits_t" sz
+
 let cpp_type_of_type
       (pi: program_info)
       (tau: typ) =
   match tau with
-  | Bits_t sz ->
-     assert (sz >= 0);
-     if sz > 64 then
-       request_multiprecision pi;
-     if sz = 0 then
-       "unit"
-     else if sz <= 1024 then
-       sprintf "bits<%d>" sz
-     else
-       failwith (sprintf "Unsupported size: %d" sz)
+  | Bits_t sz -> cpp_type_of_size pi "bits" sz
   | Enum_t sg -> cpp_enum_name pi sg
   | Struct_t sg -> cpp_struct_name pi sg
 
@@ -176,30 +185,26 @@ let z_to_hex bitlength z =
   let fmt = sprintf "%%0#%dx" (w + 2) in
   Z.format fmt z
 
-let cpp_const_init (pi: program_info) sz cst =
+let cpp_const_init (pi: program_info) immediate sz cst =
   assert (sz >= 0);
   if sz > 64 then
     request_multiprecision pi;
   let cst =
     z_to_hex sz cst in
+  let ns =
+    if immediate then "BITSV" else "BITS" in
   if sz = 0 then
     "prims::tt"
-  else if sz <= 8 then
-    sprintf "UINT8(%s)" cst
-  else if sz <= 16 then
-    sprintf "UINT16(%s)" cst
-  else if sz <= 32 then
-    sprintf "UINT32(%s)" cst
   else if sz <= 64 then
-    sprintf "UINT64(%s)" cst
+    sprintf "%s(%d, %s)" ns sz cst
   else if sz <= 128 then
-    sprintf "UINT128(%s)" cst
+    sprintf "%s_128(%d, %s)" ns sz cst
   else if sz <= 256 then
-    sprintf "UINT256(%s)" cst
+    sprintf "%s_256(%d, %s)" ns sz cst
   else if sz <= 512 then
-    sprintf "UINT512(%s)" cst
+    sprintf "%s_512(%d, %s)" ns sz cst
   else if sz <= 1024 then
-    sprintf "UINT1024(%s)" cst
+    sprintf "%s_1024(%d, %s)" ns sz cst
   else
     failwith (sprintf "Unsupported size: %d" sz)
 
@@ -221,34 +226,32 @@ let cpp_ext_funcall f a =
   sprintf "extfuns.template %s(%s)" f a
 
 let cpp_bits1_fn_name (f: Extr.PrimTyped.fbits1) =
-  sprintf "prims::%s"
-    (match f with
-     | Not sz -> sprintf "lnot<%d>" sz
-     | ZExtL (sz, width) -> sprintf "zextl<%d, %d>" sz width
-     | ZExtR (sz, width) -> sprintf "zextr<%d, %d>" sz width
-     | Part (sz, offset, width) -> sprintf "part<%d, %d, %d>" sz offset width)
+  match f with
+  | Not _ -> "operator~"
+  | ZExtL (sz, width) -> sprintf "prims::zextl<%d, %d>" sz width
+  | ZExtR (sz, width) -> sprintf "prims::zextr<%d, %d>" sz width
+  | Part (sz, offset, width) -> sprintf "prims::part<%d, %d, %d>" sz offset width
 
 let cpp_bits2_fn_name (f: Extr.PrimTyped.fbits2) =
-  sprintf "prims::%s"
-    (match f with
-     | And sz -> sprintf "land<%d>" sz
-     | Or sz -> sprintf "lor<%d>" sz
-     | Xor sz -> sprintf "lxor<%d>" sz
-     | Lsl (bits_sz, shift_sz) -> sprintf "lsl<%d, %d>" bits_sz shift_sz
-     | Lsr (bits_sz, shift_sz) -> sprintf "lsr<%d, %d>" bits_sz shift_sz
-     | Asr (bits_sz, shift_sz) -> sprintf "asr<%d, %d>" bits_sz shift_sz
-     | Concat (sz1, sz2) -> sprintf "concat<%d, %d>" sz1 sz2
-     | Sel sz -> sprintf "sel<%d, %d>" sz (Cuttlebone.Extr.log2 sz)
-     | PartSubst (sz, offset, width) -> sprintf "part_subst<%d, %d, %d>" sz offset width
-     | IndexedPart (sz, width) -> sprintf "indexed_part<%d, %d, %d>" sz (Cuttlebone.Extr.log2 sz) width
-     | Plus sz -> sprintf "plus<%d>" sz
-     | Minus sz -> sprintf "minus<%d>" sz
-     | EqBits sz -> sprintf "eq<%d>" sz
-     | Compare (signed, cmp, sz) ->
-        sprintf "%s%s<%d>"
-          (if signed then "s" else "")
-          (match cmp with CLt -> "lt" | CGt -> "gt" | CLe -> "le" | CGe -> "ge")
-          sz)
+  match f with
+  | And _ -> "operator&"
+  | Or _ -> "operator|"
+  | Xor _ -> "operator^"
+  | Lsl _ -> "operator<<"
+  | Lsr _ -> "operator>>"
+  | Asr _ -> "prims::asr"
+  | Concat _ -> "prims::concat"
+  | Sel _ -> "operator[]"       (* FIXME *)
+  | PartSubst (sz, offset, width) -> sprintf "prims::part_subst<%d, %d, %d>" sz offset width
+  | IndexedPart (sz, width) -> sprintf "prims::indexed_part<%d, %d, %d>" sz (Cuttlebone.Extr.log2 sz) width
+  | Plus _ -> "operator+"
+  | Minus _ -> "operator-"
+  | EqBits _ -> "operator=="
+  | Compare (true, cmp, _) ->
+     sprintf "s%s"
+       (match cmp with CLt -> "lt" | CGt -> "gt" | CLe -> "le" | CGe -> "ge")
+  | Compare (false, cmp, _) ->
+     (match cmp with CLt -> "operator<" | CGt -> "operator>" | CLe -> "operator<=" | CGe -> "operator>=")
 
 let cpp_preamble =
   (* cppPreamble.ml is auto-generated from preamble.hpp *)
@@ -265,12 +268,12 @@ let reconstruct_switch action =
                               | Some v -> v' = v
                               | None -> true) ->
        let default, branches = match loop (Some v') fbr with
-         | Some (_, default, branches) -> default, branches
+         | Some (_, _, default, branches) -> default, branches
          | None -> fbr, [] in
-       Some (v', default, (Cuttlebone.Util.value_of_extr_value tau cst, tbr) :: branches)
+       Some (v', tau, default, (Cuttlebone.Util.value_of_extr_value tau cst, tbr) :: branches)
     | _ -> None in
   match loop None action with
-  | Some (_, _, [_]) | None -> None
+  | Some (_, _, _, [_]) | None -> None
   | res -> res
 
 type target_info =
@@ -300,6 +303,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
 
   let program_info = fresh_program_info () in
   let cpp_type_of_type = cpp_type_of_type program_info in
+  let cpp_value_type_of_size = cpp_value_type_of_size program_info in
   let cpp_enum_name = cpp_enum_name program_info in
   let cpp_struct_name = cpp_struct_name program_info in
   let cpp_enumerator_name = cpp_enumerator_name program_info in
@@ -349,18 +353,18 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
            (if b then one else zero) + shift_left z 1)
          bits zero) in
 
-  let rec sp_value (v: value) =
+  let rec sp_value ?(immediate=false) (v: value) =
     match v with
-    | Bits bs -> sp_bits_value bs
+    | Bits bs -> sp_bits_value ~immediate bs
     | Enum (sg, v) -> sp_enum_value sg v
     | Struct (sg, fields) -> sp_struct_value sg fields
-  and sp_bits_value bs =
+  and sp_bits_value ?(immediate=false) bs =
     let z = bits_to_Z bs in
     let bitlength = Array.length bs in
-    cpp_const_init bitlength z
+    cpp_const_init immediate bitlength z
   and sp_enum_value sg v =
     match enum_find_field_opt sg v with
-    | None -> sprintf "static_cast<%s>(%s)" (cpp_enum_name sg) (sp_bits_value v)
+    | None -> sprintf "static_cast<%s>(%s.v)" (cpp_enum_name sg) (sp_bits_value v)
     | Some nm -> cpp_enumerator_name ~enum:(Some sg) nm
   and sp_struct_value sg fields =
     let fields = String.concat ", " (List.map sp_value fields) in
@@ -371,8 +375,8 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     | Enum_t _ | Struct_t _ -> "repr" in
 
   let sp_comparator ?(ns="") = function
-    | Bits_t sz -> sprintf "%seq<%d>" ns sz
-    | Enum_t _ | Struct_t _ -> ns ^ "eq" in
+    | Bits_t _ -> sprintf "%soperator==" ns
+    | Enum_t _ | Struct_t _ -> ns ^ "eq" in (* FIXME overload == for structs too *)
 
   let sp_comparison ?(ns="") tau a1 a2 =
     sprintf "%s(%s, %s)" (sp_comparator ~ns tau) a1 a2 in
@@ -406,10 +410,14 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     let nm = cpp_enum_name sg in
     if esz = 0 then failwith (sprintf "Enum %s is empty (its members are zero-bits wide)" nm);
     if esz > 64 then failwith (sprintf "Enum %s is too large (its members are %d-bits wide; the limit is 64)" nm esz);
-    let decl = sprintf "enum class %s : %s" nm (cpp_type_of_type (Bits_t esz)) in
+    let decl = sprintf "enum class %s : %s" nm (cpp_value_type_of_size esz) in
     p_scoped decl ~terminator:";" (fun () ->
         iter_sep (fun () -> p ", ")
-          (fun (name, v) -> p "%s = %s" (cpp_enumerator_name name) (sp_bits_value v)) sg.enum_members) in
+          (fun (name, v) ->
+            let nm = cpp_enumerator_name name in
+            let vstr = sp_bits_value ~immediate:true v in
+            p "%s = %s" nm vstr)
+          sg.enum_members) in
 
   let p_struct_decl sg =
     let decl = sprintf "struct %s" (cpp_struct_name sg) in
@@ -435,7 +443,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
                 sg.enum_members;
               let v_sz = typ_sz tau in
               let bits_sz_tau = cpp_type_of_type (Bits_t v_sz) in
-              let v_cast = sprintf "static_cast<%s>(%s)" bits_sz_tau v_arg in
+              let v_cast = sprintf "%s::mk(%s)" bits_sz_tau v_arg in
               p "default: return \"%s{\" + repr<%d>(%s, style) + \"}\";"
                 sg.enum_name v_sz v_cast)) in (* unmangled *)
 
@@ -476,10 +484,10 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
         ~args:bits_argdecl ~name:(sp_unpacker tau) pbody in
 
     let p_enum_pack _ =
-      p_pack (fun () -> p "return static_cast<%s>(%s);" bits_tau v_arg) in
+      p_pack (fun () -> p "return %s::mk(%s);" bits_tau v_arg) in
 
     let p_enum_unpack _ =
-      p_unpack (fun () -> p "return static_cast<%s>(%s);" v_tau bits_arg) in
+      p_unpack (fun () -> p "return static_cast<%s>(%s.v);" v_tau bits_arg) in
 
     let p_enum_eq _sg =
       p_eq (fun () -> pr "%s == %s" v1 v2) in
@@ -496,14 +504,14 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     let p_struct_pack sg =
       let var = "packed" in
       p_pack (fun () ->
-          p_decl (Bits_t v_sz) var ~init:(Some (cpp_const_init v_sz Z.zero));
+          p_decl (Bits_t v_sz) var ~init:(Some (cpp_const_init false v_sz Z.zero));
           List.iteri (fun idx (fname, ftau) ->
               let sz = typ_sz ftau in
               let fname = cpp_field_name fname in
               let fval = sprintf "%s.%s" v_arg fname in
               let fpacked = sp_packer ftau ~arg:fval in
-              if idx <> 0 then p "%s <<= %d;" var sz;
-              p "%s |= %s;" var fpacked)
+              if idx <> 0 then p "%s = %s << %d;" var var sz;
+              p "%s = %s | prims::widen<%d, %d>(%s);" var var v_sz sz fpacked)
             sg.struct_fields;
           p "return %s;" var) in
 
@@ -715,6 +723,8 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
         match fn with
         | Eq tau ->
            PureExpr (sp_comparison ~ns:"prims::" (Cuttlebone.Util.typ_of_extr_type tau) a1 a2)
+        | Bits2 (Sel _) ->
+           PureExpr (sprintf "%s[%s]" a1 a2)
         | Bits2 fn ->
            PureExpr (sprintf "%s(%s, %s)" (cpp_bits2_fn_name fn) a1 a2)
         | Struct2 (sg, idx) ->
@@ -766,8 +776,9 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
         | Extr.If (_, _, cond, tbr, fbr) ->
            let target = p_declare_target target in
            (match reconstruct_switch rl with
-            | Some (var, default, branches) ->
-               p_switch pos target var default branches
+            | Some (var, tau, default, branches) ->
+               let tau = Cuttlebone.Util.typ_of_extr_type tau in
+               p_switch pos target tau var default branches
             | None ->
                let ctarget = gensym_target (Bits_t 1) "c" in
                let cexpr = p_action pos ctarget cond in
@@ -810,17 +821,21 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
            ImpureExpr (cpp_ext_funcall ffi.ffi_name (must_value a))
         | Extr.APos (_, _, pos, a) ->
            p_action (hpp.cpp_pos_of_pos pos) target a
-      and p_switch pos target var default branches =
+      and p_switch pos target tau var default branches =
         let rec loop = function
           | [] ->
              p "default:";
              p_assign_expr target (p_action pos target default);
           | (const, action) :: branches ->
-             p "case %s:" (sp_value const);
+             p "case %s:" (sp_value ~immediate:true const);
              p_assign_and_ignore target (p_action pos target action);
              p "break;";
              loop branches in
-        p_scoped (sprintf "switch (%s)" (hpp.cpp_var_names var)) (fun () ->
+        let varname = hpp.cpp_var_names var in
+        let discriminand = match tau with
+          | Bits_t _ -> sprintf "%s.v" varname
+          | _ -> varname in
+        p_scoped (sprintf "switch (%s)" discriminand) (fun () ->
             loop branches)
       and p_bound_var_assign pos tau v expr =
         let needs_tmp = Cuttlebone.Util.action_mentions_var v expr in

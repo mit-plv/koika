@@ -5,10 +5,10 @@
 (module taint
   (cpp-preamble "
 class extfuns {
-  bits<5> state = UINT8(0);
+  bits<5> state{0u};
 public:
   bits<5> impure(const unit& /*ignored*/) {
-    state = prims::plus<5>(state, 1);
+    state = state + bits<5>{1u};
     return state;
   }
 };")

@@ -38,130 +38,161 @@ static inline void _sim_assert_fn(const char* repr,
 #ifdef NEEDS_BOOST_MULTIPRECISION
 #include <boost/multiprecision/cpp_int.hpp>
 template<std::size_t size>
-using wbits = std::conditional_t<size <= 128, boost::multiprecision::uint128_t,
-              std::conditional_t<size <= 256, boost::multiprecision::uint256_t,
-              std::conditional_t<size <= 512, boost::multiprecision::uint512_t,
-              std::conditional_t<size <= 1024, boost::multiprecision::uint1024_t,
-                                 void>>>>;
+using wbits_t = std::conditional_t<size <= 128, boost::multiprecision::uint128_t,
+                std::conditional_t<size <= 256, boost::multiprecision::uint256_t,
+                std::conditional_t<size <= 512, boost::multiprecision::uint512_t,
+                std::conditional_t<size <= 1024, boost::multiprecision::uint1024_t,
+                                   void>>>>;
 template<std::size_t size>
-using wsbits = std::conditional_t<size <= 128, boost::multiprecision::int128_t,
-               std::conditional_t<size <= 256, boost::multiprecision::int256_t,
-               std::conditional_t<size <= 512, boost::multiprecision::int512_t,
-               std::conditional_t<size <= 1024, boost::multiprecision::int1024_t,
-                                  void>>>>;
+using wsbits_t = std::conditional_t<size <= 128, boost::multiprecision::int128_t,
+                 std::conditional_t<size <= 256, boost::multiprecision::int256_t,
+                 std::conditional_t<size <= 512, boost::multiprecision::int512_t,
+                 std::conditional_t<size <= 1024, boost::multiprecision::int1024_t,
+                                    void>>>>;
 #else
 template<std::size_t size>
-using wbits = void;
+using wbits_t = void;
 template<std::size_t size>
-using wsbits = void;
+using wsbits_t = void;
 #endif // #ifdef NEEDS_BOOST_MULTIPRECISION
 
 struct unit {};
 
 template<std::size_t size>
-using bits = std::conditional_t<size ==  0, unit,
-             std::conditional_t<size <=  8, std::uint8_t,
-             std::conditional_t<size <= 16, std::uint16_t,
-             std::conditional_t<size <= 32, std::uint32_t,
-             std::conditional_t<size <= 64, std::uint64_t,
-                                wbits<size>>>>>>;
+using bits_t = std::conditional_t<size ==  0, unit,
+               std::conditional_t<size <=  8, std::uint8_t,
+               std::conditional_t<size <= 16, std::uint16_t,
+               std::conditional_t<size <= 32, std::uint32_t,
+               std::conditional_t<size <= 64, std::uint64_t,
+                                  wbits_t<size>>>>>>;
 
 template<std::size_t size>
-using sbits = std::conditional_t<size ==  0, unit,
-              std::conditional_t<size <=  8, std::int8_t,
-              std::conditional_t<size <= 16, std::int16_t,
-              std::conditional_t<size <= 32, std::int32_t,
-              std::conditional_t<size <= 64, std::int64_t,
-                                 wsbits<size>>>>>>;
+using sbits_t = std::conditional_t<size ==  0, unit,
+                std::conditional_t<size <=  8, std::int8_t,
+                std::conditional_t<size <= 16, std::int16_t,
+                std::conditional_t<size <= 32, std::int32_t,
+                std::conditional_t<size <= 64, std::int64_t,
+                                   wsbits_t<size>>>>>>;
+
+/// Literals
 
 // https://stackoverflow.com/questions/57417154/
-#define UINT8(c) static_cast<uint8_t>(UINT8_C(c))
-#define UINT16(c) static_cast<uint16_t>(UINT16_C(c))
-#define UINT32(c) static_cast<uint32_t>(UINT32_C(c))
-#define UINT64(c) static_cast<uint64_t>(UINT64_C(c))
+#define BITS(sz, c) (bits<sz>{UINT64_C(c)})
+#define BITSV(sz, c) (bits_t<sz>{UINT64_C(c)})
 #ifdef NEEDS_BOOST_MULTIPRECISION
 using namespace boost::multiprecision::literals;
-#define UINT128(c) c##_cppui128
-#define UINT256(c) c##_cppui256
-#define UINT512(c) c##_cppui512
-#define UINT1024(c) c##_cppui1024
+#define BITS_128(sz, c) (bits<sz>{c##_cppui128})
+#define BITSV_128(sz, c) (bits_t<sz>{c##_cppui128})
+#define BITS_256(sz, c) (bits<sz>{c##_cppui256})
+#define BITSV_256(sz, c) (bits_t<sz>{c##_cppui256})
+#define BITS_512(sz, c) (bits<sz>{c##_cppui512})
+#define BITSV_512(sz, c) (bits_t<sz>{c##_cppui512})
+#define BITS_1024(sz, c) (bits<sz>{c##_cppui1024})
+#define BITSV_1024(sz, c) (bits_t<sz>{c##_cppui1024})
 #endif
 
 namespace prims {
-  const unit __attribute__((unused)) tt = {};
+  const unit _unused tt = {};
 
   template<typename T>
   T __attribute__((noreturn)) unreachable() {
     __builtin_unreachable();
   }
 
-  template<size_t sz>
-  size_t padding_width() {
-    return std::numeric_limits<bits<sz>>::digits - sz;
+  template<std::size_t sz>
+  struct bits {
+    bits_t<sz> v;
+
+    /// Casts
+
+    static constexpr int padding_width() {
+      return std::numeric_limits<bits_t<sz>>::digits - sz;
+    }
+
+    sbits_t<sz> to_sbits() const {
+      sbits_t<sz> sx; // FIXME does this work with multiprecision?
+      std::memcpy(&sx, &this->v, sizeof sx);
+      return sx;
+    }
+
+    static bits<sz> of_sbits(sbits_t<sz> sx) {
+      bits_t<sz> x; // FIXME does this work with multiprecision?
+      std::memcpy(&x, &sx, sizeof x);
+      return bits<sz>::mk(x);
+    }
+
+    sbits_t<sz> to_shifted_sbits() const {
+      return to_sbits() << bits<sz>::padding_width();
+    }
+
+    static bits<sz> of_shifted_sbits(sbits_t<sz> sx) {
+      // This constructs an int of the same bitsize as x, with the same
+      // bitpattern, except that it uses the high bits of the storage type instead
+      // of the low ones (e.g. 4'b1101 is represented as 8'b11010000).
+      return of_sbits(sx) >> bits<sz>::padding_width();
+    }
+
+    /// Constants
+
+    static constexpr bits<sz>
+    ones() {
+      // GCC and Clang are smart enough to elide the shift when digits == sz
+      return bits<sz>::mk(std::numeric_limits<bits_t<sz>>::max() >> bits<sz>::padding_width());
+    }
+
+    /// Member functions
+
+    explicit operator bool() const {
+      return bool(v);
+    }
+
+    explicit operator bits_t<sz>() const {
+      return v;
+    }
+
+    template<std::size_t idx_sz>
+    bits<1> operator[](const bits<idx_sz> idx) const;
+
+    /// Constructors
+
+    template<typename T>
+    static constexpr bits<sz> mk(T arg) {
+      return bits{static_cast<bits_t<sz>>(arg)};
+    }
+  };
+
+  /// Functions on bits
+
+  template<std::size_t sz>
+  static bits<sz> mask(bits<sz> arg) {
+    return arg & bits<sz>::ones();
+  }
+
+  template<std::size_t ret_sz, std::size_t sz>
+  static bits<ret_sz> widen(const bits<sz> arg) {
+    return bits<ret_sz>::mk(arg.v);
+  }
+
+  template<std::size_t ret_sz, std::size_t sz>
+  static bits<ret_sz> truncate(const bits<sz> arg) {
+    return mask(widen<ret_sz, sz>(arg));
   }
 
   template<std::size_t sz>
-  sbits<sz> sbits_of_bits(const bits<sz> x) {
-    sbits<sz> sx; // FIXME does this work with multiprecision?
-    std::memcpy(&sx, &x, sizeof x);
-    return sx;
+  bits<1> msb(const bits<sz> arg) {
+    return sz == 0 ? 0 : truncate<1, sz>(arg >> (sz - 1));
   }
 
   template<std::size_t sz>
-  bits<sz> bits_of_sbits(const sbits<sz> sx) {
-    bits<sz> x; // FIXME does this work with multiprecision?
-    std::memcpy(&x, &sx, sizeof x);
-    return x;
-  }
-
-  template<std::size_t sz>
-  sbits<sz> shifted_sbits_of_bits(const bits<sz> x) {
-    // This constructs an int of the same bitsize as x, with the same
-    // bitpattern, except that it uses the high bits of the storage type instead
-    // of the low ones (e.g. 4'b1101 is represented as 8'b11010000).
-    return sbits_of_bits<sz>(x) << padding_width<sz>();
-  }
-
-  template<std::size_t sz>
-  bits<sz> bits_of_shifted_sbits(const sbits<sz> sx) {
-    return bits_of_sbits<sz>(sx) >> padding_width<sz>();
-  }
-
-  template<std::size_t sz>
-  bits<sz> ones() {
-    // GCC and Clang are smart enough to elide the shift when digits == sz
-    return std::numeric_limits<bits<sz>>::max() >> padding_width<sz>();
-  }
-
-  template<std::size_t sz>
-  bits<sz> mask(const bits<sz> arg) {
-    return arg & ones<sz>();
-  }
-
-  template<std::size_t sz, typename T>
-  bits<sz> widen(const T arg) {
-    return static_cast<bits<sz>>(arg);
-  }
-
-  template<std::size_t ret_sz, std::size_t arg_sz>
-  bits<ret_sz> truncate(const bits<arg_sz> arg) {
-    return mask<ret_sz>(widen<ret_sz>(arg));
-  }
-
-  template<std::size_t sz>
-  bits<1> msb(const bits<sz> bs) {
-    return sz == 0 ? 0 : truncate<1, sz>(bs >> (sz - 1));
-  }
-
-  template<std::size_t sz1, std::size_t sz2>
-  bits<1> sel(const bits<sz1> data, const bits<sz2> idx) {
-    return truncate<1, sz1>(data >> idx);
+  template<std::size_t idx_sz>
+  bits<1> bits<sz>::operator[](const bits<idx_sz> idx) const {
+    return truncate<1>((*this) >> idx);
   }
 
   template<std::size_t sz1, std::size_t idx, std::size_t width>
   bits<sz1> part_subst(const bits<sz1> data, const bits<width> repl) {
-    const bits<sz1> mask = ~(widen<sz1>(ones<width>()) << idx);
-    return (data & mask) | (widen<sz1>(repl) << idx);
+    const bits<sz1> mask = ~(widen<sz1, width>(bits<width>::ones()) << idx);
+    return (data & mask) | (widen<sz1, width>(repl) << idx);
   }
 
   template<std::size_t sz1, std::size_t sz2, std::size_t width>
@@ -170,108 +201,118 @@ namespace prims {
   }
 
   template<std::size_t sz>
-  bits<sz> land(const bits<sz> data1, const bits<sz> data2) {
-    return data1 & data2;
+  bits<sz> operator&(const bits<sz> data1, const bits<sz> data2) {
+    return bits<sz>::mk(data1.v & data2.v);
   }
 
   template<std::size_t sz>
-  bits<sz> lor(const bits<sz> data1, const bits<sz> data2) {
-    return data1 | data2;
+  bits<sz> operator|(const bits<sz> data1, const bits<sz> data2) {
+    return bits<sz>::mk(data1.v | data2.v);
   }
 
   template<std::size_t sz>
-  bits<sz> lxor(const bits<sz> data1, const bits<sz> data2) {
-    return data1 ^ data2;
+  bits<sz> operator^(const bits<sz> data1, const bits<sz> data2) {
+    return bits<sz>::mk(data1.v ^ data2.v);
   }
 
   template<std::size_t sz1, std::size_t sz2>
   bits<sz1> asr(const bits<sz1> data, const bits<sz2> shift) {
-    return bits_of_shifted_sbits<sz1>(shifted_sbits_of_bits<sz1>(data) >> shift);
+    return bits<sz1>::of_shifted_sbits(data.to_shifted_sbits() >> shift.v);
+  }
+
+  template<std::size_t sz1>
+  bits<sz1> operator>>(const bits<sz1> data, const size_t shift) {
+    return bits<sz1>::mk(data.v >> shift);
+  }
+
+  template<std::size_t sz1>
+  bits<sz1> operator<<(const bits<sz1> data, const size_t shift) {
+    return mask(bits<sz1>::mk(data.v << shift));
   }
 
   template<std::size_t sz1, std::size_t sz2>
-  bits<sz1> lsr(const bits<sz1> data, const bits<sz2> shift) {
-    return data >> shift;
+  bits<sz1> operator>>(const bits<sz1> data, const bits<sz2> shift) {
+    return bits<sz1>::mk(data.v >> shift.v);
   }
 
   template<std::size_t sz1, std::size_t sz2>
-  bits<sz1> lsl(const bits<sz1> data, const bits<sz2> shift) {
-    return mask<sz1>(data << shift);
+  bits<sz1> operator<<(const bits<sz1> data, const bits<sz2> shift) {
+    return mask(bits<sz1>::mk(data.v << shift.v));
   }
 
   template<std::size_t sz>
-  bits<1> eq(const bits<sz> x, const bits<sz> y) {
-    return x == y;
+  bits<1> operator==(const bits<sz> x, const bits<sz> y) {
+    return bits<1>::mk(x.v == y.v);
   }
 
   template<std::size_t sz>
-  bits<sz> plus(const bits<sz> x, const bits<sz> y) {
-    return mask<sz>(x + y);
+  bits<sz> operator+(const bits<sz> x, const bits<sz> y) {
+    return bits<sz>::mk(x.v + y.v);
   }
 
   template<std::size_t sz>
-  bits<sz> minus(const bits<sz> x, const bits<sz> y) {
-    return mask<sz>(x + ~y + 1);
+  bits<sz> operator-(const bits<sz> x, const bits<sz> y) {
+    return mask(bits<sz>::mk(x.v + ~y.v + 1));
   }
 
   template<std::size_t sz>
-  bits<1> lt(const bits<sz> x, const bits<sz> y) {
-    return x < y;
+  bits<1> operator<(const bits<sz> x, const bits<sz> y) {
+    return bits<1>::mk(x.v < y.v);
   }
 
   template<std::size_t sz>
-  bits<1> gt(const bits<sz> x, const bits<sz> y) {
-    return x > y;
+  bits<1> operator>(const bits<sz> x, const bits<sz> y) {
+    return bits<1>::mk(x.v > y.v);
   }
 
   template<std::size_t sz>
-  bits<1> le(const bits<sz> x, const bits<sz> y) {
-    return x <= y;
+  bits<1> operator<=(const bits<sz> x, const bits<sz> y) {
+    return bits<1>::mk(x.v <= y.v);
   }
 
   template<std::size_t sz>
-  bits<1> ge(const bits<sz> x, const bits<sz> y) {
-    return x >= y;
+  bits<1> operator>=(const bits<sz> x, const bits<sz> y) {
+    return bits<1>::mk(x.v >= y.v);
   }
 
   template<std::size_t sz>
   bits<1> slt(const bits<sz> x, const bits<sz> y) {
-    return shifted_sbits_of_bits<sz>(x) < shifted_sbits_of_bits<sz>(y);
+    return bits<1>::mk(x.to_shifted_sbits() < y.to_shifted_sbits());
   }
 
   template<std::size_t sz>
   bits<1> sgt(const bits<sz> x, const bits<sz> y) {
-    return shifted_sbits_of_bits<sz>(x) > shifted_sbits_of_bits<sz>(y);
+    return bits<1>::mk(x.to_shifted_sbits() > y.to_shifted_sbits());
   }
 
   template<std::size_t sz>
   bits<1> sle(const bits<sz> x, const bits<sz> y) {
-    return shifted_sbits_of_bits<sz>(x) <= shifted_sbits_of_bits<sz>(y);
+    return bits<1>::mk(x.to_shifted_sbits() <= y.to_shifted_sbits());
   }
 
   template<std::size_t sz>
   bits<1> sge(const bits<sz> x, const bits<sz> y) {
-    return shifted_sbits_of_bits<sz>(x) >= shifted_sbits_of_bits<sz>(y);
+    return bits<1>::mk(x.to_shifted_sbits() >= y.to_shifted_sbits());
   }
 
   template<std::size_t sz1, std::size_t sz2>
   bits<sz1 + sz2> concat(const bits<sz1> x, const bits<sz2> y) {
-    return widen<sz1 + sz2>(x) << sz2 | y;
+    return widen<sz1 + sz2, sz1>(x) << sz2 | widen<sz1 + sz2, sz2>(y);
   }
 
   template<std::size_t sz>
-  bits<sz> lnot(const bits<sz> data) {
-    return mask<sz>(~data);
+  bits<sz> operator~(const bits<sz> data) {
+    return mask(bits<sz>::mk(~data.v));
   }
 
   template<std::size_t sz, std::size_t width>
   bits<std::max(sz, width)> zextl(const bits<sz> x) {
-    return widen<std::max(sz, width)>(x);
+    return widen<std::max(sz, width), sz>(x);
   }
 
   template<std::size_t sz, std::size_t width>
   bits<std::max(sz, width)> zextr(const bits<sz> x) {
-    return widen<std::max(sz, width)>(x) << (std::max(width, sz) - sz);
+    return widen<std::max(sz, width), sz>(x) << (std::max(width, sz) - sz);
   }
 
   template<std::size_t sz1, std::size_t idx, std::size_t width>
@@ -279,7 +320,7 @@ namespace prims {
     return truncate<width, sz1>(data >> idx);
   }
 
-  unit display(const std::string& msg) {
+  static _unused unit display(_unused const std::string& msg) {
 #ifndef SIM_MINIMAL
     std::cout << msg;
 #endif
@@ -294,6 +335,8 @@ namespace prims {
   // Forward-declared; our compiler defines one instance per structure type
   template<typename T, std::size_t sz> _unused T unpack(bits<sz> /*bits*/);
 } // namespace prims
+
+using prims::bits;
 
 #ifndef SIM_MINIMAL
 enum class repr_style {
@@ -320,22 +363,22 @@ struct _repr {
     case repr_style::bin:
       stream << (r.include_size ? "b" : "0b");
       for (size_t pos = sz; pos > 0; pos--) {
-        unsigned int bit = prims::truncate<1, sz>(r.val >> (pos - 1u));
+        unsigned int bit = prims::truncate<1, sz>(r.val >> (pos - 1u)).v;
         stream << bit;
       }
     break;
     case repr_style::hex:
-      stream << (r.include_size ? "x" : "0x") << std::hex << +r.val;
+      stream << (r.include_size ? "x" : "0x") << std::hex << +r.val.v;
       break;
     case repr_style::dec:
-      stream << std::dec << +r.val;
+      stream << std::dec << +r.val.v;
       break;
     case repr_style::utf8:
       // FIXME: endianness problems: use arrays
       // FIXME: Decode array of bytes before printing
       for (size_t printed = 0; printed < sz; printed += 8) {
         stream << static_cast<unsigned char>(
-            prims::truncate<8, sz>(r.val >> printed));
+            prims::truncate<8, sz>(r.val >> printed).v);
       }
       break;
     case repr_style::full:
@@ -446,5 +489,4 @@ struct reg_log_t {
 };
 
 #define CHECK_RETURN(can_fire) { if (!(can_fire)) { return false; } }
-
 #endif // #ifndef _PREAMBLE_HPP
