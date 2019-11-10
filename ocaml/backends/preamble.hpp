@@ -246,6 +246,11 @@ namespace prims {
   }
 
   template<std::size_t sz>
+  bits<1> operator!=(const bits<sz> x, const bits<sz> y) {
+    return bits<1>::mk(x.v != y.v);;
+  }
+
+  template<std::size_t sz>
   bits<sz> operator+(const bits<sz> x, const bits<sz> y) {
     return bits<sz>::mk(x.v + y.v);
   }
