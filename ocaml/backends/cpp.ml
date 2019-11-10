@@ -227,31 +227,30 @@ let cpp_ext_funcall f a =
 
 let cpp_bits1_fn_name (f: Extr.PrimTyped.fbits1) =
   match f with
-  | Not _ -> "operator~"
+  | Not _ -> "~"
   | ZExtL (sz, width) -> sprintf "prims::zextl<%d, %d>" sz width
   | ZExtR (sz, width) -> sprintf "prims::zextr<%d, %d>" sz width
   | Part (sz, offset, width) -> sprintf "prims::part<%d, %d, %d>" sz offset width
 
 let cpp_bits2_fn_name (f: Extr.PrimTyped.fbits2) =
   match f with
-  | And _ -> "operator&"
-  | Or _ -> "operator|"
-  | Xor _ -> "operator^"
-  | Lsl _ -> "operator<<"
-  | Lsr _ -> "operator>>"
-  | Asr _ -> "prims::asr"
-  | Concat _ -> "prims::concat"
-  | Sel _ -> "operator[]"       (* FIXME *)
-  | PartSubst (sz, offset, width) -> sprintf "prims::part_subst<%d, %d, %d>" sz offset width
-  | IndexedPart (sz, width) -> sprintf "prims::indexed_part<%d, %d, %d>" sz (Cuttlebone.Extr.log2 sz) width
-  | Plus _ -> "operator+"
-  | Minus _ -> "operator-"
-  | EqBits _ -> "operator=="
+  | And _ -> `Infix "&"
+  | Or _ -> `Infix "|"
+  | Xor _ -> `Infix "^"
+  | Lsl _ -> `Infix "<<"
+  | Lsr _ -> `Infix ">>"
+  | Asr _ -> `Fn "prims::asr"
+  | Concat _ -> `Fn "prims::concat"
+  | Sel _ -> `Array
+  | PartSubst (sz, offset, width) -> `Fn (sprintf "prims::part_subst<%d, %d, %d>" sz offset width)
+  | IndexedPart (sz, width) -> `Fn (sprintf "prims::indexed_part<%d, %d, %d>" sz (Cuttlebone.Extr.log2 sz) width)
+  | Plus _ -> `Infix "+"
+  | Minus _ -> `Infix "-"
+  | EqBits _ -> `Infix "=="
   | Compare (true, cmp, _) ->
-     sprintf "s%s"
-       (match cmp with CLt -> "lt" | CGt -> "gt" | CLe -> "le" | CGe -> "ge")
+     `Fn (match cmp with CLt -> "slt" | CGt -> "sgt" | CLe -> "sle" | CGe -> "sge")
   | Compare (false, cmp, _) ->
-     (match cmp with CLt -> "operator<" | CGt -> "operator>" | CLe -> "operator<=" | CGe -> "operator>=")
+     `Infix (match cmp with CLt -> "<" | CGt -> ">" | CLe -> "<=" | CGe -> ">=")
 
 let cpp_preamble =
   (* cppPreamble.ml is auto-generated from preamble.hpp *)
@@ -374,12 +373,14 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     | Bits_t sz -> sprintf "repr<%d>" sz
     | Enum_t _ | Struct_t _ -> "repr" in
 
-  let sp_comparator ?(ns="") = function
-    | Bits_t _ -> sprintf "%soperator==" ns
-    | Enum_t _ | Struct_t _ -> ns ^ "eq" in (* FIXME overload == for structs too *)
+  let sp_binop op a1 a2 =
+    match op with
+    | `Infix op -> sprintf "(%s %s %s)" a1 op a2
+    | `Fn f -> sprintf "%s(%s, %s)" f a1 a2
+    | `Array -> sprintf "%s[%s]" a1 a2 in
 
-  let sp_comparison ?(ns="") tau a1 a2 =
-    sprintf "%s(%s, %s)" (sp_comparator ~ns tau) a1 a2 in
+  let sp_equality a1 a2 =
+    sp_binop (`Infix "==") a1 a2 in
 
   (* Not needed: unpack(0) instead *)
   (* let sp_initializer tau =
@@ -463,19 +464,48 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     | Enum_t sg -> p_enum_printer sg
     | Struct_t sg -> p_struct_printer sg in
 
+  let p_operator_eq tau =
+    let v_sz = typ_sz tau in
+    let v1, v2 = "v1", "v2" in
+    let v_tau = cpp_type_of_type tau in
+    let v_argdecl v = sprintf "const %s %s" v_tau v in
+    let bits_tau = cpp_type_of_type (Bits_t v_sz) in
+
+    let p_eq prbody =
+      p_fn ~typ:"static _unused bits<1> "
+        ~args:(sprintf "%s, %s" (v_argdecl v1) (v_argdecl v2))
+        ~name:"operator==" (fun () -> pr "return "; prbody (); p ";") in
+
+    let p_enum_eq _sg =
+      p_eq (fun () -> pr "%s::mk(%s) == %s::mk(%s)" bits_tau v1 bits_tau v2) in
+
+    let sp_field_eq v1 v2 field =
+      let field = cpp_field_name field in
+      let eq = sp_equality (v1 ^ "." ^ field) (v2 ^ "." ^ field) in
+      sprintf "%s.v" eq in
+
+    let p_struct_eq sg =
+      p_eq (fun () ->
+          pr "bits<1>::mk(";
+          iter_sep (fun () -> pr " && ") (fun (nm, _) ->
+              pr "%s" (sp_field_eq v1 v2 nm))
+            sg.struct_fields;
+          pr ")") in
+
+    match tau with
+    | Bits_t _ -> ()
+    | Enum_t sg -> p_enum_eq sg
+    | Struct_t sg -> p_struct_eq sg in
+
   let p_prims tau =
     let v_sz = typ_sz tau in
-    let v_arg, v1, v2 = "val", "v1", "v2" in
+    let v_arg = "val" in
     let v_tau = cpp_type_of_type tau in
     let v_argdecl v = sprintf "const %s %s" v_tau v in
     let bits_arg = "bits" in
     let bits_tau = cpp_type_of_type (Bits_t v_sz) in
     let bits_argdecl = sprintf "const %s %s" bits_tau bits_arg in
 
-    let p_eq prbody =
-      p_fn ~typ:"static _unused bool "
-        ~args:(sprintf "%s, %s" (v_argdecl v1) (v_argdecl v2))
-        ~name:"eq" (fun () -> pr "return ("; prbody (); p ");") in
     let p_pack pbody =
       p_fn ~typ:("static _unused " ^ bits_tau)
         ~args:(v_argdecl v_arg) ~name:(sp_packer tau) pbody in
@@ -488,18 +518,6 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
 
     let p_enum_unpack _ =
       p_unpack (fun () -> p "return static_cast<%s>(%s.v);" v_tau bits_arg) in
-
-    let p_enum_eq _sg =
-      p_eq (fun () -> pr "%s == %s" v1 v2) in
-
-    let sp_field_eq v1 v2 tau field =
-      let field = cpp_field_name field in
-      sp_comparison tau (v1 ^ "." ^ field) (v2 ^ "." ^ field) in
-
-    let p_struct_eq sg =
-      p_eq (fun () -> iter_sep (fun () -> pr " && ") (fun (nm, tau) ->
-                          pr "%s" (sp_field_eq v1 v2 tau nm))
-                        sg.struct_fields) in
 
     let p_struct_pack sg =
       let var = "packed" in
@@ -532,8 +550,8 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
 
     match tau with
     | Bits_t _ -> ()
-    | Enum_t sg -> p_enum_eq sg; p_enum_pack sg; nl (); p_enum_unpack sg
-    | Struct_t sg -> p_struct_eq sg; nl (); p_struct_pack sg; nl (); p_struct_unpack sg in
+    | Enum_t sg -> p_enum_pack sg; nl (); p_enum_unpack sg
+    | Struct_t sg -> p_struct_pack sg; nl (); p_struct_unpack sg in
 
   let complete_user_types () =
     let reg_typ (_, t) = register_subtypes program_info t in
@@ -554,6 +572,8 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     nl ();
     p_ifdef "ndef SIM_MINIMAL" (fun () ->
         iter_sep nl p_printer types);
+    nl ();
+    iter_sep nl p_operator_eq types;
     nl ();
     p_scoped "namespace prims" (fun () ->
         iter_sep nl p_prims types) in
@@ -721,12 +741,10 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
       let p_binop target (fn: Cuttlebone.Extr.PrimTyped.fn2) a1 a2 =
         let open Cuttlebone.Extr.PrimTyped in
         match fn with
-        | Eq tau ->
-           PureExpr (sp_comparison ~ns:"prims::" (Cuttlebone.Util.typ_of_extr_type tau) a1 a2)
-        | Bits2 (Sel _) ->
-           PureExpr (sprintf "%s[%s]" a1 a2)
+        | Eq _ ->
+           PureExpr (sp_equality a1 a2)
         | Bits2 fn ->
-           PureExpr (sprintf "%s(%s, %s)" (cpp_bits2_fn_name fn) a1 a2)
+           PureExpr (sp_binop (cpp_bits2_fn_name fn) a1 a2)
         | Struct2 (sg, idx) ->
            (* Extraction eliminated the single-constructor struct2 inductive (SusbtField) *)
            let sg = Cuttlebone.Util.struct_sig_of_extr_struct_sig sg in
