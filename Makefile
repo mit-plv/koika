@@ -92,8 +92,7 @@ EXAMPLES_TARGETS := $(patsubst %,%.objects/,${EXAMPLES})
 # Generate xyz.cmxs
 	dune build "${EXTRACTED_DIR}/${MODNAME}.cmxs"
 # Compile to circuits
-	${CUTTLEC_EXE} "${BUILT_CMXS}" \
-		-T all -o "$@"
+	${CUTTLEC_EXE} "${BUILT_CMXS}" -T all -o "$@"
 # Remove the generated dune file to prevent errors if extracted ml files are later deleted
 	@rm "${EXTRACTED_DIR}/dune"
 	@touch "$@"
@@ -123,3 +122,7 @@ PHONY += all clean
 
 .PHONY: ${PHONY}
 .SUFFIXES:
+
+# Running two copies of dune in parallel isn't safe, and dune is already
+# handling most of the parallelism for us
+.NOTPARALLEL:
