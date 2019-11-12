@@ -74,23 +74,6 @@ using sbits_t = std::conditional_t<size ==  0, unit,
                 std::conditional_t<size <= 64, std::int64_t,
                                    wsbits_t<size>>>>>>;
 
-/// Literals
-
-// https://stackoverflow.com/questions/57417154/
-#define BITS(sz, c) (bits<sz>{UINT64_C(c)})
-#define BITSV(sz, c) (bits_t<sz>{UINT64_C(c)})
-#ifdef NEEDS_BOOST_MULTIPRECISION
-using namespace boost::multiprecision::literals;
-#define BITS_128(sz, c) (bits<sz>{c##_cppui128})
-#define BITSV_128(sz, c) (bits_t<sz>{c##_cppui128})
-#define BITS_256(sz, c) (bits<sz>{c##_cppui256})
-#define BITSV_256(sz, c) (bits_t<sz>{c##_cppui256})
-#define BITS_512(sz, c) (bits<sz>{c##_cppui512})
-#define BITSV_512(sz, c) (bits_t<sz>{c##_cppui512})
-#define BITS_1024(sz, c) (bits<sz>{c##_cppui1024})
-#define BITSV_1024(sz, c) (bits_t<sz>{c##_cppui1024})
-#endif
-
 namespace prims {
   const unit _unused tt = {};
 
@@ -114,7 +97,8 @@ namespace prims {
 
     // Not constexpr because Boost's >> isn't constexpr
     static const bits_t<sz> bitmask() {
-      return std::numeric_limits<bits_t<sz>>::max() >> bits<sz>::padding_width;
+      auto pw = bits<sz>::padding_width; // https://stackoverflow.com/questions/8452952/
+      return std::numeric_limits<bits_t<sz>>::max() >> pw;
     }
 
     void invariant() const {
@@ -185,6 +169,175 @@ namespace prims {
       return bits{static_cast<bits_t<sz>>(arg)};
     }
   };
+
+  namespace literal_parsing {
+    using std::size_t;
+
+    template<uint base, char c>
+    constexpr bool valid_digit() {
+      if (base == 2) {
+        return c == '0' || c == '1';
+      } else if (base == 10) {
+        return '0' <= c && c <= '9';
+      } else if (base == 16) {
+        return (('0' <= c && c <= '9') ||
+                ('a' <= c && c <= 'f') || ('A' <= c && c <= 'F'));
+      }
+    }
+
+    template <uint base, char c>
+    constexpr uint parse_digit() {
+      static_assert(base == 2 || base == 10 || base == 16, "Invalid base");
+      static_assert(valid_digit<base, c>(), "Invalid digit");
+      if ('0' <= c && c <= '9') {
+        return c - '0';
+      } else if ('a' <= c && c <= 'f') {
+        return c - 'a' + 9;
+      } else if ('A' <= c && c <= 'F') {
+        return c - 'A' + 9;
+      }
+    }
+
+    template <uint base, uint64_t max, uint64_t num>
+    constexpr uint64_t parse_u64() {
+      return num;
+    }
+
+    template <uint base, uint64_t max, uint64_t num, char c, char... cs>
+    constexpr uint64_t parse_u64() {
+      const uint64_t digit = parse_digit<base, c>();
+      static_assert((max - digit) / base >= num, "Overflow in literal parsing");
+      return parse_u64<base, max, base * num + digit, cs...>();
+    }
+
+    enum class parser { u64, u128, u256, u512, u1024, unsupported };
+
+    template <parser p, uint base, size_t sz, char... cs>
+    struct parse_number {
+      static_assert(p != parser::unsupported, "Unsupported bitsize.");
+#ifndef NEEDS_BOOST_MULTIPRECISION
+      static_assert(p == parser::u64, "Needs boost::multiprecision to parse numbers with > 64 bits.");
+#endif
+      static_assert(p == parser::u64 || base == 16, "boost::multiprecision only supports base-16 literals.");
+    };
+
+    template <uint base, size_t sz, char... cs>
+    struct parse_number<parser::u64, base, sz, cs...> {
+      static constexpr uint64_t max = std::numeric_limits<bits_t<sz>>::max();
+      static constexpr bits_t<sz> v = parse_u64<base, max, 0, cs...>();
+    };
+
+#ifdef NEEDS_BOOST_MULTIPRECISION
+    using namespace boost::multiprecision::literals;
+
+    template <size_t sz, char... cs>
+    struct parse_number<parser::u128, 16, sz, cs...> {
+      static constexpr bits_t<sz> v = operator "" _cppui128<'0', 'x', cs...>();
+    };
+
+    template <size_t sz, char... cs>
+    struct parse_number<parser::u256, 16, sz, cs...> {
+      static constexpr bits_t<sz> v = operator "" _cppui256<'0', 'x', cs...>();
+    };
+
+    template <size_t sz, char... cs>
+    struct parse_number<parser::u512, 16, sz, cs...> {
+      static constexpr bits_t<sz> v = operator "" _cppui512<'0', 'x', cs...>();
+    };
+
+    template <size_t sz, char... cs>
+    struct parse_number<parser::u1024, 16, sz, cs...> {
+      static constexpr bits_t<sz> v = operator "" _cppui1024<'0', 'x', cs...>();
+    };
+#endif
+
+    constexpr parser get_parser(size_t sz) {
+      if (sz <= 64) {
+        return parser::u64;
+      } else if (sz <= 128) {
+        return parser::u128;
+      } else if (sz <= 256) {
+        return parser::u256;
+      } else if (sz <= 512) {
+        return parser::u512;
+      } else if (sz <= 1024) {
+        return parser::u1024;
+      } else {
+        return parser::unsupported;
+      }
+    }
+
+    template <bool imm, uint base, size_t sz, char... cs>
+    struct parse_literal;
+
+    template <uint base, size_t sz, char... cs>
+    struct parse_literal<true, base, sz, '\'', cs...> {
+      static_assert(sz <= 64, "Immediates can't have size > 64.");
+      static constexpr bits_t<sz> v = parse_number<get_parser(sz), base, sz, cs...>::v;
+    };
+
+    template <uint base, size_t sz, char... cs>
+    struct parse_literal<false, base, sz, '\'', cs...> {
+      static constexpr bits<sz> v = bits<sz>{parse_number<get_parser(sz), base, sz, cs...>::v};
+    };
+
+    template <bool imm, uint base, size_t sz, char c, char... cs>
+    struct parse_literal<imm, base, sz, c, cs...> {
+      static constexpr size_t sz_digit = parse_digit<10, c>();
+      static constexpr auto v = parse_literal<imm, base, 10 * sz + sz_digit, cs...>::v;
+    };
+
+    template <bool imm, char... cs>
+    using parse_bin = parse_literal<imm, 2, 0, cs...>;
+
+    template <bool imm, char... cs>
+    using parse_dec = parse_literal<imm, 10, 0, cs...>;
+
+    template <bool imm, char... cs> struct parse_hex;
+    template <bool imm, char c0, char c1, char... cs>
+    struct parse_hex<imm, c0, c1, cs...> {
+      static_assert(c0 == '0' && c1 == 'x', "Hex literal must start with 0x");
+      static constexpr auto v = parse_literal<imm, 16, 0, cs...>::v;
+    };
+  }
+
+  namespace literals {
+    // ‘auto v = …; return v’: see
+    // * https://stackoverflow.com/questions/8452952/c-linker-error-with-class-static-constexpr
+    // * https://stackoverflow.com/questions/45970113/
+    // * https://stackoverflow.com/a/18940384/695591
+    // … or compile with -std=c++17
+
+    // Binary representation: 4'0010_b
+    template <char... cs> constexpr auto operator "" _b() {
+      constexpr auto v = literal_parsing::parse_bin<false, cs...>::v; return v;
+    }
+
+    // Decimal representation: 11'1234_d
+    template <char... cs> constexpr auto operator "" _d() {
+      constexpr auto v = literal_parsing::parse_dec<false, cs...>::v; return v;
+    }
+
+    // Hex representation: 0x16'abcd_x
+    template <char... cs> constexpr auto operator "" _x() {
+      constexpr auto v = literal_parsing::parse_hex<false, cs...>::v; return v;
+    }
+
+    // Immediate binary representation: 4'0010_bv
+    template <char... cs> constexpr auto operator "" _bv() {
+      constexpr auto v = literal_parsing::parse_bin<true, cs...>::v; return v;
+    }
+
+    // Immediate decimal representation: 11'1234_dv
+    template <char... cs> constexpr auto operator "" _dv() {
+      constexpr auto v = literal_parsing::parse_dec<true, cs...>::v; return v;
+    }
+
+    // Immediate hex representation: 0x16'abcd_xv
+    template <char... cs> constexpr auto operator "" _xv() {
+      constexpr auto v = literal_parsing::parse_hex<true, cs...>::v; return v;
+    }
+  }
 
   /// Functions on bits
 
@@ -386,6 +539,7 @@ namespace prims {
 } // namespace prims
 
 using prims::bits;
+using namespace prims::literals;
 
 #ifndef SIM_MINIMAL
 enum class repr_style {

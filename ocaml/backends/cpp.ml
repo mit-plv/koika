@@ -180,33 +180,31 @@ let register_subtypes (pi: program_info) tau =
                      List.iter (loop << snd) sg.struct_fields in
   loop tau
 
-let z_to_hex bitlength z =
-  let w = (bitlength + 7) / 8 in
-  let fmt = sprintf "%%0#%dx" (w + 2) in
+let z_to_str (base: [`Bin | `Hex]) bitlength z =
+  let b, w = match base with
+    | `Hex -> "x", (bitlength + 7) / 8
+    | `Bin -> "b", bitlength in
+  let fmt = sprintf "%%0%d%s" w b in
   Z.format fmt z
 
 let cpp_const_init (pi: program_info) immediate sz cst =
   assert (sz >= 0);
   if sz > 64 then
     request_multiprecision pi;
-  let cst =
-    z_to_hex sz cst in
-  let ns =
-    if immediate then "BITSV" else "BITS" in
   if sz = 0 then
     "prims::tt"
-  else if sz <= 64 then
-    sprintf "%s(%d, %s)" ns sz cst
-  else if sz <= 128 then
-    sprintf "%s_128(%d, %s)" ns sz cst
-  else if sz <= 256 then
-    sprintf "%s_256(%d, %s)" ns sz cst
-  else if sz <= 512 then
-    sprintf "%s_512(%d, %s)" ns sz cst
-  else if sz <= 1024 then
-    sprintf "%s_1024(%d, %s)" ns sz cst
   else
-    failwith (sprintf "Unsupported size: %d" sz)
+    let imm_suffix = if immediate then "v" else "" in
+    if sz <= 32 then
+      let lit = z_to_str `Bin sz cst in
+      let prefix = sprintf "%d'" sz in
+      prefix ^ lit ^ "_b" ^ imm_suffix
+    else if sz <= 1024 then
+      let lit = z_to_str `Hex sz cst in
+      let prefix = sprintf "0x%d'" sz in
+      prefix ^ lit ^ "_x" ^ imm_suffix
+    else
+      failwith (sprintf "Unsupported size: %d" sz)
 
 let cpp_type_needs_allocation _tau =
   false (* boost::multiprecision has literals *)
