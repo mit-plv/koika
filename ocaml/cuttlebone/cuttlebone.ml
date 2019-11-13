@@ -192,35 +192,13 @@ module Util = struct
     { reg_name = string_of_coq_string (pkg.koika_reg_names.show0 r);
       reg_init = init }
 
-  (* let fn_sigs_of_koika_package ext_fn_names (pkg: _ Extr.koika_package_t) =
-   *   let custom_fn_info fn =
-   *     let name, fn = custom_fn_names fn, pkg.koika_ext_fn_types fn in
-   *     ffi_sig_of_extr_external_sig name fn in
-   *   fun fn -> ffi_sig_of_interop_fn ~custom_fn_info fn *)
+  let action_footprint a =
+    let m = Hashtbl.create 25 in
+    List.iter (fun (r, _) -> Hashtbl.replace m r ()) (Extr.action_footprint a);
+    List.of_seq (Hashtbl.to_seq_keys m)
 
-  (* Not implemented in Extr because Extr needs an R and a Sigma to iterate through an action *)
-  let rec exists_subterm (f: _ Extr.action -> bool) (a: _ Extr.action) =
-    f a ||
-      match a with
-       | Fail _
-       | Var _
-       | Const _ -> false
-       | Assign (_, _, _, _, ex) -> exists_subterm f ex
-       | Seq (_, _, a1, a2) -> exists_subterm f a1 || exists_subterm f a2
-       | Bind (_, _, _, _, ex, body) -> exists_subterm f ex || exists_subterm f body
-       | If (_, _, cond, tbranch, fbranch) ->
-          exists_subterm f cond || exists_subterm f tbranch || exists_subterm f fbranch
-       | Read (_, _, _) -> false
-       | Write (_, _, _, value) -> exists_subterm f value
-       | Unop (_, _, a) -> exists_subterm f a
-       | Binop (_, _, a1, a2) -> exists_subterm f a1 || exists_subterm f a2
-       | ExternalCall (_, _, a) -> exists_subterm f a
-       | APos (_, _, _, a) -> exists_subterm f a
-
-  let action_mentions_var k a =
-    exists_subterm (function
-        | Var (_, k', _, _) -> k' = k
-        | _ -> false) a
+  let action_mentions_var v a =
+    Extr.action_mentions_var any_eq_dec v a
 
   let member_mentions_shadowed_binding sg k0 v0 (m: _ Extr.member) =
     Extr.member_mentions_shadowed_binding any_eq_dec sg k0 v0 m

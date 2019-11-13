@@ -1002,39 +1002,8 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
   let buf_hpp = with_output_to_buffer p_hpp in
   (buf_hpp, buf_cpp)
 
-let action_footprint a =
-  let m = Hashtbl.create 25 in
-
-  let rec action_footprint = function
-    | Extr.Fail _ -> ()
-    | Extr.Var _ | Extr.Const _ -> ()
-    | Extr.Assign (_, _, _, _, ex) ->
-       action_footprint ex
-    | Extr.If (_, _, _, r1, r2)
-      | Extr.Seq (_, _, r1, r2) ->
-       action_footprint r1;
-       action_footprint r2
-    | Extr.Bind (_, _, _, _, ex, a) ->
-       action_footprint ex;
-       action_footprint a
-    | Extr.Read (_, _, r) -> Hashtbl.replace m r ()
-    | Extr.Write (_, _, r, ex) ->
-       Hashtbl.replace m r ();
-       action_footprint ex
-    | Extr.Unop (_, _, arg) ->
-       action_footprint arg
-    | Extr.Binop (_, _, a1, a2) ->
-       action_footprint a1; action_footprint a2
-    | Extr.ExternalCall (_, _, arg) ->
-       action_footprint arg
-    | Extr.APos (_, _, _, a) ->
-       action_footprint a in
-
-  action_footprint a;
-  List.of_seq (Hashtbl.to_seq_keys m)
-
 let cpp_rule_of_action (rl_name, (_kind, rl_body)) =
-  { rl_name; rl_body; rl_footprint = action_footprint rl_body }
+  { rl_name; rl_body; rl_footprint = Cuttlebone.Util.action_footprint rl_body }
 
 let input_of_compile_unit (cu: 'f Cuttlebone.Compilation.compile_unit) =
   { cpp_classname = cu.c_modname;

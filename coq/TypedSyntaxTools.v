@@ -17,20 +17,23 @@ Section TypedSyntaxTools.
     Inductive Event := ERead | EWrite.
     Notation footprint_t := (list (reg_t * (Event * Port))).
 
-    Fixpoint action_footprint {sig tau} (acc: footprint_t) (a: action sig tau) :=
+    Fixpoint action_footprint' {sig tau} (acc: footprint_t) (a: action sig tau) :=
       match a with
       | Fail _ | Var _ | Const _ => acc
-      | Assign m ex => action_footprint acc ex
-      | Seq r1 r2 => action_footprint (action_footprint acc r1) r2
-      | Bind var ex body => action_footprint (action_footprint acc ex) body
-      | If cond tbranch fbranch => action_footprint (action_footprint (action_footprint acc cond) tbranch) fbranch
+      | Assign m ex => action_footprint' acc ex
+      | Seq r1 r2 => action_footprint' (action_footprint' acc r1) r2
+      | Bind var ex body => action_footprint' (action_footprint' acc ex) body
+      | If cond tbranch fbranch => action_footprint' (action_footprint' (action_footprint' acc cond) tbranch) fbranch
       | Read port idx => (idx, (ERead, port)) :: acc
-      | Write port idx value => action_footprint ((idx, (EWrite, port)) :: acc) value
-      | Unop fn arg1 => action_footprint acc arg1
-      | Binop fn arg1 arg2 => action_footprint (action_footprint acc arg1) arg2
-      | ExternalCall fn arg => action_footprint acc arg
-      | APos _ a => action_footprint acc a
+      | Write port idx value => action_footprint' ((idx, (EWrite, port)) :: acc) value
+      | Unop fn arg1 => action_footprint' acc arg1
+      | Binop fn arg1 arg2 => action_footprint' (action_footprint' acc arg1) arg2
+      | ExternalCall fn arg => action_footprint' acc arg
+      | APos _ a => action_footprint' acc a
       end.
+
+    Definition action_footprint {sig tau} (a: action sig tau) :=
+      action_footprint' [] a.
 
     Fixpoint dedup {A} {EQ: EqDec A} (acc: list A) (l: list A) :=
       match l with
@@ -42,7 +45,7 @@ Section TypedSyntaxTools.
       end.
 
     Fixpoint action_registers {sig tau} {EQ: EqDec reg_t} (a: action sig tau) : list reg_t :=
-      dedup [] (List.map (fun '(rs, _) => rs) (action_footprint [] a)).
+      dedup [] (List.map (fun '(rs, _) => rs) (action_footprint a)).
 
     Fixpoint all_scheduler_paths (s: scheduler) : list (list rule_name_t) :=
       let cons r s := List.map (fun rs => r :: rs) (all_scheduler_paths s) in
@@ -82,7 +85,7 @@ Section TypedSyntaxTools.
     Context (rules: rule_name_t -> rule).
 
     Definition add_footprints (path: list rule_name_t) :=
-      List.map (fun rl => (rl, action_footprint [] (rules rl))) path.
+      List.map (fun rl => (rl, action_footprint (rules rl))) path.
 
     Definition find_dependencies reg_rules :=
       List.fold_left
@@ -106,8 +109,11 @@ Section TypedSyntaxTools.
       List.map path_dependency_graph paths.
   End Footprint.
 
-  Fixpoint existsb_subterm (f: forall sig tau, action sig tau -> bool) {sig tau} (a: action sig tau) :=
-    f _ _ a ||
+  Inductive any_action :=
+  | AnyAction {sig: tsig var_t} {tau: type} (aa_action: action sig tau).
+
+  Fixpoint existsb_subterm (f: any_action -> bool) {sig tau} (a: action sig tau) :=
+    f (AnyAction a) ||
       match a with
       | Fail tau => false
       | Var m => false
@@ -132,14 +138,14 @@ Section TypedSyntaxTools.
     end.
 
   Fixpoint action_mentions_shadowed_var {EQ: EqDec var_t} {sig tau} (a: action sig tau) :=
-    existsb_subterm (fun _ _ a => match a with
-                               | Var m => member_mentions_shadowed_binding m
-                               | _ => false
-                               end) a.
+    existsb_subterm (fun a => match a with
+                           | AnyAction (Var m) => member_mentions_shadowed_binding m
+                           | _ => false
+                           end) a.
 
   Fixpoint action_mentions_var {EQ: EqDec var_t} {sig tau} (k: var_t) (a: action sig tau) :=
-    existsb_subterm (fun _ _ a => match a with
-                               | @Var _ _ _ _ _ _ _ k' _ m => beq_dec k k'
-                               | _ => false
-                               end) a.
+    existsb_subterm (fun a => match a with
+                           | AnyAction (@Var _ _ _ _ _ _ _ k' _ m) => beq_dec k k'
+                           | _ => false
+                           end) a.
 End TypedSyntaxTools.
