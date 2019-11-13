@@ -367,10 +367,6 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     let fields = String.concat ", " (List.map sp_value fields) in
     sprintf "%s{ %s }" (cpp_struct_name sg) fields in
 
-  let sp_value_printer = function
-    | Bits_t sz -> sprintf "repr<%d>" sz
-    | Enum_t _ | Struct_t _ -> "repr" in
-
   let sp_binop op a1 a2 =
     match op with
     | `Infix op -> sprintf "(%s %s %s)" a1 op a2
@@ -443,16 +439,16 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
               let v_sz = typ_sz tau in
               let bits_sz_tau = cpp_type_of_type (Bits_t v_sz) in
               let v_cast = sprintf "%s::mk(%s)" bits_sz_tau v_arg in
-              p "default: return \"%s{\" + repr<%d>(%s, style) + \"}\";"
-                sg.enum_name v_sz v_cast)) in (* unmangled *)
+              p "default: return \"%s{\" + repr(%s, style) + \"}\";"
+                sg.enum_name v_cast)) in (* unmangled *)
 
     let p_struct_printer sg =
       p_printer (fun () ->
           p "std::ostringstream stream;";
           p "stream << \"%s { \";" sg.struct_name; (* unmangled *)
-          List.iter (fun (fname, ftau) ->
-              p "stream << \"  .%s = \" << %s(%s.%s, style) << \"; \";" (* unmangled *)
-                fname (sp_value_printer ftau) v_arg (cpp_field_name fname))
+          List.iter (fun (fname, _) ->
+              p "stream << \"  .%s = \" << repr(%s.%s, style) << \"; \";" (* unmangled *)
+                fname v_arg (cpp_field_name fname))
             sg.struct_fields;
           p "stream << \"}\";";
           p "return stream.str();") in
@@ -609,8 +605,8 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
       p_decl (reg_type r) r.reg_name in
 
     let p_dump_register r =
-      p "std::cout << \"%s = \" << %s(%s) << std::endl;"
-        r.reg_name (sp_value_printer (reg_type r)) r.reg_name in
+      p "std::cout << \"%s = \" << repr(%s) << std::endl;"
+        r.reg_name r.reg_name in
 
     let p_state_t () =
       p_scoped "struct state_t" ~terminator:";" (fun () ->
@@ -716,10 +712,10 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
         let open Cuttlebone.Extr.PrimTyped in
         match fn with
         | Display fn ->
-           let tau, args = match fn with
-             | DisplayUtf8 sz -> Bits_t sz, sprintf "%s, repr_style::utf8" a1
-             | DisplayValue tau -> Cuttlebone.Util.typ_of_extr_type tau, a1 in
-           ImpureExpr (sprintf "prims::display(%s(%s))" (sp_value_printer tau) args)
+           let args = match fn with
+             | DisplayUtf8 _ -> sprintf "%s, repr_style::utf8" a1
+             | DisplayValue _ -> a1 in
+           ImpureExpr (sprintf "prims::display(repr(%s))" args)
         | Conv (tau, fn) ->
            let ns = "prims::" in
            let tau = Cuttlebone.Util.typ_of_extr_type tau in
