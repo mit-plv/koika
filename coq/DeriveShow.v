@@ -13,6 +13,17 @@ Module Internals.
 
   Ltac2 Type exn ::= [ NotAConstructor (constr) ].
 
+  Ltac2 eval_simpl c :=
+    Std.eval_simpl {
+        Std.rBeta := true;
+        Std.rMatch := true;
+        Std.rFix := true;
+        Std.rCofix := true;
+        Std.rZeta := true;
+        Std.rDelta := true;
+        Std.rConst := []
+      } None c.
+
   Ltac2 rec list_map fn l :=
     match l with
     | [] => []
@@ -83,7 +94,7 @@ Module Internals.
                      let hd_str := constr:(String.concat "_" (butlast $hd_path)) in
                      let arg_strs := coq_list_of_list constr:(String.string) derive_show_recurse args in
                      let str := constr:(String.concat "_" ($hd_str :: $arg_strs)) in
-                     let str := compute str in
+                     let str := eval_simpl str in
                      exact $str
       end
     end.

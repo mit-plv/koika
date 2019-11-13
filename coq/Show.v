@@ -3,7 +3,7 @@ Require Export Coq.Strings.String.
 Class Show (A: Type) :=
   { show: A -> string }.
 
-Module ShowNat.
+Module Show_nat.
   Lemma digit_lt_base m {n} : not (m + n < m).
   Proof.
     red; intros; eapply Le.le_Sn_n; eauto using Le.le_trans, Plus.le_plus_l.
@@ -28,7 +28,10 @@ Module ShowNat.
 
   Definition string_of_nat (n: nat) :=
     string_of_nat_rec (S n) n.
-End ShowNat.
+End Show_nat.
 
-Instance ShowNat : Show nat :=
-  { show := ShowNat.string_of_nat }.
+Instance Show_nat : Show nat :=
+  { show := Show_nat.string_of_nat }.
+
+Instance Show_string : Show string :=
+  {| show x := x |}.
