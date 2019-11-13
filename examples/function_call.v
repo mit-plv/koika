@@ -71,25 +71,19 @@ Definition ext_fn_names (fn: ext_fn_t) :=
   end.
 
 Definition package :=
-  {| ip_koika := {| koika_reg_names := show;
-                   koika_reg_types := R;
+  {| ip_koika := {| koika_reg_types := R;
                    koika_reg_init := r;
-
                    koika_ext_fn_types := Sigma;
-
                    koika_rules := rules;
-                   koika_rule_names := show;
-
                    koika_scheduler := sched;
                    koika_module_name := "function_call" |};
 
      ip_sim :=
-       {| sp_var_names x := x;
-          sp_ext_fn_names := ext_fn_names;
+       {| sp_ext_fn_names := ext_fn_names;
           sp_extfuns := Some "#include ""../function_call.extfuns.hpp""" |};
 
-     ip_verilog := {| vp_external_rules := [];
-                     vp_ext_fn_names := ext_fn_names |} |}.
+     ip_verilog := {| vp_ext_fn_names := ext_fn_names;
+                     vp_external_rules := [] |} |}.
 
 Unset Extraction Optimize.
 Definition prog := Interop.Backends.register package.

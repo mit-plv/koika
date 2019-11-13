@@ -45,29 +45,27 @@ Definition sched_circuits :=
 Definition sched_circuits_result :=
   tc_compute (interp_circuits (ContextEnv.(create) r) sigma sched_circuits).
 
+Definition cpp_ext_fn_names fn := match fn with f0 => "cpp_f0" end.
+Definition verilog_ext_fn_names fn := match fn with f0 => "verilog_f0" end.
+
 Definition package :=
   {| ip_koika := {| koika_reg_types := R;
                    koika_reg_init := r;
-                   koika_reg_finite := _;
-
                    koika_ext_fn_types := Sigma;
-                   koika_reg_names := show;
-
                    koika_rules := rules;
-                   koika_rule_names := show;
-
                    koika_scheduler := sched;
                    koika_module_name := "extcall" |};
-     ip_sim := {| sp_var_names x := x;
-                 sp_ext_fn_names := show;
+
+     ip_sim := {| sp_ext_fn_names := cpp_ext_fn_names;
                  sp_extfuns := Some "class extfuns {
 public:
-  bits<3> f0(const bits<3> arg) {
+  bits<3> cpp_f0(const bits<3> arg) {
     return ~arg;
   }
 };" |};
-     ip_verilog := {| vp_external_rules := [];
-                     vp_ext_fn_names := show |} |}.
+
+     ip_verilog := {| vp_ext_fn_names := verilog_ext_fn_names;
+                     vp_external_rules := [] |} |}.
 
 Definition prog := Interop.Backends.register package.
 Extraction "extcall.ml" prog.

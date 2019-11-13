@@ -50,25 +50,18 @@ Definition circuits :=
   compile_scheduler rules regfile.
 
 Definition package :=
-  {| ip_koika := {| koika_reg_names := show;
-                   koika_reg_types := R;
+  {| ip_koika := {| koika_reg_types := R;
                    koika_reg_init reg := r reg;
-
                    koika_ext_fn_types := empty_Sigma;
-
                    koika_rules := rules;
-                   koika_rule_names := show;
-
                    koika_scheduler := regfile;
-
                    koika_module_name := "vector" |};
 
-     ip_sim := {| sp_var_names x := x;
-                 sp_ext_fn_names := empty_fn_names;
+     ip_sim := {| sp_ext_fn_names := empty_fn_names;
                  sp_extfuns := None |};
 
-     ip_verilog := {| vp_external_rules := [];
-                     vp_ext_fn_names := empty_fn_names |} |}.
+     ip_verilog := {| vp_ext_fn_names := empty_fn_names;
+                     vp_external_rules := [] |} |}.
 
 Definition prog := Interop.Backends.register package.
 Extraction "vector.ml" prog.

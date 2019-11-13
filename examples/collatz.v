@@ -68,25 +68,18 @@ Module Collatz.
     tc_compute (interp_circuits (ContextEnv.(create) r) empty_sigma circuits).
 
   Definition package :=
-    {| ip_koika := {| koika_reg_names := show;
-                     koika_reg_types := R;
+    {| ip_koika := {| koika_reg_types := R;
                      koika_reg_init := r;
-
                      koika_ext_fn_types := empty_Sigma;
-
                      koika_rules := rules;
-                     koika_rule_names := show;
-
                      koika_scheduler := collatz;
-
                      koika_module_name := "collatz" |};
 
-       ip_sim := {| sp_var_names x := x;
-                   sp_ext_fn_names := empty_fn_names;
+       ip_sim := {| sp_ext_fn_names := empty_fn_names;
                    sp_extfuns := None |};
 
-       ip_verilog := {| vp_external_rules := [];
-                       vp_ext_fn_names := empty_fn_names |} |}.
+       ip_verilog := {| vp_ext_fn_names := empty_fn_names;
+                       vp_external_rules := [] |} |}.
 End Collatz.
 
 Definition prog := Interop.Backends.register Collatz.package.

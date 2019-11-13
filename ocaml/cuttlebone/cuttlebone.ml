@@ -189,7 +189,7 @@ module Util = struct
 
   let reg_sigs_of_koika_package (pkg: _ Extr.koika_package_t) r =
     let init = value_of_extr_value (pkg.koika_reg_types r) (pkg.koika_reg_init r) in
-    { reg_name = string_of_coq_string (pkg.koika_reg_names r);
+    { reg_name = string_of_coq_string (pkg.koika_reg_names.show0 r);
       reg_init = init }
 
   (* let fn_sigs_of_koika_package ext_fn_names (pkg: _ Extr.koika_package_t) =
@@ -486,7 +486,7 @@ module Graphs = struct
     dedup_circuit
       { di_regs;
         di_reg_sigs = Util.reg_sigs_of_koika_package kp;
-        di_rule_names = (fun rln -> Util.string_of_coq_string @@ kp.koika_rule_names rln);
+        di_rule_names = (fun rln -> Util.string_of_coq_string @@ kp.koika_rule_names.show0 rln);
         di_external_rules = vp.vp_external_rules;
         di_fn_sigs;
         di_circuits }

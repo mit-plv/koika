@@ -707,9 +707,9 @@ Module  RV32ICore.
   Definition koika_package :=
     {| koika_reg_types := R;
        koika_reg_init := r;
-       koika_reg_finite := _;
        koika_ext_fn_types := empty_Sigma;
-       koika_reg_names r := match r with
+       koika_reg_names := {| show r :=
+                            match r with
                             (* Declare state *)
                             | toIMem s => String.append "toIMem_" (MemReq.name_reg s)
                             | fromIMem s => String.append "fromIMem_" (MemResp.name_reg s)
@@ -722,23 +722,22 @@ Module  RV32ICore.
                             | scoreboard s => String.append "scoreboard_" (Scoreboard.name_reg s)
                             | pc => "pc"
                             | epoch => "epoch"
-                            end;
+                            end |};
        koika_rules := rules;
-       koika_rule_names r := match r with
+       koika_rule_names := {| show r := match r with
                              | O => "fetch"
                              | 1 => "decode"
                              | 2 => "execute"
                              | 3 => "writeback"
                              | 4 => "externalI"
                              | _ => "externalD"
-                         end;
+                         end |};
        koika_scheduler := rv_core;
        koika_module_name := "rv_core" |}.
 
   Definition package :=
     {| ip_koika := koika_package;
-       ip_sim := {| sp_var_names x := x;
-                   sp_ext_fn_names := empty_fn_names;
+       ip_sim := {| sp_ext_fn_names := empty_fn_names;
                    sp_extfuns := None |};
        ip_verilog := {| vp_external_rules := [4];
                         vp_ext_fn_names := empty_fn_names |} |}.

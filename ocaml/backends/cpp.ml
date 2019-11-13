@@ -1070,8 +1070,8 @@ let input_of_sim_package
   { cpp_classname = classname;
     cpp_header_name = classname;
     cpp_pos_of_pos = (fun _ -> Pos.Unknown);
-    cpp_var_names = (fun x -> Cuttlebone.Util.string_of_coq_string (sp.sp_var_names x));
-    cpp_rule_names = (fun rn -> Cuttlebone.Util.string_of_coq_string (kp.koika_rule_names rn));
+    cpp_var_names = (fun x -> Cuttlebone.Util.string_of_coq_string (sp.sp_var_names.show0 x));
+    cpp_rule_names = (fun rn -> Cuttlebone.Util.string_of_coq_string (kp.koika_rule_names.show0 rn));
     cpp_scheduler = kp.koika_scheduler;
     cpp_rules = List.map (cpp_rule_of_koika_package_rule kp) rules;
     cpp_registers = kp.koika_reg_finite.finite_elements;

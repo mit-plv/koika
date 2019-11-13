@@ -85,25 +85,18 @@ Module GCDMachine.
     tc_scheduler (start |> step_compute |> get_result |> done).
 
   Definition package :=
-    {| ip_koika := {| koika_reg_names := show;
-                     koika_reg_types := R;
+    {| ip_koika := {| koika_reg_types := R;
                      koika_reg_init := init_r;
-
                      koika_ext_fn_types := empty_Sigma;
-
                      koika_rules := rules;
-                     koika_rule_names := show;
-
                      koika_scheduler := bring;
-
                      koika_module_name := "gcd_machine" |};
 
-       ip_sim := {| sp_var_names x := x;
-                   sp_ext_fn_names := empty_fn_names;
+       ip_sim := {| sp_ext_fn_names := empty_fn_names;
                    sp_extfuns := None |};
 
-       ip_verilog := {| vp_external_rules := nil;
-                       vp_ext_fn_names := empty_fn_names |} |}.
+       ip_verilog := {| vp_ext_fn_names := empty_fn_names;
+                       vp_external_rules := nil |} |}.
 End GCDMachine.
 
 Definition prog := Interop.Backends.register GCDMachine.package.

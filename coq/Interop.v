@@ -39,7 +39,7 @@ Section Packages.
   Record koika_package_t :=
     {
       (** [koika_reg_names]: These names are used to generate readable code. *)
-      koika_reg_names: reg_t -> string;
+      koika_reg_names: Show reg_t;
       (** [koika_reg_types]: The type of data stored in each register. *)
       koika_reg_types: reg_t -> type;
       (** [koika_reg_init]: The initial value stored in each register. *)
@@ -55,7 +55,7 @@ Section Packages.
       koika_rules: forall _: rule_name_t,
           TypedSyntax.rule pos_t var_t koika_reg_types koika_ext_fn_types;
       (** [koika_rule_names]: These names are used to generate readable code. **)
-      koika_rule_names: rule_name_t -> string;
+      koika_rule_names: Show rule_name_t;
 
       (** [koika_scheduler]: The scheduler. **)
       koika_scheduler: TypedSyntax.scheduler pos_t rule_name_t;
@@ -83,8 +83,8 @@ Section Packages.
 
   Record verilog_package_t :=
     {
-      (** [vp_ext_fn_names]: A map from custom functions to Verilog
-          implementations. *)
+      (** [vp_ext_fn_names]: A map from custom function names to Verilog
+          function names. *)
       vp_ext_fn_names: forall fn: ext_fn_t, string;
 
       (** [vp_external_rules]: A list of rule names to be replaced with
@@ -95,10 +95,10 @@ Section Packages.
   Record sim_package_t :=
     {
       (** [sp_var_names]: These names are used to generate readable code. *)
-      sp_var_names: var_t -> string;
+      sp_var_names: Show var_t;
 
-      (** [sp_ext_fn_names]: A map from custom functions to C++
-          implementations. *)
+      (** [sp_ext_fn_names]: A map from custom function names to C++ function
+          names. *)
       sp_ext_fn_names: forall fn: ext_fn_t, string;
 
       (** [sp_extfuns]: A piece of C++ code implementing the custom external

@@ -97,25 +97,18 @@ Definition ext_fn_names fn :=
   end.
 
 Definition package :=
-  {| ip_koika := {| koika_reg_names := show;
-                   koika_reg_types := R;
+  {| ip_koika := {| koika_reg_types := R;
                    koika_reg_init reg := r reg;
-
                    koika_ext_fn_types := Sigma;
-
                    koika_rules := rules;
-                   koika_rule_names := show;
-
                    koika_scheduler := pipeline;
-
                    koika_module_name := "pipeline" |};
 
-     ip_sim := {| sp_var_names x := x;
-                 sp_ext_fn_names := ext_fn_names;
+     ip_sim := {| sp_ext_fn_names := ext_fn_names;
                  sp_extfuns := Some cpp_extfuns |};
 
-     ip_verilog := {| vp_external_rules := [];
-                     vp_ext_fn_names := ext_fn_names |} |}.
+     ip_verilog := {| vp_ext_fn_names := ext_fn_names;
+                     vp_external_rules := [] |} |}.
 
 Definition prog := Interop.Backends.register package.
 Extraction "pipeline.ml" prog.
