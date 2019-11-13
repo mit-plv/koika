@@ -17,7 +17,7 @@ Module PrimUntyped.
   | UNot
   | UZExtL (width: nat)
   | UZExtR (width: nat)
-  | UPart (offset: nat) (width: nat).
+  | USlice (offset: nat) (width: nat).
 
   Inductive ubits2 :=
   | UAnd
@@ -28,8 +28,8 @@ Module PrimUntyped.
   | UAsr
   | UConcat
   | USel
-  | UPartSubst (offset: nat) (width: nat)
-  | UIndexedPart (width: nat)
+  | USliceSubst (offset: nat) (width: nat)
+  | UIndexedSlice (width: nat)
   | UPlus
   | UMinus
   | UCompare (signed: bool) (c: comparison).
@@ -66,7 +66,7 @@ Module PrimTyped.
   | Not (sz: nat)
   | ZExtL (sz: nat) (width: nat)
   | ZExtR (sz: nat) (width: nat)
-  | Part (sz: nat) (offset: nat) (width: nat).
+  | Slice (sz: nat) (offset: nat) (width: nat).
 
   Inductive fbits2 :=
   | And (sz: nat)
@@ -77,8 +77,8 @@ Module PrimTyped.
   | Asr (bits_sz: nat) (shift_sz: nat)
   | Concat (sz1 sz2 : nat)
   | Sel (sz: nat)
-  | PartSubst (sz: nat) (offset: nat) (width: nat)
-  | IndexedPart (sz: nat) (width: nat)
+  | SliceSubst (sz: nat) (offset: nat) (width: nat)
+  | IndexedSlice (sz: nat) (width: nat)
   | Plus (sz : nat)
   | Minus (sz : nat)
   | EqBits (sz: nat)
@@ -102,10 +102,10 @@ Module PrimTyped.
   | Struct2 (fn: fstruct2) (sig: struct_sig) (f: struct_index sig).
 
   Definition GetFieldBits (sig: struct_sig) (idx: struct_index sig) : fbits1 :=
-    Part (struct_sz sig) (field_offset_right sig idx) (field_sz sig idx).
+    Slice (struct_sz sig) (field_offset_right sig idx) (field_sz sig idx).
 
   Definition SubstFieldBits (sig: struct_sig) (idx: struct_index sig) : fbits2 :=
-    PartSubst (struct_sz sig) (field_offset_right sig idx) (field_sz sig idx).
+    SliceSubst (struct_sz sig) (field_offset_right sig idx) (field_sz sig idx).
 End PrimTyped.
 
 (* Like Nat.log2_iter, but switches to next power of two one number earlier
@@ -150,7 +150,7 @@ Module PrimTypeInference.
                      | UNot => Not sz1
                      | UZExtL width => ZExtL sz1 width
                      | UZExtR width => ZExtR sz1 width
-                     | UPart offset width => Part sz1 offset width
+                     | USlice offset width => Slice sz1 offset width
                      end)
     | UStruct1 fn =>
       match fn with
@@ -172,8 +172,8 @@ Module PrimTypeInference.
       let/res sz2 := assert_bits_t Arg2 tau2 in
       Success (Bits2 match fn with
                      | USel => Sel sz1
-                     | UPartSubst offset width => PartSubst sz1 offset width
-                     | UIndexedPart width => IndexedPart sz1 width
+                     | USliceSubst offset width => SliceSubst sz1 offset width
+                     | UIndexedSlice width => IndexedSlice sz1 width
                      | UAnd => And sz1
                      | UOr => Or sz1
                      | UXor => Xor sz1
@@ -207,14 +207,14 @@ Module CircuitSignatures.
     | Not sz => {$ sz ~> sz $}
     | ZExtL sz width => {$ sz ~> (Nat.max sz width) $}
     | ZExtR sz width => {$ sz ~> (Nat.max sz width) $}
-    | Part sz offset width => {$ sz ~> width $}
+    | Slice sz offset width => {$ sz ~> width $}
     end.
 
   Definition CSigma2 (fn: PrimTyped.fbits2) : CSig 2 :=
     match fn with
     | Sel sz => {$ sz ~> (log2 sz) ~> 1 $}
-    | PartSubst sz offset width => {$ sz ~> width ~> sz $}
-    | IndexedPart sz width => {$ sz ~> (log2 sz) ~> width $}
+    | SliceSubst sz offset width => {$ sz ~> width ~> sz $}
+    | IndexedSlice sz width => {$ sz ~> (log2 sz) ~> width $}
     | And sz => {$ sz ~> sz ~> sz $}
     | Or sz => {$ sz ~> sz ~> sz $}
     | Xor sz => {$ sz ~> sz ~> sz $}
@@ -280,10 +280,10 @@ Module BitFuns.
   Definition bits_eq {sz} (bs1 bs2: bits sz) :=
     if eq_dec bs1 bs2 then Ob~1 else Ob~0.
 
-  Definition part {sz} (offset: nat) (width: nat) (bs: bits sz) :=
+  Definition slice {sz} (offset: nat) (width: nat) (bs: bits sz) :=
     vect_extend_end_firstn (vect_firstn width (vect_skipn offset bs)) false.
 
-  Lemma part_subst_cast :
+  Lemma slice_subst_cast :
     forall sz width offset,
       Nat.min sz (Nat.min offset sz + (width + (sz - (offset + width)))) = sz.
   Proof.
@@ -293,14 +293,14 @@ Module BitFuns.
     - f_equal; apply (IHsz (S width) offset).
   Defined.
 
-  Definition part_subst {sz}
+  Definition slice_subst {sz}
              (offset: nat)
              (width: nat)
              (bs: bits sz)
              (v: bits width) : bits sz :=
     let head := vect_firstn offset bs in
     let tail := vect_skipn (offset + width) bs in
-    ltac:(rewrite <- (part_subst_cast sz width offset);
+    ltac:(rewrite <- (slice_subst_cast sz width offset);
             exact (vect_firstn sz (vect_app head (vect_app v tail)))).
 
   Fixpoint get_field fields
@@ -333,14 +333,14 @@ Module CircuitPrimSpecs.
     | Not _ => fun bs => Bits.neg bs
     | ZExtL sz width => fun bs => Bits.extend_end bs width false
     | ZExtR sz width => fun bs => Bits.extend_beginning bs width false
-    | Part _ offset width => part offset width
+    | Slice _ offset width => slice offset width
     end.
 
   Definition sigma2 (fn: PrimTyped.fbits2) : CSig_denote (CircuitSignatures.CSigma2 fn) :=
     match fn with
     | Sel _ => sel
-    | PartSubst _ offset width => part_subst offset width
-    | IndexedPart _ width => fun bs offset => part (Bits.to_nat offset) width bs
+    | SliceSubst _ offset width => slice_subst offset width
+    | IndexedSlice _ width => fun bs offset => slice (Bits.to_nat offset) width bs
     | And _ => Bits.map2 andb
     | Or _ => Bits.map2 orb
     | Xor _ => Bits.map2 xorb

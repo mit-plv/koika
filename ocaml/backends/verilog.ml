@@ -210,7 +210,7 @@ let assignment_to_string (gensym: int ref) (assignment: assignment) =
    | EUnop (fn, arg1) ->
       (match fn with
        | Not _ -> default_left ^ "~" ^ arg1
-       | Part (_, offset, slice_sz) -> default_left ^ arg1 ^ "[" ^ (string_of_int offset) ^ " +: " ^ string_of_int slice_sz ^ "]"
+       | Slice (_, offset, slice_sz) -> default_left ^ arg1 ^ "[" ^ (string_of_int offset) ^ " +: " ^ string_of_int slice_sz ^ "]"
        | ZExtL _ | ZExtR _ -> failwith_unlowered ())
    | EBinop (fn, arg1, arg2) ->
       (match fn with
@@ -221,7 +221,7 @@ let assignment_to_string (gensym: int ref) (assignment: assignment) =
           let op = match cmp with CLt -> "<" | CGt -> ">" | CLe -> "<=" | CGe -> ">=" in
           Printf.sprintf "\tassign %s = %s %s %s" lhs (cast arg1) op (cast arg2)
        | Sel _ -> default_left ^ arg1 ^ "[" ^ arg2 ^ "]"
-       | PartSubst (sz, offset, slice_sz) ->
+       | SliceSubst (sz, offset, slice_sz) ->
           if (offset > 0) then
             if (offset + slice_sz <= sz-1) then
               Printf.sprintf "\tassign %s = {%s[%d : %d], %s, %s[%d : %d]}"
@@ -235,7 +235,7 @@ let assignment_to_string (gensym: int ref) (assignment: assignment) =
             else
               Printf.sprintf "assign %s = {%s[%d : %d], %s}"
                 lhs arg1 (sz-1) (slice_sz)  arg2
-       | IndexedPart (_, slice_sz) -> default_left ^ arg1 ^ "[" ^ arg2 ^ " +: " ^ string_of_int slice_sz ^ "]"
+       | IndexedSlice (_, slice_sz) -> default_left ^ arg1 ^ "[" ^ arg2 ^ " +: " ^ string_of_int slice_sz ^ "]"
        | And _ ->  default_left ^ arg1 ^ " & " ^ arg2
        | Or _ -> default_left ^ arg1 ^ " | " ^ arg2
        | Xor _ -> default_left ^ arg1 ^ " ^ " ^ arg2

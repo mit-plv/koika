@@ -11,13 +11,13 @@ Ltac min_t :=
          | _ => omega
          end.
 
-Lemma part_end :
+Lemma slice_end :
   forall sz sz' (v : bits (sz + sz')),
-    part sz sz' v = vect_skipn_plus sz v.
+    slice sz sz' v = vect_skipn_plus sz v.
 Proof.
   intros.
   apply vect_to_list_inj.
-  unfold part, vect_skipn_plus, vect_extend_end_firstn, vect_extend_end.
+  unfold slice, vect_skipn_plus, vect_extend_end_firstn, vect_extend_end.
   autorewrite with vect_to_list.
   min_t; rewrite Nat.sub_diag by omega; cbn.
   rewrite app_nil_r.
@@ -26,21 +26,21 @@ Proof.
   reflexivity.
 Qed.
 
-Lemma part_front :
+Lemma slice_front :
   forall n sz (v: bits (n + sz)) offset width,
     offset + width <= n ->
-    part offset width v =
-    part offset width (vect_firstn_plus n v).
+    slice offset width v =
+    slice offset width (vect_firstn_plus n v).
 Proof.
   intros.
   apply vect_to_list_inj.
-  unfold part, vect_extend_end_firstn, vect_extend_end, vect_firstn_plus.
+  unfold slice, vect_extend_end_firstn, vect_extend_end, vect_firstn_plus.
   autorewrite with vect_to_list.
   rewrite skipn_firstn, firstn_firstn.
   min_t; reflexivity.
 Qed.
 
-Lemma part_correct_le :
+Lemma slice_correct_le :
   forall fields idx,
     struct_fields_sz (skipn (S (index_to_nat idx)) fields) + type_sz (snd (List_nth fields idx)) <=
     struct_fields_sz fields.
@@ -53,13 +53,13 @@ Proof.
   apply list_sum_skipn_le.
 Qed.
 
-Lemma part_subst_end :
+Lemma slice_subst_end :
   forall sz0 sz (bs0: bits (sz0 + sz)) (bs: bits sz),
-    part_subst sz0 sz bs0 bs = Bits.app bs (fst (Bits.split bs0)).
+    slice_subst sz0 sz bs0 bs = Bits.app bs (fst (Bits.split bs0)).
 Proof.
   unfold Bits.split; intros; rewrite vect_split_firstn_skipn; cbn.
   apply vect_to_list_inj.
-  unfold part_subst, vect_skipn_plus, vect_firstn_plus, vect_extend_end_firstn, vect_extend_end.
+  unfold slice_subst, vect_skipn_plus, vect_firstn_plus, vect_extend_end_firstn, vect_extend_end.
   autorewrite with vect_to_list.
   rewrite !firstn_app.
   rewrite firstn_length_le by (rewrite vect_to_list_length; omega).
@@ -69,16 +69,16 @@ Proof.
   rewrite app_nil_r; reflexivity.
 Qed.
 
-Lemma part_subst_front :
+Lemma slice_subst_front :
   forall sz0 sz width (bs0: bits (sz0 + sz)) (bs: bits width) offset,
     offset + width <= sz0 ->
-    part_subst offset width bs0 bs =
-    Bits.app (vect_skipn_plus sz0 bs0) (part_subst offset width (vect_firstn_plus sz0 bs0) bs).
+    slice_subst offset width bs0 bs =
+    Bits.app (vect_skipn_plus sz0 bs0) (slice_subst offset width (vect_firstn_plus sz0 bs0) bs).
 Proof.
   clear.
   intros.
   apply vect_to_list_inj;
-    unfold part_subst, vect_skipn_plus, vect_firstn_plus, vect_extend_end_firstn, vect_extend_end.
+    unfold slice_subst, vect_skipn_plus, vect_firstn_plus, vect_extend_end_firstn, vect_extend_end.
   autorewrite with vect_to_list.
   rewrite !firstn_app.
   rewrite firstn_length_le by (rewrite vect_to_list_length; omega).
@@ -110,9 +110,9 @@ Proof.
           end; subst; congruence.
 Qed.
 
-Lemma get_field_bits_part:
+Lemma get_field_bits_slice:
   forall {sig} (f : struct_index sig) (a : type_denote (struct_t sig)),
-    part (field_offset_right sig f) (field_sz sig f) (bits_of_value a) =
+    slice (field_offset_right sig f) (field_sz sig f) (bits_of_value a) =
     bits_of_value (get_field (struct_fields sig) a f).
 Proof.
   intro sig;
@@ -120,16 +120,16 @@ Proof.
   induction (struct_fields sig) as [ | (nm & tau) l ]; simpl.
   * destruct f.
   * destruct f as [ | f], a; cbn in *; intros.
-    -- rewrite part_end, vect_skipn_plus_app.
+    -- rewrite slice_end, vect_skipn_plus_app.
        reflexivity.
     -- rewrite <- IHl.
-       rewrite part_front, vect_firstn_plus_app by apply part_correct_le.
+       rewrite slice_front, vect_firstn_plus_app by apply slice_correct_le.
        reflexivity.
 Qed.
 
-Lemma subst_field_bits_part_subst:
+Lemma subst_field_bits_slice_subst:
   forall {sig} (f : struct_index sig) (a1 : type_denote (struct_t sig)) (a2 : field_type sig f),
-    part_subst (field_offset_right sig f) (field_sz sig f) (bits_of_value a1) (bits_of_value a2) =
+    slice_subst (field_offset_right sig f) (field_sz sig f) (bits_of_value a1) (bits_of_value a2) =
     bits_of_value (tau := struct_t _) (subst_field (struct_fields sig) a1 f a2).
 Proof.
   intro sig;
@@ -137,9 +137,9 @@ Proof.
   induction (struct_fields sig) as [ | (nm & tau) l ]; simpl.
   * destruct f.
   * destruct f as [ | f], a1; cbn in *; intros.
-    -- rewrite part_subst_end, vect_split_app.
+    -- rewrite slice_subst_end, vect_split_app.
        reflexivity.
     -- rewrite <- IHl.
-       rewrite part_subst_front, vect_firstn_plus_app, vect_skipn_plus_app by apply part_correct_le.
+       rewrite slice_subst_front, vect_firstn_plus_app, vect_skipn_plus_app by apply slice_correct_le.
        reflexivity.
 Qed.

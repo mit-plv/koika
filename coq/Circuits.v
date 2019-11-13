@@ -433,7 +433,7 @@ Section CircuitCompilation.
         | ZExtR sz width => fun a c =>
                              ltac:(subst cRet; simpl; rewrite <- vect_extend_beginning_cast;
                                    exact (CBinop (Concat _ _) a (CConst Bits.zero)))
-        | Part sz offset width => fun a c => c
+        | Slice sz offset width => fun a c => c
         end a (CUnop fn a)
       | Struct1 fn sig f => fun a =>
         match fn return cArg1 (Struct1 fn sig f) -> cRet (Struct1 fn sig f) with

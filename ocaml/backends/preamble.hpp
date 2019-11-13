@@ -368,13 +368,13 @@ namespace prims {
   }
 
   template<std::size_t sz1, std::size_t idx, std::size_t width>
-  bits<sz1> part_subst(const bits<sz1> data, const bits<width> repl) {
+  bits<sz1> slice_subst(const bits<sz1> data, const bits<width> repl) {
     const bits<sz1> mask = ~(widen<sz1, width>(bits<width>::ones()) << idx);
     return (data & mask) | (widen<sz1, width>(repl) << idx);
   }
 
   template<std::size_t sz1, std::size_t sz2, std::size_t width>
-  bits<width> indexed_part(const bits<sz1> data, const bits<sz2> idx) {
+  bits<width> indexed_slice(const bits<sz1> data, const bits<sz2> idx) {
     return truncate<width, sz1>(data >> idx);
   }
 
@@ -499,7 +499,7 @@ namespace prims {
   }
 
   template<std::size_t sz1, std::size_t idx, std::size_t width>
-  bits<width> part(const bits<sz1> data) {
+  bits<width> slice(const bits<sz1> data) {
     return truncate<width, sz1>(data >> idx);
   }
 

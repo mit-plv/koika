@@ -125,8 +125,8 @@ Notation "a  '>='  b" := (UBinop (UBits2 (UCompare false cGe)) a b) (in custom k
 Notation "a  '>s='  b" := (UBinop (UBits2 (UCompare true cGe)) a b) (in custom koika at level 79).
 Notation "a '++' b" :=  (UBinop (UBits2 UConcat) a b) (in custom koika at level 80,  right associativity, format "a  '++'  b").
 Notation "a '[' b ']'" := (UBinop (UBits2 USel) a b) (in custom koika at level 75, format "'[' a [ b ] ']'").
-(* Notation "a '[' b ':' c ']'" := (UBinop (UBits2 (UIndexedPart c)) a b) (in custom koika at level 75, c constr at level 0, format "'[' a [ b ':+' c ] ']'"). *)
-Notation "a '[' b ':+' c ']'" := (UBinop (UBits2 (UIndexedPart c)) a b) (in custom koika at level 75, c constr at level 0, format "'[' a [ b ':+' c ] ']'").
+(* Notation "a '[' b ':' c ']'" := (UBinop (UBits2 (UIndexedSlice c)) a b) (in custom koika at level 75, c constr at level 0, format "'[' a [ b ':+' c ] ']'"). *)
+Notation "a '[' b ':+' c ']'" := (UBinop (UBits2 (UIndexedSlice c)) a b) (in custom koika at level 75, c constr at level 0, format "'[' a [ b ':+' c ] ']'").
 Notation "'`' a '`'" := ( a) (in custom koika at level 99, a constr at level 99).
 
 Notation "'fun' args ':' ret '=>' body" :=

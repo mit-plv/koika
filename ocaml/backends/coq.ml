@@ -199,7 +199,7 @@ and pp_prim_ubits1 ppf (f: Cuttlebone.Extr.PrimUntyped.ubits1) =
   | UNot -> pp_raw "UNot"
   | UZExtL width -> pp_app "UZExtL" "%d" width
   | UZExtR width -> pp_app "UZExtR" "%d" width
-  | UPart (offset, width) -> pp_app "UPart" "%d@ %d" offset width
+  | USlice (offset, width) -> pp_app "USlice" "%d@ %d" offset width
 and pp_prim_ustruct1 ppf (f: Cuttlebone.Extr.PrimUntyped.ustruct1) = match f with
   | UGetField f -> pp_app ppf "UGetField" "%a" pp_coq_quoted f
   | UGetFieldBits (sg, f) -> pp_app ppf "UGetFieldBits" "%a@ %a" pp_extr_struct_name sg pp_coq_quoted f
@@ -213,8 +213,8 @@ and pp_prim_ubits2 ppf (f: Cuttlebone.Extr.PrimUntyped.ubits2) =
   let pp_app fmt = pp_app ppf fmt in
   match f with
   | USel -> pp_raw "USel"
-  | UPartSubst (offset, width) -> pp_app "UPartSubst" "%d@ %d" offset width
-  | UIndexedPart width -> pp_app "UIndexedPart" "%d" width
+  | USliceSubst (offset, width) -> pp_app "USliceSubst" "%d@ %d" offset width
+  | UIndexedSlice width -> pp_app "UIndexedSlice" "%d" width
   | UAnd -> pp_raw "UAnd"
   | UOr -> pp_raw "UOr"
   | UXor -> pp_raw "UXor"

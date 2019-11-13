@@ -1263,9 +1263,9 @@ let bits_primitives =
    (">s=", `Prim0 (binop (UCompare (true, CGe))));
    ("zextl", `Prim1 (fun n -> unop (UZExtL n)));
    ("zextr", `Prim1 (fun n -> unop (UZExtR n)));
-   ("indexed-part", `Prim1 (fun n -> binop (UIndexedPart n)));
-   ("part", `Prim2 (fun n n' -> unop (UPart (n, n'))));
-   ("part-subst", `Prim2 (fun n n' -> unop (UPart (n, n'))))]
+   ("indexed-slice", `Prim1 (fun n -> binop (UIndexedSlice n)));
+   ("slice", `Prim2 (fun n n' -> unop (USlice (n, n'))));
+   ("slice-subst", `Prim2 (fun n n' -> unop (USlice (n, n'))))]
   |> StringMap.of_list
 
 let all_primitive_names =

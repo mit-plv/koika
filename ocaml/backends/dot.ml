@@ -9,7 +9,7 @@ let bits1_name =
   | Not _sz -> "Not"
   | ZExtL (_sz, _width) -> "ZExtL"
   | ZExtR (_sz, _width) -> "ZExtR"
-  | Part (_logsz, _offset, _width) -> "Part"
+  | Slice (_logsz, _offset, _width) -> "Slice"
 
 let comparison_name (cmp: Cuttlebone.Extr.comparison)=
   match cmp with
@@ -22,8 +22,8 @@ let bits2_name =
   let open Extr.PrimTyped in
   function
   | Sel _logsz -> "Sel"
-  | PartSubst (_logsz, _offset, _width) -> "PartSubst"
-  | IndexedPart (_logsz, _width) -> "IndexedPart"
+  | SliceSubst (_logsz, _offset, _width) -> "SliceSubst"
+  | IndexedSlice (_logsz, _width) -> "IndexedSlice"
   | And _sz -> "And"
   | Or _sz -> "Or"
   | Xor _sz -> "Xor"

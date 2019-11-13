@@ -228,7 +228,7 @@ let cpp_bits1_fn_name (f: Extr.PrimTyped.fbits1) =
   | Not _ -> "~"
   | ZExtL (sz, width) -> sprintf "prims::zextl<%d, %d>" sz width
   | ZExtR (sz, width) -> sprintf "prims::zextr<%d, %d>" sz width
-  | Part (sz, offset, width) -> sprintf "prims::part<%d, %d, %d>" sz offset width
+  | Slice (sz, offset, width) -> sprintf "prims::slice<%d, %d, %d>" sz offset width
 
 let cpp_bits2_fn_name (f: Extr.PrimTyped.fbits2) =
   match f with
@@ -240,8 +240,8 @@ let cpp_bits2_fn_name (f: Extr.PrimTyped.fbits2) =
   | Asr _ -> `Fn "prims::asr"
   | Concat _ -> `Fn "prims::concat"
   | Sel _ -> `Array
-  | PartSubst (sz, offset, width) -> `Fn (sprintf "prims::part_subst<%d, %d, %d>" sz offset width)
-  | IndexedPart (sz, width) -> `Fn (sprintf "prims::indexed_part<%d, %d, %d>" sz (Cuttlebone.Extr.log2 sz) width)
+  | SliceSubst (sz, offset, width) -> `Fn (sprintf "prims::slice_subst<%d, %d, %d>" sz offset width)
+  | IndexedSlice (sz, width) -> `Fn (sprintf "prims::indexed_slice<%d, %d, %d>" sz (Cuttlebone.Extr.log2 sz) width)
   | Plus _ -> `Infix "+"
   | Minus _ -> `Infix "-"
   | EqBits _ -> `Infix "=="
