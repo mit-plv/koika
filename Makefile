@@ -75,13 +75,16 @@ EXAMPLES_TARGETS := $(patsubst %,%.objects/,${EXAMPLES})
 
 %.v.objects/: %.v coq ${CUTTLEC_EXE}
 	@printf "\n-- Compiling $< --\n"
-# Set up variables                                                # examples/rv/xyz.v.objects/_built
+# Set up variables                                                # examples/rv/xyz.v.objects/
+	@$(eval DIR := $(dir $*))                                     # examples/rv/
 	@$(eval MODNAME := $(notdir $*))                              # xyz
 	@$(eval BUILT_VO := ${BUILD_DIR}/$*.vo)                       # _build/default/examples/rv/xyz.vo
 	@$(eval BUILT_ML := ${BUILD_DIR}/$*.ml)                       # _build/default/examples/rv/xyz.ml
-	@$(eval EXTRACTED_DIR := $(dir $*)extracted)                  # examples/rv/extracted
+	@$(eval EXTRACTED_DIR := ${DIR}extracted)                     # examples/rv/extracted
 	@$(eval BUILD_EXTRACTED_DIR := ${BUILD_DIR}/${EXTRACTED_DIR}) # _build/default/examples/rv/extracted
 	@$(eval BUILT_CMXS := ${BUILD_EXTRACTED_DIR}/${MODNAME}.cmxs) # _build/default/examples/rv/extracted/xyz.cmxs
+	@$(eval MAKEFILE_NAME := ${MODNAME}.mk)                       # xyz.v.mk
+	@$(eval MAKEFILE_PATH := ${DIR}${MAKEFILE_NAME})              # examples/rv/xyz.v.mk
 	@mkdir -p "$@" "${EXTRACTED_DIR}"
 # Generate xyz.ml; coqdep will complain: see https://github.com/ocaml/dune/pull/2053
 	@rm -f "${BUILT_VO}"
@@ -95,6 +98,8 @@ EXAMPLES_TARGETS := $(patsubst %,%.objects/,${EXAMPLES})
 	${CUTTLEC_EXE} "${BUILT_CMXS}" -T all -o "$@"
 # Remove the generated dune file to prevent errors if extracted ml files are later deleted
 	@rm "${EXTRACTED_DIR}/dune"
+# Execute example-specific follow-ups if any
+	if test -f "${MAKEFILE_PATH}"; then	$(MAKE) -C "${DIR}" -f "${MAKEFILE_NAME}"; fi
 	@touch "$@"
 
 examples: ${EXAMPLES_TARGETS};
