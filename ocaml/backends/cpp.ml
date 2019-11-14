@@ -228,6 +228,7 @@ let cpp_bits1_fn_name (f: Extr.PrimTyped.fbits1) =
   | Not _ -> "~"
   | ZExtL (sz, width) -> sprintf "prims::zextl<%d, %d>" sz width
   | ZExtR (sz, width) -> sprintf "prims::zextr<%d, %d>" sz width
+  | Repeat (sz, times) -> sprintf "prims::repeat<%d, %d>" sz times
   | Slice (sz, offset, width) -> sprintf "prims::slice<%d, %d, %d>" sz offset width
 
 let cpp_bits2_fn_name (f: Extr.PrimTyped.fbits2) =

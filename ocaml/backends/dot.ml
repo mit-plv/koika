@@ -9,6 +9,7 @@ let bits1_name =
   | Not _sz -> "Not"
   | ZExtL (_sz, _width) -> "ZExtL"
   | ZExtR (_sz, _width) -> "ZExtR"
+  | Repeat (_, _) -> "Repeat"
   | Slice (_logsz, _offset, _width) -> "Slice"
 
 let comparison_name (cmp: Cuttlebone.Extr.bits_comparison)=

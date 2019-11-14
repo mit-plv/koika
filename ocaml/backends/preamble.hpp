@@ -56,10 +56,10 @@ template<std::size_t size>
 using wsbits_t = void;
 #endif // #ifdef NEEDS_BOOST_MULTIPRECISION
 
-struct unit {};
+struct unit_t {};
 
 template<std::size_t size>
-using bits_t = std::conditional_t<size ==  0, unit,
+using bits_t = std::conditional_t<size ==  0, unit_t,
                std::conditional_t<size <=  8, std::uint8_t,
                std::conditional_t<size <= 16, std::uint16_t,
                std::conditional_t<size <= 32, std::uint32_t,
@@ -67,7 +67,7 @@ using bits_t = std::conditional_t<size ==  0, unit,
                                   wbits_t<size>>>>>>;
 
 template<std::size_t size>
-using sbits_t = std::conditional_t<size ==  0, unit,
+using sbits_t = std::conditional_t<size ==  0, unit_t,
                 std::conditional_t<size <=  8, std::int8_t,
                 std::conditional_t<size <= 16, std::int16_t,
                 std::conditional_t<size <= 32, std::int32_t,
@@ -75,8 +75,6 @@ using sbits_t = std::conditional_t<size ==  0, unit,
                                    wsbits_t<size>>>>>>;
 
 namespace prims {
-  const unit _unused tt = {};
-
   template<typename T>
   T __attribute__((noreturn)) unreachable() {
     __builtin_unreachable();
@@ -169,6 +167,9 @@ namespace prims {
       return bits{static_cast<bits_t<sz>>(arg)};
     }
   };
+
+  using unit = bits<0>;
+  const unit _unused tt{};
 
   namespace literal_parsing {
     using std::size_t;
@@ -496,6 +497,29 @@ namespace prims {
   template<std::size_t sz, std::size_t width>
   bits<std::max(sz, width)> zextr(const bits<sz> x) {
     return widen<std::max(sz, width), sz>(x) << (std::max(width, sz) - sz);
+  }
+
+  template<std::size_t sz, std::size_t times> struct repeat_t {
+    static const bits<sz * times> v(bits<sz> bs) {
+      return concat(repeat_t<sz, times - 1>::v(bs), bs);
+    };
+  };
+
+  template<std::size_t sz> struct repeat_t<sz, 0> {
+    static const bits<0> v(bits<sz>) { return tt; };
+  };
+
+  template<std::size_t times> struct repeat_t<1, times> {
+    static const bits<times> v(bits<1> bs) { return sext<1, times>(bs); };
+  };
+
+  template<std::size_t sz> struct repeat_t<sz, 1> {
+    static constexpr auto v(bits<sz> bs) { return bs; }
+  };
+
+  template<std::size_t sz, std::size_t times>
+  bits<sz * times> repeat(const bits<sz> bs) {
+    return repeat_t<sz, times>::v(bs);
   }
 
   template<std::size_t sz1, std::size_t idx, std::size_t width>

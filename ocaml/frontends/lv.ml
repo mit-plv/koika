@@ -1263,6 +1263,7 @@ let bits_primitives =
    (">s=", `Prim0 (binop (UCompare (true, CGe))));
    ("zextl", `Prim1 (fun n -> unop (UZExtL n)));
    ("zextr", `Prim1 (fun n -> unop (UZExtR n)));
+   ("repeat", `Prim1 (fun n -> unop (URepeat n)));
    ("indexed-slice", `Prim1 (fun n -> binop (UIndexedSlice n)));
    ("slice", `Prim2 (fun n n' -> unop (USlice (n, n'))));
    ("slice-subst", `Prim2 (fun n n' -> unop (USlice (n, n'))))]

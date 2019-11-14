@@ -199,6 +199,7 @@ and pp_prim_ubits1 ppf (f: Cuttlebone.Extr.PrimUntyped.ubits1) =
   | UNot -> pp_raw "UNot"
   | UZExtL width -> pp_app "UZExtL" "%d" width
   | UZExtR width -> pp_app "UZExtR" "%d" width
+  | URepeat times -> pp_app "URepeat" "%d" times
   | USlice (offset, width) -> pp_app "USlice" "%d@ %d" offset width
 and pp_prim_ustruct1 ppf (f: Cuttlebone.Extr.PrimUntyped.ustruct1) = match f with
   | UGetField f -> pp_app ppf "UGetField" "%a" pp_coq_quoted f

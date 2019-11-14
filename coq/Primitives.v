@@ -17,6 +17,7 @@ Module PrimUntyped.
   | UNot
   | UZExtL (width: nat)
   | UZExtR (width: nat)
+  | URepeat (times: nat)
   | USlice (offset: nat) (width: nat).
 
   Inductive ubits2 :=
@@ -66,6 +67,7 @@ Module PrimTyped.
   | Not (sz: nat)
   | ZExtL (sz: nat) (width: nat)
   | ZExtR (sz: nat) (width: nat)
+  | Repeat (sz: nat) (times: nat)
   | Slice (sz: nat) (offset: nat) (width: nat).
 
   Inductive fbits2 :=
@@ -136,6 +138,7 @@ Module PrimTypeInference.
                      | UNot => Not sz1
                      | UZExtL width => ZExtL sz1 width
                      | UZExtR width => ZExtR sz1 width
+                     | URepeat times => Repeat sz1 times
                      | USlice offset width => Slice sz1 offset width
                      end)
     | UStruct1 fn =>
@@ -193,6 +196,7 @@ Module CircuitSignatures.
     | Not sz => {$ sz ~> sz $}
     | ZExtL sz width => {$ sz ~> (Nat.max sz width) $}
     | ZExtR sz width => {$ sz ~> (Nat.max sz width) $}
+    | Repeat sz times => {$ sz ~> times * sz $}
     | Slice sz offset width => {$ sz ~> width $}
     end.
 
@@ -319,6 +323,7 @@ Module CircuitPrimSpecs.
     | Not _ => fun bs => Bits.neg bs
     | ZExtL sz width => fun bs => Bits.extend_end bs width false
     | ZExtR sz width => fun bs => Bits.extend_beginning bs width false
+    | Repeat sz times => fun bs => Bits.repeat times bs
     | Slice _ offset width => slice offset width
     end.
 

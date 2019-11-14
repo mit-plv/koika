@@ -86,6 +86,23 @@ Proof.
   - rewrite IHsz; reflexivity.
 Qed.
 
+Fixpoint largest_index sz : index (S sz) :=
+  match sz with
+  | 0 => thisone
+  | S sz => anotherone (largest_index sz)
+  end.
+
+Lemma index_of_nat_largest sz :
+  index_of_nat (S sz) sz = Some (largest_index sz).
+Proof.
+  induction sz; cbn.
+  - reflexivity.
+  - destruct sz; cbn in *.
+    + reflexivity.
+    + rewrite IHsz.
+      reflexivity.
+Qed.
+
 Local Set Primitive Projections.
 Inductive vect_nil_t {T: Type} := _vect_nil.
 Record vect_cons_t {A B: Type} := _vect_cons { vhd: A; vtl: B }.
@@ -153,6 +170,18 @@ Proof.
     rewrite <- vect_app_nil_cast; reflexivity.
 Defined.
 
+Fixpoint vect_repeat {T} {sz} (n: nat) (v: vect T sz) : vect T (n * sz) :=
+  match n with
+  | 0 => vect_nil
+  | S n => vect_app v (vect_repeat n v)
+  end.
+
+Lemma vect_repeat_single_const {T} n :
+  forall (t: T), vect_repeat n (vect_cons t vect_nil) = vect_const (n * 1) t.
+Proof.
+  induction n; simpl; intros; try rewrite IHn; reflexivity.
+Qed.
+
 Fixpoint vect_split {T} {sz1 sz2} (v: vect T (sz1 + sz2)) {struct sz1} : vect T sz1 * vect T sz2 :=
   match sz1 as n return (vect T (n + sz2) -> vect T n * vect T sz2) with
   | 0 => fun v => (vect_nil, v)
@@ -201,6 +230,13 @@ Definition vect_last_default {T n} (t: T) (v: vect T n) : T :=
   | 0 => fun _ => t
   | S n => fun v => vect_last v
   end v.
+
+Lemma vect_last_nth {T sz} :
+  forall (v: vect T (S sz)),
+    vect_last v = vect_nth v (largest_index sz).
+Proof.
+  induction sz; simpl; intros; try rewrite IHsz; reflexivity.
+Qed.
 
 Fixpoint vect_map {T T' n} (f: T -> T') (v: vect T n) : vect T' n :=
   match n return vect T n -> vect T' n with
@@ -263,18 +299,18 @@ Definition vect_cycle_r1 {T sz} (v: vect T sz) :=
                  vect_cons t v'
   end v.
 
-Fixpoint vect_repeat {A} (f: A -> A) n (v: A)
+Fixpoint vect_dotimes {A} (f: A -> A) n (v: A)
   : A :=
   match n with
   | O => v
-  | S n => vect_repeat f n (f v)
+  | S n => vect_dotimes f n (f v)
   end.
 
 Definition vect_cycle_l {T sz} n (v: vect T sz) :=
-  vect_repeat vect_cycle_l1 n v.
+  vect_dotimes vect_cycle_l1 n v.
 
 Definition vect_cycle_r {T sz} n (v: vect T sz) :=
-  vect_repeat vect_cycle_r1 n v.
+  vect_dotimes vect_cycle_r1 n v.
 
 Fixpoint vect_skipn_cast n:
   n = n - 0.
@@ -760,6 +796,7 @@ Module Bits.
   Notation cons := (@vect_cons bool).
   Notation const := (@vect_const bool).
   Notation app := (fun x y => @vect_app bool _ _ y x). (* !! *)
+  Notation repeat := (@vect_repeat bool).
   Notation split := (@vect_split bool).
   Notation nth := (@vect_nth bool).
   Notation hd := (@vect_hd bool).
@@ -795,11 +832,11 @@ Module Bits.
     end b.
 
   Definition asr {sz} nplaces (b: bits sz) :=
-    vect_repeat asr1 nplaces b.
+    vect_dotimes asr1 nplaces b.
   Definition lsr {sz} nplaces (b: bits sz) :=
-    vect_repeat lsr1 nplaces b.
+    vect_dotimes lsr1 nplaces b.
   Definition lsl {sz} nplaces (b: bits sz) :=
-    vect_repeat lsl1 nplaces b.
+    vect_dotimes lsl1 nplaces b.
 
   Section Casts.
     Fixpoint to_N {sz: nat} (bs: bits sz) {struct sz} : N :=

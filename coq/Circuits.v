@@ -426,7 +426,8 @@ Section CircuitCompilation.
         end a
       | Bits1 fn => fun a =>
         match fn return cArg1 (Bits1 fn) -> cRet (Bits1 fn) -> cRet (Bits1 fn) with
-        | Not sz => fun a c => c
+        | Not _ => fun a c => c
+        | Repeat _ _ => fun a c => c
         | ZExtL sz width => fun a c =>
                              ltac:(subst cRet; simpl; rewrite <- vect_extend_end_cast;
                                    exact (CBinop (Concat _ _) (CConst Bits.zero) a))
