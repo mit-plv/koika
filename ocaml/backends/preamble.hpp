@@ -223,7 +223,7 @@ namespace prims {
 
     template <uint base, size_t sz, char... cs>
     struct parse_number<parser::u64, base, sz, cs...> {
-      static constexpr uint64_t max = std::numeric_limits<bits_t<sz>>::max();
+      static constexpr uint64_t max = std::numeric_limits<bits_t<sz>>::max() >> bits<sz>::padding_width;
       static constexpr bits_t<sz> v = parse_u64<base, max, 0, cs...>();
     };
 
