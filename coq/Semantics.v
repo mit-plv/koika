@@ -184,6 +184,12 @@ Section Interp.
       | APos _ a => fun Gamma =>
         interp_action Gamma sched_log action_log a
       end Gamma.
+
+    Definition interp_rule (sched_log: Log) (rl: rule) : option Log :=
+      match interp_action CtxEmpty sched_log log_empty rl with
+      | Some (l, _, _) => Some l
+      | None => None
+      end.
   End Action.
 
   Section Scheduler.
@@ -194,8 +200,8 @@ Section Interp.
              (s: scheduler)
              {struct s} :=
       let interp_try r s1 s2 :=
-          match interp_action CtxEmpty sched_log log_empty (rules r) with
-          | Some (l, _, _) => interp_scheduler' (log_app l sched_log) s1
+          match interp_rule sched_log (rules r) with
+          | Some l => interp_scheduler' (log_app l sched_log) s1
           | None => interp_scheduler' sched_log s2
           end in
       match s with

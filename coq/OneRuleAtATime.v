@@ -27,11 +27,11 @@ Section Proof.
            (s: scheduler)
            {struct s} :=
     let interp_try rl s1 s2 :=
-        match interp_action r sigma CtxEmpty sched_log log_empty (rules rl) with
-        | Some (l, _, _ ) => match interp_scheduler'_trace (log_app l sched_log) s1 with
-                            | Some (rs, log) => Some (rl :: rs, log)
-                            | None => None
-                            end
+        match interp_rule r sigma sched_log (rules rl) with
+        | Some l => match interp_scheduler'_trace (log_app l sched_log) s1 with
+                   | Some (rs, log) => Some (rl :: rs, log)
+                   | None => None
+                   end
         | None => interp_scheduler'_trace sched_log s2
         end in
     match s with
@@ -151,9 +151,13 @@ Section Proof.
       destruct a, kind, port; try discriminate; reflexivity.
   Qed.
 
+  Create HintDb oraat.
+  Hint Unfold interp_rule : oraat.
+
   Ltac t_step :=
     match goal with
     | _ => cleanup_step
+    | _ => progress autounfold with oraat in *
     | [ H: context[may_read0 (log_app _ _) _ _] |- _ ] =>
       rewrite may_read0_app_sl in H
     | [ H: context[may_read1 (log_app _ _) _] |- _ ] =>
@@ -216,9 +220,10 @@ Section Proof.
       interp_scheduler_trace_and_update l0 s = Some (rs, r') ->
       List.fold_left (update_one) rs (Some (commit_update r l0)) = Some r'.
   Proof.
-    induction s; cbn.
+    induction s; cbn;
+      unfold interp_scheduler_trace_and_update; cbn.
     - (* Done *) inversion 1; subst; cbn in *; eauto.
-    - (* Cons *) unfold interp_scheduler_trace_and_update; cbn; intros; t.
+    - (* Cons *) intros; t.
       + erewrite interp_action_commit by (rewrite log_app_empty_r; eassumption);
           cbn.
         rewrite log_app_empty_l.
@@ -229,7 +234,7 @@ Section Proof.
       + eapply IHs.
         unfold interp_scheduler_trace_and_update; rewrite Heqo.
         reflexivity.
-    - (* Try *) unfold interp_scheduler_trace_and_update; cbn; intros; t.
+    - (* Try *) intros; t.
       + erewrite interp_action_commit by (rewrite log_app_empty_r; eassumption);
           cbn.
         rewrite log_app_empty_l.
@@ -250,12 +255,12 @@ Section Proof.
   Proof.
     induction s; cbn.
     - (* Done *) inversion 1; subst; eauto.
-    - (* Cons *) intros * Heq. destruct interp_action as [((log' & ?) & ?) | ] eqn:?.
+    - (* Cons *) intros * Heq. destruct interp_rule as [log' | ] eqn:?.
       + destruct (IHs _ _ Heq) as (rs & Heq').
         rewrite Heq'; eauto.
       + destruct (IHs _ _ Heq) as (rs & Heq').
         rewrite Heq'; eauto.
-    - (* Try *) intros * Heq. destruct interp_action as [((log' & ?) & ?) | ] eqn:?.
+    - (* Try *) intros * Heq. destruct interp_rule as [log' | ] eqn:?.
       + destruct (IHs1 _ _ Heq) as (rs & Heq').
         rewrite Heq'; eauto.
       + destruct (IHs2 _ _ Heq) as (rs & Heq').

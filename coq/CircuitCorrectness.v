@@ -1440,6 +1440,7 @@ Section CompilerCorrectness.
                                   ltac:(ceauto) ltac:(ceauto)
                                   ltac:(ceauto) ltac:(ceauto)
                                                 ltac:(ceauto)).
+      unfold interp_rule;
       destruct (interp_action r sigma CtxEmpty Log log_empty (rules r0)) as [((? & ?) & ?) | ] eqn:? ;
         destruct compile_action; cbn; apply IHs;
           repeat cleanup_step; eauto with circuits.
@@ -1449,6 +1450,7 @@ Section CompilerCorrectness.
                                   ltac:(ceauto) ltac:(ceauto)
                                   ltac:(ceauto) ltac:(ceauto)
                                   ltac:(ceauto)).
+      unfold interp_rule;
       destruct (interp_action r sigma CtxEmpty Log log_empty (rules r0)) as [(? & ?) | ] eqn:?; cbn; t.
       + repeat apply conj.
         * apply log_data1_consistent'_mux_l; try apply IHs1; ceauto.
@@ -1556,7 +1558,8 @@ Section CompilerCorrectness.
       log_writes_ordered log idx ->
       log_writes_ordered (@interp_scheduler' pos_t var_t rule_name_t reg_t ext_fn_t R Sigma REnv r sigma rules log s) idx.
   Proof.
-    induction s; cbn; intros; eauto.
+    induction s; cbn; intros; eauto;
+      unfold interp_rule.
     all: lazymatch goal with
          | [ |- context[interp_action ?r ?sigma ?ctx ?Log ?log ?rl] ] =>
            pose proof (action_log_writes_ordered _ _ rl ctx Log log _ ltac:(rewrite log_app_empty_r; ceauto));
