@@ -1,0 +1,41 @@
+;;; Computations involving sign bits
+
+(module signed
+  (register r 8'b11110000)
+  (register rpos 8'b11110000)
+  (register rneg 8'b11110000)
+
+  (register r16 16'b0)
+
+  (register rneg_asr_0 8'b0)
+  (register rneg_asr_3 8'b0)
+  (register rneg_sext_4 8'b0)
+  (register rneg_sext_16 16'b0)
+
+  (register rpos_asr_0 8'b0)
+  (register rpos_asr_3 8'b0)
+  (register rpos_sext_4 8'b0)
+  (register rpos_sext_16 16'b0)
+
+  (register rrepeat16 80'b0)
+  (register rrepeat1 16'b0)
+
+  (rule test
+    (let ((rposv (read.0 rpos))
+          (rnegv (read.0 rneg)))
+      (write.0 rpos_asr_0 (asr rposv 1'b0))
+      (write.0 rpos_asr_3 (asr rposv 2'3))
+      (write.0 rpos_sext_4 (sext 4 rposv))
+      (write.0 rpos_sext_16 (sext 16 rposv))
+      (write.0 rneg_asr_0 (asr rnegv 1'b0))
+      (write.0 rneg_asr_3 (asr rnegv 2'3))
+      (write.0 rneg_sext_4 (sext 4 rnegv))
+      (write.0 rneg_sext_16 (sext 16 rnegv))
+      (write.0 rrepeat16 (repeat 10 rposv))
+      (write.0 rrepeat1 (repeat 16 1'b1))))
+
+  (rule simple
+    (write.1 r16 (sext 16 (read.0 r))))
+
+  (scheduler main
+    (sequence test)))
