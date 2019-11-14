@@ -194,7 +194,7 @@ type expression =
 type assignment = string * expression (* LHS, RHS *)
 
 let failwith_unlowered () =
-  failwith "The verilog backend doesn't support zextl and zextr: they should be elaborated away by the compiler."
+  failwith "The verilog backend doesn't support sext, zextl and zextr: they must be elaborated away by the compiler."
 
 let assignment_to_string (gensym: int ref) (assignment: assignment) =
   let (lhs,expr) = assignment in
@@ -212,7 +212,7 @@ let assignment_to_string (gensym: int ref) (assignment: assignment) =
        | Not _ -> default_left ^ "~" ^ arg1
        | Repeat (_, times) -> Printf.sprintf "{%d{%s}}" times arg1
        | Slice (_, offset, slice_sz) -> default_left ^ arg1 ^ "[" ^ (string_of_int offset) ^ " +: " ^ string_of_int slice_sz ^ "]"
-       | ZExtL _ | ZExtR _ -> failwith_unlowered ())
+       | SExt _ | ZExtL _ | ZExtR _ -> failwith_unlowered ())
    | EBinop (fn, arg1, arg2) ->
       (match fn with
        | Plus _ -> default_left ^ arg1 ^ " + " ^ arg2

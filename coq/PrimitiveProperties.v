@@ -143,3 +143,15 @@ Proof.
        rewrite slice_subst_front, vect_firstn_plus_app, vect_skipn_plus_app by apply slice_correct_le.
        reflexivity.
 Qed.
+
+Lemma sel_msb {sz} (bs: bits sz):
+  BitFuns.sel bs (Bits.of_nat (log2 sz) (pred sz)) =
+  Ob~(Bits.msb bs).
+Proof.
+  unfold sel, Bits.to_index.
+  rewrite Bits.to_nat_of_nat by eauto using pred_lt_pow2_log2.
+  destruct sz.
+  - reflexivity.
+  - rewrite index_of_nat_largest.
+    setoid_rewrite vect_last_nth; reflexivity.
+Qed.

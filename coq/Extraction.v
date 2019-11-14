@@ -11,6 +11,7 @@ Require Koika.Common
 Extraction "extracted.ml"
            EqDec.EqDec
            FiniteType.FiniteType Member.mem Member.mmap
+           PeanoNat.Nat.log2_up
            IndexUtils.List_nth
            Environments.ContextEnv Environments.to_list
            Vect.vect_to_list Vect.vect_of_list Vect.Bits.to_nat Vect.index_to_nat Vect.vect_zip

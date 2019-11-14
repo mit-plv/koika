@@ -490,6 +490,13 @@ namespace prims {
   }
 
   template<std::size_t sz, std::size_t width>
+  bits<std::max(sz, width)> sext(const bits<sz> x) {
+    constexpr std::size_t newsz = std::max(sz, width);
+    constexpr std::size_t nbits = width >= sz ? width - sz : std::size_t{0};
+    return bits<newsz>::of_shifted_sbits((widen<newsz, sz>(x) << nbits).to_shifted_sbits() >> nbits);
+  }
+
+  template<std::size_t sz, std::size_t width>
   bits<std::max(sz, width)> zextl(const bits<sz> x) {
     return widen<std::max(sz, width), sz>(x);
   }

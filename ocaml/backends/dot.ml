@@ -7,6 +7,7 @@ let bits1_name =
   let open Extr.PrimTyped in
   function
   | Not _sz -> "Not"
+  | SExt (_, _) -> "SExt"
   | ZExtL (_sz, _width) -> "ZExtL"
   | ZExtR (_sz, _width) -> "ZExtR"
   | Repeat (_, _) -> "Repeat"

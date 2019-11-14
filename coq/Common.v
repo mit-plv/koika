@@ -91,6 +91,12 @@ Ltac constr_hd c :=
 Definition and_fst {A B} := fun '(conj a _: and A B) => a.
 Definition and_snd {A B} := fun '(conj _ b: and A B) => b.
 
+Fixpoint upto (n: nat) :=
+  match n with
+  | O => [0]
+  | S x => n :: upto x
+  end.
+
 Notation log2 := Nat.log2_up.
 
 Instance EqDec_FiniteType {T} {FT: FiniteType T} : EqDec T.

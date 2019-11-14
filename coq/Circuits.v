@@ -428,12 +428,18 @@ Section CircuitCompilation.
         match fn return cArg1 (Bits1 fn) -> cRet (Bits1 fn) -> cRet (Bits1 fn) with
         | Not _ => fun a c => c
         | Repeat _ _ => fun a c => c
+        | SExt sz width => fun a c =>
+                            ltac:(subst cRet; simpl; rewrite <- vect_extend_end_cast, <- (Nat.mul_1_r (width - sz));
+                                  exact (CBinop (Concat _ _)
+                                                (CUnop (Repeat 1 (width - sz))
+                                                       (CBinop (Sel sz) a (CConst (Bits.of_nat (log2 sz) (pred sz)))))
+                                                a))
         | ZExtL sz width => fun a c =>
                              ltac:(subst cRet; simpl; rewrite <- vect_extend_end_cast;
-                                   exact (CBinop (Concat _ _) (CConst Bits.zero) a))
+                                     exact (CBinop (Concat _ _) (CConst Bits.zero) a))
         | ZExtR sz width => fun a c =>
                              ltac:(subst cRet; simpl; rewrite <- vect_extend_beginning_cast;
-                                   exact (CBinop (Concat _ _) a (CConst Bits.zero)))
+                                     exact (CBinop (Concat _ _) a (CConst Bits.zero)))
         | Slice sz offset width => fun a c => c
         end a (CUnop fn a)
       | Struct1 fn sig f => fun a =>

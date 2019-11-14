@@ -15,6 +15,7 @@ Module PrimUntyped.
 
   Inductive ubits1 :=
   | UNot
+  | USExt (width: nat)
   | UZExtL (width: nat)
   | UZExtR (width: nat)
   | URepeat (times: nat)
@@ -65,6 +66,7 @@ Module PrimTyped.
 
   Inductive fbits1 :=
   | Not (sz: nat)
+  | SExt (sz: nat) (width: nat)
   | ZExtL (sz: nat) (width: nat)
   | ZExtR (sz: nat) (width: nat)
   | Repeat (sz: nat) (times: nat)
@@ -136,6 +138,7 @@ Module PrimTypeInference.
       let/res sz1 := assert_bits_t Arg1 tau1 in
       Success (Bits1 match fn with
                      | UNot => Not sz1
+                     | USExt width => SExt sz1 width
                      | UZExtL width => ZExtL sz1 width
                      | UZExtR width => ZExtR sz1 width
                      | URepeat times => Repeat sz1 times
@@ -194,6 +197,7 @@ Module CircuitSignatures.
   Definition CSigma1 (fn: fbits1) : CSig 1 :=
     match fn with
     | Not sz => {$ sz ~> sz $}
+    | SExt sz width => {$ sz ~> (Nat.max sz width) $}
     | ZExtL sz width => {$ sz ~> (Nat.max sz width) $}
     | ZExtR sz width => {$ sz ~> (Nat.max sz width) $}
     | Repeat sz times => {$ sz ~> times * sz $}
@@ -321,6 +325,7 @@ Module CircuitPrimSpecs.
   Definition sigma1 (fn: PrimTyped.fbits1) : CSig_denote (CircuitSignatures.CSigma1 fn) :=
     match fn with
     | Not _ => fun bs => Bits.neg bs
+    | SExt sz width => fun bs => Bits.extend_end bs width (Bits.msb bs)
     | ZExtL sz width => fun bs => Bits.extend_end bs width false
     | ZExtR sz width => fun bs => Bits.extend_beginning bs width false
     | Repeat sz times => fun bs => Bits.repeat times bs
