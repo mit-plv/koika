@@ -80,7 +80,7 @@
 
 (flycheck-define-checker lv
   "A checker for Lispy Verilog."
-  :command ("cli.exe" "-" "-")
+  :command ("cuttlec.exe" "-")
   :standard-input t
   :error-patterns
   ((error line-start
@@ -102,7 +102,7 @@
   :modes lispy-verilog-mode)
 
 (setf (car (flycheck-checker-get 'lv 'command))
-      (expand-file-name "_build/default/ocaml/cli.exe"
+      (expand-file-name "_build/default/ocaml/cuttlec.exe"
                         (file-name-directory (directory-file-name lv-script-root-path))))
 
 (add-to-list 'flycheck-checkers 'lv)
