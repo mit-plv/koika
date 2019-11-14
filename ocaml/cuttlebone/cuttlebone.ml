@@ -8,6 +8,9 @@ type ('name_t, 'reg_t, 'ext_fn_t) extr_circuit =
   ('name_t, 'reg_t, 'ext_fn_t, ('name_t, 'reg_t, 'ext_fn_t) Extr.rwdata) Extr.circuit
 
 module Util = struct
+  let log2 =
+    Extr.Nat.log2_up
+
   let list_nth (l: 'a list) (n: Extr.index) =
     Extr.list_nth l n
 

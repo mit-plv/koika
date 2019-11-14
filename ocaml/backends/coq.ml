@@ -225,12 +225,12 @@ and pp_prim_ubits2 ppf (f: Cuttlebone.Extr.PrimUntyped.ubits2) =
   | UPlus -> pp_raw "UPlus"
   | UMinus -> pp_raw "UMinus"
   | UCompare (signed, cmp) -> pp_app "UCompare" "%a@ %a" pp_bool signed pp_cmp cmp
-and pp_cmp ppf (cmp: Cuttlebone.Extr.comparison) =
+and pp_cmp ppf (cmp: Cuttlebone.Extr.bits_comparison) =
   match cmp with
-  | Cuttlebone.Extr.CLt -> pp_raw ppf "cLt"
-  | Cuttlebone.Extr.CGt -> pp_raw ppf "cGt"
-  | Cuttlebone.Extr.CLe -> pp_raw ppf "cLe"
-  | Cuttlebone.Extr.CGe -> pp_raw ppf "cGe"
+  | CLt -> pp_raw ppf "cLt"
+  | CGt -> pp_raw ppf "cGt"
+  | CLe -> pp_raw ppf "cLe"
+  | CGe -> pp_raw ppf "cGe"
 and pp_prim_ustruct2 ppf (f: Cuttlebone.Extr.PrimUntyped.ustruct2) = match f with
   | USubstField f -> pp_app ppf "USubstField" "%a" pp_coq_quoted f
   | USubstFieldBits (sg, f) -> pp_app ppf "USubstFieldBits" "%a@ %a" pp_extr_struct_name sg pp_coq_quoted f

@@ -241,7 +241,7 @@ let cpp_bits2_fn_name (f: Extr.PrimTyped.fbits2) =
   | Concat _ -> `Fn "prims::concat"
   | Sel _ -> `Array
   | SliceSubst (sz, offset, width) -> `Fn (sprintf "prims::slice_subst<%d, %d, %d>" sz offset width)
-  | IndexedSlice (sz, width) -> `Fn (sprintf "prims::indexed_slice<%d, %d, %d>" sz (Cuttlebone.Extr.log2 sz) width)
+  | IndexedSlice (sz, width) -> `Fn (sprintf "prims::indexed_slice<%d, %d, %d>" sz (Cuttlebone.Util.log2 sz) width)
   | Plus _ -> `Infix "+"
   | Minus _ -> `Infix "-"
   | EqBits _ -> `Infix "=="

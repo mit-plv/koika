@@ -1,6 +1,6 @@
 Require Export Koika.Common Koika.Environments Koika.IndexUtils Koika.Types Koika.ErrorReporting.
 
-Inductive comparison :=
+Inductive bits_comparison :=
   cLt | cGt | cLe | cGe.
 
 Module PrimUntyped.
@@ -32,7 +32,7 @@ Module PrimUntyped.
   | UIndexedSlice (width: nat)
   | UPlus
   | UMinus
-  | UCompare (signed: bool) (c: comparison).
+  | UCompare (signed: bool) (c: bits_comparison).
 
   Inductive ustruct1 :=
   | UGetField (f: string)
@@ -82,7 +82,7 @@ Module PrimTyped.
   | Plus (sz : nat)
   | Minus (sz : nat)
   | EqBits (sz: nat)
-  | Compare (signed: bool) (c: comparison) (sz: nat).
+  | Compare (signed: bool) (c: bits_comparison) (sz: nat).
 
   Inductive fstruct1 :=
   | GetField.
@@ -107,20 +107,6 @@ Module PrimTyped.
   Definition SubstFieldBits (sig: struct_sig) (idx: struct_index sig) : fbits2 :=
     SliceSubst (struct_sz sig) (field_offset_right sig idx) (field_sz sig idx).
 End PrimTyped.
-
-(* Like Nat.log2_iter, but switches to next power of two one number earlier
-   (computes ceil(log2(n)) instead of floor(log2(n))). *)
-Fixpoint log2_iter k_fuel p_logn q_n r_buffer :=
-  match k_fuel with
-    | O => p_logn
-    | S k_fuel =>
-      match r_buffer with
-      | O => log2_iter k_fuel (S p_logn) (S q_n) (pred q_n)
-      | S r_buffer => log2_iter k_fuel p_logn (S q_n) r_buffer
-      end
-  end.
-
-Definition log2 n := log2_iter (pred n) 0 1 0.
 
 Module PrimTypeInference.
   Import PrimUntyped PrimTyped.

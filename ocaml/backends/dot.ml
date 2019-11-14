@@ -11,7 +11,7 @@ let bits1_name =
   | ZExtR (_sz, _width) -> "ZExtR"
   | Slice (_logsz, _offset, _width) -> "Slice"
 
-let comparison_name (cmp: Cuttlebone.Extr.comparison)=
+let comparison_name (cmp: Cuttlebone.Extr.bits_comparison)=
   match cmp with
   | CLt -> "lt"
   | CGt -> "gt"

@@ -91,6 +91,8 @@ Ltac constr_hd c :=
 Definition and_fst {A B} := fun '(conj a _: and A B) => a.
 Definition and_snd {A B} := fun '(conj _ b: and A B) => b.
 
+Notation log2 := Nat.log2_up.
+
 Instance EqDec_FiniteType {T} {FT: FiniteType T} : EqDec T.
 Proof.
   econstructor; intros.
