@@ -569,6 +569,7 @@ namespace prims {
   template<typename T, std::size_t sz> _unused T unpack(bits<sz> /*bits*/);
 } // namespace prims
 
+using prims::unit;
 using prims::bits;
 using namespace prims::literals;
 

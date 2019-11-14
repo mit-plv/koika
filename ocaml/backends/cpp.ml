@@ -192,7 +192,7 @@ let cpp_const_init (pi: program_info) immediate sz cst =
   if sz > 64 then
     request_multiprecision pi;
   if sz = 0 then
-    "prims::tt"
+    if immediate then "prims::tt.v" else "prims::tt"
   else
     let imm_suffix = if immediate then "v" else "" in
     if sz <= 32 then
