@@ -130,11 +130,11 @@ Fixpoint vect_const {T} sz (t: T) : vect T sz :=
   | S sz => vect_cons t (vect_const sz t)
   end.
 
-Fixpoint vect_app {T} {sz1 sz2} (bs1: vect T sz1) (bs2: vect T sz2) {struct sz1} : vect T (sz1 + sz2) :=
+Fixpoint vect_app {T} {sz1 sz2} (v1: vect T sz1) (v2: vect T sz2) {struct sz1} : vect T (sz1 + sz2) :=
   match sz1 as n return (vect T n -> vect T (n + sz2)) with
-  | 0 => fun _ => bs2
-  | S sz1 => fun bs1 => vect_cons (vect_hd bs1) (vect_app (vect_tl bs1) bs2)
-  end bs1.
+  | 0 => fun _ => v2
+  | S sz1 => fun v1 => vect_cons (vect_hd v1) (vect_app (vect_tl v1) v2)
+  end v1.
 
 Fixpoint vect_app_nil_cast n:
   n = n + 0.
@@ -685,6 +685,75 @@ Instance EqDec_vect_cons A B `{EqDec A} `{EqDec B} : EqDec (vect_cons_t A B) := 
 Instance EqDec_vect T n `{EqDec T} : EqDec (vect T n).
 Proof. induction n; cbn; eauto using EqDec_vect_nil, EqDec_vect_cons; eassumption. Defined.
 
+Section Npow2.
+  Open Scope N_scope.
+
+  Lemma N_lt_pow2_succ_1 :
+    forall n m,
+      1 + 2 * n < 2 ^ N.succ m ->
+      n < 2 ^ m.
+  Proof.
+    intros * Hlt.
+    rewrite N.pow_succ_r' in Hlt.
+    rewrite N.mul_lt_mono_pos_l with (p := 2).
+    rewrite N.add_1_l in Hlt.
+    apply N.lt_succ_l.
+    eassumption.
+    econstructor.
+  Qed.
+
+  Lemma N_lt_pow2_succ :
+    forall n m,
+      2 * n < 2 ^ N.succ m ->
+      n < 2 ^ m.
+  Proof.
+    intros * Hlt.
+    rewrite N.pow_succ_r' in Hlt.
+    rewrite N.mul_lt_mono_pos_l with (p := 2).
+    eassumption.
+    econstructor.
+  Qed.
+End Npow2.
+
+Section pow2.
+  (* The S (pred …) makes it clear to the typechecher that the result is nonzero *)
+  Definition pow2 n :=
+    S (pred (Nat.pow 2 n)).
+
+  Arguments pow2 / !n : assert.
+
+  Lemma pow2_correct : forall n, pow2 n = Nat.pow 2 n.
+  Proof.
+    unfold pow2; induction n; simpl.
+    - reflexivity.
+    - destruct (Nat.pow 2 n); simpl; (discriminate || reflexivity).
+  Qed.
+
+  Lemma le_pow2_log2 :
+    forall sz, sz <= pow2 (Nat.log2_up sz).
+  Proof.
+    intros; rewrite pow2_correct.
+    destruct sz; [ | apply Nat.log2_log2_up_spec ]; auto with arith.
+  Qed.
+
+  Lemma pred_lt_pow2_log2 :
+    forall sz, pred sz < pow2 (Nat.log2_up sz).
+  Proof.
+    destruct sz; cbn; auto using le_pow2_log2 with arith.
+  Qed.
+
+  Lemma N_pow_Nat_pow :
+    forall n m,
+      N.pow (N.of_nat m) (N.of_nat n) =
+      N.of_nat (Nat.pow m n).
+  Proof.
+    induction n; intros.
+    - reflexivity.
+    - rewrite Nat2N.inj_succ; cbn; rewrite Nat2N.inj_mul, <- IHn.
+      rewrite N.pow_succ_r'; reflexivity.
+  Qed.
+End pow2.
+
 Module Bits.
   Notation bits := (vect bool).
   Notation nil := (@vect_nil bool).
@@ -790,6 +859,39 @@ Module Bits.
         | Zneg x => vect_snoc true (neg (of_N sz (N.pred (Npos x))))
         end
       end.
+
+    Lemma to_N_zeroes :
+      forall sz, to_N (zeroes sz) = 0%N.
+    Proof. induction sz; simpl; try rewrite IHsz; reflexivity. Qed.
+
+    Lemma to_N_of_N :
+      forall n sz,
+        (n < N.pow 2 (N.of_nat sz))%N ->
+        to_N (of_N sz n) = n.
+    Proof.
+      destruct n; simpl.
+      - intros; apply to_N_zeroes.
+      - induction p; intros sz Hlt;
+          destruct sz; try solve [inversion Hlt];
+            cbn -[N.mul N.add];
+            rewrite Nat2N.inj_succ in Hlt.
+        1, 2: solve [intros; rewrite IHp; eauto using N_lt_pow2_succ_1, N_lt_pow2_succ].
+        rewrite to_N_zeroes; reflexivity.
+    Qed.
+
+    Lemma to_nat_of_nat :
+      forall sz n,
+        n < pow2 sz ->
+        to_nat (of_nat sz n) = n.
+    Proof.
+      unfold to_nat, of_nat;
+        intros; rewrite to_N_of_N, Nat2N.id.
+      - reflexivity.
+      - change 2%N with (N.of_nat 2).
+        rewrite N_pow_Nat_pow.
+        unfold N.lt. rewrite <- Nat2N.inj_compare, <- nat_compare_lt.
+        rewrite pow2_correct in H; eassumption.
+    Qed.
   End Casts.
 
   Section Arithmetic.
@@ -874,19 +976,6 @@ Notation "bs '~' b" := (Bits.cons b bs) (at level 7, left associativity, format 
 Notation "bs '~' 0" := (Bits.cons false bs) (at level 7, left associativity, format "bs '~' 0") : bits.
 Notation "bs '~' 1" := (Bits.cons true bs) (at level 7, left associativity, format "bs '~' 1") : bits.
 Global Open Scope bits.
-
-(* The S (pred …) makes it clear to the typechecher that the result is nonzero *)
-Definition pow2 n :=
-  S (pred (Nat.pow 2 n)).
-
-Arguments pow2 / !n : assert.
-
-Lemma pow2_correct : forall n, pow2 n = Nat.pow 2 n.
-Proof.
-  unfold pow2; induction n; simpl.
-  - reflexivity.
-  - destruct (Nat.pow 2 n); simpl; (discriminate || reflexivity).
-Qed.
 
 Fixpoint z_range start len :=
   match len with
