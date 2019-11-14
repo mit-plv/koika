@@ -2,7 +2,6 @@
 #include "elf.h"
 #include <iostream>
 #include <fstream>
-#define IMEM_SIZE 4000000000
 #define DMEM_SIZE 4000000000
 
 class extfuns {
@@ -12,14 +11,13 @@ public:
 
 using sim_t = module_rv_core<extfuns>;
 
-bits<32>* imem = new bits<32>[IMEM_SIZE];
 bits<32>* dmem = new bits<32>[DMEM_SIZE];
 
 class rv_core : public sim_t {
 
 public:
   explicit rv_core(const state_t init) : sim_t(init){}
-  void init_imem(char* elf_filename) {
+  void init_mem(char* elf_filename) {
     std::ifstream elf_file;
     char* elf_data;
     unsigned long long elf_size;
@@ -71,6 +69,7 @@ public:
 	// loop through program header tables
 	for (int i = 0 ; i < ehdr->e_phnum ; i++) {
 	    // only look at non-zero length PT_LOAD sections
+	    printf("Section of type: %d of size %d filesize %d starting at %x\n", phdr[i].p_type, phdr[i].p_memsz, phdr[i].p_filesz,phdr[i].p_paddr);
 	    if ((phdr[i].p_type == PT_LOAD) && (phdr[i].p_memsz > 0)) {
 		if (phdr[i].p_memsz < phdr[i].p_filesz) {
 		    std::cerr << "ERROR: file size is larger than target memory size" << std::endl;
@@ -80,7 +79,7 @@ public:
 			std::cerr << "ERROR: file section overflow" << std::endl;
 		}
 		// Set the corresponding section in IMem
-		memcpy(&imem[phdr[i].p_paddr>>2], elf_data + phdr[i].p_offset, phdr[i].p_filesz);
+		memcpy(&dmem[phdr[i].p_paddr>>2], elf_data + phdr[i].p_offset, phdr[i].p_filesz);
 	    }
 	}
     } else {
@@ -119,11 +118,15 @@ protected:
             struct_mem_resp _x2 = _x3;
             _x2.addr = DAddress;
             struct_mem_resp data = _x2;
+	    // Manually added
 	    bits<32> current_value = dmem[DAddress.v >> 2];
-	    if (DAddress.v == 0xfff0) { // PutChar  && DEn.v == 0xf
-	      printf("Yoyo %c", (char) readRequestD.data.v);
+	    if (DAddress.v == 0xffff0 && DEn.v == 0xf) { // PutChar  && DEn.v == 0xf
+	      printf("%c", (char) readRequestD.data.v);
 	    }
-	    if (DAddress.v == 0xfff4 && DEn.v == 0) { // GetChar
+	    if (DAddress.v == 0x40001000 && DEn.v == 0xf) {
+	      exit(readRequestD.data.v);
+	    }
+	    if (DAddress.v == 0xffff4 && DEn.v == 0) { // GetChar
 	      scanf("%c", (char *) &data.data.v);
 	    }
 	    else {
@@ -194,12 +197,13 @@ protected:
             struct_mem_resp _x2 = _x3;
             _x2.addr = IAddress;
             struct_mem_resp data = _x2;
-	    bits<32> current_value = imem[IAddress.v >> 2];
+	    // Manually added
+	    bits<32> current_value = dmem[IAddress.v >> 2];
 	    data.data = current_value;
-	    bits<32> mask0 = 0x32'000000ff_x;
-	    bits<32> mask1 = 0x32'0000ff00_x;
-	    bits<32> mask2 = 0x32'00ff0000_x;
-	    bits<32> mask3 = 0x32'ff000000_x;
+	    // bits<32> mask0 = 0x32'000000ff_x;
+	    // bits<32> mask1 = 0x32'0000ff00_x;
+	    // bits<32> mask2 = 0x32'00ff0000_x;
+	    // bits<32> mask3 = 0x32'ff000000_x;
 	    // imem[IAddress.v >> 2] = (IEn[2'0_d].v == 1 ? (readRequestI.data & mask0) : (current_value & mask0))
 	    //   | (IEn[2'1_d].v == 1 ? (readRequestI.data & mask1) : (current_value & mask1))
 	    //   | (IEn[2'2_d].v == 1 ? (readRequestI.data & mask2) : (current_value & mask2))
@@ -339,7 +343,7 @@ sim_t::state_t init_and_run(char* filename, unsigned long long int ncycles) {
   };
 
   rv_core simulator(init);
-  simulator.init_imem(filename);
+  simulator.init_mem(filename);
   simulator.run(ncycles);
   return simulator.snapshot();
 }
@@ -347,8 +351,6 @@ sim_t::state_t init_and_run(char* filename, unsigned long long int ncycles) {
 
 #ifndef SIM_MINIMAL
 int main(int argc, char **argv) {
-
-  bits<32> mask0 = 0x32'000000ff_x;
   unsigned long long int ncycles = 1000;
   char* filename;
   if (argc >= 3) {

@@ -47,15 +47,6 @@ Section RV32IHelpers.
     |}.
 
 
-  Definition signExtend' (z:nat) (n:nat) (m:nat) : UInternalFunction reg_t empty_ext_fn_t :=
-    {{
-        fun (arg : bits_t n) : bits_t (m+n) =>
-          if (arg[#(Bits.of_nat z n)]) then
-            #(Bits.ones (m)) ++ arg
-          else
-            #(Bits.zeroes (m)) ++ arg
-    }}.
-
   Definition getFields : UInternalFunction reg_t empty_ext_fn_t :=
     {{
         fun (inst : bits_t 32) : struct_t inst_field =>
@@ -268,7 +259,7 @@ Section RV32IHelpers.
          : bits_t 32 =>
          let shamt := b[Ob~0~0~0~0~0 :+ 5] in
          match funct3 with
-         | #funct3_ADD  => if (inst_30 == Ob~1) then a - b else a + b
+         | #funct3_ADD  => if (inst_30 == Ob~1) then a - b else (a + b)
          | #funct3_SLL  => a << shamt
          | #funct3_SLT  => zeroExtend(a <s b, 32)
          | #funct3_SLTU => zeroExtend(a < b, 32)
@@ -279,6 +270,7 @@ Section RV32IHelpers.
          return default: #(Bits.of_nat 32 0)
          end
     }}.
+  
 
   Definition execALU32 : UInternalFunction reg_t empty_ext_fn_t :=
 
@@ -636,12 +628,12 @@ Module  RV32ICore.
           (* Byte enable shifting back *)
           let resp := fromDMem.(MemResp.deq)() in
           let mem_data := get(resp,data) in
-          set mem_data := mem_data >> (get(execute_bookeeping,offset) ++ Ob~0~0);
+          set mem_data := mem_data >> (get(execute_bookeeping,offset) ++ Ob~0~0~0);
           match (get(execute_bookeeping,isUnsigned)++get(execute_bookeeping,size)) with
-          | Ob~1~0~0 => set data := {signExtend 8  24}(mem_data[|5`d0|:+8])  (* Unsigned Byte *)
-          | Ob~1~0~1 => set data := {signExtend 16 16}(mem_data[|5`d0|:+16]) (* Unsigned Half *)
-          | Ob~0~0~0 => set data := zeroExtend(mem_data[|5`d0|:+8],32)       (* Load Byte *)
-          | Ob~0~0~1 => set data := zeroExtend(mem_data[|5`d0|:+16],32)      (* Load Half *)
+          | Ob~0~0~0 => set data := {signExtend 8  24}(mem_data[|5`d0|:+8])
+          | Ob~0~0~1 => set data := {signExtend 16 16}(mem_data[|5`d0|:+16])
+          | Ob~1~0~0 => set data := zeroExtend(mem_data[|5`d0|:+8],32)
+          | Ob~1~0~1 => set data := zeroExtend(mem_data[|5`d0|:+16],32)
           | Ob~0~1~0 => set data := mem_data      (* Load Word *)
           return default: fail                   (* Load Double or Signed Word *)
           end
@@ -711,9 +703,9 @@ Module  RV32ICore.
 
   Definition debug a :uaction reg_t empty_ext_fn_t:= a.
 
-  (* Definition tc_debug :=  tc_action R empty_Sigma (debug {{ Ob~1~1 }} ). *)
-  (*   Eval vm_compute in (interp_action *)
-  (*                        cr empty_sigma CtxEmpty log_empty log_empty tc_debug). *)
+  Definition tc_debug :=  tc_action R empty_Sigma (debug {{ Ob~0~1 - Ob~0~1 }} ).
+    Eval vm_compute in (interp_action
+                         cr empty_sigma CtxEmpty log_empty log_empty tc_debug).
 
   Definition circuits :=
     compile_scheduler rules rv_core.
