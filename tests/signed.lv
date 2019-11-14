@@ -2,7 +2,7 @@
 
 (module signed
   (register r 8'b11110000)
-  (register rpos 8'b11110000)
+  (register rpos 8'b01110000)
   (register rneg 8'b11110000)
 
   (register r16 16'b0)
