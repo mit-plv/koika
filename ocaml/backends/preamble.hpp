@@ -581,28 +581,28 @@ template<std::size_t sz>
 struct _repr {
   bits<sz> val;
   repr_style style;
-  bool include_size;
 
-  _repr(bits<sz> val,
-        repr_style style = repr_style::full,
-        bool include_size = false)
-    : val(val), style(style), include_size(include_size) {}
+  enum class prefixes { sized, plain, minimal };
+  prefixes prefix;
+
+  _repr(bits<sz> val, repr_style style, prefixes prefix)
+    : val(val), style(style), prefix(prefix) {}
 
   friend std::ostream& operator<<(std::ostream& stream, const _repr& r) {
-    if (r.include_size && r.style != repr_style::utf8) {
+    if (r.prefix == prefixes::sized && r.style != repr_style::utf8) {
       stream << sz << "'";
     }
 
     switch (r.style) {
     case repr_style::bin:
-      stream << (r.include_size ? "b" : "0b");
+      stream << (r.prefix == prefixes::plain ? "0b" : "b");
       for (size_t pos = sz; pos > 0; pos--) {
         unsigned int bit = prims::truncate<1, sz>(r.val >> (pos - 1u)).v;
         stream << bit;
       }
     break;
     case repr_style::hex:
-      stream << (r.include_size ? "x" : "0x") << std::hex << +r.val.v;
+      stream << (r.prefix == prefixes::plain ? "0x" : "x") << std::hex << +r.val.v;
       break;
     case repr_style::dec:
       stream << std::dec << +r.val.v;
@@ -617,12 +617,12 @@ struct _repr {
       break;
     case repr_style::full:
       if (sz <= 64) {
-        stream << _repr<sz>(r.val, repr_style::bin);
-        stream << " (" << _repr<sz>(r.val, repr_style::hex);
-        stream << ", " << _repr<sz>(r.val, repr_style::dec);
+        stream << _repr<sz>(r.val, repr_style::bin, prefixes::minimal);
+        stream << " (" << _repr<sz>(r.val, repr_style::hex, prefixes::sized);
+        stream << ", " << _repr<sz>(r.val, repr_style::dec, prefixes::sized);
         stream << ")";
       } else {
-        stream << _repr<sz>(r.val, repr_style::hex, r.include_size);
+        stream << _repr<sz>(r.val, repr_style::hex, prefixes::minimal);
       }
       break;
     }
@@ -634,7 +634,7 @@ struct _repr {
 template<std::size_t sz>
 std::string repr(const bits<sz> val, const repr_style style = repr_style::full) {
   std::ostringstream stream;
-  stream << _repr<sz>(val, style, true);
+  stream << _repr<sz>(val, style, _repr<sz>::prefixes::sized);
   return stream.str();
 }
 #endif // #ifndef SIM_MINIMAL
