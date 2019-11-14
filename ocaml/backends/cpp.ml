@@ -19,7 +19,7 @@ type ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_input_t = {
 
     cpp_pos_of_pos: 'pos_t -> Pos.t;
     cpp_var_names: 'var_t -> string;
-    cpp_rule_names: 'rule_name_t -> string;
+    cpp_rule_names: ?prefix:string -> 'rule_name_t -> string;
 
     cpp_scheduler: ('pos_t, 'rule_name_t) Extr.scheduler;
     cpp_rules: ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_rule_t list;
@@ -120,11 +120,16 @@ module Mangling = struct
   let mangle_function_sig f =
     { f with ffi_name = mangle_name f.ffi_name }
 
+  let default v = function
+    | Some v' -> v'
+    | None -> v
+
   let mangle_unit u =
     { u with (* The prefixes are needed to prevent collisions with ‘prims::’ *)
       cpp_classname = mangle_name ~prefix:"module" u.cpp_classname;
       cpp_var_names = (fun v -> v |> u.cpp_var_names |> mangle_name);
-      cpp_rule_names = (fun rl -> rl |> u.cpp_rule_names |> mangle_name ~prefix:"rule");
+      cpp_rule_names = (fun ?prefix rl ->
+        rl |> u.cpp_rule_names |> mangle_name ~prefix:(default "rule" prefix));
       cpp_register_sigs = (fun r -> r |> u.cpp_register_sigs |> mangle_register_sig);
       cpp_ext_sigs = (fun f -> f |> u.cpp_ext_sigs |> mangle_function_sig) }
 end
@@ -654,8 +659,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
       let p_commit () =
         iter_registers (fun { reg_name; _ } ->
             p "Log.%s = log.%s;" reg_name reg_name)
-          rule.rl_footprint;
-        p "return true;" in
+          rule.rl_footprint in
 
       let p_declare_target = function
         | VarTarget { tau; declared = false; name } ->
@@ -866,12 +870,22 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
       and p_assign_and_ignore target expr =
         ignore (p_assign_expr target expr) in
 
+      let reset = hpp.cpp_rule_names ~prefix:"reset" rule.rl_name in
+      let commit = hpp.cpp_rule_names ~prefix:"commit" rule.rl_name in
+
+      p_fn ~typ:"virtual void" ~name:reset p_reset;
+      nl ();
+
+      p_fn ~typ:"virtual void" ~name:commit p_commit;
+      nl ();
+
       p_fn ~typ:"virtual bool" ~name:(hpp.cpp_rule_names rule.rl_name) (fun () ->
-          p_reset ();
+          p "%s();" reset;
           nl ();
           p_assign_and_ignore NoTarget (p_action Pos.Unknown NoTarget rule.rl_body);
           nl ();
-          p_commit ()) in
+          p "%s();" commit;
+          p "return true;") in
 
     let p_constructor () =
       let p_init_data0 { reg_name = nm; _ } =
@@ -1012,7 +1026,7 @@ let input_of_compile_unit (cu: 'f Cuttlebone.Compilation.compile_unit) =
     cpp_header_name = cu.c_modname;
     cpp_pos_of_pos = cu.c_pos_of_pos;
     cpp_var_names = (fun x -> x);
-    cpp_rule_names = (fun rl -> rl);
+    cpp_rule_names = (fun ?prefix:_ rl -> rl);
     cpp_scheduler = cu.c_scheduler;
     cpp_rules = List.map cpp_rule_of_action cu.c_rules;
     cpp_registers = cu.c_registers;
@@ -1042,7 +1056,8 @@ let input_of_sim_package
     cpp_header_name = classname;
     cpp_pos_of_pos = (fun _ -> Pos.Unknown);
     cpp_var_names = (fun x -> Cuttlebone.Util.string_of_coq_string (sp.sp_var_names.show0 x));
-    cpp_rule_names = (fun rn -> Cuttlebone.Util.string_of_coq_string (kp.koika_rule_names.show0 rn));
+    cpp_rule_names = (fun ?prefix:_ rn ->
+      Cuttlebone.Util.string_of_coq_string (kp.koika_rule_names.show0 rn));
     cpp_scheduler = kp.koika_scheduler;
     cpp_rules = List.map (cpp_rule_of_koika_package_rule kp) rules;
     cpp_registers = kp.koika_reg_finite.finite_elements;
