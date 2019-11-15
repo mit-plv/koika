@@ -259,18 +259,18 @@ Section RV32IHelpers.
          : bits_t 32 =>
          let shamt := b[Ob~0~0~0~0~0 :+ 5] in
          match funct3 with
-         | #funct3_ADD  => if (inst_30 == Ob~1) then a - b else (a + b)
+         | #funct3_ADD  => if (inst_30 == Ob~1) then a - b else a + b
          | #funct3_SLL  => a << shamt
          | #funct3_SLT  => zeroExtend(a <s b, 32)
          | #funct3_SLTU => zeroExtend(a < b, 32)
          | #funct3_XOR  => a ^ b
-         | #funct3_SRL  => if (inst_30 == Ob~1) then a >>> shamt else (a >> shamt)
+         | #funct3_SRL  => if (inst_30 == Ob~1) then a >>> shamt else a >> shamt
          | #funct3_OR   => a || b
          | #funct3_AND  => a && b
          return default: #(Bits.of_nat 32 0)
          end
     }}.
-  
+
 
   Definition execALU32 : UInternalFunction reg_t empty_ext_fn_t :=
 
@@ -582,8 +582,8 @@ Module  RV32ICore.
                               | Ob~1~0 => Ob~1~1~1~1
                               return default: fail(4)
                               end << offset in
-               set data := (rs2_val << shift_amount);
-               set addr := (addr[|5`d2| :+ 30 ] ++ |2`d0|);
+               set data := rs2_val << shift_amount;
+               set addr := addr[|5`d2| :+ 30 ] ++ |2`d0|;
                set isUnsigned := funct3[|2`d2|];
                let type_mem := if (fInst[|5`d5|] == Ob~1)
                                then byte_en
@@ -703,9 +703,9 @@ Module  RV32ICore.
 
   Definition debug a :uaction reg_t empty_ext_fn_t:= a.
 
-  Definition tc_debug :=  tc_action R empty_Sigma (debug {{ Ob~0~1 - Ob~0~1 }} ).
-    Eval vm_compute in (interp_action
-                         cr empty_sigma CtxEmpty log_empty log_empty tc_debug).
+  (* Definition tc_debug :=  tc_action R empty_Sigma (debug {{ Ob~0~1 - Ob~0~1 }} ). *)
+  (*   Eval vm_compute in (interp_action *)
+  (*                        cr empty_sigma CtxEmpty log_empty log_empty tc_debug). *)
 
   Definition circuits :=
     compile_scheduler rules rv_core.
