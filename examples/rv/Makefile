@@ -4,10 +4,15 @@ RISCVCC32=riscv-none-embed-gcc -march=rv32i -mabi=ilp32 -nostartfiles -static -m
 FULLASMTESTS=$(patsubst fullasmtests/%.S, build/fullasmtests/%32, $(wildcard fullasmtests/*.S))
 
 
-all: core fullasmtests
+all: test
 
 core:
 	$(MAKE) -C ../.. examples/rv/RVCore.v.objects/
+	g++ -O3 rv_driver.cpp -I RVCore.v.objects/ -o RVCore.v.objects/rv_core.exe
+
+test: fullasmtests core 
+	echo "Testing full asm tests:\n"
+	find build/fullasmtests/. -name "*32" -exec bash -c "echo 'Test {}'; ./RVCore.v.objects/rv_core.exe {} 2000000; if [ \$$? -eq 0 ]; then echo '[0;32mPassed[0m'; else echo '[0;31mFailed[0m {}'; fi " \;
 
 fullasmtests: $(FULLASMTESTS)
 
