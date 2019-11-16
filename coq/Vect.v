@@ -219,6 +219,16 @@ Fixpoint vect_nth {T n} (v: vect T n) (idx: index n) {struct n} : T :=
             end
   end v idx.
 
+Fixpoint vect_replace {T n} (v: vect T n) (idx: index n) (t: T) :=
+  match n return (vect T n -> index n -> vect T n) with
+  | 0 => fun _ idx => False_rect _ idx
+  | S n => fun v idx =>
+            match idx with
+            | thisone => vect_cons t (vect_tl v)
+            | anotherone idx => vect_cons (vect_hd v) (vect_replace (vect_tl v) idx t)
+            end
+  end v idx.
+
 Fixpoint vect_last {T n} (v: vect T (S n)) : T :=
   match n return vect T (S n) -> T with
   | O => fun v => vect_hd v
@@ -811,6 +821,28 @@ Module Bits.
   Notation ones n := (@const n true).
   Notation lsb := (@vect_hd_default bool _ false).
   Notation msb := (@vect_last_default bool _ false).
+
+  Fixpoint rmul n m :=
+    match n with
+    | 0 => 0
+    | S p => rmul p m + m
+    end.
+
+  Lemma rmul_correct : forall n m, rmul n m = Nat.mul n m.
+  Proof. induction n; cbn; intros; rewrite ?IHn; auto with arith. Qed.
+
+  Fixpoint splitn {n sz} (bs: bits (rmul n sz)) : vect (bits sz) n :=
+    match n return bits (rmul n sz) -> vect (bits sz) n with
+    | 0 => fun _ => vect_nil
+    | S n => fun v => let (rest, hd) := vect_split v in
+                  vect_cons hd (splitn rest)
+    end bs.
+
+  Fixpoint appn {n sz} (bss: vect (bits sz) n) : bits (rmul n sz) :=
+    match n return vect (bits sz) n -> bits (rmul n sz) with
+    | 0 => fun _ => Bits.nil
+    | S n => fun v => Bits.app (vect_hd v) (appn (vect_tl v))
+    end bss.
 
   Definition neg {sz} (b: bits sz) :=
     map negb b.

@@ -4,6 +4,7 @@ Section TypeErrors.
   Context {pos_t var_t fn_name_t: Type}.
 
   Inductive basic_error_message :=
+  | OutOfBounds (pos: nat) (sig: array_sig)
   | UnboundField (f: string) (sig: struct_sig)
   | TypeMismatch (actual: type) (expected: type)
   | KindMismatch (actual: type_kind) (expected: type_kind).
@@ -23,16 +24,19 @@ Section TypeErrors.
   Inductive fn_tc_error_loc := Arg1 | Arg2.
   Definition fn_tc_error : Type := fn_tc_error_loc * basic_error_message.
 
-  Definition assert_bits_t arg (tau: type) : result nat fn_tc_error :=
-    match tau with
-    | bits_t sz => Success sz
-    | enum_t _ | struct_t _ => Failure (arg, KindMismatch (kind_of_type tau) kind_bits)
-    end.
-
-  Definition assert_struct_t arg (tau: type) : result struct_sig fn_tc_error :=
-    match tau with
-    | struct_t sg => Success sg
-    | bits_t _ | enum_t _ => Failure (arg, KindMismatch (kind_of_type tau) (kind_struct None))
+  Definition assert_kind (kind: type_kind) arg (tau: type)
+    : result (match kind with
+              | kind_bits => nat
+              | kind_enum sig => enum_sig
+              | kind_struct sig => struct_sig
+              | kind_array sig => array_sig
+              end) fn_tc_error :=
+    match kind, tau with
+    | kind_bits, bits_t sz => Success sz
+    | kind_enum _, enum_t sg => Success sg
+    | kind_struct _, struct_t sg => Success sg
+    | kind_array _, array_t sg => Success sg
+    | _, _ => Failure (arg, KindMismatch (kind_of_type tau) kind)
     end.
 
   (* Error sources live in prop, because they are only useful in interactive

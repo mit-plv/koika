@@ -12,11 +12,10 @@ Section SyntaxMacros.
       Ob~b7~b6~b5~b4~b3~b2~b1~b0
     end.
 
-  Fixpoint bits_of_bytes s : bits (String.length s * 8) :=
+  Fixpoint array_of_bytes (s: string) : vect (bits 8) (String.length s) :=
     match s with
-    | EmptyString => Ob
-    | String c s =>
-      Bits.app (bits_of_bytes s) (bits_of_ascii c) (* FIXME: reversed *)
+    | EmptyString => vect_nil
+    | String c s => vect_cons (bits_of_ascii c) (array_of_bytes s)
     end.
 
   Fixpoint gen_switch {tau}

@@ -75,7 +75,7 @@ Section Desugaring.
          | UConstBits bs =>
            UConst (tau := bits_t _) bs
          | UConstString s =>
-           UConst (tau := bits_t _) (bits_of_bytes s)
+           UConst (tau := array_t {| array_type := bits_t 8 |}) (array_of_bytes s)
          | UConstEnum sig name =>
            match vect_index name sig.(enum_members) with
            | Some idx => UConst (tau := enum_t sig) (vect_nth sig.(enum_bitpatterns) idx)

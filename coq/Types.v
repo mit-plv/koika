@@ -15,24 +15,33 @@ Record enum_sig :=
     enum_members: vect string enum_size;
     enum_bitpatterns: vect (bits enum_bitsize) enum_size }.
 
+Record array_sig' {A} :=
+  { array_type: A;
+    array_len: nat }.
+Arguments array_sig' : clear implicits.
+
 Inductive type : Type :=
 | bits_t (sz: nat)
 | enum_t (sig: enum_sig)
-| struct_t (sig: struct_sig' type).
+| struct_t (sig: struct_sig' type)
+| array_t (sig: array_sig' type).
 
 Notation unit_t := (bits_t 0).
 Notation struct_sig := (struct_sig' type).
+Notation array_sig := (array_sig' type).
 
 Inductive type_kind :=
 | kind_bits
 | kind_enum (sig: option enum_sig)
-| kind_struct (sig: option struct_sig).
+| kind_struct (sig: option struct_sig)
+| kind_array (sig: option array_sig).
 
 Definition kind_of_type (tau: type) :=
   match tau with
   | bits_t sz => kind_bits
   | enum_t sig => kind_enum (Some sig)
   | struct_t sig => kind_struct (Some sig)
+  | array_t sig => kind_array (Some sig)
   end.
 
 Definition struct_fields_sz' (type_sz: type -> nat) (fields: list (string * type)) :=
@@ -43,6 +52,7 @@ Fixpoint type_sz tau :=
   | bits_t sz => sz
   | enum_t sig => sig.(enum_bitsize)
   | struct_t sig => struct_fields_sz' type_sz sig.(struct_fields)
+  | array_t sig => Bits.rmul sig.(array_len) (type_sz sig.(array_type))
   end.
 
 Notation struct_fields_sz := (struct_fields_sz' type_sz).
@@ -67,6 +77,18 @@ Definition field_offset_right (sig: struct_sig) (idx: struct_index sig) :=
   let next_fields := List.skipn (S (index_to_nat idx)) sig.(struct_fields) in
   struct_fields_sz next_fields.
 
+Definition array_index (sig: array_sig) :=
+  Vect.index sig.(array_len).
+
+Definition array_sz sig :=
+  type_sz (array_t sig).
+
+Definition element_sz (sig: array_sig) :=
+  type_sz sig.(array_type).
+
+Definition element_offset_right (sig: array_sig) (idx: array_index sig) :=
+  Bits.rmul (sig.(array_len) - S (Vect.index_to_nat idx)) (element_sz sig).
+
 Notation struct_bits_t sig :=
   (bits_t (struct_sz sig)).
 
@@ -86,6 +108,7 @@ Fixpoint type_denote tau : Type :=
   | bits_t sz => bits sz
   | enum_t sig => bits sig.(enum_bitsize)
   | struct_t sig => struct_denote' type_denote sig.(struct_fields)
+  | array_t sig => vect (type_denote sig.(array_type)) sig.(array_len)
   end.
 
 Notation struct_denote := (struct_denote' type_denote).
@@ -103,9 +126,10 @@ Fixpoint bits_of_value {tau: type} (x: type_denote tau) {struct tau} : bits (typ
          | (nm, tau) :: fields => fun '(x, xs) => Bits.app (bits_of_value x) (bits_of_struct_value xs)
          end x) in
   match tau return type_denote tau -> bits (type_sz tau) with
-  | bits_t sz => fun bs => bs
-  | enum_t sig => fun bs => bs
-  | struct_t sig => fun str => bits_of_struct_value str
+  | bits_t _ => fun bs => bs
+  | enum_t _ => fun bs => bs
+  | struct_t _ => fun str => bits_of_struct_value str
+  | array_t _ => fun v => Bits.appn (vect_map bits_of_value v)
   end x.
 
 Fixpoint value_of_bits {tau: type} (bs: bits (type_sz tau)) {struct tau}: type_denote tau :=
@@ -124,28 +148,32 @@ Fixpoint value_of_bits {tau: type} (bs: bits (type_sz tau)) {struct tau}: type_d
              (hd, tl)
          end bs) in
   match tau return bits (type_sz tau) -> type_denote tau with
-  | bits_t sz => fun bs => bs
-  | enum_t sig => fun bs => bs
-  | struct_t sig => fun bs => value_of_struct_bits bs
+  | bits_t _ => fun bs => bs
+  | enum_t _ => fun bs => bs
+  | struct_t _ => fun bs => value_of_struct_bits bs
+  | array_t _ => fun bs => vect_map value_of_bits (Bits.splitn bs)
   end bs.
 
 Example ex__bits_of_value :=
   Eval simpl in
-    let t := struct_t {| struct_name := "xyz";
-                        struct_fields := [("mm_typ", bits_t 2);
-                                           ("addr", bits_t 8);
-                                           ("data", bits_t 8)]%string |} in
+    let t := struct_t
+              {| struct_name := "xyz";
+                 struct_fields :=
+                   [("mm_typ", bits_t 2);
+                    ("addr", bits_t 8);
+                    ("data", array_t {| array_type := bits_t 2;
+                                        array_len := 3 |})] |}%string in
     let mm_typ := Ob~0~1 in
     let mm_addr := Ob~1~1~1~1~0~0~0~0 in
-    let mm_data := Ob~1~1~0~0~1~1~0~0 in
+    let mm_data := [Ob~1~0; Ob~0~0; Ob~1~1]%vect in
     bits_of_value ((mm_typ, (mm_addr, (mm_data, tt))): type_denote t).
-(* [ex__bits_of_value = Ob~0~1~1~1~1~1~0~0~0~0~1~1~0~0~1~1~0~0 : bits 18] *)
+(* [ex__bits_of_value = Ob~0~1~1~1~1~1~0~0~0~0~1~0~0~0~1~1 : bits 16] *)
 
 Definition bits_of_value_of_bits :
   forall tau (bs: bits (type_sz tau)),
     bits_of_value (value_of_bits bs) = bs.
 Proof.
-  fix IHtau 1; destruct tau as [sz | sig | sig]; cbn.
+  fix IHtau 1; destruct tau as [sz | sig | sig | sig]; cbn.
   - reflexivity.
   - reflexivity.
   - destruct sig; cbn.
@@ -153,13 +181,16 @@ Proof.
     fix IHfields 1. destruct struct_fields0 as [ | (nm & tau) struct_fields0 ]; cbn.
     + destruct bs; reflexivity.
     + intros; rewrite IHtau, IHfields; apply vect_app_split.
+  - intros;
+      erewrite vect_map_map, (vect_map_id _ (IHtau _)), Bits.appn_splitn;
+      reflexivity.
 Qed.
 
 Definition value_of_bits_of_value :
   forall tau (v: type_denote tau),
     (value_of_bits (bits_of_value v)) = v.
 Proof.
-  fix IHt 1; destruct tau as [sz | sig | sig]; cbn.
+  fix IHt 1; destruct tau as [sz | sig | sig | sig]; cbn.
   - reflexivity.
   - reflexivity.
   - destruct sig; cbn.
@@ -173,6 +204,9 @@ Proof.
       rewrite vect_split_app.
       cbn.
       rewrite IH, IHt.
+      reflexivity.
+  - intros;
+      erewrite Bits.splitn_appn, vect_map_map, (vect_map_id _ (IHt _));
       reflexivity.
 Qed.
 
@@ -306,8 +340,8 @@ Instance EqDec_type : EqDec type.
 Proof.
   econstructor.
   fix IHtau 1;
-    destruct t1 as [ sz1 | en1 | fs1 ];
-    destruct t2 as [ sz2 | en2 | fs2 ]; cbn;
+    destruct t1 as [ sz1 | en1 | fs1 | as1 ];
+    destruct t2 as [ sz2 | en2 | fs2 | as2 ]; cbn;
       try simple_eq.
   - destruct (eq_dec sz1 sz2); subst;
       simple_eq.
@@ -322,13 +356,17 @@ Proof.
       destruct fs2 as [ nm2 f2 ]; cbn.
     destruct (eq_dec nm1 nm2); subst; try simple_eq.
     destruct (eq_dec (EqDec := _) f1 f2); subst; try simple_eq.
+  - destruct as1 as [ tau1 len1 ];
+      destruct as2 as [ tau2 len2 ]; cbn.
+    destruct (IHtau tau1 tau2); subst; try simple_eq.
+    destruct (eq_dec len1 len2); subst; try simple_eq.
 Defined.
 
 Instance EqDec_type_denote {tau: type} : EqDec (type_denote tau).
 Proof.
   econstructor.
   revert tau; fix eq_dec_td 1;
-    destruct tau as [ ? | ? | [? fields] ]; cbn.
+    destruct tau as [ ? | ? | [? fields] | ? ]; cbn.
   - apply eq_dec.
   - apply eq_dec.
   - revert fields; fix eq_dec_struct 1.
@@ -337,4 +375,6 @@ Proof.
     + destruct t1 as [t1 tt1], t2 as [t2 tt2].
       destruct (eq_dec_td _ t1 t2); subst; try simple_eq.
       destruct (eq_dec_struct _ tt1 tt2); subst; try simple_eq.
+  - pose {| eq_dec := eq_dec_td (sig.(array_type)) |}.
+    apply eq_dec.
 Defined.

@@ -445,6 +445,11 @@ Section CircuitCompilation.
         | GetField => fun a =>
           CUnop (GetFieldBits sig f) a
         end a
+      | Array1 fn sig idx => fun a =>
+        match fn return cArg1 (Array1 fn sig idx) -> cRet (Array1 fn sig idx) with
+        | GetElement => fun a =>
+          CUnop (GetElementBits sig idx) a
+        end a
       end a.
 
     Definition compile_binop (fn: fn2)
@@ -461,6 +466,11 @@ Section CircuitCompilation.
         match fn return cArg1 (Struct2 fn sig f) -> cArg2 (Struct2 fn sig f) -> cRet (Struct2 fn sig f) with
         | SubstField => fun a1 a2 =>
           CBinop (SubstFieldBits sig f) a1 a2
+        end a1 a2
+      | Array2 fn sig idx => fun a1 a2 =>
+        match fn return cArg1 (Array2 fn sig idx) -> cArg2 (Array2 fn sig idx) -> cRet (Array2 fn sig idx) with
+        | SubstElement => fun a1 a2 =>
+          CBinop (SubstElementBits sig idx) a1 a2
         end a1 a2
       end a1 a2.
 
