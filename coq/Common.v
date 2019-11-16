@@ -1,7 +1,9 @@
 Require Import Coq.Lists.List Coq.Bool.Bool Coq.Strings.String.
 Require Export Coq.omega.Omega.
-Import ListNotations.
 Require Export Koika.EqDec Koika.Vect Koika.FiniteType Koika.Show.
+
+Import ListNotations.
+Global Open Scope list_scope.
 
 (* https://coq-club.inria.narkive.com/HeWqgvKm/boolean-simplification *)
 Hint Rewrite

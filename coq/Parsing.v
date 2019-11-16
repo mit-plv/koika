@@ -10,7 +10,6 @@ Export Koika.Primitives.PrimUntyped.
 Export Coq.Strings.String.
 Export Coq.Lists.List.ListNotations.
 
-Open Scope list_scope.
 Open Scope string_scope.
 
 Declare Custom Entry koika.
