@@ -102,20 +102,27 @@ namespace prims {
   struct bits {
     bits_t<sz> v;
 
+#ifndef __OPTIMIZE__
+    // This makes debugging easier
+    static constexpr std::size_t size = sz;
+#endif
+
     /// Representation invariant
 
-    static constexpr int padding_width =
-      std::numeric_limits<bits_t<sz>>::digits - sz;
+    static constexpr int padding_width() {
+      // making this a function avoids polluting GDB's output
+      return std::numeric_limits<bits_t<sz>>::digits - sz;
+    }
 
     // Not constexpr because Boost's >> isn't constexpr
     static const bits_t<sz> bitmask() {
-      auto pw = bits<sz>::padding_width; // https://stackoverflow.com/questions/8452952/
+      auto pw = bits<sz>::padding_width(); // https://stackoverflow.com/questions/8452952/
       return std::numeric_limits<bits_t<sz>>::max() >> pw;
     }
 
     void invariant() const {
       // Knowing this invariant can sometimes help the compiler; it does in
-      // particular in operator bool().
+      // particular in ‘operator bool()’ below.
       assume(v <= bitmask());
     }
 
@@ -134,14 +141,14 @@ namespace prims {
     }
 
     sbits_t<sz> to_shifted_sbits() const {
-      return to_sbits() << bits<sz>::padding_width;
+      return to_sbits() << bits<sz>::padding_width();
     }
 
     static bits<sz> of_shifted_sbits(sbits_t<sz> sx) {
       // This constructs an int of the same bitsize as x, with the same
       // bitpattern, except that it uses the high bits of the storage type instead
       // of the low ones (e.g. 4'b1101 is represented as 8'b11010000).
-      return of_sbits(sx) >> bits<sz>::padding_width;
+      return of_sbits(sx) >> bits<sz>::padding_width();
     }
 
     /// Constants
@@ -238,7 +245,7 @@ namespace prims {
 
     template <uint base, size_t sz, char... cs>
     struct parse_number<parser::u64, base, sz, cs...> {
-      static constexpr uint64_t max = std::numeric_limits<bits_t<sz>>::max() >> bits<sz>::padding_width;
+      static constexpr uint64_t max = std::numeric_limits<bits_t<sz>>::max() >> bits<sz>::padding_width();
       static constexpr bits_t<sz> v = parse_u64<base, max, 0, cs...>();
     };
 
