@@ -749,4 +749,7 @@ struct reg_log_t {
 };
 
 #define CHECK_RETURN(can_fire) { if (!(can_fire)) { return false; } }
+
+#undef _unoptimized
+#undef _display_unoptimized
 #endif // #ifndef _PREAMBLE_HPP
