@@ -48,9 +48,10 @@
   (rule rl5
     (let ((a 5'b0)
           (b (unpack 'xyz (read.1 r0)))
-          (c (new 'instr))
-          (d (new (bits 16)))
-          (e (new 'bool2)))
+          (c (init 'instr))
+          (d (init (bits 16)))
+          (e (init 'bool2))
+          (f (init (array (bits 8) 4) 8'37 8'29)))
       (setq x (+ x 5'b00010))
       (write.0 r1
         (zextl 1

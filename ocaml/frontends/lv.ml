@@ -27,13 +27,16 @@ module UnresolvedAST = struct
     | Struct_u of { name: string locd; fields: (string locd * unresolved_type locd) list }
   and unresolved_type =
     | Bits_u of int
+    | String_u
+    | Array_u of unresolved_type locd * int option
     | Unknown_u of string
 
   type unresolved_literal =
     | Var of var_t
     | Fail of unresolved_type
     | Num of (string * int)
-    | Symbol of string
+    | Type of unresolved_type
+    | String of string
     | Keyword of string
     | Enumerator of { enum: string; constructor: string }
     | Const of unresolved_value
@@ -84,6 +87,7 @@ module ResolvedAST = struct
   and usugar =
     | AstError
     | Skip
+    | ConstString of string
     | Progn of uaction locd list
     | Let of (var_t locd * uaction locd) list * uaction locd
     | When of uaction locd * uaction locd
@@ -91,6 +95,7 @@ module ResolvedAST = struct
                   default: uaction locd;
                   branches: (uaction locd * uaction locd) list }
     | StructInit of { sg: struct_sig; fields: (string locd * uaction locd) list }
+    | ArrayInit of { sg: array_sig; elements: uaction locd list }
 
   type uscheduler = UnresolvedAST.unresolved_scheduler
 
@@ -115,6 +120,7 @@ module ResolvedAST = struct
             (match u with
              | AstError -> UErrorInAst
              | Skip -> USkip
+             | ConstString str -> UConstString (Cuttlebone.Util.coq_string_of_string str)
              | Progn rs ->
                 UProgn (List.map translate_action rs)
              | Let (bs, body) ->
@@ -127,7 +133,10 @@ module ResolvedAST = struct
                 USwitch (translate_action operand, translate_action default, branches)
              | StructInit { sg; fields } ->
                 let fields = List.map (fun (nm, v) -> Util.coq_string_of_string nm.lcnt, translate_action v) fields in
-                UStructInit (Util.extr_struct_sig_of_struct_sig sg, fields)))
+                UStructInit (Util.extr_struct_sig_of_struct_sig sg, fields)
+             | ArrayInit { sg; elements } ->
+                let elements = List.map translate_action elements in
+                UArrayInit (Util.extr_type_of_typ sg.array_type, elements)))
 
   let rec translate_scheduler ({ lpos; lcnt }: uscheduler locd) =
     Extr.USPos
@@ -197,6 +206,8 @@ type resolved_fn =
   | FnUnop of Cuttlebone.Extr.PrimUntyped.ufn1
   | FnBinop of Cuttlebone.Extr.PrimUntyped.ufn2
   | FnStructInit of { sg: struct_sig; field_names: string locd list }
+  | FnArrayInit of { sg: array_sig }
+  | FnStringInit of string
 
 type resolved_fndecl =
   | ExternalDecl of resolved_extfun
@@ -273,7 +284,8 @@ module Errors = struct
       | ExpectingNil of { kind: string; prev: string }
       | UnexpectedList of { expected: string }
       | UnexpectedAtom of { expected: string; atom: string }
-      | UnexpectedSymbol of { symbol: string }
+      | UnexpectedType of { typ: typ }
+      | UnexpectedString of { str: string }
       | UnexpectedKeyword of { keyword: string }
       | BadChoice of { atom: string; expected: string list }
       | BadLiteral of { atom: string }
@@ -284,10 +296,11 @@ module Errors = struct
       | BadKeyword of { kind: string; atom: string }
       | BadEnumerator of { atom: string }
       | BadType of { atom: string }
-      | BadBitsSizeInType of { atom: string }
-      | BadIntParam of { obj: string }
+      | BadSizeInType of { atom: string }
+      | BadIntParam of { obj: string; kind: string option }
       | BadKeywordParam of { obj: string; kind: string }
-      | BadSymbolParam of { obj: string; kind: string }
+      | BadStringParam of { obj: string }
+      | BadTypeParam of { obj: string; kind: string }
       | EmptySwitch
       | EarlyDefaultInSwitch
       | MissingDefaultInSwitch
@@ -312,10 +325,12 @@ module Errors = struct
          sprintf "Expecting %s, but got a list" expected
       | UnexpectedAtom { expected; atom } ->
          sprintf "Expecting a list (%s), got %a" expected fquote atom
-      | UnexpectedSymbol { symbol } ->
-         sprintf "Unexpected symbol %s" (quote symbol)
+      | UnexpectedType { typ } ->
+         sprintf "Unexpected type %s" (typ_name typ)
+      | UnexpectedString { str } ->
+         sprintf "Unexpected string %a" fquote str
       | UnexpectedKeyword { keyword } ->
-         sprintf "Unexpected keyword %s" (quote keyword)
+         sprintf "Unexpected keyword %a" fquote keyword
       | BadChoice { atom; expected } ->
          sprintf "Expecting %s, got %a" (one_of_str expected) fquote atom
       | BadLiteral { atom } ->
@@ -334,14 +349,17 @@ module Errors = struct
          sprintf "Expecting an enumerator (format: abc::xyz or ::xyz), got %a" fquote atom
       | BadType { atom } ->
          sprintf "Expecting a type name (e.g. (bits 16) or 'xyz) got %a" fquote atom
-      | BadBitsSizeInType { atom } ->
-         sprintf "Expecting a bit size (e.g. 32), got %a" fquote atom
-      | BadIntParam { obj } ->
-         sprintf "This %s should be an integer" obj
+      | BadSizeInType { atom } ->
+         sprintf "Expecting a size (e.g. 32), got %a" fquote atom
+      | BadIntParam { obj; kind } ->
+         sprintf "This %s should be an integer%s" obj
+           (match kind with Some k -> sprintf " (%s)" k | None -> "")
       | BadKeywordParam { obj; kind } ->
          sprintf "This %s should be a keyword (%s, starting with a colon)" obj kind
-      | BadSymbolParam { obj; kind } ->
-         sprintf "This %s should be a symbol (%s, starting with a quote)" obj kind
+      | BadStringParam { obj } ->
+         sprintf "This %s should be a string" obj
+      | BadTypeParam { obj; kind } ->
+         sprintf "This %s should be a type (%s, such as bool, (array 5 (bits 8)), or a type name starting with a quote)" obj kind
       | EmptySwitch ->
          "No valid branch in switch: not sure what to return"
       | EarlyDefaultInSwitch ->
@@ -388,7 +406,10 @@ module Errors = struct
     type t =
       | BadArgumentCount of { fn: string; expected: int; given: int }
       | InconsistentEnumeratorSizes of { expected: int; actual: int }
-      | BadKind of { name: string; expected: string; actual_type: typ }
+      | BadKind of { expected: string; actual_type: typ }
+      | ArrayLengthMismatch of { expected: int; actual: int }
+      | MissingArraySize
+      | MissingStringSize
 
     let to_string = function
       | BadArgumentCount { fn; expected; given } ->
@@ -396,8 +417,14 @@ module Errors = struct
       | InconsistentEnumeratorSizes { expected; actual } ->
          sprintf "Inconsistent sizes in enum: expecting %a, got %a"
            fquote (sprintf "bits %d" expected) fquote (sprintf "bits %d" actual)
-      | BadKind { name; expected: string; actual_type } ->
-         sprintf "Type %a is %s, not %s" fquote name (kind_to_str actual_type) expected
+      | BadKind { expected: string; actual_type } ->
+         sprintf "Got type %s but expected %s" (typ_name actual_type) expected
+      | ArrayLengthMismatch { expected; actual } ->
+         sprintf "This array has %d element(s) instead of the expected %d" actual expected
+      | MissingArraySize ->
+         sprintf "Missing size in array type"
+      | MissingStringSize ->
+         sprintf "Missing size in string type; use (array char ...) instead"
   end
 
   module TypeInferenceErrors = struct
@@ -408,6 +435,7 @@ module Errors = struct
       | ExplicitErrorInAst -> `TypeError
       | SugaredConstructorInAst -> `SyntaxError
       | UnboundVariable _ -> `NameError
+      | OutOfBounds _ -> `TypeError
       | UnboundField _ -> `NameError
       | UnboundEnumMember _ -> `NameError
       | IncorrectRuleType _ -> `TypeError
@@ -424,6 +452,8 @@ module Errors = struct
          "Improper desugaring (this is a bug; please report it)"
       | UnboundVariable { var } ->
          sprintf "Unbound variable %a" fquote var
+      | OutOfBounds { pos; sg } ->
+         sprintf "Index %d is not in range [0 .. %d)" pos sg.array_len
       | UnboundField { field; sg } ->
          sprintf "Unbound field %a in %s" fquote field (struct_sig_to_string sg)
       | UnboundEnumMember { name; sg } ->
@@ -446,15 +476,8 @@ module Errors = struct
   end
 
   module Warnings = struct
-    type t =
-      | BadInitBits of { init: string; size: int }
-      | BadInitEnum of { init: string; name: string; bitsize: int }
-
-    let to_string = function
-      | BadInitBits { init; size } ->
-         sprintf "Use %d'0 instead of (new '%s ...) to create a 0-initialized bits" size init
-      | BadInitEnum { init; name; bitsize } ->
-         sprintf "Use unpack (e.g. (unpack '%s %d'0)) or an enumerator literal (e.g. ::xyz) instead of (new '%s ...) to create an enum value" name bitsize init
+    type t = NoWarning
+    let to_string _ = ""
   end
 
   type err =
@@ -510,7 +533,7 @@ module Errors = struct
 end
 
 open Errors
-open Warnings
+(* open Warnings *)
 
 module Delay = struct
   let buffer = ref []
@@ -617,6 +640,11 @@ module BitsDuplicates = Dups(struct type t = bool array let compare = Pervasives
 let expect_cons loc kind = function
   | [] -> syntax_error loc @@ MissingElement { kind }
   | hd :: tl -> hd, tl
+
+let expect_single loc kind where = function
+  | [] -> syntax_error loc (MissingElementIn { kind; where })
+  | _ :: _ :: _ -> syntax_error loc (TooManyElementsIn { kind; where })
+  | [x] -> x
 
 let rec gather_pairs = function
   | [] -> []
@@ -785,15 +813,17 @@ let language_constructs =
    ("switch", `Switch)]
   |> StringMap.of_list
 
+let type_names =
+  [("unit", Bits_u 0);
+   ("bool", Bits_u 1);
+   ("char", Bits_u 8);
+   ("string", String_u)]
+  |> StringMap.of_list
+
+let type_constructors =
+  [("bits", `Bits); ("array", `Array)]
+
 let parse (sexps: Pos.t sexp list) =
-  let expect_single loc kind where = function
-    | [] ->
-       syntax_error loc
-         (MissingElementIn { kind; where })
-    | _ :: _ :: _ ->
-       syntax_error loc
-         (TooManyElementsIn { kind; where })
-    | [x] -> x in
   let expect_atom expected = function
     | List { loc; _ } ->
        syntax_error loc @@ UnexpectedList { expected }
@@ -826,23 +856,6 @@ let parse (sexps: Pos.t sexp list) =
     let candidates = List.map fst csts in
     let loc, s = expect_atom (one_of_str candidates) c in
     loc, expect_constant loc csts s in
-  let expect_literal loc a =
-    match try_enumerator a with
-    | Some { enum; constructor } -> Enumerator { enum; constructor }
-    | None ->
-       match try_keyword a with
-       | Some name -> Keyword name
-       | None ->
-          match try_symbol a with
-          | Some name -> Symbol name
-          | None ->
-             match try_number loc a with
-             | Some (`Num n) -> Num (a, n)
-             | Some (`Const bs) -> Const (UBits bs)
-             | None ->
-                match try_variable a with
-                | `ValidIdentifier var -> Var var
-                | _ -> syntax_error loc @@ BadLiteral { atom = a } in
   let expect_identifier kind v =
     let loc, atom = expect_atom kind v in
     match try_variable atom with
@@ -876,37 +889,71 @@ let parse (sexps: Pos.t sexp list) =
     match try_enumerator atom with
     | Some ev -> ev
     | None -> syntax_error loc @@ BadEnumerator { atom } in
-  let expect_type ?(bits_raw=false) = function (* (bit 16), 'typename *)
-    | Atom { loc; atom = "unit" } ->
-       locd_make loc (Bits_u 0)
+  let rec expect_type ?(bits_raw=false) = function (* (bit 16), (array 3 (bit 15)), 'typename *)
     | Atom { loc; atom } ->
        locd_make loc
-         (match try_symbol atom with
-          | Some s -> Unknown_u s
+         (match StringMap.find_opt atom type_names with
+          | Some tau -> tau
           | None ->
-             match try_plain_int atom with
-             | Some n when bits_raw -> Bits_u n
-             | _ -> syntax_error loc @@ BadType { atom })
-    | List { elements = [Atom { loc; atom = "bool"; _ }]; _ } ->
-       locd_make loc (Bits_u 1)
+             match try_symbol atom with
+             | Some s -> Unknown_u s
+             | None ->
+                match try_plain_int atom with
+                | Some n when bits_raw -> Bits_u n
+                | _ -> syntax_error loc @@ BadType { atom })
     | List { loc; elements } ->
-       let hd, sizes = expect_cons loc "type" elements in
-       let _ = expect_constant_atom [("bits", ())] hd in
-       let loc, szstr = expect_atom "a size" (expect_single loc "size" "bit type" sizes) in
-       match try_plain_int szstr with
-       | Some size -> locd_make loc (Bits_u size)
-       | _ -> syntax_error loc @@ BadBitsSizeInType { atom = szstr } in
+       let expect_size_arg loc args =
+         let sz, args = expect_cons loc "size" args in
+         let loc, szstr = expect_atom "a size" sz in
+         match try_plain_int szstr with
+         | Some size -> size, args
+         | _ -> syntax_error loc @@ BadSizeInType { atom = szstr } in
+       let hd, args = expect_cons loc "type" elements in
+       let loc, kind = expect_constant_atom type_constructors hd in
+       locd_make loc
+         (match kind with
+          | `Bits -> let sz, args = expect_size_arg loc args in
+                     expect_nil "argument" args;
+                     Bits_u sz
+          | `Array -> let tau, args = expect_cons loc "element type" args in
+                      let tau = expect_type ~bits_raw:false tau in
+                      if args = [] then Array_u (tau, None)
+                      else let sz, args = expect_size_arg loc args in
+                           expect_nil "argument" args;
+                           Array_u (tau, Some sz)) in
+  let try_type ?(bits_raw=false) sexp =
+    try Some (expect_type ~bits_raw sexp)
+    with Errors _ -> None in
+  let expect_literal loc a =
+    match try_enumerator a with
+    | Some { enum; constructor } -> Enumerator { enum; constructor }
+    | None ->
+       match try_keyword a with
+       | Some name -> Keyword name
+       | None ->
+          match try_number loc a with
+          | Some (`Num n) -> Num (a, n)
+          | Some (`Const bs) -> Const (UBits bs)
+          | None ->
+             match try_variable a with
+             | `ValidIdentifier var -> Var var
+             | `InvalidIdentifier -> String a (* FIXME use a parser that distinguishes strings and atoms *)
+             | `ReservedIdentifier ->
+                syntax_error loc @@ ReservedIdentifier { atom = a; kind = "a string or variable name" } in
   let expect_funapp loc kind elements =
     let hd, args = expect_cons loc kind elements in
     let loc_hd, hd = expect_atom (sprintf "a %s name" kind) hd in
     loc_hd, hd, args in
-  let rec expect_action_nodelay = function
+  let rec expect_action_nodelay action =
+    match action with
     | Atom { loc; atom } ->
        locd_make loc
          (match atom with       (* FIXME disallow these var names *)
           | "skip" -> Skip
           | "fail" -> Fail (Bits_t 0)
-          | atom -> Lit (expect_literal loc atom))
+          | atom -> match try_type action with
+                    | Some tau -> Lit (Type tau.lcnt)
+                    | None -> Lit (expect_literal loc atom))
     | List { loc; elements } ->
        let loc_hd, hd, args = expect_funapp loc "constructor or function" (elements) in
        locd_make loc
@@ -961,8 +1008,11 @@ let parse (sexps: Pos.t sexp list) =
                  Let ([(locd_make operand.lpos binder, inspected)],
                       [locd_make loc switch]))
           | None ->
-             let args = List.map expect_action args in
-             Call { fn = locd_make loc_hd hd; args })
+             if List.mem_assoc hd type_constructors then
+               Lit (Type (expect_type action).lcnt)
+             else
+               let args = List.map expect_action args in
+               Call { fn = locd_make loc_hd hd; args })
   and expect_action s =
     Delay.apply1_default { lpos = sexp_pos s; lcnt = AstError } expect_action_nodelay s
   and expect_switch_branch branch =
@@ -1141,18 +1191,18 @@ let parse (sexps: Pos.t sexp list) =
     "external function" (fun fn -> fn.ufn_name) (fun fn -> fn.ufn_name.lcnt) fns;
   { types; fns; mods }
 
-let rexpect_num obj =
+let rexpect_num ?kind obj =
   function
   | { lpos; lcnt = Lit (Num n); _} -> lpos, n
-  | { lpos; _ } -> syntax_error lpos @@ BadIntParam { obj }
+  | { lpos; _ } -> syntax_error lpos @@ BadIntParam { obj; kind }
 
 let rexpect_keyword kind obj = function
   | { lpos; lcnt = Lit (Keyword s); _} -> lpos, s
   | { lpos; _ } -> syntax_error lpos @@ BadKeywordParam { obj; kind }
 
-let rexpect_symbol kind obj = function
-  | { lpos; lcnt = Lit (Symbol s) } -> lpos, s
-  | { lpos; _ } -> syntax_error lpos @@ BadSymbolParam { obj; kind }
+let rexpect_string obj = function
+  | { lpos; lcnt = Lit (Var s | String s); _} -> lpos, s
+  | { lpos; _ } -> syntax_error lpos @@ BadStringParam { obj }
 
 let rexpect_param k loc (args: unresolved_action locd list) =
   let obj = "parameter" in
@@ -1167,7 +1217,7 @@ let types_empty =
 
 let types_add tau_r types =
   match tau_r with
-  | Bits_t _ -> types
+  | Bits_t _ | Array_t _ -> types
   | Enum_t sg ->
      { types with td_all = StringMap.add sg.enum_name tau_r types.td_all;
                   td_enums = StringMap.add sg.enum_name sg types.td_enums;
@@ -1179,9 +1229,16 @@ let types_add tau_r types =
                   td_structs = StringMap.add sg.struct_name sg types.td_structs }
 
 
-let resolve_type types { lpos; lcnt: unresolved_type } =
+let rec resolve_type types { lpos; lcnt: unresolved_type } =
   match lcnt with
   | Bits_u sz -> Bits_t sz
+  | String_u ->
+     type_error lpos @@ MissingStringSize
+  | Array_u (tau, Some len) ->
+     Array_t { array_len = len;
+               array_type = resolve_type types tau }
+  | Array_u (_, None) ->
+     type_error lpos @@ MissingArraySize
   | Unknown_u name ->
      match StringMap.find_opt name types.td_all with
      | Some tau -> tau
@@ -1228,7 +1285,13 @@ let core_primitives =
    ("get", `FieldFn (fun f -> unop (UStruct1 (UGetField f))));
    ("update", `FieldFn (fun f -> binop (UStruct2 (USubstField f))));
    ("get-bits", `StructFn (fun sg f -> unop (UStruct1 (UGetFieldBits (sg, f)))));
-   ("update-bits", `StructFn (fun sg f -> binop (UStruct2 (USubstFieldBits (sg, f)))))]
+   ("update-bits", `StructFn (fun sg f -> binop (UStruct2 (USubstFieldBits (sg, f)))));
+   ("aref", `ElementFn (fun pos -> unop (UArray1 (UGetElement pos))));
+   ("asubst", `ElementFn (fun pos -> binop (UArray2 (USubstElement pos))));
+   ("aref-bits", `ArrayFn (fun sg pos -> unop (UArray1 (UGetElementBits (sg, pos)))));
+   ("asubst-bits", `ArrayFn (fun sg pos -> binop (UArray2 (USubstElementBits (sg, pos)))));
+   ("display-value", `Fn (unop (UDisplay UDisplayValue)));
+   ("display-utf8", `Fn (unop (UDisplay UDisplayUtf8)))]
   |> StringMap.of_list
 
 let bits_primitives =
@@ -1294,7 +1357,7 @@ let resolve_value types { lpos; lcnt } =
   | UEnum { enum; constructor } ->
      (match StringMap.find_opt enum types.td_all with
       | Some (Enum_t sg) -> resolve_enum_constructor sg constructor
-      | Some tau -> type_error lpos @@ BadKind { name = enum; actual_type = tau; expected = "an enum" }
+      | Some tau -> type_error lpos @@ BadKind { actual_type = tau; expected = "an enum" }
       | None -> name_error lpos @@ Unbound { kind = "enum"; prefix = ""; name = enum; candidates = keys types.td_enums })
 
 let try_resolve_bits_fn { lpos; lcnt = name } args =
@@ -1318,61 +1381,89 @@ let rexpect_pairs kind2 f1 f2 xs =
       | `Single h1 -> ignore (f1 h1); syntax_error h1.lpos @@ MissingPairElement { kind2 })
     (gather_pairs xs)
 
-let rexpect_type loc types (args: unresolved_action locd list) =
-  let (loc, t), args = rexpect_param (rexpect_symbol "a type name") loc args in
-  let tau = resolve_type types (locd_make loc (Unknown_u t)) in
-  loc, t, tau, args
+let rexpect_unresolved_type kind obj = function
+  | { lpos; lcnt = Lit (Type tau) } -> lpos, tau
+  | { lpos; _ } -> syntax_error lpos @@ BadTypeParam { obj; kind }
+
+let rexpect_unresolved_type_param loc (args: unresolved_action locd list) =
+  rexpect_param (rexpect_unresolved_type "a type") loc args
+
+let rexpect_type_param loc types (args: unresolved_action locd list) =
+  let (loc, tau), args = rexpect_unresolved_type_param loc args in
+  let tau = resolve_type types (locd_make loc tau) in
+  loc, tau, args
+
+let must_struct_t loc = function
+  | Struct_t sg -> Cuttlebone.Util.extr_struct_sig_of_struct_sig sg
+  | tau -> type_error loc @@ BadKind { actual_type = tau; expected = "a struct" }
+
+let must_array_t loc = function
+  | Array_t sg -> Cuttlebone.Util.extr_array_sig_of_array_sig sg
+  | tau -> type_error loc @@ BadKind { actual_type = tau; expected = "an array" }
 
 let try_resolve_primitive types name args =
-  let must_struct_t loc name = function
-    | Struct_t sg -> Cuttlebone.Util.extr_struct_sig_of_struct_sig sg
-    | tau -> type_error loc @@ BadKind { name; actual_type = tau; expected = "a struct" } in
   let rexpect_field args =
     let (_, f), args = rexpect_param (rexpect_keyword "a struct field") name.lpos args in
     Cuttlebone.Util.coq_string_of_string f, args in
+  let rexpect_pos args =
+    let (_, (_, pos)), args = rexpect_param (rexpect_num ~kind:"an array index") name.lpos args in
+    pos, args in
   match StringMap.find_opt name.lcnt core_primitives with
   | Some fn ->
      Some (match fn with
            | `Fn fn ->
               (fn, args)
            | `TypeFn fn ->
-              let _, _, t, args = rexpect_type name.lpos types args in
+              let _, t, args = rexpect_type_param name.lpos types args in
               (fn (Cuttlebone.Util.extr_type_of_typ t), args)
            | `FieldFn fn ->
               let f, args = rexpect_field args in
               (fn f, args)
            | `StructFn fn ->
-              let loc, nm, t, args = rexpect_type name.lpos types args in
+              let loc, t, args = rexpect_type_param name.lpos types args in
               let f, args = rexpect_field args in
-              (fn (must_struct_t loc nm t) f, args))
+              (fn (must_struct_t loc t) f, args)
+           | `ElementFn fn ->
+              let f, args = rexpect_pos args in
+              (fn f, args)
+           | `ArrayFn fn ->
+              let loc, t, args = rexpect_type_param name.lpos types args in
+              let f, args = rexpect_pos args in
+              (fn (must_array_t loc t) f, args))
   | None -> try_resolve_bits_fn name args
 
-let literal_zero sz = Lit (Const (UBits (Array.make sz false)))
+let add_array_size sz = function
+  | Array_u (tau, None) -> Array_u (tau, Some sz)
+  | (String_u | Array_u (_, Some _) | Bits_u _ | Unknown_u _) as tau -> tau
 
 let try_resolve_special_primitive types name (args: unresolved_action locd list) =
   match StringMap.find_opt name.lcnt special_primitives with
+  | None -> None
   | Some `Init ->
-     let loc, nm, tau, args = rexpect_type name.lpos types args in
-     let extr_tau = Cuttlebone.Util.extr_type_of_typ tau in
-     let uunpack = Cuttlebone.Extr.PrimUntyped.(UConv (UUnpack extr_tau)) in
-     let zero = { lpos = loc; lcnt = literal_zero (typ_sz tau) } in
-     let uinit_call = FnUnop uunpack, [zero] in
-     (match tau with
-      | Bits_t sz ->
-         warning name.lpos @@ BadInitBits { init = nm; size = sz };
-         Some uinit_call
-      | Enum_t { enum_name; enum_bitsize; _ } ->
-         warning name.lpos @@ BadInitEnum { init = nm; name = enum_name; bitsize = enum_bitsize };
-         Some uinit_call (* FIXME try_enum_const *)
-      | Struct_t sg ->
-         let expect_field_name nm =
-           locd_of_pair (rexpect_keyword "initializer parameter" "a field name" nm) in
-         let expect_field_val x = x in
-         Some (match rexpect_pairs "value" expect_field_name expect_field_val args with
-               | [] -> uinit_call
-               | fields -> let field_names, actions = List.split fields in
-                           FnStructInit { sg; field_names }, actions))
-  | _ -> None
+     let (loc, utau), args = rexpect_unresolved_type_param name.lpos args in
+     if utau = String_u then
+       let lit = expect_single name.lpos "string" "init" args in
+       let _, str = rexpect_string "parameter" lit in
+       Some (FnStringInit str, [])
+     else
+       let args_len = List.length args in
+       let utau = add_array_size args_len utau in
+       let tau = resolve_type types (locd_make loc utau) in
+       match tau with
+       | Struct_t sg ->
+          let expect_field_name nm =
+            locd_of_pair (rexpect_keyword "initializer parameter" "a field name" nm) in
+          let expect_field_val x = x in
+          let fields = rexpect_pairs "value" expect_field_name expect_field_val args in
+          let field_names, actions = List.split fields in
+          Some (FnStructInit { sg; field_names }, actions)
+       | Array_t sg ->
+          if args_len <> sg.array_len then
+            type_error loc @@ ArrayLengthMismatch { expected = sg.array_len; actual = args_len };
+          Some (FnArrayInit { sg }, args)
+       | Bits_t _ | Enum_t _ ->
+          type_error loc @@ BadKind { actual_type = tau;
+                                      expected = "a struct or an array" }
 
 let resolve_function types fns name (args: unresolved_action locd list)
   : resolved_fn * unresolved_action locd list =
@@ -1431,6 +1522,10 @@ let assemble_resolved_funcall name (fn: resolved_fn) (args: ResolvedAST.uaction 
      assemble_binop_chain name fn args
   | FnStructInit { sg; field_names } ->
      Sugar (StructInit { sg; fields = List.combine field_names args })
+  | FnArrayInit { sg } ->
+     Sugar (ArrayInit { sg; elements = args })
+  | FnStringInit str ->
+     Sugar (ConstString str)
 
 let resolve_register_reference registers { lpos; lcnt = name } =
   match List.find_opt (fun rsig -> rsig.reg_name = name) registers with
@@ -1449,7 +1544,10 @@ and resolve_action_nodelay types fns registers ({ lpos; lcnt }: unresolved_actio
            | Lit (Fail tau) -> Fail (resolve_type types (locd_make lpos tau))
            | Lit (Var v) -> ResolvedAST.Var v
            | Lit (Num (s, _)) -> syntax_error lpos @@ MissingSize { number = s }
-           | Lit (Symbol symbol) -> syntax_error lpos @@ UnexpectedSymbol { symbol }
+           | Lit (Type typ) ->
+              let typ = resolve_type types (locd_make lpos typ) in
+              syntax_error lpos @@ UnexpectedType { typ }
+           | Lit (String str) -> syntax_error lpos @@ UnexpectedString { str }
            | Lit (Keyword keyword) -> syntax_error lpos @@ UnexpectedKeyword { keyword }
            | Lit (Enumerator { enum; constructor }) ->
               let v = UEnum { enum; constructor } in
@@ -1589,6 +1687,7 @@ let describe_language () =
   let atomlist xs = list (map atom xs) in
   let pair k v = list [atom k; atomlist (sort Pervasives.compare v)] in
   list [pair "language-constructs" (keys language_constructs);
+        pair "type-names" (keys type_names);
         pair "core-primitives" (keys special_primitives @ keys core_primitives);
         pair "bits-primitives" (keys bits_primitives);
         pair "reserved-identifiers" (StringSet.elements forbidden_vars)]
