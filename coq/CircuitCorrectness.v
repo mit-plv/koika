@@ -20,12 +20,17 @@ Section PrimCompilerCorrectness.
     match goal with
     | _ => progress intros
     | _ => progress simpl in *
-    | _ => progress unfold Bits.extend_beginning, Bits.extend_end, struct_sz, field_sz
+    | _ => progress unfold Bits.extend_beginning, Bits.extend_end,
+          struct_sz, field_sz, array_sz, element_sz
     | _ => rewrite bits_of_value_of_bits
     | [ H: interp_circuit _ = _ |- _ ] => rewrite H
     | [  |- context[match ?d with _ => _ end] ] => is_var d; destruct d
     | [  |- context[eq_rect _ _ _ _ ?pr] ] => destruct pr
-    | _ => apply bits_eq_of_value || apply get_field_bits_slice || apply subst_field_bits_slice_subst
+    | _ => (apply bits_eq_of_value ||
+           apply get_field_bits_slice ||
+           apply subst_field_bits_slice_subst ||
+           apply get_element_bits_slice ||
+           apply subst_element_bits_slice_subst)
     | _ => rewrite sel_msb, vect_repeat_single_const
     | _ => solve [eauto]
     end.

@@ -261,6 +261,27 @@ Proof.
   induction sz; destruct v, idx; cbn; auto.
 Qed.
 
+Lemma vect_map_map {T T' T'' n} (f: T -> T') (f': T' -> T'') :
+  forall (v: vect T n),
+    vect_map f' (vect_map f v) = vect_map (fun x => f' (f x)) v.
+Proof.
+  induction n; cbn; intros; rewrite ?IHn; reflexivity.
+Qed.
+
+Lemma vect_map_pointwise_morphism {T T' n} (f f': T -> T') :
+  (forall x, f x = f' x) ->
+  forall (v: vect T n), vect_map f v = vect_map f' v.
+Proof.
+  induction n; cbn; intros; rewrite ?H, ?IHn by eassumption; reflexivity.
+Qed.
+
+Lemma vect_map_id {T n} (f: T -> T):
+  (forall x, f x = x) ->
+  forall (v: vect T n), vect_map f v = v.
+Proof.
+  induction n; destruct v; cbn; intros; rewrite ?H, ?IHn by eassumption; reflexivity.
+Qed.
+
 Fixpoint vect_zip {T1 T2 n} (v1: vect T1 n) (v2: vect T2 n) : vect (T1 * T2) n :=
   match n return vect T1 n -> vect T2 n -> vect (T1 * T2) n with
   | O => fun _ _ => vect_nil
@@ -855,6 +876,26 @@ Module Bits.
     | 0 => fun _ => Bits.nil
     | S n => fun v => Bits.app (vect_hd v) (appn (vect_tl v))
     end bss.
+
+  Lemma splitn_appn {n sz} :
+    forall (bss: vect (bits sz) n), splitn (appn bss) = bss.
+  Proof.
+    induction n; cbn; intros.
+    - destruct bss; reflexivity.
+    - rewrite vect_split_app, IHn.
+      reflexivity.
+  Qed.
+
+  Lemma appn_splitn {n sz} :
+    forall (bs: bits (rmul n sz)), appn (splitn bs) = bs.
+  Proof.
+    induction n; cbn; intros.
+    - destruct bs; reflexivity.
+    - destruct (split _) eqn:Hsplit; cbn.
+      rewrite <- (vect_app_split bs).
+      set (split _) in *; rewrite Hsplit; cbn.
+      rewrite IHn; reflexivity.
+  Qed.
 
   Definition neg {sz} (b: bits sz) :=
     map negb b.

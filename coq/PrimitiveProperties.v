@@ -37,7 +37,7 @@ Proof.
   min_t; reflexivity.
 Qed.
 
-Lemma slice_correct_le :
+Lemma struct_slice_correct_le :
   forall fields idx,
     struct_fields_sz (skipn (S (index_to_nat idx)) fields) + type_sz (snd (List_nth fields idx)) <=
     struct_fields_sz fields.
@@ -48,6 +48,17 @@ Proof.
   rewrite List_nth_skipn_cons_next.
   rewrite <- skipn_map.
   apply list_sum_skipn_le.
+Qed.
+
+Lemma array_slice_correct_le :
+  forall n n' sz,
+    n' < n ->
+    Bits.rmul (n - S n') sz + sz <= Bits.rmul n sz.
+Proof.
+  intros.
+  rewrite !Bits.rmul_correct.
+  rewrite <- Nat.mul_succ_l.
+  auto using Nat.mul_le_mono_r with arith.
 Qed.
 
 Lemma slice_subst_end :
@@ -108,36 +119,74 @@ Proof.
 Qed.
 
 Lemma get_field_bits_slice:
-  forall {sig} (f : struct_index sig) (a : type_denote (struct_t sig)),
-    slice (field_offset_right sig f) (field_sz sig f) (bits_of_value a) =
-    bits_of_value (get_field (struct_fields sig) a f).
+  forall {sig} (idx : struct_index sig) (a : type_denote (struct_t sig)),
+    slice (field_offset_right sig idx) (field_sz sig idx) (bits_of_value a) =
+    bits_of_value (get_field (struct_fields sig) a idx).
 Proof.
   intro sig;
     repeat (simpl; unfold struct_index, field_type, field_sz, field_offset_right).
   induction (struct_fields sig) as [ | (nm & tau) l ]; simpl.
-  * destruct f.
-  * destruct f as [ | f], a; cbn in *; intros.
+  * destruct idx.
+  * destruct idx as [ | idx], a; cbn in *; intros.
     -- rewrite slice_end, vect_skipn_plus_app.
        reflexivity.
     -- rewrite <- IHl.
-       rewrite slice_front, vect_firstn_plus_app by apply slice_correct_le.
+       rewrite slice_front, vect_firstn_plus_app by apply struct_slice_correct_le.
+       reflexivity.
+Qed.
+
+Lemma get_element_bits_slice:
+  forall (sig : array_sig) (idx : array_index sig)
+    (a : vect (array_type sig) (array_len sig)),
+    slice (element_offset_right sig idx) (element_sz sig)
+          (Bits.appn (vect_map bits_of_value a)) =
+    bits_of_value (vect_nth a idx).
+Proof.
+  intros sig;
+    repeat (simpl; unfold array_index, element_sz, element_offset_right).
+  induction (array_len sig); simpl.
+  * destruct idx.
+  * destruct idx as [ | idx], a; cbn in *; intros.
+    -- rewrite Nat.sub_0_r, slice_end, vect_skipn_plus_app.
+       reflexivity.
+    -- rewrite <- IHn.
+       rewrite slice_front, vect_firstn_plus_app by apply array_slice_correct_le, index_to_nat_bounded.
        reflexivity.
 Qed.
 
 Lemma subst_field_bits_slice_subst:
-  forall {sig} (f : struct_index sig) (a1 : type_denote (struct_t sig)) (a2 : field_type sig f),
-    slice_subst (field_offset_right sig f) (field_sz sig f) (bits_of_value a1) (bits_of_value a2) =
-    bits_of_value (tau := struct_t _) (subst_field (struct_fields sig) a1 f a2).
+  forall {sig} (idx : struct_index sig) (a1 : type_denote (struct_t sig)) (a2 : field_type sig idx),
+    slice_subst (field_offset_right sig idx) (field_sz sig idx) (bits_of_value a1) (bits_of_value a2) =
+    bits_of_value (tau := struct_t _) (subst_field (struct_fields sig) a1 idx a2).
 Proof.
   intro sig;
     repeat (simpl; unfold struct_index, field_type, field_sz, field_offset_right).
   induction (struct_fields sig) as [ | (nm & tau) l ]; simpl.
-  * destruct f.
-  * destruct f as [ | f], a1; cbn in *; intros.
+  * destruct idx.
+  * destruct idx as [ | idx], a1; cbn in *; intros.
     -- rewrite slice_subst_end, vect_split_app.
        reflexivity.
     -- rewrite <- IHl.
-       rewrite slice_subst_front, vect_firstn_plus_app, vect_skipn_plus_app by apply slice_correct_le.
+       rewrite slice_subst_front, vect_firstn_plus_app, vect_skipn_plus_app by apply struct_slice_correct_le.
+       reflexivity.
+Qed.
+
+Lemma subst_element_bits_slice_subst:
+  forall (sig : array_sig) (idx : array_index sig)
+    (a1 : vect (array_type sig) (array_len sig)) (a2 : array_type sig),
+    slice_subst (element_offset_right sig idx) (element_sz sig)
+                (Bits.appn (vect_map bits_of_value a1)) (bits_of_value a2) =
+    Bits.appn (vect_map bits_of_value (vect_replace a1 idx a2)).
+Proof.
+  intro sig;
+    repeat (simpl; unfold array_index, element_sz, element_offset_right).
+  induction (array_len sig); simpl.
+  * destruct 1.
+  * destruct idx as [ | idx], a1; cbn in *; intros.
+    -- rewrite Nat.sub_0_r, slice_subst_end, vect_split_app.
+       reflexivity.
+    -- rewrite <- IHn.
+       rewrite slice_subst_front, vect_firstn_plus_app, vect_skipn_plus_app by apply array_slice_correct_le, index_to_nat_bounded.
        reflexivity.
 Qed.
 
