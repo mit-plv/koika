@@ -394,18 +394,20 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
   let sp_parenthesized arg =
     if arg = "" then "" else sprintf "(%s)" arg in
 
-  let sp_packer ?(ns = "") ?(arg = "") tau =
+  let sp_packer ?(arg = "") tau =
     let parg = sp_parenthesized arg in
     match tau with
     | Bits_t _ -> arg
-    | Enum_t _ | Struct_t _ -> sprintf "%spack%s" ns parg in
+    | Enum_t _ | Struct_t _ -> sprintf "prims::pack%s" parg in
 
-  let sp_unpacker ?(ns = "") ?(arg = "") tau =
+  let sp_unpacker ?(arg = "") tau =
     let parg = sp_parenthesized arg in
     match tau with
     | Bits_t _ -> arg
-    | Enum_t sg -> sprintf "%sunpack<%s, %d>%s" ns (cpp_enum_name sg) (enum_sz sg) parg
-    | Struct_t sg -> sprintf "%sunpack<%s, %d>%s" ns (cpp_struct_name sg) (struct_sz sg) parg in
+    | Enum_t sg ->
+       sprintf "prims::unpack<%s, %d>%s" (cpp_enum_name sg) (enum_sz sg) parg
+    | Struct_t sg ->
+       sprintf "prims::unpack<%s, %d>%s" (cpp_struct_name sg) (struct_sz sg) parg
 
   let p_enum_decl sg =
     let esz = enum_sz sg in
@@ -516,10 +518,12 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
 
     let p_pack pbody =
       p_fn ~typ:("static _unused " ^ bits_tau)
-        ~args:(v_argdecl v_arg) ~name:(sp_packer tau) pbody in
+        ~args:(v_argdecl v_arg) ~name:"pack" pbody in
     let p_unpack pbody =
-      p_fn ~typ:("template <> _unused " ^ v_tau)
-        ~args:bits_argdecl ~name:(sp_unpacker tau) pbody in
+      let decl = sprintf "template <> struct _unpack<%s, %d>" v_tau v_sz in
+      p_scoped decl ~terminator:";" (fun () ->
+          p_fn ~typ:("static " ^ v_tau)
+            ~args:bits_argdecl ~name:"unpack" pbody) in
 
     let p_enum_pack _ =
       p_pack (fun () -> p "return %s::mk(%s);" bits_tau v_arg) in
@@ -730,11 +734,10 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
              | DisplayValue _ -> a1 in
            ImpureExpr (sprintf "prims::display(%s)" args)
         | Conv (tau, fn) ->
-           let ns = "prims::" in
            let tau = Cuttlebone.Util.typ_of_extr_type tau in
            PureExpr (match fn with
-                     | Pack -> sp_packer ~ns ~arg:a1 tau
-                     | Unpack -> sp_unpacker ~ns ~arg:a1 tau
+                     | Pack -> sp_packer ~arg:a1 tau
+                     | Unpack -> sp_unpacker ~arg:a1 tau
                      | Ignore -> sprintf "prims::ignore(%s)" a1)
         | Bits1 fn ->
            PureExpr (sprintf "%s(%s)" (cpp_bits1_fn_name fn) a1)

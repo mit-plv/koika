@@ -599,7 +599,17 @@ namespace prims {
     return tt;
   }
 
+  /// Packing and unpacking
 
+  // Forward-declared; our compiler defines one instance per struct and enum.
+  // Unpack needs to be structs to get return-type polymorphism through
+  // explicit template instantiation.
+  template<typename T, std::size_t sz> struct _unpack;
+
+  template<typename T, std::size_t sz>
+  static T unpack(const bits<sz>& bs) {
+    return _unpack<T, sz>::unpack(bs);
+  }
 
 #ifndef SIM_MINIMAL
   // This convenience function creates a string from an object
