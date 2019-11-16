@@ -1,4 +1,3 @@
-Require Import Coq.Lists.List.
 Require Export Koika.Common Koika.Environments Koika.Types Koika.Primitives.
 
 Import PrimTyped PrimSignatures.

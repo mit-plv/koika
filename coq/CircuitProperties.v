@@ -1,4 +1,3 @@
-Require Export Coq.Bool.Bool Coq.Lists.List.
 Require Export Koika.Circuits.
 Require Import Koika.Common Koika.Environments Koika.Types.
 

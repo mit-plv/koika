@@ -1,8 +1,5 @@
-Require Import Coq.Lists.List.
 Require Import Koika.Primitives.
-
 Import BitFuns.
-Import ListNotations.
 
 Ltac min_t :=
   repeat match goal with

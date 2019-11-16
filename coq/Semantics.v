@@ -1,6 +1,4 @@
-Require Import Coq.Lists.List Coq.Bool.Bool.
 Require Export Koika.Common Koika.Environments Koika.Vect Koika.Syntax Koika.TypedSyntax.
-Import ListNotations.
 
 Section Logs.
   Inductive LogEntryKind :=

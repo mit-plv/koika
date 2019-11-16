@@ -1,7 +1,5 @@
-Require Import Coq.Strings.String Coq.Lists.List.
-Require Import Koika.Environments Koika.Types Koika.TypedSyntax Koika.Circuits.
+Require Import Koika.Common Koika.Environments Koika.Types Koika.TypedSyntax Koika.Circuits.
 Require Export Koika.Primitives.
-Import ListNotations.
 
 Inductive empty_ext_fn_t :=.
 Definition empty_Sigma (fn: empty_ext_fn_t)

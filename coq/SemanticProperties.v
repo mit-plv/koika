@@ -1,5 +1,4 @@
-Require Export Coq.Lists.List Coq.Bool.Bool.
-Require Export Koika.Semantics.
+Require Export Koika.Common Koika.Semantics.
 
 Section Lists.
   Lemma list_find_opt_app {A B} (f: A -> option B) (l l': list A) :

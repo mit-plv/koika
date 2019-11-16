@@ -1,7 +1,5 @@
-Require Coq.Lists.List.
-Require Import Coq.Strings.String.
-
 Require Import
+        Koika.Common
         Koika.Syntax
         Koika.IdentParsing.
 
@@ -9,8 +7,6 @@ Export Koika.Types.SigNotations.
 Export Koika.Primitives.PrimUntyped.
 Export Coq.Strings.String.
 Export Coq.Lists.List.ListNotations.
-
-Open Scope string_scope.
 
 Declare Custom Entry koika.
 Declare Custom Entry koika_args.

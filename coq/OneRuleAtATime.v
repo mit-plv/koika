@@ -1,8 +1,6 @@
 Require Import Koika.Common Koika.Syntax Koika.TypedSyntax Koika.SemanticProperties.
 Require Import Coq.setoid_ring.Ring_theory Coq.setoid_ring.Ring Coq.setoid_ring.Ring.
-Require Import Coq.Lists.List.
 
-Import ListNotations.
 Open Scope bool_scope.
 
 Section Proof.

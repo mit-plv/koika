@@ -1,8 +1,5 @@
 Require Coq.Logic.FinFun.
-Require Import Coq.Lists.List.
 Require Import Koika.Common Koika.Vect Koika.Member.
-
-Import ListNotations.
 
 Fixpoint all_indices (bound: nat) : vect (index bound) bound :=
   match bound as n return (vect (index n) n) with

@@ -1,6 +1,4 @@
-Require Import Coq.Bool.Bool Coq.Lists.List.
 Require Import Koika.Member Koika.TypedSyntax.
-Import ListNotations.
 
 Section TypedSyntaxTools.
   Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
@@ -101,7 +99,7 @@ Section TypedSyntaxTools.
     Definition path_dependency_graph (path: list rule_name_t) : list (reg_t * list edge) :=
       let path_with_footprints := add_footprints path in
       let rules_by_register := compute_rules_by_registers path_with_footprints in
-      let deps_by_register := map REnv (fun reg rr => find_dependencies rr) rules_by_register in
+      let deps_by_register := Environments.map REnv (fun reg rr => find_dependencies rr) rules_by_register in
       to_alist REnv deps_by_register.
 
     Definition dependency_graph (s: scheduler) : list (list (reg_t * list edge)) :=

@@ -2,8 +2,6 @@ Require Import
         Koika.Common Koika.Environments
         Koika.Syntax Koika.TypedSyntax Koika.SyntaxMacros
         Koika.Desugaring Koika.ErrorReporting.
-Require Import Coq.Lists.List.
-Import ListNotations.
 
 Section ErrorReporting.
   Context {pos_t var_t fn_name_t reg_t ext_fn_t: Type}.

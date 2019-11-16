@@ -1,7 +1,4 @@
-Require Import Coq.Lists.List.
 Require Import Koika.Common Koika.Syntax Koika.TypedSyntax Koika.Primitives.
-Import ListNotations.
-
 Import PrimUntyped.
 
 Section SyntaxMacros.
@@ -51,8 +48,6 @@ Module Display.
     | Str (s: string)
     | Value (tau: type).
 
-    Open Scope string_scope.
-
     Notation intfun := (InternalFunction fn_name_t var_t uaction).
 
     Definition empty_printer : InternalFunction fn_name_t var_t uaction :=
@@ -75,7 +70,7 @@ Module Display.
            int_retType := int_retType;
            int_body := (USeq (display_utf8 s) int_body) |}
       | Value tau =>
-        let arg := "arg" ++ show offset in
+        let arg := String.append "arg" (show offset) in
         {| int_name := int_name;
            int_argspec := (arg, tau) :: int_argspec;
            int_retType := unit_t;

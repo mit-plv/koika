@@ -1,7 +1,5 @@
-Require Import Coq.Strings.String Coq.Lists.List.
 Require Import Koika.Common.
 Require Export Koika.Member.
-Import ListNotations.
 
 Section Contexts.
   Context {K: Type}.

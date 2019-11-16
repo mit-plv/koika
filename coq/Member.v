@@ -1,7 +1,4 @@
-Require Import Coq.Strings.String Coq.Lists.List.
 Require Import Koika.Common.
-
-Import ListNotations.
 
 Inductive member {K: Type}: K -> list K -> Type :=
 | MemberHd: forall k sig, member k (k :: sig)

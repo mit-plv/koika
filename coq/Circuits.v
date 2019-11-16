@@ -1,7 +1,5 @@
 Require Export Koika.Common Koika.Environments.
 Require Import Koika.Syntax Koika.TypedSyntax Koika.TypedSyntaxTools.
-Require Import Coq.Strings.String.
-Open Scope string_scope.
 
 Import PrimTyped CircuitSignatures.
 

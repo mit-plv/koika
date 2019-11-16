@@ -1,6 +1,4 @@
 Require Import Koika.Common Koika.Environments Koika.Syntax Koika.TypedSyntax Koika.ErrorReporting Koika.SyntaxMacros.
-Require Import Coq.Lists.List.
-Import ListNotations.
 
 Section Desugaring.
   (* The desugaring phase can produce larger terms than its inputs, and so

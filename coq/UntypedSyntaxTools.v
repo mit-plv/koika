@@ -1,7 +1,4 @@
-Require Import Coq.Lists.List.
 Require Import Koika.Syntax.
-
-Import ListNotations.
 
 Section SyntaxTools.
   Section CoqErrorReporting.

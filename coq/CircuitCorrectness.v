@@ -1,7 +1,4 @@
 Require Import Coq.setoid_ring.Ring_theory Coq.setoid_ring.Ring Coq.setoid_ring.Ring.
-Require Import Coq.Strings.String.
-Require Import Coq.Lists.List.
-Import ListNotations.
 
 Require Import
         Koika.Common Koika.Environments Koika.Syntax
