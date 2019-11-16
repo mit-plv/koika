@@ -33,6 +33,7 @@ Section Syntax.
             (default: uaction)
             (branches: list (uaction * uaction))
   | UStructInit (sig: struct_sig) (fields: list (string * uaction))
+  | UArrayInit (tau: type) (elements: list uaction)
   | UCallModule {module_reg_t module_ext_fn_t: Type}
                 (fR: module_reg_t -> reg_t)
                 (fSigma: module_ext_fn_t -> ext_fn_t)

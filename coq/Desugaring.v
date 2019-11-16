@@ -91,8 +91,14 @@ Section Desugaring.
          | UStructInit sig fields =>
            let uinit := UUnop (UConv (UUnpack (struct_t sig))) in
            let usubst f := UBinop (UStruct2 (USubstField f)) in
-           List.fold_left (fun acc '(f, a) => (usubst f) acc (d a))
-                          fields (uinit (UConst (tau := bits_t _) (Bits.zeroes (struct_sz sig))))
+           let empty := uinit (UConst (tau := bits_t _) (Bits.zeroes (struct_sz sig))) in
+           List.fold_left (fun acc '(f, a) => (usubst f) acc (d a)) fields empty
+         | UArrayInit tau elements =>
+           let sig := {| array_type := tau; array_len := List.length elements |} in
+           let uinit := UUnop (UConv (UUnpack (array_t sig))) in
+           let usubst pos := UBinop (UArray2 (USubstElement pos)) in
+           let empty := uinit (UConst (tau := bits_t _) (Bits.zeroes (array_sz sig))) in
+           snd (List.fold_left (fun '(pos, acc) a => (S pos, (usubst pos) acc (d a))) elements (0, empty))
          | USwitch var default branches =>
            let branches := List.map (fun '(cond, body) => (d cond, d body)) branches in
            desugar_USwitch (d var) (d default) branches

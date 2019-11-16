@@ -76,6 +76,10 @@ Section SyntaxTools.
              let '(_, fields) :=
                  foldi (fun n '(nm, a) fields => (nm, r n a) :: fields) 0 [] fields in
              UStructInit sig fields
+           | UArrayInit tau elements =>
+             let '(_, elements) :=
+                 foldi (fun n a elements => (r n a) :: elements) 0 [] elements in
+             UArrayInit tau elements
            | UCallModule fR fSigma ufn args =>
              let ufn :=
                  {| int_name := ufn.(int_name);
@@ -221,6 +225,12 @@ Section SyntaxTools.
              let '(fvar, var) := pe 0 var in
              let '(fdefault, default) := pe 1 default in
              (fbranches ++ fvar ++ fdefault, USwitch var default branches)
+           | UArrayInit tau elements =>
+             let '(_, (felements, elements)) :=
+                 foldi (fun n a '(felements, elements) =>
+                          let '(f, a) := pe n a in (felements ++ f, a :: elements))
+                       0 ([], []) elements in
+             (felements, UArrayInit tau elements)
            | UStructInit sig fields =>
              let '(_, (ffields, fields)) :=
                  foldi (fun n '(v, a) '(ffields, fields) =>
