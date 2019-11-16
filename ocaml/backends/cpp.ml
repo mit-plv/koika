@@ -160,13 +160,17 @@ let cpp_value_type_of_size
       (sz: int) =
   cpp_type_of_size pi "bits_t" sz
 
-let cpp_type_of_type
-      (pi: program_info)
-      (tau: typ) =
+let rec cpp_type_of_type
+          (pi: program_info)
+          (tau: typ) =
   match tau with
   | Bits_t sz -> cpp_type_of_size pi "bits" sz
   | Enum_t sg -> cpp_enum_name pi sg
   | Struct_t sg -> cpp_struct_name pi sg
+  | Array_t sg -> cpp_type_of_array pi sg
+and cpp_type_of_array pi { array_type; array_len } =
+  sprintf "std::array<%s, %d>"
+    (cpp_type_of_type pi array_type) array_len
 
 let cpp_enumerator_name pi ?(enum=None) nm =
   let nm = Mangling.mangle_name nm in
@@ -182,7 +186,8 @@ let register_subtypes (pi: program_info) tau =
     | Bits_t sz -> if sz > 64 then request_multiprecision pi
     | Enum_t sg -> ignore (cpp_enum_name pi sg)
     | Struct_t sg -> ignore (cpp_struct_name pi sg);
-                     List.iter (loop << snd) sg.struct_fields in
+                     List.iter (loop << snd) sg.struct_fields
+    | Array_t { array_type; _ } -> loop array_type in
   loop tau
 
 let z_to_str (base: [`Bin | `Hex]) bitlength z =
@@ -307,6 +312,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
 
   let program_info = fresh_program_info () in
   let cpp_type_of_type = cpp_type_of_type program_info in
+  let cpp_type_of_array = cpp_type_of_array program_info in
   let cpp_value_type_of_size = cpp_value_type_of_size program_info in
   let cpp_enum_name = cpp_enum_name program_info in
   let cpp_struct_name = cpp_struct_name program_info in
@@ -362,6 +368,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     | Bits bs -> sp_bits_value ~immediate bs
     | Enum (sg, v) -> sp_enum_value sg v
     | Struct (sg, fields) -> sp_struct_value sg fields
+    | Array (tau, values) -> sp_array_value tau values
   and sp_bits_value ?(immediate=false) bs =
     let z = bits_to_Z bs in
     let bitlength = Array.length bs in
@@ -372,7 +379,11 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     | Some nm -> cpp_enumerator_name ~enum:(Some sg) nm
   and sp_struct_value sg fields =
     let fields = String.concat ", " (List.map sp_value fields) in
-    sprintf "%s{ %s }" (cpp_struct_name sg) fields in
+    sprintf "%s{ %s }" (cpp_struct_name sg) fields
+  and sp_array_value sg values =
+    let vals = String.concat ", " (List.map sp_value (Array.to_list values)) in
+    sprintf "%s{%s}" (cpp_type_of_array sg) vals
+  in
 
   let sp_binop op a1 a2 =
     match op with
@@ -398,7 +409,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     let parg = sp_parenthesized arg in
     match tau with
     | Bits_t _ -> arg
-    | Enum_t _ | Struct_t _ -> sprintf "prims::pack%s" parg in
+    | Enum_t _ | Struct_t _ | Array_t _ -> sprintf "prims::pack%s" parg in
 
   let sp_unpacker ?(arg = "") tau =
     let parg = sp_parenthesized arg in
@@ -408,6 +419,8 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
        sprintf "prims::unpack<%s, %d>%s" (cpp_enum_name sg) (enum_sz sg) parg
     | Struct_t sg ->
        sprintf "prims::unpack<%s, %d>%s" (cpp_struct_name sg) (struct_sz sg) parg
+    | Array_t sg ->
+       sprintf "prims::unpack<%s, %d>%s" (cpp_type_of_array sg) (array_sz sg) parg in
 
   let p_enum_decl sg =
     let esz = enum_sz sg in
@@ -462,7 +475,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
           p "os << \"}\";") in
 
     match tau with
-    | Bits_t _ -> ()
+    | Bits_t _ | Array_t _ -> ()
     | Enum_t sg -> p_enum_printer sg
     | Struct_t sg -> p_struct_printer sg in
 
@@ -500,7 +513,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
           pr ")") in
 
     (match tau with
-     | Bits_t _ -> ()
+     | Bits_t _ | Array_t _ -> ()
      | Enum_t sg -> p_enum_eq sg
      | Struct_t sg -> p_struct_eq sg);
     nl ();
@@ -560,8 +573,16 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
             sg.struct_fields 0 |> ignore;
           p "return %s;" var) in
 
+    let p_type_info () =
+      let decl = sprintf "template <> struct type_info<%s>" v_tau in
+      p_scoped decl ~terminator:";" (fun () ->
+          p_cpp_decl ~prefix:"static constexpr " ~init:(sprintf "%d" v_sz)
+            "std::size_t" "size") in
+
+    p_type_info ();
+    nl ();
     match tau with
-    | Bits_t _ -> ()
+    | Bits_t _ | Array_t _ -> ()
     | Enum_t sg -> p_enum_pack sg; nl (); p_enum_unpack sg
     | Struct_t sg -> p_struct_pack sg; nl (); p_struct_unpack sg in
 
@@ -746,6 +767,8 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
            let fname, _tau = Cuttlebone.Util.list_nth sg.struct_fields idx in
            let fname = cpp_field_name (Cuttlebone.Util.string_of_coq_string fname) in
            PureExpr (sprintf "%s.%s" a1 fname)
+        | Array1 (sg, idx) ->
+           PureExpr (sprintf "%s[%d]" a1 (Cuttlebone.Extr.index_to_nat sg.array_len idx))
       in
 
       let p_binop target (fn: Cuttlebone.Extr.PrimTyped.fn2) a1 a2 =
@@ -762,7 +785,9 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
            let tinfo = ensure_target (Struct_t sg) target in
            let res = p_assign_expr (VarTarget tinfo) (PureExpr a1) in
            p "%s.%s = %s;" tinfo.name (cpp_field_name fname) a2;
-           res in
+           res
+        | Array2 (_, idx) ->
+           PureExpr (sprintf "prims::replace<%d>(%s, %s)" idx a1 a2) in
 
       let assert_no_shadowing sg v tau v_to_string m =
         if Cuttlebone.Util.member_mentions_shadowed_binding sg v tau m then

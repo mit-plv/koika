@@ -3,6 +3,7 @@
 
 #include <cstddef> // For size_t
 #include <cstdint>
+#include <array>
 #include <cstring> // For memcpy
 #include <limits> // For std::numeric_limits used in prims::mask
 #include <type_traits> // For std::conditional_t
@@ -561,6 +562,13 @@ namespace prims {
     return truncate<width, sz1>(data >> idx);
   }
 
+  template<std::size_t pos, typename T, std::size_t len>
+  std::array<T, len> replace(const std::array<T, len> arr, T val) {
+    std::array<T, len> copy = arr;
+    copy[pos] = val;
+    return copy;
+  }
+
   template<std::size_t sz>
   bits<sz>& bits<sz>::operator&=(const bits<sz> arg) { return (*this = *this & arg); }
   template<std::size_t sz>
@@ -610,6 +618,65 @@ namespace prims {
   static T unpack(const bits<sz>& bs) {
     return _unpack<T, sz>::unpack(bs);
   }
+
+  /// Type info
+
+  template<typename T> struct type_info;
+
+  template<std::size_t sz> struct type_info<bits<sz>> {
+    static constexpr std::size_t size = sz;
+  };
+
+  template<typename T, std::size_t len> struct type_info<std::array<T, len>> {
+    static constexpr std::size_t size = len * type_info<T>::size;
+  };
+
+  /// Bits packing and unpacking (no-op, but needed by array packing/unpacking)
+
+  template<std::size_t sz>
+  static bits<sz> pack(const bits<sz> val) {
+    return val;
+  }
+
+  template<std::size_t sz, std::size_t packed_sz>
+  struct _unpack<bits<sz>, packed_sz> {
+    static_assert(sz == packed_sz, "Inconsistent size parameters in call to unpack");
+    static bits<sz> unpack(const bits<packed_sz> bs) {
+      return bs;
+    }
+  };
+
+  /// Array packing and unpacking
+
+  template<typename T, std::size_t len>
+  static bits<type_info<std::array<T, len>>::size> pack(const std::array<T, len>& val) {
+    constexpr std::size_t elem_sz = type_info<T>::size;
+    constexpr std::size_t packed_sz = type_info<std::array<T, len>>::size;
+    bits<packed_sz> packed{};
+    for (std::size_t pos = 0; pos < len; pos++) {
+      packed <<= elem_sz;
+      packed |= prims::widen<packed_sz, elem_sz>(val[pos]);
+    }
+    return packed;
+  }
+
+  template<typename T, std::size_t len, std::size_t packed_sz>
+  struct _unpack<std::array<T, len>, packed_sz> {
+    // We need a struct for return-type polymorphism
+    static constexpr std::size_t elem_sz = type_info<T>::size;
+    static constexpr std::size_t expected_sz = len * elem_sz;
+    static_assert(expected_sz == packed_sz,
+                  "Inconsistent size parameters in call to unpack");
+
+    static std::array<T, len> unpack(bits<packed_sz> bs) { // not const&
+      std::array<T, len> unpacked{};
+      for (std::size_t pos = 0; pos < len; pos++) {
+        unpacked[pos] = truncate<elem_sz, packed_sz>(bs);
+        bs >>= elem_sz;
+      }
+      return unpacked;
+    }
+  };
 
 #ifndef SIM_MINIMAL
   // This convenience function creates a string from an object
@@ -690,9 +757,53 @@ namespace prims {
     return fmt(os, bs);
   }
 
+  /// Array printing functions
+
+  namespace internal {
+    template<typename T, std::size_t len>
+    static std::ostream& array_fmt(std::ostream& os, const std::array<T, len>& val, fmtstyle style) {
+      if (style == fmtstyle::full) {
+        style = fmtstyle::hex;
+      }
+      os << "[";
+      if (len != 0) {
+        fmt(os, val[0], style);
+        for (std::size_t pos = 1; pos < len; pos++) {
+          os << "; ";
+          fmt(os, val[pos], style);
+        }
+      }
+      os << "]";
+      return os;
+    }
+  }
+
+  template<typename T, std::size_t len>
+  static std::ostream& fmt(std::ostream& os, const std::array<T, len>& val, fmtstyle style) {
+    return internal::array_fmt(os, val, style);
+  }
+
+  template<std::size_t len>
+  static std::ostream& fmt(std::ostream& os, const std::array<bits<8>, len>& val, fmtstyle style) {
+    if (style == fmtstyle::utf8) {
+      std::string s{};
+      for (size_t pos = 0; pos < len; pos ++) {
+        s.push_back(static_cast<char>(val[pos].v));
+      }
+      return os << "\"" << s << "\"";
+    } else {
+      return internal::array_fmt(os, val, style);
+    }
+  }
+
+  template<typename T, std::size_t len>
+  std::ostream& operator<<(std::ostream& os, const std::array<T, len>& val) {
+    return fmt(os, val);
+  }
 #endif // #ifndef SIM_MINIMAL
 } // namespace prims
 
+using std::array;
 using prims::unit;
 using prims::bits;
 using namespace prims::literals;
