@@ -50,8 +50,8 @@ let rec pp_seq_trailer pp_sep pp_elem ppf = function
 let pp_list pp_elem ppf elems =
   fprintf ppf "[@[%a@]]" (pp_seq (pp_sep "; ") pp_elem) elems
 
-let pp_vector pp_elem ppf elems =
-  fprintf ppf "@[<2>vect_of_list %a@]" (pp_list pp_elem) elems
+let pp_vect pp_elem ppf elems =
+  fprintf ppf "%a%%vect" (pp_list pp_elem) elems
 
 let pp_bool ppf b =
   fprintf ppf (if b then "true" else "false")
@@ -62,10 +62,21 @@ let pp_bit ppf b =
 let pp_bits ppf bs =
   fprintf ppf "Ob%a" (pp_seq pp_noop pp_bit) (Array.to_list bs)
 
-let pp_type ~wrap ppf = function
-  | Bits_t sz -> fprintf ppf (if wrap then "(bits_t %d)" else "bits_t %d") sz
+let pp_wrapped wrap pp_inside ppf inside =
+  if wrap then fprintf ppf "(%a)" pp_inside inside
+  else pp_inside ppf inside
+
+let rec pp_type ~wrap ppf = function
+  | Bits_t sz -> pp_wrapped wrap (fun ppf -> fprintf ppf "bits_t %d") ppf sz
   | Struct_t sg -> pp_raw ppf sg.struct_name
   | Enum_t sg -> pp_raw ppf sg.enum_name
+  | Array_t sg -> pp_wrapped wrap pp_array_type ppf sg
+and pp_array_type ppf { array_type; array_len } =
+  let p fmt = fprintf ppf fmt in
+  p "{|@ @[";
+  p "array_type := %a;@ " (pp_type ~wrap:false) array_type;
+  p "array_len := %d" array_len;
+  p "@]@ |}"
 
 let pp_type_wrapped = pp_type ~wrap:true
 let pp_type_unwrapped = pp_type ~wrap:false
@@ -77,8 +88,8 @@ let pp_enum ppf { enum_name; enum_bitsize; enum_members } =
   p "enum_name := %a;@ " pp_quoted enum_name;
   p "enum_size := %d;@ " (List.length enum_members);
   p "enum_bitsize := %d;@ " enum_bitsize;
-  p "enum_members := %a;@ " (pp_vector pp_quoted) members;
-  p "enum_bitpatterns := %a;" (pp_vector pp_bits) bitpatterns;
+  p "enum_members := %a;@ " (pp_vect pp_quoted) members;
+  p "enum_bitpatterns := %a;" (pp_vect pp_bits) bitpatterns;
   p "@]@ |}.@ @]";
   p "Definition %s : type := enum_t %s_sig." enum_name enum_name
 
@@ -152,6 +163,8 @@ let rec pp_value ppf = function
        | [] -> fprintf ppf "tt"
        | v :: vs -> pp_pair pp_value loop ppf (v, vs) in
      pp_cast loop ppf (v, sg.struct_name ^ "_sig")
+  | Array (_tau, values) -> (* FIXME does this need a type annotation? *)
+     pp_vect pp_value ppf (Array.to_list values)
 
 let try_enum_const = function
   | Enum (sg, v) ->
@@ -180,11 +193,15 @@ let pp_app ppf fn fmt =
 let pp_extr_type ppf tau =
   pp_type ~wrap:true ppf (Cuttlebone.Util.typ_of_extr_type tau)
 
+let pp_extr_array_type ppf sg =
+  pp_extr_type ppf (Cuttlebone.Extr.Array_t sg)
+
 let rec pp_prim_ufn1 ppf (f: Cuttlebone.Extr.PrimUntyped.ufn1) = match f with
   | UDisplay f -> pp_app ppf "UDisplay" "%a" pp_prim_display_ufn f
   | UConv f -> pp_app ppf "UConv" "%a" pp_prim_uconv f
   | UBits1 f -> pp_app ppf "UBits1" "%a" pp_prim_ubits1 f
   | UStruct1 f -> pp_app ppf "UStruct1" "%a" pp_prim_ustruct1 f
+  | UArray1 f -> pp_app ppf "UArray1" "%a" pp_prim_uarray1 f
 and pp_prim_display_ufn ppf (f: Cuttlebone.Extr.PrimUntyped.udisplay) = match f with
   | UDisplayUtf8 -> pp_raw ppf "UDisplayUtf8"
   | UDisplayValue -> pp_raw ppf "UDisplayValue"
@@ -205,11 +222,15 @@ and pp_prim_ubits1 ppf (f: Cuttlebone.Extr.PrimUntyped.ubits1) =
 and pp_prim_ustruct1 ppf (f: Cuttlebone.Extr.PrimUntyped.ustruct1) = match f with
   | UGetField f -> pp_app ppf "UGetField" "%a" pp_coq_quoted f
   | UGetFieldBits (sg, f) -> pp_app ppf "UGetFieldBits" "%a@ %a" pp_extr_struct_name sg pp_coq_quoted f
+and pp_prim_uarray1 ppf (f: Cuttlebone.Extr.PrimUntyped.uarray1) = match f with
+  | UGetElement pos -> pp_app ppf "UGetElement" "%d" pos
+  | UGetElementBits (sg, pos) -> pp_app ppf "UGetElementBits" "%a@ %d" pp_extr_array_type sg pos
 
 let rec pp_prim_ufn2 ppf (f: Cuttlebone.Extr.PrimUntyped.ufn2) = match f with
   | UEq -> pp_raw ppf "UEq"
   | UBits2 f -> pp_app ppf "UBits2" "%a" pp_prim_ubits2 f
   | UStruct2 f -> pp_app ppf "UStruct2" "%a" pp_prim_ustruct2 f
+  | UArray2 f -> pp_app ppf "UArray2" "%a" pp_prim_uarray2 f
 and pp_prim_ubits2 ppf (f: Cuttlebone.Extr.PrimUntyped.ubits2) =
   let pp_raw = pp_raw ppf in
   let pp_app fmt = pp_app ppf fmt in
@@ -236,6 +257,9 @@ and pp_cmp ppf (cmp: Cuttlebone.Extr.bits_comparison) =
 and pp_prim_ustruct2 ppf (f: Cuttlebone.Extr.PrimUntyped.ustruct2) = match f with
   | USubstField f -> pp_app ppf "USubstField" "%a" pp_coq_quoted f
   | USubstFieldBits (sg, f) -> pp_app ppf "USubstFieldBits" "%a@ %a" pp_extr_struct_name sg pp_coq_quoted f
+and pp_prim_uarray2 ppf (f: Cuttlebone.Extr.PrimUntyped.uarray2) = match f with
+  | USubstElement pos -> pp_app ppf "USubstElement" "%d" pos
+  | USubstElementBits (sg, pos) -> pp_app ppf "USubstElementBits" "%a@ %d" pp_extr_array_type sg pos
 
 let pp_pos ppf pos =
   pp_quoted ppf (Pos.to_string pos)
@@ -286,6 +310,8 @@ let rec pp_action print_positions ppf (a: ResolvedAST.uaction locd) =
     | AstError -> pp_raw ppf "AstError"
     | Skip ->
        pp_raw ppf "USkip"
+    | ConstString s ->
+       pp_app "UConstString" "%a" pp_quoted s
     | Progn actions ->
        pp_app "UProgn" "%a" (pp_list pp_action) actions
     | Let (bindings, body) ->
@@ -296,7 +322,9 @@ let rec pp_action print_positions ppf (a: ResolvedAST.uaction locd) =
        pp_app "USwitch" "%a@ %a@ %a" pp_action operand
          pp_action default (pp_list (pp_pair pp_action pp_action)) branches
     | StructInit { sg; fields } ->
-       pp_app "UStructInit" "%a@ %a" pp_struct_name sg (pp_list pp_binding) fields in
+       pp_app "UStructInit" "%a@ %a" pp_struct_name sg (pp_list pp_binding) fields
+    | ArrayInit { sg; elements } ->
+       pp_app "UArrayInit" "%a@ %a" pp_array_type sg (pp_list pp_action) elements in
   pp_maybe_pos print_positions "UAPos" pp ppf a
 
 let pp_rule position_printer ppf (name, action) =
