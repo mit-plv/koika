@@ -38,7 +38,7 @@ module Util = struct
                         struct_fields }
   and enum_sig_of_extr_enum_sig { enum_name; enum_size; enum_bitsize; enum_members; enum_bitpatterns } : enum_sig =
     { enum_name = string_of_coq_string enum_name;
-      enum_bitsize = enum_bitsize;
+      enum_bitsize;
       enum_members =
         List.map (fun (nm, bs) ->
             (string_of_coq_string nm, bits_const_of_extr_bits enum_bitsize bs))
@@ -56,7 +56,7 @@ module Util = struct
                         struct_fields }
   and extr_enum_sig_of_enum_sig { enum_name; enum_bitsize; enum_members } : Extr.enum_sig =
     { enum_name = coq_string_of_string enum_name;
-      enum_bitsize = enum_bitsize;
+      enum_bitsize;
       enum_size = List.length enum_members;
       enum_members = Extr.vect_of_list (List.map (fun (nm, _) -> coq_string_of_string nm) enum_members);
       enum_bitpatterns = Extr.vect_of_list (List.map (fun (_, bs) -> extr_bits_of_bits_const bs) enum_members) }
@@ -69,8 +69,8 @@ module Util = struct
 
   let ffi_sig_of_extr_external_sig ffi_name fsig =
     Extr.{ ffi_name;
-          ffi_argtype = argType 1 fsig 0;
-          ffi_rettype = typ_of_extr_type fsig.retType }
+           ffi_argtype = argType 1 fsig 0;
+           ffi_rettype = typ_of_extr_type fsig.retType }
 
   let extr_external_sig_of_ffi_sig { ffi_argtype; ffi_rettype; _ } =
     Extr.{ argTypes = Extr.vect_of_list [extr_type_of_typ ffi_argtype];
@@ -191,9 +191,10 @@ module Util = struct
       (String.concat ", " (List.map sp_field (List.combine sg.struct_fields v)))
 
   let reg_sigs_of_koika_package (pkg: _ Extr.koika_package_t) r =
-    let init = value_of_extr_value (pkg.koika_reg_types r) (pkg.koika_reg_init r) in
+    let reg_init =
+      value_of_extr_value (pkg.koika_reg_types r) (pkg.koika_reg_init r) in
     { reg_name = string_of_coq_string (pkg.koika_reg_names.show0 r);
-      reg_init = init }
+      reg_init }
 
   let action_footprint a =
     let m = Hashtbl.create 25 in

@@ -343,14 +343,14 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     pbody ();
     p "#endif" in
 
-  let p_decl' ?(prefix = "") ?(init = None) t name =
+  let p_cpp_decl ?(prefix = "") ?init typ name =
     pr "%s" prefix;
     match init with
-    | None -> p "%s %s;" t name
-    | Some init -> p "%s %s = %s;" t name init in
+    | None -> p "%s %s;" typ name
+    | Some init -> p "%s %s = %s;" typ name init in
 
-  let p_decl ?(prefix = "") ?(init = None) tau name =
-    p_decl' ~prefix ~init (cpp_type_of_type tau) name in
+  let p_decl ?(prefix = "") ?init tau name =
+    p_cpp_decl ~prefix ?init (cpp_type_of_type tau) name in
 
   let bits_to_Z bits =
     Z.(Array.fold_right (fun b z ->
@@ -523,7 +523,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     let p_struct_pack sg =
       let var = "packed" in
       p_pack (fun () ->
-          p_decl (Bits_t v_sz) var ~init:(Some (cpp_const_init false v_sz Z.zero));
+          p_decl (Bits_t v_sz) var ~init:(cpp_const_init false v_sz Z.zero);
           List.iteri (fun idx (fname, ftau) ->
               let sz = typ_sz ftau in
               let fname = cpp_field_name fname in
@@ -537,7 +537,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     let p_struct_unpack sg =
       let var = "unpacked" in
       p_unpack (fun () ->
-          p_decl tau var ~init:(Some "{}");
+          p_decl tau var ~init:"{}";
           List.fold_right (fun (fname, ftau) offset ->
               let sz = typ_sz ftau in
               let fname = cpp_field_name fname in
@@ -689,7 +689,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
            if name <> e then p "%s = %s;" name e;
            Assigned name
         | VarTarget { tau; name; _ }, (PureExpr e | ImpureExpr e) ->
-           p_decl ~prefix ~init:(Some e) tau name;
+           p_decl ~prefix ~init:e tau name;
            Assigned name
         | NoTarget, ImpureExpr e ->
            p "%s;" e; (* Keep impure exprs like extfuns *)
@@ -1006,7 +1006,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
 
     p_ifdef "ndef SIM_MINIMAL" (fun () ->
         p_fn ~typ:"int" ~name:"main" ~args:"int argc, char** argv" (fun () ->
-            p_decl' ~init:(Some "1000") ull "ncycles";
+            p_cpp_decl ~init:"1000" ull "ncycles";
             p_scoped "if (argc >= 2) " (fun () ->
                 p "ncycles = std::stoull(argv[1]);");
             nl ();
