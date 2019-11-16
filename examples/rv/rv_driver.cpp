@@ -1,4 +1,4 @@
-#include "rv_core.hpp"
+#include "rv32i_core_pipelined.hpp"
 #include "elf.h"
 #include <iostream>
 #include <fstream>
@@ -9,7 +9,7 @@ public:
   /* External methods (if any) should be implemented here. */
 };
 
-using sim_t = module_rv_core<extfuns>;
+using sim_t = module_rv32i_core_pipelined<extfuns>;
 
 bits<32>* dmem = new bits<32>[DMEM_SIZE];
 
@@ -89,90 +89,8 @@ public:
   }
 
 protected:
-  bool rule_externalD() {
-    log.fromDMem_valid0.reset(Log.fromDMem_valid0);
-    log.fromDMem_data0.reset(Log.fromDMem_data0);
-    log.toDMem_data0.reset(Log.toDMem_data0);
-    log.toDMem_valid0.reset(Log.toDMem_valid0);
-
-    /* bind */ {
-      struct_mem_req readRequestD;
-      bits<1> _c0;
-      CHECK_RETURN(log.toDMem_valid0.read0(&_c0, state.toDMem_valid0,
-                                           Log.toDMem_valid0.rwset));
-      if (bool(_c0)) {
-        CHECK_RETURN(log.toDMem_valid0.write0(1'0_b, Log.toDMem_valid0.rwset));
-        CHECK_RETURN(log.toDMem_data0.read0(&readRequestD, state.toDMem_data0,
-                                            Log.toDMem_data0.rwset));
-      } else {
-        return false;
-      }
-      /* bind */ {
-        bits<32> DAddress = readRequestD.addr;
-        /* bind */ {
-          bits<4> DEn = readRequestD.byte_en;
-          /* bind */ {
-            struct_mem_resp _x3 =
-                prims::unpack<struct_mem_resp, 68>(0x68'000000000_x);
-            _x3.byte_en = DEn;
-            struct_mem_resp _x2 = _x3;
-            _x2.addr = DAddress;
-            struct_mem_resp data = _x2;
-	    // Manually added
-	    bits<32> current_value = dmem[DAddress.v >> 2];
-	    if (DAddress.v == 0xffff0 && DEn.v == 0xf) { // PutChar  && DEn.v == 0xf
-	      printf("%c", (char) readRequestD.data.v);
-	    }
-	    if (DAddress.v == 0x40001000 && DEn.v == 0xf) {
-	      exit(readRequestD.data.v);
-	    }
-	    if (DAddress.v == 0xffff4 && DEn.v == 0) { // GetChar
-	      scanf("%c", (char *) &data.data.v);
-	    }
-	    else {
-	      data.data = current_value;
-	    }
-
-	    bits<32> mask0 = 0x32'000000ff_x;
-	    bits<32> mask1 = 0x32'0000ff00_x;
-	    bits<32> mask2 = 0x32'00ff0000_x;
-	    bits<32> mask3 = 0x32'ff000000_x;
-	    dmem[DAddress.v >> 2] = (DEn[2'0_d].v == 1 ? (readRequestD.data & mask0) : (current_value & mask0))
-	      | (DEn[2'1_d].v == 1 ? (readRequestD.data & mask1) : (current_value & mask1))
-	      | (DEn[2'2_d].v == 1 ? (readRequestD.data & mask2) : (current_value & mask2))
-	      | (DEn[2'3_d].v == 1 ? (readRequestD.data & mask3) : (current_value & mask3));
-            bits<1> _x6;
-	    int* PUT_ADDR = (int *)0x000fff0;
-	    int* GET_ADDR = (int *)0x000fff4;
-
-
-            CHECK_RETURN(log.fromDMem_valid0.read0(&_x6, state.fromDMem_valid0,
-                                                   Log.fromDMem_valid0.rwset));
-            if (bool(~(_x6))) {
-              CHECK_RETURN(
-                  log.fromDMem_data0.write0(data, Log.fromDMem_data0.rwset));
-              CHECK_RETURN(
-                  log.fromDMem_valid0.write0(1'1_b, Log.fromDMem_valid0.rwset));
-            } else {
-              return false;
-            }
-          }
-        }
-      }
-    }
-
-    Log.fromDMem_valid0 = log.fromDMem_valid0;
-    Log.fromDMem_data0 = log.fromDMem_data0;
-    Log.toDMem_data0 = log.toDMem_data0;
-    Log.toDMem_valid0 = log.toDMem_valid0;
-    return true;
-  }
-
-  bool rule_externalI() {
-    log.fromIMem_data0.reset(Log.fromIMem_data0);
-    log.toIMem_data0.reset(Log.toIMem_data0);
-    log.fromIMem_valid0.reset(Log.fromIMem_valid0);
-    log.toIMem_valid0.reset(Log.toIMem_valid0);
+  virtual bool rule_ExternalI() {
+    reset_ExternalI();
 
     /* bind */ {
       struct_mem_req readRequestI;
@@ -200,14 +118,6 @@ protected:
 	    // Manually added
 	    bits<32> current_value = dmem[IAddress.v >> 2];
 	    data.data = current_value;
-	    // bits<32> mask0 = 0x32'000000ff_x;
-	    // bits<32> mask1 = 0x32'0000ff00_x;
-	    // bits<32> mask2 = 0x32'00ff0000_x;
-	    // bits<32> mask3 = 0x32'ff000000_x;
-	    // imem[IAddress.v >> 2] = (IEn[2'0_d].v == 1 ? (readRequestI.data & mask0) : (current_value & mask0))
-	    //   | (IEn[2'1_d].v == 1 ? (readRequestI.data & mask1) : (current_value & mask1))
-	    //   | (IEn[2'2_d].v == 1 ? (readRequestI.data & mask2) : (current_value & mask2))
-	    //   | (IEn[2'3_d].v == 1 ? (readRequestI.data & mask3) : (current_value & mask3));
             bits<1> _x6;
             CHECK_RETURN(log.fromIMem_valid0.read0(&_x6, state.fromIMem_valid0,
                                                    Log.fromIMem_valid0.rwset));
@@ -224,10 +134,76 @@ protected:
       }
     }
 
-    Log.fromIMem_data0 = log.fromIMem_data0;
-    Log.toIMem_data0 = log.toIMem_data0;
-    Log.fromIMem_valid0 = log.fromIMem_valid0;
-    Log.toIMem_valid0 = log.toIMem_valid0;
+    commit_ExternalI();
+    return true;
+  }
+
+ virtual bool rule_ExternalD() {
+    reset_ExternalD();
+
+    /* bind */ {
+      struct_mem_req readRequestD;
+      bits<1> _c0;
+      CHECK_RETURN(log.toDMem_valid0.read0(&_c0, state.toDMem_valid0,
+                                           Log.toDMem_valid0.rwset));
+      if (bool(_c0)) {
+        CHECK_RETURN(log.toDMem_valid0.write0(1'0_b, Log.toDMem_valid0.rwset));
+        CHECK_RETURN(log.toDMem_data0.read0(&readRequestD, state.toDMem_data0,
+                                            Log.toDMem_data0.rwset));
+      } else {
+        return false;
+      }
+      /* bind */ {
+        bits<32> DAddress = readRequestD.addr;
+        /* bind */ {
+          bits<4> DEn = readRequestD.byte_en;
+          /* bind */ {
+            struct_mem_resp _x3 =
+                prims::unpack<struct_mem_resp, 68>(0x68'000000000_x);
+            _x3.byte_en = DEn;
+            struct_mem_resp _x2 = _x3;
+            _x2.addr = DAddress;
+            struct_mem_resp data = _x2;
+	    	    // Manually added
+	    bits<32> current_value = dmem[DAddress.v >> 2];
+	    if (DAddress.v == 0xffff0 && DEn.v == 0xf) { // PutChar  && DEn.v == 0xf
+	      printf("%c", (char) readRequestD.data.v);
+	    }
+	    if (DAddress.v == 0x40001000 && DEn.v == 0xf) {
+	      exit(readRequestD.data.v);
+	    }
+	    if (DAddress.v == 0xffff4 && DEn.v == 0) { // GetChar
+	      scanf("%c", (char *) &data.data.v);
+	    }
+	    else {
+	      data.data = current_value;
+	    }
+
+	    bits<32> mask0 = 0x32'000000ff_x;
+	    bits<32> mask1 = 0x32'0000ff00_x;
+	    bits<32> mask2 = 0x32'00ff0000_x;
+	    bits<32> mask3 = 0x32'ff000000_x;
+	    dmem[DAddress.v >> 2] = (DEn[2'0_d].v == 1 ? (readRequestD.data & mask0) : (current_value & mask0))
+	      | (DEn[2'1_d].v == 1 ? (readRequestD.data & mask1) : (current_value & mask1))
+	      | (DEn[2'2_d].v == 1 ? (readRequestD.data & mask2) : (current_value & mask2))
+	      | (DEn[2'3_d].v == 1 ? (readRequestD.data & mask3) : (current_value & mask3));
+            bits<1> _x6;
+            CHECK_RETURN(log.fromDMem_valid0.read0(&_x6, state.fromDMem_valid0,
+                                                   Log.fromDMem_valid0.rwset));
+            if (bool(~(_x6))) {
+              CHECK_RETURN(
+                  log.fromDMem_data0.write0(data, Log.fromDMem_data0.rwset));
+              CHECK_RETURN(
+                  log.fromDMem_valid0.write0(1'1_b, Log.fromDMem_valid0.rwset));
+            } else {
+              return false;
+            }
+          }
+        }
+      }
+    }
+
+    commit_ExternalD();
     return true;
   }
 
@@ -306,38 +282,38 @@ sim_t::state_t init_and_run(char* filename, unsigned long long int ncycles) {
       .rf_rData_29 = 32'00000000000000000000000000000000_b,
       .rf_rData_30 = 32'00000000000000000000000000000000_b,
       .rf_rData_31 = 32'00000000000000000000000000000000_b,
-      .scoreboard_rfrData_0 = 2'00_b,
-      .scoreboard_rfrData_1 = 2'00_b,
-      .scoreboard_rfrData_2 = 2'00_b,
-      .scoreboard_rfrData_3 = 2'00_b,
-      .scoreboard_rfrData_4 = 2'00_b,
-      .scoreboard_rfrData_5 = 2'00_b,
-      .scoreboard_rfrData_6 = 2'00_b,
-      .scoreboard_rfrData_7 = 2'00_b,
-      .scoreboard_rfrData_8 = 2'00_b,
-      .scoreboard_rfrData_9 = 2'00_b,
-      .scoreboard_rfrData_10 = 2'00_b,
-      .scoreboard_rfrData_11 = 2'00_b,
-      .scoreboard_rfrData_12 = 2'00_b,
-      .scoreboard_rfrData_13 = 2'00_b,
-      .scoreboard_rfrData_14 = 2'00_b,
-      .scoreboard_rfrData_15 = 2'00_b,
-      .scoreboard_rfrData_16 = 2'00_b,
-      .scoreboard_rfrData_17 = 2'00_b,
-      .scoreboard_rfrData_18 = 2'00_b,
-      .scoreboard_rfrData_19 = 2'00_b,
-      .scoreboard_rfrData_20 = 2'00_b,
-      .scoreboard_rfrData_21 = 2'00_b,
-      .scoreboard_rfrData_22 = 2'00_b,
-      .scoreboard_rfrData_23 = 2'00_b,
-      .scoreboard_rfrData_24 = 2'00_b,
-      .scoreboard_rfrData_25 = 2'00_b,
-      .scoreboard_rfrData_26 = 2'00_b,
-      .scoreboard_rfrData_27 = 2'00_b,
-      .scoreboard_rfrData_28 = 2'00_b,
-      .scoreboard_rfrData_29 = 2'00_b,
-      .scoreboard_rfrData_30 = 2'00_b,
-      .scoreboard_rfrData_31 = 2'00_b,
+      .scoreboard_Scores_rData_0 = 2'00_b,
+      .scoreboard_Scores_rData_1 = 2'00_b,
+      .scoreboard_Scores_rData_2 = 2'00_b,
+      .scoreboard_Scores_rData_3 = 2'00_b,
+      .scoreboard_Scores_rData_4 = 2'00_b,
+      .scoreboard_Scores_rData_5 = 2'00_b,
+      .scoreboard_Scores_rData_6 = 2'00_b,
+      .scoreboard_Scores_rData_7 = 2'00_b,
+      .scoreboard_Scores_rData_8 = 2'00_b,
+      .scoreboard_Scores_rData_9 = 2'00_b,
+      .scoreboard_Scores_rData_10 = 2'00_b,
+      .scoreboard_Scores_rData_11 = 2'00_b,
+      .scoreboard_Scores_rData_12 = 2'00_b,
+      .scoreboard_Scores_rData_13 = 2'00_b,
+      .scoreboard_Scores_rData_14 = 2'00_b,
+      .scoreboard_Scores_rData_15 = 2'00_b,
+      .scoreboard_Scores_rData_16 = 2'00_b,
+      .scoreboard_Scores_rData_17 = 2'00_b,
+      .scoreboard_Scores_rData_18 = 2'00_b,
+      .scoreboard_Scores_rData_19 = 2'00_b,
+      .scoreboard_Scores_rData_20 = 2'00_b,
+      .scoreboard_Scores_rData_21 = 2'00_b,
+      .scoreboard_Scores_rData_22 = 2'00_b,
+      .scoreboard_Scores_rData_23 = 2'00_b,
+      .scoreboard_Scores_rData_24 = 2'00_b,
+      .scoreboard_Scores_rData_25 = 2'00_b,
+      .scoreboard_Scores_rData_26 = 2'00_b,
+      .scoreboard_Scores_rData_27 = 2'00_b,
+      .scoreboard_Scores_rData_28 = 2'00_b,
+      .scoreboard_Scores_rData_29 = 2'00_b,
+      .scoreboard_Scores_rData_30 = 2'00_b,
+      .scoreboard_Scores_rData_31 = 2'00_b,
       .pc = 32'10000000000000000000000000000000_b,
       .epoch = 1'0_b,
   };
