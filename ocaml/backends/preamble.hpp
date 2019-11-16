@@ -35,6 +35,20 @@ static inline void _sim_assert_fn(const char* repr,
 
 #define _unused __attribute__((unused))
 
+#if defined(__clang__)
+#define _unoptimized __attribute__((optnone))
+#elif defined(__GNUG__)
+#define _unoptimized __attribute__((optimize("O0")))
+#else
+#define _unoptimized
+#endif
+
+#if defined(SIM_MINIMAL) && defined(SIM_KEEP_DISPLAY)
+#define _display_unoptimized _unoptimized
+#else
+#define _display_unoptimized
+#endif
+
 #ifdef NEEDS_BOOST_MULTIPRECISION
 #include <boost/multiprecision/cpp_int.hpp>
 template<std::size_t size>
@@ -553,12 +567,16 @@ namespace prims {
   template<std::size_t sz> template<std::size_t shift_sz>
   bits<sz>& bits<sz>::operator>>=(const bits<shift_sz> shift) { return (*this = *this >> shift); }
 
-  static _unused unit display(_unused const std::string& msg) {
-#ifndef SIM_MINIMAL
-    std::cout << msg;
-#endif
+#ifdef SIM_MINIMAL
+  static _unused _display_unoptimized unit display(_unused const std::string& msg) {
     return tt;
   }
+#else
+  static _unused unit display(_unused const std::string& msg) {
+    std::cout << msg;
+    return tt;
+  }
+#endif
 
   template<typename T>
   unit ignore(const T /*unused*/) {
