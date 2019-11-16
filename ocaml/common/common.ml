@@ -58,6 +58,7 @@ type typ =
   | Bits_t of size_t
   | Enum_t of enum_sig
   | Struct_t of struct_sig
+  | Array_t of array_sig
 and struct_sig =
   { struct_name: string;
     struct_fields: (string * typ) list }
@@ -65,6 +66,9 @@ and enum_sig =
   { enum_name: string;
     enum_bitsize: int;
     enum_members: (string * bits_value) list }
+and array_sig =
+  { array_type: typ;
+    array_len: int }
 
 let enum_find_field_opt sg v =
   match List.find_opt (fun (_nm, bs) -> bs = v) sg.enum_members with
@@ -75,31 +79,38 @@ let rec typ_sz = function
   | Bits_t sz -> sz
   | Enum_t sg -> enum_sz sg
   | Struct_t sg -> struct_sz sg
+  | Array_t sg -> array_sz sg
 and enum_sz { enum_bitsize; _ } =
   enum_bitsize
 and struct_sz { struct_fields; _ } =
   List.fold_left (fun acc (_, ftau) -> acc + typ_sz ftau) 0 struct_fields
+and array_sz { array_type; array_len } =
+  typ_sz array_type * array_len
 
 let kind_to_str ?(pre=false) = function
   | Bits_t _ -> "bits"
   | Enum_t _ -> (if pre then "an enum" else "enum")
   | Struct_t _ -> (if pre then "a struct" else "struct")
+  | Array_t _ -> (if pre then "an array" else "array")
 
 type value =
   | Bits of bits_value
   | Enum of enum_sig * bits_value
   | Struct of struct_sig * (value list)
+  | Array of array_sig * (value array)
 
 let typ_of_value = function
   | Bits bs -> Bits_t (Array.length bs)
   | Enum (sg, _) -> Enum_t sg
   | Struct (sg, _) -> Struct_t sg
+  | Array (sg, _) -> Array_t sg
 
 let rec typ_to_string (tau: typ) =
   match tau with
   | Bits_t sz -> Printf.sprintf "bits %d" sz
   | Enum_t sg -> enum_sig_to_string sg
   | Struct_t sg -> struct_sig_to_string sg
+  | Array_t sg -> array_sig_to_string sg
 and enum_sig_to_string sg =
   Printf.sprintf "enum %s" sg.enum_name
 and struct_field_to_string (nm, typ) =
@@ -107,8 +118,15 @@ and struct_field_to_string (nm, typ) =
 and struct_sig_to_string { struct_name; struct_fields } =
   let fields = List.map struct_field_to_string struct_fields in
   Printf.sprintf "struct %s { %s }" struct_name (String.concat "; " fields)
+and array_sig_to_string { array_type; array_len } =
+  Printf.sprintf "array<%s, %d>" (typ_to_string array_type) array_len
+and typ_name (tau: typ) =
+  match tau with
+  | Enum_t sg -> sg.enum_name
+  | Struct_t sg -> sg.struct_name
+  | Bits_t _ | Array_t _ -> typ_to_string tau
 
-let compare_types tau1 tau2 =
+let rec compare_types tau1 tau2 =
   match tau1, tau2 with
   | Bits_t sz1, Bits_t sz2 -> compare sz1 sz2
   | Bits_t _, _ -> -1
@@ -117,6 +135,12 @@ let compare_types tau1 tau2 =
   | Enum_t _, _ -> -1
   | _, Enum_t _ -> 1
   | Struct_t sg1, Struct_t sg2 -> compare sg1.struct_name sg2.struct_name
+  | Struct_t _, _ -> -1
+  | _, Struct_t _ -> 1
+  | Array_t sg1, Array_t sg2 ->
+     let tau12 = compare_types sg1.array_type sg2.array_type in
+     if tau12 <> 0 then tau12
+     else compare sg1.array_len sg2.array_len
 
 let sort_types types =
   List.sort compare_types types
@@ -130,20 +154,22 @@ module TypNameSet = Set.Make(OrderedTypByName)
 
 let topo_sort_types types =
   let add (seen, ordered) = function
-    | Bits_t _ -> (seen, ordered)
+    | Bits_t _ | Array_t _ -> (seen, ordered) (* Bits and arrays are anonymous types *)
     | (Struct_t _ | Enum_t _) as tau -> (TypNameSet.add tau seen, tau :: ordered) in
   let rec loop ((seen, _) as acc) tau =
     if TypNameSet.mem tau seen then acc
     else let acc = match tau with
            | Struct_t sg -> List.fold_left (fun acc (_, tau) -> loop acc tau) acc sg.struct_fields
-           | _ -> acc in
+           | Array_t { array_type; _ } -> loop acc array_type
+           | Bits_t _ | Enum_t _ -> acc in
+         (* Add tau last because we're topo-sorting *)
          add acc tau in
   List.rev (snd (List.fold_left loop (TypNameSet.empty, []) types))
 
 let partition_types types =
   List.fold_right (fun tau (enums, structs) ->
       match tau with
-      | Bits_t _ -> (enums, structs)
+      | Bits_t _ | Array_t _ -> (enums, structs)
       | Enum_t sg -> (sg :: enums, structs)
       | Struct_t sg -> (enums, sg :: structs))
     types ([], [])

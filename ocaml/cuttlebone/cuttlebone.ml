@@ -20,10 +20,10 @@ module Util = struct
   let coq_string_of_string s =
     List.of_seq (String.to_seq s)
 
-  let bits_const_of_extr_bits sz bs =
+  let array_of_vect sz bs =
     Array.of_list (Extr.vect_to_list sz bs)
 
-  let extr_bits_of_bits_const (bs: bits_value) =
+  let vect_of_array (bs: 'a array) =
     Extr.vect_of_list (Array.to_list bs)
 
   let rec typ_of_extr_type (tau: Extr.type0) : typ =
@@ -31,6 +31,7 @@ module Util = struct
     | Extr.Bits_t sz -> Bits_t sz
     | Extr.Enum_t sg -> Enum_t (enum_sig_of_extr_enum_sig sg)
     | Extr.Struct_t sg -> Struct_t (struct_sig_of_extr_struct_sig sg)
+    | Extr.Array_t sg -> Array_t (array_sig_of_extr_array_sig sg)
   and struct_sig_of_extr_struct_sig { struct_name; struct_fields } : struct_sig =
     { struct_name = string_of_coq_string struct_name;
       struct_fields = List.map (fun (nm, tau) ->
@@ -41,14 +42,17 @@ module Util = struct
       enum_bitsize;
       enum_members =
         List.map (fun (nm, bs) ->
-            (string_of_coq_string nm, bits_const_of_extr_bits enum_bitsize bs))
+            (string_of_coq_string nm, array_of_vect enum_bitsize bs))
           (Extr.vect_to_list enum_size (Extr.vect_zip enum_size enum_members enum_bitpatterns)) }
+  and array_sig_of_extr_array_sig { array_type; array_len } =
+    { array_type = typ_of_extr_type array_type; array_len }
 
   let rec extr_type_of_typ (tau: typ) : Extr.type0 =
     match tau with
     | Bits_t sz -> Extr.Bits_t sz
     | Enum_t sg -> Extr.Enum_t (extr_enum_sig_of_enum_sig sg)
     | Struct_t sg -> Extr.Struct_t (extr_struct_sig_of_struct_sig sg)
+    | Array_t sg -> Extr.Array_t (extr_array_sig_of_array_sig sg)
   and extr_struct_sig_of_struct_sig { struct_name; struct_fields } : Extr.type0 Extr.struct_sig' =
     { struct_name = coq_string_of_string struct_name;
       struct_fields = List.map (fun (nm, tau) ->
@@ -59,7 +63,10 @@ module Util = struct
       enum_bitsize;
       enum_size = List.length enum_members;
       enum_members = Extr.vect_of_list (List.map (fun (nm, _) -> coq_string_of_string nm) enum_members);
-      enum_bitpatterns = Extr.vect_of_list (List.map (fun (_, bs) -> extr_bits_of_bits_const bs) enum_members) }
+      enum_bitpatterns = Extr.vect_of_list (List.map (fun (_, bs) -> vect_of_array bs) enum_members) }
+  and extr_array_sig_of_array_sig { array_type; array_len } =
+    { array_type = extr_type_of_typ array_type;
+      array_len = array_len }
 
   let argType nargs (fsig: Extr.sig0) idx : typ =
     typ_of_extr_type @@ List.nth (Extr.vect_to_list nargs fsig.argTypes) idx
@@ -85,11 +92,14 @@ module Util = struct
   let extr_type_to_string tau =
     typ_to_string (typ_of_extr_type tau)
 
+  let extr_enum_sig_to_string sg =
+    enum_sig_to_string (enum_sig_of_extr_enum_sig sg)
+
   let extr_struct_sig_to_string sg =
     struct_sig_to_string (struct_sig_of_extr_struct_sig sg)
 
-  let extr_enum_sig_to_string sg =
-    enum_sig_to_string (enum_sig_of_extr_enum_sig sg)
+  let extr_array_sig_to_string sg =
+    array_sig_to_string (array_sig_of_extr_array_sig sg)
 
   let type_kind_to_string (tk: Extr.type_kind) =
     match tk with
@@ -98,6 +108,8 @@ module Util = struct
     | Extr.Kind_enum (Some sg) -> extr_enum_sig_to_string sg
     | Extr.Kind_struct None -> "struct"
     | Extr.Kind_struct (Some sg) -> extr_struct_sig_to_string sg
+    | Extr.Kind_array None -> "array"
+    | Extr.Kind_array (Some sg) -> extr_array_sig_to_string sg
 
   let string_eq_dec =
     { Extr.eq_dec = fun (s1: string) (s2: string) -> s1 = s2 }
@@ -109,6 +121,7 @@ module Util = struct
     | ExplicitErrorInAst
     | SugaredConstructorInAst
     | UnboundVariable of { var: 'var_t }
+    | OutOfBounds of { pos: int; sg: array_sig }
     | UnboundField of { field: string; sg: struct_sig }
     | UnboundEnumMember of { name: string; sg: enum_sig }
     | IncorrectRuleType of { actual: typ }
@@ -135,6 +148,8 @@ module Util = struct
        TooFewArguments { name; expected; actual = expected - nmissing }
     |Extr.BasicError err ->
       match err with
+      | Extr.OutOfBounds (pos, sg) ->
+         OutOfBounds { pos; sg = array_sig_of_extr_array_sig sg }
       | Extr.UnboundField (field, sg) ->
          UnboundField { field = string_of_coq_string field;
                         sg = struct_sig_of_extr_struct_sig sg }
@@ -145,37 +160,52 @@ module Util = struct
          KindMismatch { actual = type_kind_to_string actual;
                         expected = type_kind_to_string expected }
 
-  let rec value_of_extr_value tau v =
+  let rec value_of_extr_value tau (v: Extr.type_denote) =
     match tau with
     | Extr.Bits_t sz ->
-       Bits (bits_const_of_extr_bits sz v)
+       Bits (array_of_vect sz v)
     | Extr.Enum_t sg ->
-       Enum (enum_sig_of_extr_enum_sig sg, bits_const_of_extr_bits sg.enum_bitsize v)
+       Enum (enum_sig_of_extr_enum_sig sg, array_of_vect sg.enum_bitsize v)
     | Extr.Struct_t sg ->
        Struct (struct_sig_of_extr_struct_sig sg,
                List.map snd (Extr.struct_to_list value_of_extr_value sg.struct_fields v))
+    | Extr.Array_t sg ->
+       let extr_values = array_of_vect sg.array_len v in
+       let values = Array.map (value_of_extr_value sg.array_type) extr_values in
+       Array (array_sig_of_extr_array_sig sg, values)
 
   let rec extr_value_of_value (v: value) =
     match v with
-    | Bits bs -> Extr.Bits_t (Array.length bs), (extr_bits_of_bits_const bs)
-    | Enum (sg, v) -> Extr.Enum_t (extr_enum_sig_of_enum_sig sg), (extr_bits_of_bits_const v)
+    | Bits bs -> Extr.Bits_t (Array.length bs), (vect_of_array bs)
+    | Enum (sg, v) -> Extr.Enum_t (extr_enum_sig_of_enum_sig sg), (vect_of_array v)
     | Struct (sg, sv) ->
-       let vv = List.map2 (fun (nm, _) v -> coq_string_of_string nm, v) sg.struct_fields sv in
-       let conv v = let tau, extr_v = extr_value_of_value v in Extr.ExistT (tau, extr_v) in
+       let vv =
+         List.map2 (fun (nm, _) v -> coq_string_of_string nm, v)
+           sg.struct_fields sv in
+       let conv v =
+         let tau, extr_v = extr_value_of_value v in
+         Extr.ExistT (tau, extr_v) in
        (Extr.Struct_t (extr_struct_sig_of_struct_sig sg),
         Extr.struct_of_list conv vv)
+    | Array (sg, values) ->
+       (Extr.Array_t (extr_array_sig_of_array_sig sg),
+        vect_of_array (Array.map extr_value_of_value values))
 
   let bits_of_value (v: value) =
     let tau, v = extr_value_of_value v in
-    bits_const_of_extr_bits (Extr.type_sz tau) (Extr.bits_of_value tau v)
+    array_of_vect (Extr.type_sz tau) (Extr.bits_of_value tau v)
 
   let rec string_of_value (v: value) =
     match v with
     | Bits bs -> string_of_bits bs
     | Enum (sg, v) -> string_of_enum sg v
     | Struct (sg, v) -> string_of_struct sg v
+    | Array (_, v) -> string_of_array v
   and string_of_bits ?(mode=`Verilog) (bs: bits_value) =
-    let bitstring = String.concat "" (List.rev_map (fun b -> if b then "1" else "0") (Array.to_list bs)) in
+    let bitstring =
+      let sbit b = if b then "1" else "0" in
+      let bits = List.rev_map sbit (Array.to_list bs) in
+      String.concat "" bits in
     (match mode with
      | `Cpp -> Printf.sprintf "0b%s"
      | `Verilog -> Printf.sprintf "%d'b%s" (Array.length bs)) bitstring
@@ -189,6 +219,9 @@ module Util = struct
       Printf.sprintf "%s = %s" nm (string_of_value v) in
     Printf.sprintf "%s { %s }" sg.struct_name
       (String.concat ", " (List.map sp_field (List.combine sg.struct_fields v)))
+  and string_of_array v =
+    let strs = List.map string_of_value (Array.to_list v) in
+    Printf.sprintf "[|%s|]" (String.concat "; " strs)
 
   let reg_sigs_of_koika_package (pkg: _ Extr.koika_package_t) r =
     let reg_init =
@@ -201,8 +234,8 @@ module Util = struct
     List.iter (fun (r, _) -> Hashtbl.replace m r ()) (Extr.action_footprint a);
     List.of_seq (Hashtbl.to_seq_keys m)
 
-  let action_mentions_var v a =
-    Extr.action_mentions_var any_eq_dec v a
+  let action_mentions_var k a =
+    Extr.action_mentions_var any_eq_dec k a
 
   let member_mentions_shadowed_binding sg k0 v0 (m: _ Extr.member) =
     Extr.member_mentions_shadowed_binding any_eq_dec sg k0 v0 m
@@ -394,7 +427,7 @@ module Graphs = struct
       | Extr.CMux (sz, s, c1, c2) ->
          CMux (sz, dedup s, dedup c1, dedup c2)
       | Extr.CConst (sz, bs) ->
-         CConst (Util.bits_const_of_extr_bits sz bs)
+         CConst (Util.array_of_vect sz bs)
       | Extr.CReadRegister r ->
          CReadRegister (pkg.di_reg_sigs r)
       | Extr.CUnop (fn, c1) ->
