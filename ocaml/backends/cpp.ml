@@ -429,48 +429,52 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
   let p_printer tau =
     let v_arg = "val" in
     let v_tau = cpp_type_of_type tau in
-    let v_style = "const repr_style style = repr_style::full" in
-    let v_argdecl = sprintf "const %s %s, %s" v_tau v_arg v_style in
+    let v_style = "const fmtstyle style" in
+    let v_argdecl = sprintf "std::ostream& os, const %s& %s" v_tau v_arg in
 
     let p_printer pbody =
-      p_fn ~typ:"static _unused std::string "
-        ~name:"repr" ~args:v_argdecl pbody in
+      p_fn ~typ:"static _unused std::ostream&" ~name:"fmt"
+        ~args:(sprintf "%s, %s" v_argdecl v_style) (fun () ->
+          pbody (); p "return os;") in
 
     let p_enum_printer sg =
       p_printer (fun () ->
           p_scoped (sprintf "switch (%s)" v_arg) (fun () ->
               List.iter (fun (nm, _v) ->
                   let lbl = cpp_enumerator_name ~enum:(Some sg) nm in
-                  p "case %s: return \"%s::%s\";" lbl sg.enum_name nm) (* unmangled *)
+                  p "case %s: os << \"%s::%s\"; break;" lbl sg.enum_name nm) (* unmangled *)
                 sg.enum_members;
               let v_sz = typ_sz tau in
               let bits_sz_tau = cpp_type_of_type (Bits_t v_sz) in
               let v_cast = sprintf "%s::mk(%s)" bits_sz_tau v_arg in
-              p "default: return \"%s{\" + repr(%s, style) + \"}\";"
+              p "default: os << \"%s{\"; fmt(os, %s, opts) << \"}\";"
                 sg.enum_name v_cast)) in (* unmangled *)
 
     let p_struct_printer sg =
       p_printer (fun () ->
-          p "std::ostringstream stream;";
-          p "stream << \"%s { \";" sg.struct_name; (* unmangled *)
+          p "os << \"%s { \";" sg.struct_name; (* unmangled *)
           List.iter (fun (fname, _) ->
-              p "stream << \"  .%s = \" << repr(%s.%s, style) << \"; \";" (* unmangled *)
+              p "os << \".%s = \"; fmt(os, %s.%s, opts) << \"; \";" (* unmangled *)
                 fname v_arg (cpp_field_name fname))
             sg.struct_fields;
-          p "stream << \"}\";";
-          p "return stream.str();") in
+          p "os << \"}\";") in
 
     match tau with
     | Bits_t _ -> ()
     | Enum_t sg -> p_enum_printer sg
     | Struct_t sg -> p_struct_printer sg in
 
-  let p_operator_eq tau =
+  let p_operators tau =
     let v_sz = typ_sz tau in
     let v1, v2 = "v1", "v2" in
     let v_tau = cpp_type_of_type tau in
     let v_argdecl v = sprintf "const %s %s" v_tau v in
     let bits_tau = cpp_type_of_type (Bits_t v_sz) in
+
+    let p_ostream_printer () =
+      let args = sprintf "std::ostream& os, const %s& val" v_tau in
+      p_fn ~typ:"static _unused std::ostream&" ~name:"operator<<" ~args
+        (fun () -> p "return prims::fmt(os, val);") in
 
     let p_eq prbody =
       p_fn ~typ:"static _unused bits<1> "
@@ -493,17 +497,20 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
             sg.struct_fields;
           pr ")") in
 
-    match tau with
-    | Bits_t _ -> ()
-    | Enum_t sg -> p_enum_eq sg
-    | Struct_t sg -> p_struct_eq sg in
+    (match tau with
+     | Bits_t _ -> ()
+     | Enum_t sg -> p_enum_eq sg
+     | Struct_t sg -> p_struct_eq sg);
+    nl ();
+    p_ifdef "ndef SIM_MINIMAL" (fun () ->
+        p_ostream_printer ()) in
 
   let p_prims tau =
     let v_sz = typ_sz tau in
     let v_arg = "val" in
     let v_tau = cpp_type_of_type tau in
     let v_argdecl v = sprintf "const %s %s" v_tau v in
-    let bits_arg = "bits" in
+    let bits_arg = "bs" in
     let bits_tau = cpp_type_of_type (Bits_t v_sz) in
     let bits_argdecl = sprintf "const %s %s" bits_tau bits_arg in
 
@@ -571,12 +578,12 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     nl ();
     iter_sep nl p_struct_decl structs;
     nl ();
-    p_ifdef "ndef SIM_MINIMAL" (fun () ->
-        iter_sep nl p_printer types);
-    nl ();
-    iter_sep nl p_operator_eq types;
+    iter_sep nl p_operators types;
     nl ();
     p_scoped "namespace prims" (fun () ->
+        p_ifdef "ndef SIM_MINIMAL" (fun () ->
+            iter_sep nl p_printer types);
+        nl ();
         iter_sep nl p_prims types) in
 
   let p_preamble () =
@@ -612,7 +619,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
       p_decl (reg_type r) r.reg_name in
 
     let p_dump_register r =
-      p "std::cout << \"%s = \" << repr(%s) << std::endl;"
+      p "std::cout << \"%s = \" << %s << std::endl;"
         r.reg_name r.reg_name in
 
     let p_state_t () =
@@ -719,9 +726,9 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
         match fn with
         | Display fn ->
            let args = match fn with
-             | DisplayUtf8 _ -> sprintf "%s, repr_style::utf8" a1
+             | DisplayUtf8 _ -> sprintf "%s, prims::utf8" a1
              | DisplayValue _ -> a1 in
-           ImpureExpr (sprintf "prims::display(repr(%s))" args)
+           ImpureExpr (sprintf "prims::display(%s)" args)
         | Conv (tau, fn) ->
            let ns = "prims::" in
            let tau = Cuttlebone.Util.typ_of_extr_type tau in

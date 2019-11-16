@@ -98,6 +98,9 @@ namespace prims {
     if (!condition) { unreachable<void>(); }
   }
 
+  template <std::size_t sz> struct bits;
+  template <std::size_t sz> std::ostream& operator<<(std::ostream&, const bits<sz>&);
+
   template<std::size_t sz>
   struct bits {
     bits_t<sz> v;
@@ -180,6 +183,9 @@ namespace prims {
     bits<sz>& operator>>=(const std::size_t shift);
     template<std::size_t shift_sz> bits<sz>& operator<<=(const bits<shift_sz> shift);
     template<std::size_t shift_sz> bits<sz>& operator>>=(const bits<shift_sz> shift);
+
+    // https://stackoverflow.com/questions/4660123/
+    friend std::ostream& operator<<<sz>(std::ostream& os, const bits<sz>& bs);
 
     /// Constructors
 
@@ -574,13 +580,16 @@ namespace prims {
   template<std::size_t sz> template<std::size_t shift_sz>
   bits<sz>& bits<sz>::operator>>=(const bits<shift_sz> shift) { return (*this = *this >> shift); }
 
+  enum fmtstyle { full, hex, dec, bin, utf8 };
+
+  template<typename T>
 #ifdef SIM_MINIMAL
-  static _unused _display_unoptimized unit display(_unused const std::string& msg) {
+  static _unused _display_unoptimized unit display(const _unused T& msg, _unused fmtstyle style = fmtstyle::full) {
     return tt;
   }
 #else
-  static _unused unit display(_unused const std::string& msg) {
-    std::cout << msg;
+  static _unused unit display(const _unused T& msg, _unused fmtstyle style = fmtstyle::full) {
+    fmt(std::cout, msg, style);
     return tt;
   }
 #endif
@@ -590,80 +599,93 @@ namespace prims {
     return tt;
   }
 
-  // Forward-declared; our compiler defines one instance per structure type
-  template<typename T, std::size_t sz> _unused T unpack(bits<sz> /*bits*/);
+
+
+#ifndef SIM_MINIMAL
+  // This convenience function creates a string from an object
+  template<typename T>
+  std::string repr(const T& val, const fmtstyle style = fmtstyle::full) {
+    std::ostringstream stream;
+    fmt(stream, val, style);
+    return stream.str();
+  }
+
+  // This default overload passes a default ‘fmtstyle’
+  template<typename T>
+  std::ostream& fmt(std::ostream& os, const T& val) {
+    return fmt(os, val, fmtstyle::full);
+  }
+
+  /// Bits printing functions:
+
+  enum class prefixes { sized, plain, minimal };
+
+  namespace internal {
+    template<std::size_t sz>
+    static std::string decode_bitstring(bits<sz> val) {
+      std::string s{};
+      for (size_t pos = 0; pos < sz; pos += 8) {
+        bits<8> c = prims::truncate<8, sz>(val >> pos);
+        s.push_back(static_cast<char>(c.v));
+      }
+      return s;
+    }
+
+    template<std::size_t sz>
+    static std::ostream& bits_fmt(std::ostream& os, const bits<sz>& val, const fmtstyle style, const prefixes prefix) {
+      if (prefix == prefixes::sized) {
+        os << sz << "'";
+      }
+
+      switch (style) {
+      case fmtstyle::bin:
+        os << (prefix == prefixes::plain ? "0b" : "b");
+        for (size_t pos = sz; pos > 0; pos--) {
+          unsigned int bit = prims::truncate<1, sz>(val >> (pos - 1u)).v;
+          os << bit;
+        }
+        break;
+      case fmtstyle::hex:
+        os << (prefix == prefixes::plain ? "0x" : "x");
+        os << std::hex << +val.v << std::dec;
+        break;
+      case fmtstyle::dec:
+        os << std::dec << +val.v;
+        break;
+      case fmtstyle::utf8:
+        os << decode_bitstring(val);
+        break;
+      case fmtstyle::full:
+        if (sz <= 64) {
+          bits_fmt(os, val, fmtstyle::bin, prefixes::minimal);
+          os << " ("; bits_fmt(os, val, fmtstyle::hex, prefixes::plain);
+          os << ", "; bits_fmt(os, val, fmtstyle::dec, prefixes::plain);
+          os << ")";
+        } else {
+          bits_fmt(os, val, fmtstyle::hex, prefixes::minimal);
+        }
+        break;
+      }
+      return os;
+    }
+  }
+
+  template<std::size_t sz>
+  static std::ostream& fmt(std::ostream& os, const bits<sz>& val, const fmtstyle style) {
+    return internal::bits_fmt(os, val, style, prefixes::sized);
+  }
+
+  template<std::size_t sz>
+  std::ostream& operator<<(std::ostream& os, const bits<sz>& bs) {
+    return fmt(os, bs);
+  }
+
+#endif // #ifndef SIM_MINIMAL
 } // namespace prims
 
 using prims::unit;
 using prims::bits;
 using namespace prims::literals;
-
-#ifndef SIM_MINIMAL
-enum class repr_style {
-  full, hex, dec, bin, utf8
-};
-
-template<std::size_t sz>
-struct _repr {
-  bits<sz> val;
-  repr_style style;
-
-  enum class prefixes { sized, plain, minimal };
-  prefixes prefix;
-
-  _repr(bits<sz> val, repr_style style, prefixes prefix)
-    : val(val), style(style), prefix(prefix) {}
-
-  friend std::ostream& operator<<(std::ostream& stream, const _repr& r) {
-    if (r.prefix == prefixes::sized && r.style != repr_style::utf8) {
-      stream << sz << "'";
-    }
-
-    switch (r.style) {
-    case repr_style::bin:
-      stream << (r.prefix == prefixes::plain ? "0b" : "b");
-      for (size_t pos = sz; pos > 0; pos--) {
-        unsigned int bit = prims::truncate<1, sz>(r.val >> (pos - 1u)).v;
-        stream << bit;
-      }
-    break;
-    case repr_style::hex:
-      stream << (r.prefix == prefixes::plain ? "0x" : "x") << std::hex << +r.val.v;
-      break;
-    case repr_style::dec:
-      stream << std::dec << +r.val.v;
-      break;
-    case repr_style::utf8:
-      // FIXME: endianness problems: use arrays
-      // FIXME: Decode array of bytes before printing
-      for (size_t printed = 0; printed < sz; printed += 8) {
-        stream << static_cast<unsigned char>(
-            prims::truncate<8, sz>(r.val >> printed).v);
-      }
-      break;
-    case repr_style::full:
-      if (sz <= 64) {
-        stream << _repr<sz>(r.val, repr_style::bin, prefixes::minimal);
-        stream << " (" << _repr<sz>(r.val, repr_style::hex, prefixes::sized);
-        stream << ", " << _repr<sz>(r.val, repr_style::dec, prefixes::sized);
-        stream << ")";
-      } else {
-        stream << _repr<sz>(r.val, repr_style::hex, prefixes::minimal);
-      }
-      break;
-    }
-
-    return stream;
-  }
-};
-
-template<std::size_t sz>
-std::string repr(const bits<sz> val, const repr_style style = repr_style::full) {
-  std::ostringstream stream;
-  stream << _repr<sz>(val, style, _repr<sz>::prefixes::sized);
-  return stream.str();
-}
-#endif // #ifndef SIM_MINIMAL
 
 struct rwset_t {
   bool r1 : 1; // FIXME does adding :1 always help?
