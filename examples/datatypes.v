@@ -15,6 +15,10 @@ Definition flag :=
      enum_members := vect_of_list ["set"; "unset"];
      enum_bitpatterns := vect_of_list [Ob~1; Ob~0] |}.
 
+Definition ipv4_address :=
+  {| array_len := 4;
+     array_type := bits_t 8 |}.
+
 Definition ipv4_header :=
   {| struct_name := "ipv4_header";
      struct_fields :=
@@ -31,8 +35,8 @@ Definition ipv4_header :=
         ("ttl", bits_t 8);
         ("protocol", enum_t proto);
         ("checksum", bits_t 16);
-        ("src", bits_t 32);
-        ("dst", bits_t 32)] |}.
+        ("src", array_t ipv4_address);
+        ("dst", array_t ipv4_address)] |}.
 
 Definition option (a: type) :=
   {| struct_name := "result";
