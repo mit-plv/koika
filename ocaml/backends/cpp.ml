@@ -289,7 +289,7 @@ let reconstruct_switch action =
   | res -> res
 
 type target_info =
-  { tau: typ; declared: bool; name: var_t }
+  { tau: typ; mutable declared: bool; name: var_t }
 
 type assignment_target =
   | NoTarget
@@ -697,16 +697,25 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
           rule.rl_footprint in
 
       let p_declare_target = function
-        | VarTarget { tau; declared = false; name } ->
+        | VarTarget ({ tau; declared = false; name } as ti) ->
            p_decl tau name;
-           VarTarget { tau; declared = true; name }
-        | t -> t in
+           ti.declared <- true
+        | _ -> () in
 
       let gensym_target_info tau prefix =
         { tau; declared = false; name = gensym prefix } in
 
       let gensym_target tau prefix =
         VarTarget (gensym_target_info tau prefix) in
+
+      let maybe_gensym_target existing_target tau0 prefix =
+        (* Return ‘existing_target’ if it can store a value of type ‘tau0’;
+           otherwise, gensym a target starting with ‘prefix’.  This allows us to
+           print ‘subst(y, f, 1)’ with target ‘x’ as ‘x = y; x.f = 1’ instead of
+           ‘tmp = y; x = tmp; x.f = 1’. *)
+        match existing_target with
+        | VarTarget { tau; _ } when tau = tau0 -> existing_target
+        | VarTarget _ | NoTarget -> gensym_target tau0 prefix in
 
       let ensure_target tau t =
         match t with
@@ -720,11 +729,12 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
 
       let p_assign_expr ?(prefix = "") target result =
         match target, result with
-        | VarTarget { declared = true; name; _ }, (PureExpr e | ImpureExpr e) ->
-           if name <> e then p "%s = %s;" name e;
-           Assigned name
-        | VarTarget { tau; name; _ }, (PureExpr e | ImpureExpr e) ->
-           p_decl ~prefix ~init:e tau name;
+        | VarTarget ({ declared; name; tau } as ti), (PureExpr e | ImpureExpr e) ->
+           if declared && name <> e then
+             p "%s = %s;" name e
+           else if not declared then
+             (p_decl ~prefix ~init:e tau name;
+              ti.declared <- true);
            Assigned name
         | NoTarget, ImpureExpr e ->
            p "%s;" e; (* Keep impure exprs like extfuns *)
@@ -834,12 +844,12 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
            p_assign_and_ignore NoTarget (p_action pos NoTarget a1);
            p_action pos target a2
         | Extr.Bind (_, tau, _, v, expr, rl) ->
-           let target = p_declare_target target in
+           p_declare_target target;
            p_scoped "/* bind */" (fun () ->
                p_bound_var_assign pos tau v expr;
                p_assign_expr target (p_action pos target rl))
         | Extr.If (_, _, cond, tbr, fbr) ->
-           let target = p_declare_target target in
+           p_declare_target target;
            (match reconstruct_switch rl with
             | Some (var, tau, default, branches) ->
                let tau = Cuttlebone.Util.typ_of_extr_type tau in
@@ -876,7 +886,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
            taint [a] (p_unop fn (must_value a))
         | Extr.Binop (_, fn, a1, a2) ->
            let fsig = Cuttlebone.Extr.PrimSignatures.coq_Sigma2 fn in
-           let a1 = p_action pos (gensym_target (Cuttlebone.Util.argType 2 fsig 0) "x") a1 in
+           let a1 = p_action pos (maybe_gensym_target target (Cuttlebone.Util.argType 2 fsig 0) "x") a1 in
            let a2 = p_action pos (gensym_target (Cuttlebone.Util.argType 2 fsig 1) "y") a2 in
            taint [a1; a2] (p_binop target fn (must_value a1) (must_value a2))
         | Extr.ExternalCall (_, fn, a) ->
