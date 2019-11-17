@@ -1277,6 +1277,8 @@ let core_primitives =
   let open Cuttlebone.Extr.PrimUntyped in
   let unop fn = FnUnop fn in
   let binop fn = FnBinop fn in
+  let display_opts display_newline : Cuttlebone.Extr.display_options =
+    { display_strings = true; display_style = DFull; display_newline } in
   [("eq", `Fn (binop UEq));
    ("=", `Fn (binop UEq));
    ("pack", `Fn (unop (UConv UPack)));
@@ -1290,8 +1292,9 @@ let core_primitives =
    ("asubst", `ElementFn (fun pos -> binop (UArray2 (USubstElement pos))));
    ("aref-bits", `ArrayFn (fun sg pos -> unop (UArray1 (UGetElementBits (sg, pos)))));
    ("asubst-bits", `ArrayFn (fun sg pos -> binop (UArray2 (USubstElementBits (sg, pos)))));
-   ("display-value", `Fn (unop (UDisplay UDisplayValue)));
-   ("display-utf8", `Fn (unop (UDisplay UDisplayUtf8)))]
+   ("disp", `Fn (unop (UDisplay (UDisplayValue (display_opts false)))));
+   ("displn", `Fn (unop (UDisplay (UDisplayValue (display_opts true)))));
+   ("print", `Fn (unop (UDisplay UDisplayUtf8)))]
   |> StringMap.of_list
 
 let bits_primitives =

@@ -444,7 +444,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
   let p_printer tau =
     let v_arg = "val" in
     let v_tau = cpp_type_of_type tau in
-    let v_style = "const fmtstyle style" in
+    let v_style = "const fmtopts opts" in
     let v_argdecl = sprintf "std::ostream& os, const %s& %s" v_tau v_arg in
 
     let p_printer pbody =
@@ -746,14 +746,23 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
         | PureExpr s when List.exists is_impure_expr dependencies -> ImpureExpr s
         | other -> other in
 
+      let sp_display_style (dp: Cuttlebone.Extr.bits_display_style) =
+        match dp with
+        | DBin -> "prims::bin"
+        | DDec -> "prims::dec"
+        | DHex -> "prims::hex"
+        | DFull -> "prims::full" in
+
       let p_unop (fn: Cuttlebone.Extr.PrimTyped.fn1) a1 =
         let open Cuttlebone.Extr.PrimTyped in
         match fn with
         | Display fn ->
-           let args = match fn with
-             | DisplayUtf8 _ -> sprintf "%s, prims::utf8" a1
-             | DisplayValue _ -> a1 in
-           ImpureExpr (sprintf "prims::display(%s)" args)
+           ImpureExpr
+             (match fn with
+              | DisplayUtf8 _ -> sprintf "prims::putstring(%s)" a1
+              | DisplayValue (_, { display_strings; display_newline; display_style }) ->
+                 sprintf "prims::display(%s, { %b, %b, %s })" a1
+                   display_strings display_newline (sp_display_style display_style))
         | Conv (tau, fn) ->
            let tau = Cuttlebone.Util.typ_of_extr_type tau in
            PureExpr (match fn with

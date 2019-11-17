@@ -3,10 +3,18 @@ Require Export Koika.Common Koika.Environments Koika.IndexUtils Koika.Types Koik
 Inductive bits_comparison :=
   cLt | cGt | cLe | cGe.
 
+Inductive bits_display_style :=
+  dBin | dDec | dHex | dFull.
+
+Record display_options :=
+  { display_strings : bool;
+    display_newline : bool;
+    display_style : bits_display_style }.
+
 Module PrimUntyped.
   Inductive udisplay :=
   | UDisplayUtf8
-  | UDisplayValue.
+  | UDisplayValue (opts: display_options).
 
   Inductive uconv :=
   | UPack
@@ -69,7 +77,7 @@ End PrimUntyped.
 Module PrimTyped.
   Inductive fdisplay :=
   | DisplayUtf8 (len: nat)
-  | DisplayValue (tau: type).
+  | DisplayValue (tau: type) (opts: display_options).
 
   Inductive fconv :=
     Pack | Unpack | Ignore.
@@ -152,8 +160,8 @@ Module PrimTypeInference.
       | UDisplayUtf8 =>
         let/res sig := assert_kind (kind_array None) Arg1 tau1 in
         Success (Display (DisplayUtf8 sig.(array_len)))
-      | UDisplayValue =>
-        Success (Display (DisplayValue tau1))
+      | UDisplayValue opts =>
+        Success (Display (DisplayValue tau1 opts))
       end
     | UConv fn =>
       Success (match fn with
@@ -285,7 +293,7 @@ Module PrimSignatures.
     | Display fn =>
       {$ match fn with
          | DisplayUtf8 len => array_t {| array_len := len; array_type := bits_t 8 |}
-         | DisplayValue tau => tau
+         | DisplayValue tau _ => tau
          end ~> unit_t $}
     | Bits1 fn => Sig_of_CSig (CSigma1 fn)
     | Struct1 GetField sig idx => {$ struct_t sig ~> field_type sig idx $}
@@ -415,7 +423,7 @@ Module PrimSpecs.
     | Display fn =>
       match fn with
       | DisplayUtf8 _ => fun _ => Ob
-      | DisplayValue tau => fun _ => Ob
+      | DisplayValue tau _ => fun _ => Ob
       end
     | Conv tau fn =>
       match fn with

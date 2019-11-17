@@ -196,6 +196,19 @@ let pp_extr_type ppf tau =
 let pp_extr_array_type ppf sg =
   pp_extr_type ppf (Cuttlebone.Extr.Array_t sg)
 
+let rec pp_display_opts ppf Cuttlebone.Extr.{ display_strings; display_newline; display_style } =
+  let p fmt = fprintf ppf fmt in
+  p "{|@ @[";
+  p "display_strings := %a;@ " pp_bool display_strings;
+  p "display_newline := %a;@ " pp_bool display_newline;
+  p "display_style := %a" pp_display_style display_style;
+  p "@]@ |}"
+and pp_display_style ppf = function
+  | DBin -> fprintf ppf "dBin"
+  | DDec -> fprintf ppf "dDec"
+  | DHex -> fprintf ppf "dHex"
+  | DFull -> fprintf ppf "dFull"
+
 let rec pp_prim_ufn1 ppf (f: Cuttlebone.Extr.PrimUntyped.ufn1) = match f with
   | UDisplay f -> pp_app ppf "UDisplay" "%a" pp_prim_display_ufn f
   | UConv f -> pp_app ppf "UConv" "%a" pp_prim_uconv f
@@ -204,7 +217,7 @@ let rec pp_prim_ufn1 ppf (f: Cuttlebone.Extr.PrimUntyped.ufn1) = match f with
   | UArray1 f -> pp_app ppf "UArray1" "%a" pp_prim_uarray1 f
 and pp_prim_display_ufn ppf (f: Cuttlebone.Extr.PrimUntyped.udisplay) = match f with
   | UDisplayUtf8 -> pp_raw ppf "UDisplayUtf8"
-  | UDisplayValue -> pp_raw ppf "UDisplayValue"
+  | UDisplayValue opts -> pp_app ppf "UDisplayValue" "%a" pp_display_opts opts
 and pp_prim_uconv ppf (f: Cuttlebone.Extr.PrimUntyped.uconv) = match f with
   | UPack -> pp_raw ppf "UPack"
   | UUnpack tau -> pp_app ppf "UUnpack" "%a" pp_extr_type tau

@@ -11,8 +11,8 @@
 #include <string> // For prims::display
 
 #ifndef SIM_MINIMAL
-#include <sstream>
 #include <iostream>
+#include <iomanip> // For std::setfill
 #endif // #ifndef SIM_MINIMAL
 
 #ifdef SIM_DEBUG
@@ -197,7 +197,7 @@ namespace prims {
   };
 
   using unit = bits<0>;
-  const unit _unused tt{};
+  static const _unused unit tt{};
 
   namespace literal_parsing {
     using std::size_t;
@@ -588,19 +588,46 @@ namespace prims {
   template<std::size_t sz> template<std::size_t shift_sz>
   bits<sz>& bits<sz>::operator>>=(const bits<shift_sz> shift) { return (*this = *this >> shift); }
 
-  enum fmtstyle { full, hex, dec, bin, utf8 };
+  enum fmtstyle { full, hex, dec, bin };
+
+  struct fmtopts {
+    bool strings;
+    bool newline;
+    fmtstyle style;
+  };
+
+  static const _unused fmtopts default_fmtopts{ true, true, fmtstyle::full };
 
   template<typename T>
-#ifdef SIM_MINIMAL
-  static _unused _display_unoptimized unit display(const _unused T& msg, _unused fmtstyle style = fmtstyle::full) {
+  static _unused _display_unoptimized unit display(const _unused T& msg,
+                                                   const _unused fmtopts opts = default_fmtopts) {
+#ifndef SIM_MINIMAL
+    fmt(std::cout, msg, opts);
+    std::cout << std::endl;
+#endif
     return tt;
   }
-#else
-  static _unused unit display(const _unused T& msg, _unused fmtstyle style = fmtstyle::full) {
-    fmt(std::cout, msg, style);
-    return tt;
+
+#ifndef SIM_MINIMAL
+  namespace internal {
+    template<typename T, std::size_t len>
+    std::string string_of_bytestring(const std::array<T, len>& val) {
+      std::string s{};
+      for (size_t pos = 0; pos < len; pos ++) {
+        s.push_back(static_cast<char>(val[pos].v));
+      }
+      return s;
+    }
   }
 #endif
+
+  template<std::size_t len>
+  static _unused _display_unoptimized unit putstring(const _unused std::array<bits<8>, len>& msg) {
+#ifndef SIM_MINIMAL
+    std::cout << internal::string_of_bytestring(msg);
+#endif
+    return tt;
+  }
 
   template<typename T>
   unit ignore(const T /*unused*/) {
@@ -670,8 +697,8 @@ namespace prims {
 
     static std::array<T, len> unpack(bits<packed_sz> bs) { // not const&
       std::array<T, len> unpacked{};
-      for (std::size_t pos = 0; pos < len; pos++) {
-        unpacked[pos] = truncate<elem_sz, packed_sz>(bs);
+      for (std::size_t pos = 0; pos < len; pos++) { // CPC check the order of elements
+        unpacked[len - 1 - pos] = prims::unpack<T>(truncate<elem_sz, packed_sz>(bs));
         bs >>= elem_sz;
       }
       return unpacked;
@@ -681,16 +708,16 @@ namespace prims {
 #ifndef SIM_MINIMAL
   // This convenience function creates a string from an object
   template<typename T>
-  std::string repr(const T& val, const fmtstyle style = fmtstyle::full) {
+  std::string repr(const T& val, const fmtopts opts = default_fmtopts) {
     std::ostringstream stream;
-    fmt(stream, val, style);
+    fmt(stream, val, opts);
     return stream.str();
   }
 
-  // This default overload passes a default ‘fmtstyle’
+  // This default overload passes a default set of format options
   template<typename T>
   std::ostream& fmt(std::ostream& os, const T& val) {
-    return fmt(os, val, fmtstyle::full);
+    return fmt(os, val, default_fmtopts);
   }
 
   /// Bits printing functions:
@@ -709,7 +736,8 @@ namespace prims {
     }
 
     template<std::size_t sz>
-    static std::ostream& bits_fmt(std::ostream& os, const bits<sz>& val, const fmtstyle style, const prefixes prefix) {
+    static std::ostream& bits_fmt(std::ostream& os, const bits<sz>& val,
+                                  const fmtstyle style, const prefixes prefix) {
       if (prefix == prefixes::sized) {
         os << sz << "'";
       }
@@ -729,9 +757,6 @@ namespace prims {
       case fmtstyle::dec:
         os << std::dec << +val.v;
         break;
-      case fmtstyle::utf8:
-        os << decode_bitstring(val);
-        break;
       case fmtstyle::full:
         if (sz <= 64) {
           bits_fmt(os, val, fmtstyle::bin, prefixes::minimal);
@@ -748,8 +773,8 @@ namespace prims {
   }
 
   template<std::size_t sz>
-  static std::ostream& fmt(std::ostream& os, const bits<sz>& val, const fmtstyle style) {
-    return internal::bits_fmt(os, val, style, prefixes::sized);
+  static std::ostream& fmt(std::ostream& os, const bits<sz>& val, const fmtopts opts) {
+    return internal::bits_fmt(os, val, opts.style, prefixes::sized);
   }
 
   template<std::size_t sz>
@@ -761,16 +786,16 @@ namespace prims {
 
   namespace internal {
     template<typename T, std::size_t len>
-    static std::ostream& array_fmt(std::ostream& os, const std::array<T, len>& val, fmtstyle style) {
-      if (style == fmtstyle::full) {
-        style = fmtstyle::hex;
+    static std::ostream& array_fmt(std::ostream& os, const std::array<T, len>& val, fmtopts opts) {
+      if (opts.style == fmtstyle::full) {
+        opts.style = fmtstyle::hex;
       }
       os << "[";
       if (len != 0) {
-        fmt(os, val[0], style);
+        fmt(os, val[0], opts);
         for (std::size_t pos = 1; pos < len; pos++) {
           os << "; ";
-          fmt(os, val[pos], style);
+          fmt(os, val[pos], opts);
         }
       }
       os << "]";
@@ -779,21 +804,29 @@ namespace prims {
   }
 
   template<typename T, std::size_t len>
-  static std::ostream& fmt(std::ostream& os, const std::array<T, len>& val, fmtstyle style) {
-    return internal::array_fmt(os, val, style);
+  static std::ostream& fmt(std::ostream& os, const std::array<T, len>& val, const fmtopts opts) {
+    return internal::array_fmt(os, val, opts);
   }
 
   template<std::size_t len>
-  static std::ostream& fmt(std::ostream& os, const std::array<bits<8>, len>& val, fmtstyle style) {
-    if (style == fmtstyle::utf8) {
-      std::string s{};
-      for (size_t pos = 0; pos < len; pos ++) {
-        s.push_back(static_cast<char>(val[pos].v));
+  static std::ostream& fmt(std::ostream& os, const std::array<bits<8>, len>& val, const fmtopts opts) {
+    if (opts.strings) {
+      os << "\"" << std::hex << std::setfill('0');
+      for (std::size_t pos = 0; pos < len; pos ++) {
+        unsigned char chr = static_cast<unsigned char>(val[pos].v);
+        if (chr == '\\' || chr == '"') {
+          os << "\\" << chr;
+        } else if (std::isgraph(chr)) {
+          os << chr;
+        } else {
+          os << "\\x" << std::setw(2) << static_cast<unsigned>(chr);
+        }
       }
-      return os << "\"" << s << "\"";
+      os << "\"";
     } else {
-      return internal::array_fmt(os, val, style);
+      internal::array_fmt(os, val, opts);
     }
+    return os;
   }
 
   template<typename T, std::size_t len>
