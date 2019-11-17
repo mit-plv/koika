@@ -169,7 +169,7 @@ let rec cpp_type_of_type
   | Struct_t sg -> cpp_struct_name pi sg
   | Array_t sg -> cpp_type_of_array pi sg
 and cpp_type_of_array pi { array_type; array_len } =
-  sprintf "std::array<%s, %d>"
+  sprintf "prims::array<%s, %d>"
     (cpp_type_of_type pi array_type) array_len
 
 let cpp_enumerator_name pi ?(enum=None) nm =
@@ -577,7 +577,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
       let decl = sprintf "template <> struct type_info<%s>" v_tau in
       p_scoped decl ~terminator:";" (fun () ->
           p_cpp_decl ~prefix:"static constexpr " ~init:(sprintf "%d" v_sz)
-            "std::size_t" "size") in
+            "prims::bitwidth" "size") in
 
     p_type_info ();
     nl ();

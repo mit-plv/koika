@@ -90,6 +90,9 @@ using sbits_t = std::conditional_t<size ==  0, unit_t,
                                    wsbits_t<size>>>>>>;
 
 namespace prims {
+  using bitwidth = std::size_t;
+  using size_t = std::size_t;
+
   template<typename T>
   T __attribute__((noreturn)) unreachable() {
     __builtin_unreachable();
@@ -99,21 +102,24 @@ namespace prims {
     if (!condition) { unreachable<void>(); }
   }
 
-  template <std::size_t sz> struct bits;
-  template <std::size_t sz> std::ostream& operator<<(std::ostream&, const bits<sz>&);
+  template<typename T, size_t len>
+  using array = std::array<T, len>;
 
-  template<std::size_t sz>
+  template <bitwidth sz> struct bits;
+  template <bitwidth sz> std::ostream& operator<<(std::ostream&, const bits<sz>&);
+
+  template<bitwidth sz>
   struct bits {
     bits_t<sz> v;
 
 #ifndef __OPTIMIZE__
     // This makes debugging easier
-    static constexpr std::size_t size = sz;
+    static constexpr bitwidth size = sz;
 #endif
 
     /// Representation invariant
 
-    static constexpr int padding_width() {
+    static constexpr bitwidth padding_width() {
       // making this a function avoids polluting GDB's output
       return std::numeric_limits<bits_t<sz>>::digits - sz;
     }
@@ -172,7 +178,7 @@ namespace prims {
       return v;
     }
 
-    template<std::size_t idx_sz>
+    template<bitwidth idx_sz>
     bits<1> operator[](const bits<idx_sz> idx) const;
 
     bits<sz>& operator&=(const bits<sz> arg);
@@ -180,10 +186,10 @@ namespace prims {
     bits<sz>& operator^=(const bits<sz> arg);
     bits<sz>& operator+=(const bits<sz> arg);
     bits<sz>& operator-=(const bits<sz> arg);
-    bits<sz>& operator<<=(const std::size_t shift);
-    bits<sz>& operator>>=(const std::size_t shift);
-    template<std::size_t shift_sz> bits<sz>& operator<<=(const bits<shift_sz> shift);
-    template<std::size_t shift_sz> bits<sz>& operator>>=(const bits<shift_sz> shift);
+    bits<sz>& operator<<=(const size_t shift);
+    bits<sz>& operator>>=(const size_t shift);
+    template<bitwidth shift_sz> bits<sz>& operator<<=(const bits<shift_sz> shift);
+    template<bitwidth shift_sz> bits<sz>& operator>>=(const bits<shift_sz> shift);
 
     // https://stackoverflow.com/questions/4660123/
     friend std::ostream& operator<<<sz>(std::ostream& os, const bits<sz>& bs);
@@ -200,8 +206,6 @@ namespace prims {
   static const _unused unit tt{};
 
   namespace literal_parsing {
-    using std::size_t;
-
     template<uint base, char c>
     constexpr bool valid_digit() {
       if (base == 2) {
@@ -241,7 +245,7 @@ namespace prims {
 
     enum class parser { u64, u128, u256, u512, u1024, unsupported };
 
-    template <parser p, uint base, size_t sz, char... cs>
+    template <parser p, uint base, bitwidth sz, char... cs>
     struct parse_number {
       static_assert(p != parser::unsupported, "Unsupported bitsize.");
 #ifndef NEEDS_BOOST_MULTIPRECISION
@@ -250,7 +254,7 @@ namespace prims {
       static_assert(p == parser::u64 || base == 16, "boost::multiprecision only supports base-16 literals.");
     };
 
-    template <uint base, size_t sz, char... cs>
+    template <uint base, bitwidth sz, char... cs>
     struct parse_number<parser::u64, base, sz, cs...> {
       static constexpr uint64_t max = std::numeric_limits<bits_t<sz>>::max() >> bits<sz>::padding_width();
       static constexpr bits_t<sz> v = parse_u64<base, max, 0, cs...>();
@@ -259,28 +263,28 @@ namespace prims {
 #ifdef NEEDS_BOOST_MULTIPRECISION
     using namespace boost::multiprecision::literals;
 
-    template <size_t sz, char... cs>
+    template <bitwidth sz, char... cs>
     struct parse_number<parser::u128, 16, sz, cs...> {
       static constexpr bits_t<sz> v = operator "" _cppui128<'0', 'x', cs...>();
     };
 
-    template <size_t sz, char... cs>
+    template <bitwidth sz, char... cs>
     struct parse_number<parser::u256, 16, sz, cs...> {
       static constexpr bits_t<sz> v = operator "" _cppui256<'0', 'x', cs...>();
     };
 
-    template <size_t sz, char... cs>
+    template <bitwidth sz, char... cs>
     struct parse_number<parser::u512, 16, sz, cs...> {
       static constexpr bits_t<sz> v = operator "" _cppui512<'0', 'x', cs...>();
     };
 
-    template <size_t sz, char... cs>
+    template <bitwidth sz, char... cs>
     struct parse_number<parser::u1024, 16, sz, cs...> {
       static constexpr bits_t<sz> v = operator "" _cppui1024<'0', 'x', cs...>();
     };
 #endif
 
-    constexpr parser get_parser(size_t sz) {
+    constexpr parser get_parser(bitwidth sz) {
       if (sz <= 64) {
         return parser::u64;
       } else if (sz <= 128) {
@@ -296,23 +300,23 @@ namespace prims {
       }
     }
 
-    template <bool imm, uint base, size_t sz, char... cs>
+    template <bool imm, uint base, bitwidth sz, char... cs>
     struct parse_literal;
 
-    template <uint base, size_t sz, char... cs>
+    template <uint base, bitwidth sz, char... cs>
     struct parse_literal<true, base, sz, '\'', cs...> {
       static_assert(sz <= 64, "Immediates can't have size > 64.");
       static constexpr bits_t<sz> v = parse_number<get_parser(sz), base, sz, cs...>::v;
     };
 
-    template <uint base, size_t sz, char... cs>
+    template <uint base, bitwidth sz, char... cs>
     struct parse_literal<false, base, sz, '\'', cs...> {
       static constexpr bits<sz> v = bits<sz>{parse_number<get_parser(sz), base, sz, cs...>::v};
     };
 
-    template <bool imm, uint base, size_t sz, char c, char... cs>
+    template <bool imm, uint base, bitwidth sz, char c, char... cs>
     struct parse_literal<imm, base, sz, c, cs...> {
-      static constexpr size_t sz_digit = parse_digit<10, c>();
+      static constexpr bitwidth sz_digit = parse_digit<10, c>();
       static constexpr auto v = parse_literal<imm, base, 10 * sz + sz_digit, cs...>::v;
     };
 
@@ -370,222 +374,222 @@ namespace prims {
 
   /// Functions on bits
 
-  template<std::size_t sz>
+  template<bitwidth sz>
   static bits<sz> mask(bits<sz> arg) {
     return arg & bits<sz>::ones();
   }
 
-  template<std::size_t ret_sz, std::size_t sz>
+  template<bitwidth ret_sz, bitwidth sz>
   static bits<ret_sz> widen(const bits<sz> arg) {
     return bits<ret_sz>::mk(arg.v);
   }
 
-  template<std::size_t ret_sz, std::size_t sz>
+  template<bitwidth ret_sz, bitwidth sz>
   static bits<ret_sz> truncate(const bits<sz> arg) {
     return mask(widen<ret_sz, sz>(arg));
   }
 
-  template<std::size_t sz>
+  template<bitwidth sz>
   bits<1> msb(const bits<sz> arg) {
     return sz == 0 ? 0 : truncate<1, sz>(arg >> (sz - 1));
   }
 
-  template<std::size_t sz>
-  template<std::size_t idx_sz>
+  template<bitwidth sz>
+  template<bitwidth idx_sz>
   bits<1> bits<sz>::operator[](const bits<idx_sz> idx) const {
     return truncate<1>((*this) >> idx);
   }
 
-  template<std::size_t sz1, std::size_t idx, std::size_t width>
+  template<bitwidth sz1, bitwidth idx, bitwidth width>
   bits<sz1> slice_subst(const bits<sz1> data, const bits<width> repl) {
     const bits<sz1> mask = ~(widen<sz1, width>(bits<width>::ones()) << idx);
     return (data & mask) | (widen<sz1, width>(repl) << idx);
   }
 
-  template<std::size_t sz1, std::size_t sz2, std::size_t width>
+  template<bitwidth sz1, bitwidth sz2, bitwidth width>
   bits<width> indexed_slice(const bits<sz1> data, const bits<sz2> idx) {
     return truncate<width, sz1>(data >> idx);
   }
 
-  template<std::size_t sz>
+  template<bitwidth sz>
   bits<sz> operator&(const bits<sz> data1, const bits<sz> data2) {
     return bits<sz>::mk(data1.v & data2.v);
   }
 
-  template<std::size_t sz>
+  template<bitwidth sz>
   bits<sz> operator|(const bits<sz> data1, const bits<sz> data2) {
     return bits<sz>::mk(data1.v | data2.v);
   }
 
-  template<std::size_t sz>
+  template<bitwidth sz>
   bits<sz> operator^(const bits<sz> data1, const bits<sz> data2) {
     return bits<sz>::mk(data1.v ^ data2.v);
   }
 
-  template<std::size_t sz1, std::size_t sz2>
+  template<bitwidth sz1, bitwidth sz2>
   bits<sz1> asr(const bits<sz1> data, const bits<sz2> shift) {
     return bits<sz1>::of_shifted_sbits(data.to_shifted_sbits() >> shift.v);
   }
 
-  template<std::size_t sz1>
+  template<bitwidth sz1>
   bits<sz1> operator>>(const bits<sz1> data, const size_t shift) {
     return bits<sz1>::mk(data.v >> shift);
   }
 
-  template<std::size_t sz1>
+  template<bitwidth sz1>
   bits<sz1> operator<<(const bits<sz1> data, const size_t shift) {
     return mask(bits<sz1>::mk(data.v << shift));
   }
 
-  template<std::size_t sz1, std::size_t sz2>
+  template<bitwidth sz1, bitwidth sz2>
   bits<sz1> operator>>(const bits<sz1> data, const bits<sz2> shift) {
     return bits<sz1>::mk(data.v >> shift.v);
   }
 
-  template<std::size_t sz1, std::size_t sz2>
+  template<bitwidth sz1, bitwidth sz2>
   bits<sz1> operator<<(const bits<sz1> data, const bits<sz2> shift) {
     return mask(bits<sz1>::mk(data.v << shift.v));
   }
 
-  template<std::size_t sz>
+  template<bitwidth sz>
   bits<1> operator==(const bits<sz> x, const bits<sz> y) {
     return bits<1>::mk(x.v == y.v);
   }
 
-  template<std::size_t sz>
+  template<bitwidth sz>
   bits<1> operator!=(const bits<sz> x, const bits<sz> y) {
     return bits<1>::mk(x.v != y.v);;
   }
 
-  template<std::size_t sz>
+  template<bitwidth sz>
   bits<sz> operator+(const bits<sz> x, const bits<sz> y) {
     return bits<sz>::mk(x.v + y.v);
   }
 
-  template<std::size_t sz>
+  template<bitwidth sz>
   bits<sz> operator-(const bits<sz> x, const bits<sz> y) {
     return mask(bits<sz>::mk(x.v + ~y.v + 1));
   }
 
-  template<std::size_t sz>
+  template<bitwidth sz>
   bits<1> operator<(const bits<sz> x, const bits<sz> y) {
     return bits<1>::mk(x.v < y.v);
   }
 
-  template<std::size_t sz>
+  template<bitwidth sz>
   bits<1> operator>(const bits<sz> x, const bits<sz> y) {
     return bits<1>::mk(x.v > y.v);
   }
 
-  template<std::size_t sz>
+  template<bitwidth sz>
   bits<1> operator<=(const bits<sz> x, const bits<sz> y) {
     return bits<1>::mk(x.v <= y.v);
   }
 
-  template<std::size_t sz>
+  template<bitwidth sz>
   bits<1> operator>=(const bits<sz> x, const bits<sz> y) {
     return bits<1>::mk(x.v >= y.v);
   }
 
-  template<std::size_t sz>
+  template<bitwidth sz>
   bits<1> slt(const bits<sz> x, const bits<sz> y) {
     return bits<1>::mk(x.to_shifted_sbits() < y.to_shifted_sbits());
   }
 
-  template<std::size_t sz>
+  template<bitwidth sz>
   bits<1> sgt(const bits<sz> x, const bits<sz> y) {
     return bits<1>::mk(x.to_shifted_sbits() > y.to_shifted_sbits());
   }
 
-  template<std::size_t sz>
+  template<bitwidth sz>
   bits<1> sle(const bits<sz> x, const bits<sz> y) {
     return bits<1>::mk(x.to_shifted_sbits() <= y.to_shifted_sbits());
   }
 
-  template<std::size_t sz>
+  template<bitwidth sz>
   bits<1> sge(const bits<sz> x, const bits<sz> y) {
     return bits<1>::mk(x.to_shifted_sbits() >= y.to_shifted_sbits());
   }
 
-  template<std::size_t sz1, std::size_t sz2>
+  template<bitwidth sz1, bitwidth sz2>
   bits<sz1 + sz2> concat(const bits<sz1> x, const bits<sz2> y) {
     return widen<sz1 + sz2, sz1>(x) << sz2 | widen<sz1 + sz2, sz2>(y);
   }
 
-  template<std::size_t sz>
+  template<bitwidth sz>
   bits<sz> operator~(const bits<sz> data) {
     return mask(bits<sz>::mk(~data.v));
   }
 
-  template<std::size_t sz, std::size_t width>
+  template<bitwidth sz, bitwidth width>
   bits<std::max(sz, width)> sext(const bits<sz> x) {
-    constexpr std::size_t newsz = std::max(sz, width);
-    constexpr std::size_t nbits = width >= sz ? width - sz : std::size_t{0};
+    constexpr bitwidth newsz = std::max(sz, width);
+    constexpr bitwidth nbits = width >= sz ? width - sz : bitwidth{0};
     return bits<newsz>::of_shifted_sbits((widen<newsz, sz>(x) << nbits).to_shifted_sbits() >> nbits);
   }
 
-  template<std::size_t sz, std::size_t width>
+  template<bitwidth sz, bitwidth width>
   bits<std::max(sz, width)> zextl(const bits<sz> x) {
     return widen<std::max(sz, width), sz>(x);
   }
 
-  template<std::size_t sz, std::size_t width>
+  template<bitwidth sz, bitwidth width>
   bits<std::max(sz, width)> zextr(const bits<sz> x) {
     return widen<std::max(sz, width), sz>(x) << (std::max(width, sz) - sz);
   }
 
-  template<std::size_t sz, std::size_t times> struct repeat_t {
+  template<bitwidth sz, bitwidth times> struct repeat_t {
     static const bits<sz * times> v(bits<sz> bs) {
       return concat(repeat_t<sz, times - 1>::v(bs), bs);
     };
   };
 
-  template<std::size_t sz> struct repeat_t<sz, 0> {
+  template<bitwidth sz> struct repeat_t<sz, 0> {
     static const bits<0> v(bits<sz>) { return tt; };
   };
 
-  template<std::size_t times> struct repeat_t<1, times> {
+  template<bitwidth times> struct repeat_t<1, times> {
     static const bits<times> v(bits<1> bs) { return sext<1, times>(bs); };
   };
 
-  template<std::size_t sz> struct repeat_t<sz, 1> {
+  template<bitwidth sz> struct repeat_t<sz, 1> {
     static constexpr auto v(bits<sz> bs) { return bs; }
   };
 
-  template<std::size_t sz, std::size_t times>
+  template<bitwidth sz, bitwidth times>
   bits<sz * times> repeat(const bits<sz> bs) {
     return repeat_t<sz, times>::v(bs);
   }
 
-  template<std::size_t sz1, std::size_t idx, std::size_t width>
+  template<bitwidth sz1, bitwidth idx, bitwidth width>
   bits<width> slice(const bits<sz1> data) {
     return truncate<width, sz1>(data >> idx);
   }
 
-  template<std::size_t pos, typename T, std::size_t len>
-  std::array<T, len> replace(const std::array<T, len> arr, T val) {
-    std::array<T, len> copy = arr;
+  template<size_t pos, typename T, size_t len>
+  array<T, len> replace(const array<T, len> arr, T val) {
+    array<T, len> copy = arr;
     copy[pos] = val;
     return copy;
   }
 
-  template<std::size_t sz>
+  template<bitwidth sz>
   bits<sz>& bits<sz>::operator&=(const bits<sz> arg) { return (*this = *this & arg); }
-  template<std::size_t sz>
+  template<bitwidth sz>
   bits<sz>& bits<sz>::operator|=(const bits<sz> arg) { return (*this = *this | arg); }
-  template<std::size_t sz>
+  template<bitwidth sz>
   bits<sz>& bits<sz>::operator^=(const bits<sz> arg) { return (*this = *this ^ arg); }
-  template<std::size_t sz>
+  template<bitwidth sz>
   bits<sz>& bits<sz>::operator+=(const bits<sz> arg) { return (*this = *this + arg); }
-  template<std::size_t sz>
+  template<bitwidth sz>
   bits<sz>& bits<sz>::operator-=(const bits<sz> arg) { return (*this = *this - arg); }
-  template<std::size_t sz>
-  bits<sz>& bits<sz>::operator<<=(const std::size_t shift) { return (*this = *this << shift); }
-  template<std::size_t sz>
-  bits<sz>& bits<sz>::operator>>=(const std::size_t shift) { return (*this = *this >> shift); }
-  template<std::size_t sz> template<std::size_t shift_sz>
+  template<bitwidth sz>
+  bits<sz>& bits<sz>::operator<<=(const size_t shift) { return (*this = *this << shift); }
+  template<bitwidth sz>
+  bits<sz>& bits<sz>::operator>>=(const size_t shift) { return (*this = *this >> shift); }
+  template<bitwidth sz> template<bitwidth shift_sz>
   bits<sz>& bits<sz>::operator<<=(const bits<shift_sz> shift) { return (*this = *this << shift); }
-  template<std::size_t sz> template<std::size_t shift_sz>
+  template<bitwidth sz> template<bitwidth shift_sz>
   bits<sz>& bits<sz>::operator>>=(const bits<shift_sz> shift) { return (*this = *this >> shift); }
 
   enum fmtstyle { full, hex, dec, bin };
@@ -610,8 +614,8 @@ namespace prims {
 
 #ifndef SIM_MINIMAL
   namespace internal {
-    template<typename T, std::size_t len>
-    std::string string_of_bytestring(const std::array<T, len>& val) {
+    template<typename T, size_t len>
+    std::string string_of_bytestring(const array<T, len>& val) {
       std::string s{};
       for (size_t pos = 0; pos < len; pos ++) {
         s.push_back(static_cast<char>(val[pos].v));
@@ -621,8 +625,8 @@ namespace prims {
   }
 #endif
 
-  template<std::size_t len>
-  static _unused _display_unoptimized unit putstring(const _unused std::array<bits<8>, len>& msg) {
+  template<size_t len>
+  static _unused _display_unoptimized unit putstring(const _unused array<bits<8>, len>& msg) {
 #ifndef SIM_MINIMAL
     std::cout << internal::string_of_bytestring(msg);
 #endif
@@ -639,9 +643,9 @@ namespace prims {
   // Forward-declared; our compiler defines one instance per struct and enum.
   // Unpack needs to be structs to get return-type polymorphism through
   // explicit template instantiation.
-  template<typename T, std::size_t sz> struct _unpack;
+  template<typename T, bitwidth sz> struct _unpack;
 
-  template<typename T, std::size_t sz>
+  template<typename T, bitwidth sz>
   static T unpack(const bits<sz>& bs) {
     return _unpack<T, sz>::unpack(bs);
   }
@@ -650,22 +654,22 @@ namespace prims {
 
   template<typename T> struct type_info;
 
-  template<std::size_t sz> struct type_info<bits<sz>> {
-    static constexpr std::size_t size = sz;
+  template<bitwidth sz> struct type_info<bits<sz>> {
+    static constexpr bitwidth size = sz;
   };
 
-  template<typename T, std::size_t len> struct type_info<std::array<T, len>> {
-    static constexpr std::size_t size = len * type_info<T>::size;
+  template<typename T, size_t len> struct type_info<array<T, len>> {
+    static constexpr bitwidth size{len * type_info<T>::size};
   };
 
   /// Bits packing and unpacking (no-op, but needed by array packing/unpacking)
 
-  template<std::size_t sz>
+  template<bitwidth sz>
   static bits<sz> pack(const bits<sz> val) {
     return val;
   }
 
-  template<std::size_t sz, std::size_t packed_sz>
+  template<bitwidth sz, bitwidth packed_sz>
   struct _unpack<bits<sz>, packed_sz> {
     static_assert(sz == packed_sz, "Inconsistent size parameters in call to unpack");
     static bits<sz> unpack(const bits<packed_sz> bs) {
@@ -675,29 +679,29 @@ namespace prims {
 
   /// Array packing and unpacking
 
-  template<typename T, std::size_t len>
-  static bits<type_info<std::array<T, len>>::size> pack(const std::array<T, len>& val) {
-    constexpr std::size_t elem_sz = type_info<T>::size;
-    constexpr std::size_t packed_sz = type_info<std::array<T, len>>::size;
+  template<typename T, size_t len>
+  static bits<type_info<array<T, len>>::size> pack(const array<T, len>& val) {
+    constexpr bitwidth elem_sz = type_info<T>::size;
+    constexpr bitwidth packed_sz = type_info<array<T, len>>::size;
     bits<packed_sz> packed{};
-    for (std::size_t pos = 0; pos < len; pos++) {
+    for (size_t pos = 0; pos < len; pos++) {
       packed <<= elem_sz;
       packed |= prims::widen<packed_sz, elem_sz>(val[pos]);
     }
     return packed;
   }
 
-  template<typename T, std::size_t len, std::size_t packed_sz>
-  struct _unpack<std::array<T, len>, packed_sz> {
+  template<typename T, size_t len, bitwidth packed_sz>
+  struct _unpack<array<T, len>, packed_sz> {
     // We need a struct for return-type polymorphism
-    static constexpr std::size_t elem_sz = type_info<T>::size;
-    static constexpr std::size_t expected_sz = len * elem_sz;
+    static constexpr bitwidth elem_sz = type_info<T>::size;
+    static constexpr bitwidth expected_sz = len * elem_sz;
     static_assert(expected_sz == packed_sz,
                   "Inconsistent size parameters in call to unpack");
 
-    static std::array<T, len> unpack(bits<packed_sz> bs) { // not const&
-      std::array<T, len> unpacked{};
-      for (std::size_t pos = 0; pos < len; pos++) { // CPC check the order of elements
+    static array<T, len> unpack(bits<packed_sz> bs) { // not const&
+      array<T, len> unpacked{};
+      for (size_t pos = 0; pos < len; pos++) { // CPC check the order of elements
         unpacked[len - 1 - pos] = prims::unpack<T>(truncate<elem_sz, packed_sz>(bs));
         bs >>= elem_sz;
       }
@@ -725,17 +729,17 @@ namespace prims {
   enum class prefixes { sized, plain, minimal };
 
   namespace internal {
-    template<std::size_t sz>
+    template<bitwidth sz>
     static std::string decode_bitstring(bits<sz> val) {
       std::string s{};
-      for (size_t pos = 0; pos < sz; pos += 8) {
+      for (bitwidth pos = 0; pos < sz; pos += 8) {
         bits<8> c = prims::truncate<8, sz>(val >> pos);
         s.push_back(static_cast<char>(c.v));
       }
       return s;
     }
 
-    template<std::size_t sz>
+    template<bitwidth sz>
     static std::ostream& bits_fmt(std::ostream& os, const bits<sz>& val,
                                   const fmtstyle style, const prefixes prefix) {
       if (prefix == prefixes::sized) {
@@ -745,7 +749,7 @@ namespace prims {
       switch (style) {
       case fmtstyle::bin:
         os << (prefix == prefixes::plain ? "0b" : "b");
-        for (size_t pos = sz; pos > 0; pos--) {
+        for (bitwidth pos = sz; pos > 0; pos--) {
           unsigned int bit = prims::truncate<1, sz>(val >> (pos - 1u)).v;
           os << bit;
         }
@@ -772,12 +776,12 @@ namespace prims {
     }
   }
 
-  template<std::size_t sz>
+  template<bitwidth sz>
   static std::ostream& fmt(std::ostream& os, const bits<sz>& val, const fmtopts opts) {
     return internal::bits_fmt(os, val, opts.style, prefixes::sized);
   }
 
-  template<std::size_t sz>
+  template<bitwidth sz>
   std::ostream& operator<<(std::ostream& os, const bits<sz>& bs) {
     return fmt(os, bs);
   }
@@ -785,15 +789,15 @@ namespace prims {
   /// Array printing functions
 
   namespace internal {
-    template<typename T, std::size_t len>
-    static std::ostream& array_fmt(std::ostream& os, const std::array<T, len>& val, fmtopts opts) {
+    template<typename T, size_t len>
+    static std::ostream& array_fmt(std::ostream& os, const array<T, len>& val, fmtopts opts) {
       if (opts.style == fmtstyle::full) {
         opts.style = fmtstyle::hex;
       }
       os << "[";
       if (len != 0) {
         fmt(os, val[0], opts);
-        for (std::size_t pos = 1; pos < len; pos++) {
+        for (size_t pos = 1; pos < len; pos++) {
           os << "; ";
           fmt(os, val[pos], opts);
         }
@@ -803,16 +807,16 @@ namespace prims {
     }
   }
 
-  template<typename T, std::size_t len>
-  static std::ostream& fmt(std::ostream& os, const std::array<T, len>& val, const fmtopts opts) {
+  template<typename T, size_t len>
+  static std::ostream& fmt(std::ostream& os, const array<T, len>& val, const fmtopts opts) {
     return internal::array_fmt(os, val, opts);
   }
 
-  template<std::size_t len>
-  static std::ostream& fmt(std::ostream& os, const std::array<bits<8>, len>& val, const fmtopts opts) {
+  template<size_t len>
+  static std::ostream& fmt(std::ostream& os, const array<bits<8>, len>& val, const fmtopts opts) {
     if (opts.strings) {
       os << "\"" << std::hex << std::setfill('0');
-      for (std::size_t pos = 0; pos < len; pos ++) {
+      for (size_t pos = 0; pos < len; pos ++) {
         unsigned char chr = static_cast<unsigned char>(val[pos].v);
         if (chr == '\\' || chr == '"') {
           os << "\\" << chr;
@@ -829,8 +833,8 @@ namespace prims {
     return os;
   }
 
-  template<typename T, std::size_t len>
-  std::ostream& operator<<(std::ostream& os, const std::array<T, len>& val) {
+  template<typename T, size_t len>
+  std::ostream& operator<<(std::ostream& os, const array<T, len>& val) {
     return fmt(os, val);
   }
 #endif // #ifndef SIM_MINIMAL
