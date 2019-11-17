@@ -103,7 +103,12 @@ namespace prims {
   }
 
   template<typename T, size_t len>
-  using array = std::array<T, len>;
+  struct array : public std::array<T, len> { // Inherit to be able to overload ‘==’
+    // https://stackoverflow.com/questions/24280521/
+    // TODO: remove this constructor once we move to C++17
+    template <typename... Args>
+    array(Args &&... args) : std::array<T, len>({std::forward<Args>(args)...}) {}
+  };
 
   template <bitwidth sz> struct bits;
   template <bitwidth sz> std::ostream& operator<<(std::ostream&, const bits<sz>&);
@@ -454,6 +459,12 @@ namespace prims {
   template<bitwidth sz>
   bits<1> operator==(const bits<sz> x, const bits<sz> y) {
     return bits<1>::mk(x.v == y.v);
+  }
+
+  template<typename T, size_t len>
+  bits<1> operator==(const array<T, len> x, const array<T, len> y) {
+    return bits<1>::mk(static_cast<const std::array<T, len>&>(x) ==
+                       static_cast<const std::array<T, len>&>(y));
   }
 
   template<bitwidth sz>

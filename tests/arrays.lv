@@ -7,12 +7,14 @@
   (register r 16'b0)
 
   (rule init
-    (let ((arr (init (array bool) true false true true)))
+    (let ((arr0 (init (array bool) true false true true))
+          (arr arr0))
       (displn arr)
       (setq arr (asubst 0 arr false))
       (displn arr)
       (setq arr (asubst 1 arr true))
-      (displn arr)))
+      (displn arr)
+      (displn (= arr0 (asubst 1 (asubst 0 arr true) false)))))
 
   (rule init_chars
     (let ((str (init (array char) 8'107 8'195 8'180 8'105 8'107 8'97)))
