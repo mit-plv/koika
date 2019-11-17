@@ -1,0 +1,47 @@
+;;; Unit tests for array functions
+
+(enum test
+  ::x 1'b1)
+
+(module arrays
+  (register r 16'b0)
+
+  (rule init
+    (let ((arr (init (array bool) true false true true)))
+      (displn arr)
+      (setq arr (asubst 0 arr false))
+      (displn arr)
+      (setq arr (asubst 1 arr true))
+      (displn arr)))
+
+  (rule init_chars
+    (let ((str (init (array char) 8'107 8'195 8'180 8'105 8'107 8'97)))
+      (displn str)
+      (print str)
+      (print (init string "\n"))
+      (let ((packed (pack str)))
+        (print (init string "packed: "))
+        (displn packed)
+        (let ((unpacked (unpack (array char 6) packed)))
+          (print (init string "unpacked: "))
+          (displn unpacked)))))
+
+  (rule init_str
+    (let ((str (init string "kôika")))
+      (displn str)
+      (print str)
+      (print (init string "\n"))
+      (displn (aref 0 str))))
+
+  (rule array_of_strings
+    (displn
+     (init (array (array char 8))
+           (init string "abcdefgh")
+           (init (array char) 8'97 8'98 8'99 8'100 8'101 8'102 8'103 8'104))))
+
+  (rule array_of_enums
+    (displn
+     (init (array 'test)
+           ::x ::x ::x)))
+
+  (scheduler s (sequence init init_chars init_str array_of_strings array_of_enums)))
