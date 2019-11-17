@@ -190,10 +190,10 @@ let register_subtypes (pi: program_info) tau =
     | Array_t { array_type; _ } -> loop array_type in
   loop tau
 
-let z_to_str (base: [`Bin | `Hex]) bitlength z =
+let z_to_str (base: [`Bin | `Hex]) bitlen z =
   let b, w = match base with
-    | `Hex -> "x", (bitlength + 7) / 8
-    | `Bin -> "b", bitlength in
+    | `Hex -> "x", (bitlen + 7) / 8
+    | `Bin -> "b", bitlen in
   let fmt = sprintf "%%0%d%s" w b in
   Z.format fmt z
 
@@ -205,12 +205,15 @@ let cpp_const_init (pi: program_info) immediate sz cst =
     if immediate then "prims::tt.v" else "prims::tt"
   else
     let imm_suffix = if immediate then "v" else "" in
-    if sz <= 32 then
-      let lit = z_to_str `Bin sz cst in
+    let wide = sz > 8 in
+    let trivial = Z.equal cst Z.zero || Z.equal cst Z.one in
+    let bitlen = if wide && trivial then 0 else sz in
+    if bitlen <= 8 && sz <= 64 then
+      let lit = z_to_str `Bin bitlen cst in
       let prefix = sprintf "%d'" sz in
       prefix ^ lit ^ "_b" ^ imm_suffix
     else if sz <= 1024 then
-      let lit = z_to_str `Hex sz cst in
+      let lit = z_to_str `Hex bitlen cst in
       let prefix = sprintf "0x%d'" sz in
       prefix ^ lit ^ "_x" ^ imm_suffix
     else
