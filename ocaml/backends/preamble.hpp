@@ -386,12 +386,12 @@ namespace prims {
 
   template<bitwidth ret_sz, bitwidth sz>
   static bits<ret_sz> truncate(const bits<sz> arg) {
-    return mask(widen<ret_sz, sz>(arg));
+    return mask(widen<ret_sz>(arg));
   }
 
   template<bitwidth sz>
   bits<1> msb(const bits<sz> arg) {
-    return sz == 0 ? 0 : truncate<1, sz>(arg >> (sz - 1));
+    return sz == 0 ? 0 : truncate<1>(arg >> (sz - 1));
   }
 
   template<bitwidth sz>
@@ -400,15 +400,15 @@ namespace prims {
     return truncate<1>((*this) >> idx);
   }
 
-  template<bitwidth sz1, bitwidth idx, bitwidth width>
+  template<bitwidth idx, bitwidth sz1, bitwidth width>
   bits<sz1> slice_subst(const bits<sz1> data, const bits<width> repl) {
-    const bits<sz1> mask = ~(widen<sz1, width>(bits<width>::ones()) << idx);
-    return (data & mask) | (widen<sz1, width>(repl) << idx);
+    const bits<sz1> mask = ~(widen<sz1>(bits<width>::ones()) << idx);
+    return (data & mask) | (widen<sz1>(repl) << idx);
   }
 
-  template<bitwidth sz1, bitwidth sz2, bitwidth width>
+  template<bitwidth width, bitwidth sz1, bitwidth sz2>
   bits<width> indexed_slice(const bits<sz1> data, const bits<sz2> idx) {
-    return truncate<width, sz1>(data >> idx);
+    return truncate<width>(data >> idx);
   }
 
   template<bitwidth sz>
@@ -513,7 +513,7 @@ namespace prims {
 
   template<bitwidth sz1, bitwidth sz2>
   bits<sz1 + sz2> concat(const bits<sz1> x, const bits<sz2> y) {
-    return widen<sz1 + sz2, sz1>(x) << sz2 | widen<sz1 + sz2, sz2>(y);
+    return widen<sz1 + sz2>(x) << sz2 | widen<sz1 + sz2>(y);
   }
 
   template<bitwidth sz>
@@ -521,49 +521,50 @@ namespace prims {
     return mask(bits<sz>::mk(~data.v));
   }
 
-  template<bitwidth sz, bitwidth width>
+  template<bitwidth width, bitwidth sz>
   bits<std::max(sz, width)> sext(const bits<sz> x) {
     constexpr bitwidth newsz = std::max(sz, width);
     constexpr bitwidth nbits = width >= sz ? width - sz : bitwidth{0};
-    return bits<newsz>::of_shifted_sbits((widen<newsz, sz>(x) << nbits).to_shifted_sbits() >> nbits);
+    return bits<newsz>::of_shifted_sbits((widen<newsz>(x) << nbits).to_shifted_sbits() >> nbits);
   }
 
-  template<bitwidth sz, bitwidth width>
+  template<bitwidth width, bitwidth sz>
   bits<std::max(sz, width)> zextl(const bits<sz> x) {
-    return widen<std::max(sz, width), sz>(x);
+    return widen<std::max(sz, width)>(x);
   }
 
-  template<bitwidth sz, bitwidth width>
+  template<bitwidth width, bitwidth sz>
   bits<std::max(sz, width)> zextr(const bits<sz> x) {
-    return widen<std::max(sz, width), sz>(x) << (std::max(width, sz) - sz);
+    constexpr bitwidth mx = std::max(sz, width);
+    return widen<mx>(x) << (mx - sz);
   }
 
-  template<bitwidth sz, bitwidth times> struct repeat_t {
+  template<bitwidth times, bitwidth sz> struct repeat_t {
     static const bits<sz * times> v(bits<sz> bs) {
-      return concat(repeat_t<sz, times - 1>::v(bs), bs);
+      return concat(repeat_t<times - 1, sz>::v(bs), bs);
     };
   };
 
-  template<bitwidth sz> struct repeat_t<sz, 0> {
+  template<bitwidth sz> struct repeat_t<0, sz> {
     static const bits<0> v(bits<sz>) { return tt; };
   };
 
-  template<bitwidth times> struct repeat_t<1, times> {
-    static const bits<times> v(bits<1> bs) { return sext<1, times>(bs); };
+  template<bitwidth times> struct repeat_t<times, 1> {
+    static const bits<times> v(bits<1> bs) { return sext<times>(bs); };
   };
 
-  template<bitwidth sz> struct repeat_t<sz, 1> {
+  template<bitwidth sz> struct repeat_t<1, sz> {
     static constexpr auto v(bits<sz> bs) { return bs; }
   };
 
-  template<bitwidth sz, bitwidth times>
+  template<bitwidth times, bitwidth sz>
   bits<sz * times> repeat(const bits<sz> bs) {
-    return repeat_t<sz, times>::v(bs);
+    return repeat_t<times, sz>::v(bs);
   }
 
-  template<bitwidth sz1, bitwidth idx, bitwidth width>
+  template<bitwidth idx, bitwidth width, bitwidth sz1>
   bits<width> slice(const bits<sz1> data) {
-    return truncate<width, sz1>(data >> idx);
+    return truncate<width>(data >> idx);
   }
 
   template<size_t pos, typename T, size_t len>
@@ -686,7 +687,7 @@ namespace prims {
     bits<packed_sz> packed{};
     for (size_t pos = 0; pos < len; pos++) {
       packed <<= elem_sz;
-      packed |= prims::widen<packed_sz, elem_sz>(val[pos]);
+      packed |= prims::widen<packed_sz>(val[pos]);
     }
     return packed;
   }
@@ -702,7 +703,7 @@ namespace prims {
     static array<T, len> unpack(bits<packed_sz> bs) { // not const&
       array<T, len> unpacked{};
       for (size_t pos = 0; pos < len; pos++) { // CPC check the order of elements
-        unpacked[len - 1 - pos] = prims::unpack<T>(truncate<elem_sz, packed_sz>(bs));
+        unpacked[len - 1 - pos] = prims::unpack<T>(truncate<elem_sz>(bs));
         bs >>= elem_sz;
       }
       return unpacked;
@@ -733,7 +734,7 @@ namespace prims {
     static std::string decode_bitstring(bits<sz> val) {
       std::string s{};
       for (bitwidth pos = 0; pos < sz; pos += 8) {
-        bits<8> c = prims::truncate<8, sz>(val >> pos);
+        bits<8> c = prims::truncate<8>(val >> pos);
         s.push_back(static_cast<char>(c.v));
       }
       return s;
@@ -750,7 +751,7 @@ namespace prims {
       case fmtstyle::bin:
         os << (prefix == prefixes::plain ? "0b" : "b");
         for (bitwidth pos = sz; pos > 0; pos--) {
-          unsigned int bit = prims::truncate<1, sz>(val >> (pos - 1u)).v;
+          unsigned int bit = prims::truncate<1>(val >> (pos - 1u)).v;
           os << bit;
         }
         break;

@@ -236,11 +236,11 @@ let cpp_ext_funcall f a =
 let cpp_bits1_fn_name (f: Extr.PrimTyped.fbits1) =
   match f with
   | Not _ -> "~"
-  | SExt (sz, width) -> sprintf "prims::sext<%d, %d>" sz width
-  | ZExtL (sz, width) -> sprintf "prims::zextl<%d, %d>" sz width
-  | ZExtR (sz, width) -> sprintf "prims::zextr<%d, %d>" sz width
-  | Repeat (sz, times) -> sprintf "prims::repeat<%d, %d>" sz times
-  | Slice (sz, offset, width) -> sprintf "prims::slice<%d, %d, %d>" sz offset width
+  | SExt (_sz, width) -> sprintf "prims::sext<%d>" width
+  | ZExtL (_sz, width) -> sprintf "prims::zextl<%d>" width
+  | ZExtR (_sz, width) -> sprintf "prims::zextr<%d>" width
+  | Repeat (_sz, times) -> sprintf "prims::repeat<%d>" times
+  | Slice (_sz, offset, width) -> sprintf "prims::slice<%d, %d>" offset width
 
 let cpp_bits2_fn_name (f: Extr.PrimTyped.fbits2) =
   match f with
@@ -252,8 +252,8 @@ let cpp_bits2_fn_name (f: Extr.PrimTyped.fbits2) =
   | Asr _ -> `Fn "prims::asr"
   | Concat _ -> `Fn "prims::concat"
   | Sel _ -> `Array
-  | SliceSubst (sz, offset, width) -> `Fn (sprintf "prims::slice_subst<%d, %d, %d>" sz offset width)
-  | IndexedSlice (sz, width) -> `Fn (sprintf "prims::indexed_slice<%d, %d, %d>" sz (Cuttlebone.Util.log2 sz) width)
+  | SliceSubst (_sz, offset, _width) -> `Fn (sprintf "prims::slice_subst<%d>" offset)
+  | IndexedSlice (_sz, width) -> `Fn (sprintf "prims::indexed_slice<%d>" width)
   | Plus _ -> `Infix "+"
   | Minus _ -> `Infix "-"
   | EqBits _ -> `Infix "=="
@@ -416,11 +416,11 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     match tau with
     | Bits_t _ -> arg
     | Enum_t sg ->
-       sprintf "prims::unpack<%s, %d>%s" (cpp_enum_name sg) (enum_sz sg) parg
+       sprintf "prims::unpack<%s>%s" (cpp_enum_name sg) parg
     | Struct_t sg ->
-       sprintf "prims::unpack<%s, %d>%s" (cpp_struct_name sg) (struct_sz sg) parg
+       sprintf "prims::unpack<%s>%s" (cpp_struct_name sg) parg
     | Array_t sg ->
-       sprintf "prims::unpack<%s, %d>%s" (cpp_type_of_array sg) (array_sz sg) parg in
+       sprintf "prims::unpack<%s>%s" (cpp_type_of_array sg) parg in
 
   let p_enum_decl sg =
     let esz = enum_sz sg in
@@ -554,7 +554,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
               let fval = sprintf "%s.%s" v_arg fname in
               let fpacked = sp_packer ftau ~arg:fval in
               if idx <> 0 then p "%s <<= %d;" var sz;
-              p "%s |= prims::widen<%d, %d>(%s);" var v_sz sz fpacked)
+              p "%s |= prims::widen<%d>(%s);" var v_sz fpacked)
             sg.struct_fields;
           p "return %s;" var) in
 
@@ -565,8 +565,8 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
           List.fold_right (fun (fname, ftau) offset ->
               let sz = typ_sz ftau in
               let fname = cpp_field_name fname in
-              let fval = sprintf "prims::truncate<%d, %d>(%s >> %du)"
-                           sz v_sz bits_arg offset in
+              let fval = sprintf "prims::truncate<%d>(%s >> %du)"
+                           sz bits_arg offset in
               let unpacked = sp_unpacker ~arg:fval ftau in
               p "%s.%s = %s;" var fname unpacked;
               offset + sz)
