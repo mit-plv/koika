@@ -164,11 +164,5 @@ Module Rf (s: Rf_sig).
 End Rf.
 
 
-Fixpoint signExtend {reg_t} (n:nat) (m:nat) : UInternalFunction reg_t empty_ext_fn_t :=
-  {{
-      fun (arg : bits_t n) : bits_t (m+n) =>
-        `match (m) with
-         | O => {{ arg }}
-         | S m => {{(arg[#(Bits.of_nat (log2 (pred n)) (pred n))]) ++ {signExtend n m}(arg)}}
-         end`
-  }}.
+Definition signExtend {reg_t} (n:nat) (m:nat) : UInternalFunction reg_t empty_ext_fn_t :=
+  {{ fun (arg : bits_t n) : bits_t (m+n) => sext(arg, m + n) }}.
