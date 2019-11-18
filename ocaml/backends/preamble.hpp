@@ -882,7 +882,8 @@ struct rwset_t {
     r1 = w0 = w1 = false;
   }
 
-  rwset_t() : r1(false), w0(false), w1(false) {}
+  // Removing this constructor causes collatz's performance to drop 5x with GCC
+  rwset_t() : r1{}, w0{}, w1{} {}
 };
 
 template<typename T>
@@ -931,7 +932,8 @@ struct reg_log_t {
     return data0;
   }
 
-  reg_log_t() : data0(T{}), data1(T{}) {}
+  // Removing this constructor causes collatz's performance to drop 5x with GCC
+  reg_log_t() : rwset{}, data0{}, data1{} {}
 };
 
 #define CHECK_RETURN(can_fire) { if (!(can_fire)) { return false; } }

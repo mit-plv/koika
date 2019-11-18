@@ -949,7 +949,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
       let p_init_data0 { reg_name = nm; _ } =
         p "Log.%s.data0 = state.%s;" nm nm in
       p_fn ~typ:"explicit" ~name:hpp.cpp_classname
-        ~args:"const state_t init" ~annot:" : state(init)"
+        ~args:"const state_t init" ~annot:" : log{}, Log{}, state{init}, extfuns{}"
         (fun () -> iter_all_registers p_init_data0) in
 
     let rec p_scheduler pos s =
@@ -990,8 +990,8 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
         p "protected:";
         p_log_t ();
         nl ();
-        p "log_t Log;";
         p "log_t log;";
+        p "log_t Log;";
         p "state_t state;";
         p "extfuns_t extfuns;";
         nl ();
