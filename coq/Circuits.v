@@ -693,14 +693,11 @@ Section CircuitCompilation.
       compile_scheduler_circuit s input
     end.
 
-  Definition commit_rwdata {sz} (reg: @rwdata sz) initial_value : circuit sz :=
+  Definition commit_rwdata {sz} (reg: @rwdata sz) : circuit sz :=
     CAnnotOpt "commit_write1"
               (CMux (reg.(write1))
                     (reg.(data1))
-                    (CAnnotOpt "commit_write0"
-                               (CMux (reg.(write0))
-                                     (reg.(data0))
-                                     (CAnnotOpt "commit_unchanged" initial_value)))).
+                    (reg.(data0))).
 
   Definition init_scheduler_rwdata idx : rwdata :=
     {| read0 := $`"sched_init_no_read0"` Ob~0;
@@ -719,7 +716,7 @@ Section CircuitCompilation.
   Definition compile_scheduler' (s: scheduler pos_t rule_name_t)
     : register_update_circuitry :=
     let s := compile_scheduler_circuit s init_scheduler_circuit in
-    map2 REnv (fun k r1 r2 => commit_rwdata r1 r2) s cr.
+    map REnv (fun k r => commit_rwdata r) s.
 End CircuitCompilation.
 
 Arguments CR_of_R {reg_t} R idx : assert.

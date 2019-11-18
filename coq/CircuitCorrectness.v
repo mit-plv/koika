@@ -1577,30 +1577,24 @@ Section CompilerCorrectness.
         bits_of_value (REnv.(getenv) (commit_update r (interp_scheduler r sigma rules s)) idx).
   Proof.
     intros; unfold compile_scheduler', commit_update, commit_rwdata, interp_scheduler.
-    rewrite !getenv_map2, !getenv_create; cbn.
+    rewrite !getenv_map, !getenv_create; cbn.
     repeat (rewrite !lco_proof; cbn).
     pose proof (compile_scheduler_circuit_correct s log_empty (init_scheduler_circuit rc)
                                                   ltac:(ceauto) ltac:(ceauto)
                                                   ltac:(ceauto) ltac:(ceauto)) as (Hrv & Hcst0 & Hcst1).
     specialize (Hrv idx); specialize (Hcst0 idx); specialize (Hcst1 idx); cbv zeta in *.
-    repeat cleanup_step.
-    repeat bool_cleanup.
+    repeat cleanup_step || bool_cleanup.
 
     rewrite scheduler_log_writes_ordered by ceauto.
 
     destruct (log_existsb _ _ is_write1) eqn:?; cbn.
-    lazymatch goal with
-    | [ H: _ -> match ?x with _ => _ end |- _ ] =>
-      let Heq := fresh in
-      specialize (H eq_refl); destruct x eqn:Heq; try (exfalso; eassumption);
-        []; rewrite H
-    end.
-
-    reflexivity.
-    rewrite latest_write1_None by eauto.
-    destruct (log_existsb _ _ is_write0) eqn:?; cbn.
-    - destruct latest_write0; eauto.
-    - rewrite latest_write0_None; eauto.
+    - lazymatch goal with
+      | [ H: _ -> match ?x with _ => _ end |- _ ] =>
+        specialize (H eq_refl); destruct x eqn:? ;
+          [rewrite H; reflexivity | exfalso; eassumption]
+      end.
+    - rewrite latest_write1_None by eauto.
+      destruct latest_write0; reflexivity.
   Qed.
 End CompilerCorrectness.
 
