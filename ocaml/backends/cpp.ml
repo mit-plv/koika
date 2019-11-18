@@ -685,7 +685,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
 
       let p_reset () =
         iter_registers (fun { reg_name; _ } ->
-            p "log.%s.reset(Log.%s);" reg_name reg_name)
+            p "log.%s = Log.%s;" reg_name reg_name)
           rule.rl_footprint in
 
       let p_commit () =

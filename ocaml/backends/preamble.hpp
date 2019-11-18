@@ -870,12 +870,12 @@ struct rwset_t {
     return !(rL.w1);
   }
 
-  bool may_write0(rwset_t rL) {
-    return !(r1 || w0 || w1 || rL.r1 || rL.w0 || rL.w1);
+  bool may_write0(rwset_t /*unused*/) {
+    return !(r1 || w0 || w1);
   }
 
-  bool may_write1(rwset_t rL) {
-    return !(w1 || rL.w1);
+  bool may_write1(rwset_t /*unused*/) {
+    return !(w1);
   }
 
   void reset() {
@@ -921,12 +921,6 @@ struct reg_log_t {
     data1 = val;
     rwset.w1 = true;
     return ok;
-  }
-
-  void reset(reg_log_t other) {
-    rwset.reset();
-    data0 = other.data0;
-    data1 = other.data1;
   }
 
   T commit() {
