@@ -655,12 +655,16 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
               p_fn ~typ:"void" ~name:"dump" ~annot:" const" (fun () ->
                   iter_all_registers p_dump_register))) in
 
-    let p_log_register r =
-      p "reg_log_t<%s> %s;" (cpp_type_of_type (reg_type r)) r.reg_name in
-
     let p_log_t () =
+      let p_decl_log_register r =
+        p "reg_log_t<%s> %s;" (cpp_type_of_type (reg_type r)) r.reg_name in
+      let p_commit_register r =
+        p "%s.commit();" r.reg_name in
       p_scoped "struct log_t" ~terminator:";" (fun () ->
-          iter_all_registers p_log_register) in
+          iter_all_registers p_decl_log_register;
+          nl ();
+          p_fn ~typ:"void" ~name:"commit" (fun () ->
+              iter_all_registers p_commit_register)) in
 
     let p_checked prbody =
       pr "CHECK_RETURN(";
@@ -948,9 +952,9 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
 
     let p_constructor () =
       let p_init_data0 { reg_name = nm; _ } =
-        p "Log.%s.data0 = state.%s;" nm nm in
+        p "Log.%s.data0 = init.%s;" nm nm in
       p_fn ~typ:"explicit" ~name:hpp.cpp_classname
-        ~args:"const state_t init" ~annot:" : log{}, Log{}, state{init}, extfuns{}"
+        ~args:"const state_t init" ~annot:" : log{}, Log{}, extfuns{}"
         (fun () -> iter_all_registers p_init_data0) in
 
     let rec p_scheduler pos s =
@@ -967,11 +971,9 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
          p_scheduler (hpp.cpp_pos_of_pos pos) s in
 
     let p_cycle () =
-      let p_commit_register r =
-        p "state.%s = Log.%s.commit();" r.reg_name r.reg_name in
       p_fn ~typ:"void" ~name:"cycle" (fun () ->
           p_scheduler Pos.Unknown hpp.cpp_scheduler;
-          iter_all_registers p_commit_register) in
+          p "Log.commit();") in
 
     let p_run () =
       let typ = sprintf "template<typename T> %s&" hpp.cpp_classname in
@@ -981,7 +983,12 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
           p "return *this;") in
 
     let p_snapshot () =
-      p_fn ~typ:"state_t" ~name:"snapshot" (fun () -> p "return state;") in
+      let p_copy_data0 { reg_name = nm; _ } =
+        p "state.%s = Log.%s.data0;" nm nm in
+      p_fn ~typ:"state_t" ~name:"snapshot" (fun () ->
+          p "state_t state{};";
+          iter_all_registers p_copy_data0;
+          p "return state;") in
 
     p_sim_class (fun () ->
         p "public:";
@@ -993,7 +1000,6 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
         nl ();
         p "log_t log;";
         p "log_t Log;";
-        p "state_t state;";
         p "extfuns_t extfuns;";
         nl ();
         iter_sep nl p_rule hpp.cpp_rules;
