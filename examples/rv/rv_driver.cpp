@@ -1,4 +1,4 @@
-#include "rv32i_core_pipelined.hpp"
+#include "rv32i_core_pipelined.v.objects/rv32i_core_pipelined.hpp"
 #include "elf.h"
 #include <iostream>
 #include <fstream>
@@ -95,12 +95,10 @@ protected:
     /* bind */ {
       struct_mem_req readRequestI;
       bits<1> _c0;
-      CHECK_RETURN(log.toIMem_valid0.read0(&_c0, state.toIMem_valid0,
-                                           Log.toIMem_valid0.rwset));
+      CHECK_RETURN(log.toIMem_valid0.read0(&_c0, Log.toIMem_valid0));
       if (bool(_c0)) {
-        CHECK_RETURN(log.toIMem_valid0.write0(1'0_b, Log.toIMem_valid0.rwset));
-        CHECK_RETURN(log.toIMem_data0.read0(&readRequestI, state.toIMem_data0,
-                                            Log.toIMem_data0.rwset));
+        CHECK_RETURN(log.toIMem_valid0.write0(1'0_b, Log.toIMem_valid0));
+        CHECK_RETURN(log.toIMem_data0.read0(&readRequestI, Log.toIMem_data0));
       } else {
         return false;
       }
@@ -119,13 +117,12 @@ protected:
 	    bits<32> current_value = dmem[IAddress.v >> 2];
 	    data.data = current_value;
             bits<1> _x6;
-            CHECK_RETURN(log.fromIMem_valid0.read0(&_x6, state.fromIMem_valid0,
-                                                   Log.fromIMem_valid0.rwset));
+            CHECK_RETURN(log.fromIMem_valid0.read0(&_x6, Log.fromIMem_valid0));
             if (bool(~(_x6))) {
               CHECK_RETURN(
-                  log.fromIMem_data0.write0(data, Log.fromIMem_data0.rwset));
+                  log.fromIMem_data0.write0(data, Log.fromIMem_data0));
               CHECK_RETURN(
-                  log.fromIMem_valid0.write0(1'1_b, Log.fromIMem_valid0.rwset));
+                  log.fromIMem_valid0.write0(1'1_b, Log.fromIMem_valid0));
             } else {
               return false;
             }
@@ -144,12 +141,10 @@ protected:
     /* bind */ {
       struct_mem_req readRequestD;
       bits<1> _c0;
-      CHECK_RETURN(log.toDMem_valid0.read0(&_c0, state.toDMem_valid0,
-                                           Log.toDMem_valid0.rwset));
+      CHECK_RETURN(log.toDMem_valid0.read0(&_c0, Log.toDMem_valid0));
       if (bool(_c0)) {
-        CHECK_RETURN(log.toDMem_valid0.write0(1'0_b, Log.toDMem_valid0.rwset));
-        CHECK_RETURN(log.toDMem_data0.read0(&readRequestD, state.toDMem_data0,
-                                            Log.toDMem_data0.rwset));
+        CHECK_RETURN(log.toDMem_valid0.write0(1'0_b, Log.toDMem_valid0));
+        CHECK_RETURN(log.toDMem_data0.read0(&readRequestD, Log.toDMem_data0));
       } else {
         return false;
       }
@@ -188,13 +183,12 @@ protected:
 	      | (DEn[2'2_d].v == 1 ? (readRequestD.data & mask2) : (current_value & mask2))
 	      | (DEn[2'3_d].v == 1 ? (readRequestD.data & mask3) : (current_value & mask3));
             bits<1> _x6;
-            CHECK_RETURN(log.fromDMem_valid0.read0(&_x6, state.fromDMem_valid0,
-                                                   Log.fromDMem_valid0.rwset));
+            CHECK_RETURN(log.fromDMem_valid0.read0(&_x6, Log.fromDMem_valid0));
             if (bool(~(_x6))) {
               CHECK_RETURN(
-                  log.fromDMem_data0.write0(data, Log.fromDMem_data0.rwset));
+                  log.fromDMem_data0.write0(data, Log.fromDMem_data0));
               CHECK_RETURN(
-                  log.fromDMem_valid0.write0(1'1_b, Log.fromDMem_valid0.rwset));
+                  log.fromDMem_valid0.write0(1'1_b, Log.fromDMem_valid0));
             } else {
               return false;
             }

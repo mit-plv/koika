@@ -886,6 +886,7 @@ struct rwset_t {
   rwset_t() : r1{}, w0{}, w1{} {}
 };
 
+
 template<typename T>
 struct reg_log_t {
   rwset_t rwset;
@@ -897,28 +898,28 @@ struct reg_log_t {
   unsigned : 0;
   T data1;
 
-  [[nodiscard]] bool read0(T* const target, const T data, const rwset_t rLset) {
-    bool ok = rwset.may_read0(rLset);
-    *target = data;
+  [[nodiscard]] bool read0(T* const target, const reg_log_t rL) {
+    bool ok = rwset.may_read0(rL.rwset);
+    *target = rL.data0;
     return ok;
   }
 
-  [[nodiscard]] bool read1(T* const target, const rwset_t rLset) {
-    bool ok = rwset.may_read1(rLset);
+  [[nodiscard]] bool read1(T* const target, const reg_log_t rL) {
+    bool ok = rwset.may_read1(rL.rwset);
     *target = data0;
     rwset.r1 = true;
     return ok;
   }
 
-  [[nodiscard]] bool write0(const T val, const rwset_t rLset) {
-    bool ok = rwset.may_write0(rLset);
+  [[nodiscard]] bool write0(const T val, const reg_log_t rL) {
+    bool ok = rwset.may_write0(rL.rwset);
     data0 = val;
     rwset.w0 = true;
     return ok;
   }
 
-  [[nodiscard]] bool write1(const T val, const rwset_t rLset) {
-    bool ok = rwset.may_write1(rLset);
+  [[nodiscard]] bool write1(const T val, const reg_log_t rL) {
+    bool ok = rwset.may_write1(rL.rwset);
     data1 = val;
     rwset.w1 = true;
     return ok;

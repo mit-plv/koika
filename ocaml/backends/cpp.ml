@@ -866,21 +866,17 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
         | Extr.Read (_, port, reg) ->
            let r = hpp.cpp_register_sigs reg in
            let var = p_ensure_declared (ensure_target (reg_type r) target) in
+           let pt = match port with P0 -> 0 | P1 -> 1 in
            p_checked (fun () ->
-               match port with
-               | P0 -> pr "log.%s.read0(&%s, state.%s, Log.%s.rwset)" r.reg_name var r.reg_name r.reg_name
-               | P1 -> pr "log.%s.read1(&%s, Log.%s.rwset)" r.reg_name var r.reg_name);
+               pr "log.%s.read%d(&%s, Log.%s)" r.reg_name pt var r.reg_name);
            Assigned var
         | Extr.Write (_, port, reg, expr) ->
            let r = hpp.cpp_register_sigs reg in
            let vt = gensym_target (reg_type r) "v" in
            let v = must_value (p_action pos vt expr) in
-           let fn_name = match port with
-             | P0 -> "write0"
-             | P1 -> "write1" in
+           let pt = match port with P0 -> 0 | P1 -> 1 in
            p_checked (fun () ->
-               pr "log.%s.%s(%s, Log.%s.rwset)"
-                 r.reg_name fn_name v r.reg_name);
+               pr "log.%s.write%d(%s, Log.%s)" r.reg_name pt v r.reg_name);
            p_assign_expr target (PureExpr "prims::tt")
         | Extr.Unop (_, Extr.PrimTyped.Conv (tau, Extr.PrimTyped.Unpack), a)
              when Cuttlebone.Util.is_const_zero a ->
