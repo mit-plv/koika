@@ -7,15 +7,15 @@ Fixpoint all_indices (bound: nat) : vect (index bound) bound :=
   | S bound => vect_cons thisone (vect_map anotherone (all_indices bound))
   end.
 
-Lemma all_indices_eqn bound:
+Fixpoint all_indices_eqn bound:
   forall idx, vect_nth (all_indices bound) idx = idx.
 Proof.
-  induction bound; destruct idx; cbn.
+  destruct bound, idx; cbn.
   - reflexivity.
   - rewrite vect_nth_map.
-    rewrite IHbound.
+    rewrite all_indices_eqn.
     reflexivity.
-Qed.
+Defined.
 
 Lemma all_indices_NoDup bound:
   vect_NoDup (all_indices bound).

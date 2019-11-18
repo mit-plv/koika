@@ -254,12 +254,12 @@ Fixpoint vect_map {T T' n} (f: T -> T') (v: vect T n) : vect T' n :=
   | S _ => fun v => vect_cons (f (vect_hd v)) (vect_map f (vect_tl v))
   end v.
 
-Lemma vect_nth_map {T T' sz} (f: T -> T'):
+Fixpoint vect_nth_map {T T' sz} (f: T -> T') {struct sz}:
   forall (v: vect T sz) idx,
     vect_nth (vect_map f v) idx = f (vect_nth v idx).
 Proof.
-  induction sz; destruct v, idx; cbn; auto.
-Qed.
+  destruct sz, v, idx; cbn; auto.
+Defined.
 
 Lemma vect_map_map {T T' T'' n} (f: T -> T') (f': T' -> T'') :
   forall (v: vect T n),
@@ -613,15 +613,15 @@ Section Conversions.
       try setoid_rewrite IHsz; reflexivity.
   Qed.
 
-  Lemma vect_to_list_nth {T sz}:
+  Fixpoint vect_to_list_nth {T sz} {struct sz}:
     forall (v: vect T sz) idx,
       List.nth_error (vect_to_list v) (index_to_nat idx) =
       Some (vect_nth v idx).
   Proof.
-    induction sz; destruct v, idx; cbn.
+    destruct sz, v, idx; cbn.
     - reflexivity.
-    - setoid_rewrite IHsz; reflexivity.
-  Qed.
+    - apply vect_to_list_nth.
+  Defined.
 
   Lemma vect_to_list_length {T sz}:
     forall (v: vect T sz),
