@@ -9,7 +9,7 @@ let add_line_pragmas = false
 
 type ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_rule_t = {
     rl_name: 'rule_name_t;
-    rl_footprint: 'reg_t list;
+    rl_footprint: 'reg_t array;
     rl_body: ('pos_t, 'var_t, 'reg_t, 'ext_fn_t) Extr.rule;
   }
 
@@ -24,7 +24,7 @@ type ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_input_t = {
     cpp_scheduler: ('pos_t, 'rule_name_t) Extr.scheduler;
     cpp_rules: ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_rule_t list;
 
-    cpp_registers: 'reg_t list;
+    cpp_registers: 'reg_t array;
     cpp_register_sigs: 'reg_t -> reg_signature;
     cpp_ext_sigs: 'ext_fn_t -> ffi_signature;
 
@@ -624,11 +624,11 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
   in
 
   let iter_registers f regs =
-    List.iter (fun r -> f (hpp.cpp_register_sigs r)) regs in
+    Array.iter (fun r -> f (hpp.cpp_register_sigs r)) regs in
 
   let iter_all_registers =
-    let sigs = List.map hpp.cpp_register_sigs hpp.cpp_registers in
-    fun f -> List.iter f sigs in
+    let sigs = Array.map hpp.cpp_register_sigs hpp.cpp_registers in
+    fun f -> Array.iter f sigs in
 
   let p_impl () =
     p "////////////////////";
@@ -683,15 +683,20 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     let p_rule (rule: (pos_t, var_t, rule_name_t, reg_t, ext_fn_t) cpp_rule_t) =
       gensym_reset ();
 
+      let large_footprint =
+        5 * Array.length rule.rl_footprint > 4 * Array.length hpp.cpp_registers in
+
       let p_reset () =
-        iter_registers (fun { reg_name; _ } ->
-            p "log.%s = Log.%s;" reg_name reg_name)
-          rule.rl_footprint in
+        if large_footprint then p "log = Log;"
+        else iter_registers (fun { reg_name; _ } ->
+                 p "log.%s = Log.%s;" reg_name reg_name)
+               rule.rl_footprint in
 
       let p_commit () =
-        iter_registers (fun { reg_name; _ } ->
-            p "Log.%s = log.%s;" reg_name reg_name)
-          rule.rl_footprint in
+        if large_footprint then p "Log = log;"
+        else iter_registers (fun { reg_name; _ } ->
+                 p "Log.%s = log.%s;" reg_name reg_name)
+               rule.rl_footprint in
 
       let p_declare_target = function
         | VarTarget ({ tau; declared = false; name } as ti) ->
@@ -1076,8 +1081,9 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
   let buf_hpp = with_output_to_buffer p_hpp in
   (buf_hpp, buf_cpp)
 
-let cpp_rule_of_action (rl_name, (_kind, rl_body)) =
-  { rl_name; rl_body; rl_footprint = Cuttlebone.Util.action_footprint rl_body }
+let cpp_rule_of_action all_regs (rl_name, (_kind, rl_body)) =
+  let rl_footprint = Array.of_list (Cuttlebone.Util.action_footprint all_regs rl_body) in
+  { rl_name; rl_body; rl_footprint }
 
 let input_of_compile_unit (cu: 'f Cuttlebone.Compilation.compile_unit) =
   { cpp_classname = cu.c_modname;
@@ -1086,8 +1092,8 @@ let input_of_compile_unit (cu: 'f Cuttlebone.Compilation.compile_unit) =
     cpp_var_names = (fun x -> x);
     cpp_rule_names = (fun ?prefix:_ rl -> rl);
     cpp_scheduler = cu.c_scheduler;
-    cpp_rules = List.map cpp_rule_of_action cu.c_rules;
-    cpp_registers = cu.c_registers;
+    cpp_rules = List.map (cpp_rule_of_action cu.c_registers) cu.c_rules;
+    cpp_registers = Array.of_list cu.c_registers;
     cpp_register_sigs = (fun r -> r);
     cpp_ext_sigs = (fun f -> f);
     cpp_extfuns = cu.c_cpp_preamble; }
@@ -1100,8 +1106,8 @@ let collect_rules sched =
   | Extr.SPos (_, s) -> loop acc s
   in loop [] sched
 
-let cpp_rule_of_koika_package_rule (s: _ Cuttlebone.Extr.koika_package_t) (rn: 'rule_name_t) =
-  cpp_rule_of_action (rn, (`Internal, s.koika_rules rn))
+let cpp_rule_of_koika_package_rule (kp: _ Cuttlebone.Extr.koika_package_t) (rn: 'rule_name_t) =
+  cpp_rule_of_action kp.koika_reg_finite.finite_elements (rn, (`Internal, kp.koika_rules rn))
 
 let input_of_sim_package
       (kp: ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) Cuttlebone.Extr.koika_package_t)
@@ -1118,7 +1124,7 @@ let input_of_sim_package
       Cuttlebone.Util.string_of_coq_string (kp.koika_rule_names.show0 rn));
     cpp_scheduler = kp.koika_scheduler;
     cpp_rules = List.map (cpp_rule_of_koika_package_rule kp) rules;
-    cpp_registers = kp.koika_reg_finite.finite_elements;
+    cpp_registers = Array.of_list kp.koika_reg_finite.finite_elements;
     cpp_register_sigs = Cuttlebone.Util.reg_sigs_of_koika_package kp;
     cpp_ext_sigs = (fun f -> Cuttlebone.Util.ffi_sig_of_extr_external_sig (ext_fn_name f) (kp.koika_ext_fn_types f));
     cpp_extfuns = (match sp.sp_extfuns with

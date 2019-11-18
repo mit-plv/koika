@@ -229,10 +229,11 @@ module Util = struct
     { reg_name = string_of_coq_string (pkg.koika_reg_names.show0 r);
       reg_init }
 
-  let action_footprint a =
+  let action_footprint all_registers a =
     let m = Hashtbl.create 25 in
     List.iter (fun (r, _) -> Hashtbl.replace m r ()) (Extr.action_footprint a);
-    List.of_seq (Hashtbl.to_seq_keys m)
+    (* Filter instead of returning m's keys to preserver order *)
+    List.filter (Hashtbl.mem m) all_registers
 
   let is_const_zero a =
     Extr.is_const_zero a
