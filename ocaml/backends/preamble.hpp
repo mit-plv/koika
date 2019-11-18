@@ -50,6 +50,8 @@ static inline void _sim_assert_fn(const char* repr,
 #define _display_unoptimized
 #endif
 
+#define _unlikely(b) __builtin_expect((b), 0)
+
 #ifdef NEEDS_BOOST_MULTIPRECISION
 #include <boost/multiprecision/cpp_int.hpp>
 template<std::size_t size>
@@ -926,7 +928,7 @@ struct reg_log_t {
   }
 
   T commit() {
-    if (rwset.w1) {
+    if (_unlikely(rwset.w1)) {
       data0 = data1;
     }
     rwset.reset();
@@ -939,6 +941,7 @@ struct reg_log_t {
 
 #define CHECK_RETURN(can_fire) { if (!(can_fire)) { return false; } }
 
+#undef _unlikely
 #undef _unoptimized
 #undef _display_unoptimized
 #endif // #ifndef _PREAMBLE_HPP
