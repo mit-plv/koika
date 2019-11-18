@@ -752,8 +752,18 @@ Instance EqDec_vect_cons A B `{EqDec A} `{EqDec B} : EqDec (vect_cons_t A B) := 
 Instance EqDec_vect T n `{EqDec T} : EqDec (vect T n).
 Proof. induction n; cbn; eauto using EqDec_vect_nil, EqDec_vect_cons; eassumption. Defined.
 
+Require Import Lia.
+
 Section Npow2.
   Open Scope N_scope.
+
+  Lemma Npow2_ge_1 :
+    forall n, (1 <= N.pow 2 n)%N.
+  Proof.
+    induction n using N.peano_ind.
+    - reflexivity.
+    - rewrite N.pow_succ_r'; nia.
+  Qed.
 
   Lemma N_lt_pow2_succ_1 :
     forall n m,
@@ -999,6 +1009,47 @@ Module Bits.
             rewrite Nat2N.inj_succ in Hlt.
         1, 2: solve [intros; rewrite IHp; eauto using N_lt_pow2_succ_1, N_lt_pow2_succ].
         rewrite to_N_zeroes; reflexivity.
+    Qed.
+
+    Lemma of_N_inj :
+      forall sz n1 n2,
+        (n1 < N.pow 2 (N.of_nat sz))%N ->
+        (n2 < N.pow 2 (N.of_nat sz))%N ->
+        of_N sz n1 = of_N sz n2 ->
+        n1 = n2.
+    Proof.
+      intros * Hlt1 Hlt2 Heq%(f_equal to_N).
+      rewrite !to_N_of_N in Heq by assumption.
+      assumption.
+    Qed.
+
+    Lemma to_N_inj :
+      forall sz (bs1 bs2: bits sz),
+        to_N bs1 = to_N bs2 ->
+        bs1 = bs2.
+    Proof.
+      induction sz; destruct bs1, bs2; cbn; intros.
+      - reflexivity.
+      - destruct vhd0, vhd1, (to_N vtl0) eqn:?, (to_N vtl1) eqn:?; cbn in *;
+          discriminate || (rewrite (IHsz vtl0 vtl1) by congruence; reflexivity).
+    Qed.
+
+    Lemma to_N_bounded:
+      forall sz (bs: bits sz),
+        (to_N bs < 2 ^ N.of_nat sz)%N.
+    Proof.
+      induction sz; destruct bs; cbn -[N.pow N.mul]; intros.
+      - repeat econstructor.
+      - setoid_rewrite Nat2N.inj_succ; rewrite N.pow_succ_r'.
+        destruct vhd0, (to_N vtl0) eqn:Heq; cbn -[N.pow N.mul N.add];
+          specialize (IHsz vtl0); rewrite Heq in IHsz; nia.
+    Qed.
+
+    Lemma of_N_to_N :
+      forall sz (bs: bits sz),
+        of_N sz (to_N bs) = bs.
+    Proof.
+      auto using to_N_inj, to_N_of_N, to_N_bounded.
     Qed.
 
     Lemma to_nat_of_nat :

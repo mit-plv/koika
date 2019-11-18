@@ -146,4 +146,21 @@ Section TypedSyntaxTools.
                            | AnyAction (@Var _ _ _ _ _ _ _ k' _ m) => beq_dec k k'
                            | _ => false
                            end) a.
+
+  Fixpoint is_const_zero {sig tau} (a: action sig tau) :=
+    match a with
+    | Fail tau => false
+    | Var m => false
+    | Const cst => N.eqb (Bits.to_N (bits_of_value cst)) N.zero
+    | Assign m ex => false
+    | Seq r1 r2 => is_const_zero r2
+    | Bind var ex body => is_const_zero body
+    | If cond tbranch fbranch => is_const_zero tbranch && is_const_zero fbranch
+    | Read port idx => false
+    | Write port idx value => false
+    | Unop fn arg1 => false
+    | Binop fn arg1 arg2 => false
+    | ExternalCall fn arg => false
+    | APos pos a => is_const_zero a
+    end.
 End TypedSyntaxTools.
