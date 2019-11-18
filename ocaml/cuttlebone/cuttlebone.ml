@@ -234,6 +234,9 @@ module Util = struct
     List.iter (fun (r, _) -> Hashtbl.replace m r ()) (Extr.action_footprint a);
     List.of_seq (Hashtbl.to_seq_keys m)
 
+  let is_const_zero a =
+    Extr.is_const_zero a
+
   let action_mentions_var k a =
     Extr.action_mentions_var any_eq_dec k a
 

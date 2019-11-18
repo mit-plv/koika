@@ -397,13 +397,10 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
   let sp_equality a1 a2 =
     sp_binop (`Infix "==") a1 a2 in
 
-  (* Not needed: unpack(0) instead *)
-  (* let sp_initializer tau =
-   *   let bs0 sz = Array.make sz false in
-   *   match tau with
-   *   | Bits_t sz -> sp_value (Bits (bs0 sz))
-   *   | Enum_t sg -> sp_value (Enum (sg, (bs0 sg.enum_bitsize)))
-   *   | Struct_t sg -> sprintf "%s {}" (cpp_struct_name sg) in *)
+  let sp_initializer tau =
+    (* This is needed for readability rather than performance, since GCC is
+       smart enough to optimize unpack(0). *)
+    sprintf "%s{}" (cpp_type_of_type tau) in
 
   let sp_parenthesized arg =
     if arg = "" then "" else sprintf "(%s)" arg in
@@ -880,6 +877,10 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
                pr "log.%s.%s(%s, Log.%s.rwset)"
                  r.reg_name fn_name v r.reg_name);
            p_assign_expr target (PureExpr "prims::tt")
+        | Extr.Unop (_, Extr.PrimTyped.Conv (tau, Extr.PrimTyped.Unpack), a)
+             when Cuttlebone.Util.is_const_zero a ->
+           p_assign_and_ignore NoTarget (p_action pos NoTarget a);
+           PureExpr (sp_initializer (Cuttlebone.Util.typ_of_extr_type tau))
         | Extr.Unop (_, fn, a) ->
            let fsig = Cuttlebone.Extr.PrimSignatures.coq_Sigma1 fn in
            let a = p_action pos (gensym_target (Cuttlebone.Util.argType 1 fsig 0) "x") a in

@@ -26,3 +26,4 @@ Extraction Implicit TypedSyntaxTools.action_footprint' [R Sigma sig tau].
 Extraction Implicit TypedSyntaxTools.action_mentions_var [R Sigma sig tau].
 Extraction Implicit TypedSyntaxTools.action_mentions_shadowed_var [R Sigma sig tau].
 Extraction Implicit TypedSyntaxTools.existsb_subterm [R Sigma sig tau].
+Extraction Implicit TypedSyntaxTools.is_const_zero [R Sigma sig tau].
