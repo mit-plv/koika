@@ -338,7 +338,6 @@ Section CircuitCompilation.
   Context (cr: REnv.(env_t) (fun reg => circuit (CR reg))).
 
   Notation CAnnotOpt an c := (CAnnot an (opt _ c)).
-  (* Notation CAnnotOpt an c := (CAnnot an c). *)
 
   Declare Scope circuit.
   Notation "f [ arg ]` an `" :=
@@ -348,9 +347,6 @@ Section CircuitCompilation.
     (CAnnotOpt an (CExternal f arg1 arg2))
       (at level 99, arg1 at level 99, arg2 at level 99,
        format "f [ arg1 ','  arg2 ]` an `") : circuit.
-  Notation "#` an ` reg" :=
-    (CAnnotOpt an (CReadRegister reg))
-      (at level 75, format "#` an ` reg") : circuit.
   Notation "$` an ` c" :=
     (CAnnotOpt an (CConst c))
       (at level 75, format "$` an ` c") : circuit.
@@ -366,7 +362,8 @@ Section CircuitCompilation.
   Notation "c1 ==>` an ` c2" :=
     (CAnnotOpt an (COr (CAnnotOpt "impl" (CNot c1)) c2))
       (at level 70, no associativity) : circuit.
-  (* Notation "s ?? c1 // c2" := (CMux s c1 c2) (at level 80, no associativity) : circuit. *)
+  Notation CMuxAnnotOpt an s c1 c2 :=
+    (CAnnotOpt an (CMux s c1 c2)).
 
   Local Open Scope circuit.
 
@@ -391,12 +388,12 @@ Section CircuitCompilation.
     context (fun '(k, tau) => circuit (type_sz tau)) sig.
 
   Definition mux_rwdata {sz} an (cond: circuit 1) (tReg fReg: @rwdata sz) :=
-    {| read0 := CAnnotOpt an (CMux cond (tReg.(read0)) (fReg.(read0)));
-       read1 := CAnnotOpt an (CMux cond (tReg.(read1)) (fReg.(read1)));
-       write0 := CAnnotOpt an (CMux cond (tReg.(write0)) (fReg.(write0)));
-       write1 := CAnnotOpt an (CMux cond (tReg.(write1)) (fReg.(write1)));
-       data0 := CAnnotOpt an (CMux cond (tReg.(data0)) (fReg.(data0)));
-       data1 := CAnnotOpt an (CMux cond (data1 tReg) (data1 fReg)) |}.
+    {| read0 := CMuxAnnotOpt an cond (tReg.(read0)) (fReg.(read0));
+       read1 := CMuxAnnotOpt an cond (tReg.(read1)) (fReg.(read1));
+       write0 := CMuxAnnotOpt an cond (tReg.(write0)) (fReg.(write0));
+       write1 := CMuxAnnotOpt an cond (tReg.(write1)) (fReg.(write1));
+       data0 := CMuxAnnotOpt an cond (tReg.(data0)) (fReg.(data0));
+       data1 := CMuxAnnotOpt an cond (data1 tReg) (data1 fReg) |}.
 
   Definition mux_rwsets an (cond: circuit 1) (tRegs fRegs: rwset) :=
     map2 REnv (fun k treg freg => mux_rwdata an cond treg freg)
@@ -405,7 +402,7 @@ Section CircuitCompilation.
   Fixpoint mux_ccontext {sig} (cond: circuit 1) (ctxT: ccontext sig) (ctxF: ccontext sig) : ccontext sig.
     destruct sig as [ | (k, tau)]; cbn.
     - exact CtxEmpty.
-    - apply (CtxCons (k, tau) (CMux cond (chd ctxT) (chd ctxF))
+    - apply (CtxCons (k, tau) (CMuxAnnotOpt "mux_ccontext" cond (chd ctxT) (chd ctxF))
                      (mux_ccontext _ cond (ctl ctxT) (ctl ctxF))).
   Defined.
 
@@ -511,8 +508,8 @@ Section CircuitCompilation.
         let (cond, Gamma) := compile_action Gamma cond clog in
         let (tbranch, Gamma_t) := compile_action Gamma tbranch cond.(erwc) in
         let (fbranch, Gamma_f) := compile_action Gamma fbranch cond.(erwc) in
-        ({| retVal := CAnnotOpt "if_retVal" (CMux cond.(retVal) tbranch.(retVal) fbranch.(retVal));
-           erwc := {| canFire := CAnnotOpt "if_cF" (CMux cond.(retVal) tbranch.(erwc).(canFire) fbranch.(erwc).(canFire));
+        ({| retVal := CMuxAnnotOpt "if_retVal" cond.(retVal) tbranch.(retVal) fbranch.(retVal);
+           erwc := {| canFire := CMuxAnnotOpt "if_cF" cond.(retVal) tbranch.(erwc).(canFire) fbranch.(erwc).(canFire);
                      regs := mux_rwsets "if_mux" cond.(retVal) tbranch.(erwc).(regs) fbranch.(erwc).(regs) |} |},
          mux_ccontext cond.(retVal) Gamma_t Gamma_f)
       | Read P0 idx => fun Gamma =>
@@ -698,10 +695,7 @@ Section CircuitCompilation.
     end.
 
   Definition commit_rwdata {sz} (reg: @rwdata sz) : circuit sz :=
-    CAnnotOpt "commit_write1"
-              (CMux (reg.(write1))
-                    (reg.(data1))
-                    (reg.(data0))).
+    CMuxAnnotOpt "commit_write1" (reg.(write1)) (reg.(data1)) (reg.(data0)).
 
   Definition init_scheduler_rwdata idx : rwdata :=
     {| read0 := $`"sched_init_no_read0"` Ob~0;
