@@ -8,6 +8,7 @@ module Extr = Cuttlebone.Extr
 let add_line_pragmas = false
 
 type ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_rule_t = {
+    rl_external: bool;
     rl_name: 'rule_name_t;
     rl_footprint: 'reg_t array;
     rl_body: ('pos_t, 'var_t, 'reg_t, 'ext_fn_t) Extr.rule;
@@ -936,13 +937,16 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
       let reset = hpp.cpp_rule_names ~prefix:"reset" rule.rl_name in
       let commit = hpp.cpp_rule_names ~prefix:"commit" rule.rl_name in
 
-      p_fn ~typ:"virtual void" ~name:reset p_reset;
+      let virtual_flag =
+        if rule.rl_external then "virtual " else "" in
+
+      p_fn ~typ:(virtual_flag ^ "void") ~name:reset p_reset;
       nl ();
 
-      p_fn ~typ:"virtual void" ~name:commit p_commit;
+      p_fn ~typ:(virtual_flag ^ "void") ~name:commit p_commit;
       nl ();
 
-      p_fn ~typ:"virtual bool" ~name:(hpp.cpp_rule_names rule.rl_name) (fun () ->
+      p_fn ~typ:(virtual_flag ^ "bool") ~name:(hpp.cpp_rule_names rule.rl_name) (fun () ->
           p "%s();" reset;
           nl ();
           p_assign_and_ignore NoTarget (p_action Pos.Unknown NoTarget rule.rl_body);
@@ -1083,9 +1087,9 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
   let buf_hpp = with_output_to_buffer p_hpp in
   (buf_hpp, buf_cpp)
 
-let cpp_rule_of_action all_regs (rl_name, (_kind, rl_body)) =
+let cpp_rule_of_action all_regs (rl_name, (kind, rl_body)) =
   let rl_footprint = Array.of_list (Cuttlebone.Util.action_footprint all_regs rl_body) in
-  { rl_name; rl_body; rl_footprint }
+  { rl_external = kind = `ExternalRule; rl_name; rl_body; rl_footprint }
 
 let input_of_compile_unit (cu: 'f Cuttlebone.Compilation.compile_unit) =
   { cpp_classname = cu.c_modname;
