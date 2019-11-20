@@ -7,6 +7,9 @@ module Extr = Extr
 type ('name_t, 'reg_t, 'ext_fn_t) extr_circuit =
   ('name_t, 'reg_t, 'ext_fn_t, ('name_t, 'reg_t, 'ext_fn_t) Extr.rwdata) Extr.circuit
 
+(* FIXME: expose this option on the command line *)
+let strip_annotations = true
+
 module Util = struct
   let log2 =
     Extr.Nat.log2_up
@@ -352,7 +355,8 @@ module Graphs = struct
       di_fn_sigs: 'ext_fn_t -> ffi_signature;
       di_rule_names: 'rule_name_t -> string;
       di_rule_external: 'rule_name_t -> bool;
-      di_circuits : 'reg_t -> ('rule_name_t, 'reg_t, 'ext_fn_t) extr_circuit
+      di_circuits : 'reg_t -> ('rule_name_t, 'reg_t, 'ext_fn_t) extr_circuit;
+      di_strip_annotations: bool;
     }
 
   module CircuitHash = struct
@@ -452,7 +456,11 @@ module Graphs = struct
          else
            rebuild_circuit_for_deduplication circuit
       | Extr.CAnnot (sz, annot, c) ->
-         CAnnot (sz, Util.string_of_coq_string annot, dedup c)
+         if pkg.di_strip_annotations then
+           rebuild_circuit_for_deduplication c
+         else
+           let annot = Util.string_of_coq_string annot in
+           CAnnot (sz, annot, dedup c)
     and rebuild_rwdata_for_deduplication (rw : (rule_name_t, reg_t, ext_fn_t) Extr.rwdata) =
       { read0 = dedup rw.read0;
         read1 = dedup rw.read1;
@@ -488,7 +496,8 @@ module Graphs = struct
         di_fn_sigs = (fun fn -> fn);
         di_rule_names = (fun rln -> rln);
         di_rule_external = externalp;
-        di_circuits = Compilation.compile cu }
+        di_circuits = Compilation.compile cu;
+        di_strip_annotations = strip_annotations }
 
   let graph_of_verilog_package (type pos_t var_t rule_name_t reg_t ext_fn_t)
         (kp: (pos_t, var_t, rule_name_t, reg_t, ext_fn_t) Extr.koika_package_t)
@@ -509,5 +518,6 @@ module Graphs = struct
         di_rule_names = (fun rln -> Util.string_of_coq_string @@ kp.koika_rule_names.show0 rln);
         di_rule_external = kp.koika_rule_external;
         di_fn_sigs;
-        di_circuits }
+        di_circuits;
+        di_strip_annotations = strip_annotations }
 end

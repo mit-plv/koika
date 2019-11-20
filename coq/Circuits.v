@@ -379,6 +379,7 @@ Section CircuitCompilation.
   Context (opt: forall {sz}, circuit sz -> circuit sz).
   Context (cr: REnv.(env_t) (fun reg => circuit (CR reg))).
 
+  (* Notation CAnnot an c := (match an : string with _ => c end). *)
   Notation CAnnotOpt an c := (CAnnot an (opt _ c)).
 
   Declare Scope circuit.
