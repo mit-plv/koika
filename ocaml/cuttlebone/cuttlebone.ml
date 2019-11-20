@@ -300,8 +300,9 @@ module Compilation = struct
   let compile (cu: 'f compile_unit) : (reg_signature -> compiled_circuit) =
     let finiteType = finiteType_of_register_list cu.c_registers in
     let rules r = List.assoc r cu.c_rules |> snd in
+    let externalp r = (List.assoc r cu.c_rules |> fst) = `ExternalRule in
     let rEnv = Extr.contextEnv finiteType in
-    let env = Extr.compile_scheduler _R _Sigma finiteType (opt _R _Sigma) rules cu.c_scheduler in
+    let env = Extr.compile_scheduler _R _Sigma finiteType (opt _R _Sigma) rules externalp cu.c_scheduler in
     (fun r -> Extr.getenv rEnv env r)
 end
 
@@ -350,7 +351,7 @@ module Graphs = struct
       di_reg_sigs: 'reg_t -> reg_signature;
       di_fn_sigs: 'ext_fn_t -> ffi_signature;
       di_rule_names: 'rule_name_t -> string;
-      di_external_rules: 'rule_name_t list;
+      di_rule_external: 'rule_name_t -> bool;
       di_circuits : 'reg_t -> ('rule_name_t, 'reg_t, 'ext_fn_t) extr_circuit
     }
 
@@ -446,7 +447,7 @@ module Graphs = struct
                     Extr.mmap regs (fun r m ->
                         let rwdata = Extr.cassoc regs r m bundle in
                         (pkg.di_reg_sigs r, rebuild_rwdata_for_deduplication rwdata))) in
-         if List.mem rule_name pkg.di_external_rules then
+         if pkg.di_rule_external rule_name then
            CBundleRef(sz, hashcons bundle, rwcircuit_of_extr_rwcircuit pkg.di_reg_sigs field)
          else
            rebuild_circuit_for_deduplication circuit
@@ -480,18 +481,18 @@ module Graphs = struct
 
   let graph_of_compile_unit (cu: 'f Compilation.compile_unit)
       : circuit_graph =
-    let external_rules = List.filter (fun (_, (kind, _)) -> kind = `ExternalRule) cu.c_rules in
+    let externalp rln = fst (List.assoc rln cu.c_rules) = `ExternalRule in
     dedup_circuit
       { di_regs = cu.c_registers;
         di_reg_sigs = (fun r -> r);
         di_fn_sigs = (fun fn -> fn);
         di_rule_names = (fun rln -> rln);
-        di_external_rules = List.map fst external_rules;
+        di_rule_external = externalp;
         di_circuits = Compilation.compile cu }
 
   let graph_of_verilog_package (type pos_t var_t rule_name_t reg_t ext_fn_t)
         (kp: (pos_t, var_t, rule_name_t, reg_t, ext_fn_t) Extr.koika_package_t)
-        (vp: (rule_name_t, ext_fn_t) Extr.verilog_package_t)
+        (vp: ext_fn_t Extr.verilog_package_t)
       : circuit_graph =
     let di_regs =
       kp.koika_reg_finite.finite_elements in
@@ -506,7 +507,7 @@ module Graphs = struct
       { di_regs;
         di_reg_sigs = Util.reg_sigs_of_koika_package kp;
         di_rule_names = (fun rln -> Util.string_of_coq_string @@ kp.koika_rule_names.show0 rln);
-        di_external_rules = vp.vp_external_rules;
+        di_rule_external = kp.koika_rule_external;
         di_fn_sigs;
         di_circuits }
 end

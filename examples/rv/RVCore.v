@@ -686,6 +686,12 @@ Module  RV32ICore.
     | ExternalD => tc_externalD
     end.
 
+  Definition rv_external (rl: rv_rules_t) :=
+    match rl with
+    | ExternalI | ExternalD => true
+    | _ => false
+    end.
+
   Instance FiniteType_toIMem : FiniteType MemReq.reg_t := _.
   Instance FiniteType_fromIMem : FiniteType MemResp.reg_t := _.
   Instance FiniteType_toDMem : FiniteType MemReq.reg_t := _.

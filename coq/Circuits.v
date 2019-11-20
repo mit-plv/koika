@@ -639,12 +639,15 @@ Section CircuitCompilation.
 
   Definition bundleref_wrap_rwdata rl rs bundle (r: reg_t) (ruleReg: @rwdata (CR r))
     : @rwdata (CR r) :=
-    {| read0 := CBundleRef rl rs bundle (rwcircuit_rwdata r rwdata_r0) (ruleReg.(read0));
-       read1 := CBundleRef rl rs bundle (rwcircuit_rwdata r rwdata_r1) (ruleReg.(read1));
-       write0 := CBundleRef rl rs bundle (rwcircuit_rwdata r rwdata_w0) (ruleReg.(write0));
-       write1 := CBundleRef rl rs bundle (rwcircuit_rwdata r rwdata_w1) (ruleReg.(write1));
-       data0 := CBundleRef rl rs bundle (rwcircuit_rwdata r rwdata_data0) (ruleReg.(data0));
-       data1 := CBundleRef rl rs bundle (rwcircuit_rwdata r rwdata_data1) (ruleReg.(data1)) |}.
+    let ft := REnv.(finite_keys) in
+    if List.find (fun r' => beq_dec (EQ := EqDec_FiniteType) r r') rs then
+      {| read0 := CBundleRef rl rs bundle (rwcircuit_rwdata r rwdata_r0) (ruleReg.(read0));
+         read1 := CBundleRef rl rs bundle (rwcircuit_rwdata r rwdata_r1) (ruleReg.(read1));
+         write0 := CBundleRef rl rs bundle (rwcircuit_rwdata r rwdata_w0) (ruleReg.(write0));
+         write1 := CBundleRef rl rs bundle (rwcircuit_rwdata r rwdata_w1) (ruleReg.(write1));
+         data0 := CBundleRef rl rs bundle (rwcircuit_rwdata r rwdata_data0) (ruleReg.(data0));
+         data1 := CBundleRef rl rs bundle (rwcircuit_rwdata r rwdata_data1) (ruleReg.(data1)) |}
+    else ruleReg.
 
   Definition bundleref_wrap_rwset rl rs bundle (rws: rwset) :=
     map REnv (bundleref_wrap_rwdata rl rs bundle) rws.
@@ -662,6 +665,7 @@ Section CircuitCompilation.
        retVal := rl.(retVal) |}.
 
   Context (rules: rule_name_t -> rule pos_t var_t R Sigma).
+  Context (external: rule_name_t -> bool).
 
   Fixpoint compile_scheduler_circuit
            (s: scheduler pos_t rule_name_t)
@@ -672,7 +676,7 @@ Section CircuitCompilation.
       let ft := REnv.(finite_keys) in
       let rs := action_registers (EQ := EqDec_FiniteType) rule in
       let (rl, _) := compile_action CtxEmpty rule (adapter input) in
-      let rl := bundleref_wrap_action_circuit rs input rl rl_name in
+      let rl := if external rl_name then bundleref_wrap_action_circuit rs input rl rl_name else rl in
       let acc := update_accumulated_rwset rl.(erwc).(regs) input in
       (rl, acc) in
     match s with
@@ -745,10 +749,11 @@ Section Helpers.
 
   Definition compile_scheduler
              (rules: rule_name_t -> rule pos_t var_t R Sigma)
+             (external: rule_name_t -> bool)
              (s: scheduler pos_t rule_name_t)
     : register_update_circuitry rule_name_t R Sigma _ :=
     let cr := ContextEnv.(create) (readRegisters R Sigma) in
-    compile_scheduler' opt cr rules s.
+    compile_scheduler' opt cr rules external s.
 
   Context {REnv: Env reg_t}.
   Context (r: REnv.(env_t) R).

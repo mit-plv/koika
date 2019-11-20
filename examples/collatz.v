@@ -61,8 +61,10 @@ Module Collatz.
     tc_compute (interp_action cr empty_sigma CtxEmpty log_empty log_empty
                               (rules multiply)).
 
+Definition external (r: rule_name_t) := false.
+
   Definition circuits :=
-    compile_scheduler rules collatz.
+    compile_scheduler rules external collatz.
 
   Definition circuits_result :=
     tc_compute (interp_circuits (ContextEnv.(create) r) empty_sigma circuits).
@@ -72,14 +74,14 @@ Module Collatz.
                      koika_reg_init := r;
                      koika_ext_fn_types := empty_Sigma;
                      koika_rules := rules;
+                     koika_rule_external := external;
                      koika_scheduler := collatz;
                      koika_module_name := "collatz" |};
 
        ip_sim := {| sp_ext_fn_names := empty_fn_names;
                    sp_extfuns := None |};
 
-       ip_verilog := {| vp_ext_fn_names := empty_fn_names;
-                       vp_external_rules := [] |} |}.
+       ip_verilog := {| vp_ext_fn_names := empty_fn_names |} |}.
 End Collatz.
 
 Definition prog := Interop.Backends.register Collatz.package.

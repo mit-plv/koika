@@ -72,8 +72,10 @@ Definition sched : scheduler :=
 
 Instance FiniteType_reg_t : FiniteType reg_t := _.
 
+Definition external (r: rule_name_t) := false.
+
 Definition circuits :=
-  compile_scheduler rules sched.
+  compile_scheduler rules external sched.
 
 Definition circuits_result :=
   Eval compute in interp_circuits (ContextEnv.(create) r) empty_sigma circuits.
@@ -86,14 +88,14 @@ Definition package :=
                    koika_reg_init := r;
                    koika_ext_fn_types := empty_Sigma;
                    koika_rules := rules;
+                   koika_rule_external := external;
                    koika_scheduler := sched;
                    koika_module_name := "intfn" |};
 
      ip_sim := {| sp_ext_fn_names := empty_fn_names;
                  sp_extfuns := None |};
 
-     ip_verilog := {| vp_ext_fn_names := empty_fn_names;
-                     vp_external_rules := [] |} |}.
+     ip_verilog := {| vp_ext_fn_names := empty_fn_names |} |}.
 
 Definition prog := Interop.Backends.register package.
 Extraction "method_call.ml" prog.

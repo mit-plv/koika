@@ -30,8 +30,10 @@ Definition sched : scheduler :=
 Definition sched_result :=
   tc_compute (interp_scheduler (ContextEnv.(create) r) empty_sigma rules sched).
 
+Definition external (r: rule_name_t) := false.
+
 Definition sched_circuits :=
-  compile_scheduler rules sched.
+  compile_scheduler rules external sched.
 
 Definition sched_circuits_result :=
   tc_compute (interp_circuits (ContextEnv.(create) r) empty_sigma sched_circuits).
@@ -41,14 +43,14 @@ Definition package :=
                    koika_reg_init := r;
                    koika_ext_fn_types := empty_Sigma;
                    koika_rules := rules;
+                   koika_rule_external := external;
                    koika_scheduler := sched;
                    koika_module_name := "double_write" |};
 
      ip_sim := {| sp_ext_fn_names := empty_fn_names;
                  sp_extfuns := None |};
 
-     ip_verilog := {| vp_ext_fn_names := empty_fn_names;
-                     vp_external_rules := [] |} |}.
+     ip_verilog := {| vp_ext_fn_names := empty_fn_names |} |}.
 
 Definition prog := Interop.Backends.register package.
 Extraction "double_write.ml" prog.

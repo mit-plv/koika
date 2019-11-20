@@ -68,8 +68,10 @@ Definition rules :=
 Definition pipeline : scheduler :=
   tc_scheduler (doG |> doF |> done).
 
+Definition external (r: rule_name_t) := false.
+
 Definition circuits :=
-  compile_scheduler rules pipeline.
+  compile_scheduler rules external pipeline.
 
 Definition circuits_result sigma :=
   interp_circuits (ContextEnv.(create) r) sigma circuits.
@@ -101,14 +103,14 @@ Definition package :=
                    koika_reg_init reg := r reg;
                    koika_ext_fn_types := Sigma;
                    koika_rules := rules;
+                   koika_rule_external := external;
                    koika_scheduler := pipeline;
                    koika_module_name := "pipeline" |};
 
      ip_sim := {| sp_ext_fn_names := ext_fn_names;
                  sp_extfuns := Some cpp_extfuns |};
 
-     ip_verilog := {| vp_ext_fn_names := ext_fn_names;
-                     vp_external_rules := [] |} |}.
+     ip_verilog := {| vp_ext_fn_names := ext_fn_names |} |}.
 
 Definition prog := Interop.Backends.register package.
 Extraction "pipeline.ml" prog.

@@ -75,6 +75,7 @@ Definition package :=
                    koika_reg_init := r;
                    koika_ext_fn_types := Sigma;
                    koika_rules := rules;
+                   koika_rule_external _ := false;
                    koika_scheduler := sched;
                    koika_module_name := "function_call" |};
 
@@ -82,8 +83,7 @@ Definition package :=
        {| sp_ext_fn_names := ext_fn_names;
           sp_extfuns := Some "#include ""../function_call.extfuns.hpp""" |};
 
-     ip_verilog := {| vp_ext_fn_names := ext_fn_names;
-                     vp_external_rules := [] |} |}.
+     ip_verilog := {| vp_ext_fn_names := ext_fn_names |} |}.
 
 Unset Extraction Optimize.
 Definition prog := Interop.Backends.register package.

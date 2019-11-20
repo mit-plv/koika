@@ -996,6 +996,8 @@ Section CompilerCorrectness.
     rewrite <- Hcceq, <- Hgammaeq; reflexivity.
   Qed.
 
+  Notation mux_ccontext := (mux_ccontext lco).
+
   Lemma ccontext_equiv_mux_ccontext {sig}:
     forall (cond: circuit 1) (c0 c1: ccontext sig),
       ccontext_equiv (if Bits.single (interp_circuit cond) then c0 else c1)
@@ -1006,8 +1008,9 @@ Section CompilerCorrectness.
     - destruct Bits.single; apply ccontext_equiv_refl.
     - specialize (IHsig cond (ctl c0) (ctl c1)).
       destruct Bits.single eqn:Heq; cbn;
-        apply ccontext_equiv_cons; cbn; try rewrite Heq.
-      all: eauto.
+        apply ccontext_equiv_cons; cbn;
+          rewrite ?lco_proof; cbn;
+            rewrite ?Heq; eauto.
   Qed.
 
   Lemma mux_gamma_equiv_t:
@@ -1320,6 +1323,7 @@ Section CompilerCorrectness.
 
   Notation scheduler := (scheduler pos_t rule_name_t).
   Context (rules: rule_name_t -> rule).
+  Context (external: rule_name_t -> bool).
 
   Notation compile_scheduler_circuit := (compile_scheduler_circuit lco).
   Notation compile_scheduler' := (compile_scheduler' lco).
@@ -1337,7 +1341,8 @@ Section CompilerCorrectness.
     apply forallb_pointwise; intros.
     unfold willFire_of_canFire', bundleref_wrap_rwset.
     rewrite getenv_map.
-    repeat (cbn; rewrite !lco_proof); reflexivity.
+    unfold bundleref_wrap_rwdata.
+    destruct List.find; repeat (cbn; rewrite ?lco_proof); reflexivity.
   Qed.
 
   Lemma interp_circuit_willFire_of_canFire_remove_bundle :
@@ -1361,6 +1366,9 @@ Section CompilerCorrectness.
            | [ |- context[(getenv ?REnv (map ?REnv ?f2 ?cLog) ?idx)] ] =>
              rewrite @getenv_map
            | [ |- context[match (?ind) with _ => _ end] ] => destruct ind
+           | [ |- context[List.find _ _] ] => destruct List.find
+           | [ H: context[List.find _ _] |- _ ] => destruct List.find
+           | _ => unfold bundleref_wrap_rwdata in *; cbn in *
            end; eauto.
 
   Lemma log_data1_consistent'_bundle_equiv : forall Log cLog regs rl rs bundle,
@@ -1430,9 +1438,9 @@ Section CompilerCorrectness.
       log_data0_consistent' Log cLog ->
       log_rwdata_consistent Log cLog ->
       circuit_env_equiv ->
-      log_data1_consistent' (interp_scheduler' r sigma rules Log s) (compile_scheduler_circuit rc rules s cLog) /\
-      log_data0_consistent' (interp_scheduler' r sigma rules Log s) (compile_scheduler_circuit rc rules s cLog) /\
-      log_rwdata_consistent (interp_scheduler' r sigma rules Log s) (compile_scheduler_circuit rc rules s cLog).
+      log_data1_consistent' (interp_scheduler' r sigma rules Log s) (compile_scheduler_circuit rc rules external s cLog) /\
+      log_data0_consistent' (interp_scheduler' r sigma rules Log s) (compile_scheduler_circuit rc rules external s cLog) /\
+      log_rwdata_consistent (interp_scheduler' r sigma rules Log s) (compile_scheduler_circuit rc rules external s cLog).
   Proof.
     induction s; cbn; intros.
     - eauto.
@@ -1444,7 +1452,7 @@ Section CompilerCorrectness.
                                                 ltac:(ceauto)).
       unfold interp_rule;
       destruct (interp_action r sigma CtxEmpty Log log_empty (rules r0)) as [((? & ?) & ?) | ] eqn:? ;
-        destruct compile_action; cbn; apply IHs;
+        destruct compile_action; cbn; apply IHs; destruct external;
           repeat cleanup_step; eauto with circuits.
     - pose proof (@action_compiler_correct nil _ Log cLog (rules r0)) as Hrc.
       unshelve eassert (Hrc := Hrc (adapter cLog) CtxEmpty CtxEmpty log_empty
@@ -1452,16 +1460,16 @@ Section CompilerCorrectness.
                                   ltac:(ceauto) ltac:(ceauto)
                                   ltac:(ceauto) ltac:(ceauto)
                                   ltac:(ceauto)).
-      unfold interp_rule;
+      unfold interp_rule.
       destruct (interp_action r sigma CtxEmpty Log log_empty (rules r0)) as [(? & ?) | ] eqn:?; cbn; t.
       + repeat apply conj.
-        * apply log_data1_consistent'_mux_l; try apply IHs1; ceauto.
-        * apply log_data0_consistent'_mux_l; try apply IHs1; ceauto.
-        * apply log_rwdata_consistent_mux_l; try apply IHs1; ceauto.
+        * destruct external; apply log_data1_consistent'_mux_l; try apply IHs1; ceauto.
+        * destruct external; apply log_data0_consistent'_mux_l; try apply IHs1; ceauto.
+        * destruct external; apply log_rwdata_consistent_mux_l; try apply IHs1; ceauto.
       + repeat apply conj.
-        * apply log_data1_consistent'_mux_r; try apply IHs2; ceauto.
-        * apply log_data0_consistent'_mux_r; try apply IHs2; ceauto.
-        * apply log_rwdata_consistent_mux_r; try apply IHs2; ceauto.
+        * destruct external; apply log_data1_consistent'_mux_r; try apply IHs2; ceauto.
+        * destruct external; apply log_data0_consistent'_mux_r; try apply IHs2; ceauto.
+        * destruct external; apply log_rwdata_consistent_mux_r; try apply IHs2; ceauto.
     - eauto.
   Qed.
 
@@ -1573,7 +1581,7 @@ Section CompilerCorrectness.
     forall (s: scheduler),
       circuit_env_equiv ->
       forall idx,
-        interp_circuit (REnv.(getenv) (compile_scheduler' rc rules s) idx) =
+        interp_circuit (REnv.(getenv) (compile_scheduler' rc rules external s) idx) =
         bits_of_value (REnv.(getenv) (commit_update r (interp_scheduler r sigma rules s)) idx).
   Proof.
     intros; unfold compile_scheduler', commit_update, commit_rwdata, interp_scheduler.
@@ -1644,7 +1652,7 @@ Section Thm.
 
     Theorem scheduler_compiler_correct:
       let spec_results := commit_update r (interp_scheduler r sigma rules s) in
-      let circuits := compile_scheduler lco rules s in
+      let circuits := compile_scheduler lco rules (fun _ => false) s in
       forall reg,
         interp_circuit (cr_of_r r) (csigma_of_sigma sigma) (ContextEnv.(getenv) circuits reg) =
         bits_of_value (ContextEnv.(getenv) spec_results reg).

@@ -52,6 +52,9 @@ Section Packages.
       (** [koika_rules]: The rules of the program. **)
       koika_rules: forall _: rule_name_t,
           TypedSyntax.rule pos_t var_t koika_reg_types koika_ext_fn_types;
+      (** [koika_rule_external]: Whether a rule will be replaced by a native
+          implementation. **)
+      koika_rule_external: rule_name_t -> bool;
       (** [koika_rule_names]: These names are used to generate readable code. **)
       koika_rule_names: Show rule_name_t;
 
@@ -84,10 +87,6 @@ Section Packages.
       (** [vp_ext_fn_names]: A map from custom function names to Verilog
           function names. *)
       vp_ext_fn_names: forall fn: ext_fn_t, string;
-
-      (** [vp_external_rules]: A list of rule names to be replaced with
-          Verilog implementations *)
-      vp_external_rules: list rule_name_t
     }.
 
   Record sim_package_t :=
@@ -192,7 +191,7 @@ Section Compilation.
                    forall {sz}, circuit sz -> circuit sz)
     : circuit_package_t :=
     let _ := s.(koika_reg_finite) in
-    {| cp_circuits := compile_scheduler opt s.(koika_rules) s.(koika_scheduler) |}.
+    {| cp_circuits := compile_scheduler opt s.(koika_rules) s.(koika_rule_external) s.(koika_scheduler) |}.
 End Compilation.
 
 Record interop_package_t :=
@@ -202,7 +201,7 @@ Record interop_package_t :=
     ip_rule_name_t : Type;
     ip_ext_fn_t : Type;
     ip_koika : @koika_package_t pos_t var_t ip_rule_name_t ip_reg_t ip_ext_fn_t;
-    ip_verilog : @verilog_package_t ip_rule_name_t ip_ext_fn_t;
+    ip_verilog : @verilog_package_t ip_ext_fn_t;
     ip_sim : @sim_package_t var_t ip_ext_fn_t }.
 
 Require Import Koika.ExtractionSetup.
@@ -211,7 +210,7 @@ Module Backends.
   Section Backends.
     Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
     Notation koika_package_t := (@koika_package_t pos_t var_t rule_name_t reg_t ext_fn_t).
-    Notation verilog_package_t := (@verilog_package_t rule_name_t ext_fn_t).
+    Notation verilog_package_t := (@verilog_package_t ext_fn_t).
     Notation sim_package_t := (@sim_package_t var_t ext_fn_t).
 
     Axiom compile_circuits: koika_package_t -> verilog_package_t -> unit.

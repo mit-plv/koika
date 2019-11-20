@@ -66,22 +66,23 @@ Definition rules :=
 Definition bring : scheduler :=
   tc_scheduler (outsideWorld |> receive |> done).
 
+(* Annotating [outsideWorld] in [koika_rule_external] below indicates that the
+   corresponding rule should be removed by the Verilog backend to let us insert
+   an external implementation instead. *)
 Definition package : interop_package_t :=
   {| ip_koika := {| koika_reg_types := R;
                    koika_reg_init := r;
                    koika_ext_fn_types := empty_Sigma;
                    koika_rules := rules;
+                   koika_rule_external r :=
+                     match r with outsideWorld => true | _ => false end;
                    koika_scheduler := bring;
                    koika_module_name := "external_rule" |};
 
      ip_sim := {| sp_ext_fn_names := empty_fn_names;
                  sp_extfuns := None |};
 
-     (* Including [outsideWorld] in [vp_external_rules] below indicates that the
-        corresponding rule should be removed by the Verilog backend to let us
-        insert an external circuit. *)
-     ip_verilog := {| vp_ext_fn_names := empty_fn_names;
-                     vp_external_rules := [outsideWorld] |} |}.
+     ip_verilog := {| vp_ext_fn_names := empty_fn_names |} |}.
 
 Definition prog := Interop.Backends.register package.
 Extraction "external_rule.ml" prog.
