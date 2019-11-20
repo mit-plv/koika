@@ -121,8 +121,8 @@ Section CircuitOptimizer.
 
   Lemma unannot_sound {REnv cr sz} :
     forall (c: circuit sz),
-      interp_circuit (REnv := REnv) cr csigma c =
-      interp_circuit (REnv := REnv) cr csigma (unannot c).
+      interp_circuit (REnv := REnv) cr csigma (unannot c) =
+      interp_circuit (REnv := REnv) cr csigma c.
   Proof. induction c; eauto. Qed.
 
   Section MuxElim.
@@ -142,14 +142,14 @@ Section CircuitOptimizer.
       | _ => fun c0 => c0
       end c.
 
-    Lemma opt_muxelim_correct :
+    Lemma opt_muxelim_sound :
       forall {sz} (c: circuit sz),
         interp_circuit cr csigma (opt_muxelim c) = interp_circuit cr csigma c.
     Proof.
       destruct c; simpl; try reflexivity.
       destruct eqb eqn:Heqb.
       - apply eqb_sound in Heqb.
-        rewrite (unannot_sound c2), (unannot_sound c3), Heqb.
+        rewrite <- (unannot_sound c2), <- (unannot_sound c3), Heqb.
         destruct Bits.single; reflexivity.
       - reflexivity.
     Qed.
@@ -206,11 +206,28 @@ Section CircuitOptimizer.
       | c => c
       end.
 
+    Definition opt_mux_bit1 {sz} (c: circuit sz): circuit sz :=
+      match c in Circuit _ _ sz return circuit sz -> circuit sz with
+      | @CMux _ _ _ _ _ _ n s c1 c2 =>
+        fun c0 => match n return Circuit _ _ n -> Circuit _ _ n with
+               | 1 => fun c0 =>
+                       match asconst c1, asconst c2 with
+                       | Some ltrue, Some lfalse => CAnnot "optimized_mux" s
+                       | Some lfalse, Some ltrue => CAnnot "optimized_mux" (CNot s)
+                       | _, _ => c0
+                       end
+               | _ => fun c0 => c0
+               end c0
+      | _ => fun c0 => c0
+      end c.
+
     Definition opt_constprop {sz} (c: circuit sz): circuit sz :=
       match sz as n return (circuit n -> circuit n) with
       | 0 => fun c => CConst Bits.nil
-      | _ => fun c => opt_constprop' c
+      | _ => fun c => opt_mux_bit1 (opt_constprop' c)
       end c.
+
+    Arguments opt_constprop sz !c : assert.
 
     Lemma asconst_Some :
       forall {sz} (c: circuit sz) bs,
@@ -228,10 +245,8 @@ Section CircuitOptimizer.
       apply IHc; eassumption.
     Qed.
 
-    Arguments opt_constprop sz !c : assert.
-
     Arguments EqDec_ListBool: simpl never.
-    Lemma opt_constprop'_correct :
+    Lemma opt_constprop'_sound :
       forall {sz} (c: circuit sz),
         interp_circuit cr csigma (opt_constprop' c) = interp_circuit cr csigma c.
     Proof.
@@ -256,23 +271,45 @@ Section CircuitOptimizer.
       all: repeat t.
     Qed.
 
-    Lemma opt_constprop_correct :
+    Lemma opt_mux_bit1_sound :
+      forall {sz} (c: circuit sz),
+        interp_circuit cr csigma (opt_mux_bit1 c) = interp_circuit cr csigma c.
+    Proof.
+      destruct c; simpl; try reflexivity; [].
+      destruct sz as [ | [ | ] ]; simpl; try reflexivity; [].
+      destruct (asconst c2) as [ [ | [ | ] [ | ] ] | ] eqn:Hc2; try reflexivity;
+        destruct (asconst c3) as [ [ | [ | ] [ | ] ] | ] eqn:Hc3; try reflexivity;
+          repeat match goal with
+                 | _ => progress (cbn in * || subst)
+                 | [ H: _ :: _ = _ :: _ |- _ ] => inversion H; subst; clear H
+                 | [ v: vect_nil_t _ |- _ ] => destruct v
+                 | [ H: asconst _ = Some _ |- _ ] => apply asconst_Some in H
+                 | [  |- context[interp_circuit _ _ ?c] ] => destruct (interp_circuit _ _ c) eqn:?
+                 | [  |- context[if ?x then _ else _] ] => destruct x
+                 | _ => reflexivity
+                 end.
+    Qed.
+
+    Lemma opt_constprop_sound :
       forall {sz} (c: circuit sz),
         interp_circuit cr csigma (opt_constprop c) = interp_circuit cr csigma c.
     Proof.
       unfold opt_constprop; destruct sz.
       - cbn; intros.
         destruct interp_circuit; reflexivity.
-      - eauto using opt_constprop'_correct.
+      - intros; rewrite opt_mux_bit1_sound, opt_constprop'_sound; reflexivity.
     Qed.
   End ConstProp.
 End CircuitOptimizer.
 
+Arguments unannot {rule_name_t reg_t ext_fn_t CR CSigma rwdata} [sz] c : assert.
+Arguments unannot_sound {rule_name_t reg_t ext_fn_t CR CSigma rwdata} csigma [REnv] cr [sz] c : assert.
+
 Arguments opt_constprop {rule_name_t reg_t ext_fn_t CR CSigma rwdata} [sz] c : assert.
-Arguments opt_constprop_correct {rule_name_t reg_t ext_fn_t CR CSigma rwdata} csigma [REnv] cr [sz] c : assert.
+Arguments opt_constprop_sound {rule_name_t reg_t ext_fn_t CR CSigma rwdata} csigma [REnv] cr [sz] c : assert.
 
 Arguments opt_muxelim {rule_name_t reg_t ext_fn_t CR CSigma rwdata} eqb [sz] c : assert.
-Arguments opt_muxelim_correct {rule_name_t reg_t ext_fn_t CR CSigma rwdata} csigma {eqb} eqb_sound [REnv] cr [sz] c : assert.
+Arguments opt_muxelim_sound {rule_name_t reg_t ext_fn_t CR CSigma rwdata} csigma {eqb} eqb_sound [REnv] cr [sz] c : assert.
 
 Arguments lco_fn {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} l [sz] c : assert.
 Arguments lco_proof {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} l {REnv} cr [sz] c : assert.
@@ -287,16 +324,21 @@ Section LCO.
   Context {rwdata: nat -> Type}.
   Context (csigma: forall f, CSig_denote (CSigma f)).
 
+  Definition lco_unannot : @local_circuit_optimizer rule_name_t _ _ CR _ rwdata csigma :=
+    {| lco_fn := unannot;
+       lco_proof := unannot_sound csigma |}.
+
   Definition lco_constprop: @local_circuit_optimizer rule_name_t _ _ CR _ rwdata csigma :=
     {| lco_fn := opt_constprop;
-       lco_proof := opt_constprop_correct csigma |}.
+       lco_proof := opt_constprop_sound csigma |}.
 
   Definition lco_muxelim eqb eqb_sound
     : @local_circuit_optimizer rule_name_t _ _ CR _ rwdata csigma :=
     {| lco_fn := opt_muxelim eqb;
-       lco_proof := opt_muxelim_correct csigma eqb_sound |}.
+       lco_proof := opt_muxelim_sound csigma eqb_sound |}.
 End LCO.
 
+Arguments lco_unannot {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} : assert.
 Arguments lco_constprop {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} : assert.
 Arguments lco_muxelim {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} {eqb} eqb_sound : assert.
 
