@@ -72,6 +72,8 @@ Module Type RfPow2_sig.
   Parameter idx_sz: nat.
   Parameter T: type.
   Parameter init: T.
+  Parameter read_style : @switch_style var_t.
+  Parameter write_style : @switch_style var_t.
 End RfPow2_sig.
 
 Module RfPow2 (s: RfPow2_sig).
@@ -93,29 +95,24 @@ Module RfPow2 (s: RfPow2_sig).
     | rData n => String.append "rData_" (show n)
     end.
 
-  (* Definition read_style := SequentialSwitch s.T "tmp". *)
-  (* Definition write_style := SequentialSwitch unit_t "tmp". *)
-  Definition read_style := @TreeSwitch var_t.
-  Definition write_style := @TreeSwitch var_t.
-
   Definition read_0 : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun (idx : bits_t s.idx_sz) : s.T =>
-         `UCompleteSwitch read_style s.idx_sz "idx"
+         `UCompleteSwitch s.read_style s.idx_sz "idx"
               (fun idx => {{ read0(rData idx) }})` }}.
 
   Definition write_0 : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun (idx : bits_t s.idx_sz) (val: s.T) : unit_t =>
-         `UCompleteSwitch write_style s.idx_sz "idx"
+         `UCompleteSwitch s.write_style s.idx_sz "idx"
               (fun idx => {{ write0(rData idx, val) }})` }}.
 
   Definition read_1 : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun (idx : bits_t s.idx_sz) : s.T =>
-         `UCompleteSwitch read_style s.idx_sz "idx"
+         `UCompleteSwitch s.read_style s.idx_sz "idx"
               (fun idx => {{ read1(rData idx) }})` }}.
 
   Definition write_1 : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun (idx : bits_t s.idx_sz) (val: s.T) : unit_t =>
-         `UCompleteSwitch write_style s.idx_sz "idx"
+         `UCompleteSwitch s.write_style s.idx_sz "idx"
               (fun idx => {{ write1(rData idx, val) }})` }}.
 End RfPow2.
 

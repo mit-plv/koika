@@ -1,4 +1,4 @@
-(* External functions *)
+(* Double writes *)
 Require Import Koika.Frontend.
 
 Inductive reg_t := reg0.

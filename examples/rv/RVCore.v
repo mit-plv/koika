@@ -420,6 +420,8 @@ Module  RV32ICore.
     Definition idx_sz := log2 32.
     Definition T := bits_t 32.
     Definition init := Bits.zeroes 32.
+    Definition read_style := Scoreboard.read_style T.
+    Definition write_style := Scoreboard.write_style.
   End Rf_32.
   Module Rf := RfPow2 Rf_32.
 
@@ -428,7 +430,6 @@ Module  RV32ICore.
     Definition maxScore := 3.
   End Scoreboard_32reg.
   Module Scoreboard := Scoreboard Scoreboard_32reg.
-
 
   (* Declare state *)
   Inductive reg_t :=
