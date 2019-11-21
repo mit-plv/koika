@@ -25,7 +25,8 @@ Definition r reg : R reg :=
 (* This macro expands into a switch that branches on the value of [idx] to return
    the idx-th register in rData. *)
 Definition read_vect idx : uaction reg_t empty_ext_fn_t :=
-  UCompleteSwitch index_sz idx (fun idx => {{ read0(rData idx) }}).
+  {{ `UCompleteSwitch (Sequential (bits_t reg_sz) "tmp") index_sz idx
+         (fun idx => {{ read0(rData idx) }})` }}.
 
 Definition _read_reg : uaction reg_t empty_ext_fn_t :=
   {{

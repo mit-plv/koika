@@ -18,21 +18,72 @@ Section SyntaxMacros.
     | String c s => vect_cons (bits_of_ascii c) (array_of_bytes s)
     end.
 
-  Fixpoint gen_switch {tau}
-           (var: var_t)
-           {nb} (branches: vect (type_denote tau * uaction) (S nb)) : uaction :=
-    let '(label, branch) := vect_hd branches in
+  Fixpoint uprogn (aa: list uaction) :=
+    match aa with
+    | [] => UConst (tau := bits_t 0) Ob
+    | [a] => a
+    | a :: aa => USeq a (uprogn aa)
+    end.
+
+  Definition uskip : uaction :=
+    UConst (tau := bits_t 0) Ob.
+
+  Definition uinit (tau: type) : uaction :=
+    let zeroes := UConst (tau := bits_t _) (Bits.zeroes (type_sz tau)) in
+    UUnop (UConv (UUnpack tau)) zeroes.
+
+  Fixpoint uswitch (var: uaction) (default: uaction)
+           (branches: list (uaction * uaction)) : uaction :=
+    match branches with
+    | nil => default
+    | (label, action) :: branches =>
+      UIf (UBinop UEq var label) action (uswitch var default branches)
+    end.
+
+  Fixpoint uswitch_nodefault (var: uaction)
+           {nb} (branches: vect (uaction * uaction) (S nb)) : uaction :=
+    let '(label, action) := vect_hd branches in
     match nb return vect _ (S nb) -> uaction with
-    | 0 => fun _ => branch
+    | 0 => fun _ => action
     | S nb => fun branches =>
-      UIf (UBinop UEq (UVar var) (UConst label))
-          branch (gen_switch var (vect_tl branches))
+               UIf (UBinop UEq var label) action
+                   (uswitch_nodefault var (vect_tl branches))
     end branches.
 
-  Definition UCompleteSwitch sz (var: var_t) (branches: index (pow2 sz) -> uaction) :=
-    gen_switch (tau := bits_t sz) var
-               (vect_map (fun idx => (Bits.of_index sz idx, branches idx))
-                         (all_indices (pow2 sz))).
+  Inductive switch_style :=
+  | Nested
+  | Sequential (tau: type) (output_var: var_t).
+
+  Definition gen_branches label_sz bound (branches: index bound -> uaction)
+    : vect (uaction * uaction) bound :=
+    let label_of_index idx := UConst (tau := bits_t _) (Bits.of_index label_sz idx) in
+    vect_map (fun idx => (label_of_index idx, branches idx))
+             (all_indices bound).
+
+  Fixpoint uswitch_stateful (var: uaction) (output_var: var_t)
+           {nb} (branches: vect (uaction * uaction) nb) : uaction :=
+    match nb return vect _ nb -> uaction with
+    | 0 => fun _ => uskip
+    | S nb => fun branches =>
+               let '(label, action) := vect_hd branches in
+               USeq (UIf (UBinop UEq var label)
+                         (UAssign output_var action)
+                         uskip)
+                    (uswitch_stateful var output_var (vect_tl branches))
+    end branches.
+
+  (*  The sequential style only works with branches that return unit *)
+  Definition UCompleteSwitch (style: switch_style) sz
+             (var: var_t) (branches: index (pow2 sz) -> uaction) :=
+    let branches := gen_branches sz (pow2 sz) branches in
+    match style with
+    | Nested => uswitch_nodefault (UVar var) branches
+    | Sequential output_type output_var =>
+      UBind output_var
+            (uinit output_type)
+            (USeq (uswitch_stateful (UVar var) output_var branches)
+                  (UVar output_var))
+    end.
 End SyntaxMacros.
 
 Module Display.

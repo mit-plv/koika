@@ -95,11 +95,13 @@ Module RfPow2 (s: RfPow2_sig).
 
   Definition read : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun (idx : bits_t s.idx_sz) : s.T =>
-         `UCompleteSwitch s.idx_sz "idx" (fun idx => {{ read0(rData idx) }})` }}.
+         `UCompleteSwitch (Sequential (bits_t sz) "tmp") s.idx_sz "idx"
+              (fun idx => {{ read0(rData idx) }})` }}.
 
   Definition write : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun (idx : bits_t s.idx_sz) (val: s.T) : unit_t =>
-         `UCompleteSwitch s.idx_sz "idx" (fun idx => {{ write0(rData idx, val) }})` }}.
+         `UCompleteSwitch (Sequential unit_t "tmp") s.idx_sz "idx"
+              (fun idx => {{ write0(rData idx, val) }})` }}.
 End RfPow2.
 
 Module Type Rf_sig.

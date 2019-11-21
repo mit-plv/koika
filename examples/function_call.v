@@ -37,7 +37,7 @@ Definition Sigma (fn: ext_fn_t) : ExternalSignature :=
 
 Definition nth_instr_intfun : UInternalFunction reg_t ext_fn_t :=
   {{ fun (pc: bits_t pc_sz) : bits_t instr_sz =>
-       `UCompleteSwitch pc_sz "pc" (List_nth instructions)` }}.
+       `UCompleteSwitch Nested pc_sz "pc" (List_nth instructions)` }}.
 
 Definition _fetch_internal : uaction reg_t ext_fn_t :=
   {{ let pc := read0(pc) in

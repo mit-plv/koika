@@ -12,25 +12,6 @@ Section Desugaring.
 
   Import PrimUntyped.
 
-  Fixpoint desugar_UProgn {reg_t ext_fn_t} (aa: list (uaction reg_t ext_fn_t)) :=
-    match aa with
-    | [] => UConst (tau := bits_t 0) Ob
-    | [a] => a
-    | a :: aa => USeq a (desugar_UProgn aa)
-    end.
-
-  Fixpoint desugar_USwitch
-           (var: uaction reg_t ext_fn_t)
-           (default: uaction reg_t ext_fn_t)
-           (branches: list (uaction reg_t ext_fn_t *
-                            uaction reg_t ext_fn_t))
-    : uaction reg_t ext_fn_t :=
-    match branches with
-    | nil => default
-    | (val, action) :: branches =>
-      UIf (UBinop UEq var val) action (desugar_USwitch var default branches)
-    end.
-
   Definition map_int_fn_body {fn_name_t var_t action action': Type}
              (f: action -> action') (fn: InternalFunction fn_name_t var_t action) :=
     {| int_name := fn.(int_name);
@@ -71,7 +52,7 @@ Section Desugaring.
          | UErrorInAst =>
            UError {| emsg := ExplicitErrorInAst; epos := pos; esource := ErrSrc s |}
          | USkip =>
-           UConst (tau := bits_t 0) Ob
+           SyntaxMacros.uskip
          | UConstBits bs =>
            UConst (tau := bits_t _) bs
          | UConstString s =>
@@ -83,25 +64,23 @@ Section Desugaring.
                               esource := ErrSrc s |}
            end
          | UProgn aa =>
-           desugar_UProgn (List.map d aa)
+           SyntaxMacros.uprogn (List.map d aa)
          | ULet bindings body =>
            List.fold_right (fun '(var, a) acc => UBind var (d a) acc) (d body) bindings
          | UWhen cond body =>
            UIf (d cond) (d body) (UFail (bits_t 0)) (* FIXME infer the type of the second branch? *)
          | UStructInit sig fields =>
-           let uinit := UUnop (UConv (UUnpack (struct_t sig))) in
+           let empty := SyntaxMacros.uinit (struct_t sig) in
            let usubst f := UBinop (UStruct2 (USubstField f)) in
-           let empty := uinit (UConst (tau := bits_t _) (Bits.zeroes (struct_sz sig))) in
            List.fold_left (fun acc '(f, a) => (usubst f) acc (d a)) fields empty
          | UArrayInit tau elements =>
            let sig := {| array_type := tau; array_len := List.length elements |} in
-           let uinit := UUnop (UConv (UUnpack (array_t sig))) in
            let usubst pos := UBinop (UArray2 (USubstElement pos)) in
-           let empty := uinit (UConst (tau := bits_t _) (Bits.zeroes (array_sz sig))) in
+           let empty := SyntaxMacros.uinit (array_t sig) in
            snd (List.fold_left (fun '(pos, acc) a => (S pos, (usubst pos) acc (d a))) elements (0, empty))
          | USwitch var default branches =>
            let branches := List.map (fun '(cond, body) => (d cond, d body)) branches in
-           desugar_USwitch (d var) (d default) branches
+           SyntaxMacros.uswitch (d var) (d default) branches
          | UCallModule fR' fSigma' fn args =>
            let df body := desugar_action' pos (fun r => fR (fR' r)) (fun fn => fSigma (fSigma' fn)) body in
            let args := List.map d args in
