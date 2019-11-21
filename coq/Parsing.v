@@ -102,6 +102,7 @@ Notation "'!' a" := (UUnop (UBits1 UNot) a) (in custom koika at level 75, a cust
 Notation "a '||' b" :=  (UBinop (UBits2 UOr) a b) (in custom koika at level 85, format "a  '||'  b").
 Notation "'zeroExtend(' a ',' b ')'" :=  (UUnop (UBits1 (UZExtL b)) a) (in custom koika, b constr at level 0, format "'zeroExtend(' a ',' b ')'").
 Notation "'sext(' a ',' b ')'" :=  (UUnop (UBits1 (USExt b)) a) (in custom koika, b constr at level 0, format "'sext(' a ',' b ')'").
+Notation "'ignore(' a ')'" :=  (UUnop (UConv UIgnore) a) (in custom koika, a custom koika).
 Notation "'pack(' a ')'" :=  (UUnop (UConv UPack) a) (in custom koika, a custom koika).
 Notation "'unpack(' t ',' v ')'" :=  (UUnop (UConv (UUnpack t)) v) (in custom koika, t constr at level 11, v custom koika).
 Notation "a  '^'  b" :=  (UBinop (UBits2 UXor) a b) (in custom koika at level 85).
