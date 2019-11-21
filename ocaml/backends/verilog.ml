@@ -360,24 +360,44 @@ let continous_assignments
 
  *)
 
-type statement = Update of string  * string  * string
-(* name register, init value, net obtained by looking up the root of the register *)
+type statement =
+  { upd_reg_name: string; upd_reg_init: string; upd_reg_net: string }
 
-let statement_to_string ?(debug=false) (statement: statement) =
-  let Update (reg, initvalue, net_update) = statement in (* Really we can do that? That's cool *)
-  (* So we should compensate with something less cool: *)
+open Printf
+
+let format_assign_init { upd_reg_name; upd_reg_init; _ } =
+  sprintf "%s <= %s;" upd_reg_name upd_reg_init
+
+let format_assign_net ~debug { upd_reg_name; upd_reg_net; _ } =
+  let assignment =
+    sprintf "%s <= %s;" upd_reg_name upd_reg_net in
   if debug then
-  "\talways @(posedge CLK) begin\n\t\tif (!reset) begin\n\t\t\t" ^ reg ^ " <= " ^ initvalue ^ ";\n" ^
-    "\t\tend else begin\n" ^ "\t\t\tif (" ^ reg ^ "__overwrite" ^ ") begin\n" ^
-      "\t\t\t\t" ^ reg ^ " <= " ^ reg ^ "__overwrite_data" ^ ";\n\t\t\tend else begin\n" ^
-        "\t\t\t\t" ^ reg ^ " <= " ^ net_update ^ ";\n\t\t\tend\n\t\tend\n\tend"
+    let reg_overwrite = upd_reg_name ^ "__overwrite" in
+    let reg_overwrite_data = upd_reg_name ^ "__overwrite_data" in
+    sprintf "if (%s) begin
+				%s <= %s;
+			end else begin
+				%s
+			end"
+      reg_overwrite upd_reg_name reg_overwrite_data assignment
   else
-    "\talways @(posedge CLK) begin\n\t\tif (!reset) begin\n\t\t\t" ^ reg ^ " <= " ^ initvalue ^ ";\n" ^
-    "\t\tend else begin\n" ^
-        "\t\t\t\t" ^ reg ^ " <= " ^ net_update ^ ";\n\t\t\tend\n\t\tend\n"
+    assignment
+
+let format_always_block ?(debug=false) statements =
+  let sep = "\n			" in
+  let inits = List.map format_assign_init statements in
+  let nets = List.map (format_assign_net ~debug) statements in
+  Printf.sprintf "	always @(posedge CLK) begin
+		if (!reset) begin
+			%s
+		end else begin
+			%s
+		end
+	end"
+    (String.concat sep inits)
+    (String.concat sep nets)
 
 type statements = statement list
-
 
 let statements
       (environment: (int, string) Hashtbl.t)
@@ -385,10 +405,10 @@ let statements
     : statements
   =
   List.map (fun root ->
-      let reg_name = root.root_reg.reg_name in
-      let reg_init = string_of_bits (Cuttlebone.Util.bits_of_value root.root_reg.reg_init) in
-      let reg_wire_update = Hashtbl.find environment root.root_circuit.tag in
-      Update (reg_name, reg_init, reg_wire_update))
+      let upd_reg_name = root.root_reg.reg_name in
+      let upd_reg_init = string_of_bits (Cuttlebone.Util.bits_of_value root.root_reg.reg_init) in
+      let upd_reg_net = Hashtbl.find environment root.root_circuit.tag in
+      { upd_reg_name; upd_reg_init; upd_reg_net })
     (circuit.graph_roots)
 
 (* Generate BSV wrapper *)
@@ -550,7 +570,7 @@ let main target_dpath (modname: string) (circuit: circuit_graph) =
     let string_prologue = "module " ^ modname ^ "(" ^ (String.concat ",\n\t" string_io_decls) ^ ");" in
     let string_internal_decls = String.concat "\n" (List.map internal_decl_to_string internal_decls) in
     let string_continous_assignments = String.concat "\n" (List.map (assignment_to_string instance_external_gensym)  continous_assignments) in
-    let string_statements = String.concat "\n" (List.map statement_to_string statements) in
+    let string_statements = format_always_block statements in
     let string_epilogue = "endmodule" in
     List.iter (fun s -> output_string out s; output_string out "\n")
       [string_prologue;
