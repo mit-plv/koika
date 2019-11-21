@@ -1113,7 +1113,10 @@ let collect_rules sched =
   in loop [] sched
 
 let cpp_rule_of_koika_package_rule (kp: _ Cuttlebone.Extr.koika_package_t) (rn: 'rule_name_t) =
-  cpp_rule_of_action kp.koika_reg_finite.finite_elements (rn, (`Internal, kp.koika_rules rn))
+  let kind rn =
+    if kp.koika_rule_external rn then `ExternalRule else `InternalRule in
+  cpp_rule_of_action kp.koika_reg_finite.finite_elements
+    (rn, (kind rn, kp.koika_rules rn))
 
 let input_of_sim_package
       (kp: ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) Cuttlebone.Extr.koika_package_t)
