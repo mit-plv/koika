@@ -86,6 +86,37 @@ Proof.
   - rewrite IHsz; reflexivity.
 Qed.
 
+Lemma index_of_nat_none_ge :
+  forall sz n,
+    index_of_nat sz n = None ->
+    n >= sz.
+Proof.
+  intros; destruct (ge_dec n sz) as [ ? | Hle ].
+  - eassumption.
+  - apply not_ge, index_of_nat_bounded in Hle; destruct Hle;
+      congruence.
+Qed.
+
+Lemma index_of_nat_ge_none :
+  forall sz n,
+    n >= sz ->
+    index_of_nat sz n = None.
+Proof.
+  induction sz; cbn; intros.
+  - reflexivity.
+  - destruct n.
+    + omega.
+    + try rewrite IHsz by omega; reflexivity.
+Qed.
+
+Definition index_of_nat_lt (sz n: nat)
+  : n < sz -> index sz.
+Proof.
+  destruct (index_of_nat sz n) as [idx | ] eqn:Heq; intros Hlt.
+  - exact idx.
+  - exfalso; apply index_of_nat_none_ge in Heq; omega.
+Defined.
+
 Fixpoint largest_index sz : index (S sz) :=
   match sz with
   | 0 => thisone
@@ -1052,19 +1083,38 @@ Module Bits.
       auto using to_N_inj, to_N_of_N, to_N_bounded.
     Qed.
 
+    Lemma nat_lt_pow2_N (sz n: nat):
+      n < pow2 sz ->
+      (N.of_nat n < 2 ^ N.of_nat sz)%N.
+    Proof.
+      intros H.
+      change 2%N with (N.of_nat 2).
+      rewrite N_pow_Nat_pow.
+      unfold N.lt. rewrite <- Nat2N.inj_compare, <- nat_compare_lt.
+      rewrite pow2_correct in H; eassumption.
+    Qed.
+
     Lemma to_nat_of_nat :
       forall sz n,
         n < pow2 sz ->
         to_nat (of_nat sz n) = n.
     Proof.
       unfold to_nat, of_nat;
-        intros; rewrite to_N_of_N, Nat2N.id.
-      - reflexivity.
-      - change 2%N with (N.of_nat 2).
-        rewrite N_pow_Nat_pow.
-        unfold N.lt. rewrite <- Nat2N.inj_compare, <- nat_compare_lt.
-        rewrite pow2_correct in H; eassumption.
+        intros; rewrite to_N_of_N, Nat2N.id;
+          eauto using nat_lt_pow2_N.
     Qed.
+
+    Lemma to_nat_bounded {sz} :
+      forall (bs: bits sz), to_nat bs < pow2 sz.
+    Proof.
+      unfold to_nat; intros.
+      rewrite pow2_correct, <- Nat.compare_lt_iff.
+      rewrite Nat2N.inj_compare, N2Nat.id, <- N_pow_Nat_pow, N.compare_lt_iff.
+      apply to_N_bounded.
+    Qed.
+
+    Definition to_index_safe {sz} (bs: bits sz) :=
+      index_of_nat_lt (pow2 sz) (to_nat bs) (to_nat_bounded _).
   End Casts.
 
   Section Arithmetic.

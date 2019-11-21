@@ -4,7 +4,7 @@ Definition nregs := 16.
 Definition reg_sz := 32.
 
 Inductive reg_t := rIndex | rData (n: Vect.index nregs) | rOutput.
-Inductive rule_name_t := read_reg | incr_index.
+Inductive rule_name_t := read_reg_sequential | read_reg_tree | incr_index.
 
 Notation index_sz := (log2 nregs).
 
@@ -24,14 +24,24 @@ Definition r reg : R reg :=
 
 (* This macro expands into a switch that branches on the value of [idx] to return
    the idx-th register in rData. *)
-Definition read_vect idx : uaction reg_t empty_ext_fn_t :=
-  {{ `UCompleteSwitch (Sequential (bits_t reg_sz) "tmp") index_sz idx
+Definition read_vect_sequential idx : uaction reg_t empty_ext_fn_t :=
+  {{ `UCompleteSwitch (SequentialSwitch (bits_t reg_sz) "tmp") index_sz idx
          (fun idx => {{ read0(rData idx) }})` }}.
 
-Definition _read_reg : uaction reg_t empty_ext_fn_t :=
+Definition read_vect_tree idx : uaction reg_t empty_ext_fn_t :=
+  {{ `UCompleteSwitch TreeSwitch index_sz idx
+         (fun idx => {{ read0(rData idx) }})` }}.
+
+Definition _read_reg_sequential : uaction reg_t empty_ext_fn_t :=
   {{
       let v := read0(rIndex) in
-      write0(rOutput, `read_vect "v"`)
+      write1(rOutput, `read_vect_sequential "v"`)
+  }}.
+
+Definition _read_reg_tree : uaction reg_t empty_ext_fn_t :=
+  {{
+      let v := read0(rIndex) in
+      write0(rOutput, `read_vect_tree "v"`)
   }}.
 
 Definition _incr_index : uaction reg_t empty_ext_fn_t :=
@@ -40,12 +50,13 @@ Definition _incr_index : uaction reg_t empty_ext_fn_t :=
 Definition rules :=
   tc_rules R empty_Sigma
            (fun rl => match rl with
-                   | read_reg => _read_reg
+                   | read_reg_sequential => _read_reg_sequential
+                   | read_reg_tree => _read_reg_tree
                    | incr_index => _incr_index
                    end).
 
 Definition regfile : scheduler :=
-  tc_scheduler (read_reg |> incr_index |> done).
+  tc_scheduler (read_reg_sequential |> read_reg_tree |> incr_index |> done).
 
 Definition external (r: rule_name_t) := false.
 

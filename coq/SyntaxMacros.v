@@ -50,14 +50,10 @@ Section SyntaxMacros.
                    (uswitch_nodefault var (vect_tl branches))
     end branches.
 
-  Inductive switch_style :=
-  | Nested
-  | Sequential (tau: type) (output_var: var_t).
-
-  Definition gen_branches label_sz bound (branches: index bound -> uaction)
+  Definition gen_branches label_sz bound (branch_bodies: index bound -> uaction)
     : vect (uaction * uaction) bound :=
     let label_of_index idx := UConst (tau := bits_t _) (Bits.of_index label_sz idx) in
-    vect_map (fun idx => (label_of_index idx, branches idx))
+    vect_map (fun idx => (label_of_index idx, branch_bodies idx))
              (all_indices bound).
 
   Fixpoint uswitch_stateful (var: uaction) (output_var: var_t)
@@ -72,16 +68,42 @@ Section SyntaxMacros.
                     (uswitch_stateful var output_var (vect_tl branches))
     end branches.
 
-  (*  The sequential style only works with branches that return unit *)
+  Fixpoint utree var_logsz bit_idx (var: var_t) {sz} (bodies: bits sz -> uaction) :=
+    match sz return (bits sz -> uaction) -> uaction with
+    | 0 =>
+      fun bodies =>
+        bodies Ob
+    | S n =>
+      fun bodies =>
+      (* FIXME add a version of sel taking a compile-time constant? *)
+      let bidx := UConst (tau := bits_t var_logsz) (Bits.of_nat var_logsz bit_idx) in
+      UIf (UBinop (UBits2 USel) (UVar var) bidx)
+          (utree var_logsz (S bit_idx) var (fun bs => bodies bs~1))
+          (utree var_logsz (S bit_idx) var (fun bs => bodies bs~0))
+    end bodies.
+
+  Definition UCompleteTree sz
+             (var: var_t) (branch_bodies: bits sz -> uaction) :=
+    utree (log2 sz) 0 var branch_bodies.
+
+  Inductive switch_style :=
+  | TreeSwitch
+  | NestedSwitch
+  | SequentialSwitch (tau: type) (output_var: var_t).
+
   Definition UCompleteSwitch (style: switch_style) sz
-             (var: var_t) (branches: index (pow2 sz) -> uaction) :=
-    let branches := gen_branches sz (pow2 sz) branches in
+             (var: var_t) (branch_bodies: index (pow2 sz) -> uaction) :=
+    let branches _ :=
+        gen_branches sz (pow2 sz) branch_bodies in
     match style with
-    | Nested => uswitch_nodefault (UVar var) branches
-    | Sequential output_type output_var =>
+    | TreeSwitch =>
+      UCompleteTree sz var (fun bs => branch_bodies (Bits.to_index_safe bs))
+    | NestedSwitch =>
+      uswitch_nodefault (UVar var) (branches tt)
+    | SequentialSwitch output_type output_var =>
       UBind output_var
             (uinit output_type)
-            (USeq (uswitch_stateful (UVar var) output_var branches)
+            (USeq (uswitch_stateful (UVar var) output_var (branches tt))
                   (UVar output_var))
     end.
 End SyntaxMacros.

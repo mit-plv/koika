@@ -93,14 +93,19 @@ Module RfPow2 (s: RfPow2_sig).
     | rData n => String.append "rData_" (show n)
     end.
 
+  (* Definition read_style := Sequential s.T "tmp". *)
+  (* Definition write_style := Sequential unit_t "tmp". *)
+  Definition read_style := @TreeSwitch var_t.
+  Definition write_style := @TreeSwitch var_t.
+
   Definition read : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun (idx : bits_t s.idx_sz) : s.T =>
-         `UCompleteSwitch (Sequential s.T "tmp") s.idx_sz "idx"
+         `UCompleteSwitch read_style s.idx_sz "idx"
               (fun idx => {{ read0(rData idx) }})` }}.
 
   Definition write : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun (idx : bits_t s.idx_sz) (val: s.T) : unit_t =>
-         `UCompleteSwitch (Sequential unit_t "tmp") s.idx_sz "idx"
+         `UCompleteSwitch write_style s.idx_sz "idx"
               (fun idx => {{ write0(rData idx, val) }})` }}.
 End RfPow2.
 
