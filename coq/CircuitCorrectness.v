@@ -1649,10 +1649,11 @@ Section Thm.
 
   Section Standalone.
     Context (rules: rule_name_t -> rule pos_t var_t R Sigma).
+    Context (external: rule_name_t -> bool).
 
-    Theorem scheduler_compiler_correct:
+    Theorem compiler_correct:
       let spec_results := commit_update r (interp_scheduler r sigma rules s) in
-      let circuits := compile_scheduler lco rules (fun _ => false) s in
+      let circuits := compile_scheduler lco rules external s in
       forall reg,
         interp_circuit (cr_of_r r) (csigma_of_sigma sigma) (ContextEnv.(getenv) circuits reg) =
         bits_of_value (ContextEnv.(getenv) spec_results reg).
