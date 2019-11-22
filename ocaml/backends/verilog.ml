@@ -148,6 +148,29 @@ let internal_decl_for_reg (root: circuit_root) =
   let reg_type = reg_type root.root_reg in
   Reg(reg_name, typ_sz reg_type)
 
+let fn1_sz fn =
+  let fsig = Cuttlebone.Extr.PrimSignatures.coq_Sigma1 (Bits1 fn) in
+  typ_sz (Cuttlebone.Util.retType fsig)
+
+let fn2_sz fn =
+  let fsig = Cuttlebone.Extr.PrimSignatures.coq_Sigma2 (Bits2 fn) in
+  typ_sz (Cuttlebone.Util.retType fsig)
+
+let circuit_sz (c: circuit) =
+  match c.node with
+  | CNot _
+    | CAnd (_, _)
+    | COr (_, _) -> 1
+  | CMux (n, _, _, _)
+  | CAnnot (n, _, _) -> n
+  | CConst l -> Array.length l
+  | CUnop (fn, _) -> fn1_sz fn
+  | CBinop (fn, _, _) -> fn2_sz fn
+  | CExternal (ffi_sig, _) -> typ_sz ffi_sig.ffi_rettype
+  | CReadRegister r_sig -> typ_sz (reg_type r_sig)
+  | CBundle (_, _) -> 0
+  | CBundleRef (sz, _, _) -> sz
+
 let internal_decl_for_net
       (environment: (int, string) Hashtbl.t)
       (gensym : int ref)
@@ -157,26 +180,13 @@ let internal_decl_for_net
   gensym := !gensym + 1;
   let name_net = "__inter_" ^ (string_of_int name_ptr) in
   Hashtbl.add environment c.tag name_net;
+  let sz = circuit_sz c in
   match c.node with
-  | CNot _
-    | CAnd (_, _)
-    | COr (_, _) ->   Wire(name_net, 1)
-  | CMux (n, _, _, _) -> Wire(name_net, n)
-  | CAnnot (n, name , _) ->
+  | CAnnot (_, name , _) ->
      Hashtbl.add environment c.tag (name ^ name_net);
-     Wire(name ^ name_net, n) (* Prefix with the name given by the user *)
-  | CConst l -> Wire(name_net, Array.length l)
-  | CUnop (fn, _) ->
-     let fsig = Cuttlebone.Extr.PrimSignatures.coq_Sigma1 (Bits1 fn) in
-     Wire(name_net, typ_sz (Cuttlebone.Util.retType fsig))
-  | CBinop (fn, _, _) ->
-     let fsig = Cuttlebone.Extr.PrimSignatures.coq_Sigma2 (Bits2 fn) in
-     Wire(name_net, typ_sz (Cuttlebone.Util.retType fsig))
-  | CExternal (ffi_sig, _) -> Wire(name_net, typ_sz ffi_sig.ffi_rettype)
-  | CReadRegister r_sig -> Wire(name_net, typ_sz (reg_type r_sig))
+     Wire (name ^ name_net, sz) (* Prefix with the name given by the user *)
   | CBundle (_,_) -> Nothing
-  | CBundleRef (sz, _, _) -> Wire(name_net, sz)
-
+  | _ -> Wire (name_net, sz)
 
 let internal_declarations (environment: (int, string) Hashtbl.t) (circuit: circuit_graph) =
   let gensym = ref 0 in
@@ -208,12 +218,12 @@ type expression =
   | EAnd of string * string
   | EOr of string * string
   | EMux of size_t * string * string * string
-  | EIO of string
-  | EConst of string
+  | EIO of size_t * string
+  | EConst of size_t * string
   | EUnop of Extr.PrimTyped.fbits1 * string
   | EBinop of Extr.PrimTyped.fbits2 * string * string
   | EExternal of ffi_signature * string
-  | EReadRegister of string
+  | EReadRegister of reg_signature
   | EAnnot of size_t * string * string
 
 type assignment = string * expression (* LHS, RHS *)
@@ -221,7 +231,7 @@ type assignment = string * expression (* LHS, RHS *)
 let failwith_unlowered () =
   failwith "The verilog backend doesn't support sext, zextl and zextr: they must be elaborated away by the compiler."
 
-let assignment_to_string (gensym: int ref) (assignment: assignment) =
+let assignment_to_string' (gensym: int ref) (assignment: assignment) =
   let (lhs,expr) = assignment in
   let default_left = "\tassign " ^ lhs ^ " = " in
   (match expr with
@@ -230,8 +240,8 @@ let assignment_to_string (gensym: int ref) (assignment: assignment) =
    | EAnd (arg1, arg2) -> default_left ^ arg1 ^ " & " ^ arg2
    | EOr (arg1, arg2) -> default_left ^ arg1 ^ " | " ^ arg2
    | EMux (_, sel, t, f) -> default_left ^ sel ^ " ? " ^ t ^ " : " ^ f
-   | EIO s -> default_left ^ s
-   | EConst s -> default_left ^ s
+   | EIO (_sz, s) -> default_left ^ s
+   | EConst (_sz, s) -> default_left ^ s
    | EUnop (fn, arg1) ->
       (match fn with
        | Not _ -> default_left ^ "~" ^ arg1
@@ -275,10 +285,23 @@ let assignment_to_string (gensym: int ref) (assignment: assignment) =
       gensym := !gensym + 1 ;
       "\t"^ ffi.ffi_name ^ " " ^ (ffi.ffi_name ^ "__instance__" ^ string_of_int number_s) ^
         "(" ^ arg ^ "," ^ lhs ^ ")"
-   | EReadRegister r -> default_left ^ r
+   | EReadRegister r -> default_left ^ r.reg_name
    | EAnnot (_, _, rhs) -> default_left ^ rhs) ^ ";"
 
+let expr_sz (e: expression) =
+  match e with
+  | ENot _ | EAnd _ | EOr _ -> 1
+  | EMux (sz, _, _, _)
+  | EIO (sz, _)
+  | EConst (sz, _) -> sz
+  | EUnop (fn, _) -> fn1_sz fn
+  | EBinop (fn, _, _) -> fn2_sz fn
+  | EExternal (fn, _) -> typ_sz fn.ffi_rettype
+  | EReadRegister r_sig -> typ_sz (reg_type r_sig)
+  | EAnnot (sz, _, _) -> sz
 
+let assignment_to_string (gensym: int ref) (assignment: assignment) =
+  Printf.sprintf "%s // %d" (assignment_to_string' gensym assignment) (expr_sz @@ snd assignment)
 
 type continous_assignments = assignment list
 
@@ -290,22 +313,23 @@ let assignment_node
   let env = Hashtbl.find environment in
   let node = c.node in
   match node with
-  | CBundleRef (_, bundle , rwc) ->
+  | CBundleRef (sz, bundle , rwc) ->
      begin
        match bundle.node with
        | CBundle (rule_name, _) ->
-          [(env c.tag, EIO("rule_"^rule_name^ "_input_" ^ rwcircuit_to_string rwc))]
+          [(env c.tag, EIO(sz, "rule_"^rule_name^ "_input_" ^ rwcircuit_to_string rwc))]
        | _ -> assert false
      end
   | CBundle (rule_name, list_assigns) ->
      List.flatten
      @@ List.map (fun (reg,rwdata) ->
-            [("rule_"^rule_name^"_output_"^reg.reg_name^"_data0", EIO(env rwdata.data0.tag));
-             ("rule_"^rule_name^"_output_"^reg.reg_name^"_data1", EIO(env rwdata.data1.tag));
-             ("rule_"^rule_name^"_output_"^reg.reg_name^"_read0", EIO(env rwdata.read0.tag));
-             ("rule_"^rule_name^"_output_"^reg.reg_name^"_read1", EIO(env rwdata.read1.tag));
-             ("rule_"^rule_name^"_output_"^reg.reg_name^"_write0", EIO(env rwdata.write0.tag));
-             ("rule_"^rule_name^"_output_"^reg.reg_name^"_write1", EIO(env rwdata.write1.tag))])
+            let sz = circuit_sz rwdata.write0 in
+            [("rule_"^rule_name^"_output_"^reg.reg_name^"_data0", EIO(1, env rwdata.data0.tag));
+             ("rule_"^rule_name^"_output_"^reg.reg_name^"_data1", EIO(1, env rwdata.data1.tag));
+             ("rule_"^rule_name^"_output_"^reg.reg_name^"_read0", EIO(1, env rwdata.read0.tag));
+             ("rule_"^rule_name^"_output_"^reg.reg_name^"_read1", EIO(1, env rwdata.read1.tag));
+             ("rule_"^rule_name^"_output_"^reg.reg_name^"_write0", EIO(sz, env rwdata.write0.tag));
+             ("rule_"^rule_name^"_output_"^reg.reg_name^"_write1", EIO(sz, env rwdata.write1.tag))])
           list_assigns
   | _ ->
      begin
@@ -319,11 +343,11 @@ let assignment_node
                                              env c_sel.tag,
                                              env c_t.tag,
                                              env c_f.tag)
-       | CConst l -> EConst (string_of_bits l) (* TODO *)
+       | CConst l -> EConst (Array.length l, string_of_bits l) (* TODO *)
        | CUnop (fn, c_1) -> EUnop (fn, env c_1.tag)
        | CBinop (fn, c_1, c_2) -> EBinop (fn, env c_1.tag, env c_2.tag)
        | CExternal (ffi_sig, c_1) -> EExternal (ffi_sig, env c_1.tag)
-       | CReadRegister r_sig -> EReadRegister (r_sig.reg_name)
+       | CReadRegister r_sig -> EReadRegister r_sig
        | CAnnot (sz, name_rhs, c) -> EAnnot (sz, name_rhs, env c.tag)
        | _ -> assert false
      in
@@ -339,7 +363,7 @@ let continous_assignments
   let maybe_debug = if debug then
                       (List.map (fun root ->
                            (root.root_reg.reg_name ^ "__data",
-                            EReadRegister root.root_reg.reg_name))
+                            EReadRegister root.root_reg))
                          (circuit.graph_roots))
                     else []
   in
