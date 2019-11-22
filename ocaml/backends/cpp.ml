@@ -302,6 +302,13 @@ type assignment_result =
   | PureExpr of string
   | ImpureExpr of string
 
+let assignment_result_to_string (d: assignment_result) =
+  match d with
+  | NotAssigned -> sprintf "NotAssigned"
+  | Assigned v -> sprintf "Assigned %s" v
+  | PureExpr s -> sprintf "PureExpr %s" s
+  | ImpureExpr s -> sprintf "ImpureExpr %s" s
+
 let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
       (hpp: (pos_t, var_t, rule_name_t, reg_t, ext_fn_t) cpp_input_t) =
   let buffer = ref (Buffer.create 0) in
@@ -741,7 +748,9 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
         | NoTarget, ImpureExpr e ->
            p "%s;" e; (* Keep impure exprs like extfuns *)
            NotAssigned
-        | _, _ -> result
+        | (NoTarget, _) -> NotAssigned
+        | (VarTarget _, Assigned _) -> result
+        | (VarTarget _, NotAssigned) -> assert false
       in
 
       let must_expr = function
@@ -850,7 +859,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
            p_scoped "" (fun () ->
                p_bound_var_assign pos tau v expr;
                p_assign_expr target (p_action pos target rl))
-        | Extr.If (_, _, cond, tbr, fbr) ->
+        | Extr.If (_, tau, cond, tbr, fbr) ->
            p_declare_target target;
            (match reconstruct_switch rl with
             | Some (var, tau, default, branches) ->
@@ -859,10 +868,16 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
             | None ->
                let ctarget = gensym_target (Bits_t 1) "c" in
                let cexpr = p_action pos ctarget cond in
-               (p_scoped (sprintf "if (%s)" (must_value cexpr))
-                  (fun () -> p_assign_and_ignore target (p_action pos target tbr)));
-               p_scoped "else"
-                 (fun () -> p_assign_expr target (p_action pos target fbr)))
+               let tres =
+                 p_scoped (sprintf "if (%s)" (must_value cexpr))
+                   (fun () -> p_assign_expr target (p_action pos target tbr)) in
+               let fres =
+                 if tau = Extr.Bits_t 0 && Cuttlebone.Util.is_const_zero fbr then
+                   tres
+                 else
+                   p_scoped "else"
+                     (fun () -> p_assign_expr target (p_action pos target fbr)) in
+               assert (tres = fres); tres)
         | Extr.Read (_, port, reg) ->
            let r = hpp.cpp_register_sigs reg in
            let var = p_ensure_declared (ensure_target (reg_type r) target) in
