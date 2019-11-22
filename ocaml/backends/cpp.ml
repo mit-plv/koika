@@ -667,11 +667,6 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
           p_fn ~typ:"void" ~name:"commit" (fun () ->
               iter_all_registers p_commit_register)) in
 
-    let p_checked prbody =
-      pr "CHECK_RETURN(";
-      prbody ();
-      p ");" in
-
     let backslash_re =
       Str.regexp "\\\\" in
 
@@ -852,7 +847,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
            p_action pos target a2
         | Extr.Bind (_, tau, _, v, expr, rl) ->
            p_declare_target target;
-           p_scoped "/* bind */" (fun () ->
+           p_scoped "" (fun () ->
                p_bound_var_assign pos tau v expr;
                p_assign_expr target (p_action pos target rl))
         | Extr.If (_, _, cond, tbr, fbr) ->
@@ -864,7 +859,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
             | None ->
                let ctarget = gensym_target (Bits_t 1) "c" in
                let cexpr = p_action pos ctarget cond in
-               (p_scoped (sprintf "if (bool(%s))" (must_value cexpr))
+               (p_scoped (sprintf "if (%s)" (must_value cexpr))
                   (fun () -> p_assign_and_ignore target (p_action pos target tbr)));
                p_scoped "else"
                  (fun () -> p_assign_expr target (p_action pos target fbr)))
@@ -872,16 +867,14 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
            let r = hpp.cpp_register_sigs reg in
            let var = p_ensure_declared (ensure_target (reg_type r) target) in
            let pt = match port with P0 -> 0 | P1 -> 1 in
-           p_checked (fun () ->
-               pr "log.%s.read%d(&%s, Log.%s)" r.reg_name pt var r.reg_name);
+           pr "READ%d(%s, &%s);" pt r.reg_name var;
            Assigned var
         | Extr.Write (_, port, reg, expr) ->
            let r = hpp.cpp_register_sigs reg in
            let vt = gensym_target (reg_type r) "v" in
            let v = must_value (p_action pos vt expr) in
            let pt = match port with P0 -> 0 | P1 -> 1 in
-           p_checked (fun () ->
-               pr "log.%s.write%d(%s, Log.%s)" r.reg_name pt v r.reg_name);
+           pr "WRITE%d(%s, %s);" pt r.reg_name v;
            p_assign_expr target (PureExpr "prims::tt")
         | Extr.Unop (_, Extr.PrimTyped.Conv (tau, Extr.PrimTyped.Unpack), a)
              when Cuttlebone.Util.is_const_zero a ->

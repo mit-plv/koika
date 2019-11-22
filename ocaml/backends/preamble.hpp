@@ -940,6 +940,10 @@ struct reg_log_t {
 };
 
 #define CHECK_RETURN(can_fire) { if (!(can_fire)) { return false; } }
+#define READ0(reg, ptr) (CHECK_RETURN(log.reg.read0((ptr), Log.reg)))
+#define READ1(reg, ptr) (CHECK_RETURN(log.reg.read1((ptr), Log.reg)))
+#define WRITE0(reg, val) (CHECK_RETURN(log.reg.write0((val), Log.reg)))
+#define WRITE1(reg, val) (CHECK_RETURN(log.reg.write1((val), Log.reg)))
 
 #undef _unlikely
 #undef _unoptimized
