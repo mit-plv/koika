@@ -90,7 +90,7 @@ Section CompilerCorrectness.
   Notation action := (action pos_t var_t R Sigma).
   Notation rule := (rule pos_t var_t R Sigma).
   Notation interp_circuit := (interp_circuit (rule_name_t := rule_name_t) cr csigma).
-  Notation circuit_lt := (circuit_lt r csigma).
+  Notation circuit_le := (circuit_le r csigma).
 
   Context (rc: REnv.(env_t) (fun reg => circuit (CR reg))).
 
@@ -399,8 +399,8 @@ Section CompilerCorrectness.
       interp_circuit (willFire_of_canFire rl {| canFire := c; regs := rwd |} cLog) = Ob~0.
   Proof.
     intros.
-    eapply interp_circuit_circuit_lt_helper_false.
-    apply circuit_lt_willFire_of_canFire_canFire.
+    eapply interp_circuit_circuit_le_helper_false.
+    apply circuit_le_willFire_of_canFire_canFire.
     eassumption.
   Qed.
 
@@ -492,79 +492,79 @@ Section CompilerCorrectness.
 
   Transparent Circuits.willFire_of_canFire'.
 
-  Definition rwdata_circuit_lt_invariant {idx} (rwd1 rwd2: rwdata (CR idx)) :=
-      circuit_lt (rwd1.(read0)) (rwd2.(read0)) /\
-      circuit_lt (rwd1.(write0)) (rwd2.(write0)) /\
-      circuit_lt (rwd1.(read1)) (rwd2.(read1)) /\
-      circuit_lt (rwd1.(write1)) (rwd2.(write1)).
+  Definition rwdata_circuit_le_invariant {idx} (rwd1 rwd2: rwdata (CR idx)) :=
+      circuit_le (rwd1.(read0)) (rwd2.(read0)) /\
+      circuit_le (rwd1.(write0)) (rwd2.(write0)) /\
+      circuit_le (rwd1.(read1)) (rwd2.(read1)) /\
+      circuit_le (rwd1.(write1)) (rwd2.(write1)).
 
-  Definition rwset_circuit_lt_invariant (rws1 rws2: rwset) idx :=
-    rwdata_circuit_lt_invariant
+  Definition rwset_circuit_le_invariant (rws1 rws2: rwset) idx :=
+    rwdata_circuit_le_invariant
       (REnv.(getenv) rws1 idx)
       (REnv.(getenv) rws2 idx).
 
-  Lemma rwset_circuit_lt_invariant_refl :
-    forall rws idx, rwset_circuit_lt_invariant rws rws idx.
-  Proof. firstorder using circuit_lt_refl. Qed.
+  Lemma rwset_circuit_le_invariant_refl :
+    forall rws idx, rwset_circuit_le_invariant rws rws idx.
+  Proof. firstorder using circuit_le_refl. Qed.
 
-  Lemma rwset_circuit_lt_invariant_trans :
+  Lemma rwset_circuit_le_invariant_trans :
     forall rws1 rws2 rws3 idx,
-      rwset_circuit_lt_invariant rws1 rws2 idx ->
-      rwset_circuit_lt_invariant rws2 rws3 idx ->
-      rwset_circuit_lt_invariant rws1 rws3 idx.
-  Proof. firstorder using circuit_lt_trans. Qed.
+      rwset_circuit_le_invariant rws1 rws2 idx ->
+      rwset_circuit_le_invariant rws2 rws3 idx ->
+      rwset_circuit_le_invariant rws1 rws3 idx.
+  Proof. firstorder using circuit_le_trans. Qed.
 
 
-  Lemma rwset_circuit_lt_invariant_putenv_eq :
+  Lemma rwset_circuit_le_invariant_putenv_eq :
     forall rws1 rws2 idx rwd0,
-    rwdata_circuit_lt_invariant (REnv.(getenv) rws1 idx) rwd0 ->
-    rwset_circuit_lt_invariant rws1 (REnv.(putenv) rws2 idx rwd0) idx.
+    rwdata_circuit_le_invariant (REnv.(getenv) rws1 idx) rwd0 ->
+    rwset_circuit_le_invariant rws1 (REnv.(putenv) rws2 idx rwd0) idx.
   Proof.
-    unfold rwset_circuit_lt_invariant; intros.
+    unfold rwset_circuit_le_invariant; intros.
     rewrite get_put_eq; eauto.
   Qed.
 
-  Lemma rwset_circuit_lt_invariant_putenv_neq :
+  Lemma rwset_circuit_le_invariant_putenv_neq :
     forall rws1 rws2 idx idx0 rwd0,
       idx <> idx0 ->
-      rwset_circuit_lt_invariant rws1 rws2 idx ->
-      rwset_circuit_lt_invariant rws1 (REnv.(putenv) rws2 idx0 rwd0) idx.
+      rwset_circuit_le_invariant rws1 rws2 idx ->
+      rwset_circuit_le_invariant rws1 (REnv.(putenv) rws2 idx0 rwd0) idx.
   Proof.
-    unfold rwset_circuit_lt_invariant; intros.
+    unfold rwset_circuit_le_invariant; intros.
     rewrite get_put_neq; eauto.
   Qed.
 
-  Lemma rwset_circuit_lt_invariant_putenv :
+  Lemma rwset_circuit_le_invariant_putenv :
     forall rws1 rws2 idx0 rwd0,
-      (forall idx, rwset_circuit_lt_invariant rws1 rws2 idx) ->
-      rwdata_circuit_lt_invariant (getenv REnv rws1 idx0) rwd0 ->
-      (forall idx, rwset_circuit_lt_invariant rws1 (REnv.(putenv) rws2 idx0 rwd0) idx).
+      (forall idx, rwset_circuit_le_invariant rws1 rws2 idx) ->
+      rwdata_circuit_le_invariant (getenv REnv rws1 idx0) rwd0 ->
+      (forall idx, rwset_circuit_le_invariant rws1 (REnv.(putenv) rws2 idx0 rwd0) idx).
   Proof.
     intros.
     destruct (eq_dec idx0 idx); subst;
-      eauto using rwset_circuit_lt_invariant_putenv_eq, rwset_circuit_lt_invariant_putenv_neq.
+      eauto using rwset_circuit_le_invariant_putenv_eq, rwset_circuit_le_invariant_putenv_neq.
   Qed.
 
   Notation mux_rwdata := (mux_rwdata lco).
 
-  Lemma rwdata_circuit_lt_invariant_mux_rwdata_l :
+  Lemma rwdata_circuit_le_invariant_mux_rwdata_l :
     forall s c idx rwd1 rwd2 rwd3,
-      (interp_circuit c = Ob~1 -> @rwdata_circuit_lt_invariant idx rwd1 rwd3) ->
-      (interp_circuit c = Ob~0 -> @rwdata_circuit_lt_invariant idx rwd2 rwd3) ->
-      @rwdata_circuit_lt_invariant idx (mux_rwdata s c rwd1 rwd2) rwd3.
+      (interp_circuit c = Ob~1 -> @rwdata_circuit_le_invariant idx rwd1 rwd3) ->
+      (interp_circuit c = Ob~0 -> @rwdata_circuit_le_invariant idx rwd2 rwd3) ->
+      @rwdata_circuit_le_invariant idx (mux_rwdata s c rwd1 rwd2) rwd3.
   Proof.
-    unfold rwdata_circuit_lt_invariant, mux_rwdata; cbn; intros.
-    repeat split; apply circuit_lt_CAnnot_l, circuit_lt_opt_l, circuit_lt_CMux_l; intuition eauto.
+    unfold rwdata_circuit_le_invariant, mux_rwdata; cbn; intros.
+    repeat split; apply circuit_le_CAnnot_l, circuit_le_opt_l, circuit_le_CMux_l; intuition eauto.
   Qed.
 
-  Lemma rwdata_circuit_lt_invariant_mux_rwdata_r :
+  Lemma rwdata_circuit_le_invariant_mux_rwdata_r :
     forall s c idx rwd1 rwd2 rwd3,
-      (interp_circuit c = Ob~1 -> @rwdata_circuit_lt_invariant idx rwd1 rwd2) ->
-      (interp_circuit c = Ob~0 -> @rwdata_circuit_lt_invariant idx rwd1 rwd3) ->
-      @rwdata_circuit_lt_invariant idx rwd1 (mux_rwdata s c rwd2 rwd3).
+      (interp_circuit c = Ob~1 -> @rwdata_circuit_le_invariant idx rwd1 rwd2) ->
+      (interp_circuit c = Ob~0 -> @rwdata_circuit_le_invariant idx rwd1 rwd3) ->
+      @rwdata_circuit_le_invariant idx rwd1 (mux_rwdata s c rwd2 rwd3).
   Proof.
-    unfold rwdata_circuit_lt_invariant, mux_rwdata; cbn; intros.
-    repeat split; apply circuit_lt_CAnnot_r, circuit_lt_opt_r, circuit_lt_CMux_r; intuition eauto.
+    unfold rwdata_circuit_le_invariant, mux_rwdata; cbn; intros.
+    repeat split; apply circuit_le_CAnnot_r, circuit_le_opt_r, circuit_le_CMux_r; intuition eauto.
   Qed.
 
   Notation compile_action := (compile_action lco).
@@ -578,121 +578,121 @@ Section CompilerCorrectness.
            | [ H: (_, _) = (_, _) |- _ ] => inversion H; subst; clear H
            end.
 
-  Theorem rwset_circuit_lt_compile_action_correct {sig tau} :
+  Theorem rwset_circuit_le_compile_action_correct {sig tau} :
     forall (gamma: ccontext sig) (a: action sig tau) (rwc: rwcircuit) c gamma',
       compile_action rc gamma a rwc = (c, gamma') ->
-      circuit_lt (canFire (erwc c)) (canFire rwc) /\
-      forall idx, rwset_circuit_lt_invariant (rwc.(regs)) (c.(erwc).(regs)) idx.
+      circuit_le (canFire (erwc c)) (canFire rwc) /\
+      forall idx, rwset_circuit_le_invariant (rwc.(regs)) (c.(erwc).(regs)) idx.
   Proof.
     induction a; cbn; intros; circuit_compile_destruct_t; cbn in *;
-      try solve [split; circuit_lt_f_equal; eauto using rwset_circuit_lt_invariant_refl].
+      try solve [split; circuit_le_f_equal; eauto using rwset_circuit_le_invariant_refl].
 
     - (* Assign *)
-      intuition eauto using circuit_lt_trans, rwset_circuit_lt_invariant_trans.
+      intuition eauto using circuit_le_trans, rwset_circuit_le_invariant_trans.
     - (* Seq *)
-      intuition eauto using circuit_lt_trans, rwset_circuit_lt_invariant_trans.
+      intuition eauto using circuit_le_trans, rwset_circuit_le_invariant_trans.
     - (* Bind *)
-      intuition eauto using circuit_lt_trans, rwset_circuit_lt_invariant_trans.
+      intuition eauto using circuit_le_trans, rwset_circuit_le_invariant_trans.
     - (* If *)
       split.
-      + circuit_lt_f_equal.
-        apply circuit_lt_CMux_l;
-          intuition eauto using circuit_lt_trans, rwset_circuit_lt_invariant_trans.
+      + circuit_le_f_equal.
+        apply circuit_le_CMux_l;
+          intuition eauto using circuit_le_trans, rwset_circuit_le_invariant_trans.
       + unfold mux_rwsets; red; intros.
         rewrite getenv_map2.
-        apply rwdata_circuit_lt_invariant_mux_rwdata_r;
-          intros; eapply rwset_circuit_lt_invariant_trans; intuition eauto.
+        apply rwdata_circuit_le_invariant_mux_rwdata_r;
+          intros; eapply rwset_circuit_le_invariant_trans; intuition eauto.
     - destruct port; cbn; circuit_compile_destruct_t.
       (* Read0 *)
       + split.
-        * apply circuit_lt_refl.
-        * intros. eapply rwset_circuit_lt_invariant_putenv.
-          -- eauto using rwset_circuit_lt_invariant_refl.
-          -- red; cbn; eauto using circuit_lt_true, circuit_lt_refl, circuit_lt_opt_r.
+        * apply circuit_le_refl.
+        * intros. eapply rwset_circuit_le_invariant_putenv.
+          -- eauto using rwset_circuit_le_invariant_refl.
+          -- red; cbn; eauto using circuit_le_true, circuit_le_refl, circuit_le_opt_r.
       (* Read1 *)
       + split.
-        * eauto using circuit_lt_refl.
-        * intros; apply rwset_circuit_lt_invariant_putenv.
-          -- eauto using rwset_circuit_lt_invariant_refl.
-          -- red; cbn; eauto using circuit_lt_true, circuit_lt_refl, circuit_lt_opt_r.
+        * eauto using circuit_le_refl.
+        * intros; apply rwset_circuit_le_invariant_putenv.
+          -- eauto using rwset_circuit_le_invariant_refl.
+          -- red; cbn; eauto using circuit_le_true, circuit_le_refl, circuit_le_opt_r.
     - (* Write *)
       destruct port; cbn;
       circuit_compile_destruct_t;
       destruct IHa as (Hpr & Hpr'); split.
-      all: circuit_lt_f_equal; eauto using circuit_lt_CAnd_l.
-      all: intros; apply rwset_circuit_lt_invariant_putenv; eauto.
+      all: circuit_le_f_equal; eauto using circuit_le_CAnd_l.
+      all: intros; apply rwset_circuit_le_invariant_putenv; eauto.
       all: specialize (Hpr' idx); repeat (red || red in Hpr'); cbn;
-        intuition eauto using circuit_lt_true, circuit_lt_opt_r.
+        intuition eauto using circuit_le_true, circuit_le_opt_r.
     - (* Unop *)
       circuit_compile_destruct_t.
-      intuition eauto using circuit_lt_trans, rwset_circuit_lt_invariant_trans.
+      intuition eauto using circuit_le_trans, rwset_circuit_le_invariant_trans.
     - (* Binop *)
       circuit_compile_destruct_t.
-      intuition eauto using circuit_lt_trans, rwset_circuit_lt_invariant_trans.
+      intuition eauto using circuit_le_trans, rwset_circuit_le_invariant_trans.
     - (* ExternalCall *)
       circuit_compile_destruct_t.
-      intuition eauto using circuit_lt_trans, rwset_circuit_lt_invariant_trans.
+      intuition eauto using circuit_le_trans, rwset_circuit_le_invariant_trans.
     - (* APos *) eauto.
   Qed.
 
-  Lemma circuit_lt_willFire_of_canFire':
+  Lemma circuit_le_willFire_of_canFire':
     forall idx (rwd0 rwd1 rwd2: rwdata (CR idx)),
-      rwdata_circuit_lt_invariant rwd1 rwd0 ->
-      circuit_lt (willFire_of_canFire' rwd0 rwd2) (willFire_of_canFire' rwd1 rwd2).
+      rwdata_circuit_le_invariant rwd1 rwd0 ->
+      circuit_le (willFire_of_canFire' rwd0 rwd2) (willFire_of_canFire' rwd1 rwd2).
   Proof.
-    unfold rwdata_circuit_lt_invariant; intros; repeat cleanup_step; circuit_lt_f_equal;
+    unfold rwdata_circuit_le_invariant; intros; repeat cleanup_step; circuit_le_f_equal;
       eauto.
   Qed.
 
-  Lemma circuit_lt_willFire_of_canFire rl:
+  Lemma circuit_le_willFire_of_canFire rl:
     forall (l1 l2: rwcircuit) L,
-      circuit_lt (canFire l1) (canFire l2) ->
-      (forall idx, rwset_circuit_lt_invariant l2.(regs) l1.(regs) idx) ->
-      circuit_lt (willFire_of_canFire rl l1 L) (willFire_of_canFire rl l2 L).
+      circuit_le (canFire l1) (canFire l2) ->
+      (forall idx, rwset_circuit_le_invariant l2.(regs) l1.(regs) idx) ->
+      circuit_le (willFire_of_canFire rl l1 L) (willFire_of_canFire rl l2 L).
   Proof.
     unfold willFire_of_canFire; intros * Hlt Hfr.
-    apply circuit_lt_fold_right.
+    apply circuit_le_fold_right.
     - eassumption.
     - intros; rewrite !getenv_zip; cbn.
-      apply circuit_lt_CAnnot, circuit_lt_opt_l, circuit_lt_opt_r, circuit_lt_CAnd.
+      apply circuit_le_CAnnot, circuit_le_opt_l, circuit_le_opt_r, circuit_le_CAnd.
       assumption.
-      apply circuit_lt_willFire_of_canFire'.
+      apply circuit_le_willFire_of_canFire'.
       apply Hfr.
   Qed.
 
   Lemma action_compile_willFire_of_canFire'_decreasing {sig}:
     forall t (ex : action sig t) (gamma : ccontext sig) (rwc : rwcircuit) idx rwd c gamma',
       compile_action rc gamma ex rwc = (c, gamma') ->
-      circuit_lt (willFire_of_canFire' (getenv REnv (regs (erwc c)) idx) rwd)
+      circuit_le (willFire_of_canFire' (getenv REnv (regs (erwc c)) idx) rwd)
                  (willFire_of_canFire' (getenv REnv (regs rwc) idx) rwd).
   Proof.
-    intros. eapply circuit_lt_willFire_of_canFire', rwset_circuit_lt_compile_action_correct. eauto.
+    intros. eapply circuit_le_willFire_of_canFire', rwset_circuit_le_compile_action_correct. eauto.
   Qed.
 
   Theorem action_compile_willFire_of_canFire_decreasing rl {sig}:
     forall t (ex : action sig t) (cLog : scheduler_circuit)
       (gamma : ccontext sig) (rwc : rwcircuit) c gamma',
       compile_action rc gamma ex rwc = (c, gamma') ->
-      circuit_lt (willFire_of_canFire rl (erwc c) cLog)
+      circuit_le (willFire_of_canFire rl (erwc c) cLog)
                  (willFire_of_canFire rl rwc cLog).
   Proof.
     intros;
-      eapply circuit_lt_willFire_of_canFire;
-      eapply rwset_circuit_lt_compile_action_correct; eauto.
+      eapply circuit_le_willFire_of_canFire;
+      eapply rwset_circuit_le_compile_action_correct; eauto.
   Qed.
 
   Lemma willFire_of_canFire_decreasing rl:
     forall c1 c2 (cLog: scheduler_circuit) rws,
-      circuit_lt c1 c2 ->
-      circuit_lt (willFire_of_canFire rl {| canFire := c1; regs := rws |} cLog)
+      circuit_le c1 c2 ->
+      circuit_le (willFire_of_canFire rl {| canFire := c1; regs := rws |} cLog)
                  (willFire_of_canFire rl {| canFire := c2; regs := rws |} cLog).
   Proof.
     unfold willFire_of_canFire; intros.
-    eapply circuit_lt_fold_right.
+    eapply circuit_le_fold_right.
     - eassumption.
     - intros; rewrite !getenv_zip.
       cbn.
-      eauto using circuit_lt_CAnnot, circuit_lt_opt_l, circuit_lt_opt_r, circuit_lt_CAnd, circuit_lt_refl.
+      eauto using circuit_le_CAnnot, circuit_le_opt_l, circuit_le_opt_r, circuit_le_CAnd, circuit_le_refl.
   Qed.
 
   Context {var_t_eq_dec: EqDec var_t}.
@@ -828,24 +828,24 @@ Section CompilerCorrectness.
   (* Hint Extern 1 => eapply circuit_gamma_equiv_CtxCons : circuits. *)
 
   Hint Resolve
-       circuit_lt_CAnnot_l
-       circuit_lt_CAnnot_r
-       circuit_lt_CBundleRef_l
-       circuit_lt_CBundleRef_r
-       circuit_lt_CAnd
-       circuit_lt_CAnd_l
-       circuit_lt_CAnd_r
-       circuit_lt_opt_l
-       circuit_lt_opt_r
-       circuit_lt_COr
-       circuit_lt_CNot
-       circuit_lt_true
-       circuit_lt_false
-       circuit_lt_refl
-       circuit_lt_true
-       circuit_lt_false
-       rwset_circuit_lt_invariant_putenv
-       rwset_circuit_lt_invariant_refl : circuits.
+       circuit_le_CAnnot_l
+       circuit_le_CAnnot_r
+       circuit_le_CBundleRef_l
+       circuit_le_CBundleRef_r
+       circuit_le_CAnd
+       circuit_le_CAnd_l
+       circuit_le_CAnd_r
+       circuit_le_opt_l
+       circuit_le_opt_r
+       circuit_le_COr
+       circuit_le_CNot
+       circuit_le_true
+       circuit_le_false
+       circuit_le_refl
+       circuit_le_true
+       circuit_le_false
+       rwset_circuit_le_invariant_putenv
+       rwset_circuit_le_invariant_refl : circuits.
   Hint Resolve Bits.single_inj : circuits.
   Hint Extern 3 => cbn in * : circuits.
   Hint Extern 3 => red : circuits.
@@ -1073,11 +1073,11 @@ Section CompilerCorrectness.
       t; interp_willFire_cleanup; t; eauto using circuit_gamma_equiv_creplace.
     - (* Seq *)
       t.
-      eapply interp_circuit_circuit_lt_helper_false;
+      eapply interp_circuit_circuit_le_helper_false;
         eauto using action_compile_willFire_of_canFire_decreasing.
     - (* Bind *)
       t. eauto 7 using circuit_gamma_equiv_ctl.
-      eapply interp_circuit_circuit_lt_helper_false;
+      eapply interp_circuit_circuit_le_helper_false;
         eauto using action_compile_willFire_of_canFire_decreasing.
     - (* If *)
       t.
@@ -1110,14 +1110,14 @@ Section CompilerCorrectness.
       + unfold mux_rwsets; interp_willFire_cleanup; t.
         * left.
           destruct Bits.single;
-            eapply interp_circuit_circuit_lt_helper_false;
-            try eapply rwset_circuit_lt_compile_action_correct;
+            eapply interp_circuit_circuit_le_helper_false;
+            try eapply rwset_circuit_le_compile_action_correct;
             eauto.
         * right.
           exists x; t.
           rewrite (interp_circuit_willFire_of_canFire'_mux_rwdata x); t.
           destruct Bits.single; t;
-            eapply interp_circuit_circuit_lt_helper_false;
+            eapply interp_circuit_circuit_le_helper_false;
             try eapply action_compile_willFire_of_canFire'_decreasing;
             eauto.
     - (* Read *)
@@ -1177,11 +1177,11 @@ Section CompilerCorrectness.
             may_read_write_t.
         * right; exists idx; interp_willFire_cleanup;
             may_read_write_t.
-      + eapply interp_circuit_circuit_lt_helper_false; eauto;
-          intros; apply circuit_lt_willFire_of_canFire; cbn;
+      + eapply interp_circuit_circuit_le_helper_false; eauto;
+          intros; apply circuit_le_willFire_of_canFire; cbn;
             eauto 6 with circuits.
         all: intros;
-          apply rwset_circuit_lt_invariant_putenv;
+          apply rwset_circuit_le_invariant_putenv;
           eauto 8 with circuits.
       + repeat apply conj.
         * interp_willFire_cleanup;
@@ -1197,20 +1197,20 @@ Section CompilerCorrectness.
           may_read_write_t; eauto.
         right; exists idx; interp_willFire_cleanup;
           may_read_write_t.
-      + eapply interp_circuit_circuit_lt_helper_false; eauto;
-          intros; apply circuit_lt_willFire_of_canFire; cbn;
+      + eapply interp_circuit_circuit_le_helper_false; eauto;
+          intros; apply circuit_le_willFire_of_canFire; cbn;
             eauto 4 with circuits.
         all: intros;
-          apply rwset_circuit_lt_invariant_putenv;
+          apply rwset_circuit_le_invariant_putenv;
           eauto 8 with circuits.
     - (* Unop *)
       t; eauto 7 using compile_unop_correct.
     - (* Binop *)
       t; eauto 7 using compile_binop_correct,
-         interp_circuit_circuit_lt_helper_false,
+         interp_circuit_circuit_le_helper_false,
          action_compile_willFire_of_canFire_decreasing.
     - (* ExternalCall *)
-      t; eauto 7 using interp_circuit_circuit_lt_helper_false,
+      t; eauto 7 using interp_circuit_circuit_le_helper_false,
          action_compile_willFire_of_canFire_decreasing.
     - (* APos *) t.
   Qed.
