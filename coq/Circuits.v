@@ -209,15 +209,21 @@ Section CircuitOptimizer.
     Definition opt_mux_bit1 {sz} (c: circuit sz): circuit sz :=
       match c in Circuit _ _ sz return circuit sz -> circuit sz with
       | @CMux _ _ _ _ _ _ n s c1 c2 =>
-        fun c0 => match n return Circuit _ _ n -> Circuit _ _ n with
-               | 1 => fun c0 =>
+        fun c0 => match n return Circuit _ _ n -> Circuit _ _ n -> Circuit _ _ n -> Circuit _ _ n with
+               | 1 => fun c0 c1 c2 =>
+                       let annot := CAnnot "optimized_mux" in
                        match asconst c1, asconst c2 with
-                       | Some ltrue, Some lfalse => CAnnot "optimized_mux" s
-                       | Some lfalse, Some ltrue => CAnnot "optimized_mux" (CNot s)
+                       | Some ltrue, Some lfalse => annot s
+                       | Some ltrue, _ => annot (COr s c2)
+                       | Some lfalse, Some ltrue => annot (CNot s)
+                       (* FIXME: these two increase the circuit size *)
+                       (* | Some lfalse, _ => annot (CAnd (CNot s) c2) *)
+                       (* | _, Some ltrue => annot (COr (CNot s) c1) *)
+                       | _, Some lfalse => annot (CAnd s c1)
                        | _, _ => c0
                        end
-               | _ => fun c0 => c0
-               end c0
+               | _ => fun c0 c1 c2 => c0
+               end c0 c1 c2
       | _ => fun c0 => c0
       end c.
 
@@ -278,16 +284,18 @@ Section CircuitOptimizer.
       destruct c; simpl; try reflexivity; [].
       destruct sz as [ | [ | ] ]; simpl; try reflexivity; [].
       destruct (asconst c2) as [ [ | [ | ] [ | ] ] | ] eqn:Hc2; try reflexivity;
-        destruct (asconst c3) as [ [ | [ | ] [ | ] ] | ] eqn:Hc3; try reflexivity;
-          repeat match goal with
-                 | _ => progress (cbn in * || subst)
-                 | [ H: _ :: _ = _ :: _ |- _ ] => inversion H; subst; clear H
-                 | [ v: vect_nil_t _ |- _ ] => destruct v
-                 | [ H: asconst _ = Some _ |- _ ] => apply asconst_Some in H
-                 | [  |- context[interp_circuit _ _ ?c] ] => destruct (interp_circuit _ _ c) eqn:?
-                 | [  |- context[if ?x then _ else _] ] => destruct x
-                 | _ => reflexivity
-                 end.
+        destruct (asconst c3) as [ [ | [ | ] [ | ] ] | ] eqn:Hc3; try reflexivity.
+      Ltac tmux :=
+        match goal with
+        | _ => progress (cbn in * || subst)
+        | [ H: _ :: _ = _ :: _ |- _ ] => inversion H; subst; clear H
+        | [ v: vect_nil_t _ |- _ ] => destruct v
+        | [ H: asconst _ = Some _ |- _ ] => apply asconst_Some in H
+        | [  |- context[interp_circuit _ _ ?c] ] => destruct (interp_circuit _ _ c) eqn:?
+        | [  |- context[if ?x then _ else _] ] => destruct x
+        | _ => reflexivity || discriminate
+        end.
+      all: solve [repeat tmux].
     Qed.
 
     Lemma opt_constprop_sound :
