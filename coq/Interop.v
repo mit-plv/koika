@@ -36,6 +36,9 @@ Section Packages.
 
   Record koika_package_t :=
     {
+      (** [koika_var_names]: These names are used to generate readable code. *)
+      koika_var_names: Show var_t;
+
       (** [koika_reg_names]: These names are used to generate readable code. *)
       koika_reg_names: Show reg_t;
       (** [koika_reg_types]: The type of data stored in each register. *)
@@ -91,9 +94,6 @@ Section Packages.
 
   Record sim_package_t :=
     {
-      (** [sp_var_names]: These names are used to generate readable code. *)
-      sp_var_names: Show var_t;
-
       (** [sp_ext_fn_names]: A map from custom function names to C++ function
           names. *)
       sp_ext_fn_names: forall fn: ext_fn_t, string;
@@ -191,6 +191,8 @@ Section Compilation.
                    forall {sz}, circuit sz -> circuit sz)
     : circuit_package_t :=
     let _ := s.(koika_reg_finite) in
+    let _ := s.(koika_var_names) in
+    let _ := s.(koika_rule_names) in
     {| cp_circuits := compile_scheduler opt s.(koika_rules) s.(koika_rule_external) s.(koika_scheduler) |}.
 End Compilation.
 
@@ -202,7 +204,7 @@ Record interop_package_t :=
     ip_ext_fn_t : Type;
     ip_koika : @koika_package_t pos_t var_t ip_rule_name_t ip_reg_t ip_ext_fn_t;
     ip_verilog : @verilog_package_t ip_ext_fn_t;
-    ip_sim : @sim_package_t var_t ip_ext_fn_t }.
+    ip_sim : @sim_package_t ip_ext_fn_t }.
 
 Require Import Koika.ExtractionSetup.
 
@@ -211,7 +213,7 @@ Module Backends.
     Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
     Notation koika_package_t := (@koika_package_t pos_t var_t rule_name_t reg_t ext_fn_t).
     Notation verilog_package_t := (@verilog_package_t ext_fn_t).
-    Notation sim_package_t := (@sim_package_t var_t ext_fn_t).
+    Notation sim_package_t := (@sim_package_t ext_fn_t).
 
     Axiom compile_circuits: koika_package_t -> verilog_package_t -> unit.
     Axiom compile_simulation: koika_package_t -> sim_package_t -> unit.

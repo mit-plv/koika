@@ -120,8 +120,8 @@ let io_declarations (circuit: circuit_graph) : io_decls =
 
    We declare the internal registers, and one wire per subcircuit i.e
    one per nodes of (circuit_nets: circuit Hashtbl.t).  The signal
-   are all named __inter_n except for the one where a name has been
-   given by the user; then we name them givenname__inter_n. The sizes
+   are all named _n except for the one where a name has been
+   given by the user; then we name them givenname_n. The sizes
    of registers and internal wires are also declared in that phase.
 
  *)
@@ -178,7 +178,7 @@ let internal_decl_for_net
   =
   let name_ptr = !gensym in
   gensym := !gensym + 1;
-  let name_net = "__inter_" ^ (string_of_int name_ptr) in
+  let name_net = "_" ^ (string_of_int name_ptr) in
   Hashtbl.add environment c.tag name_net;
   let sz = circuit_sz c in
   match c.node with

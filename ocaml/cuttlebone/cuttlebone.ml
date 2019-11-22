@@ -302,10 +302,13 @@ module Compilation = struct
 
   let compile (cu: 'f compile_unit) : (reg_signature -> compiled_circuit) =
     let finiteType = finiteType_of_register_list cu.c_registers in
+    let show_string = { Extr.show0 = fun (rl: string) -> Util.coq_string_of_string rl } in
     let rules r = List.assoc r cu.c_rules |> snd in
     let externalp r = (List.assoc r cu.c_rules |> fst) = `ExternalRule in
     let rEnv = Extr.contextEnv finiteType in
-    let env = Extr.compile_scheduler _R _Sigma finiteType (opt _R _Sigma) rules externalp cu.c_scheduler in
+    let env = Extr.compile_scheduler _R _Sigma finiteType
+                show_string show_string
+                (opt _R _Sigma) rules externalp cu.c_scheduler in
     (fun r -> Extr.getenv rEnv env r)
 end
 

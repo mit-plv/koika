@@ -357,6 +357,9 @@ Section CircuitCompilation.
   Context {Sigma: ext_fn_t -> ExternalSignature}.
   Context {REnv: Env reg_t}.
 
+  Context {Show_var_t : Show var_t}.
+  Context {Show_rule_name_t : Show rule_name_t}.
+
   Definition CR_of_R idx :=
     type_sz (R idx).
   Notation CR := CR_of_R.
@@ -535,8 +538,8 @@ Section CircuitCompilation.
             erwc := {| canFire := $`"fail_cF"` Ob~0;
                        regs := clog.(regs) |} |},
          Gamma)
-      | Var m => fun Gamma =>
-        ({| retVal := CAnnotOpt "var_reference" (cassoc m Gamma);
+      | @Var _ _ _ _ _ _ _ k _ m => fun Gamma =>
+        ({| retVal := CAnnotOpt (String.append "var_" (show k)) (cassoc m Gamma);
             erwc := clog |},
          Gamma)
       | Const cst => fun Gamma =>
@@ -666,10 +669,11 @@ Section CircuitCompilation.
     (willFire_of_canFire'_write0 ruleReg inReg) &&`""`
     (willFire_of_canFire'_rw1 ruleReg inReg).
 
-  Definition willFire_of_canFire cRule cInput : circuit 1 :=
+  Definition willFire_of_canFire rl_name cRule cInput : circuit 1 :=
+    let annot := String.append "wF_" (show rl_name) in
     fold_right REnv
            (fun k '(ruleReg, inReg) acc =>
-              acc &&`"wF_fold_res"` willFire_of_canFire' ruleReg inReg)
+              acc &&`annot` willFire_of_canFire' ruleReg inReg)
            (zip REnv cRule.(regs) cInput) cRule.(canFire).
 
   Arguments willFire_of_canFire' : simpl never.
@@ -732,14 +736,14 @@ Section CircuitCompilation.
       input
     | Cons rl_name s =>
       let (rl, acc) := compile_action rl_name in
-      let will_fire := willFire_of_canFire rl.(erwc) input in
+      let will_fire := willFire_of_canFire rl_name rl.(erwc) input in
       let input := mux_rwsets "mux_input" will_fire acc input in
       compile_scheduler_circuit s input
     | Try rl_name st sf =>
       let (rl, acc) := compile_action rl_name in
       let st := compile_scheduler_circuit st acc in
       let sf := compile_scheduler_circuit sf input in
-      let will_fire := willFire_of_canFire rl.(erwc) input in
+      let will_fire := willFire_of_canFire rl_name rl.(erwc) input in
       mux_rwsets "mux_subschedulers" will_fire st sf
     | SPos _ s =>
       compile_scheduler_circuit s input
@@ -785,6 +789,9 @@ Section Helpers.
   Context {R: reg_t -> type}.
   Context {Sigma: ext_fn_t -> ExternalSignature}.
   Context {FiniteType_reg_t: FiniteType reg_t}.
+
+  Context {Show_var_t: Show var_t}.
+  Context {Show_rule_name_t: Show rule_name_t}.
 
   Notation circuit :=
     (circuit (rule_name_t := rule_name_t)

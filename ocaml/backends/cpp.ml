@@ -1120,7 +1120,7 @@ let cpp_rule_of_koika_package_rule (kp: _ Cuttlebone.Extr.koika_package_t) (rn: 
 
 let input_of_sim_package
       (kp: ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) Cuttlebone.Extr.koika_package_t)
-      (sp: ('var_t, 'ext_fn_t) Cuttlebone.Extr.sim_package_t)
+      (sp: ('ext_fn_t) Cuttlebone.Extr.sim_package_t)
     : ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_input_t =
   let rules = collect_rules kp.koika_scheduler in
   let classname = Cuttlebone.Util.string_of_coq_string kp.koika_module_name in
@@ -1128,7 +1128,7 @@ let input_of_sim_package
   { cpp_classname = classname;
     cpp_header_name = classname;
     cpp_pos_of_pos = (fun _ -> Pos.Unknown);
-    cpp_var_names = (fun x -> Cuttlebone.Util.string_of_coq_string (sp.sp_var_names.show0 x));
+    cpp_var_names = (fun x -> Cuttlebone.Util.string_of_coq_string (kp.koika_var_names.show0 x));
     cpp_rule_names = (fun ?prefix:_ rn ->
       Cuttlebone.Util.string_of_coq_string (kp.koika_rule_names.show0 rn));
     cpp_scheduler = kp.koika_scheduler;
