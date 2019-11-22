@@ -865,7 +865,7 @@ struct rwset_t {
   bool w1 : 1;
 
   bool may_read0(rwset_t rL) {
-    return !(w1 || rL.w1 || rL.w0);
+    return !(rL.w1 || rL.w0);
   }
 
   bool may_read1(rwset_t rL) {
