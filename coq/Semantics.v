@@ -83,9 +83,9 @@ Section Interp.
 
   Open Scope bool_scope.
 
-  Definition may_read0 (sched_log rule_log: Log) idx :=
+  Definition may_read0 (sched_log: Log) idx :=
     negb (log_existsb sched_log idx is_write0) &&
-    negb (log_existsb (log_app rule_log sched_log) idx is_write1).
+    negb (log_existsb sched_log idx is_write1).
 
   Definition may_read1 (sched_log: Log) idx :=
     negb (log_existsb sched_log idx is_write1).
@@ -152,7 +152,7 @@ Section Interp.
         else
           interp_action Gamma sched_log action_log fbranch
       | Read P0 idx => fun Gamma =>
-        if may_read0 sched_log action_log idx then
+        if may_read0 sched_log idx then
           Some (log_cons idx (LE LogRead P0 tt) action_log, REnv.(getenv) r idx, Gamma)
         else None
       | Read P1 idx => fun Gamma =>

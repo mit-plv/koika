@@ -64,6 +64,9 @@ Section CompilerCorrectness.
 
   Context {REnv: Env reg_t}.
 
+  Context {Show_var_t : Show var_t}.
+  Context {Show_rule_name_t : Show rule_name_t}.
+
   Context (r: REnv.(env_t) R).
   Notation cr := (cr_of_r r).
 
@@ -390,10 +393,10 @@ Section CompilerCorrectness.
   Notation willFire_of_canFire' := (willFire_of_canFire' lco).
   Notation willFire_of_canFire := (willFire_of_canFire lco).
 
-  Lemma interp_willFire_of_canFire_canFire_false :
+  Lemma interp_willFire_of_canFire_canFire_false rl :
     forall (c: circuit 1) (rwd: rwset) (cLog: scheduler_circuit),
       interp_circuit c = Ob~0 ->
-      interp_circuit (willFire_of_canFire {| canFire := c; regs := rwd |} cLog) = Ob~0.
+      interp_circuit (willFire_of_canFire rl {| canFire := c; regs := rwd |} cLog) = Ob~0.
   Proof.
     intros.
     eapply interp_circuit_circuit_lt_helper_false.
@@ -401,9 +404,9 @@ Section CompilerCorrectness.
     eassumption.
   Qed.
 
-  Lemma interp_willFire_of_canFire_eqn :
+  Lemma interp_willFire_of_canFire_eqn rl :
     forall clog (cLog: scheduler_circuit),
-      interp_circuit (willFire_of_canFire clog cLog) =
+      interp_circuit (willFire_of_canFire rl clog cLog) =
       Ob~(andb (Bits.single (interp_circuit (canFire clog)))
                (List.forallb (fun idx =>
                                 (Bits.single
@@ -433,9 +436,9 @@ Section CompilerCorrectness.
     eauto using nth_error_In, finite_surjective.
   Qed.
 
-  Lemma interp_willFire_of_canFire_true :
+  Lemma interp_willFire_of_canFire_true rl:
     forall clog (cLog: scheduler_circuit),
-      interp_circuit (willFire_of_canFire clog cLog) = Ob~1 <->
+      interp_circuit (willFire_of_canFire rl clog cLog) = Ob~1 <->
       interp_circuit (canFire clog) = Ob~1 /\
       forall idx, interp_circuit
                (willFire_of_canFire'
@@ -463,9 +466,9 @@ Section CompilerCorrectness.
       rewrite H0; reflexivity.
   Qed.
 
-  Lemma interp_willFire_of_canFire_false :
+  Lemma interp_willFire_of_canFire_false rl:
     forall clog (cLog: scheduler_circuit),
-      interp_circuit (willFire_of_canFire clog cLog) = Ob~0 <->
+      interp_circuit (willFire_of_canFire rl clog cLog) = Ob~0 <->
       interp_circuit (canFire clog) = Ob~0 \/
       exists idx, interp_circuit
                (willFire_of_canFire'
@@ -602,7 +605,7 @@ Section CompilerCorrectness.
     - destruct port; cbn; circuit_compile_destruct_t.
       (* Read0 *)
       + split.
-        * apply circuit_lt_CAnnot_l, circuit_lt_opt_l, circuit_lt_CAnd_l, circuit_lt_refl.
+        * apply circuit_lt_refl.
         * intros. eapply rwset_circuit_lt_invariant_putenv.
           -- eauto using rwset_circuit_lt_invariant_refl.
           -- red; cbn; eauto using circuit_lt_true, circuit_lt_refl, circuit_lt_opt_r.
@@ -641,11 +644,11 @@ Section CompilerCorrectness.
       eauto.
   Qed.
 
-  Lemma circuit_lt_willFire_of_canFire :
+  Lemma circuit_lt_willFire_of_canFire rl:
     forall (l1 l2: rwcircuit) L,
       circuit_lt (canFire l1) (canFire l2) ->
       (forall idx, rwset_circuit_lt_invariant l2.(regs) l1.(regs) idx) ->
-      circuit_lt (willFire_of_canFire l1 L) (willFire_of_canFire l2 L).
+      circuit_lt (willFire_of_canFire rl l1 L) (willFire_of_canFire rl l2 L).
   Proof.
     unfold willFire_of_canFire; intros * Hlt Hfr.
     apply circuit_lt_fold_right.
@@ -666,23 +669,23 @@ Section CompilerCorrectness.
     intros. eapply circuit_lt_willFire_of_canFire', rwset_circuit_lt_compile_action_correct. eauto.
   Qed.
 
-  Theorem action_compile_willFire_of_canFire_decreasing {sig}:
+  Theorem action_compile_willFire_of_canFire_decreasing rl {sig}:
     forall t (ex : action sig t) (cLog : scheduler_circuit)
       (gamma : ccontext sig) (rwc : rwcircuit) c gamma',
       compile_action rc gamma ex rwc = (c, gamma') ->
-      circuit_lt (willFire_of_canFire (erwc c) cLog)
-                 (willFire_of_canFire rwc cLog).
+      circuit_lt (willFire_of_canFire rl (erwc c) cLog)
+                 (willFire_of_canFire rl rwc cLog).
   Proof.
     intros;
       eapply circuit_lt_willFire_of_canFire;
       eapply rwset_circuit_lt_compile_action_correct; eauto.
   Qed.
 
-  Lemma willFire_of_canFire_decreasing :
+  Lemma willFire_of_canFire_decreasing rl:
     forall c1 c2 (cLog: scheduler_circuit) rws,
       circuit_lt c1 c2 ->
-      circuit_lt (willFire_of_canFire {| canFire := c1; regs := rws |} cLog)
-                 (willFire_of_canFire {| canFire := c2; regs := rws |} cLog).
+      circuit_lt (willFire_of_canFire rl {| canFire := c1; regs := rws |} cLog)
+                 (willFire_of_canFire rl {| canFire := c2; regs := rws |} cLog).
   Proof.
     unfold willFire_of_canFire; intros.
     eapply circuit_lt_fold_right.
@@ -888,13 +891,13 @@ Section CompilerCorrectness.
            | _ => reflexivity
            (* The notations for willFire_of_canFire and willFire_of_canFire'
               can't be used here, because of section variable (Coq bug?) *)
-           | [ H: interp_circuit (Circuits.willFire_of_canFire _ _ _) = Ob~1 |- _ ] =>
+           | [ H: interp_circuit (Circuits.willFire_of_canFire _ _ _ _) = Ob~1 |- _ ] =>
              rewrite interp_willFire_of_canFire_true in H
-           | [ H: interp_circuit (Circuits.willFire_of_canFire _ _ _) = Ob~0 |- _ ] =>
+           | [ H: interp_circuit (Circuits.willFire_of_canFire _ _ _ _) = Ob~0 |- _ ] =>
              rewrite interp_willFire_of_canFire_false in H
-           | [ |- interp_circuit (Circuits.willFire_of_canFire _ _ _) = Ob~1 ] =>
+           | [ |- interp_circuit (Circuits.willFire_of_canFire _ _ _ _) = Ob~1 ] =>
              rewrite interp_willFire_of_canFire_true
-           | [ |- interp_circuit (Circuits.willFire_of_canFire _ _ _) = Ob~0 ] =>
+           | [ |- interp_circuit (Circuits.willFire_of_canFire _ _ _ _) = Ob~0 ] =>
              rewrite interp_willFire_of_canFire_false
            | _ => progress cbn
            | _ => progress intros
@@ -1039,7 +1042,7 @@ Section CompilerCorrectness.
     rewrite Heq; assumption.
   Qed.
 
-  Theorem action_compiler_correct {sig tau} Log cLog:
+  Theorem action_compiler_correct rl {sig tau} Log cLog:
     forall (ex: action sig tau) (clog: rwcircuit)
       (Gamma: vcontext sig) (gamma: ccontext sig) log,
       log_rwdata_consistent log clog.(regs) ->
@@ -1048,7 +1051,7 @@ Section CompilerCorrectness.
       log_data1_consistent log Log clog.(regs) ->
       circuit_gamma_equiv Gamma gamma ->
       circuit_env_equiv ->
-      interp_circuit (willFire_of_canFire clog cLog) = Ob~1 ->
+      interp_circuit (willFire_of_canFire rl clog cLog) = Ob~1 ->
       let (cExpr, gamma_new) := compile_action rc gamma ex clog in
       match interp_action r sigma Gamma Log log ex with
       | Some (l', v, Gamma_new) =>
@@ -1056,10 +1059,10 @@ Section CompilerCorrectness.
         log_rwdata_consistent l' cExpr.(erwc).(regs) /\
         log_data0_consistent l' Log cExpr.(erwc).(regs) /\
         log_data1_consistent l' Log cExpr.(erwc).(regs) /\
-        interp_circuit (willFire_of_canFire cExpr.(erwc) cLog) = Ob~1 /\
+        interp_circuit (willFire_of_canFire rl cExpr.(erwc) cLog) = Ob~1 /\
         circuit_gamma_equiv Gamma_new gamma_new (* 6 > 5 :( for eauto *)
       | None =>
-        interp_circuit (willFire_of_canFire cExpr.(erwc) cLog) = Ob~0
+        interp_circuit (willFire_of_canFire rl cExpr.(erwc) cLog) = Ob~0
       end.
   Proof.
     induction ex; intros.
@@ -1120,7 +1123,7 @@ Section CompilerCorrectness.
     - (* Read *)
       destruct port.
       + cbn.
-        destruct (may_read0 Log log idx) eqn:?; cbn.
+        destruct (may_read0 Log idx) eqn:?; cbn.
         * repeat eapply conj.
           -- rewrite lco_proof; eauto.
           -- apply log_rwdata_consistent_log_cons_putenv;
@@ -1292,8 +1295,8 @@ Section CompilerCorrectness.
     intuition eauto.
   Qed.
 
-  Lemma interp_circuit_willFire_of_canFire_adapter (cLog: REnv.(env_t) _):
-    interp_circuit (willFire_of_canFire (adapter cLog) cLog) = Ob~1.
+  Lemma interp_circuit_willFire_of_canFire_adapter rl (cLog: REnv.(env_t) _):
+    interp_circuit (willFire_of_canFire rl (adapter cLog) cLog) = Ob~1.
   Proof.
     interp_willFire_cleanup.
     - rewrite lco_proof; reflexivity.
@@ -1328,12 +1331,14 @@ Section CompilerCorrectness.
   Notation compile_scheduler_circuit := (compile_scheduler_circuit lco).
   Notation compile_scheduler' := (compile_scheduler' lco).
 
-  Lemma interp_circuit_willFire_of_canFire_remove_bundle' :
+  Lemma interp_circuit_willFire_of_canFire_remove_bundle':
     forall (cLog: rwset) (c: rwcircuit) rl rs bundle,
         interp_circuit
-          (Circuits.willFire_of_canFire lco (bundleref_wrap_erwc rl rs bundle c) cLog) =
+          (Circuits.willFire_of_canFire
+             (REnv := REnv) lco rl (bundleref_wrap_erwc rl rs bundle c) cLog) =
         interp_circuit
-          (Circuits.willFire_of_canFire (REnv := REnv) lco c cLog) .
+          (Circuits.willFire_of_canFire
+             (REnv := REnv) lco rl c cLog) .
   Proof.
     unfold bundleref_wrap_erwc; intros.
     rewrite !interp_willFire_of_canFire_eqn; cbn.
@@ -1348,9 +1353,9 @@ Section CompilerCorrectness.
   Lemma interp_circuit_willFire_of_canFire_remove_bundle :
     forall (cLog: rwset) (c: rwcircuit) rl rs bundle res,
       interp_circuit
-        ((Circuits.willFire_of_canFire (REnv := REnv) lco c) cLog) = res ->
+        ((Circuits.willFire_of_canFire (REnv := REnv) lco rl c) cLog) = res ->
       interp_circuit
-        (Circuits.willFire_of_canFire lco (bundleref_wrap_erwc rl rs bundle c) cLog) = res.
+        (Circuits.willFire_of_canFire lco rl (bundleref_wrap_erwc rl rs bundle c) cLog) = res.
   Proof.
     intros; subst; apply interp_circuit_willFire_of_canFire_remove_bundle'.
   Qed.
@@ -1444,7 +1449,7 @@ Section CompilerCorrectness.
   Proof.
     induction s; cbn; intros.
     - eauto.
-    - pose proof (@action_compiler_correct nil _ Log cLog (rules r0)) as Hrc.
+    - pose proof (@action_compiler_correct r0 nil _ Log cLog (rules r0)) as Hrc.
       unshelve eassert (Hrc := Hrc (adapter cLog) CtxEmpty CtxEmpty log_empty
                                   ltac:(ceauto) ltac:(ceauto)
                                   ltac:(ceauto) ltac:(ceauto)
@@ -1454,7 +1459,7 @@ Section CompilerCorrectness.
       destruct (interp_action r sigma CtxEmpty Log log_empty (rules r0)) as [((? & ?) & ?) | ] eqn:? ;
         destruct compile_action; cbn; apply IHs; destruct external;
           repeat cleanup_step; eauto with circuits.
-    - pose proof (@action_compiler_correct nil _ Log cLog (rules r0)) as Hrc.
+    - pose proof (@action_compiler_correct r0 nil _ Log cLog (rules r0)) as Hrc.
       unshelve eassert (Hrc := Hrc (adapter cLog) CtxEmpty CtxEmpty log_empty
                                   ltac:(ceauto) ltac:(ceauto)
                                   ltac:(ceauto) ltac:(ceauto)
@@ -1636,6 +1641,8 @@ Section Thm.
   Context {R: reg_t -> type}.
   Context {Sigma: ext_fn_t -> ExternalSignature}.
   Context {FiniteType_reg_t: FiniteType reg_t}.
+  Context {Show_var_t : Show var_t}.
+  Context {Show_rule_name_t : Show rule_name_t}.
 
   Context (r: ContextEnv.(env_t) R).
   Context (sigma: forall f, Sigma f).
@@ -1658,7 +1665,8 @@ Section Thm.
         interp_circuit (cr_of_r r) (csigma_of_sigma sigma) (ContextEnv.(getenv) circuits reg) =
         bits_of_value (ContextEnv.(getenv) spec_results reg).
     Proof.
-      eauto using compile_scheduler'_correct, circuit_env_equiv_CReadRegister, csigma_spec_csigma_of_sigma.
+      apply compile_scheduler'_correct;
+        eauto using csigma_spec_csigma_of_sigma, circuit_env_equiv_CReadRegister, csigma_spec_csigma_of_sigma.
     Qed.
   End Standalone.
 End Thm.

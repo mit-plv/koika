@@ -569,8 +569,7 @@ Section CircuitCompilation.
       | Read P0 idx => fun Gamma =>
         let reg := REnv.(getenv) clog.(regs) idx in
         ({| retVal := CAnnotOpt "read0" (REnv.(getenv) cr idx);
-           erwc := {| canFire := (clog.(canFire) &&`"read0_cF"`
-                                (!`"no_write1"` reg.(write1)));
+           erwc := {| canFire := clog.(canFire);
                      regs := REnv.(putenv) clog.(regs) idx {| read0 := $`"read0"` Ob~1;
                                                              (* Unchanged *)
                                                              read1 := reg.(read1);

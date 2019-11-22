@@ -93,6 +93,8 @@ Section Circuits.
   Context (r: REnv.(env_t) R).
   Notation cr := (cr_of_r r).
 
+  Context {Show_rule_name_t : Show rule_name_t}.
+
   Definition csigma_spec (sigma: forall f, Sig_denote (Sigma f)) csigma :=
     forall fn (a: (Sigma fn).(arg1Type)),
       csigma fn (bits_of_value a) = bits_of_value (sigma fn a).
@@ -289,8 +291,8 @@ Section Circuits.
   Qed.
 
   Lemma circuit_lt_willFire_of_canFire_canFire :
-    forall c1 (cLog: scheduler_circuit (rule_name_t := rule_name_t) R Sigma REnv) rws,
-      circuit_lt (willFire_of_canFire lco {| canFire := c1; regs := rws |} cLog) c1.
+    forall rl_name c1 (cLog: scheduler_circuit (rule_name_t := rule_name_t) R Sigma REnv) rws,
+      circuit_lt (willFire_of_canFire lco rl_name {| canFire := c1; regs := rws |} cLog) c1.
   Proof.
     unfold willFire_of_canFire; intros.
     eapply circuit_lt_trans.

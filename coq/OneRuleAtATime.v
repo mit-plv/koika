@@ -66,18 +66,15 @@ Section Proof.
            end.
 
   Lemma may_read0_app_sl :
-    forall (sl sl' l: Log) idx,
-      may_read0 (log_app sl sl') l idx =
-      may_read0 sl l idx && may_read0 sl' l idx.
+    forall (sl sl': Log) idx,
+      may_read0 (log_app sl sl') idx =
+      may_read0 sl idx && may_read0 sl' idx.
   Proof.
     unfold may_read0; intros.
     rewrite !log_forallb_not_existsb, !log_forallb_app.
     set_forallb_fns.
     ring_simplify.
     f_equal.
-    f_equal.
-    rewrite <- !Bool.andb_assoc.
-    rewrite Bool.andb_diag; reflexivity.
   Qed.
 
   Lemma may_read1_app :
@@ -109,13 +106,12 @@ Section Proof.
     end.
 
   Lemma may_read0_no_writes :
-    forall sl l idx,
-      may_read0 sl l idx = true ->
+    forall sl idx,
+      may_read0 sl idx = true ->
       latest_write sl idx = None.
   Proof.
     unfold may_read0; intros.
     rewrite !log_forallb_not_existsb in H.
-    rewrite log_forallb_app in H.
     repeat (cleanup_step || bool_step).
     unfold log_forallb in *.
     rewrite forallb_forall in *.
@@ -156,7 +152,7 @@ Section Proof.
     match goal with
     | _ => cleanup_step
     | _ => progress autounfold with oraat in *
-    | [ H: context[may_read0 (log_app _ _) _ _] |- _ ] =>
+    | [ H: context[may_read0 (log_app _ _) _] |- _ ] =>
       rewrite may_read0_app_sl in H
     | [ H: context[may_read1 (log_app _ _) _] |- _ ] =>
       rewrite may_read1_app in H
