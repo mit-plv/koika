@@ -715,7 +715,7 @@ namespace prims {
 
     static array<T, len> unpack(bits<packed_sz> bs) { // not const&
       array<T, len> unpacked{};
-      for (size_t pos = 0; pos < len; pos++) { // CPC check the order of elements
+      for (size_t pos = 0; pos < len; pos++) { // FIXME check the order of elements
         unpacked[len - 1 - pos] = prims::unpack<T>(truncate<elem_sz>(bs));
         bs >>= elem_sz;
       }
