@@ -7,8 +7,9 @@ module Extr = Extr
 type ('name_t, 'reg_t, 'ext_fn_t) extr_circuit =
   ('name_t, 'reg_t, 'ext_fn_t, ('name_t, 'reg_t, 'ext_fn_t) Extr.rwdata) Extr.circuit
 
-(* FIXME: expose this option on the command line *)
+(* FIXME: expose these options on the command line *)
 let strip_annotations = true
+let hashcons_circuits = true
 
 module Util = struct
   let log2 =
@@ -313,6 +314,8 @@ module Compilation = struct
 end
 
 module Graphs = struct
+  (* Careful with this definition: the hashcons module keeps weak pointers to
+     Hashcons.hash_consed record. *)
   type circuit = circuit' Hashcons.hash_consed
   and circuit' =
     | CNot of circuit
@@ -407,8 +410,14 @@ module Graphs = struct
       Hashtbl.hash c (* FIXME see the hashcons docs to improve this *)
   end
 
-  (* CircuitHashcons is used to find duplicate subcircuits *)
-  module CircuitHashcons = Hashcons.Make(CircuitHash)
+  module CircuitPhysicalHash = struct
+    type t = circuit'
+    let equal (c: circuit') (c': circuit') = c == c'
+    let hash c = Hashtbl.hash c
+  end
+
+  module CircuitStructuralHashcons = Hashcons.Make(CircuitHash)
+  module CircuitPhysicalHashcons = Hashcons.Make(CircuitPhysicalHash)
 
   module CoqStringSet = Set.Make(struct type t = char list let compare = Pervasives.compare end)
 
@@ -421,6 +430,10 @@ module Graphs = struct
       end in
     (* ExtrCircuitHashtbl is used to detect and leverage existing physical sharing *)
     let module ExtrCircuitHashtbl = Hashtbl.Make(ExtrCircuitHash) in
+    (* CircuitStructuralHashcons is used to find duplicate subcircuits *)
+    let (module CircuitHashcons: Hashcons.S with type key = circuit') =
+      if hashcons_circuits then (module CircuitStructuralHashcons)
+      else (module CircuitPhysicalHashcons) in
 
     let list_of_hashcons hc =
       let acc = ref [] in
