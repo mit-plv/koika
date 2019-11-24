@@ -192,20 +192,20 @@ let backends_of_spec frontend spec =
   if spec = "all" then
     List.assoc frontend all_backends
   else
-    match Core.List.find_map backends ~f:found with
+    match Base.List.find_map backends ~f:found with
     | None -> abort "Unexpected output format: %s" spec
     | Some backend -> [backend]
 
 let parse_output_spec frontend spec =
-  Core.List.concat_map
+  Base.List.concat_map
     ~f:(backends_of_spec frontend)
     (String.split_on_char ',' spec)
 
 let run_cli expect_errors src_fpath dst_dpath output_specs =
   expect_success := not expect_errors;
   let _, frontend = frontend_of_path src_fpath in
-  let backends = Core.List.concat_map ~f:(parse_output_spec frontend) output_specs in
-  let dst_dpath = Core.Option.value dst_dpath ~default:(Filename.dirname src_fpath) in
+  let backends = Base.List.concat_map ~f:(parse_output_spec frontend) output_specs in
+  let dst_dpath = Base.Option.value dst_dpath ~default:(Filename.dirname src_fpath) in
   run frontend backends { cnf_src_fpath = src_fpath;
                           cnf_dst_dpath = dst_dpath };
   exit true
