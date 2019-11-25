@@ -32,7 +32,7 @@ PHONY += coq coq-all
 # Extraction.vo at the moment.  See https://github.com/ocaml/dune/issues/2178.
 ocaml: coq
 	@printf "\n== Building OCaml library and executables ==\n"
-	dune build ocaml/cuttlec.exe ocaml/cuttlec.bc @ocaml/install
+	dune build ocaml/cuttlec.exe ocaml/cuttlec.bc @install
 
 PHONY += ocaml
 

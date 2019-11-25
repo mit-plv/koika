@@ -232,9 +232,16 @@ let make_gensym gensym_prefix =
 
 exception CompilationError
 
+let special_re =
+  Str.regexp ".*[][ \t\n!\"#^$&'()*,;<=>?\\`{|}~]"
+
+let quote_arg arg =
+  if Sys.os_type = "Unix" && not (Str.string_match special_re arg 0)
+  then arg else Filename.quote arg
+
 let command ?(verbose=false) ?(elapsed=false) exe args =
   (* FIXME use Unix.open_process_args instead of Filename.quote (OCaml 4.08) *)
-  let qargs = List.map Filename.quote (exe :: args) in
+  let qargs = List.map quote_arg (exe :: args) in
   let cmd = String.concat " " qargs in
   let time = Unix.gettimeofday () in
   if verbose then Printf.eprintf ">> %s\n%!" cmd;
