@@ -3,15 +3,16 @@ open Printf
 open Frontends
 
 type frontend =
-  [`CoqPkg | `LV]
+  CoqPkg | LV | ExtractedML
 
 type backend =
   [`Coq | `Verilog | `Dot | `Hpp | `Cpp | `Exe]
 
-let all_backends : (frontend * backend list) list =
+let all_backends (f: frontend) : backend list =
   (* Exe implies Hpp and Cpp *)
-  [(`CoqPkg, [`Verilog; `Dot; `Exe]);
-   (`LV, [`Coq; `Verilog; `Dot; `Exe])]
+  match f with
+  | CoqPkg | ExtractedML -> [`Verilog; `Dot; `Exe]
+  | LV -> [`Coq; `Verilog; `Dot; `Exe]
 
 let backends : (backend * (string * string)) list =
   [(`Dot, ("dot", ".dot"));
@@ -25,8 +26,10 @@ let suffix_of_backend backend =
   snd (List.assoc backend backends)
 
 let suffixes_to_frontends : (string * frontend) list =
-  [(".cmxs", `CoqPkg);
-   (".lv", `LV)]
+  [(".lv", LV);
+   (".cmxs", CoqPkg);
+   (".kpkg", CoqPkg);
+   (".ml", ExtractedML)]
 
 let split_suffix label suffixes fname =
   let rec loop = function
@@ -45,7 +48,7 @@ let assoc_suffix label known_suffixes stdio_default fpath =
   else split_suffix label known_suffixes fpath
 
 let frontend_of_path fpath =
-  assoc_suffix "frontend" suffixes_to_frontends `LV fpath
+  assoc_suffix "frontend" suffixes_to_frontends LV fpath
 
 type config = {
     cnf_src_fpath: string;
@@ -91,27 +94,24 @@ let abort fmt =
 let run_backend backend cnf pkg =
   try run_backend' backend cnf pkg
   with UnsupportedOutput msg -> abort "%s" msg
-     | Backends.Cpp.CppCompilationError -> abort "Compilation failed"
+     | Common.CompilationError -> abort "Compilation failed"
 
 let run_backends backends cnf pkg =
   List.iter (fun b -> run_backend b cnf pkg) backends
-
-let first_compile_unit in_path mods =
-  match mods with
-  | [] -> Lv.name_error (Pos.Filename in_path) @@ MissingModule
-  | md :: _ -> md
 
 let print_errors_and_warnings errs =
   let errs_with_warnings = List.rev_append (Lv.Errors.fetch_warnings ()) errs in
   List.iter (pstderr "%s" << Lv.Errors.to_string)
     (List.stable_sort Lv.Errors.compare errs_with_warnings)
 
-let dynlink_interop_packages in_path : Cuttlebone.Extr.interop_package_t list =
+let dynlink_interop_packages in_fpath : Cuttlebone.Extr.interop_package_t list =
   (try
-     Dynlink.loadfile_private in_path;
+     Dynlink.loadfile_private in_fpath;
    with Dynlink.Error err ->
      abort "Dynlink error: %s" (Dynlink.error_message err));
-  Registry.reset ()
+  match Registry.reset () with
+  | [] -> abort "Package %s does not export Koika modules" in_fpath
+  | ips -> ips
 
 (* https://github.com/janestreet/core/issues/136 *)
 module RelPath = struct
@@ -154,43 +154,45 @@ let adjust_pos target_dpath (p: Pos.t) : Pos.t =
 let adjust_positions dst_dpath (cu: Pos.t Cuttlebone.Compilation.compile_unit) =
   { cu with c_pos_of_pos = adjust_pos dst_dpath << cu.c_pos_of_pos }
 
+let run_lv (backends: backend list) (cnf: config) =
+  try
+    let resolved, c_unit = Lv.load cnf.cnf_src_fpath in
+    let c_unit = adjust_positions cnf.cnf_dst_dpath c_unit in
+    print_errors_and_warnings [];
+    run_backends backends cnf
+      { pkg_modname = c_unit.c_modname;
+        pkg_lv = lazy resolved;
+        pkg_cpp = lazy (Backends.Cpp.input_of_compile_unit c_unit);
+        pkg_graph = lazy (Cuttlebone.Graphs.graph_of_compile_unit c_unit) }
+  with Lv.Errors.Errors errs ->
+    print_errors_and_warnings errs;
+    exit false
+
+let run_ip (backends: backend list) cnf (ip: Cuttlebone.Extr.interop_package_t) =
+  run_backends backends cnf
+    { pkg_modname = Cuttlebone.Util.string_of_coq_string ip.ip_koika.koika_module_name;
+      pkg_lv = lazy (raise (UnsupportedOutput "Coq output is only supported from LV input"));
+      pkg_cpp = lazy (Backends.Cpp.input_of_sim_package ip.ip_koika ip.ip_sim);
+      pkg_graph = lazy (Cuttlebone.Graphs.graph_of_verilog_package ip.ip_koika ip.ip_verilog) }
+
+let run_cmxs (backends: backend list) (cnf: config) =
+  List.iter (run_ip backends cnf) (dynlink_interop_packages cnf.cnf_src_fpath)
+
+let run_ocaml (backends: backend list) (cnf: config) =
+  let pkg = Frontends.Coq.compile_ml cnf.cnf_src_fpath cnf.cnf_dst_dpath in
+  List.iter (run_ip backends cnf) (dynlink_interop_packages pkg)
+
 let run (frontend: frontend) (backends: backend list) (cnf: config) =
   match frontend with
-  | `LV ->
-     let open Lv in
-     (try
-       let resolved, typechecked =
-         Delay.with_delayed_errors (fun () ->
-             let resolved =  resolve (parse (read_sexps cnf.cnf_src_fpath)) in
-             resolved, typecheck resolved) in
-       let c_unit = first_compile_unit cnf.cnf_src_fpath typechecked in
-       let c_unit = adjust_positions cnf.cnf_dst_dpath c_unit in
-       print_errors_and_warnings [];
-       run_backends backends cnf
-         { pkg_modname = c_unit.c_modname;
-           pkg_lv = lazy resolved;
-           pkg_cpp = lazy (Backends.Cpp.input_of_compile_unit c_unit);
-           pkg_graph = lazy (Cuttlebone.Graphs.graph_of_compile_unit c_unit) }
-     with Lv.Errors.Errors errs ->
-       print_errors_and_warnings errs;
-       exit false)
-  | `CoqPkg ->
-     match dynlink_interop_packages cnf.cnf_src_fpath with
-     | [] -> abort "Package %s does not export Koika modules" cnf.cnf_src_fpath
-     | ips ->
-        let run_one (ip: Cuttlebone.Extr.interop_package_t) =
-          run_backends backends cnf
-            { pkg_modname = Cuttlebone.Util.string_of_coq_string ip.ip_koika.koika_module_name;
-              pkg_lv = lazy (raise (UnsupportedOutput "Coq output is only supported from LV input"));
-              pkg_cpp = lazy (Backends.Cpp.input_of_sim_package ip.ip_koika ip.ip_sim);
-              pkg_graph = lazy (Cuttlebone.Graphs.graph_of_verilog_package ip.ip_koika ip.ip_verilog) } in
-        List.iter run_one ips
+  | LV -> run_lv backends cnf
+  | CoqPkg -> run_cmxs backends cnf
+  | ExtractedML -> run_ocaml backends cnf
 
 let backends_of_spec frontend spec =
   let found (backend, (spec', _)) =
     if spec' = spec then Some backend else None in
   if spec = "all" then
-    List.assoc frontend all_backends
+    all_backends frontend
   else
     match Base.List.find_map backends ~f:found with
     | None -> abort "Unexpected output format: %s" spec

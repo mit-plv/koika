@@ -28,17 +28,11 @@ PHONY += coq coq-all
 # OCaml #
 #########
 
-KOIKA_LIB := ${OCAML_BUILD_DIR}/koika.cmxa
-CUTTLEC_EXE := ${OCAML_BUILD_DIR}/cuttlec.exe
-
 # FIXME: The ‘coq’ dependency is because dune doesn't track the dependency on
 # Extraction.vo at the moment.  See https://github.com/ocaml/dune/issues/2178.
 ocaml: coq
 	@printf "\n== Building OCaml library and executables ==\n"
-	dune build ocaml/cuttlec.exe ocaml/cuttlec.bc ocaml/koika.cma ocaml/koika.cmxa
-
-# This prevents make from running two instances of Dune in parallel
-${KOIKA_LIB} ${CUTTLEC_EXE}: ocaml;
+	dune build ocaml/cuttlec.exe ocaml/cuttlec.bc @ocaml/install
 
 PHONY += ocaml
 
@@ -52,63 +46,47 @@ EXAMPLES := $(wildcard examples/*.lv) $(wildcard examples/*.v) examples/rv/rv32i
 TESTS_TARGETS := $(patsubst %,%.objects/,${TESTS})
 EXAMPLES_TARGETS := $(patsubst %,%.objects/,${EXAMPLES})
 
-%.lv.objects/: %.lv ${CUTTLEC_EXE}
+%.lv.objects/: %.lv ocaml
 	@printf "\n-- Compiling %s --\n" "$<"
 	@mkdir -p "$@"
-	${CUTTLEC_EXE} "$<" \
+	dune exec cuttlec -- "$<" \
 		-T all -o "$@" $(if $(findstring .1.,$<),--expect-errors 2> "$@stderr")
 	@touch "$@"
 
-# The complexity below is due to lack of support in dune for OCaml files
-# extracted from Coq, as well as the complexities of dependency tracking across
-# folders in one repo.  In fact, the lines below are not even enough: the
-# dependency from ‘examples/*.v’ on ‘coq/’ isn't captured, so one needs to call
-# clean after updating files in ‘coq/’ to build examples without getting a
+# Dune can't track multi-library Coq dependencies, so the dependency from
+# ‘examples/*.v’ on ‘coq/’ isn't captured.  As a result, one needs to call
+# ‘clean’ after updating files in ‘coq/’ to build examples without getting a
 # ‘Compiled library … makes inconsistent assumptions over library …’ message.
 #
 # Code written against a packaged version of Koika (e.g. installed using OPAM)
-# don't need to use these tricks; instead, you can just use the
-# following commands:
+# won't run into this issue; you can just use the following command:
 #
-#   ocamlfind ocamlopt -package koika.registry extracted.mli extracted.ml -shared -o extracted.cmxs
-#   cuttlec extracted.cmxs -T verilog -o directory
+#   cuttlec extracted.ml -T verilog -o directory
 
-%.v.objects/: %.v coq ${CUTTLEC_EXE}
+%.v.objects/: %.v coq ocaml
 	@printf "\n-- Compiling $< --\n"
+	@mkdir -p "$@"
 # Set up variables                                                # examples/rv/xyz.v.objects/
 	@$(eval DIR := $(dir $*))                                     # examples/rv/
-	@$(eval MODNAME := $(notdir $*))                              # xyz
-	@$(eval BUILT_VO := ${BUILD_DIR}/$*.vo)                       # _build/default/examples/rv/xyz.vo
-	@$(eval BUILT_ML := ${BUILD_DIR}/$*.ml)                       # _build/default/examples/rv/xyz.ml
-	@$(eval EXTRACTED_DIR := ${DIR}extracted)                     # examples/rv/extracted
-	@$(eval BUILD_EXTRACTED_DIR := ${BUILD_DIR}/${EXTRACTED_DIR}) # _build/default/examples/rv/extracted
-	@$(eval BUILT_CMXS := ${BUILD_EXTRACTED_DIR}/${MODNAME}.cmxs) # _build/default/examples/rv/extracted/xyz.cmxs
-	@$(eval MAKEFILE_NAME := ${MODNAME}.mk)                       # xyz.v.mk
-	@$(eval MAKEFILE_PATH := ${DIR}${MAKEFILE_NAME})              # examples/rv/xyz.v.mk
-	@mkdir -p "$@" "${EXTRACTED_DIR}"
+	@$(eval MAKEFILE_NAME := $(notdir $*).mk)                     # xyz.v.mk
 # Generate xyz.ml; coqdep will complain: see https://github.com/ocaml/dune/pull/2053
-	@rm -f "${BUILT_VO}"
+	@rm -f "${BUILD_DIR}/$*.vo"
 	dune build "$*.vo"
-	@mv "${BUILT_ML}"* "${EXTRACTED_DIR}/"
-# Generate a fresh dune file to build xyz.ml
-	@ocaml etc/gen_dune.ml "${EXTRACTED_DIR}" > "${EXTRACTED_DIR}/dune"
-# Generate xyz.cmxs
-	dune build "${EXTRACTED_DIR}/${MODNAME}.cmxs"
 # Compile to circuits
-	${CUTTLEC_EXE} "${BUILT_CMXS}" -T all -o "$@"
-# Remove the generated dune file to prevent errors if extracted ml files are later deleted
-	@rm "${EXTRACTED_DIR}/dune"
+	dune exec cuttlec -- "${BUILD_DIR}/$*.ml" -T all -o "$@"
 # Execute example-specific follow-ups if any
-	if test -f "${MAKEFILE_PATH}"; then	$(MAKE) -C "${DIR}" -f "${MAKEFILE_NAME}"; fi
+	cd ${DIR}; if test -f "${MAKEFILE_NAME}"; then $(MAKE) -f "${MAKEFILE_NAME}"; fi
 	@touch "$@"
 
 examples: ${EXAMPLES_TARGETS};
 clean-examples:
-	find examples/ -type d \( -name *.objects -or -name extracted \) -exec rm -r {} +
+	find examples/ -type d -name *.objects -exec rm -r {} +
+	rm -rf ${BUILD_DIR}/examples
 
 tests: ${TESTS_TARGETS};
 clean-tests:
-	find tests/ -type d \( -name *.objects -or -name extracted \) -exec rm -r {} +
+	find tests/ -type d -name *.objects -exec rm -r {} +
+	rm -rf ${BUILD_DIR}/tests
 
 PHONY += examples clean-examples tests clean-tests
 

@@ -1683,6 +1683,18 @@ let typecheck_module { name; cpp_preamble; registers; rules; schedulers }
 let typecheck resolved =
   Delay.map typecheck_module resolved.r_mods
 
+let first_compile_unit in_path mods =
+  match mods with
+  | [] -> name_error (Pos.Filename in_path) @@ MissingModule
+  | md :: _ -> md
+
+let load src_fpath =
+  let resolved, typechecked =
+    Delay.with_delayed_errors (fun () ->
+        let resolved =  resolve (parse (read_sexps src_fpath)) in
+        resolved, typecheck resolved) in
+  resolved, first_compile_unit src_fpath typechecked
+
 let describe_language () =
   let open List in
   let atom x = Base.Sexp.Atom x in

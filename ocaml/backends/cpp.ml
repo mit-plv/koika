@@ -1148,25 +1148,14 @@ let input_of_sim_package
                    | None -> None
                    | Some s -> Some (Cuttlebone.Util.string_of_coq_string s)); }
 
-exception CppCompilationError
-
-let command ?(verbose=false) exe args =
-  (* FIXME use Unix.open_process_args instead of Filename.quote (OCaml 4.08) *)
-  let qargs = List.map Filename.quote (exe :: args) in
-  let cmd = String.concat " " qargs in
-  let time = Unix.gettimeofday () in
-  if verbose then Printf.eprintf ">> %s\n%!" cmd;
-  if Sys.command cmd <> 0 then raise CppCompilationError;
-  if verbose then Printf.eprintf "   (%.2f s)\n%!" (Unix.gettimeofday () -. time)
-
 let clang_format fname =
-  command "clang-format" ["-i"; fname]
+  Common.command "clang-format" ["-i"; fname]
 
 let compile_cpp fname =
   let srcname = fname ^ ".cpp" in
   let exename = fname ^ ".exe" in
   let flags = ["-U_FORTIFY_SOURCE"; "-D_FORTIFY_SOURCE=0"; "-O3"; "--std=c++14"; "-Wall"; "-Wextra"; "-fno-stack-protector"; ] in
-  command ~verbose:true "g++" (flags @ [srcname; "-o"; exename])
+  Common.command ~verbose:true ~elapsed:true "g++" (flags @ [srcname; "-o"; exename])
 
 let write_formatted fpath_noext ext buf =
   let fname = fpath_noext ^ ext in

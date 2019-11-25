@@ -230,4 +230,15 @@ let make_gensym gensym_prefix =
     Printf.sprintf "%s%s%d" gensym_prefix prefix counter in
   (next, reset)
 
+exception CompilationError
+
+let command ?(verbose=false) ?(elapsed=false) exe args =
+  (* FIXME use Unix.open_process_args instead of Filename.quote (OCaml 4.08) *)
+  let qargs = List.map Filename.quote (exe :: args) in
+  let cmd = String.concat " " qargs in
+  let time = Unix.gettimeofday () in
+  if verbose then Printf.eprintf ">> %s\n%!" cmd;
+  if Sys.command cmd <> 0 then raise CompilationError;
+  if verbose && elapsed then Printf.eprintf "   (%.2f s)\n%!" (Unix.gettimeofday () -. time)
+
 let (<<) f g x = f (g x)

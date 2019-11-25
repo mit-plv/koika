@@ -1,7 +1,7 @@
 (library
  (name cuttlebone)
  (public_name koika.cuttlebone)
- (libraries common)
+ (libraries common hashcons)
  (flags (:standard -w -39)))
 
 ;; (rule
@@ -9,5 +9,5 @@
 ;;  (deps "../../coq/Extraction.vo")
 ;;  (action
 ;;   (progn
-;;    (run cp "../../coq/extracted.ml" "./coq.ml")
-;;    (run cp "../../coq/extracted.mli" "./coq.mli"))))
+;;    (run cp "../../coq/extracted.ml" "./extr.ml")
+;;    (run cp "../../coq/extracted.mli" "./extr.mli"))))

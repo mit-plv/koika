@@ -1,4 +1,4 @@
 (library
  (name common)
  (public_name koika.common)
- (libraries hashcons))
+ (libraries str))
