@@ -1,3 +1,4 @@
+(*! Calling external (verilog) modules from Kôika !*)
 Require Import Koika.Frontend.
 Require Koika.Std.
 

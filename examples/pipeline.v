@@ -1,3 +1,4 @@
+(*! Building simple pipelines !*)
 Require Import Koika.Frontend.
 
 Inductive reg_t := r0 | outputReg | inputReg | invalid | correct.

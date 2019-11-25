@@ -1,3 +1,4 @@
+(*! Circuits | Lemmas used in the compiler-correctness proof !*)
 Require Export Koika.Circuits.
 Require Import Koika.Common Koika.Environments Koika.Types.
 

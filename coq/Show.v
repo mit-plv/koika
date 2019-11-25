@@ -1,3 +1,4 @@
+(*! Utilities | Show typeclass (α → string) !*)
 Require Export Coq.Strings.String.
 
 Class Show (A: Type) :=

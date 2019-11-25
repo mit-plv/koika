@@ -1,3 +1,4 @@
+(*! Frontend | Typechecking errors and error-reporting functions !*)
 Require Import Koika.Common Koika.Types.
 
 Section TypeErrors.

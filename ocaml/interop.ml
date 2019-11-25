@@ -1,3 +1,4 @@
+(*! Functions to use if compiling Kôika programs straight from Coq, without going through cuttlec !*)
 open Cuttlebone
 
 let fname ?directory (pkg: _ Extr.koika_package_t) ext =

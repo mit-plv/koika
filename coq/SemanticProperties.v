@@ -1,3 +1,4 @@
+(*! ORAAT | Properties of the semantics used in the one-rule-at-a-time theorem !*)
 Require Export Koika.Common Koika.Semantics.
 
 Section Lists.

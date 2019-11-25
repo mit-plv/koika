@@ -1,3 +1,4 @@
+(*! Using structures, enums, and arrays !*)
 Require Import Koika.Frontend.
 
 Inductive reg_t := input | output.

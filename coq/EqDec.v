@@ -1,3 +1,4 @@
+(*! Utilities | Decidable equality typeclass !*)
 Require Import Coq.Strings.String.
 Require Import Coq.Vectors.Vector.
 

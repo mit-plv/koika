@@ -1,3 +1,4 @@
+(*! Utilities | Vectors and bitvector library !*)
 Require Import Coq.Lists.List.
 Require Import Coq.omega.Omega.
 Require Export Coq.NArith.NArith.          (* Coq bug: If this isn't exported, other files can't import Vect.vo *)

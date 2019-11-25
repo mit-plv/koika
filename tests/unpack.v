@@ -1,4 +1,4 @@
-(*;;; Unpacking structures *)
+(*! Structure unpacking !*)
 Require Import Koika.Frontend.
 
 Inductive reg_t := Rpacked | Runpacked.

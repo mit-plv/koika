@@ -1,3 +1,4 @@
+(*! Command line interface to the compilers !*)
 open Common
 open Printf
 open Frontends

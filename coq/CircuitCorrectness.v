@@ -1,3 +1,4 @@
+(*! Circuits | Compiler correctness proof !*)
 Require Import Coq.setoid_ring.Ring_theory Coq.setoid_ring.Ring Coq.setoid_ring.Ring.
 
 Require Import

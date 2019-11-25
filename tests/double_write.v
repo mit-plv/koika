@@ -1,4 +1,4 @@
-(* Double writes *)
+(*! Double-write detection and prevention !*)
 Require Import Koika.Frontend.
 
 Inductive reg_t := reg0.

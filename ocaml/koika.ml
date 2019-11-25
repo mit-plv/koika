@@ -1,3 +1,4 @@
+(*! Top-level library definition !*)
 module Common = Common
 module Cuttlebone = Cuttlebone
 module Frontends = Frontends

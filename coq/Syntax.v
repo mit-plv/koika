@@ -1,3 +1,4 @@
+(*! Frontend | Untyped syntax !*)
 Require Export Koika.Common Koika.Primitives Koika.Types Koika.ErrorReporting.
 
 Section Syntax.

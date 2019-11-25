@@ -1,3 +1,4 @@
+(*! Circuits | Syntax, semantics, compilation, and optimization of circuits !*)
 Require Export Koika.Common Koika.Environments.
 Require Import Koika.Syntax Koika.TypedSyntax Koika.TypedSyntaxTools.
 

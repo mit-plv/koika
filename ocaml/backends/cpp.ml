@@ -1,3 +1,4 @@
+(*! C++ backend !*)
 open Common
 module Extr = Cuttlebone.Extr
 

@@ -1,3 +1,4 @@
+(*! Pipelined instantiation of the RISC-V processor !*)
 Require Import Koika.Frontend.
 Require Import RV.RVCore.
 Import RV32ICore.

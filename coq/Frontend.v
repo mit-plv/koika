@@ -1,3 +1,4 @@
+(*! Frontend | Top-level module imported by Kôika programs !*)
 Require Export
         Koika.SyntaxMacros
         Koika.Desugaring
@@ -9,7 +10,8 @@ Require Export
         Koika.TypedSyntaxTools
         Koika.Interop
         Koika.Parsing
-        Koika.DeriveShow.
+        Koika.DeriveShow
+        Koika.ExtractionSetup.
 
 Notation compile_scheduler :=
   (compile_scheduler opt_constprop).

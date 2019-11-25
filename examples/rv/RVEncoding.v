@@ -1,3 +1,4 @@
+(*! Encoding-related constants !*)
 Require Import Koika.Frontend.
 
 Definition opcode_LOAD      := Ob~0~0~0~0~0~1~1.

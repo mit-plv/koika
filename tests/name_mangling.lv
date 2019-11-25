@@ -1,4 +1,4 @@
-;;; Name mangling unit tests
+;;; Unit tests for name mangling
 
 (enum lv_gensym_collisions
   ::_lvs_0 2'0

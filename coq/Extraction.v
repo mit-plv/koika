@@ -1,3 +1,4 @@
+(*! Interop | Extraction to OCaml (compiler and utilities) !*)
 Require Import Koika.ExtractionSetup.
 
 Require Koika.Common

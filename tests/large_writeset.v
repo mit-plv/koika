@@ -1,4 +1,4 @@
-(* Make sure that the large writeset heuristics in the scheduler don't break things *)
+(*! Make sure that the large writeset heuristics in the scheduler don't break things !*)
 Require Import Koika.Frontend.
 
 Definition N := 10.

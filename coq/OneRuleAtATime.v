@@ -1,3 +1,4 @@
+(*! ORAAT | Proof of the One-rule-at-a-time theorem !*)
 Require Import Koika.Common Koika.Syntax Koika.TypedSyntax Koika.SemanticProperties.
 Require Import Coq.setoid_ring.Ring_theory Coq.setoid_ring.Ring Coq.setoid_ring.Ring.
 

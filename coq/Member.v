@@ -1,3 +1,4 @@
+(*! Utilities | Dependent type tracking membership into a list !*)
 Require Import Koika.Common.
 
 Inductive member {K: Type}: K -> list K -> Type :=

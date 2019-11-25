@@ -1,3 +1,4 @@
+(*! Utilities | Shared utilities !*)
 Require Export Coq.omega.Omega.
 Require Export Coq.Lists.List Coq.Bool.Bool Coq.Strings.String.
 Require Export Koika.EqDec Koika.Vect Koika.FiniteType Koika.Show.

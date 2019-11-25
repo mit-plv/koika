@@ -1,3 +1,4 @@
+(*! Language | Combinational primitivies available in all Kôika programs !*)
 Require Export Koika.Common Koika.Environments Koika.IndexUtils Koika.Types Koika.ErrorReporting.
 
 Inductive bits_comparison :=

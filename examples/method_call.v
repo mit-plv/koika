@@ -1,3 +1,4 @@
+(*! Calling methods of internal modules !*)
 Require Import Koika.Frontend.
 Require Import Koika.Std.
 

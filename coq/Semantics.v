@@ -1,3 +1,4 @@
+(*! Language | Semantics of typed Kôika programs !*)
 Require Export Koika.Common Koika.Environments Koika.Vect Koika.Syntax Koika.TypedSyntax.
 
 Section Logs.

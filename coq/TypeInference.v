@@ -1,3 +1,4 @@
+(*! Frontend | Type inference and typechecking !*)
 Require Import
         Koika.Common Koika.Environments
         Koika.Syntax Koika.TypedSyntax Koika.SyntaxMacros

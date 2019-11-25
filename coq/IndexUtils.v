@@ -1,3 +1,4 @@
+(*! Utilities | Functions on Vect.index elements !*)
 Require Coq.Logic.FinFun.
 Require Import Koika.Common Koika.Vect Koika.Member.
 

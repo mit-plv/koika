@@ -1,3 +1,4 @@
+(*! Graphviz backend !*)
 open Common
 open Cuttlebone
 open Cuttlebone.Graphs

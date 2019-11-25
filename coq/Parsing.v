@@ -1,3 +1,4 @@
+(*! Frontend | Parser for the Kôika EDSL !*)
 Require Import
         Koika.Common
         Koika.Syntax

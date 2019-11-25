@@ -1,4 +1,4 @@
-(* Ensure that area is reasonable when bypass doesn't need extra tracking *)
+(*! Ensure that area is reasonable when bypasses don't need extra tracking !*)
 Require Import Koika.Frontend.
 Require Import Koika.Std.
 

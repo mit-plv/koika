@@ -1,3 +1,4 @@
+(*! Interop | Custom extraction settings (also used by external Kôika programs !*)
 Require Export Coq.extraction.Extraction.
 From Coq.extraction Require Export ExtrOcamlBasic ExtrOcamlString ExtrOcamlNatInt ExtrOcamlZInt.
 

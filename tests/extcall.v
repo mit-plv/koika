@@ -1,4 +1,4 @@
-(* External functions *)
+(*! External functions !*)
 Require Import Koika.Frontend.
 
 Inductive reg_t := reg0.

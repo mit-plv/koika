@@ -1,3 +1,4 @@
+(*! Frontend | Functions on untyped ASTs, including error localization !*)
 Require Import Koika.Syntax.
 
 Section SyntaxTools.

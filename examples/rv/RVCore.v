@@ -1,3 +1,4 @@
+(*! Implementation of our RISC-V core !*)
 Require Import Koika.Frontend.
 Require Import Coq.Lists.List.
 

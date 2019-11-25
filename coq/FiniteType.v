@@ -1,3 +1,4 @@
+(*! Utilities | Finiteness typeclass !*)
 Require Import Coq.Lists.List.
 Require Import Coq.omega.Omega.
 Import ListNotations.

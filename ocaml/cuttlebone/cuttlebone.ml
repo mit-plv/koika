@@ -1,3 +1,4 @@
+(*! OCaml wrappers around functionality provided by the library extracted from Coq !*)
 type __ = Obj.t
 let __ = let rec f _ = Obj.repr f in Obj.repr f
 

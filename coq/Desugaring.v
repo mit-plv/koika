@@ -1,3 +1,4 @@
+(*! Frontend | Desugaring of untyped actions !*)
 Require Import Koika.Common Koika.Environments Koika.Syntax Koika.TypedSyntax Koika.ErrorReporting Koika.SyntaxMacros.
 
 Section Desugaring.

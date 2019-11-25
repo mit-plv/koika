@@ -1,3 +1,4 @@
+(*! Utilities | Automatic derivation of Show instances !*)
 Require Import Koika.Show.
 
 Require Koika.IdentParsing.

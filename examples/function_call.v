@@ -1,3 +1,4 @@
+(*! Calling external functions !*)
 Require Import Koika.Frontend.
 
 Inductive reg_t := pc | next_instr.

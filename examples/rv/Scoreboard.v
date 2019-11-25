@@ -1,3 +1,4 @@
+(*! Implementation of a scoreboard !*)
 Require Import Coq.Lists.List.
 
 Require Import Koika.Frontend.

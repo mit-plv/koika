@@ -1,3 +1,4 @@
+(*! Coq backend (from Lispy Verilog sources) !*)
 open Common
 open Frontends.Lv
 open Format

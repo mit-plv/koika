@@ -1,3 +1,4 @@
+(*! Language | Types used by Kôika programs !*)
 Require Export Coq.Strings.String.
 Require Export Koika.Common Koika.Vect Koika.IndexUtils.
 

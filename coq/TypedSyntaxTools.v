@@ -1,3 +1,4 @@
+(*! Tools | Functions defined on typed ASTs !*)
 Require Import Koika.Member Koika.TypedSyntax.
 
 Section TypedSyntaxTools.

@@ -1,3 +1,4 @@
+(*! Frontend | Macros used in untyped programs !*)
 Require Import Koika.Common Koika.Syntax Koika.TypedSyntax Koika.Primitives.
 Import PrimUntyped.
 

@@ -1,3 +1,4 @@
+(*! Interop | Exporting Kôika programs for use with the cuttlec command-line tool !*)
 Require Import Koika.Common Koika.Environments Koika.Types Koika.TypedSyntax Koika.Circuits.
 Require Export Koika.Primitives.
 

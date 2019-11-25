@@ -1,3 +1,4 @@
+/*! Preamble shared by all Kôika programs compiled to C++ !*/
 #ifndef _PREAMBLE_HPP
 #define _PREAMBLE_HPP
 

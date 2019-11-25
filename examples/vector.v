@@ -1,3 +1,4 @@
+(*! Representing vectors of registers using Coq inductives !*)
 Require Import Koika.Frontend.
 
 Definition nregs := 16.

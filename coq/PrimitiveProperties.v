@@ -1,3 +1,4 @@
+(*! Equations showing how to implement functions on structures and arrays as bitfuns !*)
 Require Import Koika.Primitives.
 Import BitFuns.
 

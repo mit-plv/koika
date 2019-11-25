@@ -1,3 +1,4 @@
+(*! Stub used to load Kôika programs extracted from Coq into cuttlec  !*)
 let registered_interop_packages : Cuttlebone.Extr.interop_package_t list ref =
   ref []
 

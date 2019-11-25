@@ -1,3 +1,4 @@
+(*! Tools | Lemmas pertaining to tools on typed syntax !*)
 Require Import Koika.TypedSyntaxTools Koika.Semantics.
 
 Section TypedSyntaxProperties.

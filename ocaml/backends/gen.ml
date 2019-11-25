@@ -1,3 +1,4 @@
+(*! Embed preamble.hpp into cppPreamble.ml at build time !*)
 let cpp_preamble =
   let inc = open_in "preamble.hpp" in
   let preamble = really_input_string inc (in_channel_length inc) in

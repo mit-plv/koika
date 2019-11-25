@@ -1,3 +1,4 @@
+(*! Lispy Verilog frontend !*)
 open Common
 
 let lcnt x = x.lcnt

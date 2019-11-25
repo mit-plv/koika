@@ -1,3 +1,4 @@
+(*! Stdlib | Standard library !*)
 Require Import Koika.Frontend.
 
 Module Type Fifo.

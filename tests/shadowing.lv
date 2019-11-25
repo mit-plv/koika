@@ -1,4 +1,4 @@
-;;; Shadowing unit tests
+;;; Unit tests for name shadowing
 
 (module shadowing
   (register r 32'0)
