@@ -61,7 +61,7 @@ Module Collatz.
     tc_compute (interp_action cr empty_sigma CtxEmpty log_empty log_empty
                               (rules multiply)).
 
-Definition external (r: rule_name_t) := false.
+  Definition external (r: rule_name_t) := false.
 
   Definition circuits :=
     compile_scheduler rules external collatz.
