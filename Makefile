@@ -122,6 +122,9 @@ PHONY += examples clean-examples tests clean-tests
 # Whole project #
 #################
 
+repo-architecture:
+	./etc/update_readme.py README.rst
+
 all: coq ocaml examples tests
 	@printf "\n== Completing full build ==\n"
 	dune build @all
