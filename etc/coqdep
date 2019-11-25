@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+# Usage: COQDEP=path-to-real-coqdep COQDEP_ARGS=extra-coqdep-opts ./coqdep args-to-real-coqdep…
+# This script exists because dune doesn't support multi-library Coq projects
+# The alternative would be to `dune build @install` the Coq library every time, but the proofs are slow and not needed by the examples
+if [ "$COQDEP" = "" ]; then
+   echo "COQDEP variable unset" > /dev/stderr; exit 1
+fi
+"$COQDEP" $COQDEP_ARGS "$@"

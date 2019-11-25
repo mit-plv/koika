@@ -54,9 +54,11 @@ EXAMPLES_TARGETS := $(patsubst %,%.objects/,${EXAMPLES})
 	@touch "$@"
 
 # Dune can't track multi-library Coq dependencies, so the dependency from
-# ‘examples/*.v’ on ‘coq/’ isn't captured.  As a result, one needs to call
-# ‘clean’ after updating files in ‘coq/’ to build examples without getting a
-# ‘Compiled library … makes inconsistent assumptions over library …’ message.
+# ‘examples/*.v’ on ‘coq/’ isn't captured.  As a result, one needs to invoke
+# ‘make clean-examples clean-tests’ after updating files in ‘coq/’ to build
+# examples without getting a ‘Compiled library … makes inconsistent assumptions
+# over library …’ message.  The trickery with ‘PATH’ and ‘COQDEP’ below is to
+# prevent coqdep from printing warnings about not finding the Koika library.
 #
 # Code written against a packaged version of Koika (e.g. installed using OPAM)
 # won't run into this issue; you can just use the following command:
@@ -66,12 +68,14 @@ EXAMPLES_TARGETS := $(patsubst %,%.objects/,${EXAMPLES})
 %.v.objects/: %.v coq ocaml
 	@printf "\n-- Compiling $< --\n"
 	@mkdir -p "$@"
-# Set up variables                                                # examples/rv/xyz.v.objects/
-	@$(eval DIR := $(dir $*))                                     # examples/rv/
-	@$(eval MAKEFILE_NAME := $(notdir $*).mk)                     # xyz.v.mk
+# Set up variables                                                  # examples/rv/xyz.v.objects/
+	@$(eval DIR := $(dir $*))                                       # examples/rv/
+	@$(eval MAKEFILE_NAME := $(notdir $*).mk)                       # xyz.v.mk
+	@$(eval export COQDEP := $(shell which coqdep))
+	@$(eval export COQDEP_ARGS := -R $(realpath ${COQ_BUILD_DIR}) Koika)
 # Generate xyz.ml; coqdep will complain: see https://github.com/ocaml/dune/pull/2053
 	@rm -f "${BUILD_DIR}/$*.vo"
-	dune build "$*.vo"
+	PATH="etc/:$$PATH" dune build "$*.vo"
 # Compile to circuits
 	dune exec cuttlec -- "${BUILD_DIR}/$*.ml" -T all -o "$@"
 # Execute example-specific follow-ups if any
