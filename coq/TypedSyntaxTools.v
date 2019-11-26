@@ -1,5 +1,5 @@
 (*! Tools | Functions defined on typed ASTs !*)
-Require Import Koika.Member Koika.TypedSyntax.
+Require Import Koika.Member Koika.TypedSyntax Koika.Primitives Koika.Semantics.
 
 Section TypedSyntaxTools.
   Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
@@ -163,5 +163,44 @@ Section TypedSyntaxTools.
     | Binop fn arg1 arg2 => false
     | ExternalCall fn arg => false
     | APos pos a => is_const_zero a
+    end.
+
+  Definition action_type {sig tau} (a: action sig tau) : option type :=
+    match a with
+    | @Fail _ _ _ _ _ _ _ tau => Some tau
+    | @Var _ _ _ _ _ _ _ _ tau _ => Some tau
+    | @Const _ _ _ _ _ _ _ tau cst => Some tau
+    | @Assign _ _ _ _ _ _ _ _ _ _ _ => Some unit_t
+    | @Seq _ _ _ _ _ _ _ tau _ _ => Some tau
+    | @Bind _ _ _ _ _ _ _ _ tau' _ _ _ => Some tau'
+    | @If _ _ _ _ _ _ _ tau _ _ _ => Some tau
+    | @Read _ _ _ _ _ _ _ _ _ => None
+    | @Write _ _ _ _ _ _ _ _ _ _ => Some unit_t
+    | @Unop _ _ _ _ _ _ _ fn _ => Some (PrimSignatures.Sigma1 fn).(retType)
+    | @Binop _ _ _ _ _ _ _ fn _ _ => Some (PrimSignatures.Sigma2 fn).(retType)
+    | @ExternalCall _ _ _ _ _ _ _ _ _ => None
+    | @APos _ _ _ _ _ _ _ tau _ _ => Some tau
+    end.
+
+  Fixpoint interp_arithmetic {sig tau} (a: action sig tau) : option (type_denote tau) :=
+    match a with
+    | Fail tau => None
+    | Var m => None
+    | Const cst => Some cst
+    | Assign m ex => None
+    | Seq r1 r2 => None
+    | Bind var ex body => None
+    | If cond tbranch fbranch => None
+    | Read port idx => None
+    | Write port idx value => None
+    | Unop fn arg1 =>
+      let/opt r1 := interp_arithmetic arg1 in
+      Some (PrimSpecs.sigma1 fn r1)
+    | Binop fn arg1 arg2 =>
+      let/opt r1 := interp_arithmetic arg1 in
+      let/opt r2 := interp_arithmetic arg2 in
+      Some (PrimSpecs.sigma2 fn r1 r2)
+    | ExternalCall fn arg => None
+    | APos pos a => interp_arithmetic a
     end.
 End TypedSyntaxTools.

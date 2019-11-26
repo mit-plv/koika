@@ -274,17 +274,18 @@ let cpp_preamble =
 let reconstruct_switch action =
   let rec loop v = function
     | Extr.If (_, _,
-              Extr.Binop (_,
-                         (Extr.PrimTyped.Eq _ | Extr.PrimTyped.Bits2 (Extr.PrimTyped.EqBits _)),
-                         Extr.Var (_, v', _, _m),
-                         Extr.Const (_, ((Extr.Bits_t _ | Extr.Enum_t _) as tau), cst)),
-              tbr, fbr) when (match v with
-                              | Some v -> v' = v
-                              | None -> true) ->
-       let default, branches = match loop (Some v') fbr with
-         | Some (_, _, default, branches) -> default, branches
-         | None -> fbr, [] in
-       Some (v', tau, default, (Cuttlebone.Util.value_of_extr_value tau cst, tbr) :: branches)
+               Extr.Binop (_,
+                           (Extr.PrimTyped.Eq _ | Extr.PrimTyped.Bits2 (Extr.PrimTyped.EqBits _)),
+                           Extr.Var (_, v', ((Extr.Bits_t _ | Extr.Enum_t _) as tau), _m),
+                           value),
+               tbr, fbr) when (match v with Some v -> v' = v | None -> true) ->
+       (match Cuttlebone.Util.interp_arithmetic value with
+        | None -> None
+        | Some cst ->
+           let default, branches = match loop (Some v') fbr with
+             | Some (_, _, default, branches) -> default, branches
+             | None -> fbr, [] in
+           Some (v', tau, default, (cst, tbr) :: branches))
     | _ -> None in
   match loop None action with
   | Some (_, _, _, [_]) | None -> None

@@ -248,6 +248,11 @@ module Util = struct
 
   let member_mentions_shadowed_binding sg k0 v0 (m: _ Extr.member) =
     Extr.member_mentions_shadowed_binding any_eq_dec sg k0 v0 m
+
+  let interp_arithmetic a =
+    match Extr.action_type a, Extr.interp_arithmetic a with
+    | Some tau, Some v -> Some (value_of_extr_value tau v)
+    | _, _ -> None
 end
 
 module Compilation = struct

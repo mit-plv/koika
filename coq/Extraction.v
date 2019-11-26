@@ -19,8 +19,12 @@ Extraction "extracted.ml"
            Syntax.uscheduler
            Desugaring.desugar_action
            TypeInference.type_action TypeInference.type_rule TypeInference.type_scheduler
-           TypedSyntaxTools.action_mentions_var TypedSyntaxTools.member_mentions_shadowed_binding
-           TypedSyntaxTools.action_footprint TypedSyntaxTools.is_const_zero
+           TypedSyntaxTools.action_mentions_var
+           TypedSyntaxTools.member_mentions_shadowed_binding
+           TypedSyntaxTools.action_footprint
+           TypedSyntaxTools.is_const_zero
+           TypedSyntaxTools.action_type
+           TypedSyntaxTools.interp_arithmetic
            Circuits.compile_scheduler
            Circuits.lco_opt_compose Circuits.opt_constprop Circuits.opt_muxelim
            Interop.koika_package_t Interop.circuit_package_t Interop.sim_package_t Interop.verilog_package_t Interop.interop_package_t

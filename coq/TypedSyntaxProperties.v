@@ -50,4 +50,33 @@ Section TypedSyntaxProperties.
              | _ => eauto using bits_to_N_zero || simpl
              end.
   Qed.
+
+  Lemma action_type_correct {sig tau} (a: action sig tau):
+    forall tau', action_type a = Some tau' -> tau = tau'.
+  Proof. destruct a; cbn; inversion 1; reflexivity. Qed.
+
+  Lemma interp_arithmetic_correct {sig tau} :
+    forall (a: action sig tau) (Gamma: vcontext sig) (sched_log: Log) (action_log: Log) res,
+      interp_arithmetic a = Some res ->
+      match interp_action r sigma Gamma sched_log action_log a with
+      | Some (_, v, _) => v = res
+      | None => True
+      end.
+  Proof.
+    induction a; cbn; intros;
+    repeat match goal with
+           | _ => discriminate
+           | _ => reflexivity
+           | _ => progress (cbn in *; subst)
+           | [ H: Some _ = Some _ |- _ ] => inversion H; subst; clear H
+           | [ H: context[let/opt _ := ?x in _] |- _ ] => destruct x eqn:?
+           | [ H: (forall Gamma sched_log action_log _,
+                      _ -> match interp_action ?r ?sigma Gamma sched_log action_log ?a with
+                          | _ => _ end) |-
+               context[interp_action ?r ?sigma ?Gamma ?sched_log ?action_log ?a] ] =>
+             specialize (H Gamma sched_log action_log _ ltac:(eauto));
+               destruct (interp_action r sigma Gamma sched_log action_log a)
+               as [ ((? & ?) & ?) | ] eqn:?
+           end.
+  Qed.
 End TypedSyntaxProperties.
