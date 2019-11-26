@@ -2,18 +2,18 @@
 #ifndef _PREAMBLE_HPP
 #define _PREAMBLE_HPP
 
+#include <algorithm> // For std::max
+#include <array>
 #include <cstddef> // For size_t
 #include <cstdint>
-#include <array>
 #include <cstring> // For memcpy
 #include <limits> // For std::numeric_limits used in prims::mask
-#include <type_traits> // For std::conditional_t
-#include <algorithm> // For std::max
 #include <string> // For prims::display
+#include <type_traits> // For std::conditional_t
 
 #ifndef SIM_MINIMAL
-#include <iostream>
 #include <iomanip> // For std::setfill
+#include <iostream>
 #endif // #ifndef SIM_MINIMAL
 
 #ifdef SIM_DEBUG
@@ -110,11 +110,12 @@ namespace prims {
     // https://stackoverflow.com/questions/24280521/
     // TODO: remove this constructor once we move to C++17
     template <typename... Args>
-    array(Args &&... args) : std::array<T, len>({std::forward<Args>(args)...}) {}
+    // NOLINTNEXTLINE(google-explicit-constructor)
+    array(Args&&... args) : std::array<T, len>({std::forward<Args>(args)...}) {}
   };
 
   template <bitwidth sz> struct bits;
-  template <bitwidth sz> std::ostream& operator<<(std::ostream&, const bits<sz>&);
+  template <bitwidth sz> std::ostream& operator<<(std::ostream& /*os*/, const bits<sz>& /*bs*/);
 
   template<bitwidth sz>
   struct bits {
@@ -127,18 +128,18 @@ namespace prims {
 
     /// Representation invariant
 
-    static constexpr bitwidth padding_width() {
+    static constexpr bitwidth padding_width() noexcept {
       // making this a function avoids polluting GDB's output
       return std::numeric_limits<bits_t<sz>>::digits - sz;
     }
 
     // Not constexpr because Boost's >> isn't constexpr
-    static const bits_t<sz> bitmask() {
+    static const bits_t<sz> bitmask() noexcept {
       auto pw = bits<sz>::padding_width(); // https://stackoverflow.com/questions/8452952/
       return std::numeric_limits<bits_t<sz>>::max() >> pw;
     }
 
-    void invariant() const {
+    void invariant() const noexcept {
       // Knowing this invariant can sometimes help the compiler; it does in
       // particular in ‘operator bool()’ below.
       assume(v <= bitmask());
@@ -187,17 +188,17 @@ namespace prims {
     }
 
     template<bitwidth idx_sz>
-    bits<1> operator[](const bits<idx_sz> idx) const;
+    bits<1> operator[](bits<idx_sz> idx) const;
 
-    bits<sz>& operator&=(const bits<sz> arg);
-    bits<sz>& operator|=(const bits<sz> arg);
-    bits<sz>& operator^=(const bits<sz> arg);
-    bits<sz>& operator+=(const bits<sz> arg);
-    bits<sz>& operator-=(const bits<sz> arg);
-    bits<sz>& operator<<=(const size_t shift);
-    bits<sz>& operator>>=(const size_t shift);
-    template<bitwidth shift_sz> bits<sz>& operator<<=(const bits<shift_sz> shift);
-    template<bitwidth shift_sz> bits<sz>& operator>>=(const bits<shift_sz> shift);
+    bits<sz>& operator&=(bits<sz> arg);
+    bits<sz>& operator|=(bits<sz> arg);
+    bits<sz>& operator^=(bits<sz> arg);
+    bits<sz>& operator+=(bits<sz> arg);
+    bits<sz>& operator-=(bits<sz> arg);
+    bits<sz>& operator<<=(size_t shift);
+    bits<sz>& operator>>=(size_t shift);
+    template<bitwidth shift_sz> bits<sz>& operator<<=(bits<shift_sz> shift);
+    template<bitwidth shift_sz> bits<sz>& operator>>=(bits<shift_sz> shift);
 
     // https://stackoverflow.com/questions/4660123/
     friend std::ostream& operator<<<sz>(std::ostream& os, const bits<sz>& bs);
@@ -216,18 +217,21 @@ namespace prims {
   namespace literal_parsing {
     template<uint base, char c>
     constexpr bool valid_digit() {
-      if (base == 2) {
+      switch (base) {
+      case 2:
         return c == '0' || c == '1';
-      } else if (base == 10) {
+      case 10:
         return '0' <= c && c <= '9';
-      } else if (base == 16) {
+      case 16:
         return (('0' <= c && c <= '9') ||
                 ('a' <= c && c <= 'f') || ('A' <= c && c <= 'F'));
+      default:
+        return false;
       }
     }
 
     template <uint base, char c>
-    constexpr uint parse_digit() {
+    constexpr uint parse_digit() noexcept {
       static_assert(base == 2 || base == 10 || base == 16, "Invalid base");
       static_assert(valid_digit<base, c>(), "Invalid digit");
       if ('0' <= c && c <= '9') {
@@ -236,16 +240,18 @@ namespace prims {
         return c - 'a' + 10;
       } else if ('A' <= c && c <= 'F') {
         return c - 'A' + 10;
+      } else {
+        unreachable<uint>();
       }
     }
 
     template <uint base, uint64_t max, uint64_t num>
-    constexpr uint64_t parse_u64() {
+    constexpr uint64_t parse_u64() noexcept {
       return num;
     }
 
     template <uint base, uint64_t max, uint64_t num, char c, char... cs>
-    constexpr uint64_t parse_u64() {
+    constexpr uint64_t parse_u64() noexcept {
       const uint64_t digit = parse_digit<base, c>();
       static_assert((max - digit) / base >= num, "Overflow in literal parsing");
       return parse_u64<base, max, base * num + digit, cs...>();
@@ -292,7 +298,7 @@ namespace prims {
     };
 #endif
 
-    constexpr parser get_parser(bitwidth sz) {
+    constexpr parser get_parser(bitwidth sz) noexcept {
       if (sz <= 64) {
         return parser::u64;
       } else if (sz <= 128) {
@@ -340,7 +346,7 @@ namespace prims {
       static_assert(c0 == '0' && c1 == 'x', "Hex literal must start with 0x");
       static constexpr auto v = parse_literal<imm, 16, 0, cs...>::v;
     };
-  }
+  } // namespace literal_parsing
 
   namespace literals {
     // ‘auto v = …; return v’: see
@@ -378,7 +384,7 @@ namespace prims {
     template <char... cs> constexpr auto operator "" _xv() {
       constexpr auto v = literal_parsing::parse_hex<true, cs...>::v; return v;
     }
-  }
+  } // namespace literals
 
   /// Functions on bits
 
@@ -560,7 +566,7 @@ namespace prims {
   };
 
   template<bitwidth sz> struct repeat_t<0, sz> {
-    static const bits<0> v(bits<sz>) { return tt; };
+    static const bits<0> v(bits<sz> /*unused*/) { return tt; };
   };
 
   template<bitwidth times> struct repeat_t<times, 1> {
@@ -637,7 +643,7 @@ namespace prims {
       }
       return s;
     }
-  }
+  } // namespace internal
 #endif
 
   template<size_t len>
@@ -789,7 +795,7 @@ namespace prims {
       }
       return os;
     }
-  }
+  } // namespace internal
 
   template<bitwidth sz>
   static std::ostream& fmt(std::ostream& os, const bits<sz>& val, const fmtopts opts) {
@@ -820,7 +826,7 @@ namespace prims {
       os << "]";
       return os;
     }
-  }
+  } // namespace internal
 
   template<typename T, size_t len>
   static std::ostream& fmt(std::ostream& os, const array<T, len>& val, const fmtopts opts) {
@@ -937,7 +943,7 @@ struct reg_log_t {
   }
 
   // Removing this constructor causes collatz's performance to drop 5x with GCC
-  reg_log_t() : rwset{}, data0{}, data1{} {}
+  reg_log_t() : rwset{}, data0{}, data1{} {} // NOLINT(readability-redundant-member-init)
 };
 
 #define CHECK_RETURN(can_fire) { if (!(can_fire)) { return false; } }
