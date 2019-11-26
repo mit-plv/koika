@@ -16,7 +16,7 @@ bits<32>* dmem = new bits<32>[DMEM_SIZE];
 class rv_core : public sim_t {
 
 public:
-  explicit rv_core(const state_t init) : sim_t(init){}
+  explicit rv_core() : sim_t{} {}
   void init_mem(char* elf_filename) {
     std::ifstream elf_file;
     char* elf_data;
@@ -205,102 +205,7 @@ protected:
 
 
 sim_t::state_t init_and_run(char* filename, unsigned long long int ncycles) {
-  sim_t::state_t init = {
-      .toIMem_data0 = struct_mem_req{4'0000_b, 32'0_b, 32'0_b},
-      .toIMem_valid0 = 1'0_b,
-      .fromIMem_data0 = struct_mem_resp{4'0000_b, 32'0_b, 32'0_b},
-      .fromIMem_valid0 = 1'0_b,
-      .toDMem_data0 = struct_mem_req{4'0000_b, 32'0_b, 32'0_b},
-      .toDMem_valid0 = 1'0_b,
-      .fromDMem_data0 = struct_mem_resp{4'0000_b, 32'0_b, 32'0_b},
-      .fromDMem_valid0 = 1'0_b,
-      .f2d_data0 = struct_fetch_bookkeeping{32'0_b, 32'0_b, 1'0_b},
-      .f2d_valid0 = 1'0_b,
-      .f2dprim_data0 = struct_fetch_bookkeeping{32'0_b, 32'0_b, 1'0_b},
-      .f2dprim_valid0 = 1'0_b,
-      .d2e_data0 =
-          struct_decode_bookkeeping{
-              32'0_b, 32'0_b, 1'0_b,
-              struct_decodedInst{1'0_b, 1'0_b, 1'0_b, 1'0_b, 32'0_b,
-                                 struct_maybe{1'0_b, enum_immType::ImmI}},
-              32'0_b, 32'0_b},
-      .d2e_valid0 = 1'0_b,
-      .e2w_data0 =
-          struct_execute_bookkeeping{
-              1'0_b, 2'00_b, 2'00_b, 32'0_b,
-              struct_decodedInst{1'0_b, 1'0_b, 1'0_b, 1'0_b, 32'0_b,
-                                 struct_maybe{1'0_b, enum_immType::ImmI}}},
-      .e2w_valid0 = 1'0_b,
-      .rf_rData_0 = 32'0_b,
-      .rf_rData_1 = 32'0_b,
-      .rf_rData_2 = 32'0_b,
-      .rf_rData_3 = 32'0_b,
-      .rf_rData_4 = 32'0_b,
-      .rf_rData_5 = 32'0_b,
-      .rf_rData_6 = 32'0_b,
-      .rf_rData_7 = 32'0_b,
-      .rf_rData_8 = 32'0_b,
-      .rf_rData_9 = 32'0_b,
-      .rf_rData_10 = 32'0_b,
-      .rf_rData_11 = 32'0_b,
-      .rf_rData_12 = 32'0_b,
-      .rf_rData_13 = 32'0_b,
-      .rf_rData_14 = 32'0_b,
-      .rf_rData_15 = 32'0_b,
-      .rf_rData_16 = 32'0_b,
-      .rf_rData_17 = 32'0_b,
-      .rf_rData_18 = 32'0_b,
-      .rf_rData_19 = 32'0_b,
-      .rf_rData_20 = 32'0_b,
-      .rf_rData_21 = 32'0_b,
-      .rf_rData_22 = 32'0_b,
-      .rf_rData_23 = 32'0_b,
-      .rf_rData_24 = 32'0_b,
-      .rf_rData_25 = 32'0_b,
-      .rf_rData_26 = 32'0_b,
-      .rf_rData_27 = 32'0_b,
-      .rf_rData_28 = 32'0_b,
-      .rf_rData_29 = 32'0_b,
-      .rf_rData_30 = 32'0_b,
-      .rf_rData_31 = 32'0_b,
-      .scoreboard_Scores_rData_0 = 2'00_b,
-      .scoreboard_Scores_rData_1 = 2'00_b,
-      .scoreboard_Scores_rData_2 = 2'00_b,
-      .scoreboard_Scores_rData_3 = 2'00_b,
-      .scoreboard_Scores_rData_4 = 2'00_b,
-      .scoreboard_Scores_rData_5 = 2'00_b,
-      .scoreboard_Scores_rData_6 = 2'00_b,
-      .scoreboard_Scores_rData_7 = 2'00_b,
-      .scoreboard_Scores_rData_8 = 2'00_b,
-      .scoreboard_Scores_rData_9 = 2'00_b,
-      .scoreboard_Scores_rData_10 = 2'00_b,
-      .scoreboard_Scores_rData_11 = 2'00_b,
-      .scoreboard_Scores_rData_12 = 2'00_b,
-      .scoreboard_Scores_rData_13 = 2'00_b,
-      .scoreboard_Scores_rData_14 = 2'00_b,
-      .scoreboard_Scores_rData_15 = 2'00_b,
-      .scoreboard_Scores_rData_16 = 2'00_b,
-      .scoreboard_Scores_rData_17 = 2'00_b,
-      .scoreboard_Scores_rData_18 = 2'00_b,
-      .scoreboard_Scores_rData_19 = 2'00_b,
-      .scoreboard_Scores_rData_20 = 2'00_b,
-      .scoreboard_Scores_rData_21 = 2'00_b,
-      .scoreboard_Scores_rData_22 = 2'00_b,
-      .scoreboard_Scores_rData_23 = 2'00_b,
-      .scoreboard_Scores_rData_24 = 2'00_b,
-      .scoreboard_Scores_rData_25 = 2'00_b,
-      .scoreboard_Scores_rData_26 = 2'00_b,
-      .scoreboard_Scores_rData_27 = 2'00_b,
-      .scoreboard_Scores_rData_28 = 2'00_b,
-      .scoreboard_Scores_rData_29 = 2'00_b,
-      .scoreboard_Scores_rData_30 = 2'00_b,
-      .scoreboard_Scores_rData_31 = 2'00_b,
-      .inst_count = 32'0_b,
-      .pc = 32'0_b,
-      .epoch = 1'0_b,
-  };
-
-  rv_core simulator(init);
+  rv_core simulator{};
   simulator.init_mem(filename);
   simulator.run(ncycles);
   return simulator.snapshot();
@@ -319,7 +224,7 @@ int main(int argc, char **argv) {
 	exit(1);
   }
 
-  sim_t::state_t snapshot = init_and_run(filename,ncycles);
+  sim_t::state_t snapshot = init_and_run(filename, ncycles);
   snapshot.dump();
   return 0;
 }

@@ -963,12 +963,25 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
           p "%s();" commit;
           p "return true;") in
 
-    let p_constructor () =
+    let p_initial_state () =
+      (* This is a function instead of a variable to avoid polluting GDB's output *)
+      p_fn ~typ:"static constexpr state_t" ~name:"initial_state" ~args:"" (fun () ->
+          p_scoped "state_t init" ~terminator:";" (fun () ->
+              iter_all_registers (fun rn ->
+                  p ".%s = %s," rn.reg_name (sp_value rn.reg_init)));
+          p "return init;") in
+
+    let p_reset () =
       let p_init_data0 { reg_name = nm; _ } =
         p "Log.%s.data0 = init.%s;" nm nm in
+      p_fn ~typ:"void" ~name:"reset" ~args:"const state_t init" (fun () ->
+          iter_all_registers p_init_data0) in
+
+    let p_constructor () =
       p_fn ~typ:"explicit" ~name:hpp.cpp_classname
-        ~args:"const state_t init" ~annot:" : log{}, Log{}, extfuns{}"
-        (fun () -> iter_all_registers p_init_data0) in
+        ~args:"const state_t init = initial_state()"
+        ~annot:" : log{}, Log{}, extfuns{}"
+        (fun () -> p "reset(init);") in
 
     let rec p_scheduler pos s =
       p_pos pos;
@@ -1019,6 +1032,10 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
         nl ();
 
         p "public:";
+        p_initial_state ();
+        nl ();
+        p_reset ();
+        nl ();
         p_constructor ();
         nl ();
         p_cycle ();
@@ -1072,12 +1089,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     let state_t = sprintf "sim_t::state_t" in
 
     p_fn ~typ:state_t ~name:"init_and_run" ~args:(sprintf "%s ncycles" ull) (fun () ->
-        p_scoped (sprintf "%s init = " state_t)
-          ~terminator:";" (fun () ->
-            iter_all_registers (fun rn ->
-                p ".%s = %s," rn.reg_name (sp_value rn.reg_init)));
-        nl ();
-        p "sim_t simulator(init);" ;
+        p "sim_t simulator{};" ;
         p "simulator.run(ncycles);";
         p "return simulator.snapshot();");
     nl ();
@@ -1088,7 +1100,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
             p_scoped "if (argc >= 2) " (fun () ->
                 p "ncycles = std::stoull(argv[1]);");
             nl ();
-            p "sim_t::state_t snapshot = init_and_run(ncycles);";
+            p "%s snapshot = init_and_run(ncycles);" state_t;
             p "snapshot.dump();";
             p "return 0;")) in
 
