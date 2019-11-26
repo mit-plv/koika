@@ -1,8 +1,8 @@
 #include "rv32i_core_pipelined.v.objects/rv32i_core_pipelined.hpp"
 #include "elf.h"
-#include <iostream>
 #include <fstream>
-#define DMEM_SIZE 4000000000
+#include <iostream>
+#define DMEM_SIZE (1 << 30)
 
 class extfuns {
 public:
@@ -11,7 +11,7 @@ public:
 
 using sim_t = module_rv32i_core_pipelined<extfuns>;
 
-bits<32>* dmem = new bits<32>[DMEM_SIZE];
+static bits<32>* dmem = new bits<32>[DMEM_SIZE];
 
 class rv_core : public sim_t {
 
