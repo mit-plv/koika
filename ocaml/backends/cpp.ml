@@ -511,7 +511,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     let sp_field_eq v1 v2 field =
       let field = cpp_field_name field in
       let eq = sp_equality (v1 ^ "." ^ field) (v2 ^ "." ^ field) in
-      sprintf "%s.v" eq in
+      sprintf "bool%s" eq in
 
     let p_struct_eq sg =
       p_eq (fun () ->
