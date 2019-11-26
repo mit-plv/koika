@@ -415,7 +415,7 @@ namespace prims {
   }
 
   template<bitwidth width, bitwidth sz1, bitwidth sz2>
-  bits<width> indexed_slice(const bits<sz1> data, const bits<sz2> idx) {
+  bits<width> islice(const bits<sz1> data, const bits<sz2> idx) {
     return truncate<width>(data >> idx);
   }
 
