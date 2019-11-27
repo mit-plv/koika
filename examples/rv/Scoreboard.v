@@ -8,9 +8,9 @@ Module Type Scoreboard_sig.
   Parameter maxScore:nat. (* Usually  maxScore ~= 3/4 *)
 End Scoreboard_sig.
 
-Definition read_style tau := SequentialSwitch tau "tmp".
+(* Definition read_style tau := SequentialSwitch tau "tmp". *)
 Definition write_style := SequentialSwitch unit_t "tmp".
-(* Definition read_style := @TreeSwitch var_t. *)
+Definition read_style (T:type) := @TreeSwitch var_t.
 (* Definition write_style := @TreeSwitch var_t. *)
 
 Module Scoreboard (s:Scoreboard_sig).
