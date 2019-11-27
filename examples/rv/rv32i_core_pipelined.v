@@ -3,8 +3,8 @@ Require Import RV.RVCore.
 Import RV32ICore.
 
 Definition rv_schedule : scheduler :=
-  tc_scheduler (ExternalI |> ExternalD |>
-                Writeback |> Execute |> Decode |> Fetch |> done).
+  tc_scheduler ( ExternalI |> ExternalD  |> Writeback |> Execute |> WaitImem |> Decode |> Fetch |>  done).
+
 
 Definition circuits :=
   compile_scheduler rv_rules rv_external rv_schedule.

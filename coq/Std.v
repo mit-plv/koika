@@ -39,14 +39,59 @@ Module Fifo1 (f: Fifo).
   Definition deq :  UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun _ : T =>
       if (read0(valid0)) then
-        write0(valid0, Ob~0);
-        read0(data0)
+        write0(valid0, Ob~0)
       else
-        fail@(T)}}.
+        fail;
+       read0(data0)}}.
 
   Instance FiniteType_reg_t : FiniteType reg_t := _.
 
 End Fifo1.
+
+
+Module Fifo1Bypass (f: Fifo).
+  Import f.
+  Inductive reg_t := data0 |  valid0.
+
+  Definition R r :=
+    match r with
+    | data0 => T
+    | valid0 => bits_t 1
+    end.
+
+  Definition r idx : R idx :=
+    match idx with
+    | data0 => value_of_bits Bits.zero
+    | valid0 => Bits.zero
+    end.
+
+  Definition name_reg r :=
+    match r with
+    | data0 => "data0"
+    | valid0 => "valid0"
+    end.
+
+
+  Definition enq : UInternalFunction reg_t empty_ext_fn_t :=
+   {{ fun (data : T) : bits_t 0 =>
+      if (!read0(valid0)) then
+        write0(data0, data);
+        write0(valid0, #Ob~1)
+      else
+        fail }}.
+
+
+  Definition deq :  UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun _ : T =>
+      if (read1(valid0)) then
+        write1(valid0, Ob~0)
+      else
+        fail;
+       read1(data0)}}.
+
+  Instance FiniteType_reg_t : FiniteType reg_t := _.
+
+End Fifo1Bypass.
 
 Definition Maybe tau :=
   {| struct_name := "maybe";

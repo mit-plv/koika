@@ -399,12 +399,13 @@ Module  RV32ICore.
   Module FifoMemResp <: Fifo.
     Definition T:= struct_t mem_resp.
   End FifoMemResp.
-  Module MemResp := Fifo1 FifoMemResp.
+  Module MemResp := Fifo1Bypass FifoMemResp.
 
   Module FifoFetch <: Fifo.
     Definition T:= struct_t fetch_bookkeeping.
   End FifoFetch.
   Module fromFetch := Fifo1 FifoFetch.
+  Module waitFromFetch := Fifo1Bypass FifoFetch.
 
   Module FifoDecode <: Fifo.
     Definition T:= struct_t decode_bookkeeping.
@@ -438,10 +439,12 @@ Module  RV32ICore.
   | toDMem (state: MemReq.reg_t)
   | fromDMem (state: MemResp.reg_t)
   | f2d (state: fromFetch.reg_t)
+  | f2dprim (state: waitFromFetch.reg_t)
   | d2e (state: fromDecode.reg_t)
   | e2w (state: fromExecute.reg_t)
   | rf (state: Rf.reg_t)
   | scoreboard (state: Scoreboard.reg_t)
+  | inst_count
   | pc
   | epoch.
 
@@ -453,11 +456,13 @@ Module  RV32ICore.
     | toDMem r => MemReq.R r
     | fromDMem r => MemResp.R r
     | f2d r => fromFetch.R r
+    | f2dprim r => waitFromFetch.R r
     | d2e r => fromDecode.R r
     | e2w r => fromExecute.R r
     | rf r => Rf.R r
     | scoreboard r => Scoreboard.R r
     | pc => bits_t 32
+    | inst_count => bits_t 32
     | epoch => bits_t 1
     end.
 
@@ -470,10 +475,12 @@ Module  RV32ICore.
     | toDMem s => MemReq.r s
     | fromDMem s => MemResp.r s
     | f2d s => fromFetch.r s
+    | f2dprim s => waitFromFetch.r s
     | d2e s => fromDecode.r s
     | e2w s => fromExecute.r s
     | scoreboard s => Scoreboard.r s
     | pc => Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0
+    | inst_count => Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0
     | epoch => Bits.zero
     end.
 
@@ -497,6 +504,15 @@ Module  RV32ICore.
   Definition tc_fetch :=
     tc_action R empty_Sigma fetch .
 
+  Definition wait_imem : uaction reg_t empty_ext_fn_t :=
+    {{
+        let fetched_bookeeping := f2d.(fromFetch.deq)() in
+        f2dprim.(waitFromFetch.enq)(fetched_bookeeping)
+    }}.
+
+  Definition tc_wait_imem :=
+    tc_action R empty_Sigma wait_imem .
+
   (* This rule is interesting because maybe we want to write it *)
   (* differently than Bluespec if we care about simulation *)
   (* performance. Moreover, we could read unconditionaly to avoid potential *)
@@ -505,7 +521,7 @@ Module  RV32ICore.
     {{
         let instr := fromIMem.(MemResp.deq)() in
         let instr := get(instr,data) in
-        let fetched_bookeeping := f2d.(fromFetch.deq)() in
+        let fetched_bookeeping := f2dprim.(waitFromFetch.deq)() in
         let decodedInst := decode_fun(instr) in
         when (get(fetched_bookeeping, epoch) == read1(epoch)) do
              (let rs1_idx := get(getFields(instr), rs1) in
@@ -620,6 +636,7 @@ Module  RV32ICore.
         let dInst := get(execute_bookeeping, dInst) in
         let data := get(execute_bookeeping, newrd) in
         let fields := getFields(get(dInst, inst)) in
+        write0(inst_count, read0(inst_count)+|32`d1|);
         if isMemoryInst(dInst) then (* // write_val *)
           (* Byte enable shifting back *)
           let resp := fromDMem.(MemResp.deq)() in
@@ -631,7 +648,7 @@ Module  RV32ICore.
           | Ob~1~0~0 => set data := zeroExtend(mem_data[|5`d0|:+8],32)
           | Ob~1~0~1 => set data := zeroExtend(mem_data[|5`d0|:+16],32)
           | Ob~0~1~0 => set data := mem_data      (* Load Word *)
-          return default: fail                   (* Load Double or Signed Word *)
+          return default: pass                   (* Load Double or Signed Word *)
           end
         else
           pass;
@@ -670,7 +687,7 @@ Module  RV32ICore.
   Time Definition tc_externalD :=
     tc_action R empty_Sigma externalD_environment.
 
-  Inductive rv_rules_t := Fetch | Decode | Execute | Writeback | ExternalI | ExternalD.
+  Inductive rv_rules_t := Fetch | Decode | Execute | Writeback | ExternalI | ExternalD | WaitImem.
 
   Definition rv_rules (rl:rv_rules_t) : rule R empty_Sigma:=
     match rl with
@@ -680,6 +697,7 @@ Module  RV32ICore.
     | Writeback => tc_writeback
     | ExternalI => tc_externalI
     | ExternalD => tc_externalD
+    | WaitImem  => tc_wait_imem
     end.
 
   Definition rv_external (rl: rv_rules_t) :=
