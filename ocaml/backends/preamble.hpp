@@ -973,6 +973,72 @@ namespace cuttlesim {
     // Removing this constructor causes collatz's performance to drop 5x with GCC
     reg_log_t() : rwset{}, data0{}, data1{} {} // NOLINT(readability-redundant-member-init)
   };
+
+  template<typename sim_t>
+  class toplevel {
+  public:
+    sim_t simulator;
+
+#ifndef SIM_MINIMAL
+    struct params {
+      using ull = unsigned long long int;
+      bool trace;
+      std::string vcd_fpath;
+      ull trace_period;
+      ull ncycles;
+
+      static params of_cli(int argc, char **argv) {
+        params parsed = {
+          .trace = false,
+          .vcd_fpath = {},
+          .trace_period = 0,
+          .ncycles = 1000
+        };
+
+        if (argc > 1) {
+          parsed.ncycles = std::stoull(argv[1]);
+        }
+
+        if (argc > 2) {
+          parsed.trace = true;
+          parsed.vcd_fpath = argv[2];
+        }
+
+        if (argc > 3) {
+          parsed.trace_period = std::stoull(argv[3]);
+        }
+
+        return parsed;
+      }
+    };
+
+    int main(int argc, char **argv) {
+      auto params = params::of_cli(argc, argv);
+
+      if (params.trace) {
+        simulator.trace(params.vcd_fpath, params.ncycles, 1);
+      } else {
+        simulator.run(params.ncycles);
+        simulator.snapshot().dump();
+      }
+
+      return 0;
+    }
+#else
+    // This definition is there to look at the generated assembly
+    typename sim_t::state_t init_and_run(unsigned long long int ncycles) {
+      sim_t simulator{};
+      return simulator.run(ncycles).snapshot().dump();
+    }
+
+    int main(int /*unused*/, char** /*unused*/) {
+      return 0;
+    }
+#endif
+
+    template <typename... Args>
+    toplevel(Args &&... args) : simulator(std::forward<Args>(args)...) {}
+  };
 } // namespace cuttlesim
 
 #define CHECK_RETURN(can_fire) { if (!(can_fire)) { return false; } }

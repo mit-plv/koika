@@ -1148,32 +1148,10 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
                List.iter p_extfun_decl (List.sort compare fns))));
     nl ();
 
-    p "using sim_t = %s<extfuns>;" hpp.cpp_classname;
-    nl ();
-
-    let ull = "unsigned long long int" in
-    let state_t = sprintf "sim_t::state_t" in
-
-    p_fn ~typ:state_t ~name:"init_and_run" ~args:(sprintf "%s ncycles" ull) (fun () ->
-        p "sim_t simulator{};" ;
-        p "simulator.run(ncycles);";
-        p "return simulator.snapshot();");
-    nl ();
-
     p_ifnminimal (fun () ->
         p_fn ~typ:"int" ~name:"main" ~args:"int argc, char** argv" (fun () ->
-            p_cpp_decl ~init:"1000" ull "ncycles";
-            p_scoped "if (argc >= 2) " (fun () ->
-                p "ncycles = std::stoull(argv[1]);");
-            nl ();
-            p_scoped "if (argc >= 3) " (fun () ->
-                p "sim_t simulator{};";
-                p "std::string vcd_fpath = argv[2];";
-                p "simulator.trace(vcd_fpath, ncycles, 1);");
-            p_scoped "else" (fun () ->
-                p "%s snapshot = init_and_run(ncycles);" state_t;
-                p "snapshot.dump();";
-                p "return 0;"))) in
+            p "cuttlesim::toplevel<%s<extfuns>> top{};" hpp.cpp_classname;
+            p "return top.main(argc, argv);")) in
 
   let buf_cpp = with_output_to_buffer p_cpp in
   let buf_hpp = with_output_to_buffer p_hpp in
