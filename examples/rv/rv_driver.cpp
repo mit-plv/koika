@@ -161,15 +161,15 @@ protected:
             struct_mem_resp data = _x2;
 	    	    // Manually added
 	    bits<32> current_value = dmem[DAddress.v >> 2];
-	    if (DAddress.v == 0xffff0 && DEn.v == 0xf) { // PutChar  && DEn.v == 0xf
+	    if (DAddress.v == 0x40000000 && DEn.v == 0xf) { // PutChar  && DEn.v == 0xf
 	      printf("%c", (char) readRequestD.data.v);
 	    }
 	    if (DAddress.v == 0x40001000 && DEn.v == 0xf) {
 	      exit(readRequestD.data.v);
 	    }
-	    if (DAddress.v == 0xffff4 && DEn.v == 0) { // GetChar
-	      scanf("%c", (char *) &data.data.v);
-	    }
+	   // if (DAddress.v == 0xffff4 && DEn.v == 0) { // GetChar
+	   //   scanf("%c", (char *) &data.data.v);
+	   // }
 	    else {
 	      data.data = current_value;
 	    }
@@ -308,7 +308,7 @@ sim_t::state_t init_and_run(char* filename, unsigned long long int ncycles) {
       .scoreboard_Scores_rData_29 = 2'00_b,
       .scoreboard_Scores_rData_30 = 2'00_b,
       .scoreboard_Scores_rData_31 = 2'00_b,
-      .pc = 32'10000000000000000000000000000000_b,
+      .pc = 32'00000000000000000000000000000000_b,
       .epoch = 1'0_b,
   };
 

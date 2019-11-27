@@ -3,7 +3,7 @@ OUTPUT_ARCH( "riscv" )
  SECTIONS
  {
  /* text: test code section */
- . = 0x200;
+ . = 0x000;
  .text.init : { init.o(.text) }
  .text :
  {

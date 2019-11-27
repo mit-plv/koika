@@ -1,8 +1,7 @@
-int* PUT_ADDR = (int *)0x00ffff0;
-int* GET_ADDR = (int *)0x00ffff4;
+int* PUT_ADDR = (int *)0x40000000;
 
 int getchar() {
-  return *GET_ADDR;
+//  return *GET_ADDR;
 }
 
 int putchar(int c) {
