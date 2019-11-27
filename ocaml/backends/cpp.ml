@@ -171,7 +171,7 @@ let rec cpp_type_of_type
   | Struct_t sg -> cpp_struct_name pi sg
   | Array_t sg -> cpp_type_of_array pi sg
 and cpp_type_of_array pi { array_type; array_len } =
-  sprintf "prims::array<%s, %d>"
+  sprintf "array<%s, %d>"
     (cpp_type_of_type pi array_type) array_len
 
 let cpp_enumerator_name pi ?(enum=None) nm =
@@ -706,7 +706,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
 
     let p_log_t () =
       let p_decl_log_register r =
-        p "reg_log_t<%s> %s;" (cpp_type_of_type (reg_type r)) r.reg_name in
+        p "cuttlesim::reg_log_t<%s> %s;" (cpp_type_of_type (reg_type r)) r.reg_name in
       let p_commit_register r =
         p "%s.commit();" r.reg_name in
       let p_copy_data0 { reg_name = nm; _ } =

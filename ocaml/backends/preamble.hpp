@@ -889,90 +889,91 @@ namespace prims {
 #endif // #ifndef SIM_MINIMAL
 } // namespace prims
 
-using std::array;
+using prims::array;
 using prims::unit;
 using prims::bits;
 using namespace prims::literals;
+namespace cuttlesim {
+  struct rwset_t {
+    bool r1 : 1; // FIXME does adding :1 always help?
+    bool w0 : 1;
+    bool w1 : 1;
 
-struct rwset_t {
-  bool r1 : 1; // FIXME does adding :1 always help?
-  bool w0 : 1;
-  bool w1 : 1;
-
-  bool may_read0(rwset_t rL) {
-    return !(rL.w1 || rL.w0);
-  }
-
-  bool may_read1(rwset_t rL) {
-    return !(rL.w1);
-  }
-
-  bool may_write0(rwset_t /*unused*/) {
-    return !(r1 || w0 || w1);
-  }
-
-  bool may_write1(rwset_t /*unused*/) {
-    return !(w1);
-  }
-
-  void reset() {
-    r1 = w0 = w1 = false;
-  }
-
-  // Removing this constructor causes collatz's performance to drop 5x with GCC
-  rwset_t() : r1{}, w0{}, w1{} {}
-};
-
-
-template<typename T>
-struct reg_log_t {
-  rwset_t rwset;
-
-  // Reset alignment to prevent Clang from packing the fields together
-  // This yielded a ~25x speedup when rwset was inline
-  unsigned : 0;
-  T data0;
-  unsigned : 0;
-  T data1;
-
-  [[nodiscard]] bool read0(T* const target, const reg_log_t rL) {
-    bool ok = rwset.may_read0(rL.rwset);
-    *target = rL.data0;
-    return ok;
-  }
-
-  [[nodiscard]] bool read1(T* const target, const reg_log_t rL) {
-    bool ok = rwset.may_read1(rL.rwset);
-    *target = data0;
-    rwset.r1 = true;
-    return ok;
-  }
-
-  [[nodiscard]] bool write0(const T val, const reg_log_t rL) {
-    bool ok = rwset.may_write0(rL.rwset);
-    data0 = val;
-    rwset.w0 = true;
-    return ok;
-  }
-
-  [[nodiscard]] bool write1(const T val, const reg_log_t rL) {
-    bool ok = rwset.may_write1(rL.rwset);
-    data1 = val;
-    rwset.w1 = true;
-    return ok;
-  }
-
-  T commit() {
-    if (_unlikely(rwset.w1)) {
-      data0 = data1;
+    bool may_read0(rwset_t rL) {
+      return !(rL.w1 || rL.w0);
     }
-    rwset.reset();
-    return data0;
-  }
 
-  // Removing this constructor causes collatz's performance to drop 5x with GCC
-  reg_log_t() : rwset{}, data0{}, data1{} {} // NOLINT(readability-redundant-member-init)
-};
+    bool may_read1(rwset_t rL) {
+      return !(rL.w1);
+    }
+
+    bool may_write0(rwset_t /*unused*/) {
+      return !(r1 || w0 || w1);
+    }
+
+    bool may_write1(rwset_t /*unused*/) {
+      return !(w1);
+    }
+
+    void reset() {
+      r1 = w0 = w1 = false;
+    }
+
+    // Removing this constructor causes collatz's performance to drop 5x with GCC
+    rwset_t() : r1{}, w0{}, w1{} {}
+  };
+
+
+  template<typename T>
+  struct reg_log_t {
+    rwset_t rwset;
+
+    // Reset alignment to prevent Clang from packing the fields together
+    // This yielded a ~25x speedup when rwset was inline
+    unsigned : 0;
+    T data0;
+    unsigned : 0;
+    T data1;
+
+    [[nodiscard]] bool read0(T* const target, const reg_log_t rL) {
+      bool ok = rwset.may_read0(rL.rwset);
+      *target = rL.data0;
+      return ok;
+    }
+
+    [[nodiscard]] bool read1(T* const target, const reg_log_t rL) {
+      bool ok = rwset.may_read1(rL.rwset);
+      *target = data0;
+      rwset.r1 = true;
+      return ok;
+    }
+
+    [[nodiscard]] bool write0(const T val, const reg_log_t rL) {
+      bool ok = rwset.may_write0(rL.rwset);
+      data0 = val;
+      rwset.w0 = true;
+      return ok;
+    }
+
+    [[nodiscard]] bool write1(const T val, const reg_log_t rL) {
+      bool ok = rwset.may_write1(rL.rwset);
+      data1 = val;
+      rwset.w1 = true;
+      return ok;
+    }
+
+    T commit() {
+      if (_unlikely(rwset.w1)) {
+        data0 = data1;
+      }
+      rwset.reset();
+      return data0;
+    }
+
+    // Removing this constructor causes collatz's performance to drop 5x with GCC
+    reg_log_t() : rwset{}, data0{}, data1{} {} // NOLINT(readability-redundant-member-init)
+  };
+} // namespace cuttlesim
 
 #define CHECK_RETURN(can_fire) { if (!(can_fire)) { return false; } }
 #define READ0(reg, ptr) (CHECK_RETURN(log.reg.read0((ptr), Log.reg)))
