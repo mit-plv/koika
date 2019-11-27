@@ -424,7 +424,7 @@ Module  RV32ICore.
   Module Rf := RfPow2 Rf_32.
 
   Module Scoreboard_32reg <: Scoreboard_sig.
-    Definition lastIdx := 31.
+    Definition idx_sz := log2 32.
     Definition maxScore := 3.
   End Scoreboard_32reg.
   Module Scoreboard := Scoreboard Scoreboard_32reg.
@@ -472,13 +472,13 @@ Module  RV32ICore.
     | d2e s => fromDecode.r s
     | e2w s => fromExecute.r s
     | scoreboard s => Scoreboard.r s
-    | pc => Ob~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0
+    | pc => Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0
     | epoch => Bits.zero
     end.
 
   Definition fetch : uaction reg_t empty_ext_fn_t :=
     {{
-        let pc := read0(pc) in
+        let pc := read1(pc) in
         let req := struct mem_req {|
                               byte_en := |4`d0|; (* Load *)
                               addr := pc;
@@ -486,10 +486,10 @@ Module  RV32ICore.
         let fetch_bookkeeping := struct fetch_bookkeeping {|
                                           pc := pc;
                                           ppc := pc + |32`d4|;
-                                          epoch := read0(epoch)
+                                          epoch := read1(epoch)
                                         |} in
         toIMem.(MemReq.enq)(req);
-        write0(pc, pc + |32`d4|);
+        write1(pc, pc + |32`d4|);
         f2d.(fromFetch.enq)(fetch_bookkeeping)
     }}.
 
@@ -506,22 +506,17 @@ Module  RV32ICore.
         let instr := get(instr,data) in
         let fetched_bookeeping := f2d.(fromFetch.deq)() in
         let decodedInst := decode_fun(instr) in
-        when (get(fetched_bookeeping, epoch) == read0(epoch)) do
+        when (get(fetched_bookeeping, epoch) == read1(epoch)) do
              (let rs1_idx := get(getFields(instr), rs1) in
              let rs2_idx := get(getFields(instr), rs2) in
-             let score := Ob~0~0 in
-             if (get(decodedInst, valid_rs1)) then
-               set score := (score + scoreboard.(Scoreboard.search)(rs1_idx))
-             else
-               if (get(decodedInst, valid_rs2)) then
-                 set score := (score + scoreboard.(Scoreboard.search)(rs2_idx))
-               else pass;
-             guard (score == Ob~0~0);
+             let score1 := scoreboard.(Scoreboard.search)(rs1_idx) in
+             let score2 := scoreboard.(Scoreboard.search)(rs2_idx) in
+             guard (score1 == Ob~0~0 && score2 == Ob~0~0);
              (when (get(decodedInst, valid_rd)) do
                   let rd_idx := get(getFields(instr), rd) in
                   scoreboard.(Scoreboard.insert)(rd_idx));
-             let rs1 := rf.(Rf.read)(rs1_idx) in
-             let rs2 := rf.(Rf.read)(rs2_idx) in
+             let rs1 := rf.(Rf.read_1)(rs1_idx) in
+             let rs2 := rf.(Rf.read_1)(rs2_idx) in
              let decode_bookkeeping := struct decode_bookkeeping {|
                                                 pc    := get(fetched_bookeeping, pc);
                                                 ppc   := get(fetched_bookeeping, ppc);
@@ -644,7 +639,7 @@ Module  RV32ICore.
           scoreboard.(Scoreboard.remove)(rd_idx);
           if (rd_idx == |5`d0|)
           then pass
-          else rf.(Rf.write)(rd_idx,data)
+          else rf.(Rf.write_0)(rd_idx,data)
         else
           pass
     }}.

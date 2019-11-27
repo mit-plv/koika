@@ -4,20 +4,20 @@ Require Import Koika.Frontend.
 Require Import Koika.Std.
 
 Module Type Scoreboard_sig.
-  Parameter lastIdx:nat.
+  Parameter idx_sz:nat.
   Parameter maxScore:nat. (* Usually  maxScore ~= 3/4 *)
 End Scoreboard_sig.
 
 Module Scoreboard (s:Scoreboard_sig).
-  Definition sz:= S s.lastIdx.
+  Definition sz:= s.idx_sz.
   Definition logScore := log2 s.maxScore.
 
-  Module Rf_params <: Rf_sig.
-    Definition lastIdx := s.lastIdx.
+  Module Rf_32 <: RfPow2_sig.
+    Definition idx_sz := sz.
     Definition T := bits_t logScore.
     Definition init := Bits.zeroes logScore.
-  End Rf_params.
-  Module Rf := Rf Rf_params.
+  End Rf_32.
+  Module Rf := RfPow2 Rf_32.
 
   Inductive reg_t := Scores (state: Rf.reg_t).
   Definition R r :=
@@ -38,37 +38,37 @@ Module Scoreboard (s:Scoreboard_sig).
   Definition sat_incr : UInternalFunction reg_t empty_ext_fn_t :=
     {{
         fun (a: bits_t logScore) : bits_t logScore =>
-          if ( a == #(Bits.of_nat logScore s.maxScore)) then fail(logScore)
-          else a + #(Bits.of_nat logScore 1)
+          (* if ( a == #(Bits.of_nat logScore s.maxScore)) then fail(logScore) *)
+          (* else *) a + #(Bits.of_nat logScore 1)
     }}.
 
   Definition sat_decr : UInternalFunction reg_t empty_ext_fn_t :=
     {{
         fun (a: bits_t logScore) : bits_t logScore =>
-          if (a == |logScore`d0|) then fail(logScore)
-          else (a - |logScore`d1|)
+          (* if (a == |logScore`d0|) then fail(logScore) *)
+          (* else *) (a - |logScore`d1|)
     }}.
 
   (* Interface: *)
   Definition insert : UInternalFunction reg_t empty_ext_fn_t :=
     {{
-        fun (idx: bits_t (log2 sz)) : bits_t 0 =>
-          let old_score := Scores.(Rf.read)(idx) in
+        fun (idx: bits_t sz) : bits_t 0 =>
+          let old_score := Scores.(Rf.read_1)(idx) in
           let new_score := sat_incr(old_score) in
-          Scores.(Rf.write)(idx, new_score)
+          Scores.(Rf.write_1)(idx, new_score)
     }}.
 
   Definition remove : UInternalFunction reg_t empty_ext_fn_t :=
     {{
-        fun (idx: bits_t (log2 sz)) : bits_t 0 =>
-          let old_score := Scores.(Rf.read)(idx) in
+        fun (idx: bits_t sz) : bits_t 0 =>
+          let old_score := Scores.(Rf.read_0)(idx) in
           let new_score := sat_decr(old_score) in
-          Scores.(Rf.write)(idx, new_score)
+          Scores.(Rf.write_0)(idx, new_score)
     }}.
 
   Definition search : UInternalFunction reg_t empty_ext_fn_t :=
     {{
-        fun (idx: bits_t (log2 sz)) : bits_t logScore =>
-          Scores.(Rf.read)(idx)
+        fun (idx: bits_t sz) : bits_t logScore =>
+          Scores.(Rf.read_1)(idx)
     }}.
 End Scoreboard.
