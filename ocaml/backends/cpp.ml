@@ -540,8 +540,9 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     let bits_argdecl = sprintf "const %s %s" bits_tau bits_arg in
 
     let p_pack pbody =
-      p_fn ~typ:("static _unused " ^ bits_tau)
-        ~args:(v_argdecl v_arg) ~name:"pack" pbody in
+      p_fn ~typ:("template <> _unused " ^ bits_tau)
+        ~args:(v_argdecl v_arg) ~name:"pack<>" pbody in
+
     let p_unpack pbody =
       let decl = sprintf "template <> struct _unpack<%s, %d>" v_tau v_sz in
       p_scoped decl ~terminator:";" (fun () ->

@@ -659,18 +659,6 @@ namespace prims {
     return tt;
   }
 
-  /// Packing and unpacking
-
-  // Forward-declared; our compiler defines one instance per struct and enum.
-  // Unpack needs to be structs to get return-type polymorphism through
-  // explicit template instantiation.
-  template<typename T, bitwidth sz> struct _unpack;
-
-  template<typename T, bitwidth sz>
-  static T unpack(const bits<sz>& bs) {
-    return _unpack<T, sz>::unpack(bs);
-  }
-
   /// Type info
 
   template<typename T> struct type_info;
@@ -682,6 +670,19 @@ namespace prims {
   template<typename T, size_t len> struct type_info<array<T, len>> {
     static constexpr bitwidth size{len * type_info<T>::size};
   };
+
+  /// Packing and unpacking
+
+  // Forward-declared; our compiler defines one instance per struct and enum.
+  // Unpack needs to be structs to get return-type polymorphism through explicit
+  // template instantiation.  Pack is a struct to make overloading it easier.
+  template<typename T, bitwidth sz> struct _unpack;
+  template<typename T> static bits<type_info<T>::size> pack(const T val);
+
+  template<typename T, bitwidth sz>
+  static T unpack(const bits<sz>& bs) {
+    return _unpack<T, sz>::unpack(bs);
+  }
 
   /// Bits packing and unpacking (no-op, but needed by array packing/unpacking)
 
