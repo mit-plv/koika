@@ -92,13 +92,13 @@ protected:
             // Manually added
             bits<32> current_value = dmem[DAddress.v >> 2];
             if (DAddress.v == 0x40000000 && DEn.v == 0xf) { // PutChar  && DEn.v == 0xf
-              printf("%c", (char) readRequestD.data.v);
+              putchar((char)readRequestD.data.v);
             }
             if (DAddress.v == 0x40001000 && DEn.v == 0xf) {
               exit(readRequestD.data.v);
             }
             // if (DAddress.v == 0xffff4 && DEn.v == 0) { // GetChar
-            //   scanf("%c", (char *) &data.data.v);
+            //   data.data.v = getchar();
             // }
             else {
               data.data = current_value;
