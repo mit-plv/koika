@@ -12,8 +12,10 @@
 #include <type_traits> // For std::conditional_t
 
 #ifndef SIM_MINIMAL
+#include <chrono> // For VCD headers
 #include <iomanip> // For std::setfill
 #include <iostream>
+#include <fstream> // For VCD files
 #endif // #ifndef SIM_MINIMAL
 
 #ifdef SIM_DEBUG
@@ -73,6 +75,10 @@ using wbits_t = void;
 template<std::size_t size>
 using wsbits_t = void;
 #endif // #ifdef NEEDS_BOOST_MULTIPRECISION
+
+namespace cuttlesim {
+  static _unused const char* version = "CuttleSim v0.0.1";
+}
 
 struct unit_t {};
 
@@ -858,6 +864,27 @@ namespace prims {
   template<typename T, size_t len>
   std::ostream& operator<<(std::ostream& os, const array<T, len>& val) {
     return fmt(os, val);
+  }
+
+  namespace vcd {
+    using namespace std::chrono;
+
+    static _unused void header(std::ostream& os) {
+      auto now = system_clock::to_time_t(system_clock::now());
+      os << "$date " << std::ctime(&now) << " $end" << std::endl;
+      os << "$version " << cuttlesim::version << " $end" << std::endl;
+      os << "$timescale 1 ps $end" << std::endl;
+    }
+
+    static _unused void var(std::ostream& os, const std::string& name, const size_t sz) {
+      os << "$var reg " << sz << " " << name << " " << name << " $end";
+    }
+
+    template<typename T>
+    static _unused void dumpvar(std::ostream& os, std::string name, const T& val) {
+      internal::bits_fmt(os, pack(val), fmtstyle::bin, prefixes::minimal);
+      os << " " << name << std::endl;
+    }
   }
 #endif // #ifndef SIM_MINIMAL
 } // namespace prims

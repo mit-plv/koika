@@ -17,7 +17,7 @@ type ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_rule_t = {
 
 type ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_input_t = {
     cpp_classname: string;
-    cpp_header_name: string;
+    cpp_module_name: string;
 
     cpp_pos_of_pos: 'pos_t -> Pos.t;
     cpp_var_names: 'var_t -> string;
@@ -345,6 +345,9 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     pbody ();
     p "#endif" in
 
+  let p_ifnminimal pbody =
+    p_ifdef "ndef SIM_MINIMAL" pbody in
+
   let p_scoped header ?(terminator="") pbody =
     p "%s {" header;
     let r = pbody () in
@@ -527,7 +530,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
      | Enum_t sg -> p_enum_eq sg
      | Struct_t sg -> p_struct_eq sg);
     nl ();
-    p_ifdef "ndef SIM_MINIMAL" (fun () ->
+    p_ifnminimal (fun () ->
         p_ostream_printer ()) in
 
   let p_prims tau =
@@ -617,7 +620,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     iter_sep nl p_operators types;
     nl ();
     p_scoped "namespace prims" (fun () ->
-        p_ifdef "ndef SIM_MINIMAL" (fun () ->
+        p_ifnminimal (fun () ->
             iter_sep nl p_printer types);
         nl ();
         iter_sep nl p_prims types) in
@@ -631,7 +634,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     if program_info.pi_needs_multiprecision then (
       p "#define NEEDS_BOOST_MULTIPRECISION";
       nl ());
-    p "#include \"%s.preamble.hpp\"" hpp.cpp_header_name
+    p "#include \"%s.preamble.hpp\"" hpp.cpp_module_name
   in
 
   let iter_registers f regs =
@@ -654,28 +657,70 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     let p_state_register r =
       p_decl (reg_type r) r.reg_name in
 
-    let p_dump_register r =
-      p "std::cout << \"%s = \" << %s << std::endl;"
-        r.reg_name r.reg_name in
+    let p_state_methods () =
+      let p_dump_register r =
+        p "os << \"%s = \" << %s << std::endl;"
+          r.reg_name r.reg_name in
+      let p_dump () =
+        p_fn ~typ:"void" ~name:"dump" ~annot:" const"
+          ~args:"std::ostream& os = std::cout"
+          (fun () -> iter_all_registers p_dump_register) in
+
+      let p_vcd_decl r =
+        p "os << \"$var reg %d %s %s $end\" << std::endl;"
+          (typ_sz (reg_type r)) r.reg_name r.reg_name in
+      let p_vcd_header () =
+        p_fn ~typ:"static _unused void" ~name:"vcd_header"
+          ~args:"std::ostream& os" (fun () ->
+            p "using namespace std::chrono;
+               auto now = system_clock::to_time_t(system_clock::now());
+               os << \"$date \" << std::put_time(std::gmtime(&now), \"%%FT%%TZ\") << \" $end\" << std::endl;
+               os << \"$version \" << cuttlesim::version << \" $end\" << std::endl;
+               os << \"$timescale 1ps $end\" << std::endl;";
+            p "os << \"$scope module %s $end\" << std::endl;" hpp.cpp_module_name;
+            iter_all_registers p_vcd_decl;
+            p "os << \"$upscope $end\" << std::endl;
+               os << \"$enddefinitions $end\" << std::endl;
+               os << \"$dumpvars\" << std::endl;") in
+
+      let p_dumpvar r =
+        p "prims::vcd::dumpvar(os, \"%s\", %s);"
+          r.reg_name r.reg_name in
+      let p_vcd_dumpvars () =
+        p_fn ~typ:"void" ~name:"vcd_dumpvars" ~args:"std::ostream& os"
+          ~annot:" const" (fun () ->
+            iter_all_registers p_dumpvar) in
+
+      p_ifnminimal (fun () ->
+          p_dump ();
+          nl ();
+          p_vcd_header ();
+          nl ();
+          p_vcd_dumpvars ()) in
 
     let p_state_t () =
       p_scoped "struct state_t" ~terminator:";" (fun () ->
           iter_all_registers p_state_register;
           nl ();
-          p_ifdef "ndef SIM_MINIMAL" (fun () ->
-              p_fn ~typ:"void" ~name:"dump" ~annot:" const" (fun () ->
-                  iter_all_registers p_dump_register))) in
+          p_state_methods ()) in
 
     let p_log_t () =
       let p_decl_log_register r =
         p "reg_log_t<%s> %s;" (cpp_type_of_type (reg_type r)) r.reg_name in
       let p_commit_register r =
         p "%s.commit();" r.reg_name in
+      let p_copy_data0 { reg_name = nm; _ } =
+        p "state.%s = %s.data0;" nm nm in
       p_scoped "struct log_t" ~terminator:";" (fun () ->
           iter_all_registers p_decl_log_register;
           nl ();
           p_fn ~typ:"void" ~name:"commit" (fun () ->
-              iter_all_registers p_commit_register)) in
+              iter_all_registers p_commit_register);
+          nl ();
+          p_fn ~typ:"state_t" ~name:"snapshot" ~annot:" const" (fun () ->
+              p "state_t state{};";
+              iter_all_registers p_copy_data0;
+              p "return state;")) in
 
     let backslash_re =
       Str.regexp "\\\\" in
@@ -976,7 +1021,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     let p_reset () =
       let p_init_data0 { reg_name = nm; _ } =
         p "Log.%s.data0 = init.%s;" nm nm in
-      p_fn ~typ:"void" ~name:"reset" ~args:"const state_t init" (fun () ->
+      p_fn ~typ:"void" ~name:"reset" ~args:"const state_t init = initial_state()" (fun () ->
           iter_all_registers p_init_data0) in
 
     let p_constructor () =
@@ -1003,20 +1048,37 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
           p_scheduler Pos.Unknown hpp.cpp_scheduler;
           p "Log.commit();") in
 
+    let run_typ =
+      sprintf "template<typename T> %s&" hpp.cpp_classname in
+
+    let p_cycle_loop pbody =
+      p_scoped "for (T cycle_id = 0; cycle_id < ncycles; cycle_id++)" pbody in
+
     let p_run () =
-      let typ = sprintf "template<typename T> %s&" hpp.cpp_classname in
-      p_fn ~typ ~name:"run" ~args:"T ncycles" (fun () ->
-          p_scoped "for (T cycle_id = 0; cycle_id < ncycles; cycle_id++)"
-            (fun () -> p "cycle();");
+      p_fn ~typ:run_typ ~name:"run" ~args:"T ncycles" (fun () ->
+          p_cycle_loop (fun () -> p "cycle();");
           p "return *this;") in
 
     let p_snapshot () =
-      let p_copy_data0 { reg_name = nm; _ } =
-        p "state.%s = Log.%s.data0;" nm nm in
       p_fn ~typ:"state_t" ~name:"snapshot" (fun () ->
-          p "state_t state{};";
-          iter_all_registers p_copy_data0;
-          p "return state;") in
+          p "return Log.snapshot();") in
+
+    let p_trace () =
+      p_ifnminimal (fun () ->
+          p_fn ~typ:run_typ ~name:"trace"
+            ~args:"std::string fname, T ncycles, std::size_t period = 1" (fun () ->
+              p "std::ofstream vcd;";
+              p "vcd.open(fname);";
+              p "state_t::vcd_header(vcd);";
+              p "snapshot().vcd_dumpvars(vcd);";
+              p "T next_dump = period;";
+              p_cycle_loop (fun () ->
+                  p "cycle();";
+                  p_scoped "if (next_dump == cycle_id) " (fun () ->
+                      p "vcd << \"#\" << cycle_id << std::endl;";
+                      p "snapshot().vcd_dumpvars(vcd);";
+                      p "next_dump = cycle_id + period;"));
+              p "return *this;")) in
 
     p_sim_class (fun () ->
         p "public:";
@@ -1045,6 +1107,8 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
         p_run ();
         nl ();
         p_snapshot ();
+        nl ();
+        p_trace ();
         nl ()) in
 
   let with_output_to_buffer (pbody: unit -> unit) =
@@ -1069,7 +1133,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     p_comment "%s %s(%s);" typ ffi_name (sp_arg ffi_argtype) in
 
   let p_cpp () =
-    p "#include \"%s.hpp\"" hpp.cpp_header_name;
+    p "#include \"%s.hpp\"" hpp.cpp_module_name;
     nl ();
 
     (match hpp.cpp_extfuns with
@@ -1096,15 +1160,20 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
         p "return simulator.snapshot();");
     nl ();
 
-    p_ifdef "ndef SIM_MINIMAL" (fun () ->
+    p_ifnminimal (fun () ->
         p_fn ~typ:"int" ~name:"main" ~args:"int argc, char** argv" (fun () ->
             p_cpp_decl ~init:"1000" ull "ncycles";
             p_scoped "if (argc >= 2) " (fun () ->
                 p "ncycles = std::stoull(argv[1]);");
             nl ();
-            p "%s snapshot = init_and_run(ncycles);" state_t;
-            p "snapshot.dump();";
-            p "return 0;")) in
+            p_scoped "if (argc >= 3) " (fun () ->
+                p "sim_t simulator{};";
+                p "std::string vcd_fpath = argv[2];";
+                p "simulator.trace(vcd_fpath, ncycles, 1);");
+            p_scoped "else" (fun () ->
+                p "%s snapshot = init_and_run(ncycles);" state_t;
+                p "snapshot.dump();";
+                p "return 0;"))) in
 
   let buf_cpp = with_output_to_buffer p_cpp in
   let buf_hpp = with_output_to_buffer p_hpp in
@@ -1116,7 +1185,7 @@ let cpp_rule_of_action all_regs (rl_name, (kind, rl_body)) =
 
 let input_of_compile_unit (cu: 'f Cuttlebone.Compilation.compile_unit) =
   { cpp_classname = cu.c_modname;
-    cpp_header_name = cu.c_modname;
+    cpp_module_name = cu.c_modname;
     cpp_pos_of_pos = cu.c_pos_of_pos;
     cpp_var_names = (fun x -> x);
     cpp_rule_names = (fun ?prefix:_ rl -> rl);
@@ -1149,7 +1218,7 @@ let input_of_sim_package
   let classname = Cuttlebone.Util.string_of_coq_string kp.koika_module_name in
   let ext_fn_name f = Cuttlebone.Util.string_of_coq_string (sp.sp_ext_fn_names f) in
   { cpp_classname = classname;
-    cpp_header_name = classname;
+    cpp_module_name = classname;
     cpp_pos_of_pos = (fun _ -> Pos.Unknown);
     cpp_var_names = (fun x -> Cuttlebone.Util.string_of_coq_string (kp.koika_var_names.show0 x));
     cpp_rule_names = (fun ?prefix:_ rn ->
