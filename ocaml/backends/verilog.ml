@@ -455,13 +455,13 @@ let generate_ifc (ifc_name:string) (set: SS.t) =
           let read0s = Printf.sprintf "\tmethod Action sread0_%s();\n"  elt.reg_name in
           let read1 = Printf.sprintf "\tmethod Bit#(%d) read1_%s();\n" (typ_sz @@ typ_of_value elt.reg_init) elt.reg_name in
           let read1v = Printf.sprintf "\tmethod Bit#(1) vread1_%s();\n"  elt.reg_name in
-          let read1s = Printf.sprintf "\tmethod Action sread1_%s(Bit#(1) data);\n"  elt.reg_name in
-          let write0 = Printf.sprintf "\tmethod Action write0_%s(Bit#(%d) data);\n" elt.reg_name (typ_sz @@ typ_of_value elt.reg_init) in
+          let read1s = Printf.sprintf "\tmethod Action sread1_%s();\n"  elt.reg_name in
+          let write0 = Printf.sprintf "\t (* always_enabled *) method Action write0_%s(Bit#(%d) data);\n" elt.reg_name (typ_sz @@ typ_of_value elt.reg_init) in
           let write0v = Printf.sprintf "\tmethod Bit#(1) vwrite0_%s();\n" elt.reg_name in
-          let write0s = Printf.sprintf "\tmethod Action swrite0_%s(Bit#(1) data);\n" elt.reg_name in
-          let write1 = Printf.sprintf "\tmethod Action write1_%s(Bit#(%d) data);\n" elt.reg_name (typ_sz @@ typ_of_value elt.reg_init) in
+          let write0s = Printf.sprintf "\tmethod Action swrite0_%s();\n" elt.reg_name in
+          let write1 = Printf.sprintf "\t (* always_enabled *) method Action write1_%s(Bit#(%d) data);\n" elt.reg_name (typ_sz @@ typ_of_value elt.reg_init) in
           let write1v = Printf.sprintf "\tmethod Bit#(1) vwrite1_%s();\n" elt.reg_name in
-          let write1s = Printf.sprintf "\tmethod Action swrite1_%s(Bit#(1) data);\n" elt.reg_name in
+          let write1s = Printf.sprintf "\tmethod Action swrite1_%s();\n" elt.reg_name in
           s ^ read0 ^ read0v ^ read0s ^ read1 ^ read1v ^ read1s ^ write0 ^ write0v ^ write0s ^ write1 ^ write1v ^ write1s)
         set
         ""))
@@ -483,7 +483,7 @@ let generate_wrapper_ifc (ifc_name:string) (ifc: SS.t) =
                         ifc_name
                         elt.reg_name
                         elt.reg_name in
-          let read0s = Printf.sprintf "\t\tmethod  sread0_%s(rule_%s_input_%s_read0);\n"
+          let read0s = Printf.sprintf "\t\tmethod  sread0_%s() enable(rule_%s_input_%s_read0);\n"
                          elt.reg_name
                          ifc_name
                          elt.reg_name in
@@ -495,36 +495,37 @@ let generate_wrapper_ifc (ifc_name:string) (ifc: SS.t) =
                         ifc_name
                         elt.reg_name
                         elt.reg_name in
-          let read1s = Printf.sprintf "\t\tmethod  sread1_%s(rule_%s_input_%s_read1);\n"
+          let read1s = Printf.sprintf "\t\tmethod  sread1_%s() enable(rule_%s_input_%s_read1);\n"
                          elt.reg_name
                          ifc_name
                          elt.reg_name in
-
-          let write0 = Printf.sprintf "\t\tmethod  write0_%s(rule_%s_input_%s_data0);\n"
+          let write0 = Printf.sprintf "\t\tmethod  write0_%s(rule_%s_input_%s_data0) enable((*inhigh*) EN%s0);\n"
                          elt.reg_name
                          ifc_name
-                         elt.reg_name in
+                         elt.reg_name
+                         (ifc_name^elt.reg_name) in
           let write0v = Printf.sprintf "\t\tmethod rule_%s_output_%s_write0 vwrite0_%s();\n"
                         ifc_name
                         elt.reg_name
                         elt.reg_name in
-          let write0s = Printf.sprintf "\t\tmethod  swrite0_%s(rule_%s_input_%s_write0);\n"
+          let write0s = Printf.sprintf "\t\tmethod  swrite0_%s() enable(rule_%s_input_%s_write0);\n"
                          elt.reg_name
                          ifc_name
                          elt.reg_name in
-          let write1 = Printf.sprintf "\t\tmethod  write1_%s(rule_%s_input_%s_data1);\n"
+          let write1 = Printf.sprintf "\t\tmethod  write1_%s(rule_%s_input_%s_data1) enable((*inhigh*) EN%s1);\n"
                          elt.reg_name
                          ifc_name
-                         elt.reg_name in
+                         elt.reg_name
+                         (ifc_name^elt.reg_name) in
           let write1v = Printf.sprintf "\t\tmethod rule_%s_output_%s_write1 vwrite1_%s();\n"
                           ifc_name
                           elt.reg_name
                           elt.reg_name in
-          let write1s = Printf.sprintf "\t\tmethod  swrite1_%s(rule_%s_input_%s_write1);\n"
+          let write1s = Printf.sprintf "\t\tmethod  swrite1_%s() enable(rule_%s_input_%s_write1);\n"
                          elt.reg_name
                          ifc_name
                          elt.reg_name in
-          s ^ read0 ^ read1 ^ write0 ^ write1 ^ read0v ^ read1v ^ write0v ^ write1v ^ read0s ^ read1s ^ write0s ^ write1s)
+          s ^ read0 ^ read1 ^ write1 ^ write0 ^ read0v ^ read1v ^ write0v ^ write1v ^ read0s ^ read1s ^ write0s ^ write1s)
         ifc
         ""))
 
@@ -545,15 +546,25 @@ let generate_list_method (ifc_name:string) (ifc: SS.t) =
         (Printf.sprintf "ifc_%s_read1_%s" ifc_name reg.reg_name) ::
           (Printf.sprintf "ifc_%s_write0_%s" ifc_name reg.reg_name) ::
             (Printf.sprintf "ifc_%s_write1_%s" ifc_name reg.reg_name) ::
+              (Printf.sprintf "ifc_%s_sread0_%s" ifc_name reg.reg_name) ::
+                (Printf.sprintf "ifc_%s_sread1_%s" ifc_name reg.reg_name) ::
+                  (Printf.sprintf "ifc_%s_swrite0_%s" ifc_name reg.reg_name) ::
+                    (Printf.sprintf "ifc_%s_swrite1_%s" ifc_name reg.reg_name) ::
+                      (Printf.sprintf "ifc_%s_vread0_%s" ifc_name reg.reg_name) ::
+                        (Printf.sprintf "ifc_%s_vread1_%s" ifc_name reg.reg_name) ::
+                          (Printf.sprintf "ifc_%s_vwrite0_%s" ifc_name reg.reg_name) ::
+                            (Printf.sprintf "ifc_%s_vwrite1_%s" ifc_name reg.reg_name) ::
               acc) ifc []) ""
 
 let generate_BVI  (module_name: string) (map:  SS.t StringMap.t) =
   let string_methods = StringMap.fold (fun k v accString -> if (String.length(accString) = 0)
                                                             then generate_list_method k v
                                                             else generate_list_method k v ^ ", " ^ accString ) map "" in
+  let can_fire = StringMap.fold (fun rule_name _ accString -> Printf.sprintf "port rule_%s_input__canfire = 1;\n%s" rule_name accString) map "" in
+  (* let ports = Printf.sprintf "port %s = %s;" in *)
   generate_ifcs map
-  ^ Printf.sprintf "\ninterface Ifc%s;\n%sendinterface\n" module_name (StringMap.fold (fun rule_name elt s -> s ^ (Printf.sprintf "interface Ifc%s ifc_%s;\n" rule_name rule_name)) map "")
-  ^ Printf.sprintf "import \"BVI\" %s = module mk%s(Ifc%s); default_clock clk(CLK);\n default_reset rstn(reset);\n%s" module_name module_name module_name (generate_wrapper_ifcs map)
+  ^ Printf.sprintf "\ninterface Ifc%s;\n%sendinterface\n" module_name (StringMap.fold (fun rule_name _ s -> s ^ (Printf.sprintf "interface Ifc%s ifc_%s;\n" rule_name rule_name)) map "")
+  ^ Printf.sprintf "import \"BVI\" %s = module mk%s(Ifc%s);\n default_clock clk(CLK);\n default_reset rstn(reset);\n%s\n%s" module_name module_name module_name can_fire (generate_wrapper_ifcs map)
   ^ Printf.sprintf "\nschedule (%s) CF (%s);\n" string_methods string_methods
   ^ Printf.sprintf "\nendmodule"
 
@@ -570,7 +581,7 @@ let main target_dpath (modname: string) (circuit: circuit_graph) =
     let string_prologue = "module " ^ modname ^ "(" ^ (String.concat ",\n\t" string_io_decls) ^ ");" in
     let string_internal_decls = String.concat "\n" (List.map internal_decl_to_string internal_decls) in
     let string_continous_assignments = String.concat "\n" (List.map (assignment_to_string instance_external_gensym)  continous_assignments) in
-    let string_statements = format_always_block statements in
+    let string_statements = String.concat "\n\n" (List.map (fun s -> format_always_block [s]) statements) in
     let string_epilogue = "endmodule" in
     List.iter (fun s -> output_string out s; output_string out "\n")
       [string_prologue;
