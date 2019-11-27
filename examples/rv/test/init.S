@@ -44,6 +44,8 @@ _start:
   li sp, 0xFFFFF0
 
   call main
+  li x10, 0
+  call exit
 1:
   j 1b
 
