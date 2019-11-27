@@ -74,10 +74,9 @@ let run_backend' backend cnf pkg =
      Backends.Cpp.main cnf.cnf_dst_dpath kd cpp
   | (`Verilog | `Dot) as backend ->
      let graph = Lazy.force pkg.pkg_graph in
-     with_output_to_file (output_fname backend cnf pkg)
-       (match backend with
-        | `Dot -> Backends.Dot.main
-        | `Verilog -> Backends.Verilog.main pkg.pkg_modname) graph
+     match backend with
+     | `Dot -> Backends.Dot.main (output_fname backend cnf pkg) graph
+     | `Verilog -> Backends.Verilog.main cnf.cnf_dst_dpath pkg.pkg_modname graph
 
 let pstderr fmt =
   Printf.kfprintf (fun out -> fprintf out "\n") stderr fmt

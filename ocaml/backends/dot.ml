@@ -148,5 +148,5 @@ let print_dot_file out Graphs.{ graph_roots = roots; graph_nodes = circuits } =
     roots;
   fprintf out "}\n"
 
-let main out g =
-  print_dot_file out g
+let main fpath g =
+  with_output_to_file fpath print_dot_file g

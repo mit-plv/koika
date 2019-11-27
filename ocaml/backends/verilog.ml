@@ -1,3 +1,4 @@
+
 open Common
 open Cuttlebone
 open Cuttlebone.Util
@@ -19,19 +20,54 @@ open Cuttlebone.Graphs
    We also need a clock and a reset signal.
 
  *)
+type kind_io =
+  | Clock
+  | Reset
+  | CanFire of string
+  | InRule of string * Common.reg_signature * Extr.rwdata_field
+  | OutRule of string * Common.reg_signature * Extr.rwdata_field
+  | DebugEn of string
+  | DebugDataIn of string
+  | DebugDataOut of string
+
+let field_to_string (field: Extr.rwdata_field) =
+  match field with
+  | Rwdata_r0 -> "_read0"
+  | Rwdata_r1 -> "_read1"
+  | Rwdata_w0 -> "_write0"
+  | Rwdata_w1 -> "_write1"
+  | Rwdata_data0 -> "_data0"
+  | Rwdata_data1 -> "_data1"
+
+let rwcircuit_to_string (rwc: rwcircuit) =
+  match rwc with
+  | Rwcircuit_rwdata (reg, field) ->
+     reg.reg_name ^ field_to_string field
+  | Rwcircuit_canfire -> "_canfire"
+
+let kind_io_to_string kind_io =
+  match kind_io with
+  | Clock -> "CLK"
+  | Reset -> "reset"
+  | CanFire(rule_name) -> "rule_" ^ rule_name ^ "_input__canfire"
+  | OutRule(rule_name, reg, port_name) -> "rule_"^ rule_name ^ "_output_" ^ reg.reg_name ^ field_to_string port_name
+  | InRule(rule_name, reg, port_name) -> "rule_"^ rule_name ^ "_input_" ^ reg.reg_name ^ field_to_string port_name
+  | DebugDataIn(reg_name) -> reg_name ^ "__overwrite_data"
+  | DebugDataOut(reg_name) -> reg_name ^ "__data"
+  | DebugEn(reg_name)-> reg_name ^ "__overwrite"
 
 type io_decl =
- | Input of string * int
- | Output of string * int
+ | Input of kind_io * int
+ | Output of kind_io * int
 
 let io_decl_to_string (io_decl:io_decl) =
   match io_decl with
   | Input (w, sz) -> if sz = 1
-                     then "input " ^ w
-                     else "input " ^ "[" ^ string_of_int (sz-1) ^ ":0] " ^ w
+                     then "input " ^ kind_io_to_string w
+                     else "input " ^ "[" ^ string_of_int (sz-1) ^ ":0] " ^ kind_io_to_string w
   | Output (w, sz) -> if sz = 1
-                     then "output " ^ w
-                     else "output " ^ "[" ^ string_of_int (sz-1) ^ ":0] " ^ w
+                     then "output " ^ kind_io_to_string w
+                     else "output " ^ "[" ^ string_of_int (sz-1) ^ ":0] " ^ kind_io_to_string w
 
 type io_decls = io_decl list
 
@@ -39,51 +75,40 @@ let io_from_reg ?(debug=false) (root: circuit_root) : io_decls =
   let reg_name = root.root_reg.reg_name in
   let reg_type = reg_type root.root_reg in
   if debug
-  then [Input (reg_name ^ "__overwrite_data", typ_sz reg_type);
-        Input (reg_name ^ "__overwrite", 1);
-        Output (reg_name ^ "__data", typ_sz reg_type) ]
+  then [Input (DebugDataIn reg_name, typ_sz reg_type);
+        Input (DebugEn reg_name, 1);
+        Output (DebugDataOut reg_name, typ_sz reg_type)]
         else []
 
 let clock_and_reset : io_decls =
   [
-    Input ("clock", 1);
-    Input ("reset", 1);
+    Input (Clock, 1);
+    Input (Reset, 1);
   ]
-
-
-let rwcircuit_to_string (rwc: rwcircuit) =
-  match rwc with
-  | Rwcircuit_rwdata (reg, field) ->
-     reg.reg_name ^
-       (match field with
-        | Rwdata_r0 -> "_read0"
-        | Rwdata_r1 -> "_read1"
-        | Rwdata_w0 -> "_write0"
-        | Rwdata_w1 -> "_write1"
-        | Rwdata_data0 -> "_data0"
-        | Rwdata_data1 -> "_data1")
-  | Rwcircuit_canfire -> "_canfire"
 
 let io_from_bundles (c: circuit) =
   match c.node with
   | CBundle (rule_name, regs) ->
      List.flatten
      @@ List.map (fun (reg,_) ->
-                         [ Output("rule_"^rule_name^"_output_"^reg.reg_name^"_data0", typ_sz @@ reg_type reg);
-                           Output("rule_"^rule_name^"_output_"^reg.reg_name^"_data1", typ_sz @@ reg_type reg);
-                           Output("rule_"^rule_name^"_output_"^reg.reg_name^"_read0", 1);
-                           Output("rule_"^rule_name^"_output_"^reg.reg_name^"_read1", 1);
-                           Output("rule_"^rule_name^"_output_"^reg.reg_name^"_write0", 1);
-                           Output("rule_"^rule_name^"_output_"^reg.reg_name^"_write1", 1) ])
+                         [ Output(OutRule(rule_name, reg, Rwdata_data0), typ_sz @@ reg_type reg);
+                           Output(OutRule(rule_name, reg, Rwdata_data1), typ_sz @@ reg_type reg);
+                           Output(OutRule(rule_name, reg, Rwdata_r0), 1);
+                           Output(OutRule(rule_name, reg, Rwdata_r1), 1);
+                           Output(OutRule(rule_name, reg, Rwdata_w0), 1);
+                           Output(OutRule(rule_name, reg, Rwdata_w1), 1);
+                           Input(CanFire(rule_name), 1);
+                           Input(InRule(rule_name, reg, Rwdata_r0),1);
+                           Input(InRule(rule_name, reg, Rwdata_r1),1);
+                           Input(InRule(rule_name, reg, Rwdata_w0),1);
+                           Input(InRule(rule_name, reg, Rwdata_w1),1);
+                           Input(InRule(rule_name, reg, Rwdata_data0), typ_sz @@ reg_type reg);
+                           Input(InRule(rule_name, reg, Rwdata_data1), typ_sz @@ reg_type reg);
+          ])
           regs
 
-  | CBundleRef (size, bundle, rwc) ->
-     begin
-       match bundle.node with
-       | CBundle(rule_name, _) ->
-          [ Input("rule_"^rule_name^ "_input_" ^ rwcircuit_to_string rwc, size) ]
-       | _ -> []
-     end
+  | CBundleRef (_size, _bundle, _rwc) ->
+     []
   | _ -> []
 
 let io_declarations (circuit: circuit_graph) : io_decls =
@@ -327,7 +352,6 @@ let continous_assignments
 
 (* Phase IV: Update of register
 
-
    The update of the registers are done in parallel for all the
    registers: on every rising edge of clock, if reset is high then we
    write the initial value of the register, otherwise if overwrite is
@@ -343,12 +367,12 @@ let statement_to_string ?(debug=false) (statement: statement) =
   let Update (reg, initvalue, net_update) = statement in (* Really we can do that? That's cool *)
   (* So we should compensate with something less cool: *)
   if debug then
-  "\talways @(posedge clock) begin\n\t\tif (reset) begin\n\t\t\t" ^ reg ^ " <= " ^ initvalue ^ ";\n" ^
+  "\talways @(posedge CLK) begin\n\t\tif (!reset) begin\n\t\t\t" ^ reg ^ " <= " ^ initvalue ^ ";\n" ^
     "\t\tend else begin\n" ^ "\t\t\tif (" ^ reg ^ "__overwrite" ^ ") begin\n" ^
       "\t\t\t\t" ^ reg ^ " <= " ^ reg ^ "__overwrite_data" ^ ";\n\t\t\tend else begin\n" ^
         "\t\t\t\t" ^ reg ^ " <= " ^ net_update ^ ";\n\t\t\tend\n\t\tend\n\tend"
   else
-    "\talways @(posedge clock) begin\n\t\tif (reset) begin\n\t\t\t" ^ reg ^ " <= " ^ initvalue ^ ";\n" ^
+    "\talways @(posedge CLK) begin\n\t\tif (!reset) begin\n\t\t\t" ^ reg ^ " <= " ^ initvalue ^ ";\n" ^
     "\t\tend else begin\n" ^
         "\t\t\t\t" ^ reg ^ " <= " ^ net_update ^ ";\n\t\t\tend\n\t\tend\n"
 
@@ -367,17 +391,176 @@ let statements
       Update (reg_name, reg_init, reg_wire_update))
     (circuit.graph_roots)
 
-let main (module_name: string) out (circuit: circuit_graph) =
+(* Generate BSV wrapper *)
+
+module OrderedReg = struct
+  type t = reg_signature
+  let compare (a:reg_signature) (b:reg_signature) =
+    compare (a.reg_name) (b.reg_name)
+end
+module SS = Set.Make(OrderedReg)    (* Set of registers touched by a rule *)
+type maprules =
+  (* A map from rules -> Set of registers *)
+  SS.t StringMap.t
+
+let bsv_ifcs_of_decls (decls: io_decls) =
+  List.fold_right (fun (decl:io_decl) map ->
+      match decl with
+      | Input (k, _sz) -> (match k with
+                          | InRule (rule_name, reg, _) -> StringMap.update
+                                                            rule_name
+                                                            (fun m -> match m with
+                                                                      | Some s -> Some(SS.add reg s)
+                                                                      | None -> Some(SS.add reg SS.empty))
+                                                            map
+                          | _ -> map)
+      | Output (k, _sz) -> (match k with
+                           | OutRule (rule_name, reg, _) ->  StringMap.update
+                                                               rule_name
+                                                               (fun m -> match m with
+                                                                         | Some s -> Some(SS.add reg s)
+                                                                         | None -> Some(SS.add reg SS.empty))
+                                                               map
+                           | _ -> map)
+    ) decls StringMap.empty
+
+let generate_ifc (ifc_name:string) (set: SS.t) =
+  (Printf.sprintf
+     "interface Ifc%s;\n%sendinterface\n"
+     ifc_name
+     (SS.fold
+        (fun elt s ->
+          let read0 = Printf.sprintf "\tmethod Bit#(%d) read0_%s();\n" (typ_sz @@ typ_of_value elt.reg_init) elt.reg_name in
+          let read0v = Printf.sprintf "\tmethod Bit#(1) vread0_%s();\n"  elt.reg_name in
+          let read0s = Printf.sprintf "\tmethod Action sread0_%s();\n"  elt.reg_name in
+          let read1 = Printf.sprintf "\tmethod Bit#(%d) read1_%s();\n" (typ_sz @@ typ_of_value elt.reg_init) elt.reg_name in
+          let read1v = Printf.sprintf "\tmethod Bit#(1) vread1_%s();\n"  elt.reg_name in
+          let read1s = Printf.sprintf "\tmethod Action sread1_%s(Bit#(1) data);\n"  elt.reg_name in
+          let write0 = Printf.sprintf "\tmethod Action write0_%s(Bit#(%d) data);\n" elt.reg_name (typ_sz @@ typ_of_value elt.reg_init) in
+          let write0v = Printf.sprintf "\tmethod Bit#(1) vwrite0_%s();\n" elt.reg_name in
+          let write0s = Printf.sprintf "\tmethod Action swrite0_%s(Bit#(1) data);\n" elt.reg_name in
+          let write1 = Printf.sprintf "\tmethod Action write1_%s(Bit#(%d) data);\n" elt.reg_name (typ_sz @@ typ_of_value elt.reg_init) in
+          let write1v = Printf.sprintf "\tmethod Bit#(1) vwrite1_%s();\n" elt.reg_name in
+          let write1s = Printf.sprintf "\tmethod Action swrite1_%s(Bit#(1) data);\n" elt.reg_name in
+          s ^ read0 ^ read0v ^ read0s ^ read1 ^ read1v ^ read1s ^ write0 ^ write0v ^ write0s ^ write1 ^ write1v ^ write1s)
+        set
+        ""))
+
+let generate_ifcs (map:  SS.t StringMap.t) =
+  StringMap.fold (fun rule_name elt s -> s ^ generate_ifc rule_name elt) map ""
+
+let generate_wrapper_ifc (ifc_name:string) (ifc: SS.t) =
+  (Printf.sprintf
+     "\tinterface Ifc%s ifc_%s;\n%sendinterface\n"
+     ifc_name ifc_name
+     (SS.fold
+        (fun elt s ->
+          let read0 = Printf.sprintf "\t\tmethod rule_%s_output_%s_data0 read0_%s();\n"
+                        ifc_name
+                        elt.reg_name
+                        elt.reg_name in
+          let read0v = Printf.sprintf "\t\tmethod rule_%s_output_%s_read0 vread0_%s();\n"
+                        ifc_name
+                        elt.reg_name
+                        elt.reg_name in
+          let read0s = Printf.sprintf "\t\tmethod  sread0_%s(rule_%s_input_%s_read0);\n"
+                         elt.reg_name
+                         ifc_name
+                         elt.reg_name in
+          let read1 = Printf.sprintf "\t\tmethod rule_%s_output_%s_data1 read1_%s();\n"
+                        ifc_name
+                        elt.reg_name
+                        elt.reg_name in
+          let read1v = Printf.sprintf "\t\tmethod rule_%s_output_%s_read1 vread1_%s();\n"
+                        ifc_name
+                        elt.reg_name
+                        elt.reg_name in
+          let read1s = Printf.sprintf "\t\tmethod  sread1_%s(rule_%s_input_%s_read1);\n"
+                         elt.reg_name
+                         ifc_name
+                         elt.reg_name in
+
+          let write0 = Printf.sprintf "\t\tmethod  write0_%s(rule_%s_input_%s_data0);\n"
+                         elt.reg_name
+                         ifc_name
+                         elt.reg_name in
+          let write0v = Printf.sprintf "\t\tmethod rule_%s_output_%s_write0 vwrite0_%s();\n"
+                        ifc_name
+                        elt.reg_name
+                        elt.reg_name in
+          let write0s = Printf.sprintf "\t\tmethod  swrite0_%s(rule_%s_input_%s_write0);\n"
+                         elt.reg_name
+                         ifc_name
+                         elt.reg_name in
+          let write1 = Printf.sprintf "\t\tmethod  write1_%s(rule_%s_input_%s_data1);\n"
+                         elt.reg_name
+                         ifc_name
+                         elt.reg_name in
+          let write1v = Printf.sprintf "\t\tmethod rule_%s_output_%s_write1 vwrite1_%s();\n"
+                          ifc_name
+                          elt.reg_name
+                          elt.reg_name in
+          let write1s = Printf.sprintf "\t\tmethod  swrite1_%s(rule_%s_input_%s_write1);\n"
+                         elt.reg_name
+                         ifc_name
+                         elt.reg_name in
+          s ^ read0 ^ read1 ^ write0 ^ write1 ^ read0v ^ read1v ^ write0v ^ write1v ^ read0s ^ read1s ^ write0s ^ write1s)
+        ifc
+        ""))
+
+(* What is left to do on that side: create the port for the rdy *)
+(* Hard wire the canfire to 1 *)
+
+let generate_wrapper_ifcs (map:  SS.t StringMap.t) =
+  StringMap.fold (fun rule_name elt s -> s ^ "\n" ^ generate_wrapper_ifc rule_name elt) map ""
+
+let generate_list_method (ifc_name:string) (ifc: SS.t) =
+  List.fold_right (fun el accString ->
+      if String.length(accString) = 0
+      then el
+      else el ^ ", " ^ accString
+    )
+    (SS.fold (fun reg acc ->
+      (Printf.sprintf "ifc_%s_read0_%s" ifc_name reg.reg_name) ::
+        (Printf.sprintf "ifc_%s_read1_%s" ifc_name reg.reg_name) ::
+          (Printf.sprintf "ifc_%s_write0_%s" ifc_name reg.reg_name) ::
+            (Printf.sprintf "ifc_%s_write1_%s" ifc_name reg.reg_name) ::
+              acc) ifc []) ""
+
+let generate_BVI  (module_name: string) (map:  SS.t StringMap.t) =
+  let string_methods = StringMap.fold (fun k v accString -> if (String.length(accString) = 0)
+                                                            then generate_list_method k v
+                                                            else generate_list_method k v ^ ", " ^ accString ) map "" in
+  generate_ifcs map
+  ^ Printf.sprintf "\ninterface Ifc%s;\n%sendinterface\n" module_name (StringMap.fold (fun rule_name elt s -> s ^ (Printf.sprintf "interface Ifc%s ifc_%s;\n" rule_name rule_name)) map "")
+  ^ Printf.sprintf "import \"BVI\" %s = module mk%s(Ifc%s); default_clock clk(CLK);\n default_reset rstn(reset);\n%s" module_name module_name module_name (generate_wrapper_ifcs map)
+  ^ Printf.sprintf "\nschedule (%s) CF (%s);\n" string_methods string_methods
+  ^ Printf.sprintf "\nendmodule"
+
+let main target_dpath (modname: string) (circuit: circuit_graph) =
   let environment = Hashtbl.create 50 in
   let instance_external_gensym = ref 0 in
-  let io_decls = io_declarations circuit in
+  let io_decls = List.sort_uniq (fun x y -> compare x y) @@ io_declarations circuit in
+  let bsv_ifcs = bsv_ifcs_of_decls io_decls in
   let internal_decls = internal_declarations environment circuit in
   let continous_assignments = continous_assignments environment circuit in
   let string_io_decls = (List.map io_decl_to_string io_decls) in
   let statements = statements environment circuit in
-  let string_prologue = "module " ^ module_name ^ "(" ^ (String.concat ",\n\t" string_io_decls) ^ ");" in
-  let string_internal_decls = String.concat "\n" (List.map internal_decl_to_string internal_decls) in
-  let string_continous_assignments = String.concat "\n" (List.map (assignment_to_string instance_external_gensym)  continous_assignments) in
-  let string_statements = String.concat "\n" (List.map statement_to_string statements) in
-  let string_epilogue = "endmodule" in
-  output_string out (String.concat "\n" [string_prologue; string_internal_decls; string_continous_assignments; string_statements; string_epilogue])
+  let print_verilog out () =
+    let string_prologue = "module " ^ modname ^ "(" ^ (String.concat ",\n\t" string_io_decls) ^ ");" in
+    let string_internal_decls = String.concat "\n" (List.map internal_decl_to_string internal_decls) in
+    let string_continous_assignments = String.concat "\n" (List.map (assignment_to_string instance_external_gensym)  continous_assignments) in
+    let string_statements = String.concat "\n" (List.map statement_to_string statements) in
+    let string_epilogue = "endmodule" in
+    List.iter (fun s -> output_string out s; output_string out "\n")
+      [string_prologue;
+       string_internal_decls;
+       string_continous_assignments;
+       string_statements;
+       string_epilogue] in
+  let print_bsv out () =
+    output_string out (generate_BVI modname bsv_ifcs) in
+  with_output_to_file (Filename.concat target_dpath (modname ^ "_verilog.v"))
+    print_verilog ();
+  with_output_to_file (Filename.concat target_dpath (modname ^ ".bsv"))
+    print_bsv ();
