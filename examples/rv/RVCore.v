@@ -648,7 +648,7 @@ Module  RV32ICore.
           | Ob~1~0~0 => set data := zeroExtend(mem_data[|5`d0|:+8],32)
           | Ob~1~0~1 => set data := zeroExtend(mem_data[|5`d0|:+16],32)
           | Ob~0~1~0 => set data := mem_data      (* Load Word *)
-          return default: pass                   (* Load Double or Signed Word *)
+          return default: fail                   (* Load Double or Signed Word *)
           end
         else
           pass;
