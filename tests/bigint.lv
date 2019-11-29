@@ -1,11 +1,16 @@
 ;;; Computations with large bitvectors (the simulator uses boost for >64 bits)
 
-(module uint128
-  (register r 128'1)
+(module bigint
+  (register r128 128'1)
+  (register r256 256'1)
 
-  (rule rotate1
-    (let ((r (read.0 r)))
-      (write.0 r (+ (<< r 7'1) (+ 128'15 (zextl 128 (sel r 7'127)))))))
+  (rule rotate128
+    (let ((r128 (read.0 r128)))
+      (write.0 r128 (+ (<< r128 7'1) (+ 128'15 (zextl 128 (sel r128 7'127)))))))
+
+  (rule rotate256
+    (let ((r256 (read.0 r256)))
+      (write.0 r256 (+ (<< r256 7'1) (+ 256'15 (zextl 256 (sel r256 8'255)))))))
 
   (scheduler main
-    (sequence rotate1)))
+    (sequence rotate128 rotate256)))
