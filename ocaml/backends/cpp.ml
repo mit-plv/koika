@@ -1137,20 +1137,23 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     let typ = cpp_type_of_type ffi_rettype in
     p_comment "%s %s(%s);" typ ffi_name (sp_arg ffi_argtype) in
 
+  let p_extfuns_stub () =
+    p_scoped "class extfuns" ~terminator:";" (fun () ->
+        p "public:";
+        p_comment "External methods (if any) should be implemented here.";
+        p_comment "Approximate signatures are provided below for convenience.";
+        let fns = List.of_seq (Hashtbl.to_seq_keys program_info.pi_ext_funcalls) in
+        List.iter p_extfun_decl (List.sort compare fns)) in
+
   let p_cpp () =
     p "#include \"%s.hpp\"" hpp.cpp_module_name;
     nl ();
 
-    (match hpp.cpp_extfuns with
-     | Some cpp -> p "%s" cpp
-     | None ->
-        p_scoped "class extfuns" ~terminator:";" (fun () ->
-            p "public:";
-            p_comment "External methods (if any) should be implemented here.";
-            if Hashtbl.length program_info.pi_ext_funcalls > 0 then
-              (p_comment "Approximate signatures are provided below for convenience.";
-               let fns = List.of_seq (Hashtbl.to_seq_keys program_info.pi_ext_funcalls) in
-               List.iter p_extfun_decl (List.sort compare fns))));
+    let extfuns =
+      match hpp.cpp_extfuns with
+      | Some cpp -> p "%s" cpp; "extfuns"
+      | None -> if Hashtbl.length program_info.pi_ext_funcalls = 0 then "unit"
+                else (p_extfuns_stub (); "extfuns") in
     nl ();
 
     p "using simulator = %s<%s>;" hpp.cpp_classname extfuns;
