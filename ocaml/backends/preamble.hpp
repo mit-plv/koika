@@ -962,12 +962,11 @@ namespace cuttlesim {
       return ok;
     }
 
-    T commit() {
+    void commit() {
       if (_unlikely(rwset.w1)) {
         data0 = data1;
       }
       rwset.reset();
-      return data0;
     }
 
     // Removing this constructor causes collatz's performance to drop 5x with GCC
