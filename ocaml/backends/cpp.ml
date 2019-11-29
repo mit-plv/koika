@@ -710,15 +710,15 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     let p_log_t () =
       let p_decl_log_register r =
         p "cuttlesim::reg_log_t<%s> %s;" (cpp_type_of_type (reg_type r)) r.reg_name in
-      let p_commit_register r =
-        p "%s.commit();" r.reg_name in
+      let p_reset_register r =
+        p "%s.reset();" r.reg_name in
       let p_copy_data0 { reg_name = nm; _ } =
-        p "state.%s = %s.data0;" nm nm in
+        p "state.%s = %s.data;" nm nm in
       p_scoped "struct log_t" ~terminator:";" (fun () ->
           iter_all_registers p_decl_log_register;
           nl ();
-          p_fn ~typ:"void" ~name:"commit" (fun () ->
-              iter_all_registers p_commit_register);
+          p_fn ~typ:"void" ~name:"reset" (fun () ->
+              iter_all_registers p_reset_register);
           nl ();
           p_fn ~typ:"state_t" ~name:"snapshot" ~annot:" const" (fun () ->
               p "state_t state{};";
@@ -1025,7 +1025,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
 
     let p_reset () =
       let p_init_data0 { reg_name = nm; _ } =
-        p "Log.%s.data0 = init.%s;" nm nm in
+        p "Log.%s.data = init.%s;" nm nm in
       p_fn ~typ:"void" ~name:"reset" ~args:"const state_t init = initial_state()" (fun () ->
           iter_all_registers p_init_data0) in
 
@@ -1050,8 +1050,8 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
 
     let p_cycle () =
       p_fn ~typ:"void" ~name:"cycle" (fun () ->
-          p_scheduler Pos.Unknown hpp.cpp_scheduler;
-          p "Log.commit();") in
+          p "Log.reset();";
+          p_scheduler Pos.Unknown hpp.cpp_scheduler) in
 
     let run_typ =
       sprintf "template<typename T> %s&" hpp.cpp_classname in

@@ -931,46 +931,41 @@ namespace cuttlesim {
     // Reset alignment to prevent Clang from packing the fields together
     // This yielded a ~25x speedup when rwset was inline
     unsigned : 0;
-    T data0;
-    unsigned : 0;
-    T data1;
+    T data;
 
     [[nodiscard]] bool read0(T* const target, const reg_log_t rL) {
       bool ok = rwset.may_read0(rL.rwset);
-      *target = rL.data0;
+      *target = rL.data;
       return ok;
     }
 
     [[nodiscard]] bool read1(T* const target, const reg_log_t rL) {
       bool ok = rwset.may_read1(rL.rwset);
-      *target = data0;
+      *target = data;
       rwset.r1 = true;
       return ok;
     }
 
     [[nodiscard]] bool write0(const T val, const reg_log_t rL) {
       bool ok = rwset.may_write0(rL.rwset);
-      data0 = val;
+      data = val;
       rwset.w0 = true;
       return ok;
     }
 
     [[nodiscard]] bool write1(const T val, const reg_log_t rL) {
       bool ok = rwset.may_write1(rL.rwset);
-      data1 = val;
+      data = val;
       rwset.w1 = true;
       return ok;
     }
 
-    void commit() {
-      if (_unlikely(rwset.w1)) {
-        data0 = data1;
-      }
+    void reset() {
       rwset.reset();
     }
 
     // Removing this constructor causes collatz's performance to drop 5x with GCC
-    reg_log_t() : rwset{}, data0{}, data1{} {} // NOLINT(readability-redundant-member-init)
+    reg_log_t() : rwset{}, data{} {} // NOLINT(readability-redundant-member-init)
   };
 
 #ifndef SIM_MINIMAL
