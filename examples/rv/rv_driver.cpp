@@ -18,7 +18,7 @@ public:
   }
 
 protected:
-  virtual bool rule_ExternalI() {
+  virtual bool rule_ExternalI() noexcept {
     reset_ExternalI();
 
     /* bind */ {
@@ -64,7 +64,7 @@ protected:
     return true;
   }
 
-  virtual bool rule_ExternalD() {
+  virtual bool rule_ExternalD() noexcept {
     reset_ExternalD();
 
     /* bind */ {

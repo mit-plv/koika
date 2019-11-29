@@ -993,19 +993,21 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
       and p_assign_and_ignore target expr =
         ignore (p_assign_expr target expr) in
 
+      let annot = " noexcept" in
+      let main = hpp.cpp_rule_names rule.rl_name in
       let reset = hpp.cpp_rule_names ~prefix:"reset" rule.rl_name in
       let commit = hpp.cpp_rule_names ~prefix:"commit" rule.rl_name in
 
       let virtual_flag =
         if rule.rl_external then "virtual " else "" in
 
-      p_fn ~typ:(virtual_flag ^ "void") ~name:reset p_reset;
+      p_fn ~typ:(virtual_flag ^ "void") ~name:reset ~annot p_reset;
       nl ();
 
-      p_fn ~typ:(virtual_flag ^ "void") ~name:commit p_commit;
+      p_fn ~typ:(virtual_flag ^ "void") ~name:commit ~annot p_commit;
       nl ();
 
-      p_fn ~typ:(virtual_flag ^ "bool") ~name:(hpp.cpp_rule_names rule.rl_name) (fun () ->
+      p_fn ~typ:(virtual_flag ^ "bool") ~name:main ~annot (fun () ->
           p "%s();" reset;
           nl ();
           p_assign_and_ignore NoTarget (p_action Pos.Unknown NoTarget rule.rl_body);
