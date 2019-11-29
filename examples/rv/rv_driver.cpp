@@ -5,16 +5,15 @@
 
 #define DMEM_SIZE (static_cast<std::size_t>(1) << 30)
 
-class extfuns {};
-using sim_t = module_rv32i_core_pipelined<extfuns>;
+using simulator = module_rv32i_core_pipelined<unit>;
 
-class rv_core : public sim_t {
+class rv_core : public simulator {
   std::unique_ptr<bits<32>[]> dmem;
 
 public:
   explicit rv_core(const std::string& elf_fpath)
     // Use new … instead of make_unique to avoid 0-initialization
-    : sim_t{}, dmem(new bits<32>[DMEM_SIZE]) {
+    : simulator{}, dmem(new bits<32>[DMEM_SIZE]) {
     elf_load(reinterpret_cast<uint32_t*>(dmem.get()), elf_fpath.c_str());
   }
 
@@ -133,8 +132,10 @@ protected:
 
 };
 
-#ifndef SIM_MINIMAL
-int main(int argc, char **argv) {
+#ifdef SIM_MINIMAL
+template simulator::state_t cuttlesim::init_and_run<simulator>(int);
+#else
+int main(int argc, char** argv) {
   if (argc <= 1) {
     std::cerr << "Usage: ./rv_core elf_file [number_cycles [vcd_path [vcd_period]]]" << std::endl;
     return 1;
@@ -142,7 +143,6 @@ int main(int argc, char **argv) {
 
   setbuf(stdout, NULL);
   std::ios_base::sync_with_stdio(false);
-  cuttlesim::toplevel<rv_core> top(argv[1]);
-  return top.main(argc - 1, argv + 1);
+  cuttlesim::main<rv_core>(argc - 1, argv + 1, argv[1]);
 }
 #endif

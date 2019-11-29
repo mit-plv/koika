@@ -345,6 +345,9 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     pbody ();
     p "#endif" in
 
+  let p_ifminimal pbody =
+    p_ifdef "def SIM_MINIMAL" pbody in
+
   let p_ifnminimal pbody =
     p_ifdef "ndef SIM_MINIMAL" pbody in
 
@@ -1148,10 +1151,14 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
                List.iter p_extfun_decl (List.sort compare fns))));
     nl ();
 
-    p_ifnminimal (fun () ->
+    p "using simulator = %s<%s>;" hpp.cpp_classname extfuns;
+    nl ();
+
+    p_ifminimal (fun () ->
+        p "template simulator::state_t cuttlesim::init_and_run<simulator>(int);";
+        p "#else";
         p_fn ~typ:"int" ~name:"main" ~args:"int argc, char** argv" (fun () ->
-            p "cuttlesim::toplevel<%s<extfuns>> top{};" hpp.cpp_classname;
-            p "return top.main(argc, argv);")) in
+            p "return cuttlesim::main<simulator>(argc, argv);")) in
 
   let buf_cpp = with_output_to_buffer p_cpp in
   let buf_hpp = with_output_to_buffer p_hpp in

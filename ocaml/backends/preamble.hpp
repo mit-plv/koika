@@ -973,71 +973,59 @@ namespace cuttlesim {
     reg_log_t() : rwset{}, data0{}, data1{} {} // NOLINT(readability-redundant-member-init)
   };
 
-  template<typename sim_t>
-  class toplevel {
-  public:
-    sim_t simulator;
-
 #ifndef SIM_MINIMAL
-    struct params {
-      using ull = unsigned long long int;
-      bool trace;
-      std::string vcd_fpath;
-      ull trace_period;
-      ull ncycles;
+  struct params {
+    using ull = unsigned long long int;
+    bool trace;
+    std::string vcd_fpath;
+    ull trace_period;
+    ull ncycles;
 
-      static params of_cli(int argc, char **argv) {
-        params parsed = {
-          .trace = false,
-          .vcd_fpath = {},
-          .trace_period = 0,
-          .ncycles = 1000
-        };
+    static params of_cli(int argc, char **argv) {
+      params parsed = {
+        .trace = false,
+        .vcd_fpath = {},
+        .trace_period = 0,
+        .ncycles = 1000
+      };
 
-        if (argc > 1) {
-          parsed.ncycles = std::stoull(argv[1]);
-        }
-
-        if (argc > 2) {
-          parsed.trace = true;
-          parsed.vcd_fpath = argv[2];
-        }
-
-        if (argc > 3) {
-          parsed.trace_period = std::stoull(argv[3]);
-        }
-
-        return parsed;
-      }
-    };
-
-    int main(int argc, char **argv) {
-      auto params = params::of_cli(argc, argv);
-
-      if (params.trace) {
-        simulator.trace(params.vcd_fpath, params.ncycles, 1);
-      } else {
-        simulator.run(params.ncycles);
-        simulator.snapshot().dump();
+      if (argc > 1) {
+        parsed.ncycles = std::stoull(argv[1]);
       }
 
-      return 0;
-    }
-#else
-    // This definition is there to look at the generated assembly
-    typename sim_t::state_t init_and_run(unsigned long long int ncycles) {
-      sim_t simulator{};
-      return simulator.run(ncycles).snapshot().dump();
-    }
+      if (argc > 2) {
+        parsed.trace = true;
+        parsed.vcd_fpath = argv[2];
+      }
 
-    int main(int /*unused*/, char** /*unused*/) {
-      return 0;
-    }
-#endif
+      if (argc > 3) {
+        parsed.trace_period = std::stoull(argv[3]);
+      }
 
-    template <typename... Args>
-    toplevel(Args &&... args) : simulator(std::forward<Args>(args)...) {}
+      return parsed;
+    }
   };
+
+  template<typename simulator, typename... Args>
+  static _unused int main(int argc, char **argv, Args&&... args) {
+    auto params = params::of_cli(argc, argv);
+
+    simulator sim(std::forward<Args>(args)...);
+    if (params.trace) {
+      sim.trace(params.vcd_fpath, params.ncycles, 1);
+    } else {
+      sim.run(params.ncycles).snapshot().dump();
+    }
+
+    return 0;
+  }
+#else
+  // This definition is here to look at the generated assembly
+  template <typename simulator, typename... Args>
+  typename simulator::state_t init_and_run(int ncycles, Args&&... args) noexcept {
+    return simulator(std::forward<Args>(args)...).run(ncycles).snapshot();
+  }
+#endif
 } // namespace cuttlesim
 
 #define CHECK_RETURN(can_fire) { if (!(can_fire)) { return false; } }
