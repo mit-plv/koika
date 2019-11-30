@@ -21,37 +21,33 @@ protected:
   virtual bool rule_ExternalI() noexcept {
     reset_ExternalI();
 
-    /* bind */ {
-      struct_mem_req readRequestI;
+    {
       bits<1> _c0;
-      CHECK_RETURN(log.toIMem_valid0.read0(&_c0, Log.toIMem_valid0));
-      if (bool(_c0)) {
-        CHECK_RETURN(log.toIMem_valid0.write0(1'0_b, Log.toIMem_valid0));
-        CHECK_RETURN(log.toIMem_data0.read0(&readRequestI, Log.toIMem_data0));
+      READ0(toIMem_valid0, &_c0);
+      if (_c0) {
+        WRITE0(toIMem_valid0, 1'0_b);
       } else {
         return false;
       }
-      /* bind */ {
+      struct_mem_req readRequestI;
+      READ0(toIMem_data0, &readRequestI);
+      {
         bits<32> IAddress = readRequestI.addr;
-        /* bind */ {
+        {
           bits<4> IEn = readRequestI.byte_en;
-          /* bind */ {
-            struct_mem_resp _x3 =
-              prims::unpack<struct_mem_resp, 68>(0x68'000000000_x);
-            _x3.byte_en = IEn;
-            struct_mem_resp _x2 = _x3;
-            _x2.addr = IAddress;
-            struct_mem_resp data = _x2;
-            // Manually added
+          {
+            struct_mem_resp data = struct_mem_resp{};
+            data.byte_en = IEn;
+            data.addr = IAddress;
+            // -- Manually added --
             bits<32> current_value = dmem[IAddress.v >> 2];
             data.data = current_value;
-            bits<1> _x6;
-            CHECK_RETURN(log.fromIMem_valid0.read0(&_x6, Log.fromIMem_valid0));
-            if (bool(~(_x6))) {
-              CHECK_RETURN(
-                           log.fromIMem_data0.write0(data, Log.fromIMem_data0));
-              CHECK_RETURN(
-                           log.fromIMem_valid0.write0(1'1_b, Log.fromIMem_valid0));
+            // --------------------
+            bits<1> _x2;
+            READ0(fromIMem_valid0, &_x2);
+            if (~(_x2)) {
+              WRITE0(fromIMem_data0, data);
+              WRITE0(fromIMem_valid0, 1'1_b);
             } else {
               return false;
             }
@@ -67,36 +63,33 @@ protected:
   virtual bool rule_ExternalD() noexcept {
     reset_ExternalD();
 
-    /* bind */ {
-      struct_mem_req readRequestD;
+    {
       bits<1> _c0;
-      CHECK_RETURN(log.toDMem_valid0.read0(&_c0, Log.toDMem_valid0));
-      if (bool(_c0)) {
-        CHECK_RETURN(log.toDMem_valid0.write0(1'0_b, Log.toDMem_valid0));
-        CHECK_RETURN(log.toDMem_data0.read0(&readRequestD, Log.toDMem_data0));
+      READ0(toDMem_valid0, &_c0);
+      if (_c0) {
+        WRITE0(toDMem_valid0, 1'0_b);
       } else {
         return false;
       }
-      /* bind */ {
+      struct_mem_req readRequestD;
+      READ0(toDMem_data0, &readRequestD);
+      {
         bits<32> DAddress = readRequestD.addr;
-        /* bind */ {
+        {
           bits<4> DEn = readRequestD.byte_en;
-          /* bind */ {
-            struct_mem_resp _x3 =
-              prims::unpack<struct_mem_resp, 68>(0x68'000000000_x);
-            _x3.byte_en = DEn;
-            struct_mem_resp _x2 = _x3;
-            _x2.addr = DAddress;
-            struct_mem_resp data = _x2;
-            // Manually added
+          {
+            struct_mem_resp data = struct_mem_resp{};
+            data.byte_en = DEn;
+            data.addr = DAddress;
+
+            // -- Manually added --
             bits<32> current_value = dmem[DAddress.v >> 2];
             if (DAddress.v == 0x40000000 && DEn.v == 0xf) { // PutChar  && DEn.v == 0xf
               putchar((char)readRequestD.data.v);
+            } else if (DAddress.v == 0x40001000 && DEn.v == 0xf) {
+              std::exit(readRequestD.data.v);
             }
-            if (DAddress.v == 0x40001000 && DEn.v == 0xf) {
-              exit(readRequestD.data.v);
-            }
-            // if (DAddress.v == 0xffff4 && DEn.v == 0) { // GetChar
+            // else if (DAddress.v == 0xffff4 && DEn.v == 0) { // GetChar
             //   data.data.v = getchar();
             // }
             else {
@@ -111,13 +104,13 @@ protected:
               | (DEn[2'1_d].v == 1 ? (readRequestD.data & mask1) : (current_value & mask1))
               | (DEn[2'2_d].v == 1 ? (readRequestD.data & mask2) : (current_value & mask2))
               | (DEn[2'3_d].v == 1 ? (readRequestD.data & mask3) : (current_value & mask3));
-            bits<1> _x6;
-            CHECK_RETURN(log.fromDMem_valid0.read0(&_x6, Log.fromDMem_valid0));
-            if (bool(~(_x6))) {
-              CHECK_RETURN(
-                           log.fromDMem_data0.write0(data, Log.fromDMem_data0));
-              CHECK_RETURN(
-                           log.fromDMem_valid0.write0(1'1_b, Log.fromDMem_valid0));
+            // --------------------
+
+            bits<1> _x2;
+            READ0(fromDMem_valid0, &_x2);
+            if (~(_x2)) {
+              WRITE0(fromDMem_data0, data);
+              WRITE0(fromDMem_valid0, 1'1_b);
             } else {
               return false;
             }
