@@ -1,5 +1,7 @@
 (*! ORAAT | Proof of the One-rule-at-a-time theorem !*)
-Require Import Koika.Common Koika.Syntax Koika.TypedSyntax Koika.SemanticProperties.
+Require Import
+        Koika.Common Koika.Syntax Koika.TypedSyntax
+        Koika.TypedSyntaxTools Koika.SemanticProperties.
 Require Import Coq.setoid_ring.Ring_theory Coq.setoid_ring.Ring Coq.setoid_ring.Ring.
 
 Open Scope bool_scope.
@@ -262,14 +264,6 @@ Section Proof.
         rewrite Heq'; eauto.
     - (* SPos *) eauto.
   Qed.
-
-  Fixpoint scheduler_rules (s: scheduler) :=
-    match s with
-    | Done => []
-    | Cons r s => r :: scheduler_rules s
-    | Try r s1 s2 => r :: scheduler_rules s1 ++ scheduler_rules s2
-    | SPos _ s => scheduler_rules s
-    end.
 
   Lemma scheduler_trace_in_scheduler :
     forall s log l0 rs,
