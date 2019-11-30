@@ -894,24 +894,111 @@ using prims::unit;
 using prims::bits;
 using namespace prims::literals;
 namespace cuttlesim {
-  struct rwset_t {
+  struct reg_rwset {
+    bool w0 : 1;
+
+    bool may_read0(reg_rwset rL) {
+      return !(rL.w0);
+    }
+
+    bool may_write0(reg_rwset /*unused*/) {
+      return !(w0);
+    }
+
+    void reset() {
+      w0 = false;
+    }
+
+    reg_rwset() : w0{} {}
+  };
+
+  template<typename T>
+  struct reg_log {
+    reg_rwset rwset;
+
+    unsigned : 0;
+    T data;
+
+    [[nodiscard]] bool read0(T* const target, const reg_log rL) {
+      bool ok = rwset.may_read0(rL.rwset);
+      *target = rL.data;
+      return ok;
+    }
+
+    [[nodiscard]] bool write0(const T val, const reg_log rL) {
+      bool ok = rwset.may_write0(rL.rwset);
+      data = val;
+      rwset.w0 = true;
+      return ok;
+    }
+
+    void reset() {
+      rwset.reset();
+    }
+
+    reg_log() : rwset{}, data{} {} // NOLINT(readability-redundant-member-init)
+  };
+
+  struct wire_rwset {
+    bool r1 : 1;
+    bool w0 : 1;
+
+    bool may_write0(wire_rwset /*unused*/) {
+      return !(r1 || w0);
+    }
+
+    void reset() {
+      r1 = w0 = false;
+    }
+
+    wire_rwset() : r1{}, w0{} {}
+  };
+
+  template<typename T>
+  struct wire_log {
+    wire_rwset rwset;
+
+    unsigned : 0;
+    T data;
+
+    [[nodiscard]] bool read1(T* const target, const wire_log /*unused*/) {
+      *target = data;
+      rwset.r1 = true;
+      return true;
+    }
+
+    [[nodiscard]] bool write0(const T val, const wire_log rL) {
+      bool ok = rwset.may_write0(rL.rwset);
+      data = val;
+      rwset.w0 = true;
+      return ok;
+    }
+
+    void reset() {
+      rwset.reset();
+    }
+
+    wire_log() : rwset{}, data{} {} // NOLINT(readability-redundant-member-init)
+  };
+
+  struct ehr_rwset {
     bool r1 : 1; // FIXME does adding :1 always help?
     bool w0 : 1;
     bool w1 : 1;
 
-    bool may_read0(rwset_t rL) {
+    bool may_read0(ehr_rwset rL) {
       return !(rL.w1 || rL.w0);
     }
 
-    bool may_read1(rwset_t rL) {
+    bool may_read1(ehr_rwset rL) {
       return !(rL.w1);
     }
 
-    bool may_write0(rwset_t /*unused*/) {
+    bool may_write0(ehr_rwset /*unused*/) {
       return !(r1 || w0 || w1);
     }
 
-    bool may_write1(rwset_t /*unused*/) {
+    bool may_write1(ehr_rwset /*unused*/) {
       return !(w1);
     }
 
@@ -919,41 +1006,40 @@ namespace cuttlesim {
       r1 = w0 = w1 = false;
     }
 
-    // Removing this constructor causes collatz's performance to drop 5x with GCC
-    rwset_t() : r1{}, w0{}, w1{} {}
+    // Removing this constructor causes Collatz's performance to drop 5x with GCC
+    ehr_rwset() : r1{}, w0{}, w1{} {}
   };
 
-
   template<typename T>
-  struct reg_log_t {
-    rwset_t rwset;
+  struct ehr_log {
+    ehr_rwset rwset;
 
     // Reset alignment to prevent Clang from packing the fields together
     // This yielded a ~25x speedup when rwset was inline
     unsigned : 0;
     T data;
 
-    [[nodiscard]] bool read0(T* const target, const reg_log_t rL) {
+    [[nodiscard]] bool read0(T* const target, const ehr_log rL) {
       bool ok = rwset.may_read0(rL.rwset);
       *target = rL.data;
       return ok;
     }
 
-    [[nodiscard]] bool read1(T* const target, const reg_log_t rL) {
+    [[nodiscard]] bool read1(T* const target, const ehr_log rL) {
       bool ok = rwset.may_read1(rL.rwset);
       *target = data;
       rwset.r1 = true;
       return ok;
     }
 
-    [[nodiscard]] bool write0(const T val, const reg_log_t rL) {
+    [[nodiscard]] bool write0(const T val, const ehr_log rL) {
       bool ok = rwset.may_write0(rL.rwset);
       data = val;
       rwset.w0 = true;
       return ok;
     }
 
-    [[nodiscard]] bool write1(const T val, const reg_log_t rL) {
+    [[nodiscard]] bool write1(const T val, const ehr_log rL) {
       bool ok = rwset.may_write1(rL.rwset);
       data = val;
       rwset.w1 = true;
@@ -964,8 +1050,8 @@ namespace cuttlesim {
       rwset.reset();
     }
 
-    // Removing this constructor causes collatz's performance to drop 5x with GCC
-    reg_log_t() : rwset{}, data{} {} // NOLINT(readability-redundant-member-init)
+    // Removing this constructor causes Collatz's performance to drop 5x with GCC
+    ehr_log() : rwset{}, data{} {} // NOLINT(readability-redundant-member-init)
   };
 
 #ifndef SIM_MINIMAL

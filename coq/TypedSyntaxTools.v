@@ -55,6 +55,45 @@ Section TypedSyntaxTools.
     Fixpoint action_registers {sig tau} {EQ: EqDec reg_t} (a: action sig tau) : list reg_t :=
       dedup [] (List.map (fun '(rs, _) => rs) (action_footprint a)).
 
+    Context (rules: rule_name_t -> rule).
+
+    Section Classification.
+      Inductive register_kind := Wire | Register | EHR.
+
+      Notation reg_events_map := (REnv.(env_t) (fun _ : reg_t => list event_t)).
+
+      Definition footprint_by_register (footprint: footprint_t) : reg_events_map :=
+        List.fold_right
+          (fun '(reg, evt) map =>
+             REnv.(putenv) map reg (evt :: REnv.(getenv) map reg))
+          (REnv.(create) (fun k => [])) footprint.
+
+      Notation reg_kind_map := (REnv.(env_t) (fun _ : reg_t => register_kind)).
+
+      Definition wire_ok (e: event_t) :=
+        match e with
+        | (RWWrite, P0) | (RWRead, P1) => true
+        | _ => false
+        end.
+
+      Definition register_ok (e: event_t) :=
+        match e with
+        | (_, P0) => true
+        | _ => false
+        end.
+
+      Definition compute_register_kind (events: list event_t) :=
+        if List.forallb wire_ok events then Wire
+        else if List.forallb register_ok events then Register
+             else EHR.
+
+      Definition classify_registers (s: scheduler) : reg_kind_map :=
+        let rule_names := scheduler_rules s in
+        let footprints := List.map (fun rn => action_footprint (rules rn)) rule_names in
+        let by_register := footprint_by_register (List.concat footprints) in
+        Environments.map REnv (fun _ events => compute_register_kind events) by_register.
+    End Classification.
+
     Section Dependencies.
       Fixpoint all_scheduler_paths (s: scheduler) : list (list rule_name_t) :=
         let cons r s := List.map (fun rs => r :: rs) (all_scheduler_paths s) in
@@ -90,8 +129,6 @@ Section TypedSyntaxTools.
                   end)
                action_footprint rbr)
           footprints rules_by_register.
-
-      Context (rules: rule_name_t -> rule).
 
       Definition add_footprints (path: list rule_name_t) :=
         List.map (fun rl => (rl, action_footprint (rules rl))) path.

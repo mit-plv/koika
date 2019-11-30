@@ -28,6 +28,7 @@ type ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_input_t = {
 
     cpp_registers: 'reg_t array;
     cpp_register_sigs: 'reg_t -> reg_signature;
+    cpp_register_kinds: 'reg_t -> Extr.register_kind;
     cpp_ext_sigs: 'ext_fn_t -> ffi_signature;
 
     cpp_extfuns: string option;
@@ -647,6 +648,11 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     let sigs = Array.map hpp.cpp_register_sigs hpp.cpp_registers in
     fun f -> Array.iter f sigs in
 
+  let iter_all_registers_with_kind =
+    let info r = (hpp.cpp_register_kinds r, hpp.cpp_register_sigs r) in
+    let sigs = Array.map info hpp.cpp_registers in
+    fun f -> Array.iter f sigs in
+
   let p_impl () =
     p "////////////////////";
     p "// IMPLEMENTATION //";
@@ -708,14 +714,19 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
           p_state_methods ()) in
 
     let p_log_t () =
-      let p_decl_log_register r =
-        p "cuttlesim::reg_log_t<%s> %s;" (cpp_type_of_type (reg_type r)) r.reg_name in
+      let log_type_of_kind = function
+        | Extr.Wire -> "wire_log"
+        | Extr.Register -> "reg_log"
+        | Extr.EHR -> "ehr_log" in
+      let p_decl_log_register (kd, r) =
+        p "cuttlesim::%s<%s> %s;" (log_type_of_kind kd)
+          (cpp_type_of_type (reg_type r)) r.reg_name in
       let p_reset_register r =
         p "%s.reset();" r.reg_name in
       let p_copy_data0 { reg_name = nm; _ } =
         p "state.%s = %s.data;" nm nm in
       p_scoped "struct log_t" ~terminator:";" (fun () ->
-          iter_all_registers p_decl_log_register;
+          iter_all_registers_with_kind p_decl_log_register;
           nl ();
           p_fn ~typ:"void" ~name:"reset" (fun () ->
               iter_all_registers p_reset_register);
@@ -1174,6 +1185,9 @@ let cpp_rule_of_action all_regs (rl_name, (kind, rl_body)) =
   { rl_external = kind = `ExternalRule; rl_name; rl_body; rl_footprint }
 
 let input_of_compile_unit (cu: 'f Cuttlebone.Compilation.compile_unit) =
+  let classify_registers regs rules scheduler =
+    let rulemap r = snd (List.assoc r rules) in
+    Cuttlebone.Util.classify_registers regs rulemap scheduler in
   { cpp_classname = cu.c_modname;
     cpp_module_name = cu.c_modname;
     cpp_pos_of_pos = cu.c_pos_of_pos;
@@ -1183,6 +1197,7 @@ let input_of_compile_unit (cu: 'f Cuttlebone.Compilation.compile_unit) =
     cpp_rules = List.map (cpp_rule_of_action cu.c_registers) cu.c_rules;
     cpp_registers = Array.of_list cu.c_registers;
     cpp_register_sigs = (fun r -> r);
+    cpp_register_kinds = classify_registers cu.c_registers cu.c_rules cu.c_scheduler;
     cpp_ext_sigs = (fun f -> f);
     cpp_extfuns = cu.c_cpp_preamble; }
 
@@ -1207,6 +1222,7 @@ let input_of_sim_package
   let rules = collect_rules kp.koika_scheduler in
   let classname = Cuttlebone.Util.string_of_coq_string kp.koika_module_name in
   let ext_fn_name f = Cuttlebone.Util.string_of_coq_string (sp.sp_ext_fn_names f) in
+  let registers = kp.koika_reg_finite.finite_elements in
   { cpp_classname = classname;
     cpp_module_name = classname;
     cpp_pos_of_pos = (fun _ -> Pos.Unknown);
@@ -1215,9 +1231,13 @@ let input_of_sim_package
       Cuttlebone.Util.string_of_coq_string (kp.koika_rule_names.show0 rn));
     cpp_scheduler = kp.koika_scheduler;
     cpp_rules = List.map (cpp_rule_of_koika_package_rule kp) rules;
-    cpp_registers = Array.of_list kp.koika_reg_finite.finite_elements;
+    cpp_registers = Array.of_list registers;
     cpp_register_sigs = Cuttlebone.Util.reg_sigs_of_koika_package kp;
-    cpp_ext_sigs = (fun f -> Cuttlebone.Util.ffi_sig_of_extr_external_sig (ext_fn_name f) (kp.koika_ext_fn_types f));
+    cpp_register_kinds =
+      Cuttlebone.Util.classify_registers registers kp.koika_rules kp.koika_scheduler;
+    cpp_ext_sigs =
+      (fun f -> Cuttlebone.Util.ffi_sig_of_extr_external_sig
+                  (ext_fn_name f) (kp.koika_ext_fn_types f));
     cpp_extfuns = (match sp.sp_extfuns with
                    | None -> None
                    | Some s -> Some (Cuttlebone.Util.string_of_coq_string s)); }

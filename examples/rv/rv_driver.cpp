@@ -23,14 +23,14 @@ protected:
 
     {
       bits<1> _c0;
-      READ0(toIMem_valid0, &_c0);
+      READ1(toIMem_valid0, &_c0);
       if (_c0) {
-        WRITE0(toIMem_valid0, 1'0_b);
+        WRITE1(toIMem_valid0, 1'0_b);
       } else {
         return false;
       }
       struct_mem_req readRequestI;
-      READ0(toIMem_data0, &readRequestI);
+      READ1(toIMem_data0, &readRequestI);
       {
         bits<32> IAddress = readRequestI.addr;
         {
@@ -44,10 +44,10 @@ protected:
             data.data = current_value;
             // --------------------
             bits<1> _x2;
-            READ0(fromIMem_valid0, &_x2);
+            READ1(fromIMem_valid0, &_x2);
             if (~(_x2)) {
-              WRITE0(fromIMem_data0, data);
-              WRITE0(fromIMem_valid0, 1'1_b);
+              WRITE1(fromIMem_data0, data);
+              WRITE1(fromIMem_valid0, 1'1_b);
             } else {
               return false;
             }
@@ -65,14 +65,14 @@ protected:
 
     {
       bits<1> _c0;
-      READ0(toDMem_valid0, &_c0);
+      READ1(toDMem_valid0, &_c0);
       if (_c0) {
-        WRITE0(toDMem_valid0, 1'0_b);
+        WRITE1(toDMem_valid0, 1'0_b);
       } else {
         return false;
       }
       struct_mem_req readRequestD;
-      READ0(toDMem_data0, &readRequestD);
+      READ1(toDMem_data0, &readRequestD);
       {
         bits<32> DAddress = readRequestD.addr;
         {
@@ -107,10 +107,10 @@ protected:
             // --------------------
 
             bits<1> _x2;
-            READ0(fromDMem_valid0, &_x2);
+            READ1(fromDMem_valid0, &_x2);
             if (~(_x2)) {
-              WRITE0(fromDMem_data0, data);
-              WRITE0(fromDMem_valid0, 1'1_b);
+              WRITE1(fromDMem_data0, data);
+              WRITE1(fromDMem_valid0, 1'1_b);
             } else {
               return false;
             }

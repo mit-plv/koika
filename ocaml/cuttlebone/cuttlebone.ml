@@ -253,6 +253,21 @@ module Util = struct
     match Extr.action_type a, Extr.interp_arithmetic a with
     | Some tau, Some v -> Some (value_of_extr_value tau v)
     | _, _ -> None
+
+  let finiteType_of_register_list registers =
+    let reg_indices = List.mapi (fun i x -> x, i) registers in
+    let regmap = Hashtbl.of_seq (List.to_seq reg_indices) in
+    { Extr.finite_elements = registers;
+      Extr.finite_index = fun r -> Hashtbl.find regmap r }
+
+  let contextEnv registers =
+    Extr.contextEnv (finiteType_of_register_list registers)
+
+  let classify_registers (type reg_t) (registers: reg_t list) rules scheduler
+      : reg_t -> Extr.register_kind =
+    let env = contextEnv registers in
+    let classified = Extr.classify_registers env rules scheduler in
+    (fun (r: reg_t) -> Extr.getenv env classified r)
 end
 
 module Compilation = struct
@@ -271,12 +286,6 @@ module Compilation = struct
 
   let _R = fun rs -> Util.extr_type_of_typ (reg_type rs)
   let _Sigma fn = Util.extr_external_sig_of_ffi_sig fn
-
-  let finiteType_of_register_list tc_registers =
-    let reg_indices = List.mapi (fun i x -> x.reg_name, i) tc_registers in
-    let regmap = Hashtbl.of_seq (List.to_seq reg_indices) in
-    { Extr.finite_elements = tc_registers;
-      Extr.finite_index = fun r -> Hashtbl.find regmap r.reg_name }
 
   (* FIXME hashmaps, not lists *)
   type 'f compile_unit =
@@ -308,7 +317,7 @@ module Compilation = struct
     lco_opt_compose cR cSigma (opt_constprop cR cSigma) (opt_muxelim cR cSigma eqb)
 
   let compile (cu: 'f compile_unit) : (reg_signature -> compiled_circuit) =
-    let finiteType = finiteType_of_register_list cu.c_registers in
+    let finiteType = Util.finiteType_of_register_list cu.c_registers in
     let show_string = { Extr.show0 = fun (rl: string) -> Util.coq_string_of_string rl } in
     let rules r = List.assoc r cu.c_rules |> snd in
     let externalp r = (List.assoc r cu.c_rules |> fst) = `ExternalRule in

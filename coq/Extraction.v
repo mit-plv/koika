@@ -25,6 +25,7 @@ Extraction "extracted.ml"
            TypedSyntaxTools.is_const_zero
            TypedSyntaxTools.action_type
            TypedSyntaxTools.interp_arithmetic
+           TypedSyntaxTools.classify_registers
            Circuits.compile_scheduler
            Circuits.lco_opt_compose Circuits.opt_constprop Circuits.opt_muxelim
            Interop.koika_package_t Interop.circuit_package_t Interop.sim_package_t Interop.verilog_package_t Interop.interop_package_t
