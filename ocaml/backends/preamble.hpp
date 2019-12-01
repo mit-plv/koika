@@ -1115,11 +1115,12 @@ namespace cuttlesim {
 #endif
 } // namespace cuttlesim
 
-#define CHECK_RETURN(can_fire) { if (!(can_fire)) { return false; } }
-#define READ0(reg, ptr) (CHECK_RETURN(log.reg.read0((ptr), Log.reg)))
-#define READ1(reg, ptr) (CHECK_RETURN(log.reg.read1((ptr), Log.reg)))
-#define WRITE0(reg, val) (CHECK_RETURN(log.reg.write0((val), Log.reg)))
-#define WRITE1(reg, val) (CHECK_RETURN(log.reg.write1((val), Log.reg)))
+#define CHECK_RETURN(rule_name, can_fire) { if (!(can_fire)) { reset_##rule_name(); return false; } }
+#define FAIL(rule_name) { reset_##rule_name(); return false; }
+#define READ0(rule_name, reg, ptr) CHECK_RETURN(rule_name, log.reg.read0((ptr), Log.reg))
+#define READ1(rule_name, reg, ptr) CHECK_RETURN(rule_name, log.reg.read1((ptr), Log.reg))
+#define WRITE0(rule_name, reg, val) CHECK_RETURN(rule_name, log.reg.write0((val), Log.reg))
+#define WRITE1(rule_name, reg, val) CHECK_RETURN(rule_name, log.reg.write1((val), Log.reg))
 
 #undef _unlikely
 #undef _unoptimized

@@ -1,5 +1,6 @@
 #include <iostream>
 
+// #define SIM_FLATTEN
 #include "rv32i_core_pipelined.v.objects/rv32i_core_pipelined.hpp"
 #include "elf.hpp"
 
@@ -19,18 +20,16 @@ public:
 
 protected:
   virtual bool rule_ExternalI() noexcept {
-    reset_ExternalI();
-
     {
       bits<1> _c0;
-      READ1(toIMem_valid0, &_c0);
+      READ1(ExternalI, toIMem_valid0, &_c0);
       if (_c0) {
-        WRITE1(toIMem_valid0, 1'0_b);
+        WRITE1(ExternalI, toIMem_valid0, 1'0_b);
       } else {
-        return false;
+        FAIL(ExternalI);
       }
       struct_mem_req readRequestI;
-      READ1(toIMem_data0, &readRequestI);
+      READ1(ExternalI, toIMem_data0, &readRequestI);
       {
         bits<32> IAddress = readRequestI.addr;
         {
@@ -44,12 +43,12 @@ protected:
             data.data = current_value;
             // --------------------
             bits<1> _x2;
-            READ1(fromIMem_valid0, &_x2);
+            READ1(ExternalI, fromIMem_valid0, &_x2);
             if (~(_x2)) {
-              WRITE1(fromIMem_data0, data);
-              WRITE1(fromIMem_valid0, 1'1_b);
+              WRITE1(ExternalI, fromIMem_data0, data);
+              WRITE1(ExternalI, fromIMem_valid0, 1'1_b);
             } else {
-              return false;
+              FAIL(ExternalI);
             }
           }
         }
@@ -61,18 +60,16 @@ protected:
   }
 
   virtual bool rule_ExternalD() noexcept {
-    reset_ExternalD();
-
     {
       bits<1> _c0;
-      READ1(toDMem_valid0, &_c0);
+      READ1(ExternalD, toDMem_valid0, &_c0);
       if (_c0) {
-        WRITE1(toDMem_valid0, 1'0_b);
+        WRITE1(ExternalD, toDMem_valid0, 1'0_b);
       } else {
-        return false;
+        FAIL(ExternalD);
       }
       struct_mem_req readRequestD;
-      READ1(toDMem_data0, &readRequestD);
+      READ1(ExternalD, toDMem_data0, &readRequestD);
       {
         bits<32> DAddress = readRequestD.addr;
         {
@@ -107,12 +104,12 @@ protected:
             // --------------------
 
             bits<1> _x2;
-            READ1(fromDMem_valid0, &_x2);
+            READ1(ExternalD, fromDMem_valid0, &_x2);
             if (~(_x2)) {
-              WRITE1(fromDMem_data0, data);
-              WRITE1(fromDMem_valid0, 1'1_b);
+              WRITE1(ExternalD, fromDMem_data0, data);
+              WRITE1(ExternalD, fromDMem_valid0, 1'1_b);
             } else {
-              return false;
+              FAIL(ExternalD);
             }
           }
         }

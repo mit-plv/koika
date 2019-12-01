@@ -891,11 +891,14 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
         if Cuttlebone.Util.member_mentions_shadowed_binding sg v tau m then
           failwith (sprintf "Variable %s is shadowed by a later binding, but the program references the original binding." (v_to_string v)) in
 
+      let rule_name_unprefixed =
+        hpp.cpp_rule_names ~prefix:"" rule.rl_name in
+
       let rec p_action (pos: Pos.t) (target: assignment_target) (rl: (pos_t, var_t, reg_t, _) Extr.action) =
         p_pos pos;
         match rl with
         | Extr.Fail (_, _) ->
-           p "return false;";
+           p "FAIL(%s);" rule_name_unprefixed;
            (match target with
             | NoTarget -> NotAssigned
             | VarTarget { declared = true; name; _ } -> Assigned name
@@ -947,14 +950,14 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
            let r = hpp.cpp_register_sigs reg in
            let var = p_ensure_declared (ensure_target (reg_type r) target) in
            let pt = match port with P0 -> 0 | P1 -> 1 in
-           pr "READ%d(%s, &%s);" pt r.reg_name var;
+           pr "READ%d(%s, %s, &%s);" pt rule_name_unprefixed r.reg_name var;
            Assigned var
         | Extr.Write (_, port, reg, expr) ->
            let r = hpp.cpp_register_sigs reg in
            let vt = gensym_target (reg_type r) "v" in
            let v = must_value (p_action pos vt expr) in
            let pt = match port with P0 -> 0 | P1 -> 1 in
-           pr "WRITE%d(%s, %s);" pt r.reg_name v;
+           pr "WRITE%d(%s, %s, %s);" pt rule_name_unprefixed r.reg_name v;
            p_assign_expr target (PureExpr "prims::tt")
         | Extr.Unop (_, Extr.PrimTyped.Conv (tau, Extr.PrimTyped.Unpack), a)
              when Cuttlebone.Util.is_const_zero a ->
@@ -1022,8 +1025,6 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
       nl ();
 
       p_fn ~typ:(virtual_flag ^ "bool") ~name:main ~annot (fun () ->
-          p "%s();" reset;
-          nl ();
           p_assign_and_ignore NoTarget (p_action Pos.Unknown NoTarget rule.rl_body);
           nl ();
           p "%s();" commit;
@@ -1065,6 +1066,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     let p_cycle () =
       p_fn ~typ:"void" ~name:"cycle" (fun () ->
           p "Log.reset();";
+          p "log = Log;"; (* LATER: Consider changing this to log.reset() *)
           p_scheduler Pos.Unknown hpp.cpp_scheduler) in
 
     let run_typ =
