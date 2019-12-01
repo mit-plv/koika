@@ -5,6 +5,7 @@ Section TypedSyntaxTools.
   Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
   Context {R: reg_t -> type}
           {Sigma: ext_fn_t -> ExternalSignature}.
+  Context {REnv : Env reg_t}.
 
   Notation rule := (rule pos_t var_t R Sigma).
   Notation action := (action pos_t var_t R Sigma).
@@ -18,11 +19,10 @@ Section TypedSyntaxTools.
     | SPos _ s => scheduler_rules s
     end.
 
-  Section Footprint.
-    Context {REnv : Env reg_t}.
+  Inductive RW := RWRead | RWWrite.
+  Notation event_t := (RW * Port)%type.
 
-    Inductive RW := RWRead | RWWrite.
-    Notation event_t := (RW * Port)%type.
+  Section Footprint.
     Notation footprint_t := (list (reg_t * event_t)).
 
     Fixpoint action_footprint' {sig tau} (acc: footprint_t) (a: action sig tau) :=
@@ -65,7 +65,7 @@ Section TypedSyntaxTools.
       Definition footprint_by_register (footprint: footprint_t) : reg_events_map :=
         List.fold_right
           (fun '(reg, evt) map =>
-             REnv.(putenv) map reg (evt :: REnv.(getenv) map reg))
+             Environments.update REnv map reg (fun _ evts => evt :: evts))
           (REnv.(create) (fun k => [])) footprint.
 
       Notation reg_kind_map := (REnv.(env_t) (fun _ : reg_t => register_kind)).
@@ -123,8 +123,8 @@ Section TypedSyntaxTools.
              List.fold_left
                (fun (rbr: reg_rules_map) '(reg, evt_port) =>
                   match evt_port with
-                  | (RWRead, P1) => REnv.(putenv) rbr reg (rr_add_read1 (REnv.(getenv) rbr reg) rl)
-                  | (RWWrite, P0) => REnv.(putenv) rbr reg (rr_add_write0 (REnv.(getenv) rbr reg) rl)
+                  | (RWRead, P1) => update REnv rbr reg (fun _ rr => rr_add_read1 rr rl)
+                  | (RWWrite, P0) => update REnv rbr reg (fun _ rr => rr_add_write0 rr rl)
                   | _ => rbr
                   end)
                action_footprint rbr)
@@ -155,6 +155,105 @@ Section TypedSyntaxTools.
         List.map path_dependency_graph paths.
     End Dependencies.
   End Footprint.
+
+  Section StaticAnalysis.
+    Inductive tribool := tTrue | tFalse | tUnknown.
+
+    Record register_history :=
+      { hr0: tribool; hr1: tribool;
+        hw0: tribool; hw1: tribool }.
+
+    Definition empty_history :=
+      {| hr0 := tFalse; hr1 := tFalse;
+         hw0 := tFalse; hw1 := tFalse |}.
+
+    Definition unknown_history :=
+      {| hr0 := tUnknown; hr1 := tUnknown;
+         hw0 := tUnknown; hw1 := tUnknown |}.
+
+    Inductive register_annotation :=
+    | aPos (pos: pos_t)
+    | aHistory (rh: register_history).
+
+    Notation reg_history_map := (REnv.(env_t) (fun _ : reg_t => register_history)).
+
+    Definition merge_tribools t1 t2 :=
+      match t1, t2 with
+      | tTrue, tTrue => tTrue
+      | tFalse, tFalse => tFalse
+      | _, _ => tUnknown
+      end.
+
+    Definition merge_histories h1 h2 :=
+      let '{| hr0 := hr0; hr1 := hr1; hw0 := hw0; hw1 := hw1 |} := h1 in
+      let '{| hr0 := hr0'; hr1 := hr1'; hw0 := hw0'; hw1 := hw1' |} := h2 in
+      {| hr0 := merge_tribools hr0 hr0';
+         hr1 := merge_tribools hr1 hr1';
+         hw0 := merge_tribools hw0 hw0';
+         hw1 := merge_tribools hw1 hw1' |}.
+
+    Definition merge_history_maps m1 m2 :=
+      Environments.map2 REnv (fun _ h1 h2 => merge_histories h1 h2) m1 m2.
+
+    Definition update_history h (evt: event_t) :=
+      match evt with
+      | (RWRead, P0)  => {| hr0 := tTrue; hr1 := h.(hr1); hw0 := h.(hw0); hw1 := h.(hw1) |}
+      | (RWRead, P1)  => {| hr0 := h.(hr0); hr1 := tTrue; hw0 := h.(hw0); hw1 := h.(hw1) |}
+      | (RWWrite, P0) => {| hr0 := h.(hr0); hr1 := h.(hr1); hw0 := tTrue; hw1 := h.(hw1) |}
+      | (RWWrite, P1) => {| hr0 := h.(hr0); hr1 := h.(hr1); hw0 := h.(hw0); hw1 := tTrue |}
+      end.
+
+    Definition update_map env reg (evt: event_t) :=
+      Environments.update REnv env reg (fun _ h => update_history h evt).
+
+    Fixpoint annotate_action_register_history
+             {sig tau} (env: reg_history_map)
+             (a: action sig tau)
+      : reg_history_map * TypedSyntax.action register_annotation var_t R Sigma sig tau :=
+      match a with
+      | Fail tau => (env, Fail tau)
+      | Var m => (env, Var m)
+      | Const cst => (env, Const cst)
+      | Assign m ex =>
+        let '(env, ex) := annotate_action_register_history env ex in
+        (env, Assign m ex)
+      | Seq r1 r2 =>
+        let '(env, r1) := annotate_action_register_history env r1 in
+        let '(env, r2) := annotate_action_register_history env r2 in
+        (env, Seq r1 r2)
+      | Bind var ex body =>
+        let '(env, ex) := annotate_action_register_history env ex in
+        let '(env, body) := annotate_action_register_history env body in
+        (env, Bind var ex body)
+      | If cond tbranch fbranch =>
+        let '(env, cond) := annotate_action_register_history env cond in
+        let '(tenv, tbranch) := annotate_action_register_history env tbranch in
+        let '(fenv, fbranch) := annotate_action_register_history env fbranch in
+        (merge_history_maps tenv fenv, If cond tbranch fbranch)
+      | Read port idx =>
+        (update_map env idx (RWRead, port),
+         APos (aHistory (REnv.(getenv) env idx))
+              (Read port idx))
+      | Write port idx value =>
+        let (env, value) := annotate_action_register_history env value in
+        (update_map env idx (RWWrite, port),
+         APos (aHistory (REnv.(getenv) env idx))
+              (Write port idx value))
+      | Unop fn arg1 =>
+        let '(env, arg1) := annotate_action_register_history env arg1 in
+        (env, Unop fn arg1)
+      | Binop fn arg1 arg2 =>
+        let '(env, arg1) := annotate_action_register_history env arg1 in
+        let '(env, arg2) := annotate_action_register_history env arg2 in
+        (env, Binop fn arg1 arg2)
+      | ExternalCall fn arg =>
+        let '(env, arg) := annotate_action_register_history env arg in
+        (env, ExternalCall fn arg)
+      | APos pos a =>
+        let '(env, a) := annotate_action_register_history env a in
+        (env, APos (aPos pos) a)
+      end.
+  End StaticAnalysis.
 
   Inductive any_action :=
   | AnyAction {sig: tsig var_t} {tau: type} (aa_action: action sig tau).
