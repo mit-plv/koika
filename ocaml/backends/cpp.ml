@@ -1065,7 +1065,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
           p_scheduler Pos.Unknown hpp.cpp_scheduler) in
 
     let run_typ =
-      sprintf "template<typename T> %s&" hpp.cpp_classname in
+      sprintf "template<typename T> _flatten %s&" hpp.cpp_classname in
 
     let p_cycle_loop pbody =
       p_scoped "for (T cycle_id = 0; cycle_id < ncycles; cycle_id++)" pbody in

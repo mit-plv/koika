@@ -53,6 +53,12 @@ static inline void _sim_assert_fn(const char* repr,
 #define _display_unoptimized
 #endif
 
+#ifdef SIM_FLATTEN
+#define _flatten __attribute__((flatten))
+#else
+#define _flatten
+#endif
+
 #define _unlikely(b) __builtin_expect((b), 0)
 
 #ifdef NEEDS_BOOST_MULTIPRECISION
@@ -1103,7 +1109,7 @@ namespace cuttlesim {
 #else
   // This definition is here to look at the generated assembly
   template <typename simulator, typename... Args>
-  typename simulator::state_t init_and_run(int ncycles, Args&&... args) noexcept {
+  _flatten typename simulator::state_t init_and_run(int ncycles, Args&&... args) noexcept {
     return simulator(std::forward<Args>(args)...).run(ncycles).snapshot();
   }
 #endif
