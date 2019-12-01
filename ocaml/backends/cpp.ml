@@ -716,28 +716,25 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
           nl ();
           p_state_methods ()) in
 
+    let p_rwset_t () =
+      let rwset_type_of_kind = function
+        | Extr.Wire -> "wire_rwset"
+        | Extr.Register -> "reg_rwset"
+        | Extr.EHR -> "ehr_rwset" in
+      let p_decl_rwset_register (kd, r) =
+        p "cuttlesim::%s %s;" (rwset_type_of_kind kd) r.reg_name in
+      p_scoped "struct rwset_t" ~terminator:";" (fun () ->
+          iter_all_registers_with_kind p_decl_rwset_register) in
+
     let p_log_t () =
-      let log_type_of_kind = function
-        | Extr.Wire -> "wire_log"
-        | Extr.Register -> "reg_log"
-        | Extr.EHR -> "ehr_log" in
-      let p_decl_log_register (kd, r) =
-        p "cuttlesim::%s<%s> %s;" (log_type_of_kind kd)
-          (cpp_type_of_type (reg_type r)) r.reg_name in
-      let p_reset_register r =
-        p "%s.reset();" r.reg_name in
-      let p_copy_data0 { reg_name = nm; _ } =
-        p "state.%s = %s.data;" nm nm in
       p_scoped "struct log_t" ~terminator:";" (fun () ->
-          iter_all_registers_with_kind p_decl_log_register;
+          p "rwset_t rwset;";
+          p "state_t state;";
           nl ();
-          p_fn ~typ:"void" ~name:"reset" (fun () ->
-              iter_all_registers p_reset_register);
-          nl ();
-          p_fn ~typ:"state_t" ~name:"snapshot" ~annot:" const" (fun () ->
-              p "state_t state{};";
-              iter_all_registers p_copy_data0;
-              p "return state;")) in
+          p_fn ~typ:"const state_t&" ~name:"snapshot" ~annot:" const" (fun () ->
+              p "return state;");
+          p_fn ~typ:"explicit" ~name:"log_t" ~args:"const state_t& init"
+            ~annot:" : rwset{}, state(init)" (fun () -> ())) in
 
     let backslash_re =
       Str.regexp "\\\\" in
@@ -758,17 +755,22 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
       let large_footprint =
         5 * Array.length rule.rl_footprint > 4 * Array.length hpp.cpp_registers in
 
+      let p_copy kind src dst =
+        let src = sprintf "%s.%s" src kind in
+        let dst = sprintf "%s.%s" dst kind in
+        iter_registers (fun { reg_name; _ } ->
+            p "%s.%s = %s.%s;" dst reg_name src reg_name)
+          rule.rl_footprint in
+
       let p_reset () =
         if large_footprint then p "log = Log;"
-        else iter_registers (fun { reg_name; _ } ->
-                 p "log.%s = Log.%s;" reg_name reg_name)
-               rule.rl_footprint in
+        else (p_copy "state" "Log" "log";
+              p_copy "rwset" "Log" "log") in
 
       let p_commit () =
         if large_footprint then p "Log = log;"
-        else iter_registers (fun { reg_name; _ } ->
-                 p "Log.%s = log.%s;" reg_name reg_name)
-               rule.rl_footprint in
+        else (p_copy "state" "log" "Log";
+              p_copy "rwset" "log" "Log") in
 
       let p_declare_target = function
         | VarTarget ({ tau; declared = false; name } as ti) ->
@@ -1039,15 +1041,13 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
           p "return init;") in
 
     let p_reset () =
-      let p_init_data0 { reg_name = nm; _ } =
-        p "Log.%s.data = init.%s;" nm nm in
       p_fn ~typ:"void" ~name:"reset" ~args:"const state_t init = initial_state()" (fun () ->
-          iter_all_registers p_init_data0) in
+          p "log = Log = log_t(init);") in
 
     let p_constructor () =
       p_fn ~typ:"explicit" ~name:hpp.cpp_classname
         ~args:"const state_t init = initial_state()"
-        ~annot:" : log{}, Log{}, extfuns{}"
+        ~annot:" : log(init), Log(init), extfuns{}"
         (fun () -> p "reset(init);") in
 
     let rec p_scheduler pos s =
@@ -1065,8 +1065,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
 
     let p_cycle () =
       p_fn ~typ:"void" ~name:"cycle" (fun () ->
-          p "Log.reset();";
-          p "log = Log;"; (* LATER: Consider changing this to log.reset() *)
+          p "log.rwset = Log.rwset = rwset_t{};";
           p_scheduler Pos.Unknown hpp.cpp_scheduler) in
 
     let run_typ =
@@ -1107,6 +1106,8 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
         nl ();
 
         p "protected:";
+        p_rwset_t ();
+        nl ();
         p_log_t ();
         nl ();
         p "log_t log;";

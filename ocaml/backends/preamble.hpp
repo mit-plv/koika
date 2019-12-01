@@ -907,7 +907,7 @@ namespace cuttlesim {
       return !(rL.w0);
     }
 
-    bool may_write0(reg_rwset /*unused*/) {
+    bool may_write0() {
       return !(w0);
     }
 
@@ -918,38 +918,15 @@ namespace cuttlesim {
     reg_rwset() : w0{} {}
   };
 
-  template<typename T>
-  struct reg_log {
-    reg_rwset rwset;
-
-    unsigned : 0;
-    T data;
-
-    [[nodiscard]] bool read0(T* const target, const reg_log rL) {
-      bool ok = rwset.may_read0(rL.rwset);
-      *target = rL.data;
-      return ok;
-    }
-
-    [[nodiscard]] bool write0(const T val, const reg_log rL) {
-      bool ok = rwset.may_write0(rL.rwset);
-      data = val;
-      rwset.w0 = true;
-      return ok;
-    }
-
-    void reset() {
-      rwset.reset();
-    }
-
-    reg_log() : rwset{}, data{} {} // NOLINT(readability-redundant-member-init)
-  };
-
   struct wire_rwset {
     bool r1 : 1;
     bool w0 : 1;
 
-    bool may_write0(wire_rwset /*unused*/) {
+    static _unused bool may_read1(wire_rwset /*unused*/) {
+      return true;
+    }
+
+    bool may_write0() {
       return !(r1 || w0);
     }
 
@@ -960,51 +937,24 @@ namespace cuttlesim {
     wire_rwset() : r1{}, w0{} {}
   };
 
-  template<typename T>
-  struct wire_log {
-    wire_rwset rwset;
-
-    unsigned : 0;
-    T data;
-
-    [[nodiscard]] bool read1(T* const target, const wire_log /*unused*/) {
-      *target = data;
-      rwset.r1 = true;
-      return true;
-    }
-
-    [[nodiscard]] bool write0(const T val, const wire_log rL) {
-      bool ok = rwset.may_write0(rL.rwset);
-      data = val;
-      rwset.w0 = true;
-      return ok;
-    }
-
-    void reset() {
-      rwset.reset();
-    }
-
-    wire_log() : rwset{}, data{} {} // NOLINT(readability-redundant-member-init)
-  };
-
   struct ehr_rwset {
     bool r1 : 1; // FIXME does adding :1 always help?
     bool w0 : 1;
     bool w1 : 1;
 
-    bool may_read0(ehr_rwset rL) {
+    static _unused bool may_read0(ehr_rwset rL) {
       return !(rL.w1 || rL.w0);
     }
 
-    bool may_read1(ehr_rwset rL) {
+    static _unused bool may_read1(ehr_rwset rL) {
       return !(rL.w1);
     }
 
-    bool may_write0(ehr_rwset /*unused*/) {
+    bool may_write0() {
       return !(r1 || w0 || w1);
     }
 
-    bool may_write1(ehr_rwset /*unused*/) {
+    bool may_write1() {
       return !(w1);
     }
 
@@ -1016,49 +966,36 @@ namespace cuttlesim {
     ehr_rwset() : r1{}, w0{}, w1{} {}
   };
 
-  template<typename T>
-  struct ehr_log {
-    ehr_rwset rwset;
+  template<typename T, typename rwset>
+  [[nodiscard]] bool read0(T* target, const T rL, rwset& rwl, const rwset rwL) {
+    bool ok = rwl.may_read0(rwL);
+    *target = rL;
+    return ok;
+  }
 
-    // Reset alignment to prevent Clang from packing the fields together
-    // This yielded a ~25x speedup when rwset was inline
-    unsigned : 0;
-    T data;
+  template<typename T, typename rwset>
+  [[nodiscard]] bool read1(T* target, const T rl, rwset& rwl, const rwset rwL) {
+    bool ok = rwl.may_read1(rwL);
+    *target = rl;
+    rwl.r1 = true;
+    return ok;
+  }
 
-    [[nodiscard]] bool read0(T* const target, const ehr_log rL) {
-      bool ok = rwset.may_read0(rL.rwset);
-      *target = rL.data;
-      return ok;
-    }
+  template<typename T, typename rwset>
+  [[nodiscard]] bool write0(T& rl, const T val, rwset& rwl) {
+    bool ok = rwl.may_write0();
+    rl = val;
+    rwl.w0 = true;
+    return ok;
+  }
 
-    [[nodiscard]] bool read1(T* const target, const ehr_log rL) {
-      bool ok = rwset.may_read1(rL.rwset);
-      *target = data;
-      rwset.r1 = true;
-      return ok;
-    }
-
-    [[nodiscard]] bool write0(const T val, const ehr_log rL) {
-      bool ok = rwset.may_write0(rL.rwset);
-      data = val;
-      rwset.w0 = true;
-      return ok;
-    }
-
-    [[nodiscard]] bool write1(const T val, const ehr_log rL) {
-      bool ok = rwset.may_write1(rL.rwset);
-      data = val;
-      rwset.w1 = true;
-      return ok;
-    }
-
-    void reset() {
-      rwset.reset();
-    }
-
-    // Removing this constructor causes Collatz's performance to drop 5x with GCC
-    ehr_log() : rwset{}, data{} {} // NOLINT(readability-redundant-member-init)
-  };
+  template<typename T, typename rwset>
+  [[nodiscard]] bool write1(T& rl, const T val, rwset& rwl) {
+    bool ok = rwl.may_write1();
+    rl = val;
+    rwl.w1 = true;
+    return ok;
+  }
 
 #ifndef SIM_MINIMAL
   struct params {
@@ -1115,12 +1052,19 @@ namespace cuttlesim {
 #endif
 } // namespace cuttlesim
 
-#define CHECK_RETURN(rule_name, can_fire) { if (!(can_fire)) { reset_##rule_name(); return false; } }
-#define FAIL(rule_name) { reset_##rule_name(); return false; }
-#define READ0(rule_name, reg, ptr) CHECK_RETURN(rule_name, log.reg.read0((ptr), Log.reg))
-#define READ1(rule_name, reg, ptr) CHECK_RETURN(rule_name, log.reg.read1((ptr), Log.reg))
-#define WRITE0(rule_name, reg, val) CHECK_RETURN(rule_name, log.reg.write0((val), Log.reg))
-#define WRITE1(rule_name, reg, val) CHECK_RETURN(rule_name, log.reg.write1((val), Log.reg))
+
+#define FAIL(rule_name) \
+  { reset_##rule_name(); return false; }
+#define CHECK_RETURN(rule_name, can_fire) \
+  { if (!(can_fire)) { FAIL(rule_name); } }
+#define READ0(rule_name, reg, ptr) \
+  CHECK_RETURN(rule_name, read0((ptr), Log.state.reg, log.rwset.reg, Log.rwset.reg))
+#define READ1(rule_name, reg, ptr) \
+  CHECK_RETURN(rule_name, read1((ptr), log.state.reg, log.rwset.reg, Log.rwset.reg))
+#define WRITE0(rule_name, reg, val) \
+  CHECK_RETURN(rule_name, write0(log.state.reg, (val), log.rwset.reg))
+#define WRITE1(rule_name, reg, val) \
+  CHECK_RETURN(rule_name, write1(log.state.reg, (val), log.rwset.reg))
 
 #undef _unlikely
 #undef _unoptimized
