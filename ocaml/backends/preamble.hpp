@@ -497,7 +497,7 @@ namespace prims {
 
   template<bitwidth sz>
   bits<sz> operator+(const bits<sz> x, const bits<sz> y) {
-    return bits<sz>::mk(x.v + y.v);
+    return mask(bits<sz>::mk(x.v + y.v));
   }
 
   template<bitwidth sz>
