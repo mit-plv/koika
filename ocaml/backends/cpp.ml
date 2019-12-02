@@ -699,7 +699,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
         p "prims::vcd::dumpvar(os, \"%s\", %s);"
           r.reg_name r.reg_name in
       let p_vcd_dumpvars () =
-        p_fn ~typ:"void" ~name:"vcd_dumpvars" ~args:"std::ostream& os"
+        p_fn ~typ:"void" ~name:"vcd_dumpvars" ~args:"_unused std::ostream& os"
           ~annot:" const" (fun () ->
             iter_all_registers p_dumpvar) in
 
