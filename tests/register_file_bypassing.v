@@ -11,7 +11,7 @@ Module Rf4_sig <: RfPow2_sig.
   Definition T := data_tau.
   Definition init := Bits.zeroes data_sz.
   Definition read_style := SequentialSwitch data_tau "tmp".
-  Definition write_style := SequentialSwitch unit_t "tmp".
+  Definition write_style := @SequentialSwitchTt var_t.
 End Rf4_sig.
 
 Module Rf4 := RfPow2 Rf4_sig.

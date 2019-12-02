@@ -57,16 +57,15 @@ Section SyntaxMacros.
     vect_map (fun idx => (label_of_index idx, branch_bodies idx))
              (all_indices bound).
 
-  Fixpoint uswitch_stateful (var: uaction) (output_var: var_t)
+  Fixpoint uswitch_stateful (var: uaction)
            {nb} (branches: vect (uaction * uaction) nb) : uaction :=
     match nb return vect _ nb -> uaction with
     | 0 => fun _ => uskip
     | S nb => fun branches =>
                let '(label, action) := vect_hd branches in
                USeq (UIf (UBinop UEq var label)
-                         (UAssign output_var action)
-                         uskip)
-                    (uswitch_stateful var output_var (vect_tl branches))
+                         action uskip)
+                    (uswitch_stateful var (vect_tl branches))
     end branches.
 
   Fixpoint utree var_logsz bit_idx (var: var_t) {sz} (bodies: bits sz -> uaction) :=
@@ -90,21 +89,25 @@ Section SyntaxMacros.
   Inductive switch_style :=
   | TreeSwitch
   | NestedSwitch
+  | SequentialSwitchTt
   | SequentialSwitch (tau: type) (output_var: var_t).
 
   Definition UCompleteSwitch (style: switch_style) sz
              (var: var_t) (branch_bodies: index (pow2 sz) -> uaction) :=
-    let branches _ :=
-        gen_branches sz (pow2 sz) branch_bodies in
+    let branches bodies :=
+        gen_branches sz (pow2 sz) bodies in
     match style with
     | TreeSwitch =>
       UCompleteTree sz var (fun bs => branch_bodies (Bits.to_index_safe bs))
     | NestedSwitch =>
-      uswitch_nodefault (UVar var) (branches tt)
+      uswitch_nodefault (UVar var) (branches branch_bodies)
+    | SequentialSwitchTt =>
+      uswitch_stateful (UVar var) (branches branch_bodies)
     | SequentialSwitch output_type output_var =>
+      let branch_bodies idx := UAssign output_var (branch_bodies idx) in
       UBind output_var
             (uinit output_type)
-            (USeq (uswitch_stateful (UVar var) output_var (branches tt))
+            (USeq (uswitch_stateful (UVar var) (branches branch_bodies))
                   (UVar output_var))
     end.
 End SyntaxMacros.

@@ -10,7 +10,7 @@ Module Type Scoreboard_sig.
 End Scoreboard_sig.
 
 (* Definition read_style tau := SequentialSwitch tau "tmp". *)
-Definition write_style := SequentialSwitch unit_t "tmp".
+Definition write_style := @SequentialSwitchTt var_t.
 Definition read_style (T:type) := @TreeSwitch var_t.
 (* Definition write_style := @TreeSwitch var_t. *)
 
