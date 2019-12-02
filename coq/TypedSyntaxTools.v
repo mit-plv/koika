@@ -252,6 +252,25 @@ Section TypedSyntaxTools.
         let '(env, a) := annotate_action_register_history env a in
         (env, APos (aPos pos) a)
       end.
+
+    (* LATER: this should properly handle switches *)
+    Fixpoint rule_max_log_size {sig tau} (a: action sig tau) : nat :=
+      match a with
+      | Fail tau => 0
+      | Var m => 0
+      | Const cst => 0
+      | Assign m ex => rule_max_log_size ex
+      | Seq r1 r2 => rule_max_log_size r1 + rule_max_log_size r2
+      | Bind var ex body => rule_max_log_size ex + rule_max_log_size body
+      | If cond tbranch fbranch =>
+        rule_max_log_size cond + max (rule_max_log_size tbranch) (rule_max_log_size fbranch)
+      | Read port idx => 1
+      | Write port idx value => 1
+      | Unop fn arg1 => rule_max_log_size arg1
+      | Binop fn arg1 arg2 => rule_max_log_size arg1 + rule_max_log_size arg2
+      | ExternalCall fn arg => rule_max_log_size arg
+      | APos pos a => rule_max_log_size a
+      end.
   End StaticAnalysis.
 
   Inductive any_action :=
