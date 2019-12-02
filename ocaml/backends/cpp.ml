@@ -1249,7 +1249,8 @@ let input_of_sim_package
                    | Some s -> Some (Cuttlebone.Util.string_of_coq_string s)); }
 
 let clang_format fname =
-  Common.command "clang-format" ["-i"; fname]
+  let style = "-style={BasedOnStyle: llvm, ColumnLimit: 100}" in
+  Common.command "clang-format" ["-i"; style; fname]
 
 let compile_cpp fname =
   let srcname = fname ^ ".cpp" in
