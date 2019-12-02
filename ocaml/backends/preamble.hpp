@@ -825,8 +825,8 @@ namespace prims {
   /// Array printing functions
 
   namespace internal {
-    template<typename T, size_t len>
-    static std::ostream& array_fmt(std::ostream& os, const array<T, len>& val, fmtopts opts) {
+    template<typename T>
+    static std::ostream& array_fmt(std::ostream& os, const std::size_t len, const T* val, fmtopts opts) {
       if (opts.style == fmtstyle::full) {
         opts.style = fmtstyle::hex;
       }
@@ -845,7 +845,7 @@ namespace prims {
 
   template<typename T, size_t len>
   static std::ostream& fmt(std::ostream& os, const array<T, len>& val, const fmtopts opts) {
-    return internal::array_fmt(os, val, opts);
+    return internal::array_fmt(os, len, val.data(), opts);
   }
 
   template<size_t len>
@@ -864,7 +864,7 @@ namespace prims {
       }
       os << "\"";
     } else {
-      internal::array_fmt(os, val, opts);
+      internal::array_fmt(os, len, val.data(), opts);
     }
     return os;
   }
