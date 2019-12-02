@@ -89,7 +89,7 @@ module Mangling = struct
        "try"; "typedef"; "typeid"; "typename"; "union"; "unsigned"; "using";
        "virtual"; "void"; "volatile"; "wchar_t"; "while"; "xor"; "xor_eq"]
 
-  let mangling_prefix = "_renamed_cpp"
+  let mangling_prefix = "renamed_cpp"
   let specials_re = Str.regexp (sprintf "^\\(_[A-Z]\\|%s\\|%s\\)" mangling_prefix gensym_prefix)
   let dunder_re = Str.regexp "__+"
   let dunder_anchored_re = Str.regexp "^.*__"
@@ -110,11 +110,14 @@ module Mangling = struct
     if not @@ Str.string_match valid_name_re name 0 then
       failwith (sprintf "Invalid name: `%s'" name)
 
+  let add_prefix prefix name =
+    if prefix = "" then name else prefix ^ "_" ^ name
+
   let mangle_name ?(prefix="") name =
     check_valid name;
-    let unmangled = if prefix = "" then name else prefix ^ "_" ^ name in
+    let unmangled = add_prefix prefix name in
     if needs_mangling unmangled then
-      escape_dunders (prefix ^ mangling_prefix ^ name)
+      escape_dunders (add_prefix prefix (mangling_prefix ^ name))
     else unmangled
 
   let mangle_register_sig r =
