@@ -171,11 +171,11 @@ Section TypedSyntaxTools.
       {| hr0 := tUnknown; hr1 := tUnknown;
          hw0 := tUnknown; hw1 := tUnknown |}.
 
+    Notation reg_history_map := (REnv.(env_t) (fun _ : reg_t => register_history)).
+
     Inductive register_annotation :=
     | aPos (pos: pos_t)
-    | aHistory (rh: register_history).
-
-    Notation reg_history_map := (REnv.(env_t) (fun _ : reg_t => register_history)).
+    | aHistory (rh: reg_history_map).
 
     Definition merge_tribools t1 t2 :=
       match t1, t2 with
@@ -211,7 +211,8 @@ Section TypedSyntaxTools.
              (a: action sig tau)
       : reg_history_map * TypedSyntax.action register_annotation var_t R Sigma sig tau :=
       match a with
-      | Fail tau => (env, Fail tau)
+      | Fail tau =>
+        (env, APos (aHistory env) (Fail tau))
       | Var m => (env, Var m)
       | Const cst => (env, Const cst)
       | Assign m ex =>
@@ -232,13 +233,11 @@ Section TypedSyntaxTools.
         (merge_history_maps tenv fenv, If cond tbranch fbranch)
       | Read port idx =>
         (update_map env idx (RWRead, port),
-         APos (aHistory (REnv.(getenv) env idx))
-              (Read port idx))
+         APos (aHistory env) (Read port idx))
       | Write port idx value =>
         let (env, value) := annotate_action_register_history env value in
         (update_map env idx (RWWrite, port),
-         APos (aHistory (REnv.(getenv) env idx))
-              (Write port idx value))
+         APos (aHistory env) (Write port idx value))
       | Unop fn arg1 =>
         let '(env, arg1) := annotate_action_register_history env arg1 in
         (env, Unop fn arg1)
