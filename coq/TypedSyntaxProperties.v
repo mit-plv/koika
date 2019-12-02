@@ -28,9 +28,19 @@ Section TypedSyntaxProperties.
     assumption.
   Qed.
 
-  Lemma is_const_zero_correct {sig tau} :
+  Ltac dec_step :=
+    match goal with
+    | _ => eassumption || discriminate || reflexivity
+    | _ => bool_step || cleanup_step
+    | _ => progress (cbn in *; subst)
+    | [ H: Some _ = Some _ |- _ ] => inversion H; subst; clear H
+    | [ H: context[let/opt _ := ?x in _] |- _ ] => destruct x eqn:?
+    | [  |- context[if ?x then _ else _] ] => destruct x eqn:?
+    end.
+
+  Lemma returns_zero_correct {sig tau} :
     forall (a: action sig tau) (Gamma: vcontext sig) (sched_log: Log) (action_log: Log),
-      is_const_zero a = true ->
+      returns_zero a = true ->
       match interp_action r sigma Gamma sched_log action_log a with
       | Some (_, v, _) => bits_of_value v = Bits.zeroes (type_sz tau)
       | None => True
@@ -38,17 +48,37 @@ Section TypedSyntaxProperties.
   Proof.
     induction a; cbn; intros; try discriminate;
       repeat match goal with
+             | _ => dec_step
              | [ H: (forall Gamma L l, _ -> match interp_action ?r ?sigma Gamma L l ?a with _ => _ end)
                  |- context[interp_action ?r ?sigma ?Gamma ?L ?l ?a] ] =>
                specialize (H Gamma L l)
-             | [ H: is_const_zero ?x = true -> _, H': is_const_zero ?x = true |- _ ] =>
+             | [ H: returns_zero ?x = true -> _, H': returns_zero ?x = true |- _ ] =>
                specialize (H H')
              | [  |- context[opt_bind (interp_action ?r ?sigma ?Gamma ?sched_log ?action_log ?a) _] ] =>
                destruct (interp_action r sigma Gamma sched_log action_log a) as [ ((? & ?) & ?) | ]
-             | [ H: _ && _ = _ |- _ ] => apply andb_prop in H; destruct H
-             | [  |- context[if ?c then _ else _] ] => destruct c
              | _ => eauto using bits_to_N_zero || simpl
              end.
+  Qed.
+
+  Lemma is_pure_correct {sig tau} :
+    forall (a: action sig tau) (Gamma: vcontext sig) (sched_log: Log) (action_log: Log),
+      is_pure a = true ->
+      match interp_action r sigma Gamma sched_log action_log a with
+      | Some (l, _, _) => l = action_log
+      | None => False
+      end.
+  Proof.
+    induction a; cbn; intros; try discriminate;
+    repeat match goal with
+           | _ => dec_step
+           | [ H: (forall Gamma sched_log action_log,
+                      _ -> match interp_action ?r ?sigma Gamma sched_log action_log ?a with
+                          | _ => _ end) |-
+               context[interp_action ?r ?sigma ?Gamma ?sched_log ?action_log ?a] ] =>
+             specialize (H Gamma sched_log action_log ltac:(eauto));
+               destruct (interp_action r sigma Gamma sched_log action_log a)
+               as [ ((? & ?) & ?) | ] eqn:?
+           end.
   Qed.
 
   Lemma action_type_correct {sig tau} (a: action sig tau):
@@ -65,11 +95,7 @@ Section TypedSyntaxProperties.
   Proof.
     induction a; cbn; intros;
     repeat match goal with
-           | _ => discriminate
-           | _ => reflexivity
-           | _ => progress (cbn in *; subst)
-           | [ H: Some _ = Some _ |- _ ] => inversion H; subst; clear H
-           | [ H: context[let/opt _ := ?x in _] |- _ ] => destruct x eqn:?
+           | _ => dec_step
            | [ H: (forall Gamma sched_log action_log _,
                       _ -> match interp_action ?r ?sigma Gamma sched_log action_log ?a with
                           | _ => _ end) |-

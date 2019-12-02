@@ -22,7 +22,8 @@ Extraction "extracted.ml"
            TypedSyntaxTools.action_mentions_var
            TypedSyntaxTools.member_mentions_shadowed_binding
            TypedSyntaxTools.action_footprint
-           TypedSyntaxTools.is_const_zero
+           TypedSyntaxTools.returns_zero
+           TypedSyntaxTools.is_pure
            TypedSyntaxTools.action_type
            TypedSyntaxTools.interp_arithmetic
            TypedSyntaxTools.classify_registers

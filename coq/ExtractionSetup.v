@@ -29,6 +29,7 @@ Extraction Implicit TypedSyntaxTools.classify_registers [R Sigma].
 Extraction Implicit TypedSyntaxTools.annotate_action_register_history [Sigma sig tau].
 Extraction Implicit TypedSyntaxTools.action_mentions_shadowed_var [R Sigma sig tau].
 Extraction Implicit TypedSyntaxTools.existsb_subterm [R Sigma sig tau].
-Extraction Implicit TypedSyntaxTools.is_const_zero [R Sigma sig tau].
+Extraction Implicit TypedSyntaxTools.returns_zero [R Sigma sig tau].
+Extraction Implicit TypedSyntaxTools.is_pure [R Sigma sig tau].
 Extraction Implicit TypedSyntaxTools.action_type [R Sigma sig tau].
 Extraction Implicit TypedSyntaxTools.interp_arithmetic [R Sigma sig tau].

@@ -295,21 +295,38 @@ Section TypedSyntaxTools.
                            | _ => false
                            end) a.
 
-  Fixpoint is_const_zero {sig tau} (a: action sig tau) :=
+  Fixpoint is_pure {sig tau} (a: action sig tau) :=
+    match a with
+    | Fail tau => false
+    | Var m => true
+    | Const cst => true
+    | Assign m ex => false
+    | Seq r1 r2 => is_pure r1 && is_pure r2
+    | Bind var ex body => is_pure ex && is_pure body
+    | If cond tbranch fbranch => is_pure cond && is_pure tbranch && is_pure fbranch
+    | Read port idx => false
+    | Write port idx value => false
+    | Unop fn arg1 => is_pure arg1
+    | Binop fn arg1 arg2 => is_pure arg1 && is_pure arg2
+    | ExternalCall fn arg => false
+    | APos pos a => is_pure a
+    end.
+
+  Fixpoint returns_zero {sig tau} (a: action sig tau) :=
     match a with
     | Fail tau => false
     | Var m => false
     | Const cst => N.eqb (Bits.to_N (bits_of_value cst)) N.zero
     | Assign m ex => false
-    | Seq r1 r2 => is_const_zero r2
-    | Bind var ex body => is_const_zero body
-    | If cond tbranch fbranch => is_const_zero tbranch && is_const_zero fbranch
+    | Seq r1 r2 => returns_zero r2
+    | Bind var ex body => returns_zero body
+    | If cond tbranch fbranch => returns_zero tbranch && returns_zero fbranch
     | Read port idx => false
     | Write port idx value => false
     | Unop fn arg1 => false
     | Binop fn arg1 arg2 => false
     | ExternalCall fn arg => false
-    | APos pos a => is_const_zero a
+    | APos pos a => returns_zero a
     end.
 
   Definition action_type {sig tau} (a: action sig tau) : option type :=

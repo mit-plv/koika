@@ -942,7 +942,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
                  p_scoped (sprintf "if (%s)" (must_value cexpr))
                    (fun () -> p_assign_expr target (p_action pos target tbr)) in
                let fres =
-                 if tau = Extr.Bits_t 0 && Cuttlebone.Util.is_const_zero fbr then
+                 if tau = Extr.Bits_t 0 && Cuttlebone.Util.is_pure fbr then
                    tres
                  else
                    p_scoped "else"
@@ -962,7 +962,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
            pr "WRITE%d(%s, %s, %s);" pt rule_name_unprefixed r.reg_name v;
            p_assign_expr target (PureExpr "prims::tt")
         | Extr.Unop (_, Extr.PrimTyped.Conv (tau, Extr.PrimTyped.Unpack), a)
-             when Cuttlebone.Util.is_const_zero a ->
+             when Cuttlebone.Util.(returns_zero a && is_pure a) ->
            p_assign_and_ignore NoTarget (p_action pos NoTarget a);
            PureExpr (sp_initializer (Cuttlebone.Util.typ_of_extr_type tau))
         | Extr.Unop (_, fn, a) ->

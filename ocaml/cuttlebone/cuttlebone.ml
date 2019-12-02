@@ -240,8 +240,11 @@ module Util = struct
     (* Filter instead of returning m's keys to preserver order *)
     List.filter (Hashtbl.mem m) all_registers
 
-  let is_const_zero a =
-    Extr.is_const_zero a
+  let is_pure a =
+    Extr.is_pure a
+
+  let returns_zero a =
+    Extr.returns_zero a
 
   let action_mentions_var k a =
     Extr.action_mentions_var any_eq_dec k a

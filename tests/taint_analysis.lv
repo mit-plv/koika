@@ -2,7 +2,9 @@
 
 (extfun impure () (bits 5))
 
-(module taint
+(module taint_analysis
+  (register v 5'b0)
+
   (cpp-preamble "
 class extfuns {
   bits<5> state{0u};
@@ -14,6 +16,12 @@ public:
 };")
 
   (rule keep_impure_exprs
-    (ignore (+ (impure) (impure))))
+    (ignore (+ (impure) (impure)))
+    (write.0 v (impure)))
 
-  (scheduler s (sequence)))
+  (rule keep_impure_branches
+    (if true
+        (write.1 v 5'b0)
+      (write.1 v 5'b0)))
+
+  (scheduler s (sequence keep_impure_exprs keep_impure_branches)))
