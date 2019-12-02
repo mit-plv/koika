@@ -240,18 +240,6 @@ module Util = struct
     (* Filter instead of returning m's keys to preserver order *)
     List.filter (Hashtbl.mem m) all_registers
 
-  let is_pure a =
-    Extr.is_pure a
-
-  let returns_zero a =
-    Extr.returns_zero a
-
-  let action_mentions_var k a =
-    Extr.action_mentions_var any_eq_dec k a
-
-  let member_mentions_shadowed_binding sg k0 v0 (m: _ Extr.member) =
-    Extr.member_mentions_shadowed_binding any_eq_dec sg k0 v0 m
-
   let interp_arithmetic a =
     match Extr.action_type a, Extr.interp_arithmetic a with
     | Some tau, Some v -> Some (value_of_extr_value tau v)

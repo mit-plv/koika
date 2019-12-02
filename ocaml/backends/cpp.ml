@@ -837,15 +837,15 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
         | PureExpr s when List.exists is_impure_expr dependencies -> ImpureExpr s
         | other -> other in
 
-      let sp_display_style (dp: Cuttlebone.Extr.bits_display_style) =
+      let sp_display_style (dp: Extr.bits_display_style) =
         match dp with
         | DBin -> "prims::bin"
         | DDec -> "prims::dec"
         | DHex -> "prims::hex"
         | DFull -> "prims::full" in
 
-      let p_unop (fn: Cuttlebone.Extr.PrimTyped.fn1) a1 =
-        let open Cuttlebone.Extr.PrimTyped in
+      let p_unop (fn: Extr.PrimTyped.fn1) a1 =
+        let open Extr.PrimTyped in
         match fn with
         | Display fn ->
            ImpureExpr
@@ -868,11 +868,11 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
            let fname = cpp_field_name (Cuttlebone.Util.string_of_coq_string fname) in
            PureExpr (sprintf "%s.%s" a1 fname)
         | Array1 (sg, idx) ->
-           PureExpr (sprintf "%s[%d]" a1 (Cuttlebone.Extr.index_to_nat sg.array_len idx))
+           PureExpr (sprintf "%s[%d]" a1 (Extr.index_to_nat sg.array_len idx))
       in
 
-      let p_binop target (fn: Cuttlebone.Extr.PrimTyped.fn2) a1 a2 =
-        let open Cuttlebone.Extr.PrimTyped in
+      let p_binop target (fn: Extr.PrimTyped.fn2) a1 a2 =
+        let open Extr.PrimTyped in
         match fn with
         | Eq _ ->
            PureExpr (sp_equality a1 a2)
@@ -890,7 +890,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
            PureExpr (sprintf "prims::replace<%d>(%s, %s)" idx a1 a2) in
 
       let assert_no_shadowing sg v tau v_to_string m =
-        if Cuttlebone.Util.member_mentions_shadowed_binding sg v tau m then
+        if Extr.member_mentions_shadowed_binding Cuttlebone.Util.any_eq_dec sg v tau m then
           failwith (sprintf "Variable %s is shadowed by a later binding, but the program references the original binding." (v_to_string v)) in
 
       let rule_name_unprefixed =
@@ -942,7 +942,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
                  p_scoped (sprintf "if (%s)" (must_value cexpr))
                    (fun () -> p_assign_expr target (p_action pos target tbr)) in
                let fres =
-                 if tau = Extr.Bits_t 0 && Cuttlebone.Util.is_pure fbr then
+                 if tau = Extr.Bits_t 0 && Extr.is_pure fbr then
                    tres
                  else
                    p_scoped "else"
@@ -962,15 +962,15 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
            pr "WRITE%d(%s, %s, %s);" pt rule_name_unprefixed r.reg_name v;
            p_assign_expr target (PureExpr "prims::tt")
         | Extr.Unop (_, Extr.PrimTyped.Conv (tau, Extr.PrimTyped.Unpack), a)
-             when Cuttlebone.Util.(returns_zero a && is_pure a) ->
+             when Extr.(returns_zero a && is_pure a) ->
            p_assign_and_ignore NoTarget (p_action pos NoTarget a);
            PureExpr (sp_initializer (Cuttlebone.Util.typ_of_extr_type tau))
         | Extr.Unop (_, fn, a) ->
-           let fsig = Cuttlebone.Extr.PrimSignatures.coq_Sigma1 fn in
+           let fsig = Extr.PrimSignatures.coq_Sigma1 fn in
            let a = p_action pos (gensym_target (Cuttlebone.Util.argType 1 fsig 0) "x") a in
            taint [a] (p_unop fn (must_value a))
         | Extr.Binop (_, fn, a1, a2) ->
-           let fsig = Cuttlebone.Extr.PrimSignatures.coq_Sigma2 fn in
+           let fsig = Extr.PrimSignatures.coq_Sigma2 fn in
            let a1 = p_action pos (maybe_gensym_target target (Cuttlebone.Util.argType 2 fsig 0) "x") a1 in
            let a2 = p_action pos (gensym_target (Cuttlebone.Util.argType 2 fsig 1) "y") a2 in
            taint [a1; a2] (p_binop target fn (must_value a1) (must_value a2))
@@ -998,7 +998,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
         p_scoped (sprintf "switch (%s)" discriminand) (fun () ->
             loop branches)
       and p_bound_var_assign pos tau v expr =
-        let needs_tmp = Cuttlebone.Util.action_mentions_var v expr in
+        let needs_tmp = Extr.action_mentions_var Cuttlebone.Util.any_eq_dec v expr in
         let tau = Cuttlebone.Util.typ_of_extr_type tau in
         let vtarget = VarTarget { tau; declared = false; name = hpp.cpp_var_names v } in
         let expr =
@@ -1215,15 +1215,15 @@ let collect_rules sched =
   | Extr.SPos (_, s) -> loop acc s
   in loop [] sched
 
-let cpp_rule_of_koika_package_rule (kp: _ Cuttlebone.Extr.koika_package_t) (rn: 'rule_name_t) =
+let cpp_rule_of_koika_package_rule (kp: _ Extr.koika_package_t) (rn: 'rule_name_t) =
   let kind rn =
     if kp.koika_rule_external rn then `ExternalRule else `InternalRule in
   cpp_rule_of_action kp.koika_reg_finite.finite_elements
     (rn, (kind rn, kp.koika_rules rn))
 
 let input_of_sim_package
-      (kp: ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) Cuttlebone.Extr.koika_package_t)
-      (sp: ('ext_fn_t) Cuttlebone.Extr.sim_package_t)
+      (kp: ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) Extr.koika_package_t)
+      (sp: ('ext_fn_t) Extr.sim_package_t)
     : ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_input_t =
   let rules = collect_rules kp.koika_scheduler in
   let classname = Cuttlebone.Util.string_of_coq_string kp.koika_module_name in
