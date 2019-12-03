@@ -999,6 +999,31 @@ namespace cuttlesim {
     return ok;
   }
 
+  struct offsets {
+    std::size_t state_offset;
+    std::size_t state_sz;
+    std::size_t rwset_offset;
+    std::size_t rwset_sz;
+
+    void memcpy(char* dst_state, char* src_state, char* dst_rwset, char* src_rwset) {
+      std::memcpy(dst_rwset + rwset_offset, src_rwset + rwset_offset, rwset_sz);
+      std::memcpy(dst_state + state_offset, src_state + state_offset, state_sz);
+    }
+  };
+
+  template<typename T, int capacity>
+  struct stack {
+    int sz;
+    unsigned: 0;
+    T data[capacity];
+
+    void push(T value) {
+      data[sz++] = value;
+    }
+
+    stack() : sz{0} {}
+  };
+
   using ull = unsigned long long int;
   template <typename simulator, typename... Args>
   _flatten _noinline typename simulator::state_t init_and_run(ull ncycles, Args&&... args) noexcept {
@@ -1061,19 +1086,54 @@ namespace cuttlesim {
 #endif
 } // namespace cuttlesim
 
-
 #define FAIL(rule_name) \
   { reset_##rule_name(); return false; }
-#define CHECK_RETURN(rule_name, can_fire) \
+#define FAIL_UNLESS(rule_name, can_fire) \
   { if (!(can_fire)) { FAIL(rule_name); } }
 #define READ0(rule_name, reg, ptr) \
-  CHECK_RETURN(rule_name, read0((ptr), Log.state.reg, log.rwset.reg, Log.rwset.reg))
+  FAIL_UNLESS(rule_name, read0((ptr), Log.state.reg, log.rwset.reg, Log.rwset.reg))
 #define READ1(rule_name, reg, ptr) \
-  CHECK_RETURN(rule_name, read1((ptr), log.state.reg, log.rwset.reg, Log.rwset.reg))
+  FAIL_UNLESS(rule_name, read1((ptr), log.state.reg, log.rwset.reg, Log.rwset.reg))
 #define WRITE0(rule_name, reg, val) \
-  CHECK_RETURN(rule_name, write0(log.state.reg, (val), log.rwset.reg))
+  FAIL_UNLESS(rule_name, write0(log.state.reg, (val), log.rwset.reg))
 #define WRITE1(rule_name, reg, val) \
-  CHECK_RETURN(rule_name, write1(log.state.reg, (val), log.rwset.reg))
+  FAIL_UNLESS(rule_name, write1(log.state.reg, (val), log.rwset.reg))
+#define COMMIT(rule_name) \
+  (commit_##rule_name())
+
+#define FAIL_DL(rule_name) \
+  { dlog.apply(log, Log); return false; }
+#define FAIL_UNLESS_DL(rule_name, can_fire) \
+  { if (!(can_fire)) { FAIL_DL(rule_name); } }
+#define READ0_DL(rule_name, reg, ptr) \
+  { dlog.push(reg_name_t::reg); FAIL_UNLESS_DL(rule_name, read0((ptr), Log.state.reg, log.rwset.reg, Log.rwset.reg)) }
+#define READ1_DL(rule_name, reg, ptr) \
+  { dlog.push(reg_name_t::reg); FAIL_UNLESS_DL(rule_name, read1((ptr), log.state.reg, log.rwset.reg, Log.rwset.reg)) }
+#define WRITE0_DL(rule_name, reg, val) \
+  { dlog.push(reg_name_t::reg); FAIL_UNLESS_DL(rule_name, write0(log.state.reg, (val), log.rwset.reg)) }
+#define WRITE1_DL(rule_name, reg, val) \
+  { dlog.push(reg_name_t::reg); FAIL_UNLESS_DL(rule_name, write1(log.state.reg, (val), log.rwset.reg)) }
+#define COMMIT_DL(rule_name) \
+  dlog.apply(Log, log)
+
+#define FAIL_DOL(rule_name) \
+  { dlog.apply(log, Log); return false; }
+#define FAIL_UNLESS_DOL(rule_name, can_fire) \
+  { if (!(can_fire)) { FAIL_DOL(rule_name); } }
+#define PUSH_DOL(reg) \
+  dlog.push({ \
+      offsetof(struct state_t, reg), sizeof(state_t::reg), \
+      offsetof(struct rwset_t, reg), sizeof(rwset_t::reg), })
+#define READ0_DOL(rule_name, reg, ptr) \
+  { PUSH_DOL(reg); FAIL_UNLESS_DOL(rule_name, read0((ptr), Log.state.reg, log.rwset.reg, Log.rwset.reg)) }
+#define READ1_DOL(rule_name, reg, ptr) \
+  { PUSH_DOL(reg); FAIL_UNLESS_DOL(rule_name, read1((ptr), log.state.reg, log.rwset.reg, Log.rwset.reg)) }
+#define WRITE0_DOL(rule_name, reg, val) \
+  { PUSH_DOL(reg); FAIL_UNLESS_DOL(rule_name, write0(log.state.reg, (val), log.rwset.reg)) }
+#define WRITE1_DOL(rule_name, reg, val) \
+  { PUSH_DOL(reg); FAIL_UNLESS_DOL(rule_name, write1(log.state.reg, (val), log.rwset.reg)) }
+#define COMMIT_DOL(rule_name) \
+  dlog.apply(Log, log)
 
 #undef _unlikely
 #undef _unoptimized

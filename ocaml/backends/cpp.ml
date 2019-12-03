@@ -8,6 +8,14 @@ module Extr = Cuttlebone.Extr
    lines) *)
 let add_line_pragmas = false
 
+(* The overhead of recording offsets and copying only the corresponding data
+   seems too high to make the stack-based approach worthwhile, even when a rule
+   touches many registers (copying the whole log at once is quite fast, while
+   iterating through the list of modified registers is much slower, even when
+   using explicit offsets into the structures rather than register names). *)
+let use_dynamic_logs = false
+let use_offsets_in_dynamic_log = false
+
 type ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_rule_t = {
     rl_external: bool;
     rl_name: 'rule_name_t;
@@ -716,6 +724,50 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
           nl ();
           p_state_methods ()) in
 
+    let p_reg_name_t () =
+      let p_decl_rwset_register r =
+        p "%s," r.reg_name in
+      let name_sz =
+        (* Compute the smallest bitwidth that can fit all names *)
+        Cuttlebone.Util.log2 (1 + Array.length hpp.cpp_registers) in
+      p_scoped (sprintf "enum class reg_name_t : bits_t<%d>" name_sz)
+        ~terminator:";" (fun () ->
+          p "_invalid = 0,";
+          iter_all_registers p_decl_rwset_register) in
+
+    let p_dynamic_log_t () =
+      if not use_offsets_in_dynamic_log then
+        (p_reg_name_t ();
+         nl ());
+      let dynlog_type =
+        if use_offsets_in_dynamic_log
+        then "cuttlesim::offsets" else "reg_name_t" in
+      let decl =
+        sprintf "%s struct dynamic_log_t : %s"
+          "template<int capacity>"
+          (sprintf "cuttlesim::stack<%s, capacity>" dynlog_type) in
+      p_scoped decl ~terminator:";" (fun () ->
+          p_fn ~typ:"void" ~name:"apply" ~args:"log_t& dst, log_t& src"
+            (fun () ->
+              (* Unrolling this loop by copying everything up to capacity
+                 doesn't help.  Nor does it help to get rid of the switch by
+                 recording struct offsets instead of register names into the
+                 dynamic log. *)
+              p_scoped "for (int idx = 0; idx < this->sz; idx++)" (fun  () ->
+                  if use_offsets_in_dynamic_log then
+                    let ri ptr = sprintf "reinterpret_cast<char*>(%s)" ptr in
+                    p "this->data[idx].memcpy(%s, %s, %s, %s);"
+                      (ri "&dst.state") (ri "&src.state")
+                      (ri "&dst.rwset") (ri "&src.rwset")
+                  else
+                    p_scoped "switch (this->data[idx])" (fun () ->
+                        let p_apply_one r =
+                          p "case reg_name_t::%s:" r.reg_name;
+                          p "dst.state.%s = src.state.%s;" r.reg_name r.reg_name;
+                          p "dst.rwset.%s = src.rwset.%s;" r.reg_name r.reg_name;
+                          p "break;" in
+                        iter_all_registers p_apply_one)))) in
+
     let p_rwset_t () =
       let rwset_type_of_kind = function
         | Extr.Wire -> "wire_rwset"
@@ -752,8 +804,29 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     let p_rule (rule: (pos_t, var_t, rule_name_t, reg_t, ext_fn_t) cpp_rule_t) =
       gensym_reset ();
 
+      let footprint_sz =
+        Array.length rule.rl_footprint in
+
       let large_footprint =
-        5 * Array.length rule.rl_footprint > 4 * Array.length hpp.cpp_registers in
+        5 * footprint_sz > 4 * Array.length hpp.cpp_registers in
+
+      let rule_max_log_size =
+        Extr.rule_max_log_size rule.rl_body in
+
+      let use_dynamic_log =
+        (* LATER: Refine this criterion based on rule_max_log_size; at the moment
+           this measure isn't precise enough to be truly useful, because it
+           overestimates log sizes in imperative switches. *)
+        use_dynamic_logs && footprint_sz > 10 in
+
+      let rw_suffix =
+        if use_dynamic_log
+        then (if use_offsets_in_dynamic_log then "_DOL" else "_DL")
+        else "" in
+      let fail = sprintf "FAIL%s" rw_suffix in
+      let commit = sprintf "COMMIT%s" rw_suffix in
+      let read pt = sprintf "READ%d%s" pt rw_suffix in
+      let write pt = sprintf "WRITE%d%s" pt rw_suffix in
 
       let p_copy kind src dst =
         let src = sprintf "%s.%s" src kind in
@@ -900,7 +973,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
         p_pos pos;
         match rl with
         | Extr.Fail (_, _) ->
-           p "FAIL(%s);" rule_name_unprefixed;
+           p "%s(%s);" fail rule_name_unprefixed;
            (match target with
             | NoTarget -> NotAssigned
             | VarTarget { declared = true; name; _ } -> Assigned name
@@ -952,14 +1025,14 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
            let r = hpp.cpp_register_sigs reg in
            let var = p_ensure_declared (ensure_target (reg_type r) target) in
            let pt = match port with P0 -> 0 | P1 -> 1 in
-           pr "READ%d(%s, %s, &%s);" pt rule_name_unprefixed r.reg_name var;
+           pr "%s(%s, %s, &%s);" (read pt) rule_name_unprefixed r.reg_name var;
            Assigned var
         | Extr.Write (_, port, reg, expr) ->
            let r = hpp.cpp_register_sigs reg in
            let vt = gensym_target (reg_type r) "v" in
            let v = must_value (p_action pos vt expr) in
            let pt = match port with P0 -> 0 | P1 -> 1 in
-           pr "WRITE%d(%s, %s, %s);" pt rule_name_unprefixed r.reg_name v;
+           pr "%s(%s, %s, %s);" (write pt) rule_name_unprefixed r.reg_name v;
            p_assign_expr target (PureExpr "prims::tt")
         | Extr.Unop (_, Extr.PrimTyped.Conv (tau, Extr.PrimTyped.Unpack), a)
              when Extr.(returns_zero a && is_pure a) ->
@@ -1013,23 +1086,24 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
         ignore (p_assign_expr target expr) in
 
       let annot = " noexcept" in
-      let main = hpp.cpp_rule_names rule.rl_name in
-      let reset = hpp.cpp_rule_names ~prefix:"reset" rule.rl_name in
-      let commit = hpp.cpp_rule_names ~prefix:"commit" rule.rl_name in
+      let rl_main = hpp.cpp_rule_names rule.rl_name in
+      let rl_reset = hpp.cpp_rule_names ~prefix:"reset" rule.rl_name in
+      let rl_commit = hpp.cpp_rule_names ~prefix:"commit" rule.rl_name in
 
       let virtual_flag =
         if rule.rl_external then "virtual " else "" in
 
-      p_fn ~typ:(virtual_flag ^ "void") ~name:reset ~annot p_reset;
-      nl ();
+      if not use_dynamic_log then
+        (p_fn ~typ:(virtual_flag ^ "void") ~name:rl_reset ~annot p_reset;
+         nl ();
+         p_fn ~typ:(virtual_flag ^ "void") ~name:rl_commit ~annot p_commit;
+         nl ());
 
-      p_fn ~typ:(virtual_flag ^ "void") ~name:commit ~annot p_commit;
-      nl ();
-
-      p_fn ~typ:(virtual_flag ^ "bool") ~name:main ~annot (fun () ->
+      p_fn ~typ:(virtual_flag ^ "bool") ~name:rl_main ~annot (fun () ->
+          if use_dynamic_log then (p "dynamic_log_t<%d> dlog{};" rule_max_log_size; nl ());
           p_assign_and_ignore NoTarget (p_action Pos.Unknown NoTarget rule.rl_body);
           nl ();
-          p "%s();" commit;
+          p "%s(%s);" commit rule_name_unprefixed;
           p "return true;") in
 
     let p_initial_state () =
@@ -1110,6 +1184,9 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
         nl ();
         p_log_t ();
         nl ();
+        if use_dynamic_logs then
+          (p_dynamic_log_t ();
+           nl ());
         p "log_t log;";
         p "log_t Log;";
         p "extfuns_t extfuns;";
