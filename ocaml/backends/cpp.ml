@@ -1002,7 +1002,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
            p_scoped "" (fun () ->
                p_bound_var_assign pos tau v expr;
                p_assign_expr target (p_action pos target rl))
-        | Extr.If (_, tau, cond, tbr, fbr) ->
+        | Extr.If (_, _, cond, tbr, fbr) ->
            p_declare_target target;
            (match reconstruct_switch rl with
             | Some (var, tau, default, branches) ->
@@ -1015,11 +1015,9 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
                  p_scoped (sprintf "if (%s)" (must_value cexpr))
                    (fun () -> p_assign_expr target (p_action pos target tbr)) in
                let fres =
-                 if tau = Extr.Bits_t 0 && Extr.is_pure fbr then
-                   tres
-                 else
-                   p_scoped "else"
-                     (fun () -> p_assign_expr target (p_action pos target fbr)) in
+                 if Extr.is_tt fbr then tres
+                 else p_scoped "else"
+                        (fun () -> p_assign_expr target (p_action pos target fbr)) in
                assert (tres = fres); tres)
         | Extr.Read (_, port, reg) ->
            let r = hpp.cpp_register_sigs reg in

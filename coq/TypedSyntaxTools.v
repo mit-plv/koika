@@ -364,6 +364,9 @@ Section TypedSyntaxTools.
     | @APos _ _ _ _ _ _ _ tau _ _ => Some tau
     end.
 
+  Definition is_tt {sig tau} (a: action sig tau) :=
+    beq_dec (action_type a) (Some unit_t) && is_pure a.
+
   Fixpoint interp_arithmetic {sig tau} (a: action sig tau) : option (type_denote tau) :=
     match a with
     | Fail tau => None

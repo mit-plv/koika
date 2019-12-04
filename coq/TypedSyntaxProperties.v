@@ -33,9 +33,11 @@ Section TypedSyntaxProperties.
     | _ => eassumption || discriminate || reflexivity
     | _ => bool_step || cleanup_step
     | _ => progress (cbn in *; subst)
+    | [ H: False |- _ ] => destruct H
     | [ H: Some _ = Some _ |- _ ] => inversion H; subst; clear H
     | [ H: context[let/opt _ := ?x in _] |- _ ] => destruct x eqn:?
     | [  |- context[if ?x then _ else _] ] => destruct x eqn:?
+    | _ => solve [eauto]
     end.
 
   Lemma returns_zero_correct {sig tau} :
@@ -84,6 +86,28 @@ Section TypedSyntaxProperties.
   Lemma action_type_correct {sig tau} (a: action sig tau):
     forall tau', action_type a = Some tau' -> tau = tau'.
   Proof. destruct a; cbn; inversion 1; reflexivity. Qed.
+
+  Lemma is_tt_correct {sig tau} :
+    forall (a: action sig tau) (Gamma: vcontext sig) (sched_log: Log) (action_log: Log),
+      is_tt a = true ->
+      tau = unit_t /\
+      match interp_action r sigma Gamma sched_log action_log a with
+      | Some (_, v, _) => bits_of_value v = Bits.zeroes (type_sz tau)
+      | None => False
+      end.
+  Proof.
+    unfold is_tt; intros.
+    repeat match goal with
+           | _ => dec_step
+           | [ H: vect_nil_t _ |- _ ] => destruct H
+           | [ H: context[beq_dec] |- _ ] => rewrite beq_dec_iff in H
+           | [ H: context[action_type _] |- _ ] => apply action_type_correct in H
+           | [ H: is_pure ?a = true |- _ ] => pose proof (is_pure_correct _ _ _ _ H)
+           | [ H: is_pure ?a = true |- context[interp_action _ _ ?G ?L ?l ?a]] =>
+             pose proof (is_pure_correct a G L l H); clear H;
+               destruct interp_action as [ ((? & ?) & ?) | ] eqn:?
+           end.
+  Qed.
 
   Lemma interp_arithmetic_correct {sig tau} :
     forall (a: action sig tau) (Gamma: vcontext sig) (sched_log: Log) (action_log: Log) res,

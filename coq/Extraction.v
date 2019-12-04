@@ -24,6 +24,7 @@ Extraction "extracted.ml"
            TypedSyntaxTools.action_footprint
            TypedSyntaxTools.returns_zero
            TypedSyntaxTools.is_pure
+           TypedSyntaxTools.is_tt
            TypedSyntaxTools.action_type
            TypedSyntaxTools.interp_arithmetic
            TypedSyntaxTools.classify_registers

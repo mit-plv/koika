@@ -32,5 +32,6 @@ Extraction Implicit TypedSyntaxTools.action_mentions_shadowed_var [R Sigma sig t
 Extraction Implicit TypedSyntaxTools.existsb_subterm [R Sigma sig tau].
 Extraction Implicit TypedSyntaxTools.returns_zero [R Sigma sig tau].
 Extraction Implicit TypedSyntaxTools.is_pure [R Sigma sig tau].
+Extraction Implicit TypedSyntaxTools.is_tt [R Sigma sig tau].
 Extraction Implicit TypedSyntaxTools.action_type [R Sigma sig tau].
 Extraction Implicit TypedSyntaxTools.interp_arithmetic [R Sigma sig tau].
