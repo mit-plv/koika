@@ -6,7 +6,7 @@ Definition idxsz := 5.
 Definition datasz := 64.
 
 Inductive reg_t := clock | index | data (idx: Vect.index (pow2 idxsz)) | output.
-Inductive rule_name_t := sequential_copy | tree_copy | comb_copy | tick.
+Inductive rule_name_t := sequential_copy | tree_copy | comb_copy | manual_switch | tick.
 
 Definition R r :=
   match r with
@@ -36,6 +36,13 @@ Definition urules rl : uaction reg_t empty_ext_fn_t :=
   | sequential_copy => rule {{ |clocksz`d0| }} (SequentialSwitch (bits_t datasz) "tmp")
   | tree_copy => rule {{ |clocksz`d1| }} TreeSwitch
   | comb_copy => rule {{ |clocksz`d2| }} NestedSwitch
+  | manual_switch => {{ match read0(clock) with
+                       | #Ob~0~0 => pass
+                       | #Ob~0~1 => pass
+                       | #Ob~1~0 => pass
+                       | #Ob~1~1 => pass
+                       return default: pass
+                       end }}
   | tick => {{ write0(clock, read0(clock) + |clocksz`d1|);
               let idx := read0(index) in
               write0(index, idx << |idxsz`d2| + idx + |idxsz`d17|) }}
@@ -45,7 +52,7 @@ Definition rules :=
   tc_rules R empty_Sigma urules.
 
 Definition sched : scheduler :=
-  tc_scheduler (sequential_copy |> tree_copy |> comb_copy |> tick |> done).
+  tc_scheduler (sequential_copy |> tree_copy |> comb_copy |> manual_switch |> tick |> done).
 
 Definition package :=
   {| ip_koika := {| koika_reg_types := R;

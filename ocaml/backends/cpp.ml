@@ -1058,7 +1058,9 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
         let rec loop = function
           | [] ->
              p "default:";
-             p_assign_expr target (p_action pos target default);
+             let res = p_assign_expr target (p_action pos target default) in
+             p "break;"; (* Ensure that we don't print an empty ‘default:’ case *)
+             res
           | (const, action) :: branches ->
              p "case %s:" (sp_value ~immediate:true const);
              p_assign_and_ignore target (p_action pos target action);
