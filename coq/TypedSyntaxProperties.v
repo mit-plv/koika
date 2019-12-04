@@ -114,7 +114,7 @@ Section TypedSyntaxProperties.
       interp_arithmetic a = Some res ->
       match interp_action r sigma Gamma sched_log action_log a with
       | Some (_, v, _) => v = res
-      | None => True
+      | None => False
       end.
   Proof.
     induction a; cbn; intros;
