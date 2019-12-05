@@ -589,20 +589,20 @@ let main target_dpath (modname: string) (circuit: circuit_graph) =
   let string_io_decls = (List.map io_decl_to_string io_decls) in
   let statements = statements environment circuit in
   let print_verilog out () =
+    let header = "// -*- mode: verilog -*-" in
     let string_prologue = "module " ^ modname ^ "(" ^ (String.concat ",\n\t" string_io_decls) ^ ");" in
     let string_internal_decls = String.concat "\n" (List.map internal_decl_to_string internal_decls) in
     let string_continous_assignments = String.concat "\n" (List.map (assignment_to_string instance_external_gensym)  continous_assignments) in
     let string_statements = String.concat "\n\n" (List.map (fun s -> format_always_block [s]) statements) in
     let string_epilogue = "endmodule" in
-    List.iter (fun s -> output_string out s; output_string out "\n")
-      [string_prologue;
+    List.iter (Printf.fprintf out "%s\n")
+      [header;
+       string_prologue;
        string_internal_decls;
        string_continous_assignments;
        string_statements;
        string_epilogue] in
-  let print_bsv out () =
-    output_string out (generate_BVI modname bsv_ifcs) in
-  with_output_to_file (Filename.concat target_dpath (modname ^ "_verilog.v"))
+  with_output_to_file (Filename.concat target_dpath (modname ^ ".v"))
     print_verilog ();
   with_output_to_file (Filename.concat target_dpath (modname ^ ".bsv"))
-    print_bsv ();
+    output_string (generate_BVI modname bsv_ifcs);
