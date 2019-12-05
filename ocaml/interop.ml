@@ -10,7 +10,7 @@ let fname ?directory (pkg: _ Extr.koika_package_t) ext =
 let directory_default = function Some dir -> dir | None -> "."
 
 let compile_simulation ?directory (kp: _ Extr.koika_package_t) (sp: _ Extr.sim_package_t) =
-  Backends.Cpp.main (directory_default directory) `Exe (Backends.Cpp.input_of_sim_package kp sp)
+  Backends.Cpp.main (directory_default directory) `Opt (Backends.Cpp.input_of_sim_package kp sp)
 
 let compile_circuits ?directory (kp: _ Extr.koika_package_t) (vp: _ Extr.verilog_package_t) =
   let circuit = Graphs.graph_of_verilog_package kp vp in

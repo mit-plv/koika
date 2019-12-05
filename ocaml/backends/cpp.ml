@@ -1346,13 +1346,13 @@ let write_preamble dpath =
   let fpath = Filename.concat dpath cuttlesim_hpp_fname in
   Common.with_output_to_file fpath output_string cuttlesim_hpp
 
-let main target_dpath (kind: [> `Cpp | `Hpp | `Exe]) (cu: _ cpp_input_t) =
+let main target_dpath (kind: [< `Cpp | `Hpp | `Opt]) (cu: _ cpp_input_t) =
   let hpp, cpp = compile cu in
   let fpath_noext = Filename.concat target_dpath cu.cpp_classname in
-  if kind = `Hpp || kind = `Exe then begin
-      write_preamble fpath_noext;
+  if kind = `Hpp || kind = `Opt then begin
+      write_preamble target_dpath;
       write_formatted fpath_noext ".hpp" hpp end;
-  if kind = `Cpp || kind = `Exe then
+  if kind = `Cpp || kind = `Opt then
     write_formatted fpath_noext ".cpp" cpp;
-  if kind = `Exe then
+  if kind = `Opt then
     compile_cpp fpath_noext
