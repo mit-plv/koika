@@ -68,7 +68,7 @@ exception UnsupportedOutput of string
 let output_fname backend { cnf_dst_dpath; _ } { pkg_modname; _ } =
   Filename.concat cnf_dst_dpath (pkg_modname ^ suffix_of_backend backend)
 
-let run_backend' backend cnf pkg =
+let run_backend' (backend: backend) cnf pkg =
   match backend with
   | `Coq ->
      let lv = Lazy.force pkg.pkg_lv in

@@ -279,9 +279,12 @@ let cpp_bits2_fn_name (f: Extr.PrimTyped.fbits2) =
   | Compare (false, cmp, _) ->
      `Infix (match cmp with CLt -> "<" | CGt -> ">" | CLe -> "<=" | CGe -> ">=")
 
-let cpp_preamble =
-  (* cppPreamble.ml is auto-generated from preamble.hpp *)
-  CppPreamble.preamble
+let cuttlesim_hpp =
+  (* resources.ml is auto-generated *)
+  Resources.cuttlesim_hpp
+
+let cuttlesim_hpp_fname =
+  "cuttlesim.hpp"
 
 let reconstruct_switch action =
   let rec loop v = function
@@ -649,8 +652,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     if program_info.pi_needs_multiprecision then (
       p "#define NEEDS_BOOST_MULTIPRECISION";
       nl ());
-    p "#include \"%s.preamble.hpp\"" hpp.cpp_module_name
-  in
+    p "#include \"%s\"" cuttlesim_hpp_fname in
 
   let iter_registers f regs =
     Array.iter (fun r -> f (hpp.cpp_register_sigs r)) regs in
@@ -1340,9 +1342,9 @@ let write_formatted fpath_noext ext buf =
   Common.with_output_to_file fname Buffer.output_buffer buf;
   clang_format fname
 
-let write_preamble fpath_noext =
-  Common.with_output_to_file (fpath_noext ^ ".preamble.hpp")
-    output_string cpp_preamble
+let write_preamble dpath =
+  let fpath = Filename.concat dpath cuttlesim_hpp_fname in
+  Common.with_output_to_file fpath output_string cuttlesim_hpp
 
 let main target_dpath (kind: [> `Cpp | `Hpp | `Exe]) (cu: _ cpp_input_t) =
   let hpp, cpp = compile cu in
