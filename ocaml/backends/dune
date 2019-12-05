@@ -4,6 +4,6 @@
  (libraries str unix zarith common cuttlebone frontends))
 
 (rule
- (deps gen.ml resources/cuttlesim.hpp resources/verilator.hpp resources/verilator.cpp)
+ (deps gen.ml resources/cuttlesim.hpp resources/verilator.hpp resources/verilator.cpp resources/Makefile)
  (targets resources.ml)
  (action (run ocaml str.cma gen.ml)))

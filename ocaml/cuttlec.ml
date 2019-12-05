@@ -7,10 +7,10 @@ type frontend =
   CoqPkg | LV | ExtractedML
 
 type backend =
-  [`Coq | `Verilog | `Verilator | `Dot | `Hpp | `Cpp | `Opt]
+  [`Coq | `Verilator | `Makefile | `Verilog | `Dot | `Hpp | `Cpp | `Opt]
 
 let all_backends (f: frontend) : backend list =
-  let shared = [`Verilog; `Verilator; `Dot; `Hpp; `Cpp] in
+  let shared = [`Verilator; `Makefile; `Verilog; `Dot; `Hpp; `Cpp] in
   match f with
   | LV -> `Coq :: shared
   | CoqPkg | ExtractedML -> shared
@@ -66,8 +66,12 @@ type ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) package = {
 
 exception UnsupportedOutput of string
 
-let output_fname backend { cnf_dst_dpath; _ } { pkg_modname; _ } =
-  Filename.concat cnf_dst_dpath (pkg_modname ^ suffix_of_backend backend)
+let output_fname (backend: backend) { cnf_dst_dpath; _ } { pkg_modname; _ } =
+  Filename.concat cnf_dst_dpath
+    (match backend with
+     | `Makefile -> "Makefile"
+     | _ -> pkg_modname ^ suffix_of_backend backend)
+
 
 let run_backend' (backend: backend) cnf pkg =
   match backend with
@@ -77,6 +81,9 @@ let run_backend' (backend: backend) cnf pkg =
        Backends.Coq.main lv
   | `Verilator ->
      Backends.Verilator.main cnf.cnf_dst_dpath pkg.pkg_modname
+  | `Makefile ->
+     with_output_to_file (output_fname backend cnf pkg)
+       Backends.Makefile.main pkg.pkg_modname
   | (`Hpp | `Cpp | `Opt) as kd ->
      let cpp = Lazy.force pkg.pkg_cpp in
      Backends.Cpp.main cnf.cnf_dst_dpath kd cpp

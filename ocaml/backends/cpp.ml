@@ -1331,10 +1331,17 @@ let clang_format fname =
   let style = "-style={BasedOnStyle: llvm, ColumnLimit: 100}" in
   Common.command "clang-format" ["-i"; style; fname]
 
+let flags_base =
+  ["--std=c++14"]
+let flags_opt =
+  ["-O3"; "-U_FORTIFY_SOURCE"; "-D_FORTIFY_SOURCE=0"; "-fno-stack-protector"]
+let flags_warnings =
+  ["-Wall"; "-Wextra"]
+
 let compile_cpp fname =
   let srcname = fname ^ ".cpp" in
   let exename = fname ^ ".exe" in
-  let flags = ["-U_FORTIFY_SOURCE"; "-D_FORTIFY_SOURCE=0"; "-O3"; "--std=c++14"; "-Wall"; "-Wextra"; "-fno-stack-protector"; ] in
+  let flags = flags_base @ flags_warnings @ flags_opt in
   Common.command ~verbose:true ~elapsed:true "g++" (flags @ [srcname; "-o"; exename])
 
 let write_formatted fpath_noext ext buf =

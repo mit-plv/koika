@@ -17,4 +17,5 @@ let _ =
   defvar out "cuttlesim_hpp" "cuttlesim.hpp";
   defvar out "verilator_cpp" "verilator.cpp";
   defvar out "verilator_hpp" "verilator.hpp";
+  defvar out "makefile" "Makefile";
   close_out out
