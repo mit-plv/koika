@@ -15,4 +15,6 @@ let defvar out varname fname =
 let _ =
   let out = open_out "resources.ml" in
   defvar out "cuttlesim_hpp" "cuttlesim.hpp";
+  defvar out "verilator_cpp" "verilator.cpp";
+  defvar out "verilator_hpp" "verilator.hpp";
   close_out out

@@ -7,10 +7,10 @@ type frontend =
   CoqPkg | LV | ExtractedML
 
 type backend =
-  [`Coq | `Verilog | `Dot | `Hpp | `Cpp | `Opt]
+  [`Coq | `Verilog | `Verilator | `Dot | `Hpp | `Cpp | `Opt]
 
 let all_backends (f: frontend) : backend list =
-  let shared = [`Verilog; `Dot; `Hpp; `Cpp] in
+  let shared = [`Verilog; `Verilator; `Dot; `Hpp; `Cpp] in
   match f with
   | LV -> `Coq :: shared
   | CoqPkg | ExtractedML -> shared
@@ -21,7 +21,8 @@ let backends : (backend * (string * string)) list =
    (`Cpp, ("cpp", ".cpp"));
    (`Opt, ("opt", ".opt"));
    (`Coq, ("coq", "_coq.v"));
-   (`Verilog, ("verilog", "_verilog.v"))]
+   (`Verilog, ("verilog", "_verilog.v"));
+   (`Verilator, ("verilator", "verilator.cpp"))]
 
 let suffix_of_backend backend =
   snd (List.assoc backend backends)
@@ -74,6 +75,8 @@ let run_backend' (backend: backend) cnf pkg =
      let lv = Lazy.force pkg.pkg_lv in
      with_output_to_file (output_fname backend cnf pkg)
        Backends.Coq.main lv
+  | `Verilator ->
+     Backends.Verilator.main cnf.cnf_dst_dpath pkg.pkg_modname
   | (`Hpp | `Cpp | `Opt) as kd ->
      let cpp = Lazy.force pkg.pkg_cpp in
      Backends.Cpp.main cnf.cnf_dst_dpath kd cpp

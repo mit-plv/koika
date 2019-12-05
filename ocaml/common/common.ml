@@ -233,6 +233,13 @@ let make_gensym gensym_prefix =
 
 exception CompilationError
 
+let rec replace_strings haystack = function
+  | [] -> haystack
+  | (needle, replacement) :: repls ->
+     let re = Str.regexp (Str.quote needle) in
+     let haystack = Str.global_replace re replacement haystack in
+     replace_strings haystack repls
+
 let special_re =
   Str.regexp ".*[][ \t\n!\"#^$&'()*,;<=>?\\`{|}~]"
 
