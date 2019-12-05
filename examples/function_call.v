@@ -16,12 +16,9 @@ Definition instructions : list (uaction reg_t ext_fn_t) :=
      {{ Ob~0~1~0~0~1~0~0~0~0~0~1~0~0~1~1~0~1~0~0~0~0~1~1~0~0~1~1~1~0~0~1~1 }};
      {{ Ob~1~1~0~0~0~0~0~1~0~1~1~1~1~1~0~0~0~1~1~0~0~0~1~0~0~1~1~1~1~0~0~1 }}].
 
-Notation instr_sz := 32.
-Notation pc_sz := (log2 (List.length instructions)).
-
 Definition R r :=
   match r with
-  | pc => bits_t pc_sz
+  | pc => bits_t 5
   | next_instr => bits_t 32
   end.
 
@@ -37,20 +34,21 @@ Definition Sigma (fn: ext_fn_t) : ExternalSignature :=
   end.
 
 Definition nth_instr_intfun : UInternalFunction reg_t ext_fn_t :=
-  {{ fun (pc: bits_t pc_sz) : bits_t instr_sz =>
-       `UCompleteSwitch NestedSwitch pc_sz "pc" (List_nth instructions)` }}.
+  {{ fun (addr: bits_t 3) : bits_t 32 =>
+       `UCompleteSwitch NestedSwitch 3
+        "addr" (List_nth instructions)` }}.
 
 Definition _fetch_internal : uaction reg_t ext_fn_t :=
-  {{ let pc := read0(pc) in
-     write0(next_instr, nth_instr_intfun(pc)) }}.
+  {{ let addr := (read0(pc) >> |5`d2|)[Ob~0~0~0 :+ 3] in
+     write0(next_instr, nth_instr_intfun(addr)) }}.
 
 Definition _fetch_external : uaction reg_t ext_fn_t :=
-  {{ let pc := read0(pc) in
-     write1(next_instr, extcall nth_instr_external(pc)) }}.
+  {{ let addr := (read0(pc) >> |5`d2|)[Ob~0~0~0 :+ 3] in
+     write1(next_instr, extcall nth_instr_external(addr)) }}.
 
 Definition plus4 : UInternalFunction reg_t ext_fn_t :=
-  {{ fun (v: bits_t pc_sz) : bits_t pc_sz =>
-       v + |pc_sz`d4| }}.
+  {{ fun (v: bits_t 5) : bits_t 5 =>
+       v + |5`d4| }}.
 
 Definition _incr_pc : uaction reg_t ext_fn_t :=
   {{ write0(pc, plus4(read0(pc))) }}.
