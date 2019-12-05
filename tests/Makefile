@@ -1,9 +1,9 @@
 default:
 	$(MAKE) -C .. tests
 
-OBJECTS := $(wildcard *.objects/)
+objects := $(patsubst %,_objects/%,$(wildcard *.v) $(wildcard *.lv))
 
-${OBJECTS}:
+${objects}:
 	$(MAKE) -C .. "tests/$@"
 
-.PHONY: ${OBJECTS}
+.PHONY: ${objects}

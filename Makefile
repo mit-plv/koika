@@ -1,3 +1,4 @@
+OBJ_DIR := _obj
 BUILD_DIR := _build/default
 COQ_BUILD_DIR := ${BUILD_DIR}/coq
 OCAML_BUILD_DIR := ${BUILD_DIR}/ocaml
@@ -40,56 +41,79 @@ PHONY += ocaml
 # Examples & tests #
 ####################
 
+# Dune can't track multi-library Coq dependencies, so the dependency from
+# ‘examples/*.v’ on ‘coq/’ isn't captured.  The setup below replaces ‘coqdep’
+# with a custom script ‘etc/coqdep’ to work around this problem.
+export COQDEP := $(shell which coqdep)
+export COQDEP_BUILD_DIR := $(shell pwd)/$(COQ_BUILD_DIR)
+export PATH := $(realpath etc):$(PATH)
+
+# The setup below generates one Makefile rule per target.  It uses canned rules
+# and eval because patterns like ‘%1/_objects/%2.v/: %1/%2.v’ aren't supported.
+# https://www.gnu.org/software/make/manual/html_node/Canned-Recipes.html
+# https://www.gnu.org/software/make/manual/html_node/Eval-Function.html
+
+target_directory = $(dir $(1))_objects/$(notdir $(1))
+target_directories = $(foreach fname,$(1),$(call target_directory,$(fname)))
+
+# Create output directory
+define cuttlec_recipe_prelude =
+	@printf "\n-- Compiling %s --\n" "$<"
+	@mkdir -p "$@"
+endef
+
+# Copy additional example-specific files and execute follow-ups if any
+define cuttlec_recipe_coda =
+	if [ -d $<.etc ]; then cp -r $<.etc/* "$@"; fi
+	if [ -d $(dir $<)etc ]; then cp -r $(dir $<)etc/* "$@"; fi
+	if [ -f "$@/Makefile" ]; then $(MAKE) -C "$@"; fi
+endef
+
+# Compile a .lv file
+define cuttlec_lv_recipe_body =
+	dune exec -- cuttlec "$<" \
+		-T all -o "$@" $(if $(findstring .1.,$<),--expect-errors 2> "$@stderr")
+endef
+
+# Compile a .v file
+define cuttlec_v_recipe_body =
+	@rm -f "${BUILD_DIR}/$(<:.v=.vo)"
+	dune build "$(<:.v=.vo)"
+	dune exec -- cuttlec "${BUILD_DIR}/$(<:.v=.ml)" -T all -o "$@"
+endef
+
+define cuttlec_lv_template =
+$(eval dirpath := $(call target_directory,$(1)))
+$(dirpath) $(dirpath)/: $(1) ocaml
+	$(value cuttlec_recipe_prelude)
+	$(value cuttlec_lv_recipe_body)
+	$(value cuttlec_recipe_coda)
+endef
+
+define cuttlec_v_template =
+$(eval dirpath := $(call target_directory,$(1)))
+$(dirpath) $(dirpath)/: $(1) ocaml
+	$(value cuttlec_recipe_prelude)
+	$(value cuttlec_v_recipe_body)
+	$(value cuttlec_recipe_coda)
+endef
+
 TESTS := $(wildcard tests/*.lv) $(wildcard tests/*.v)
 EXAMPLES := $(wildcard examples/*.lv) $(wildcard examples/*.v) examples/rv/rv32i_core_pipelined.v
 
-TESTS_TARGETS := $(patsubst %,%.objects/,${TESTS})
-EXAMPLES_TARGETS := $(patsubst %,%.objects/,${EXAMPLES})
+$(foreach fname,$(filter %.lv, $(EXAMPLES) $(TESTS)),\
+	$(eval $(call cuttlec_lv_template,$(fname))))
+$(foreach fname,$(filter %.v, $(EXAMPLES) $(TESTS)),\
+	$(eval $(call cuttlec_v_template,$(fname))))
 
-%.lv.objects/: %.lv ocaml
-	@printf "\n-- Compiling %s --\n" "$<"
-	@mkdir -p "$@"
-	dune exec cuttlec -- "$<" \
-		-T all -o "$@" $(if $(findstring .1.,$<),--expect-errors 2> "$@stderr")
-	@touch "$@"
-
-# Dune can't track multi-library Coq dependencies, so the dependency from
-# ‘examples/*.v’ on ‘coq/’ isn't captured.  As a result, one needs to invoke
-# ‘make clean-examples clean-tests’ after updating files in ‘coq/’ to build
-# examples without getting a ‘Compiled library … makes inconsistent assumptions
-# over library …’ message.  The trickery with ‘PATH’ and ‘COQDEP’ below is to
-# prevent coqdep from printing warnings about not finding the Koika library.
-#
-# Code written against a packaged version of Koika (e.g. installed using OPAM)
-# won't run into this issue; you can just use the following command:
-#
-#   cuttlec extracted.ml -T verilog -o directory
-
-%.v.objects/: %.v coq ocaml
-	@printf "\n-- Compiling $< --\n"
-	@mkdir -p "$@"
-# Set up variables                                                  # examples/rv/xyz.v.objects/
-	@$(eval DIR := $(dir $*))                                       # examples/rv/
-	@$(eval MAKEFILE_NAME := $(notdir $*).mk)                       # xyz.v.mk
-	@$(eval export COQDEP := $(shell which coqdep))
-	@$(eval export COQDEP_ARGS := -R $(realpath ${COQ_BUILD_DIR}) Koika)
-# Generate xyz.ml; coqdep will complain: see https://github.com/ocaml/dune/pull/2053
-	@rm -f "${BUILD_DIR}/$*.vo"
-	PATH="etc/:$$PATH" dune build "$*.vo"
-# Compile to circuits
-	dune exec cuttlec -- "${BUILD_DIR}/$*.ml" -T all -o "$@"
-# Execute example-specific follow-ups if any
-	cd ${DIR}; if test -f "${MAKEFILE_NAME}"; then $(MAKE) -f "${MAKEFILE_NAME}"; fi
-	@touch "$@"
-
-examples: ${EXAMPLES_TARGETS};
+examples: $(call target_directories,$(EXAMPLES));
 clean-examples:
-	find examples/ -type d -name *.objects -exec rm -r {} +
+	find examples/ -type d -name _objects -exec rm -r {} +
 	rm -rf ${BUILD_DIR}/examples
 
-tests: ${TESTS_TARGETS};
+tests: $(call target_directories,$(TESTS));
 clean-tests:
-	find tests/ -type d -name *.objects -exec rm -r {} +
+	find tests/ -type d -name _objects -exec rm -r {} +
 	rm -rf ${BUILD_DIR}/tests
 
 PHONY += examples clean-examples tests clean-tests
@@ -113,3 +137,7 @@ PHONY += all clean
 # Running two copies of dune in parallel isn't safe, and dune is already
 # handling most of the parallelism for us
 .NOTPARALLEL:
+
+# Disable built-in rules
+MAKEFLAGS += --no-builtin-rules
+.SUFFIXES:

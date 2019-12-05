@@ -31,4 +31,5 @@ _opam/
 
 # Other
 .local/
+_objects/
 **/.nia.cache

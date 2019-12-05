@@ -1,7 +1,7 @@
 #include <iostream>
 
 // #define SIM_FLATTEN
-#include "rv32i_core_pipelined.v.objects/rv32i_core_pipelined.hpp"
+#include "rv32i_core_pipelined.hpp"
 #include "elf.hpp"
 
 #define DMEM_SIZE (static_cast<std::size_t>(1) << 30)
@@ -136,3 +136,7 @@ int main(int argc, char** argv) {
   cuttlesim::main<rv_core>(argc - 1, argv + 1, argv[1]);
 }
 #endif
+
+// Local Variables:
+// flycheck-clang-include-path: ("../_objects/rv32i_core_pipelined.v/")
+// End:

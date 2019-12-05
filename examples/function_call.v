@@ -80,7 +80,7 @@ Definition package :=
 
      ip_sim :=
        {| sp_ext_fn_names := ext_fn_names;
-          sp_extfuns := Some "#include ""../function_call.extfuns.hpp""" |};
+          sp_extfuns := Some "#include ""extfuns.hpp""" |};
 
      ip_verilog := {| vp_ext_fn_names := ext_fn_names |} |}.
 
