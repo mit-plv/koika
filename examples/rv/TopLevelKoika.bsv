@@ -3,7 +3,13 @@ import BRAM::*;
 import rv32i_core_pipelined::*;
 typedef Bit#(32) Word;
 
-module mkProc(Empty);
+interface Proc;
+    interface RS232 uart_pins;
+endinterface
+
+module mkProc(Proc);
+    Bit#(16) div_reg = 54; //100 MHz / (16*54) ~ 115200 bauds
+    UART#(16) uart <- mkUART(8, NONE, STOP_1, div_reg);
     // Instantiate the dual ported memory
     BRAM_Configure cfg = defaultValue();
     cfg.loadFormat = tagged Hex "mem.vmh";
@@ -71,6 +77,7 @@ module mkProc(Empty);
 
     	    if (req.byte_en == 'hf) begin
 		if (req.addr ==  'h4000_0000) begin
+		    uart.rx.put(req.data[7:0]);
                     // Writing to STDERR
                     $fwrite(stderr, "%c", req.data[7:0]);
                     $fflush(stderr);
@@ -176,4 +183,5 @@ module mkProc(Empty);
 	rv_core.ifc_ExternalD.write1_fromDMem_valid0(rv_core.ifc_ExternalD.read1_fromDMem_valid0());
 	rv_core.ifc_ExternalD.write1_toDMem_data0(rv_core.ifc_ExternalD.read1_toDMem_data0());
     endrule
+    interface RS232 uart_pins = uart.rs232;
 endmodule
