@@ -628,7 +628,7 @@ Module  RV32ICore.
           pass
     }}.
 
-  Time Definition tc_execute :=
+  Definition tc_execute :=
     tc_action R empty_Sigma execute.
 
   Definition writeback : uaction reg_t empty_ext_fn_t :=
@@ -663,7 +663,7 @@ Module  RV32ICore.
           pass
     }}.
 
-  Time Definition tc_writeback :=
+  Definition tc_writeback :=
     tc_action R empty_Sigma writeback.
 
   Definition externalI_environment : uaction reg_t empty_ext_fn_t :=
@@ -674,7 +674,7 @@ Module  RV32ICore.
         fromIMem.(MemResp.enq)(struct mem_resp {|byte_en := IEn ; addr := IAddress; data := |32`d0| |})
     }}.
 
-  Time Definition tc_externalI :=
+  Definition tc_externalI :=
     tc_action R empty_Sigma externalI_environment.
 
   Definition externalD_environment : uaction reg_t empty_ext_fn_t :=
@@ -685,7 +685,7 @@ Module  RV32ICore.
         fromDMem.(MemResp.enq)(struct mem_resp {|byte_en := DEn ; addr := DAddress; data := |32`d0| |})
     }}.
 
-  Time Definition tc_externalD :=
+  Definition tc_externalD :=
     tc_action R empty_Sigma externalD_environment.
 
   Inductive rv_rules_t := Fetch | Decode | Execute | Writeback | ExternalI | ExternalD | WaitImem.
