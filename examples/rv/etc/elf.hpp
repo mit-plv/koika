@@ -55,7 +55,7 @@ void __attribute__((noinline)) elf_load(uint32_t* dmem, const char* elf_filename
 	// loop through program header tables
 	for (int i = 0 ; i < ehdr->e_phnum ; i++) {
       // only look at non-zero length PT_LOAD sections
-      printf("Section of type: %d of size %d filesize %d starting at %x\n", phdr[i].p_type, phdr[i].p_memsz, phdr[i].p_filesz,phdr[i].p_paddr);
+      // printf("Section of type: %d of size %d filesize %d starting at %x\n", phdr[i].p_type, phdr[i].p_memsz, phdr[i].p_filesz,phdr[i].p_paddr);
       if ((phdr[i].p_type == PT_LOAD) && (phdr[i].p_memsz > 0)) {
 		if (phdr[i].p_memsz < phdr[i].p_filesz) {
           std::cerr << "ERROR: file size is larger than target memory size" << std::endl;
