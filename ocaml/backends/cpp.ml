@@ -1177,7 +1177,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     nl ();
 
     p_ifminimal (fun () ->
-        p "template simulator::state_t cuttlesim::init_and_run<simulator>(int);";
+        p "template simulator::state_t cuttlesim::init_and_run<simulator>(unsigned long long);";
         p "#else";
         p_fn ~typ:"int" ~name:"main" ~args:"int argc, char** argv" (fun () ->
             p "return cuttlesim::main<simulator>(argc, argv);")) in
