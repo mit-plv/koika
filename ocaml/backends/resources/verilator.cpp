@@ -1,6 +1,9 @@
 #include "verilator.hpp"
 #include "V__CUTTLEC_MODULE_NAME__.h"
-#include "V__CUTTLEC_MODULE_NAME____Dpi.h"
+
+// #include "V__CUTTLEC_MODULE_NAME____Dpi.h"
+// If you have external functions implemented through DPI, uncomment the line
+// above and add your definitions here.
 
 int main(int argc, char** argv) {
   return _main<KoikaToplevel<V__CUTTLEC_MODULE_NAME__>>(argc, argv);
