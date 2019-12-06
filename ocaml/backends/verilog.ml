@@ -7,19 +7,7 @@ open Cuttlebone.Graphs
 (* TODO: What to do with bit 0?
  *)
 
-(* Phase I: IO declarations
-
-   In our circuit we don't have inputs and outputs specified from the
-   Coq side. We decide to give direct access to each register. For
-   each register of width bitwidth we create:
-      (1) an output wire reading the register named reg__data
-      (2) an input wire to order overwriting of the data in the register.
-      The wire is named reg__overwrite
-      (3) an input wire carrying the data to put in the register in case of overwrite.
-      The wire is named reg__overwrite__data
-   We also need a clock and a reset signal.
-
- *)
+(* Phase I: IO declarations *)
 type kind_io =
   | Clock
   | Reset
@@ -116,7 +104,6 @@ let io_declarations (circuit: circuit_graph) : io_decls =
 
 
 (* Phase II: Internal declarations
-
 
    We declare the internal registers, and one wire per subcircuit i.e
    one per nodes of (circuit_nets: circuit Hashtbl.t).  The signal
@@ -377,7 +364,7 @@ let continous_assignments
 (* Phase IV: Update of register
 
    The update of the registers are done in parallel for all the
-   registers: on every rising edge of clock, if reset is high then we
+   registers: on every rising edge of clock, if reset is low then we
    write the initial value of the register, otherwise if overwrite is
    high, we write the value coming from the environment, otherwise we
    write the value computed by the root wire of that register.

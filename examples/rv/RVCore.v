@@ -394,18 +394,18 @@ Module  RV32ICore.
   Module FifoMemReq <: Fifo.
     Definition T:= struct_t mem_req.
   End FifoMemReq.
-  Module MemReq := Fifo1 FifoMemReq.
+  Module MemReq := Fifo1Bypass FifoMemReq.
 
   Module FifoMemResp <: Fifo.
     Definition T:= struct_t mem_resp.
   End FifoMemResp.
-  Module MemResp := Fifo1Bypass FifoMemResp.
+  Module MemResp := Fifo1 FifoMemResp.
 
   Module FifoFetch <: Fifo.
     Definition T:= struct_t fetch_bookkeeping.
   End FifoFetch.
   Module fromFetch := Fifo1 FifoFetch.
-  Module waitFromFetch := Fifo1Bypass FifoFetch.
+  Module waitFromFetch := Fifo1 FifoFetch.
 
   Module FifoDecode <: Fifo.
     Definition T:= struct_t decode_bookkeeping.

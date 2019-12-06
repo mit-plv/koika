@@ -38,7 +38,6 @@ module mkProc(Empty);
 	if (isValid == 'b1) begin
 	    let reqB = rv_core.ifc_ExternalI.read0_toIMem_data0();
 	    wire_write0_toIMem_valid0.wset(0);
-	    rv_core.ifc_ExternalI.swrite0_toIMem_valid0();
 	    Mem req = unpack(reqB);
 	    if (debug) $display("Got request from core:", fshow(req));
 	    ireq <= req;
@@ -56,11 +55,9 @@ module mkProc(Empty);
 	    let x <- bram.portB.response.get();
 	    if (debug) $display("Communicating a response:", fshow(ireq), fshow(x));
 	    wire_write0_fromIMem_valid0.wset(1);
-	    rv_core.ifc_ExternalI.swrite0_fromIMem_valid0();
 	    let req = ireq;
 	    req.data = x;
 	    wire_write0_fromIMem_data0.wset(req);
-	    rv_core.ifc_ExternalI.swrite0_fromIMem_data0();
 	end
     endrule
 
@@ -69,7 +66,6 @@ module mkProc(Empty);
 	if (isValid == 'b1) begin
 	    let reqA = rv_core.ifc_ExternalD.read0_toDMem_data0();
 	    wire_write0_toDMem_valid0.wset(0);
-	    rv_core.ifc_ExternalD.swrite0_toDMem_valid0();
 	    Mem req = unpack(reqA);
 	    dreq <= req;
 
@@ -112,11 +108,9 @@ module mkProc(Empty);
 	if (respA == 'b0) begin
 	    let x <- bram.portA.response.get();
 	    wire_write0_fromDMem_valid0.wset(1);
-	    rv_core.ifc_ExternalD.swrite0_fromDMem_valid0();
 	    let req = dreq;
 	    req.data = x;
 	    wire_write0_fromDMem_data0.wset(req);
-	    rv_core.ifc_ExternalD.swrite0_fromDMem_data0();
 	end
     endrule
 
