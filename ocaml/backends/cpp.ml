@@ -360,9 +360,6 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     pbody ();
     p "#endif" in
 
-  let p_ifminimal pbody =
-    p_ifdef "def SIM_MINIMAL" pbody in
-
   let p_ifnminimal pbody =
     p_ifdef "ndef SIM_MINIMAL" pbody in
 
@@ -1233,33 +1230,29 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     let typ = cpp_type_of_type ffi_rettype in
     p_comment "%s %s(%s);" typ ffi_name (sp_arg ffi_argtype) in
 
-  let p_extfuns_stub () =
-    p_scoped "class extfuns" ~terminator:";" (fun () ->
-        p "public:";
-        p_comment "External methods (if any) should be implemented here.";
-        p_comment "Approximate signatures are provided below for convenience.";
-        let fns = List.of_seq (Hashtbl.to_seq_keys program_info.pi_ext_funcalls) in
-        List.iter p_extfun_decl (List.sort compare fns)) in
+  let sp_extfuns_stub () =
+    with_output_to_buffer (fun () ->
+        p_scoped "class extfuns" ~terminator:";" (fun () ->
+            p "public:";
+            p_comment "External methods (if any) should be implemented here.";
+            p_comment "Approximate signatures are provided below for convenience.";
+            let fns = List.of_seq (Hashtbl.to_seq_keys program_info.pi_ext_funcalls) in
+            List.iter p_extfun_decl (List.sort compare fns))) in
 
   let p_cpp () =
-    p "#include \"%s.hpp\"" hpp.cpp_module_name;
-    nl ();
-
     let extfuns =
       match hpp.cpp_extfuns with
-      | Some cpp -> p "%s" cpp; "extfuns"
-      | None -> if Hashtbl.length program_info.pi_ext_funcalls = 0 then "unit"
-                else (p_extfuns_stub (); "extfuns") in
-    nl ();
+      | Some cpp -> cpp
+      | None -> if Hashtbl.length program_info.pi_ext_funcalls = 0
+                then "using extfuns = unit;"
+                else Buffer.contents (sp_extfuns_stub ()) in
 
-    p "using simulator = %s<%s>;" hpp.cpp_classname extfuns;
-    nl ();
-
-    p_ifminimal (fun () ->
-        p "template simulator::state_t cuttlesim::init_and_run<simulator>(unsigned long long);";
-        p "#else";
-        p_fn ~typ:"int" ~name:"main" ~args:"int argc, char** argv" (fun () ->
-            p "return cuttlesim::main<simulator>(argc, argv);")) in
+    let markers =
+      [("__CUTTLEC_MODULE_NAME__", hpp.cpp_module_name);
+       ("__CUTTLEC_EXTFUNS__", extfuns)] in
+    let contents =
+      Common.replace_strings Resources.cuttlesim_cpp markers in
+    Buffer.add_string !buffer contents in
 
   let buf_cpp = with_output_to_buffer p_cpp in
   let buf_hpp = with_output_to_buffer p_hpp in
