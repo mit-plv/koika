@@ -1,7 +1,6 @@
 (*! Simple frontend to compile and load OCaml files extracted from Coq !*)
 let ensure_koikalib () =
-  Printf.eprintf "Path to Koika: %!";
-  Common.command "ocamlfind" ["query"; "koika"]
+  Common.command "ocamlfind" ["query"; "-qe"; "-qo"; "koika"]
 
 let run_ocamlopt incl mli ml pkg =
   Common.command ~verbose:true "ocamlfind"
