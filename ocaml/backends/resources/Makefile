@@ -87,9 +87,8 @@ kcachegrind: $(mod).callgrind
 # Verilator #
 #############
 
-verilator_objdir := Vobj_dir
-verilator_optdir := $(verilator_objdir)/opt
-verilator_tracedir := $(verilator_objdir)/trace
+verilator_optdir := obj_dir.opt
+verilator_tracedir := obj_dir.trace
 
 VERILATOR_TOPLEVEL ?= $(mod).v
 VERILATOR_DRIVER ?= $(shell pwd)/$(mod).verilator.cpp
@@ -99,13 +98,10 @@ VERILATOR_TRACE_FLAGS ?=
 
 vmod := V$(basename $(VERILATOR_TOPLEVEL))
 verilator_helper := verilator.hpp
-verilator_cflags := $(patsubst %,-CFLAGS %,"-I $(shell pwd)")
+verilator_cflags := -CFLAGS "-I $(shell pwd)"
 verilator_std_flags := $(VERILATOR_WARNINGS) $(verilator_cflags) --cc --exe
 verilator_inputs := $(VERILATOR_DRIVER) $(VERILATOR_TOPLEVEL)
-verilator_deps := $(verilator_helper) $(verilator_inputs) $(verilator_objdir) $(wildcard *.sv) $(wildcard *.v)
-
-$(verilator_objdir):
-	mkdir "$@"
+verilator_deps := $(verilator_helper) $(verilator_inputs) $(wildcard *.sv) $(wildcard *.v)
 
 $(verilator_optdir)/$(vmod).mk: $(verilator_deps)
 	verilator $(verilator_std_flags) --Mdir $(verilator_optdir) $(VERILATOR_OPT_FLAGS) $(verilator_inputs)
