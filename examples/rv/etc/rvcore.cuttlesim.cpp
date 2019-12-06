@@ -127,7 +127,7 @@ template simulator::state_t cuttlesim::init_and_run<simulator>(int);
 #else
 int main(int argc, char** argv) {
   if (argc <= 1) {
-    std::cerr << "Usage: ./rv_core elf_file [number_cycles [vcd_path [vcd_period]]]" << std::endl;
+    std::cerr << "Usage: ./rv_core elf_file [ncycles [vcd_path [vcd_period]]]" << std::endl;
     return 1;
   }
 
