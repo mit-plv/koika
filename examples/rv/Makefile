@@ -13,15 +13,18 @@ all: test
 core:
 	$(MAKE) -C ../.. examples/rv/$(build_dir)
 
-cuttlesim-tests: fullasmtests core
-	echo "Testing full asm tests:\n"
-	find build/fullasmtests/ -name "*32" -exec bash -c "echo 'Test {}'; $(build_dir)/$(opt_cuttlesim) {} 2000000; if [ \$$? -eq 0 ]; then echo '[0;32mPassed[0m'; else echo '[0;31mFailed[0m {}'; fi" \;
-
-verilator-tests: core
+test/build: $(wildcard test/*)
 	$(MAKE) -C test
+
+cuttlesim-tests: fullasmtests test/build core
+	echo "Testing full asm tests:\n"
+	find build/fullasmtests/ -name "*32" -exec bash -c "echo 'Test {}'; $(build_dir)/$(opt_cuttlesim) {} -1; if [ \$$? -eq 0 ]; then echo '[0;32mPassed[0m'; else echo '[0;31mFailed[0m {}'; fi" \;
+	time $(build_dir)/$(opt_cuttlesim) test/build/primes32 -1
+
+verilator-tests: test/build core
 	cp test/build/primes.vmh $(build_dir)/mem.vmh
 	$(MAKE) -C $(build_dir) $(opt_verilator)
-	cd $(build_dir); $(opt_verilator)
+	cd $(build_dir); time $(opt_verilator)
 
 test: cuttlesim-tests verilator-tests
 
