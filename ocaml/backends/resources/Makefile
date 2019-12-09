@@ -106,13 +106,21 @@ verilator_tracedir := obj_dir.trace
 VERILATOR_TOPLEVEL ?= $(mod).v
 VERILATOR_DRIVER ?= $(shell pwd)/$(mod).verilator.cpp
 VERILATOR_WARNINGS ?= -Wall -Wno-fatal
-VERILATOR_OPT_FLAGS ?= --x-assign fast --x-initial fast --noassert --compiler gcc
+VERILATOR_OPT_FLAGS ?= --x-assign fast --x-initial fast --noassert
 VERILATOR_TRACE_FLAGS ?=
+
+ifeq ($(CXX),g++)
+verilator_compiler_flags := --compiler gcc
+else ifeq ($(CXX),clang++)
+verilator_compiler_flags := --compiler clang -fPIC
+else
+verilator_compiler_flags :=
+endif
 
 vmod := V$(basename $(VERILATOR_TOPLEVEL))
 verilator_helper := verilator.hpp
 verilator_cflags := -CFLAGS "-I $(shell pwd)"
-verilator_std_flags := $(VERILATOR_WARNINGS) $(verilator_cflags) --cc --exe
+verilator_std_flags := $(VERILATOR_WARNINGS) $(verilator_cflags) --cc --exe $(verilator_compiler_flags)
 verilator_inputs := $(VERILATOR_DRIVER) $(VERILATOR_TOPLEVEL)
 verilator_deps := $(verilator_helper) $(verilator_inputs) $(wildcard *.sv) $(wildcard *.v)
 
