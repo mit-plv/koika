@@ -3,7 +3,7 @@ default:
 
 objects := $(patsubst %,_objects/%,$(wildcard *.v) $(wildcard *.lv))
 
-${objects}:
+${objects}/ ${objects}:
 	$(MAKE) -C .. "tests/$@"
 
 .PHONY: ${objects}
