@@ -36,7 +36,10 @@ $(mod).opt.debug: $(mod).hpp $(CPP_DRIVER)
 
 cxx_s_flags := $(CUTTLEC_S_FLAGS) -fno-asynchronous-unwind-tables -fno-exceptions -fno-rtti -masm=intel -S
 $(mod).s: $(mod).hpp $(CPP_DRIVER)
-	$(CXX) $(cxx_flags) $(CUTTLEC_OPT_FLAGS) $(cxx_s_flags) $(CPP_DRIVER)  -o - | c++filt > "$@"
+	$(CXX) $(cxx_flags) $(CUTTLEC_OPT_FLAGS) $(cxx_s_flags) $(CPP_DRIVER) -o - | c++filt > "$@"
+
+$(mod).tree $(mod).tree/: $(mod).hpp $(CPP_DRIVER)
+	$(CXX) $(cxx_flags) $(CUTTLEC_OPT_FLAGS) $(cxx_s_flags) -fdump-tree-all $(CPP_DRIVER) -o $(mod).tree/$(mod).s
 
 # Tracing
 # =======
@@ -143,6 +146,8 @@ help:
 	@echo '        Profiler-friendly build'
 	@echo '      $(mod).s:'
 	@echo '        Assembly dump in SIM_MINIMAL mode'
+	@echo '      $(mod).tree/:'
+	@echo '        Dump of GCC’s optimization passes'
 	@echo '    Tracing'
 	@echo '      $(mod).out:'
 	@echo '        Output produced by $(mod).opt'
