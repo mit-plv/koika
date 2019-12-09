@@ -13,7 +13,7 @@ all: test
 core:
 	$(MAKE) -C ../.. examples/rv/$(build_dir)
 
-test/build: $(wildcard test/*)
+test/build: $(wildcard test/*.*)
 	$(MAKE) -C test
 
 cuttlesim-tests: fullasmtests test/build core
