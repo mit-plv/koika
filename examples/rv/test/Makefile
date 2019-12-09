@@ -35,10 +35,10 @@ mmio32.o: mmio.c
 
 $(BUILDDIR)/%32: $(SRCDIR)/%.c $(ELF2HEX)/elf2hex init32.o mmio32.o mmio.ld
 	mkdir -p $(BUILDDIR)
-	$(RISCVCC32) -c $(SRCDIR)/$*.c -o intermediate32.o
-	$(RISCVCC32) -o $(BUILDDIR)/$*32 -Tmmio.ld intermediate32.o init32.o mmio32.o
+	$(RISCVCC32) -c $(SRCDIR)/$*.c -o $*.intermediate32.o
+	$(RISCVCC32) -o $(BUILDDIR)/$*32 -Tmmio.ld $*.intermediate32.o init32.o mmio32.o
 	$(ELF2HEX)/elf2hex $(BUILDDIR)/$*32 0 64K 4 $(BUILDDIR)/$*.vmh
-	rm intermediate32.o
+	rm $*.intermediate32.o
 
 clean:
 	rm -f intermediate32.o init32.o mmio32.o
