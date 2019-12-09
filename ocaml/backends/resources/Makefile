@@ -145,12 +145,15 @@ clean:
 	rm -f $(mod).opt
 	rm -f $(mod).debug
 	rm -f $(mod).opt.debug
+	rm -f $(mod).cov
 	rm -f $(mod).s
 	rm -f $(mod).out
 	rm -f $(mod).cuttlesim.vcd
 	rm -f $(mod).perf
 	rm -f $(mod).callgrind
-	rm -fr $(verilator_objdir)
+	rm -f *.gcov
+	rm -fr $(verilator_optdir)
+	rm -fr $(verilator_tracedir)
 
 help:
 	@echo 'Targets'
