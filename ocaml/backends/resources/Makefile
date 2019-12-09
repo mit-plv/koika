@@ -34,6 +34,9 @@ $(mod).debug: $(cuttlesim_helper) $(mod).hpp $(CPP_DRIVER)
 $(mod).opt.debug: $(mod).hpp $(CPP_DRIVER)
 	$(CXX) $(cxx_flags) $(CUTTLEC_OPT_FLAGS) $(CUTTLEC_DEBUG_FLAGS) $(CPP_DRIVER) -o "$@"
 
+$(mod).gcno $(mod).cov:
+	$(CXX) $(cxx_flags) $(CUTTLEC_DEBUG_FLAGS) --coverage $(CPP_DRIVER) -o "$@"
+
 cxx_s_flags := $(CUTTLEC_S_FLAGS) -fno-asynchronous-unwind-tables -fno-exceptions -fno-rtti -masm=intel -S
 $(mod).s: $(mod).hpp $(CPP_DRIVER)
 	$(CXX) $(cxx_flags) $(CUTTLEC_OPT_FLAGS) $(cxx_s_flags) $(CPP_DRIVER) -o - | c++filt > "$@"
@@ -50,6 +53,7 @@ SIM_ARGS ?=
 sim_invoke_opt := ./$(mod).opt $(SIM_ARGS) $(NCYCLES)
 sim_invoke_debug := ./$(mod).debug $(SIM_ARGS) $(NCYCLES)
 sim_invoke_opt_debug := ./$(mod).opt.debug $(SIM_ARGS) $(NCYCLES)
+sim_invoke_coverage := ./$(mod).cov $(SIM_ARGS) $(NCYCLES)
 
 $(mod).out: $(mod).opt
 	$(sim_invoke_opt) > "$@"
@@ -85,6 +89,12 @@ $(mod).callgrind: $(mod).opt.debug
 
 kcachegrind: $(mod).callgrind
 	kcachegrind "$<"
+
+GCOV_OPTS ?= --branch-counts --demangled-names --relative-only
+
+$(mod).hpp.gcov $(CPP_DRIVER).gcov: $(mod).gcno $(mod).cov
+	$(sim_invoke_coverage)
+	gcov $(GCOV_OPTS) $(CPP_DRIVER)
 
 #############
 # Verilator #
@@ -144,6 +154,8 @@ help:
 	@echo '        Debugger-friendly build'
 	@echo '      $(mod).opt.debug:'
 	@echo '        Profiler-friendly build'
+	@echo '      $(mod).cov:'
+	@echo '        Coverage-instrumented build'
 	@echo '      $(mod).s:'
 	@echo '        Assembly dump in SIM_MINIMAL mode'
 	@echo '      $(mod).tree/:'
@@ -167,6 +179,9 @@ help:
 	@echo '        Valgrind trace of $(mod).opt.debug'
 	@echo '      kcachegrind:'
 	@echo '        Visualize $(mod).callgrind'
+	@echo '      $(mod).hpp.gcov:'
+	@echo '      $(CPP_DRIVER).gcov:'
+	@echo '        Generate coverage statistics (useful to see how often rules fail and why)'
 	@echo '  Verilator'
 	@echo '    $(verilator_optdir)/$(vmod):'
 	@echo '      Optimized Verilator binary'
