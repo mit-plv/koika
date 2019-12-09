@@ -56,10 +56,10 @@ sim_invoke_opt_debug := ./$(mod).opt.debug $(SIM_ARGS) $(NCYCLES)
 sim_invoke_coverage := ./$(mod).cov $(SIM_ARGS) $(NCYCLES)
 
 $(mod).out: $(mod).opt
-	$(sim_invoke_opt) > "$@"
+	time $(sim_invoke_opt) > "$@"
 
 $(mod).cuttlesim.vcd: $(mod).opt
-	$(sim_invoke_opt) "$@"
+	time $(sim_invoke_opt) "$@"
 
 # Debugging
 # =========
@@ -79,13 +79,13 @@ lldb: $(mod).debug
 # =========
 
 $(mod).perf: $(mod).opt.debug
-	perf record -o "$@" -- $(sim_invoke_opt) || (rm -f "$@"; exit 1)
+	time perf record -o "$@" -- $(sim_invoke_opt) || (rm -f "$@"; exit 1)
 
 perf: $(mod).perf
 	perf report -i "$<"
 
 $(mod).callgrind: $(mod).opt.debug
-	valgrind --tool=callgrind --callgrind-out-file="$@" $(sim_invoke_opt_debug)
+	time valgrind --tool=callgrind --callgrind-out-file="$@" $(sim_invoke_opt_debug)
 
 kcachegrind: $(mod).callgrind
 	kcachegrind "$<"
@@ -93,7 +93,7 @@ kcachegrind: $(mod).callgrind
 GCOV_OPTS ?= --branch-counts --demangled-names --relative-only
 
 $(mod).hpp.gcov $(CPP_DRIVER).gcov: $(mod).gcno $(mod).cov
-	$(sim_invoke_coverage)
+	time $(sim_invoke_coverage)
 	gcov $(GCOV_OPTS) $(CPP_DRIVER)
 
 #############
