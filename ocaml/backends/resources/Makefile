@@ -79,7 +79,7 @@ lldb: $(mod).debug
 # =========
 
 $(mod).perf: $(mod).opt.debug
-	time perf record -o "$@" -- $(sim_invoke_opt) || (rm -f "$@"; exit 1)
+	time perf record -e "cycles:pp" -o "$@" -- $(sim_invoke_opt) || (rm -f "$@"; exit 1)
 
 perf: $(mod).perf
 	perf report -i "$<"
