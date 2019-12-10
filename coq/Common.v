@@ -103,7 +103,7 @@ Fixpoint upto (n: nat) :=
 
 Notation log2 := Nat.log2_up.
 
-Instance EqDec_FiniteType {T} {FT: FiniteType T} : EqDec T.
+Instance EqDec_FiniteType {T} {FT: FiniteType T} : EqDec T | 3.
 Proof.
   econstructor; intros.
   destruct (PeanoNat.Nat.eq_dec (finite_index t1) (finite_index t2)) as [ ? | Hneq ].
