@@ -1089,16 +1089,16 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
       let rl_reset = hpp.cpp_rule_names ~prefix:"reset" rule.rl_name in
       let rl_commit = hpp.cpp_rule_names ~prefix:"commit" rule.rl_name in
 
-      let virtual_flag =
-        if rule.rl_external then "virtual " else "" in
+      let flags =
+        (if rule.rl_external then "virtual " else "") ^ "_noinline " in
 
       if not use_dynamic_log then
-        (p_fn ~typ:(virtual_flag ^ "void") ~name:rl_reset ~annot p_reset;
+        (p_fn ~typ:(flags ^ "void") ~name:rl_reset ~annot p_reset;
          nl ();
-         p_fn ~typ:(virtual_flag ^ "void") ~name:rl_commit ~annot p_commit;
+         p_fn ~typ:(flags ^ "void") ~name:rl_commit ~annot p_commit;
          nl ());
 
-      p_fn ~typ:(virtual_flag ^ "bool") ~name:rl_main ~annot (fun () ->
+      p_fn ~typ:(flags ^ "bool") ~name:rl_main ~annot (fun () ->
           if use_dynamic_log then (p "dynamic_log_t<%d> dlog{};" rule_max_log_size; nl ());
           p_assign_and_ignore NoTarget (p_action Pos.Unknown NoTarget rule.rl_body);
           nl ();

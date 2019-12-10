@@ -19,6 +19,7 @@ CXXFLAGS ?=
 CPP_DRIVER ?= $(mod).cpp
 CUTTLEC_OPT_FLAGS ?= __CUTTLEC_CXX_OPT_FLAGS__
 CUTTLEC_DEBUG_FLAGS ?= -g
+CUTTLEC_PERF_FLAGS ?= -DSIM_NOINLINE $(CUTTLEC_OPT_FLAGS) $(CUTTLEC_DEBUG_FLAGS)
 CUTTLEC_S_FLAGS ?= -DSIM_MINIMAL -fverbose-asm
 CUTTLEC_WARNINGS ?= __CUTTLEC_CXX_WARNINGS__
 
@@ -31,8 +32,8 @@ $(mod).opt: $(cuttlesim_helper) $(mod).hpp $(CPP_DRIVER)
 $(mod).debug: $(cuttlesim_helper) $(mod).hpp $(CPP_DRIVER)
 	$(CXX) $(cxx_flags) $(CUTTLEC_DEBUG_FLAGS) $(CPP_DRIVER) -o "$@"
 
-$(mod).opt.debug: $(mod).hpp $(CPP_DRIVER)
-	$(CXX) $(cxx_flags) $(CUTTLEC_OPT_FLAGS) $(CUTTLEC_DEBUG_FLAGS) $(CPP_DRIVER) -o "$@"
+$(mod).perf: $(mod).hpp $(CPP_DRIVER)
+	$(CXX) $(cxx_flags) $(CUTTLEC_PERF_FLAGS) $(CPP_DRIVER) -o "$@"
 
 $(mod).gcno $(mod).cov:
 	$(CXX) $(cxx_flags) $(CUTTLEC_DEBUG_FLAGS) --coverage $(CPP_DRIVER) -o "$@"
@@ -52,7 +53,7 @@ SIM_ARGS ?=
 
 sim_invoke_opt := ./$(mod).opt $(SIM_ARGS) $(NCYCLES)
 sim_invoke_debug := ./$(mod).debug $(SIM_ARGS) $(NCYCLES)
-sim_invoke_opt_debug := ./$(mod).opt.debug $(SIM_ARGS) $(NCYCLES)
+sim_invoke_perf := ./$(mod).perf $(SIM_ARGS) $(NCYCLES)
 sim_invoke_coverage := ./$(mod).cov $(SIM_ARGS) $(NCYCLES)
 
 $(mod).out: $(mod).opt
@@ -64,28 +65,30 @@ $(mod).cuttlesim.vcd: $(mod).opt
 # Debugging
 # =========
 
-GDBFLAGS ?= -tui
-GDBOPTS ?= -x "set print array on" -x "set print pretty on"
+GDB_FLAGS ?= -tui
+GDB_OPTS ?= -x "set print array on" -x "set print pretty on"
 
 gdb: $(mod).debug
-	gdb $(GDBFLAGS) $(GDBOPTS) --args $(sim_invoke_debug)
+	gdb $(GDB_FLAGS) $(GDB_OPTS) --args $(sim_invoke_debug)
 
-LLDBFLAGS ?=
+LLDB_FLAGS ?=
 
 lldb: $(mod).debug
-	lldb $(LLDBFLAGS) -- $(sim_invoke_debug)
+	lldb $(LLDB_FLAGS) -- $(sim_invoke_debug)
 
 # Profiling
 # =========
 
-$(mod).perf: $(mod).opt.debug
-	time perf record -e "cycles:pp" -o "$@" -- $(sim_invoke_opt) || (rm -f "$@"; exit 1)
+$(mod).perf.data: $(mod).perf
+	time perf record -e "cycles:pp" -o "$@" -- $(sim_invoke_perf) || (rm -f "$@"; exit 1)
 
-perf: $(mod).perf
-	perf report -i "$<"
+PERF_FLAGS ?= -M intel
 
-$(mod).callgrind: $(mod).opt.debug
-	time valgrind --tool=callgrind --callgrind-out-file="$@" $(sim_invoke_opt_debug)
+perf: $(mod).perf.data
+	perf report $(PERF_FLAGS) -i "$<"
+
+$(mod).callgrind: $(mod).perf
+	time valgrind --tool=callgrind --callgrind-out-file="$@" $(sim_invoke_perf)
 
 kcachegrind: $(mod).callgrind
 	kcachegrind "$<"
@@ -144,12 +147,12 @@ $(verilator_tracedir)/$(vmod): $(verilator_tracedir)/$(vmod).mk $(verilator_deps
 clean:
 	rm -f $(mod).opt
 	rm -f $(mod).debug
-	rm -f $(mod).opt.debug
+	rm -f $(mod).perf
 	rm -f $(mod).cov
 	rm -f $(mod).s
 	rm -f $(mod).out
 	rm -f $(mod).cuttlesim.vcd
-	rm -f $(mod).perf
+	rm -f $(mod).perf.data
 	rm -f $(mod).callgrind
 	rm -f *.gcov
 	rm -fr $(verilator_optdir)
@@ -163,7 +166,7 @@ help:
 	@echo '        Optimized build'
 	@echo '      $(mod).debug:'
 	@echo '        Debugger-friendly build'
-	@echo '      $(mod).opt.debug:'
+	@echo '      $(mod).perf:'
 	@echo '        Profiler-friendly build'
 	@echo '      $(mod).cov:'
 	@echo '        Coverage-instrumented build'
@@ -182,12 +185,12 @@ help:
 	@echo '      lldb:'
 	@echo '        Run $(mod.debug) under LLDB'
 	@echo '    Profiling'
-	@echo '      $(mod).perf:'
-	@echo '        ‘perf’ profile of $(mod).opt'
+	@echo '      $(mod).perf.data:'
+	@echo '        ‘perf’ profile of $(mod).perf'
 	@echo '      perf:'
 	@echo '        Show perf report'
 	@echo '      $(mod).callgrind:'
-	@echo '        Valgrind trace of $(mod).opt.debug'
+	@echo '        Valgrind trace of $(mod).perf'
 	@echo '      kcachegrind:'
 	@echo '        Visualize $(mod).callgrind'
 	@echo '      $(mod).hpp.gcov:'
@@ -213,6 +216,8 @@ help:
 	@echo '        C++ compiler flags used in opt mode'
 	@echo '      CUTTLEC_DEBUG_FLAGS = $(CUTTLEC_DEBUG_FLAGS)'
 	@echo '        C++ compiler flags used in debug mode'
+	@echo '      CUTTLEC_DEBUG_FLAGS = $(CUTTLEC_DEBUG_FLAGS)'
+	@echo '        C++ compiler flags used in perf mode'
 	@echo '      CUTTLEC_S_FLAGS = $(CUTTLEC_S_FLAGS)'
 	@echo '        C++ compiler flags used to generate assembly listings'
 	@echo '      CUTTLEC_WARNINGS = $(CUTTLEC_WARNINGS)'
@@ -222,12 +227,14 @@ help:
 	@echo '        How many cycles to run the simulation for'
 	@echo '      SIM_ARGS = $(SIM_ARGS)'
 	@echo '        Command-line arguments passed to the C++ model'
-	@echo '      GDBFLAGS = $(GDBFLAGS)'
+	@echo '      GDB_FLAGS = $(GDB_FLAGS)'
 	@echo '        Command-line arguments passed to GDB'
-	@echo '      GDBOPTS = $(GDBOPTS)'
+	@echo '      GDB_OPTS = $(GDB_OPTS)'
 	@echo '        Additional command-line options passed to GDB'
-	@echo '      LLDBFLAGS = $(LLDBFLAGS)'
+	@echo '      LLDB_FLAGS = $(LLDB_FLAGS)'
 	@echo '        Command-line arguments passed to LLDB'
+	@echo '      PERF_FLAGS = $(PERF_FLAGS)'
+	@echo '        Command-line arguments passed to perf'
 	@echo '  Verilator'
 	@echo '    VERILATOR_TOPLEVEL = $(VERILATOR_TOPLEVEL)'
 	@echo '      Verilog or SystemVerilog file wrapping the code compiled by cuttlec.'

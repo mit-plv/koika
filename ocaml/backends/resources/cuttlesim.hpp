@@ -59,7 +59,11 @@ static inline void _sim_assert_fn(const char* repr,
 #define _flatten
 #endif
 
+#ifdef SIM_NOINLINE
 #define _noinline __attribute__((noinline))
+#else
+#define _noinline
+#endif
 
 #define _unlikely(b) __builtin_expect((b), 0)
 
@@ -1026,13 +1030,13 @@ namespace cuttlesim {
 
   using ull = unsigned long long int;
   template <typename simulator, typename... Args>
-  _flatten _noinline typename simulator::state_t init_and_run(ull ncycles, Args&&... args) noexcept {
+  _flatten __attribute__((noinline)) typename simulator::state_t init_and_run(ull ncycles, Args&&... args) noexcept {
     return simulator(std::forward<Args>(args)...).run(ncycles).snapshot();
   }
 
 #ifndef SIM_MINIMAL
   template<typename simulator, typename... Args>
-  static  _noinline _unused void init_and_trace(std::string fname, ull ncycles, Args&&... args) {
+    static __attribute__((noinline)) _unused void init_and_trace(std::string fname, ull ncycles, Args&&... args) {
     simulator(std::forward<Args>(args)...).trace(fname, ncycles, 1);
   }
 
