@@ -31,6 +31,7 @@ let suffixes_to_frontends : (string * frontend) list =
   [(".lv", LV);
    (".cmxs", CoqPkg);
    (".kpkg", CoqPkg);
+   (".kobj", CoqPkg);
    (".ml", ExtractedML)]
 
 let split_suffix label suffixes fname =
@@ -187,7 +188,7 @@ let run_ip (backends: backend list) cnf (ip: Cuttlebone.Extr.interop_package_t) 
       pkg_cpp = lazy (Backends.Cpp.input_of_sim_package ip.ip_koika ip.ip_sim);
       pkg_graph = lazy (Cuttlebone.Graphs.graph_of_verilog_package ip.ip_koika ip.ip_verilog) }
 
-let run_cmxs (backends: backend list) (cnf: config) =
+let run_dynlink (backends: backend list) (cnf: config) =
   List.iter (run_ip backends cnf) (dynlink_interop_packages cnf.cnf_src_fpath)
 
 let run_ocaml (backends: backend list) (cnf: config) =
@@ -197,7 +198,7 @@ let run_ocaml (backends: backend list) (cnf: config) =
 let run (frontend: frontend) (backends: backend list) (cnf: config) =
   match frontend with
   | LV -> run_lv backends cnf
-  | CoqPkg -> run_cmxs backends cnf
+  | CoqPkg -> run_dynlink backends cnf
   | ExtractedML -> run_ocaml backends cnf
 
 let backends_of_spec frontend spec =
