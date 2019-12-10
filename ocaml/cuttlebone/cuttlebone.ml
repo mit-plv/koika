@@ -12,6 +12,8 @@ type ('name_t, 'reg_t, 'ext_fn_t) extr_circuit =
 let strip_annotations = true
 let hashcons_circuits = true
 
+type extr_type = Extr.type0
+
 module Util = struct
   let log2 =
     Extr.Nat.log2_up
@@ -31,7 +33,7 @@ module Util = struct
   let vect_of_array (bs: 'a array) =
     Extr.vect_of_list (Array.to_list bs)
 
-  let rec typ_of_extr_type (tau: Extr.type0) : typ =
+  let rec typ_of_extr_type (tau: extr_type) : typ =
     match tau with
     | Extr.Bits_t sz -> Bits_t sz
     | Extr.Enum_t sg -> Enum_t (enum_sig_of_extr_enum_sig sg)
@@ -52,13 +54,13 @@ module Util = struct
   and array_sig_of_extr_array_sig { array_type; array_len } =
     { array_type = typ_of_extr_type array_type; array_len }
 
-  let rec extr_type_of_typ (tau: typ) : Extr.type0 =
+  let rec extr_type_of_typ (tau: typ) : extr_type =
     match tau with
     | Bits_t sz -> Extr.Bits_t sz
     | Enum_t sg -> Extr.Enum_t (extr_enum_sig_of_enum_sig sg)
     | Struct_t sg -> Extr.Struct_t (extr_struct_sig_of_struct_sig sg)
     | Array_t sg -> Extr.Array_t (extr_array_sig_of_array_sig sg)
-  and extr_struct_sig_of_struct_sig { struct_name; struct_fields } : Extr.type0 Extr.struct_sig' =
+  and extr_struct_sig_of_struct_sig { struct_name; struct_fields } : extr_type Extr.struct_sig' =
     { struct_name = coq_string_of_string struct_name;
       struct_fields = List.map (fun (nm, tau) ->
                           (coq_string_of_string nm, extr_type_of_typ tau))
