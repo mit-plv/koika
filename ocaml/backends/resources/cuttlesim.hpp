@@ -1115,6 +1115,8 @@ namespace cuttlesim {
 #define COMMIT(rule_name) \
   (commit_##rule_name())
 
+#define FAIL_FAST(_rule_name) \
+  { return false; }
 #define READ0_FAST(_rule_name, reg, ptr) \
   cuttlesim::read_fast((ptr), Log.state.reg)
 #define READ1_FAST(_rule_name, reg, ptr) \

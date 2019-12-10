@@ -9,6 +9,7 @@ Require Koika.Common
         Koika.Circuits
         Koika.Interop.
 
+Unset Extraction SafeImplicits.
 Extraction "extracted.ml"
            EqDec.EqDec
            FiniteType.FiniteType Member.mem Member.mmap
@@ -30,6 +31,7 @@ Extraction "extracted.ml"
            TypedSyntaxTools.interp_arithmetic
            TypedSyntaxTools.classify_registers
            TypedSyntaxTools.compute_register_histories
+           TypedSyntaxTools.may_fail_without_revert
            TypedSyntaxTools.rule_max_log_size
            Circuits.compile_scheduler
            Circuits.lco_opt_compose Circuits.opt_constprop Circuits.opt_muxelim

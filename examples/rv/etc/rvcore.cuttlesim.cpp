@@ -26,7 +26,7 @@ protected:
       if (_c0) {
         WRITE1_FAST(ExternalI, toIMem_valid0, 1'0_b);
       } else {
-        FAIL(ExternalI);
+        FAIL_FAST(ExternalI);
       }
       struct_mem_req readRequestI;
       READ1_FAST(ExternalI, toIMem_data0, &readRequestI);
@@ -66,7 +66,7 @@ protected:
       if (_c0) {
         WRITE1_FAST(ExternalD, toDMem_valid0, 1'0_b);
       } else {
-        FAIL(ExternalD);
+        FAIL_FAST(ExternalD);
       }
       struct_mem_req readRequestD;
       READ1_FAST(ExternalD, toDMem_data0, &readRequestD);

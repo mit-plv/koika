@@ -343,6 +343,15 @@ Section TypedSyntaxTools.
         let reg_histories := compute_scheduler_register_histories per_rule s in
         let kinds := classify_registers reg_histories in
         (rule_env, kinds).
+
+      Definition may_fail_without_revert (histories: reg_history_map) :=
+        let ok h :=
+            match h with
+            | {| hr1 := tFalse; hw0 := tFalse; hw1 := tFalse |}
+            | {| hw0 := tFalse; hw1 := tFalse; hcf := tTrue |} => true
+            | _ => false
+            end in
+        Environments.fold_right REnv (fun _ rh acc => andb (ok rh) acc) histories true.
     End Interface.
 
     (* LATER: this should properly handle switches *)

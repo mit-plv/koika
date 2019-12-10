@@ -347,6 +347,9 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
   let cpp_enumerator_name = cpp_enumerator_name program_info in
   let cpp_const_init = cpp_const_init program_info in
 
+  let may_fail_fast =
+    Cuttlebone.Util.may_fail_without_revert (Array.to_list hpp.cpp_registers) in
+
   let rec iter_sep sep body = function
     | [] -> ()
     | item :: [] -> body item
@@ -827,7 +830,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
         if use_dynamic_log
         then (if use_offsets_in_dynamic_log then "_DOL" else "_DL")
         else "" in
-      let fail = sprintf "FAIL%s" dl_suffix in
+      let fail safe = sprintf "FAIL%s" (if safe then "_FAST" else dl_suffix) in
       let commit = sprintf "COMMIT%s" dl_suffix in
       let rw_suffix reg =
         if hpp.cpp_register_kinds reg = Value then "_FAST" else dl_suffix in
@@ -982,9 +985,10 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
                 (rl: ((pos_t, reg_t) Extr.register_annotation, var_t, reg_t, _) Extr.action) =
         p_pos pos;
         match rl with
-        | Extr.APos (_, _, _,
+        | Extr.APos (_, _, Extr.HistoryAnnot reg_histories,
                      Extr.Fail (_, _)) ->
-           p "%s(%s);" fail rule_name_unprefixed;
+           let safe = may_fail_fast reg_histories in
+           p "%s(%s);" (fail safe) rule_name_unprefixed;
            (match target with
             | NoTarget -> NotAssigned
             | VarTarget { declared = true; name; _ } -> Assigned name

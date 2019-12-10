@@ -276,6 +276,9 @@ module Util = struct
     let rule_env, kinds = Extr.compute_register_histories _R rEnv rlEnv rules scheduler in
     ((fun (rl: rule_name_t) -> snd (Extr.getenv rlEnv rule_env rl)),
      (fun (r: reg_t) -> Extr.getenv rEnv kinds r))
+
+  let may_fail_without_revert registers histories =
+    Extr.may_fail_without_revert (contextEnv registers) histories
 end
 
 module Compilation = struct
