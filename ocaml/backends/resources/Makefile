@@ -22,9 +22,16 @@ CUTTLEC_DEBUG_FLAGS ?= -g
 CUTTLEC_PERF_FLAGS ?= -DSIM_NOINLINE $(CUTTLEC_OPT_FLAGS) $(CUTTLEC_DEBUG_FLAGS)
 CUTTLEC_S_FLAGS ?= -DSIM_MINIMAL -fverbose-asm
 CUTTLEC_WARNINGS ?= __CUTTLEC_CXX_WARNINGS__
+VCD_SCOPES ?= TOP $(mod)
 
+comma := ,
 cuttlesim_helper := cuttlesim.hpp
-cxx_flags := $(CXXFLAGS) $(CPPFLAGS) $(CUTTLEC_WARNINGS) __CUTTLEC_CXX_BASE_FLAGS__
+cxx_scopes_arg := '-DSIM_VCD_SCOPES={$(patsubst %,"%"$(comma),$(VCD_SCOPES))}'
+cxx_flags := $(CXXFLAGS) $(CPPFLAGS) $(CUTTLEC_WARNINGS) $(cxx_scopes_arg)
+
+ifeq (,$(findstring --std,$(cxx_flags)))
+cxx_flags += __CUTTLEC_CXX_STANDARD__
+endif
 
 $(mod).opt: $(cuttlesim_helper) $(mod).hpp $(CPP_DRIVER)
 	$(CXX) $(cxx_flags) $(CUTTLEC_OPT_FLAGS) $(CPP_DRIVER) -o "$@"
@@ -222,6 +229,8 @@ help:
 	@echo '        C++ compiler flags used to generate assembly listings'
 	@echo '      CUTTLEC_WARNINGS = $(CUTTLEC_WARNINGS)'
 	@echo '        Additional C++ compiler flags controlling warnings'
+	@echo '      VCD_SCOPES = $(VCD_SCOPES)'
+	@echo '        Module hierarchy (space-separated, unquoted) to use in Cuttlesim\'s VCD files'
 	@echo '    Run-time settings'
 	@echo '      NCYCLES = $(NCYCLES)'
 	@echo '        How many cycles to run the simulation for'

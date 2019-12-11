@@ -893,29 +893,51 @@ namespace prims {
   std::ostream& operator<<(std::ostream& os, const array<T, len>& val) {
     return fmt(os, val);
   }
+#endif // #ifndef SIM_MINIMAL
+} // namespace prims
 
+#ifndef SIM_MINIMAL
+namespace cuttlesim {
   namespace vcd {
     using namespace std::chrono;
+    using strs = std::initializer_list<std::string>;
 
-    static _unused void header(std::ostream& os) {
+    static _unused void begin_header(std::ostream& os, strs scopes) {
       auto now = system_clock::to_time_t(system_clock::now());
-      os << "$date " << std::ctime(&now) << " $end" << std::endl;
+      os << "$date " << std::put_time(std::gmtime(&now), "%FT%TZ") << " $end" << std::endl;
       os << "$version " << cuttlesim::version << " $end" << std::endl;
-      os << "$timescale 1 ps $end" << std::endl;
+      os << "$timescale 1 ns $end" << std::endl;
+      for (auto&& scope : scopes) {
+        os << "$scope module "<< scope << " $end" << std::endl;
+      }
+    }
+
+    static _unused void end_header(std::ostream& os, strs scopes) {
+      for (auto&& _ _unused : scopes) {
+        os << "$upscope $end" << std::endl;
+      }
+      os << "$enddefinitions $end" << std::endl;
+      os << "$dumpvars" << std::endl;
     }
 
     static _unused void var(std::ostream& os, const std::string& name, const size_t sz) {
-      os << "$var reg " << sz << " " << name << " " << name << " $end";
+      std::string alias = name;
+      os << "$var wire " << sz << " " << alias << " " << name;
+      if (sz > 1) {
+        os << " [" << sz - 1 << ":0]";
+      }
+      os << " $end" << std::endl;
     }
 
     template<typename T>
     static _unused void dumpvar(std::ostream& os, std::string name, const T& val) {
+      using namespace prims;
       internal::bits_fmt(os, pack(val), fmtstyle::bin, prefixes::minimal);
       os << " " << name << std::endl;
     }
   }
+}
 #endif // #ifndef SIM_MINIMAL
-} // namespace prims
 
 using prims::array;
 using prims::unit;

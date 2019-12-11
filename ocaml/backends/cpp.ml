@@ -691,24 +691,19 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
           (fun () -> iter_all_registers p_dump_register) in
 
       let p_vcd_decl r =
-        p "os << \"$var reg %d %s %s $end\" << std::endl;"
-          (typ_sz (reg_type r)) r.reg_name r.reg_name in
+        p "cuttlesim::vcd::var(os, \"%s\", %d);"
+          r.reg_name (typ_sz (reg_type r)) in
       let p_vcd_header () =
         p_fn ~typ:"static _unused void" ~name:"vcd_header"
           ~args:"std::ostream& os" (fun () ->
-            p "using namespace std::chrono;
-               auto now = system_clock::to_time_t(system_clock::now());
-               os << \"$date \" << std::put_time(std::gmtime(&now), \"%%FT%%TZ\") << \" $end\" << std::endl;
-               os << \"$version \" << cuttlesim::version << \" $end\" << std::endl;
-               os << \"$timescale 1ps $end\" << std::endl;";
-            p "os << \"$scope module %s $end\" << std::endl;" hpp.cpp_module_name;
+            p_ifdef "ndef SIM_VCD_SCOPES" (fun () ->
+                p "#define SIM_VCD_SCOPES { \"TOP\", \"%s\" }" hpp.cpp_module_name);
+            p "cuttlesim::vcd::begin_header(os, SIM_VCD_SCOPES);";
             iter_all_registers p_vcd_decl;
-            p "os << \"$upscope $end\" << std::endl;
-               os << \"$enddefinitions $end\" << std::endl;
-               os << \"$dumpvars\" << std::endl;") in
+            p "cuttlesim::vcd::end_header(os, SIM_VCD_SCOPES);") in
 
       let p_dumpvar r =
-        p "prims::vcd::dumpvar(os, \"%s\", %s);"
+        p "cuttlesim::vcd::dumpvar(os, \"%s\", %s);"
           r.reg_name r.reg_name in
       let p_vcd_dumpvars () =
         p_fn ~typ:"void" ~name:"vcd_dumpvars" ~args:"_unused std::ostream& os"
