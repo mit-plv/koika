@@ -525,7 +525,10 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     let p_eq prbody =
       p_fn ~typ:"static _unused bits<1> "
         ~args:(sprintf "%s, %s" (v_argdecl v1) (v_argdecl v2))
-        ~name:"operator==" (fun () -> pr "return "; prbody (); p ";") in
+        ~name:"operator==" (fun () -> pr "return "; prbody (); p ";");
+      p_fn ~typ:"static _unused bits<1> "
+        ~args:(sprintf "%s, %s" (v_argdecl v1) (v_argdecl v2))
+        ~name:"operator!=" (fun () -> pr "return !(%s == %s);" v1 v2)in
 
     let p_enum_eq _sg =
       p_eq (fun () -> pr "%s::mk(%s) == %s::mk(%s)" bits_tau v1 bits_tau v2) in
@@ -703,10 +706,12 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
             p "cuttlesim::vcd::end_header(os, SIM_VCD_SCOPES);") in
 
       let p_dumpvar r =
-        p "cuttlesim::vcd::dumpvar(os, \"%s\", %s);"
-          r.reg_name r.reg_name in
+        p "cuttlesim::vcd::dumpvar(os, \"%s\", %s, previous.%s, force);"
+          r.reg_name r.reg_name r.reg_name in
       let p_vcd_dumpvars () =
-        p_fn ~typ:"void" ~name:"vcd_dumpvars" ~args:"_unused std::ostream& os"
+        p_fn ~typ:"void" ~name:"vcd_dumpvars"
+          ~args:(sprintf "%s, %s, %s" "_unused std::ostream& os"
+                   "const state_t& previous" "const bool force")
           ~annot:" const" (fun () ->
             iter_all_registers p_dumpvar) in
 
@@ -1176,18 +1181,19 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     let p_trace () =
       p_ifnminimal (fun () ->
           p_fn ~typ:run_typ ~name:"trace"
-            ~args:"std::string fname, T ncycles, std::size_t period = 1" (fun () ->
+            ~args:"std::string fname, T ncycles" (fun () ->
               p "std::ofstream vcd;";
               p "vcd.open(fname);";
               p "state_t::vcd_header(vcd);";
-              p "snapshot().vcd_dumpvars(vcd);";
-              p "T next_dump = period;";
+              p "state_t latest = snapshot();";
+              p "latest.vcd_dumpvars(vcd, latest, true);";
               p_cycle_loop (fun () ->
                   p "cycle();";
-                  p_scoped "if (next_dump == cycle_id) " (fun () ->
-                      p "vcd << \"#\" << cycle_id << std::endl;";
-                      p "snapshot().vcd_dumpvars(vcd);";
-                      p "next_dump = cycle_id + period;"));
+                  p "state_t current = snapshot();";
+                  p "vcd << '#' << cycle_id << std::endl;";
+                  p "current.vcd_dumpvars(vcd, latest, false);";
+                  p "latest = current;";
+                  p "cycle();");
               p "return *this;")) in
 
     p_sim_class (fun () ->

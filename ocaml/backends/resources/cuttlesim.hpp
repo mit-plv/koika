@@ -499,6 +499,10 @@ namespace prims {
     return mask(bits<sz1>::mk(data.v << shift.v));
   }
 
+  bits<1> operator!(const bits<1> x) {
+    return bits<1>::mk(!x.v);
+  }
+
   template<bitwidth sz>
   bits<1> operator==(const bits<sz> x, const bits<sz> y) {
     return bits<1>::mk(x.v == y.v);
@@ -930,10 +934,13 @@ namespace cuttlesim {
     }
 
     template<typename T>
-    static _unused void dumpvar(std::ostream& os, std::string name, const T& val) {
-      using namespace prims;
-      internal::bits_fmt(os, pack(val), fmtstyle::bin, prefixes::minimal);
-      os << " " << name << std::endl;
+    static _unused void dumpvar(std::ostream& os, std::string name,
+                                const T& val, const T& previous, bool force) {
+      if (force || val != previous) {
+        using namespace prims;
+        internal::bits_fmt(os, pack(val), fmtstyle::bin, prefixes::minimal);
+        os << " " << name << '\n';
+      }
     }
   }
 }
@@ -1085,7 +1092,7 @@ namespace cuttlesim {
 #ifndef SIM_MINIMAL
   template<typename simulator, typename... Args>
     static __attribute__((noinline)) _unused void init_and_trace(std::string fname, ull ncycles, Args&&... args) {
-    simulator(std::forward<Args>(args)...).trace(fname, ncycles, 1);
+    simulator(std::forward<Args>(args)...).trace(fname, ncycles);
   }
 
   struct params {
