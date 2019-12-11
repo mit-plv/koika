@@ -128,7 +128,7 @@ VERILATOR_TRACE_FLAGS ?=
 ifeq ($(CXX),g++)
 verilator_compiler_flags := --compiler gcc
 else ifeq ($(CXX),clang++)
-verilator_compiler_flags := --compiler clang -fPIC
+verilator_compiler_flags := --compiler clang -CFLAGS -fPIC
 else
 verilator_compiler_flags :=
 endif
