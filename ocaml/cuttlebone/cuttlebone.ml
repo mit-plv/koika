@@ -247,20 +247,35 @@ module Util = struct
     | Some tau, Some v -> Some (value_of_extr_value tau v)
     | _, _ -> None
 
-  let finiteType_of_register_list registers =
-    let reg_indices = List.mapi (fun i x -> x, i) registers in
-    let regmap = Hashtbl.of_seq (List.to_seq reg_indices) in
-    { Extr.finite_elements = registers;
+  let finiteType_of_list elements =
+    let reg_indices = List.mapi (fun i x -> x, i) elements in
+    (* Reverse so that deduplication removes high indices *)
+    let regmap = Hashtbl.of_seq (List.to_seq (List.rev reg_indices)) in
+    { Extr.finite_elements = elements;
       Extr.finite_index = fun r -> Hashtbl.find regmap r }
 
   let contextEnv registers =
-    Extr.contextEnv (finiteType_of_register_list registers)
+    Extr.contextEnv (finiteType_of_list registers)
 
-  let classify_registers (type reg_t) (registers: reg_t list) rules scheduler
-      : reg_t -> Extr.register_kind =
-    let env = contextEnv registers in
-    let classified = Extr.classify_registers env rules scheduler in
-    (fun (r: reg_t) -> Extr.getenv env classified r)
+  let dedup (l: 'a list) =
+    List.to_seq l |> Seq.map (fun x -> (x, ()))
+    |> Hashtbl.of_seq |> Hashtbl.to_seq_keys |> List.of_seq
+
+  let compute_register_histories (type reg_t rule_name_t)
+        (_R: reg_t -> extr_type)
+        (registers: reg_t list)
+        (rule_names: rule_name_t list)
+        (rules: rule_name_t -> ('pos_t, 'var_t, reg_t, 'fn_t) Extr.rule)
+        (scheduler: ('pos_t, rule_name_t) Extr.scheduler)
+      : (rule_name_t -> ('pos_t, 'var_t, reg_t, 'fn_t) Extr.annotated_rule)
+        * (reg_t -> Extr.register_kind) =
+    (* Taking in a list of rules allows us to ensure that we annotate all rules,
+       not just those mentioned in the scheduler. *)
+    let rEnv = contextEnv registers in
+    let rlEnv = contextEnv rule_names in
+    let rule_env, kinds = Extr.compute_register_histories _R rEnv rlEnv rules scheduler in
+    ((fun (rl: rule_name_t) -> snd (Extr.getenv rlEnv rule_env rl)),
+     (fun (r: reg_t) -> Extr.getenv rEnv kinds r))
 end
 
 module Compilation = struct
@@ -310,7 +325,7 @@ module Compilation = struct
     lco_opt_compose cR cSigma (opt_constprop cR cSigma) (opt_muxelim cR cSigma eqb)
 
   let compile (cu: 'f compile_unit) : (reg_signature -> compiled_circuit) =
-    let finiteType = Util.finiteType_of_register_list cu.c_registers in
+    let finiteType = Util.finiteType_of_list cu.c_registers in
     let show_string = { Extr.show0 = fun (rl: string) -> Util.coq_string_of_string rl } in
     let rules r = List.assoc r cu.c_rules |> snd in
     let externalp r = (List.assoc r cu.c_rules |> fst) = `ExternalRule in

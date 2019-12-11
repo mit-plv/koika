@@ -1003,6 +1003,16 @@ namespace cuttlesim {
     return ok;
   }
 
+  template<typename T>
+  void read_fast(T* target, const T rL) {
+    *target = rL;
+  }
+
+  template<typename T>
+  void write_fast(T& rl, const T val) {
+    rl = val;
+  }
+
   struct offsets {
     std::size_t state_offset;
     std::size_t state_sz;
@@ -1104,6 +1114,15 @@ namespace cuttlesim {
   FAIL_UNLESS(rule_name, write1(log.state.reg, (val), log.rwset.reg))
 #define COMMIT(rule_name) \
   (commit_##rule_name())
+
+#define READ0_FAST(_rule_name, reg, ptr) \
+  cuttlesim::read_fast((ptr), Log.state.reg)
+#define READ1_FAST(_rule_name, reg, ptr) \
+  cuttlesim::read_fast((ptr), log.state.reg)
+#define WRITE0_FAST(_rule_name, reg, val) \
+  cuttlesim::write_fast(log.state.reg, (val))
+#define WRITE1_FAST(_rule_name, reg, val) \
+  cuttlesim::write_fast(log.state.reg, (val))
 
 #define FAIL_DL(rule_name) \
   { dlog.apply(log, Log); return false; }

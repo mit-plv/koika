@@ -19,6 +19,7 @@ Extraction "extracted.ml"
            Syntax.uscheduler
            Desugaring.desugar_action
            TypeInference.type_action TypeInference.type_rule TypeInference.type_scheduler
+           TypedSyntaxTools.scheduler_rules
            TypedSyntaxTools.action_mentions_var
            TypedSyntaxTools.member_mentions_shadowed_binding
            TypedSyntaxTools.action_footprint
@@ -28,7 +29,7 @@ Extraction "extracted.ml"
            TypedSyntaxTools.action_type
            TypedSyntaxTools.interp_arithmetic
            TypedSyntaxTools.classify_registers
-           TypedSyntaxTools.annotate_action_register_history
+           TypedSyntaxTools.compute_register_histories
            TypedSyntaxTools.rule_max_log_size
            Circuits.compile_scheduler
            Circuits.lco_opt_compose Circuits.opt_constprop Circuits.opt_muxelim

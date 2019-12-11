@@ -22,14 +22,14 @@ protected:
   virtual bool rule_ExternalI() noexcept {
     {
       bits<1> _c0;
-      READ1(ExternalI, toIMem_valid0, &_c0);
+      READ1_FAST(ExternalI, toIMem_valid0, &_c0);
       if (_c0) {
-        WRITE1(ExternalI, toIMem_valid0, 1'0_b);
+        WRITE1_FAST(ExternalI, toIMem_valid0, 1'0_b);
       } else {
         FAIL(ExternalI);
       }
       struct_mem_req readRequestI;
-      READ1(ExternalI, toIMem_data0, &readRequestI);
+      READ1_FAST(ExternalI, toIMem_data0, &readRequestI);
       {
         bits<32> IAddress = readRequestI.addr;
         {
@@ -43,10 +43,10 @@ protected:
             data.data = current_value;
             // --------------------
             bits<1> _x2;
-            READ1(ExternalI, fromIMem_valid0, &_x2);
+            READ1_FAST(ExternalI, fromIMem_valid0, &_x2);
             if (~(_x2)) {
-              WRITE1(ExternalI, fromIMem_data0, data);
-              WRITE1(ExternalI, fromIMem_valid0, 1'1_b);
+              WRITE1_FAST(ExternalI, fromIMem_data0, data);
+              WRITE1_FAST(ExternalI, fromIMem_valid0, 1'1_b);
             } else {
               FAIL(ExternalI);
             }
@@ -62,14 +62,14 @@ protected:
   virtual bool rule_ExternalD() noexcept {
     {
       bits<1> _c0;
-      READ1(ExternalD, toDMem_valid0, &_c0);
+      READ1_FAST(ExternalD, toDMem_valid0, &_c0);
       if (_c0) {
-        WRITE1(ExternalD, toDMem_valid0, 1'0_b);
+        WRITE1_FAST(ExternalD, toDMem_valid0, 1'0_b);
       } else {
         FAIL(ExternalD);
       }
       struct_mem_req readRequestD;
-      READ1(ExternalD, toDMem_data0, &readRequestD);
+      READ1_FAST(ExternalD, toDMem_data0, &readRequestD);
       {
         bits<32> DAddress = readRequestD.addr;
         {
@@ -104,10 +104,10 @@ protected:
             // --------------------
 
             bits<1> _x2;
-            READ1(ExternalD, fromDMem_valid0, &_x2);
+            READ1_FAST(ExternalD, fromDMem_valid0, &_x2);
             if (~(_x2)) {
-              WRITE1(ExternalD, fromDMem_data0, data);
-              WRITE1(ExternalD, fromDMem_valid0, 1'1_b);
+              WRITE1_FAST(ExternalD, fromDMem_data0, data);
+              WRITE1_FAST(ExternalD, fromDMem_valid0, 1'1_b);
             } else {
               FAIL(ExternalD);
             }

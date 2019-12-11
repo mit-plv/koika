@@ -20,7 +20,7 @@ type ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_rule_t = {
     rl_external: bool;
     rl_name: 'rule_name_t;
     rl_footprint: 'reg_t array;
-    rl_body: ('pos_t, 'var_t, 'reg_t, 'ext_fn_t) Extr.rule;
+    rl_body: (('pos_t, 'reg_t) Extr.register_annotation, 'var_t, 'reg_t, 'ext_fn_t) Extr.rule;
   }
 
 type ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_input_t = {
@@ -651,16 +651,18 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
       nl ());
     p "#include \"%s\"" cuttlesim_hpp_fname in
 
-  let iter_registers f regs =
-    Array.iter (fun r -> f (hpp.cpp_register_sigs r)) regs in
+  let reg_sig_w_kind r =
+    (hpp.cpp_register_kinds r, hpp.cpp_register_sigs r) in
+
+  let iter_registers_with_kinds f regs =
+    Array.iter (fun r -> f (reg_sig_w_kind r)) regs in
 
   let iter_all_registers =
     let sigs = Array.map hpp.cpp_register_sigs hpp.cpp_registers in
     fun f -> Array.iter f sigs in
 
   let iter_all_registers_with_kind =
-    let info r = (hpp.cpp_register_kinds r, hpp.cpp_register_sigs r) in
-    let sigs = Array.map info hpp.cpp_registers in
+    let sigs = Array.map reg_sig_w_kind hpp.cpp_registers in
     fun f -> Array.iter f sigs in
 
   let p_impl () =
@@ -769,11 +771,14 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
 
     let p_rwset_t () =
       let rwset_type_of_kind = function
-        | Extr.Wire -> "wire_rwset"
-        | Extr.Register -> "reg_rwset"
-        | Extr.EHR -> "ehr_rwset" in
+        | Extr.Value -> None
+        | Extr.Wire -> Some "wire_rwset"
+        | Extr.Register -> Some "reg_rwset"
+        | Extr.EHR -> Some "ehr_rwset" in
       let p_decl_rwset_register (kd, r) =
-        p "cuttlesim::%s %s;" (rwset_type_of_kind kd) r.reg_name in
+        match rwset_type_of_kind kd with
+        | None -> ()
+        | Some rwset -> p "cuttlesim::%s %s;" rwset r.reg_name in
       p_scoped "struct rwset_t" ~terminator:";" (fun () ->
           iter_all_registers_with_kind p_decl_rwset_register) in
 
@@ -818,31 +823,36 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
            overestimates log sizes in imperative switches. *)
         use_dynamic_logs && footprint_sz > 10 in
 
-      let rw_suffix =
+      let dl_suffix =
         if use_dynamic_log
         then (if use_offsets_in_dynamic_log then "_DOL" else "_DL")
         else "" in
-      let fail = sprintf "FAIL%s" rw_suffix in
-      let commit = sprintf "COMMIT%s" rw_suffix in
-      let read pt = sprintf "READ%d%s" pt rw_suffix in
-      let write pt = sprintf "WRITE%d%s" pt rw_suffix in
+      let fail = sprintf "FAIL%s" dl_suffix in
+      let commit = sprintf "COMMIT%s" dl_suffix in
+      let rw_suffix reg =
+        if hpp.cpp_register_kinds reg = Value then "_FAST" else dl_suffix in
+      let read reg pt =
+          sprintf "READ%d%s" pt (rw_suffix reg) in
+      let write reg pt = sprintf "WRITE%d%s" pt (rw_suffix reg) in
 
-      let p_copy kind src dst =
-        let src = sprintf "%s.%s" src kind in
-        let dst = sprintf "%s.%s" dst kind in
-        iter_registers (fun { reg_name; _ } ->
-            p "%s.%s = %s.%s;" dst reg_name src reg_name)
+      let p_copy exclude_values field src dst =
+        let src = sprintf "%s.%s" src field in
+        let dst = sprintf "%s.%s" dst field in
+        iter_registers_with_kinds (function
+            | (Value, _) when exclude_values -> ()
+            | (_, { reg_name; _ }) ->
+               p "%s.%s = %s.%s;" dst reg_name src reg_name)
           rule.rl_footprint in
 
       let p_reset () =
         if large_footprint then p "log = Log;"
-        else (p_copy "state" "Log" "log";
-              p_copy "rwset" "Log" "log") in
+        else (p_copy false "state" "Log" "log";
+              p_copy true "rwset" "Log" "log") in
 
       let p_commit () =
         if large_footprint then p "Log = log;"
-        else (p_copy "state" "log" "Log";
-              p_copy "rwset" "log" "Log") in
+        else (p_copy false "state" "log" "Log";
+              p_copy true "rwset" "log" "Log") in
 
       let p_declare_target = function
         | VarTarget ({ tau; declared = false; name } as ti) ->
@@ -968,10 +978,12 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
       let rule_name_unprefixed =
         hpp.cpp_rule_names ~prefix:"" rule.rl_name in
 
-      let rec p_action (pos: Pos.t) (target: assignment_target) (rl: (pos_t, var_t, reg_t, _) Extr.action) =
+      let rec p_action (pos: Pos.t) (target: assignment_target)
+                (rl: ((pos_t, reg_t) Extr.register_annotation, var_t, reg_t, _) Extr.action) =
         p_pos pos;
         match rl with
-        | Extr.Fail (_, _) ->
+        | Extr.APos (_, _, _,
+                     Extr.Fail (_, _)) ->
            p "%s(%s);" fail rule_name_unprefixed;
            (match target with
             | NoTarget -> NotAssigned
@@ -1018,18 +1030,20 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
                  else p_scoped "else"
                         (fun () -> p_assign_expr target (p_action pos target fbr)) in
                assert (tres = fres); tres)
-        | Extr.Read (_, port, reg) ->
+        | Extr.APos (_, _, Extr.HistoryAnnot _,
+                     Extr.Read (_, port, reg)) ->
            let r = hpp.cpp_register_sigs reg in
            let var = p_ensure_declared (ensure_target (reg_type r) target) in
            let pt = match port with P0 -> 0 | P1 -> 1 in
-           pr "%s(%s, %s, &%s);" (read pt) rule_name_unprefixed r.reg_name var;
+           pr "%s(%s, %s, &%s);" (read reg pt) rule_name_unprefixed r.reg_name var;
            Assigned var
-        | Extr.Write (_, port, reg, expr) ->
+        | Extr.APos (_, _, Extr.HistoryAnnot _,
+                     Extr.Write (_, port, reg, expr)) ->
            let r = hpp.cpp_register_sigs reg in
            let vt = gensym_target (reg_type r) "v" in
            let v = must_value (p_action pos vt expr) in
            let pt = match port with P0 -> 0 | P1 -> 1 in
-           pr "%s(%s, %s, %s);" (write pt) rule_name_unprefixed r.reg_name v;
+           pr "%s(%s, %s, %s);" (write reg pt) rule_name_unprefixed r.reg_name v;
            p_assign_expr target (PureExpr "prims::tt")
         | Extr.Unop (_, Extr.PrimTyped.Conv (tau, Extr.PrimTyped.Unpack), a)
              when Extr.(returns_zero a && is_pure a) ->
@@ -1049,8 +1063,12 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
            let a = p_action pos (gensym_target ffi.ffi_argtype "x") a in
            Hashtbl.replace program_info.pi_ext_funcalls ffi ();
            ImpureExpr (cpp_ext_funcall ffi.ffi_name (must_value a))
-        | Extr.APos (_, _, pos, a) ->
+        | Extr.APos (_, _, Extr.PosAnnot pos, a) ->
            p_action (hpp.cpp_pos_of_pos pos) target a
+        | Extr.Fail (_, _) -> while true do () done; failwith "Missing annotation on fail"
+        | Extr.Read (_, _, _) -> failwith "Missing annotation on read"
+        | Extr.Write (_, _, _, _) -> failwith "Missing annotation on write"
+        | Extr.APos (_, _, Extr.HistoryAnnot _, _) -> failwith "Unexpected annotation"
       and p_switch pos target tau var default branches =
         let rec loop = function
           | [] ->
@@ -1259,45 +1277,48 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
   (buf_hpp, buf_cpp)
 
 let cpp_rule_of_action all_regs (rl_name, (kind, rl_body)) =
-  let rl_footprint = Array.of_list (Cuttlebone.Util.action_footprint all_regs rl_body) in
+  let rl_footprint =
+    Array.of_list (Cuttlebone.Util.action_footprint all_regs rl_body) in
   { rl_external = kind = `ExternalRule; rl_name; rl_body; rl_footprint }
 
 let input_of_compile_unit (cu: 'f Cuttlebone.Compilation.compile_unit) =
-  let classify_registers regs rules scheduler =
-    let rulemap r = snd (List.assoc r rules) in
-    Cuttlebone.Util.classify_registers regs rulemap scheduler in
+  let rulemap r =
+    snd (List.assoc r cu.c_rules) in
+  let annotated_rules, register_kinds =
+    Cuttlebone.Util.compute_register_histories
+      Cuttlebone.Compilation._R cu.c_registers
+      (List.map fst cu.c_rules) rulemap cu.c_scheduler in
+  let swap_body (name, (kind, _)) =
+    (name, (kind, annotated_rules name)) in
   { cpp_classname = cu.c_modname;
     cpp_module_name = cu.c_modname;
     cpp_pos_of_pos = cu.c_pos_of_pos;
     cpp_var_names = (fun x -> x);
     cpp_rule_names = (fun ?prefix:_ rl -> rl);
     cpp_scheduler = cu.c_scheduler;
-    cpp_rules = List.map (cpp_rule_of_action cu.c_registers) cu.c_rules;
+    cpp_rules = List.map (cpp_rule_of_action cu.c_registers << swap_body) cu.c_rules;
     cpp_registers = Array.of_list cu.c_registers;
     cpp_register_sigs = (fun r -> r);
-    cpp_register_kinds = classify_registers cu.c_registers cu.c_rules cu.c_scheduler;
+    cpp_register_kinds = register_kinds;
     cpp_ext_sigs = (fun f -> f);
     cpp_extfuns = cu.c_cpp_preamble; }
 
-let collect_rules sched =
-  let rec loop acc = function
-  | Extr.Done -> List.rev acc
-  | Extr.Cons (rl, s) -> loop (rl :: acc) s
-  | Extr.Try (rl, l, r) -> loop (loop (rl :: acc) l) r
-  | Extr.SPos (_, s) -> loop acc s
-  in loop [] sched
-
-let cpp_rule_of_koika_package_rule (kp: _ Extr.koika_package_t) (rn: 'rule_name_t) =
-  let kind rn =
-    if kp.koika_rule_external rn then `ExternalRule else `InternalRule in
+let cpp_rule_of_koika_package_rule (kp: _ Extr.koika_package_t)
+      (annotated_rules: 'rn -> _) (rn: 'rn) =
+  let kind rn = if kp.koika_rule_external rn then `ExternalRule else `InternalRule in
   cpp_rule_of_action kp.koika_reg_finite.finite_elements
-    (rn, (kind rn, kp.koika_rules rn))
+    (rn, (kind rn, annotated_rules rn))
 
 let input_of_sim_package
       (kp: ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) Extr.koika_package_t)
       (sp: ('ext_fn_t) Extr.sim_package_t)
     : ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_input_t =
-  let rules = collect_rules kp.koika_scheduler in
+  let rule_names =
+    Extr.scheduler_rules kp.koika_scheduler |> Cuttlebone.Util.dedup in
+  let annotated_rules, register_kinds =
+    Cuttlebone.Util.compute_register_histories
+      kp.koika_reg_types kp.koika_reg_finite.finite_elements
+      rule_names kp.koika_rules kp.koika_scheduler in
   let classname = Cuttlebone.Util.string_of_coq_string kp.koika_module_name in
   let ext_fn_name f = Cuttlebone.Util.string_of_coq_string (sp.sp_ext_fn_names f) in
   let registers = kp.koika_reg_finite.finite_elements in
@@ -1308,11 +1329,10 @@ let input_of_sim_package
     cpp_rule_names = (fun ?prefix:_ rn ->
       Cuttlebone.Util.string_of_coq_string (kp.koika_rule_names.show0 rn));
     cpp_scheduler = kp.koika_scheduler;
-    cpp_rules = List.map (cpp_rule_of_koika_package_rule kp) rules;
+    cpp_rules = List.map (cpp_rule_of_koika_package_rule kp annotated_rules) rule_names;
     cpp_registers = Array.of_list registers;
     cpp_register_sigs = Cuttlebone.Util.reg_sigs_of_koika_package kp;
-    cpp_register_kinds =
-      Cuttlebone.Util.classify_registers registers kp.koika_rules kp.koika_scheduler;
+    cpp_register_kinds = register_kinds;
     cpp_ext_sigs =
       (fun f -> Cuttlebone.Util.ffi_sig_of_extr_external_sig
                   (ext_fn_name f) (kp.koika_ext_fn_types f));

@@ -57,43 +57,6 @@ Section TypedSyntaxTools.
 
     Context (rules: rule_name_t -> rule).
 
-    Section Classification.
-      Inductive register_kind := Wire | Register | EHR.
-
-      Notation reg_events_map := (REnv.(env_t) (fun _ : reg_t => list event_t)).
-
-      Definition footprint_by_register (footprint: footprint_t) : reg_events_map :=
-        List.fold_right
-          (fun '(reg, evt) map =>
-             Environments.update REnv map reg (fun _ evts => evt :: evts))
-          (REnv.(create) (fun k => [])) footprint.
-
-      Notation reg_kind_map := (REnv.(env_t) (fun _ : reg_t => register_kind)).
-
-      Definition wire_ok (e: event_t) :=
-        match e with
-        | (RWWrite, P0) | (RWRead, P1) => true
-        | _ => false
-        end.
-
-      Definition register_ok (e: event_t) :=
-        match e with
-        | (_, P0) => true
-        | _ => false
-        end.
-
-      Definition compute_register_kind (events: list event_t) :=
-        if List.forallb wire_ok events then Wire
-        else if List.forallb register_ok events then Register
-             else EHR.
-
-      Definition classify_registers (s: scheduler) : reg_kind_map :=
-        let rule_names := scheduler_rules s in
-        let footprints := List.map (fun rn => action_footprint (rules rn)) rule_names in
-        let by_register := footprint_by_register (List.concat footprints) in
-        Environments.map REnv (fun _ events => compute_register_kind events) by_register.
-    End Classification.
-
     Section Dependencies.
       Fixpoint all_scheduler_paths (s: scheduler) : list (list rule_name_t) :=
         let cons r s := List.map (fun rs => r :: rs) (all_scheduler_paths s) in
@@ -161,97 +124,226 @@ Section TypedSyntaxTools.
 
     Record register_history :=
       { hr0: tribool; hr1: tribool;
-        hw0: tribool; hw1: tribool }.
+        hw0: tribool; hw1: tribool;
+        hcf: tribool (* true if there are never conflicts on this register *) }.
 
     Definition empty_history :=
       {| hr0 := tFalse; hr1 := tFalse;
-         hw0 := tFalse; hw1 := tFalse |}.
+         hw0 := tFalse; hw1 := tFalse;
+         hcf := tTrue |}.
 
     Definition unknown_history :=
       {| hr0 := tUnknown; hr1 := tUnknown;
-         hw0 := tUnknown; hw1 := tUnknown |}.
+         hw0 := tUnknown; hw1 := tUnknown;
+         hcf := tFalse |}.
 
     Notation reg_history_map := (REnv.(env_t) (fun _ : reg_t => register_history)).
+    Definition empty_history_map := REnv.(create) (fun _ => empty_history).
 
     Inductive register_annotation :=
-    | aPos (pos: pos_t)
-    | aHistory (rh: reg_history_map).
+    | PosAnnot (pos: pos_t)
+    | HistoryAnnot (rh: reg_history_map).
 
-    Definition merge_tribools t1 t2 :=
+    Notation annotated_action sig tau :=
+      (TypedSyntax.action register_annotation var_t R Sigma sig tau).
+
+    Definition join_tribools t1 t2 :=
       match t1, t2 with
       | tTrue, tTrue => tTrue
       | tFalse, tFalse => tFalse
       | _, _ => tUnknown
       end.
 
-    Definition merge_histories h1 h2 :=
-      let '{| hr0 := hr0; hr1 := hr1; hw0 := hw0; hw1 := hw1 |} := h1 in
-      let '{| hr0 := hr0'; hr1 := hr1'; hw0 := hw0'; hw1 := hw1' |} := h2 in
-      {| hr0 := merge_tribools hr0 hr0';
-         hr1 := merge_tribools hr1 hr1';
-         hw0 := merge_tribools hw0 hw0';
-         hw1 := merge_tribools hw1 hw1' |}.
+    Definition join_histories h1 h2 :=
+      let '{| hr0 := hr0; hr1 := hr1; hw0 := hw0; hw1 := hw1; hcf := hcf |} := h1 in
+      let '{| hr0 := hr0'; hr1 := hr1'; hw0 := hw0'; hw1 := hw1'; hcf := hcf' |} := h2 in
+      {| hr0 := join_tribools hr0 hr0';
+         hr1 := join_tribools hr1 hr1';
+         hw0 := join_tribools hw0 hw0';
+         hw1 := join_tribools hw1 hw1';
+         hcf := join_tribools hcf hcf' |}.
 
-    Definition merge_history_maps m1 m2 :=
-      Environments.map2 REnv (fun _ h1 h2 => merge_histories h1 h2) m1 m2.
+    Definition join_history_maps m1 m2 :=
+      Environments.map2 REnv (fun _ h1 h2 => join_histories h1 h2) m1 m2.
 
-    Definition update_history h (evt: event_t) :=
-      match evt with
-      | (RWRead, P0)  => {| hr0 := tTrue; hr1 := h.(hr1); hw0 := h.(hw0); hw1 := h.(hw1) |}
-      | (RWRead, P1)  => {| hr0 := h.(hr0); hr1 := tTrue; hw0 := h.(hw0); hw1 := h.(hw1) |}
-      | (RWWrite, P0) => {| hr0 := h.(hr0); hr1 := h.(hr1); hw0 := tTrue; hw1 := h.(hw1) |}
-      | (RWWrite, P1) => {| hr0 := h.(hr0); hr1 := h.(hr1); hw0 := h.(hw0); hw1 := tTrue |}
+    Definition tandb t1 t2 :=
+      match t1, t2 with
+      | tFalse, _ | _, tFalse => tFalse
+      | tTrue, tTrue => tTrue
+      | _, _ => tUnknown
       end.
 
-    Definition update_map env reg (evt: event_t) :=
-      Environments.update REnv env reg (fun _ h => update_history h evt).
+    Definition tnegb t :=
+      match t with
+      | tFalse => tTrue
+      | tTrue => tFalse
+      | tUnknown => tUnknown
+      end.
 
-    Fixpoint annotate_action_register_history
+    Infix "&&" := tandb.
+    Notation "! a" := (tnegb a) (at level 35).
+
+    Definition update_cf l evt :=
+      match evt with
+      | (RWRead, P0)
+      | (RWRead, P1) => tTrue
+      | (RWWrite, P0) => !l.(hr1) && !l.(hw0) && !l.(hw1)
+      | (RWWrite, P1) => !l.(hw1)
+      end.
+
+    Definition update_history l (evt: event_t) :=
+      let hcf := l.(hcf) && update_cf l evt in
+      match evt with
+      | (RWRead, P0)  => {| hr0 := tTrue; hr1 := l.(hr1); hw0 := l.(hw0); hw1 := l.(hw1); hcf := hcf |}
+      | (RWRead, P1)  => {| hr0 := l.(hr0); hr1 := tTrue; hw0 := l.(hw0); hw1 := l.(hw1); hcf := hcf |}
+      | (RWWrite, P0) => {| hr0 := l.(hr0); hr1 := l.(hr1); hw0 := tTrue; hw1 := l.(hw1); hcf := hcf |}
+      | (RWWrite, P1) => {| hr0 := l.(hr0); hr1 := l.(hr1); hw0 := l.(hw0); hw1 := tTrue; hcf := hcf |}
+      end.
+
+    Definition update_map lenv reg (evt: event_t) :=
+      Environments.update REnv lenv reg (fun _ l => update_history l evt).
+
+    Fixpoint annotate_action_register_histories
              {sig tau} (env: reg_history_map)
              (a: action sig tau)
-      : reg_history_map * TypedSyntax.action register_annotation var_t R Sigma sig tau :=
+      : reg_history_map * annotated_action sig tau :=
       match a with
       | Fail tau =>
-        (env, APos (aHistory env) (Fail tau))
+        (env, APos (HistoryAnnot env) (Fail tau))
       | Var m => (env, Var m)
       | Const cst => (env, Const cst)
       | Assign m ex =>
-        let '(env, ex) := annotate_action_register_history env ex in
+        let '(env, ex) := annotate_action_register_histories env ex in
         (env, Assign m ex)
       | Seq r1 r2 =>
-        let '(env, r1) := annotate_action_register_history env r1 in
-        let '(env, r2) := annotate_action_register_history env r2 in
+        let '(env, r1) := annotate_action_register_histories env r1 in
+        let '(env, r2) := annotate_action_register_histories env r2 in
         (env, Seq r1 r2)
       | Bind var ex body =>
-        let '(env, ex) := annotate_action_register_history env ex in
-        let '(env, body) := annotate_action_register_history env body in
+        let '(env, ex) := annotate_action_register_histories env ex in
+        let '(env, body) := annotate_action_register_histories env body in
         (env, Bind var ex body)
       | If cond tbranch fbranch =>
-        let '(env, cond) := annotate_action_register_history env cond in
-        let '(tenv, tbranch) := annotate_action_register_history env tbranch in
-        let '(fenv, fbranch) := annotate_action_register_history env fbranch in
-        (merge_history_maps tenv fenv, If cond tbranch fbranch)
+        let '(env, cond) := annotate_action_register_histories env cond in
+        let '(tenv, tbranch) := annotate_action_register_histories env tbranch in
+        let '(fenv, fbranch) := annotate_action_register_histories env fbranch in
+        (join_history_maps tenv fenv, If cond tbranch fbranch)
       | Read port idx =>
         (update_map env idx (RWRead, port),
-         APos (aHistory env) (Read port idx))
+         APos (HistoryAnnot env) (Read port idx))
       | Write port idx value =>
-        let (env, value) := annotate_action_register_history env value in
+        let (env, value) := annotate_action_register_histories env value in
         (update_map env idx (RWWrite, port),
-         APos (aHistory env) (Write port idx value))
+         APos (HistoryAnnot env) (Write port idx value))
       | Unop fn arg1 =>
-        let '(env, arg1) := annotate_action_register_history env arg1 in
+        let '(env, arg1) := annotate_action_register_histories env arg1 in
         (env, Unop fn arg1)
       | Binop fn arg1 arg2 =>
-        let '(env, arg1) := annotate_action_register_history env arg1 in
-        let '(env, arg2) := annotate_action_register_history env arg2 in
+        let '(env, arg1) := annotate_action_register_histories env arg1 in
+        let '(env, arg2) := annotate_action_register_histories env arg2 in
         (env, Binop fn arg1 arg2)
       | ExternalCall fn arg =>
-        let '(env, arg) := annotate_action_register_history env arg in
+        let '(env, arg) := annotate_action_register_histories env arg in
         (env, ExternalCall fn arg)
       | APos pos a =>
-        let '(env, a) := annotate_action_register_history env a in
-        (env, APos (aPos pos) a)
+        let '(env, a) := annotate_action_register_histories env a in
+        (env, APos (PosAnnot pos) a)
       end.
+
+    Definition annotate_rule_register_histories (a: action [] unit_t) :=
+      annotate_action_register_histories empty_history_map a.
+
+    Definition torb t1 t2 :=
+      match t1, t2 with
+      | tTrue, _ | _, tTrue => tTrue
+      | tFalse, tFalse => tFalse
+      | _, _ => tUnknown
+      end.
+
+    Definition timplb t1 t2 :=
+      torb (tnegb t1) t2.
+
+    Infix "||" := torb.
+    Infix "=>>" := timplb (at level 99).
+
+    Definition append_tribools t1 t2 :=
+      join_tribools t1 (t1 || t2).
+
+    (* L is the accumulated log, l is the rule-only log; this is like willFire_of_canFire *)
+    Definition append_cf L l :=
+      tTrue
+        && (l.(hr0) =>> !L.(hw0) && !L.(hw1))
+        && (l.(hw0) =>> !L.(hr1) && !L.(hw0) && !L.(hw1))
+        && (l.(hr1) =>> !L.(hw1))
+        && (l.(hw1) =>> !L.(hw1)).
+
+    Definition append_histories h1 h2 :=
+      let '{| hr0 := hr0; hr1 := hr1; hw0 := hw0; hw1 := hw1; hcf := hcf |} := h1 in
+      let '{| hr0 := hr0'; hr1 := hr1'; hw0 := hw0'; hw1 := hw1'; hcf := hcf' |} := h2 in
+      {| hr0 := append_tribools hr0 hr0';
+         hr1 := append_tribools hr1 hr1';
+         hw0 := append_tribools hw0 hw0';
+         hw1 := append_tribools hw1 hw1';
+         hcf := hcf && hcf' && append_cf h1 h2 |}.
+
+    Definition append_history_maps m1 m2 :=
+      Environments.map2 REnv (fun _ h1 h2 => append_histories h1 h2) m1 m2.
+
+    Fixpoint compute_scheduler_register_histories'
+             (hists: rule_name_t -> reg_history_map)
+             (sched_env: reg_history_map)
+             (s: scheduler) : reg_history_map :=
+      match s with
+      | Done => sched_env
+      | Cons r s =>
+        let sched_env := append_history_maps sched_env (hists r) in
+        compute_scheduler_register_histories' hists sched_env s
+      | Try r s1 s2 =>
+        let sched_env := append_history_maps sched_env (hists r) in
+        join_history_maps (compute_scheduler_register_histories' hists sched_env s1)
+                          (compute_scheduler_register_histories' hists sched_env s2)
+      | SPos pos s => compute_scheduler_register_histories' hists sched_env s
+      end.
+
+    Definition compute_scheduler_register_histories
+             (hists: rule_name_t -> reg_history_map)
+             (s: scheduler) : reg_history_map :=
+      compute_scheduler_register_histories' hists empty_history_map s.
+
+    Section Classification.
+      Inductive register_kind := Value | Wire | Register | EHR.
+
+      Notation reg_kind_map := (REnv.(env_t) (fun _ : reg_t => register_kind)).
+
+      Definition compute_register_kind (history: register_history) :=
+        match history with
+        | {| hcf := tTrue |} => Value
+        | {| hr1 := tFalse; hw1 := tFalse |} => Register
+        | {| hr0 := tFalse; hw1 := tFalse |} => Wire
+        | _ => EHR
+        end.
+
+      Definition classify_registers (histories: reg_history_map) : reg_kind_map :=
+        Environments.map REnv (fun _ history => compute_register_kind history) histories.
+    End Classification.
+
+    Section Interface.
+      Context (RLEnv: Env rule_name_t).
+      Context (rules: rule_name_t -> rule).
+      Context (s: scheduler).
+
+      Definition annotated_rule :=
+        TypedSyntax.action register_annotation var_t R Sigma [] unit_t.
+
+      Definition compute_register_histories
+        : RLEnv.(env_t) (fun _ => (reg_history_map * annotated_rule)%type) *
+          REnv.(env_t) (fun _ => register_kind) :=
+        let rule_env := RLEnv.(create) (fun rl => annotate_rule_register_histories (rules rl)) in
+        let per_rule := fun rl => fst (RLEnv.(getenv) rule_env rl) in
+        let reg_histories := compute_scheduler_register_histories per_rule s in
+        let kinds := classify_registers reg_histories in
+        (rule_env, kinds).
+    End Interface.
 
     (* LATER: this should properly handle switches *)
     Fixpoint rule_max_log_size {sig tau} (a: action sig tau) : nat :=
