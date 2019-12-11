@@ -76,7 +76,7 @@ gtkwave.cuttlesim: $(mod).cuttlesim.vcd
 # =========
 
 GDB_FLAGS ?= -tui
-GDB_OPTS ?= -x "set print array on" -x "set print pretty on"
+GDB_OPTS ?= -ex "set print array on" -ex "set print pretty on"
 
 gdb: $(mod).debug
 	gdb $(GDB_FLAGS) $(GDB_OPTS) --args $(sim_invoke_debug)
