@@ -67,7 +67,16 @@ static inline void _sim_assert_fn(const char* repr,
 
 #define _unlikely(b) __builtin_expect((b), 0)
 
+#define MULTIPRECISION_THRESHOLD 64
+
 #ifdef NEEDS_BOOST_MULTIPRECISION
+
+#if BOOST_VERSION < 107200
+// https://github.com/boostorg/multiprecision/commit/bbe819f8034a3c854deffc6191410b91ac27b3d6
+// Before 1.72, static_cast<uint16_t>(uint128_t{1 << 16}) gives 65535 instead of 0
+#pragma message("Bignum truncation is broken in Boost < 1.72; if you run into issues, try upgrading.")
+#endif
+
 #include <boost/multiprecision/cpp_int.hpp>
 template<std::size_t size>
 using wbits_t = std::conditional_t<size <= 128, boost::multiprecision::uint128_t,
@@ -413,12 +422,19 @@ namespace prims {
 
   template<bitwidth ret_sz, bitwidth sz>
   static bits<ret_sz> widen(const bits<sz> arg) {
+    static_assert(ret_sz >= sz, "Call to widen has ret_sz < sz");
     return bits<ret_sz>::mk(arg.v);
   }
 
   template<bitwidth ret_sz, bitwidth sz>
   static bits<ret_sz> truncate(const bits<sz> arg) {
-    return mask(widen<ret_sz>(arg));
+    if (sz > MULTIPRECISION_THRESHOLD && sz > ret_sz) {
+      // Truncation is broken in Boost::multiprecision < 1.72.0, so mask before truncating
+      // https://github.com/boostorg/multiprecision/commit/bbe819f8034a3c854deffc6191410b91ac27b3d6
+      return bits<ret_sz>::mk(arg.v & bits<ret_sz>::bitmask());
+    } else {
+      return mask(bits<ret_sz>::mk(arg.v));
+    }
   }
 
   template<bitwidth sz>
@@ -561,9 +577,9 @@ namespace prims {
 
   template<bitwidth width, bitwidth sz>
   bits<std::max(sz, width)> sext(const bits<sz> x) {
-    constexpr bitwidth newsz = std::max(sz, width);
+    constexpr bitwidth maxsz = std::max(sz, width);
     constexpr bitwidth nbits = width >= sz ? width - sz : bitwidth{0};
-    return bits<newsz>::of_shifted_sbits((widen<newsz>(x) << nbits).to_shifted_sbits() >> nbits);
+    return bits<maxsz>::of_shifted_sbits((widen<maxsz>(x) << nbits).to_shifted_sbits() >> nbits);
   }
 
   template<bitwidth width, bitwidth sz>
@@ -573,8 +589,8 @@ namespace prims {
 
   template<bitwidth width, bitwidth sz>
   bits<std::max(sz, width)> zextr(const bits<sz> x) {
-    constexpr bitwidth mx = std::max(sz, width);
-    return widen<mx>(x) << (mx - sz);
+    constexpr bitwidth maxsz = std::max(sz, width);
+    return widen<maxsz>(x) << (maxsz - sz);
   }
 
   template<bitwidth times, bitwidth sz> struct repeat_t {
