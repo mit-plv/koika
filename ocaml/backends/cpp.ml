@@ -273,7 +273,8 @@ let cpp_bits2_fn_name (f: Extr.PrimTyped.fbits2) =
   | IndexedSlice (_sz, width) -> `Fn (sprintf "prims::islice<%d>" width)
   | Plus _ -> `Infix "+"
   | Minus _ -> `Infix "-"
-  | EqBits _ -> `Infix "=="
+  | EqBits (_, true) -> `Infix "!="
+  | EqBits (_, false) -> `Infix "=="
   | Compare (true, cmp, _) ->
      `Fn (match cmp with CLt -> "slt" | CGt -> "sgt" | CLe -> "sle" | CGe -> "sge")
   | Compare (false, cmp, _) ->
@@ -290,7 +291,8 @@ let reconstruct_switch action =
   let rec loop v = function
     | Extr.If (_, _,
                Extr.Binop (_,
-                           (Extr.PrimTyped.Eq _ | Extr.PrimTyped.Bits2 (Extr.PrimTyped.EqBits _)),
+                           (Extr.PrimTyped.Eq (_, false) |
+                              Extr.PrimTyped.Bits2 (Extr.PrimTyped.EqBits (_, false))),
                            Extr.Var (_, v', ((Extr.Bits_t _ | Extr.Enum_t _) as tau), _m),
                            value),
                tbr, fbr) when (match v with Some v -> v' = v | None -> true) ->
@@ -425,8 +427,8 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     | `Fn f -> sprintf "%s(%s, %s)" f a1 a2
     | `Array -> sprintf "%s[%s]" a1 a2 in
 
-  let sp_equality a1 a2 =
-    sp_binop (`Infix "==") a1 a2 in
+  let sp_equality ?(negated=false) a1 a2 =
+    sp_binop (`Infix (if negated then "!=" else "==")) a1 a2 in
 
   let sp_initializer tau =
     (* This is needed for readability rather than performance, since GCC is
@@ -959,8 +961,8 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
       let p_binop target (fn: Extr.PrimTyped.fn2) a1 a2 =
         let open Extr.PrimTyped in
         match fn with
-        | Eq _ ->
-           PureExpr (sp_equality a1 a2)
+        | Eq (_, negated) ->
+           PureExpr (sp_equality ~negated a1 a2)
         | Bits2 fn ->
            PureExpr (sp_binop (cpp_bits2_fn_name fn) a1 a2)
         | Struct2 (sg, idx) ->

@@ -265,7 +265,7 @@ let assignment_to_string' (gensym: int ref) (assignment: assignment) =
        | Lsl (_, _) -> default_left ^ arg1 ^ " << " ^ arg2
        | Lsr (_, _) -> default_left ^ arg1 ^ " >> " ^ arg2
        | Asr (_, _) -> default_left ^ "$signed(" ^ arg1 ^ ")" ^ " >>> " ^ arg2
-       | EqBits _ -> default_left ^ arg1 ^ " == " ^ arg2
+       | EqBits (_, negated) -> default_left ^ arg1 ^ (if negated then " != " else " == ") ^ arg2
        | Concat (_, _) -> default_left ^ "{" ^ arg1 ^ ", " ^ arg2 ^ "}")
    | EExternal (ffi, arg) ->
       let number_s = !gensym in (* FIXME use the gensym from common.ml *)

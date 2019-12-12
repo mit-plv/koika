@@ -109,8 +109,8 @@ Notation "'unpack(' t ',' v ')'" :=  (UUnop (UConv (UUnpack t)) v) (in custom ko
 Notation "a  '^'  b" :=  (UBinop (UBits2 UXor) a b) (in custom koika at level 85).
 Notation "a  '+'  b" :=  (UBinop (UBits2 UPlus) a b) (in custom koika at level 85).
 Notation "a  '-'  b" :=  (UBinop (UBits2 UMinus) a b) (in custom koika at level 85).
-Notation "a  '!='  b" := (UUnop (UBits1 UNot) (UBinop UEq a b)) (in custom koika at level 79).
-Notation "a  '=='  b" :=  (UBinop UEq a b) (in custom koika at level 79).
+Notation "a  '!='  b" := (UBinop (UEq true) a b) (in custom koika at level 79).
+Notation "a  '=='  b" :=  (UBinop (UEq false) a b) (in custom koika at level 79).
 Notation "a  '>>'  b" :=  (UBinop (UBits2 ULsr) a b) (in custom koika at level 79).
 Notation "a  '>>>'  b" :=  (UBinop (UBits2 UAsr) a b) (in custom koika at level 79).
 Notation "a  '<<'  b" :=  (UBinop (UBits2 ULsl) a b) (in custom koika at level 79).

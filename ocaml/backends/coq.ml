@@ -241,7 +241,7 @@ and pp_prim_uarray1 ppf (f: Cuttlebone.Extr.PrimUntyped.uarray1) = match f with
   | UGetElementBits (sg, pos) -> pp_app ppf "UGetElementBits" "%a@ %d" pp_extr_array_type sg pos
 
 let rec pp_prim_ufn2 ppf (f: Cuttlebone.Extr.PrimUntyped.ufn2) = match f with
-  | UEq -> pp_raw ppf "UEq"
+  | UEq negate -> pp_app ppf "UEq" "%a" pp_bool negate
   | UBits2 f -> pp_app ppf "UBits2" "%a" pp_prim_ubits2 f
   | UStruct2 f -> pp_app ppf "UStruct2" "%a" pp_prim_ustruct2 f
   | UArray2 f -> pp_app ppf "UArray2" "%a" pp_prim_uarray2 f

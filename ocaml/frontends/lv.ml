@@ -1280,8 +1280,10 @@ let core_primitives =
   let binop fn = FnBinop fn in
   let display_opts display_newline : Cuttlebone.Extr.display_options =
     { display_strings = true; display_style = DFull; display_newline } in
-  [("eq", `Fn (binop UEq));
-   ("=", `Fn (binop UEq));
+  [("eq", `Fn (binop (UEq false)));
+   ("=", `Fn (binop (UEq false)));
+   ("neq", `Fn (binop (UEq true)));
+   ("!=", `Fn (binop (UEq true)));
    ("pack", `Fn (unop (UConv UPack)));
    ("unpack", `TypeFn (fun tau -> unop (UConv (UUnpack tau))));
    ("ignore", `Fn (unop (UConv UIgnore)));
