@@ -17,8 +17,8 @@ Our largest example at the moment is a simple RISCV (RV32I) `4-stage pipelined c
 Getting started
 ===============
 
-Dependencies
-------------
+Installing dependencies and building from source
+------------------------------------------------
 
 * OCaml, `opam <https://opam.ocaml.org/doc/Install.html>`_, and ``make``.
 
@@ -35,10 +35,11 @@ Dependencies
 
     opam install dune base core stdio parsexp hashcons zarith
 
-Building
---------
+* To run the tests of our RISCV core, a `RISCV compilation toolchain <https://github.com/xpack-dev-tools/riscv-none-embed-gcc-xpack/releases/>`_.
 
-You can compile the full distribution, including examples, tests, and proofs by running ``make`` in the top-level directory of this repo.
+You can compile the full distribution, including examples, tests, and proofs by running ``make`` in the top-level directory of this repo.  Generated files are placed in ``_build``, ``examples/_objects/``,  ``tests/_objects/``, and  ``examples/rv/_objects/``.
+
+Each directory in ``__objects`` contains a Makefile for further experimentation; use ``make help`` in there for documentation.
 
 Browsing examples
 -----------------
@@ -50,6 +51,15 @@ Verilog” alternative frontend for |koika|) in ``etc/lv-mode.el``.
 
 Compiling your own programs
 ---------------------------
+
+Our compiler supports multiple targets:
+
+- verilog (an RTL implementation of your design expressed in the synthesizable subset of Verilog 2000)
+- hpp (a cuttlesim model of your design, i.e. a cycle-accurate C++ implementation of it, useful for debugging)
+- cpp (a driver for the cuttlesim model of your design)
+- verilator (a simple C++ driver to simulate the Verilog using Verilator)
+- makefile (an auto-generated Makefile including convenient targets to debug, profile, trace, or visualize the outputs of your design)
+- dot (a basic representation of the RTL generated from your design)
 
 **Programs written in the Coq EDSL**:
   On the Coq side, after implementing your design, use the following to define a “package”:
@@ -84,20 +94,84 @@ Execution model
 
 .. code:: coq
 
-   let a := read0(gcd_a) in
-   let b := read0(gcd_b) in
-   if a != |16`d0| then
-     if a < b then
-       write0(gcd_b, a);
-       write0(gcd_a, b)
+   Definition gcd_compute: uaction reg_t ext_fn_t := {{
+     let a := read0(gcd_a) in
+     let b := read0(gcd_b) in
+     if a != |16`d0| then
+       if a < b then
+         write0(gcd_b, a);
+         write0(gcd_a, b)
+       else
+         write0(gcd_a, a - b)
      else
-       write0(gcd_a, a - b)
-   else
-     fail
+       fail
+   }}
 
 .. _oraat:
 
-The semantics of |koika| guarantee that each rule executes atomically, and that generated circuits behave one-rule-at-a-time — that is, even when multiple rules fire in the same cycle, the updates that they compute are as if only one rule had run per cycle.  For example, consider the following rules:
+The semantics of |koika| guarantee that each rule executes atomically, and that generated circuits behave one-rule-at-a-time — that is, even when multiple rules fire in the same cycle, the updates that they compute are as if only one rule had run per cycle.
+
+As an example, consider a simple two-stage pipeline with two single-element input FIFOs and one single-element output FIFO:
+
+.. image:: etc/readme/pipeline.svg
+
+We implement these FIFOs using three single-bit registers (``…_empty``) indicating whether each FIFO is empty, and three data registers (``…_data``) holding the contents of these FIFOs.  We have three rules: two to dequeue from the input fifos into a middle fifo (``deq0`` and ``deq1``), and one to dequeue from the middle FIFO and write a result (the input plus 412) into an output FIFO (``process``).  The code looks like this (``guard(condition)`` is short for ``if !condition then fail``):
+
+.. code:: coq
+
+   Definition urules (rl: rule_name_t) : uaction reg_t empty_ext_fn_t :=
+     match rl with
+     | deq0 =>
+       {{ guard(!read0(in0_empty) && read0(fifo_empty));
+          write0(fifo_data, read0(in0_data));
+          write0(fifo_empty, Ob~0);
+          write0(in0_empty, Ob~1) }}
+     | deq1 =>
+       {{ guard(!read0(in1_empty) && read0(fifo_empty));
+          write0(fifo_data, read0(in1_data));
+          write0(fifo_empty, Ob~0);
+          write0(in1_empty, Ob~1) }}
+     | process =>
+       {{ guard(!read1(fifo_empty) && read0(out_empty));
+          write0(out_data, read1(fifo_data) + |32`d412|);
+          write1(fifo_empty, Ob~1);
+          write0(out_empty, Ob~0) }}
+     end.
+
+A conflict arises when both inputs are available; what should happen in this case? The ambiguity is resolved by the scheduler:
+
+.. code:: coq
+
+   Definition pipeline : scheduler :=
+     deq0 |> deq1 |> process |> done.
+
+This sequence indicates that ``deq0`` has priority, so ``in_data0`` is processed first.  When both inputs are available and the middle FIFO is empty, when ``deq1`` attempts to run, it will dynamically fail when trying to write into ``fifo_data``.
+
+This example includes a simple form of backpressure: if the middle FIFO is full, the first two rules will not run; if the output FIFO is full, the last rule will not run.  This is made explicit by the ``guard`` statements (those would be hidden inside the implementation of the ``dequeue`` and ``enqueue`` methods of the FIFO in a larger example).
+
+Looking carefully, you'll notice that ``read``\ s and ``write``\ s are annotated with ``0``\ s and ``1``\ s.  These are forwarding specifications, or “ports”.  Values written at port 0 are visible in the same cycle at port 1, and values written at port 1 overwrite values written at port 0.  Hence, this example defines a bypassing FIFO: values written by ``deq0`` and ``deq1`` are processed by ``process`` in the same cycle as they are written, assuming that there is space in the output FIFO.  If we had used a ``read0`` instead, we would have had a pipelined FIFO.
+
+In this example, starting with the following values::
+
+   in0_empty  ⇒ false
+   in0_data   ⇒ 42
+   in1_empty  ⇒ false
+   in1_data   ⇒ 73
+   fifo_empty ⇒ true
+   fifo_data  ⇒ 0
+   out_empty  ⇒ true
+   out_data   ⇒ 0
+
+we get the following output::
+
+   in0_empty  ⇒ true
+   in0_data   ⇒ 42
+   in1_empty  ⇒ false
+   in1_data   ⇒ 73
+   fifo_empty ⇒ true
+   fifo_data  ⇒ 42
+   out_empty  ⇒ fale
+   out_data   ⇒ 454
 
 .. _koika-syntax:
 
@@ -125,7 +199,7 @@ Start by defining the following types:
      (* The register file and the scoreboard track and record reads and writes *)
      | register_file (state: Rf.reg_t)
      | scoreboard (state: Scoreboard.reg_t)
-     (* These are plain registers, not modules *)
+     (* These are plain registers, not module instances *)
      | pc
      | epoch.
 
@@ -136,7 +210,7 @@ Start by defining the following types:
      Inductive ext_fn_t :=
      | custom_adder (size: nat).
 
-Then, declare the types of the data held in each part of your state, the initial value of each state element (we usually name these functions ``R`` and ``r``), and the signatures of your external (combinational) IP.  (In addition to bitsets, registers can contain structures, enums, or arrays of values; examples of these are given below.)
+Then, declare the types of the data held in each part of your state and the signatures of your external (combinational) IP (we usually name these functions ``R`` and ``Sigma``).  (In addition to bitsets, registers can contain structures, enums, or arrays of values; examples of these are given below.)
 
 .. code:: coq
 
@@ -151,34 +225,14 @@ Then, declare the types of the data held in each part of your state, the initial
      | epoch => bits_t 1
      end.
 
-.. code:: coq
-
-   Definition r (reg: reg_t) : R reg :=
-     match reg with
-     | to_memory st => MemReqFIFO.r st
-     | register_file st => Rf.r st
-     …
-     | pc => Bits.zero
-     | epoch => Bits.zero
-     end.
-
 .. code::
 
-   Definition Sigma (fn: ext_fn_t) : ExternalSignature :=
+   Definition Sigma (fn: ext_fn_t): ExternalSignature :=
      match fn with
      | custom_adder sz => {$ bits_t sz ~> bits_t sz ~> bits_t sz $}
      end.
 
-Optionally, for reasoning purposes, you can give a Coq model of the external functions that you use:
-
-.. code::
-
-   Definition sigma (fn: ext_fn_t) : Sig_denote (Sigma fn) :=
-     match fn with
-     | custom_adder sz => fun (bs1 bs2: bits sz) => Bits.plus bs1 bs2
-     end.
-
-Finally, as needed, you can define your own custom types; here are a few examples:
+As needed, you can define your own custom types; here are a few examples:
 
 .. code:: coq
 
@@ -259,12 +313,6 @@ The main part of your program is rules.  You have access to the following syntax
   Get a field of a struct value, or replace a field in a struct value (without mutating the original one)
 ``getbits(struct, field)``, ``substbits(struct, field, value)``
   Like get and subst, but on packed bitsets
-``Ob~1~0~1~0``, ``|4`d10|``
-  Bitset constants (here, the number 10 on 4 bits)
-``struct name {| field_n := val_n;… |}``
-  Struct constants
-``enum name {| member |}``
-  Enum constants
 ``!x``, ``x && y``, ``x || y``, ``x ^ y``
   Logical operators (not, and, or, xor)
 ``x + y``, ``x - y``, ``x << y``, ``x >> y``, ``x >>> y``
@@ -279,12 +327,20 @@ The main part of your program is rules.  You have access to the following syntax
   Call an internal function
 ``extcall function(args…)``
   Call an external function (combinational IP)
+``Ob~1~0~1~0``, ``|4`d10|``
+  Bitset constants (here, the number 10 on 4 bits)
+``struct name {| field_n := val_n;… |}``
+  Struct constants
+``enum name {| member |}``
+  Enum constants
+``#val``
+  Lift a Coq value (for example a Coq definition)
 
 For example, the following rule decreases the ``ttl`` field of an ICMP packet:
 
 .. code:: coq
 
-   Definition _decr_icmp_ttl : uaction _ empty_ext_fn_t := {{
+   Definition _decr_icmp_ttl: uaction _ empty_ext_fn_t := {{
      let hdr := unpack(struct_t ipv4_header, read0(input)) in
      let valid := Ob~1 in
      match get(hdr, protocol) with
@@ -303,23 +359,55 @@ This rule fetches the next instruction in our RV32I core:
 
 .. code:: coq
 
-
-   Definition fetch : uaction reg_t empty_ext_fn_t := {{
+   Definition fetch: uaction reg_t empty_ext_fn_t := {{
      let pc := read1(pc) in
      let req := struct mem_req {|
                            byte_en := |4`d0|; (* Load *)
                            addr := pc;
                            data := |32`d0| |} in
-     let fetch_bookkeeping := struct fetch_bookkeeping {|
-                                       pc := pc;
-                                       ppc := pc + |32`d4|;
-                                       epoch := read1(epoch)
-                                     |} in
      toIMem.(MemReq.enq)(req);
      write1(pc, pc + |32`d4|);
-     f2d.(fromFetch.enq)(fetch_bookkeeping)
+     f2d.(fromFetch.enq)(struct fetch_bookkeeping {|
+          pc := pc;
+          ppc := pc + |32`d4|;
+          epoch := read1(epoch)
+       |})
    }}.
 
+Rules are written in an untyped surface language; to typecheck a rule, use ``tc_action R Sigma rule_body``, or use ``tc_rules`` as shown below.
+
+Schedulers
+~~~~~~~~~~
+
+A scheduler defines a priority order on rules: in each cycle rules appear to execute sequentially, and later rules that conflict with earlier ones do not execute (of course, all this is about semantics; the circuits generated by the compiler are (almost entirely) parallel).
+
+A scheduler refers to rules by name, so you need three things:
+
+A rule name type:
+  .. code:: coq
+
+     Inductive rule_name_t :=
+       start | step_compute | get_result.
+
+A scheduler definition:
+  .. code:: coq
+
+     Definition scheduler :=
+       tc_scheduler
+         (start |> step_compute |>
+          get_result |> done).
+
+A mapping from rule names to (typechecked) rules:
+  .. code:: coq
+
+     Definition rules :=
+       tc_rules R Sigma
+         (fun rl =>
+          match rl with
+          | start => {{ … rule body … }}
+          | step_compute => gcd_compute
+          | get_result => {{ … rule body … }}
+          end).
 
 Functions
 ~~~~~~~~~
@@ -328,12 +416,9 @@ It is often convenient to separate out combination functions; for example:
 
 .. code:: coq
 
-   Definition alu32 : UInternalFunction reg_t empty_ext_fn_t := {{
-     fun (funct3  : bits_t 3)
-       (inst_30 : bits_t 1)
-       (a       : bits_t 32)
-       (b       : bits_t 32)
-       : bits_t 32 =>
+   Definition alu32: UInternalFunction reg_t empty_ext_fn_t := {{
+     fun (funct3: bits_t 3) (inst_30: bits_t 1)
+         (a: bits_t 32) (b: bits_t 32): bits_t 32 =>
        let shamt := b[Ob~0~0~0~0~0 :+ 5] in
        match funct3 with
        | #funct3_ADD  => if (inst_30 == Ob~1) then a - b else a + b
@@ -350,20 +435,133 @@ It is often convenient to separate out combination functions; for example:
 
 .. _lispy-verilog:
 
+Machine-friendly input
+~~~~~~~~~~~~~~~~~~~~~~
+
+When generating Kôika code from another language, it can be easier to target a format with a simpler syntax than our Coq EDSL.  In that case you can use Lispy Verilog, an alternative syntax for Kôika based on s-expressions.  See the `<examples>`_ and `<tests>`_ directories for more information; here is one example:
+
+.. code:: lisp
+
+   ;;; Computing terms of the Collatz sequence (Lispy Verilog version)
+
+   (defun times_three ((v (bits 16))) (bits 16)
+     (+ (<< v 1'1) v))
+
+   (module collatz
+     (register r0 16'19)
+
+     (rule divide
+       (let ((v (read.0 r0))
+             (odd (sel v 4'0)))
+         (when (not odd)
+           (write.0 r0 (lsr v 1'1)))))
+
+     (rule multiply
+       (let ((v (read.1 r0))
+             (odd (sel v 4'0)))
+         (when odd
+           (write.1 r0 (+ (times_three v) 16'1)))))
+
+     (scheduler main
+       (sequence divide multiply)))
+
 .. _formal-semantics:
 
 Formal semantics
 ----------------
+
+Once you have a program, you can use our executable semantics to execute it; this gives you a specification of what the program should compute.  For this, you need two more things:
+
+The initial value of each state element, ``r``
+  .. code:: coq
+
+     Definition r (reg: reg_t): R reg :=
+       match reg with
+       | to_memory st => MemReqFIFO.r st
+       | register_file st => Rf.r st
+       …
+       | pc => Bits.zero
+       | epoch => Bits.zero
+       end.
+
+A Coq model of the external IP that you use, if any:
+  .. code:: coq
+
+     Definition sigma (fn: ext_fn_t): Sig_denote (Sigma fn) :=
+       match fn with
+       | custom_adder sz => fun (bs1 bs2: bits sz) => Bits.plus bs1 bs2
+       end.
+
+Then you can run your code:
+
+.. code:: coq
+
+   Definition cr := ContextEnv.(create) r.
+
+   (* This computes a log of reads and writes *)
+   Definition event_log :=
+     tc_compute (interp_scheduler cr sigma rules scheduler).
+
+   (* This computes the new value of each register *)
+   Definition interp_result :=
+     tc_compute (commit_update r event_log).
+
+This ``interp_scheduler`` function implements the executable reference semantics of |koika|; it can be used to prove properties about programs, to guarantee that program transformation are correct, or to verify a compiler.
 
 .. _compiler-verification:
 
 Compiler verification
 ---------------------
 
+In addition to the reference interpreter, we have a verified compiler that targets RTL.  “Verified”, in this context, means that we have a machine-checked proof that the circuits produced by the compiler compute the exact same results as the original programs they were compiled from (the theorem is ``compiler_correct`` in `<coq/CircuitCorrectness.v>`_).
+
+For instance, in the following example, our theorem guarantees that ``circuits_result`` matches ``interp_result`` above:
+
+.. code:: coq
+
+   Definition is_external (r: rule_name_t) :=
+     false.
+
+   Definition circuits :=
+     compile_scheduler rules is_external collatz.
+
+   Definition circuits_result :=
+     tc_compute (interp_circuits (ContextEnv.(create) r) empty_sigma circuits).
+
 .. _cuttlesim:
 
 Simulation
 ----------
+
+To simulation, debugging, and testing purposes, we have a separate compiler, ``cuttlesim``, which generates C++ models from |koika| designs.  The models are reasonably readable, suitable for debugging with GDB or LLDB, and typically run significantly faster than RTL simulation.  Here is a concrete example:
+
+.. code:: c
+
+   bool rule_step_compute() noexcept {
+     {
+       bits<16> a;
+       READ0(step_compute, gcd_a, &a);
+       {
+         bits<16> b;
+         READ0(step_compute, gcd_b, &b);
+         if ((a != 16'0_b)) {
+           if ((a < b)) {
+             WRITE0(step_compute, gcd_b, a);
+             WRITE0(step_compute, gcd_a, b);
+           } else {
+             WRITE0(step_compute, gcd_a, (a - b));
+           }
+         } else {
+           FAIL_FAST(step_compute);
+         }
+       }
+     }
+
+     COMMIT(step_compute);
+     return true;
+   }
+
+The Makefile generated by ``cuttlec`` contains multiple useful targets that can be used in connection with ``cuttlesim``; for example, coverage statistics (using ``gcov``) can be used to get a detailed picture of which rules of a design tend to fail, and for what resons, which makes it easy to diagnose e.g. back-pressure due to incorrect pipelining setups.  Additionally, ``cuttlesim`` models can be used to generate value change dumps that can be visualized with `GTKWave <http://gtkwave.sourceforge.net/>`_.
 
 Browsing the sources
 ====================
