@@ -39,7 +39,7 @@ Module GCDMachine.
 
   Definition gcd_start : uaction reg_t ext_fn_t :=
     {{
-        if read0(input_valid) == #(Ob~1) && !read0(gcd_busy) then
+        if read0(input_valid) == Ob~1 && !read0(gcd_busy) then
           let data := read0(input_data) in
           write0(gcd_a, get(data, a));
           write0(gcd_b, get(data, b));
@@ -53,7 +53,7 @@ Module GCDMachine.
     {{
         let a := read0(gcd_a) in
         let b := read0(gcd_b) in
-        if !(a == |16`d0|) then
+        if a != |16`d0| then
           if a < b then
             write0(gcd_b, a);
             write0(gcd_a, b)

@@ -39,11 +39,11 @@ Definition ipv4_header :=
         ("src", array_t ipv4_address);
         ("dst", array_t ipv4_address)] |}.
 
-Definition option (a: type) :=
+Definition result (a: type) :=
   {| struct_name := "result";
      struct_fields := [("valid", bits_t 1); ("value", a)] |}.
 
-Definition response := option (struct_t ipv4_header).
+Definition response := result (struct_t ipv4_header).
 
 Definition R r :=
   match r with
@@ -72,10 +72,10 @@ Definition _decr_icmp_ttl : uaction _ empty_ext_fn_t :=
       match get(hdr, protocol) with
       | enum proto {| ICMP |} =>
         let t := get(hdr, ttl) in
-        if t == Ob~0~0~0~0~0~0~0~0 then
+        if t == |8`d0| then
           set valid := Ob~0
         else
-          set hdr := subst(hdr, ttl, t - Ob~0~0~0~0~0~0~0~1) (* ← same as [put(hdr, ttl, t - 1)] *)
+          set hdr := subst(hdr, ttl, t - |8`d1|) (* ← same as [put(hdr, ttl, t - 1)] *)
       return default: pass
       end;
       set hdr := subst(hdr, reserved, enum flag {| unset |}); (* reset the [reserved] field, just in case *)

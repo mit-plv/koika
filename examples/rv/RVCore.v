@@ -338,7 +338,7 @@ Section RV32IHelpers.
               else
                 ((set taken := match (funct3) with
                              | #funct3_BEQ  => (rs1_val == rs2_val)
-                             | #funct3_BNE  => !(rs1_val == rs2_val)
+                             | #funct3_BNE  => rs1_val != rs2_val
                              | #funct3_BLT  => rs1_val <s rs2_val
                              | #funct3_BGE  => !(rs1_val <s rs2_val)
                              | #funct3_BLTU => (rs1_val < rs2_val)
@@ -611,7 +611,7 @@ Module  RV32ICore.
                   else pass;
              let controlResult := execControl32(fInst, rs1_val, rs2_val, imm, pc) in
              let nextPc := get(controlResult,nextPC) in
-             if !(nextPc == get(decoded_bookeeping, ppc)) then
+             if nextPc != get(decoded_bookeeping, ppc) then
                write0(epoch, read0(epoch)+Ob~1);
                write0(pc, nextPc)
              else
