@@ -71,10 +71,10 @@ static inline void _sim_assert_fn(const char* repr,
 
 #ifdef NEEDS_BOOST_MULTIPRECISION
 
-#if BOOST_VERSION < 107200
+#if BOOST_VERSION < 106800
 // https://github.com/boostorg/multiprecision/commit/bbe819f8034a3c854deffc6191410b91ac27b3d6
-// Before 1.72, static_cast<uint16_t>(uint128_t{1 << 16}) gives 65535 instead of 0
-#pragma message("Bignum truncation is broken in Boost < 1.72; if you run into issues, try upgrading.")
+// Before 1.68, static_cast<uint16_t>(uint128_t{1 << 16}) gives 65535 instead of 0
+#pragma message("Bignum truncation is broken in Boost < 1.68; if you run into issues, try upgrading.")
 #endif
 
 #include <boost/multiprecision/cpp_int.hpp>
@@ -429,7 +429,7 @@ namespace prims {
   template<bitwidth ret_sz, bitwidth sz>
   static bits<ret_sz> truncate(const bits<sz> arg) {
     if (sz > MULTIPRECISION_THRESHOLD && sz > ret_sz) {
-      // Truncation is broken in Boost::multiprecision < 1.72.0, so mask before truncating
+      // Truncation is broken in Boost::multiprecision < 1.68.0, so mask before truncating
       // https://github.com/boostorg/multiprecision/commit/bbe819f8034a3c854deffc6191410b91ac27b3d6
       return bits<ret_sz>::mk(arg.v & bits<ret_sz>::bitmask());
     } else {
