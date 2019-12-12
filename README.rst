@@ -4,13 +4,15 @@
 
 This is the home of |koika|, an experimental hardware design language inspired by `BlueSpec SystemVerilog <http://wiki.bluespec.com/>`_.  |koika| programs are built from *rules*, small bits of hardware that operate concurrently to compute state updates but provide `the illusion of serializable (atomic) updates <atomic-actions>`_.  |koika| has simple, precise semantics that give you `strong guarantees about the behavior of your designs <oraat>`_.
 
-Our distribution includes an `executable reference-implementation of the language <formal-semantics>`_ written using the `Coq proof assistant <coq>`_, machine-checked proofs ensuring that |koika|'s semantics are compatible with `one-rule-at-a-time execution <oraat>`_, and a `formally-verified compiler <compiler-verification>`_ that generates circuits guaranteed to correctly implement your designs.
+Our distribution includes an `executable reference implementation of the language <formal-semantics>`_ written using the `Coq proof assistant <coq>`_, machine-checked proofs ensuring that |koika|'s semantics are compatible with `one-rule-at-a-time execution <oraat>`_, and a `formally-verified compiler <compiler-verification>`_ that generates circuits guaranteed to correctly implement your designs.
 
-|koika| programs are typically written inside of Coq using an `embedded DSL <koika-syntax>`_ (this lets you leverage Coq's powerful metaprogramming features and modular abstractions), though we also have a more limited `standalone front-end <lispy-verilog>`_ that accepts programs in serialized (s-expressions) form.  For simulation, debugging, and testing purposes, |koika| programs can be compiled into `readable, cycle-accurate C++ models <cuttlesim>`_, and for synthesis the |koika| compiler targets a minimal subset of synthesizable Verilog supported by all major downstream tools.
+|koika| programs are typically written inside of Coq using an `embedded DSL <syntax>`_ (this lets you leverage Coq's powerful metaprogramming features and modular abstractions), though we also have a more limited `standalone front-end <lispy-verilog>`_ that accepts programs in serialized (s-expressions) form.  For simulation, debugging, and testing purposes, |koika| programs can be compiled into `readable, cycle-accurate C++ models <cuttlesim>`_, and for synthesis the |koika| compiler targets a minimal subset of synthesizable Verilog supported by all major downstream tools.
 
 |koika| is a research prototype: the circuits that our compiler generates typically have reasonable-to-good performance, but area usage is still very much a work in progress.  Because our simulator can take advantage of high-level information, |koika| designs typically run reasonably fast in C++ simulation.
 
-|koika| is currently developed as a joint research effort at MIT, involving members of CSG (the Computation Structure Group) and PLV (the Programming Languages & Verification group).  Our `latest draft <koika-draft>`_ is a good place to get details about the research that powers it.  The name “|koika|” (甲イカ) is Japanese for “`cuttlefish <https://en.wikipedia.org/wiki/Cuttlefish>`_”; we chose it because cuttlefishes have blue blood (a tribute to the name Bluespec), and because each of their eight arms are equipped with independent neurons that allow them operate semi-independently towards a shared purpose, much like rules in |koika| designs.
+Our largest example at the moment is a simple RISCV (RV32I) `4-stage pipelined core <examples/rv/RVCore.v>`_.
+
+|koika| is currently developed as a joint research effort at MIT, involving members of CSG (the Computation Structure Group) and PLV (the Programming Languages & Verification group).  Our `latest draft <koika-paper>`_ is a good place to get details about the research that powers it.  The name “|koika|” (甲イカ) is Japanese for “`cuttlefish <https://en.wikipedia.org/wiki/Cuttlefish>`_”; we chose it because cuttlefishes have blue blood (a tribute to the name Bluespec), and because each of their eight arms are equipped with independent neurons that allow them operate semi-independently towards a shared purpose, much like rules in |koika| designs.
 
 Getting started
 ===============
@@ -49,9 +51,6 @@ Verilog” alternative frontend for |koika|) in ``etc/lv-mode.el``.
 Compiling your own programs
 ---------------------------
 
-**Programs written in the serialized syntax (“Lispy Verilog”)**:
-  Use ``cuttlec your-program.lv -T verilog``, or any other output option as described by ``cuttlec --help``.
-
 **Programs written in the Coq EDSL**:
   On the Coq side, after implementing your design, use the following to define a “package”:
 
@@ -66,21 +65,310 @@ Compiling your own programs
 
   Compile your Coq sources using ``coqc`` or ``dune`` to generate ``xyz.ml``, then compile that file using ``cuttlec xyz.ml -T …``.
 
+**Programs written in serialized syntax (“Lispy Verilog”)**:
+  Use ``cuttlec your-program.lv -T verilog``, or any other output option as described by ``cuttlec --help``.
+
 Technical details
 =================
+
+.. _koika-paper:
+
+Details about |koika|\ 's design and implementation can be found in our `research paper <https://pit-claudel.fr/clement/papers/koika.pdf>`_.
 
 Execution model
 ---------------
 
-|koika| programs are made of *rules*, orchestrated by a *scheduler*.  Each rule is a program that runs once per cycle, as long as it does not conflict with other rules.  When conflicts arise (for example, when two rules attempt to write to the same register), the scheduler determines which rule gets to execute (“fire”).
+.. _atomic-actions:
+
+|koika| programs are made of *rules*, orchestrated by a *scheduler*.  Each rule is a program that runs once per cycle, as long as it does not conflict with other rules.  When conflicts arise (for example, when two rules attempt to write to the same register), the priority order specified by the scheduler determines which rule gets to fire (i.e. execute).  Concretely, a rule might look like this (this is a rule that takes one step towards computing the GCD of the numbers in registers ``gcd_a`` and ``gcd_b``):
+
+.. code:: coq
+
+   let a := read0(gcd_a) in
+   let b := read0(gcd_b) in
+   if a != |16`d0| then
+     if a < b then
+       write0(gcd_b, a);
+       write0(gcd_a, b)
+     else
+       write0(gcd_a, a - b)
+   else
+     fail
+
+.. _oraat:
 
 The semantics of |koika| guarantee that each rule executes atomically, and that generated circuits behave one-rule-at-a-time — that is, even when multiple rules fire in the same cycle, the updates that they compute are as if only one rule had run per cycle.  For example, consider the following rules:
 
+.. _koika-syntax:
+
+Syntax
+------
+
+|koika| programs are written using an embedded DSL inside of the Coq proof assistant.  After compiling the distribution, begin your file with ``Require Import Koika.Frontend``.
+
+Preamble
+~~~~~~~~
+
+Start by defining the following types:
+
+- ``reg_t``: An enumerated type describing the state of your machine.  For example,
+
+  .. code:: coq
+
+     Inductive reg_t :=
+     (* These bypassing FIFOs are used to communicate with the memory *)
+     | to_memory (state: MemReqFIFO.reg_t)
+     | from_memory (state: MemRespFIFO.reg_t)
+     (* These FIFOs are used to connect pipeline stages *)
+     | d2e (state: fromDecodeFIFO.reg_t)
+     | e2w (state: fromExecuteFIFO.reg_t)
+     (* The register file and the scoreboard track and record reads and writes *)
+     | register_file (state: Rf.reg_t)
+     | scoreboard (state: Scoreboard.reg_t)
+     (* These are plain registers, not modules *)
+     | pc
+     | epoch.
+
+- ``ext_fn_t``: An enumerated type describing custom combinational primitives (custom IP) that your program should have access to (custom sequential IP is implemented using external rules, which are currently a work in progress; see `<examples/rv/RVCore.v>`_ for a concrete example).  For example,
+
+  .. code::
+
+     Inductive ext_fn_t :=
+     | custom_adder (size: nat).
+
+Then, declare the types of the data held in each part of your state, the initial value of each state element (we usually name these functions ``R`` and ``r``), and the signatures of your external (combinational) IP.  (In addition to bitsets, registers can contain structures, enums, or arrays of values; examples of these are given below.)
+
+.. code:: coq
+
+   Definition R (reg: reg_t) :=
+     match reg with
+     (* The type of the other modules is opaque; it's defined by the Rf module *)
+     | to_memory st => MemReqFIFO.R st
+     | register_file st => Rf.R st
+     …
+     (* Our own state is described explicitly: *)
+     | pc => bits_t 32
+     | epoch => bits_t 1
+     end.
+
+.. code:: coq
+
+   Definition r (reg: reg_t) : R reg :=
+     match reg with
+     | to_memory st => MemReqFIFO.r st
+     | register_file st => Rf.r st
+     …
+     | pc => Bits.zero
+     | epoch => Bits.zero
+     end.
+
+.. code::
+
+   Definition Sigma (fn: ext_fn_t) : ExternalSignature :=
+     match fn with
+     | custom_adder sz => {$ bits_t sz ~> bits_t sz ~> bits_t sz $}
+     end.
+
+Optionally, for reasoning purposes, you can give a Coq model of the external functions that you use:
+
+.. code::
+
+   Definition sigma (fn: ext_fn_t) : Sig_denote (Sigma fn) :=
+     match fn with
+     | custom_adder sz => fun (bs1 bs2: bits sz) => Bits.plus bs1 bs2
+     end.
+
+Finally, as needed, you can define your own custom types; here are a few examples:
+
+.. code:: coq
+
+   Definition proto :=
+     {| enum_name := "protocol";
+        enum_members :=
+          vect_of_list ["ICMP"; "IGMP"; "TCP"; "UDP"];
+        enum_bitpatterns :=
+          vect_of_list [Ob~0~0~0~0~0~0~0~1; Ob~0~0~0~0~0~0~1~0;
+                        Ob~0~0~0~0~0~1~1~0; Ob~0~0~0~1~0~0~0~1] |}.
+
+.. code:: coq
+
+   Definition flag :=
+     {| enum_name := "flag";
+        enum_members := vect_of_list ["set"; "unset"];
+        enum_bitpatterns := vect_of_list [Ob~1; Ob~0] |}.
+
+.. code:: coq
+
+   Definition ipv4_address :=
+     {| array_len := 4;
+        array_type := bits_t 8 |}.
+
+.. code:: coq
+
+   Definition ipv4_header :=
+     {| struct_name := "ipv4_header";
+        struct_fields :=
+          [("version", bits_t 4);
+           ("ihl", bits_t 4);
+           ("dscp", bits_t 6);
+           ("ecn", bits_t 2);
+           ("len", bits_t 16);
+           ("id", bits_t 16);
+           ("reserved", enum_t flag);
+           ("df", enum_t flag);
+           ("mf", enum_t flag);
+           ("fragment_offset", bits_t 13);
+           ("ttl", bits_t 8);
+           ("protocol", enum_t proto);
+           ("checksum", bits_t 16);
+           ("src", array_t ipv4_address);
+           ("dst", array_t ipv4_address)] |}.
+
+.. code:: coq
+
+   Definition result (a: type) :=
+     {| struct_name := "result";
+        struct_fields := [("valid", bits_t 1); ("value", a)] |}.
+
+   Definition response := result (struct_t ipv4_header).
+
+Rules
+~~~~~
+
+The main part of your program is rules.  You have access to the following syntax (there is no distinction between expressions and statements; statements are just expressions returning unit):
+
+``pass``:
+  Do nothing
+``fail``:
+  Abort the current rule, reverting all state changes
+``let var := val in body``
+  Let bindings
+``set var := val``
+  Assignments
+``stmt1; stmt2``
+  Sequence
+``if val then val1 else val2``
+  Conditional
+``match val with  | pattern => body…  return default: body``
+  Switches (case analysis)
+``read0(reg)``, ``read1(reg)``, ``write0(reg)``, ``write1(reg)``
+  Read or write a register at port 0 or 1
+``pack(val)``, ``unpack(type, val)``
+  Pack a value (go from struct, enum, or arrays to bits) or unpack a bitset
+``get(struct, field)``, ``subst(struct, field, value)``
+  Get a field of a struct value, or replace a field in a struct value (without mutating the original one)
+``getbits(struct, field)``, ``substbits(struct, field, value)``
+  Like get and subst, but on packed bitsets
+``Ob~1~0~1~0``, ``|4`d10|``
+  Bitset constants (here, the number 10 on 4 bits)
+``struct name {| field_n := val_n;… |}``
+  Struct constants
+``enum name {| member |}``
+  Enum constants
+``!x``, ``x && y``, ``x || y``, ``x ^ y``
+  Logical operators (not, and, or, xor)
+``x + y``, ``x - y``, ``x << y``, ``x >> y``, ``x >>> y``
+  Arithmetic operators (plus, minus, logical shits, arithmetic shift right)
+``x < y``, ``x <s y``, ``x > y``, ``x >s y``, ``x <= y``, ``x <s= y``, ``x >= y``, ``x >s= y``, ``x == y``, ``x != y``
+  Comparison operators, signed and unsigned
+``x ++ y``, ``x[y]``, ``x[y :+ z]``
+  Bitset operators (concat, select, indexed part-select)
+``reg.(method)(arg, …)``
+  Call a method of a module
+``function(args…)``
+  Call an internal function
+``extcall function(args…)``
+  Call an external function (combinational IP)
+
+For example, the following rule decreases the ``ttl`` field of an ICMP packet:
+
+.. code:: coq
+
+   Definition _decr_icmp_ttl : uaction _ empty_ext_fn_t := {{
+     let hdr := unpack(struct_t ipv4_header, read0(input)) in
+     let valid := Ob~1 in
+     match get(hdr, protocol) with
+     | enum proto {| ICMP |} =>
+       let t := get(hdr, ttl) in
+       if t == |8`d0| then
+         set valid := Ob~0
+       else
+         set hdr := subst(hdr, ttl, t - |8`d1|)
+     return default: fail
+     end;
+     write0(output, pack(struct response {| valid := valid; value := hdr |}))
+   }}.
+
+This rule fetches the next instruction in our RV32I core:
+
+.. code:: coq
+
+
+   Definition fetch : uaction reg_t empty_ext_fn_t := {{
+     let pc := read1(pc) in
+     let req := struct mem_req {|
+                           byte_en := |4`d0|; (* Load *)
+                           addr := pc;
+                           data := |32`d0| |} in
+     let fetch_bookkeeping := struct fetch_bookkeeping {|
+                                       pc := pc;
+                                       ppc := pc + |32`d4|;
+                                       epoch := read1(epoch)
+                                     |} in
+     toIMem.(MemReq.enq)(req);
+     write1(pc, pc + |32`d4|);
+     f2d.(fromFetch.enq)(fetch_bookkeeping)
+   }}.
+
+
+Functions
+~~~~~~~~~
+
+It is often convenient to separate out combination functions; for example:
+
+.. code:: coq
+
+   Definition alu32 : UInternalFunction reg_t empty_ext_fn_t := {{
+     fun (funct3  : bits_t 3)
+       (inst_30 : bits_t 1)
+       (a       : bits_t 32)
+       (b       : bits_t 32)
+       : bits_t 32 =>
+       let shamt := b[Ob~0~0~0~0~0 :+ 5] in
+       match funct3 with
+       | #funct3_ADD  => if (inst_30 == Ob~1) then a - b else a + b
+       | #funct3_SLL  => a << shamt
+       | #funct3_SLT  => zeroExtend(a <s b, 32)
+       | #funct3_SLTU => zeroExtend(a < b, 32)
+       | #funct3_XOR  => a ^ b
+       | #funct3_SRL  => if (inst_30 == Ob~1) then a >>> shamt else a >> shamt
+       | #funct3_OR   => a || b
+       | #funct3_AND  => a && b
+       return default: |32`d0|
+       end
+   }}.
+
+.. _lispy-verilog:
+
+.. _formal-semantics:
+
+Formal semantics
+----------------
+
+.. _compiler-verification:
+
+Compiler verification
+---------------------
+
+.. _cuttlesim:
+
+Simulation
+----------
 
 Browsing the sources
 ====================
 
-The following chart shows the current state of the repo:
+The following list shows the current state of the repo:
 
 .. begin repo architecture
 
