@@ -116,7 +116,7 @@ $(mod).hpp.gcov $(CPP_DRIVER).gcov: $(mod).gcno $(mod).cov
 # Compilation
 # ===========
 
-verilator_optdir := obj_dir.opt
+verilator_optdir := obj_dir
 verilator_tracedir := obj_dir.trace
 
 VERILATOR_TOPLEVEL ?= $(mod).v
@@ -153,6 +153,9 @@ $(verilator_optdir)/$(vmod): $(verilator_optdir)/$(vmod).mk $(verilator_deps)
 $(verilator_tracedir)/$(vmod): $(verilator_tracedir)/$(vmod).mk $(verilator_deps)
 	+$(MAKE) OPT="-g" -C $(verilator_tracedir) -f $(vmod).mk $(vmod)
 
+$(verilator_optdir)/$(vmod).xml: $(verilator_deps)
+	verilator $(VERILATOR_WARNINGS) $(VERILATOR_TOPLEVEL) --Mdir $(verilator_optdir) -xml-only --bbox-sys
+
 # Tracing
 # =======
 
@@ -163,8 +166,18 @@ verilator_invoke_trace := ./$(verilator_tracedir)/$(vmod) $(VERILATOR_ARGS) $(NC
 $(mod).verilator.vcd: $(verilator_tracedir)/$(vmod)
 	time $(verilator_invoke_trace) "$@"
 
+ifeq (, $(shell which xml2stems))
+$(warning xml2stems not found: not showing rtlbrowse; try installing a more recent version of GTKWave.)
 gtkwave.verilator: $(mod).verilator.vcd
-	gtkwave $<
+	gtkwave --optimize $<
+else
+# Use xml2stems because Vermin only parses up to Verilog 1995 and we use [+:] from Verilog 2000
+$(VERILATOR_TOPLEVEL).stems: $(verilator_optdir)/$(vmod).xml
+	xml2stems $< $@
+
+gtkwave.verilator: $(VERILATOR_TOPLEVEL).stems $(mod).verilator.vcd
+	gtkwave --optimize --stems $^
+endif
 
 twinwave: $(mod).cuttlesim.vcd $(mod).verilator.vcd
 	twinwave $(mod).cuttlesim.vcd + $(mod).verilator.vcd
@@ -295,4 +308,4 @@ help:
 	@echo '      NCYCLES = $(NCYCLES)'
 	@echo '        How many cycles to run the simulation for'
 
-.PHONY: gdb lldb perf kcachegrind clean help
+.PHONY: gdb lldb perf kcachegrind gtkwave.cuttlesim gtkwave.verilator twinwave clean help

@@ -3,7 +3,7 @@ include etc/Makefile.conf
 dut := rv32i_core_pipelined
 build_dir := _objects/$(dut).v
 opt_cuttlesim := $(dut).opt
-opt_verilator := obj_dir.opt/V$(basename $(VERILATOR_TOPLEVEL))
+opt_verilator := obj_dir/V$(basename $(VERILATOR_TOPLEVEL))
 RISCVCC32=riscv-none-embed-gcc -march=rv32i -mabi=ilp32 -nostartfiles -static -mstrict-align # -nostdlib -nostartfiles # -mcmodel=medany
 
 FULLASMTESTS=$(patsubst fullasmtests/%.S, build/fullasmtests/%32, $(wildcard fullasmtests/*.S))
