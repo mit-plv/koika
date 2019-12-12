@@ -61,22 +61,26 @@ Our compiler supports multiple targets:
 - makefile (an auto-generated Makefile including convenient targets to debug, profile, trace, or visualize the outputs of your design)
 - dot (a basic representation of the RTL generated from your design)
 
-**Programs written in the Coq EDSL**:
-  On the Coq side, after implementing your design, use the following to define a “package”:
+Programs written in the Coq EDSL
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-  .. code:: coq
+On the Coq side, after implementing your design, use the following to define a “package”:
 
-     Definition package :=
-       Interop.Backends.register
-         {| ip_koika := …;
-            ip_sim := …;
-            ip_verilog := … |}.
-     Extraction "xyz.ml" package.
+.. code:: coq
 
-  Compile your Coq sources using ``coqc`` or ``dune`` to generate ``xyz.ml``, then compile that file using ``cuttlec xyz.ml -T …``.
+   Definition package :=
+     Interop.Backends.register
+       {| ip_koika := …;
+          ip_sim := …;
+          ip_verilog := … |}.
+   Extraction "xyz.ml" package.
 
-**Programs written in serialized syntax (“Lispy Verilog”)**:
-  Use ``cuttlec your-program.lv -T verilog``, or any other output option as described by ``cuttlec --help``.
+Compile your Coq sources using ``coqc`` or ``dune`` to generate ``xyz.ml``, then compile that file using ``cuttlec xyz.ml -T …``.
+
+Programs written in serialized syntax (“Lispy Verilog”)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Use ``cuttlec your-program.lv -T verilog``, or any other output option as described by ``cuttlec --help``.
 
 Technical details
 =================
@@ -284,6 +288,8 @@ As needed, you can define your own custom types; here are a few examples:
      {| struct_name := "result";
         struct_fields := [("valid", bits_t 1); ("value", a)] |}.
 
+.. code:: coq
+
    Definition response := result (struct_t ipv4_header).
 
 Rules
@@ -291,9 +297,9 @@ Rules
 
 The main part of your program is rules.  You have access to the following syntax (there is no distinction between expressions and statements; statements are just expressions returning unit):
 
-``pass``:
+``pass``
   Do nothing
-``fail``:
+``fail``
   Abort the current rule, reverting all state changes
 ``let var := val in body``
   Let bindings
@@ -383,13 +389,15 @@ A scheduler defines a priority order on rules: in each cycle rules appear to exe
 
 A scheduler refers to rules by name, so you need three things:
 
-A rule name type:
+- A rule name type:
+
   .. code:: coq
 
      Inductive rule_name_t :=
        start | step_compute | get_result.
 
-A scheduler definition:
+- A scheduler definition:
+
   .. code:: coq
 
      Definition scheduler :=
@@ -397,7 +405,8 @@ A scheduler definition:
          (start |> step_compute |>
           get_result |> done).
 
-A mapping from rule names to (typechecked) rules:
+- A mapping from rule names to (typechecked) rules:
+
   .. code:: coq
 
      Definition rules :=
