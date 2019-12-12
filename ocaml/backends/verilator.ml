@@ -1,3 +1,4 @@
+(*! Verilator backend exporting a simple C++ driver !*)
 let main dpath modname =
   let hpp = Filename.concat dpath "verilator.hpp" in
   let cpp = Filename.concat dpath modname ^ ".verilator.cpp" in

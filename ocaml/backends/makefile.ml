@@ -1,3 +1,4 @@
+(*! Makefile backend (to make it easier to generate traces, statistics, models, etc.) !*)
 let concat flags =
   String.concat " " flags
 

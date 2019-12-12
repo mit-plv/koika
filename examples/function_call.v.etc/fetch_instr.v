@@ -1,4 +1,4 @@
-// -*- mode: verilog -*-
+/*! Verilog implementation of external functions for the function_call example -*- mode: verilog -*- !*/
 
 bit[31:0] instructions[8] = '{
   32'b11011000001011000000011111001101,

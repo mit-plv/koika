@@ -1,3 +1,5 @@
+/*! C++ implementation of external functions for the function_call example !*/
+
 #ifndef _EXTFUNS_HPP
 #define _EXTFUNS_HPP
 static constexpr bits<32> instructions[8] = {
