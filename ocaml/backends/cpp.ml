@@ -1137,7 +1137,8 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
 
     let p_reset () =
       p_fn ~typ:"void" ~name:"reset" ~args:"const state_t init = initial_state()" (fun () ->
-          p "log = Log = log_t(init);") in
+          p "log = Log = log_t(init);";
+          p_ifnminimal (fun () -> p "rng.seed(cuttlesim::random_seed);")) in
 
     let p_constructor () =
       p_fn ~typ:"explicit" ~name:hpp.cpp_classname
@@ -1163,6 +1164,21 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
           p "log.rwset = Log.rwset = rwset_t{};";
           p_scheduler Pos.Unknown hpp.cpp_scheduler) in
 
+    let p_cycle_randomized () =
+      let has_rules = hpp.cpp_rules <> [] in
+      let nrules = List.length hpp.cpp_rules in
+      let prefix = sprintf "%s::" hpp.cpp_classname in
+      p "typedef bool (%s*rule_ptr)();" prefix;
+      p_fn ~typ:"void" ~name:"cycle_randomized" (fun () ->
+          p "log.rwset = Log.rwset = rwset_t{};";
+          if has_rules then
+            let decl = sprintf "static constexpr rule_ptr rules[%d]" nrules in
+            p_scoped decl ~terminator:";" (fun () ->
+                iter_sep (fun () -> p ",") (fun { rl_name; _ } ->
+                    pr "&%s%s" prefix (hpp.cpp_rule_names rl_name))
+                  hpp.cpp_rules);
+            p "(this->*rules[uniform(rng)])();") in
+
     let run_typ =
       sprintf "template<typename T> _flatten %s&" hpp.cpp_classname in
 
@@ -1172,6 +1188,11 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
     let p_run () =
       p_fn ~typ:run_typ ~name:"run" ~args:"T ncycles" (fun () ->
           p_cycle_loop (fun () -> p "cycle();");
+          p "return *this;") in
+
+    let p_run_randomized () =
+      p_fn ~typ:run_typ ~name:"run_randomized" ~args:"T ncycles" (fun () ->
+          p_cycle_loop (fun () -> p "cycle_randomized();");
           p "return *this;") in
 
     let p_snapshot () =
@@ -1213,6 +1234,11 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
         p "log_t Log;";
         p "extfuns_t extfuns;";
         nl ();
+        p_ifnminimal (fun () ->
+            p "std::default_random_engine rng{};";
+            p "std::uniform_int_distribution<int> uniform{0, %d};"
+              (max 0 (List.length hpp.cpp_rules - 1)));
+        nl ();
         iter_sep nl p_rule hpp.cpp_rules;
         nl ();
 
@@ -1226,6 +1252,11 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
         p_cycle ();
         nl ();
         p_run ();
+        nl ();
+        p_ifnminimal (fun () ->
+            p_cycle_randomized ();
+            nl ();
+            p_run_randomized ());
         nl ();
         p_snapshot ();
         nl ();

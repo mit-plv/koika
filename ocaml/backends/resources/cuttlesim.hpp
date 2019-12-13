@@ -5,7 +5,7 @@
 #include <algorithm> // For std::max
 #include <array>
 #include <cstddef> // For size_t
-#include <cstdint>
+#include <cstdint> // For uintN_t
 #include <cstring> // For memcpy
 #include <limits> // For std::numeric_limits used in prims::mask
 #include <string> // For prims::display
@@ -16,6 +16,8 @@
 #include <iomanip> // For std::setfill
 #include <iostream>
 #include <fstream> // For VCD files
+#include <cstdlib> // For getenv
+#include <random> // For executing rules in random order
 #endif // #ifndef SIM_MINIMAL
 
 #ifdef SIM_DEBUG
@@ -943,7 +945,19 @@ namespace cuttlesim {
       }
     }
   }
-}
+
+  namespace internal {
+    std::size_t gen_seed() {
+      if (char* seed = std::getenv("SIM_RANDOMIZED")) {
+        return std::hash<std::string>{}(seed);
+      }
+      auto now = std::chrono::high_resolution_clock::now();
+      return now.time_since_epoch().count();
+    }
+  }
+
+  std::size_t random_seed = internal::gen_seed();
+} // namespace cuttlesim
 #endif // #ifndef SIM_MINIMAL
 
 using prims::array;
@@ -1085,13 +1099,21 @@ namespace cuttlesim {
 
   using ull = unsigned long long int;
   template <typename simulator, typename... Args>
-  _flatten __attribute__((noinline)) typename simulator::state_t init_and_run(ull ncycles, Args&&... args) noexcept {
+  _flatten __attribute__((noinline)) typename simulator::state_t
+  init_and_run(ull ncycles, Args&&... args) noexcept {
     return simulator(std::forward<Args>(args)...).run(ncycles).snapshot();
   }
 
 #ifndef SIM_MINIMAL
+  template <typename simulator, typename... Args>
+  _flatten static __attribute__((noinline)) typename simulator::state_t
+  init_and_run_randomized(ull ncycles, Args&&... args) noexcept {
+    return simulator(std::forward<Args>(args)...).run_randomized(ncycles).snapshot();
+  }
+
   template<typename simulator, typename... Args>
-    static __attribute__((noinline)) _unused void init_and_trace(std::string fname, ull ncycles, Args&&... args) {
+  _flatten static __attribute__((noinline)) _unused void
+  init_and_trace(std::string fname, ull ncycles, Args&&... args) {
     simulator(std::forward<Args>(args)...).trace(fname, ncycles);
   }
 
@@ -1136,6 +1158,8 @@ namespace cuttlesim {
 
     if (params.trace) {
       init_and_trace<simulator>(params.vcd_fpath, params.ncycles, std::forward<Args>(args)...);
+    } else if (std::getenv("SIM_RANDOMIZED")) {
+      init_and_run_randomized<simulator>(params.ncycles, std::forward<Args>(args)...).dump();
     } else {
       init_and_run<simulator>(params.ncycles, std::forward<Args>(args)...).dump();
     }
