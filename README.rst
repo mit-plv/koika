@@ -49,6 +49,8 @@ The examples can be compiled using ``make examples``, and browsed in either
 CoqIDE or Proof General.  There is basic Emacs support for ``.lv`` files (the “Lispy
 Verilog” alternative frontend for |koika|) in ``etc/lv-mode.el``.
 
+See `browsing the sources <repo-map>`_ below for information about the repository's organization.
+
 Compiling your own programs
 ---------------------------
 
@@ -82,8 +84,8 @@ Programs written in serialized syntax (“Lispy Verilog”)
 
 Use ``cuttlec your-program.lv -T verilog``, or any other output option as described by ``cuttlec --help``.
 
-Technical details
-=================
+Technical overview
+==================
 
 .. _koika-paper:
 
@@ -184,8 +186,8 @@ Syntax
 
 |koika| programs are written using an embedded DSL inside of the Coq proof assistant.  After compiling the distribution, begin your file with ``Require Import Koika.Frontend``.
 
-Preamble
-~~~~~~~~
+Preamble and types
+~~~~~~~~~~~~~~~~~~
 
 Start by defining the following types:
 
@@ -352,10 +354,8 @@ For example, the following rule decreases the ``ttl`` field of an ICMP packet:
      match get(hdr, protocol) with
      | enum proto {| ICMP |} =>
        let t := get(hdr, ttl) in
-       if t == |8`d0| then
-         set valid := Ob~0
-       else
-         set hdr := subst(hdr, ttl, t - |8`d1|)
+       if t == |8`d0| then set valid := Ob~0
+       else set hdr := subst(hdr, ttl, t - |8`d1|)
      return default: fail
      end;
      write0(output, pack(struct response {| valid := valid; value := hdr |}))
@@ -418,70 +418,17 @@ A scheduler refers to rules by name, so you need three things:
           | get_result => {{ … rule body … }}
           end).
 
-Functions
-~~~~~~~~~
-
-It is often convenient to separate out combination functions; for example:
-
-.. code:: coq
-
-   Definition alu32: UInternalFunction reg_t empty_ext_fn_t := {{
-     fun (funct3: bits_t 3) (inst_30: bits_t 1)
-         (a: bits_t 32) (b: bits_t 32): bits_t 32 =>
-       let shamt := b[Ob~0~0~0~0~0 :+ 5] in
-       match funct3 with
-       | #funct3_ADD  => if (inst_30 == Ob~1) then a - b else a + b
-       | #funct3_SLL  => a << shamt
-       | #funct3_SLT  => zeroExtend(a <s b, 32)
-       | #funct3_SLTU => zeroExtend(a < b, 32)
-       | #funct3_XOR  => a ^ b
-       | #funct3_SRL  => if (inst_30 == Ob~1) then a >>> shamt else a >> shamt
-       | #funct3_OR   => a || b
-       | #funct3_AND  => a && b
-       return default: |32`d0|
-       end
-   }}.
-
-.. _lispy-verilog:
-
-Machine-friendly input
-~~~~~~~~~~~~~~~~~~~~~~
-
-When generating Kôika code from another language, it can be easier to target a format with a simpler syntax than our Coq EDSL.  In that case you can use Lispy Verilog, an alternative syntax for Kôika based on s-expressions.  See the `<examples>`_ and `<tests>`_ directories for more information; here is one example:
-
-.. code:: lisp
-
-   ;;; Computing terms of the Collatz sequence (Lispy Verilog version)
-
-   (defun times_three ((v (bits 16))) (bits 16)
-     (+ (<< v 1'1) v))
-
-   (module collatz
-     (register r0 16'19)
-
-     (rule divide
-       (let ((v (read.0 r0))
-             (odd (sel v 4'0)))
-         (when (not odd)
-           (write.0 r0 (lsr v 1'1)))))
-
-     (rule multiply
-       (let ((v (read.1 r0))
-             (odd (sel v 4'0)))
-         (when odd
-           (write.1 r0 (+ (times_three v) 16'1)))))
-
-     (scheduler main
-       (sequence divide multiply)))
-
 .. _formal-semantics:
 
 Formal semantics
 ----------------
 
-Once you have a program, you can use our executable semantics to execute it; this gives you a specification of what the program should compute.  For this, you need two more things:
+The semantics of |koika| programs are given by a reference interpreter written in Coq.  The results computed by this interpreter are the specification of the meaning of each program.
 
-The initial value of each state element, ``r``
+To run the reference interpreter, you need two more things:
+
+- The initial value of each state element, ``r``
+
   .. code:: coq
 
      Definition r (reg: reg_t): R reg :=
@@ -493,7 +440,8 @@ The initial value of each state element, ``r``
        | epoch => Bits.zero
        end.
 
-A Coq model of the external IP that you use, if any:
+- A Coq model of the external IP that you use, if any:
+
   .. code:: coq
 
      Definition sigma (fn: ext_fn_t): Sig_denote (Sigma fn) :=
@@ -513,7 +461,7 @@ Then you can run your code:
 
    (* This computes the new value of each register *)
    Definition interp_result :=
-     tc_compute (commit_update r event_log).
+     tc_compute (commit_update cr event_log).
 
 This ``interp_scheduler`` function implements the executable reference semantics of |koika|; it can be used to prove properties about programs, to guarantee that program transformation are correct, or to verify a compiler.
 
@@ -572,10 +520,82 @@ To simulation, debugging, and testing purposes, we have a separate compiler, ``c
 
 The Makefile generated by ``cuttlec`` contains multiple useful targets that can be used in connection with ``cuttlesim``; for example, coverage statistics (using ``gcov``) can be used to get a detailed picture of which rules of a design tend to fail, and for what resons, which makes it easy to diagnose e.g. back-pressure due to incorrect pipelining setups.  Additionally, ``cuttlesim`` models can be used to generate value change dumps that can be visualized with `GTKWave <http://gtkwave.sourceforge.net/>`_.
 
+Compilation
+-----------
+
+The usual compilation process for program defined using our Coq EDSL in as follows:
+
+1. Write you program as shown above
+2. Write a *package*, gathering all pieces of your program together
+3. Export that package using extraction to OCaml
+4. Compile this package to Verilog, C++, etc. using ``cuttlec``; this invokes the verified compiler to circuits and a thin unverified layer to produce RTL, or separate (unverified) code to produce C++ models and graphs.
+
+Additional topics
+=================
+
+Function definitions
+--------------------
+
+It is often convenient to define reusable combinational functions separately; for example:
+
+.. code:: coq
+
+   Definition alu32: UInternalFunction reg_t empty_ext_fn_t := {{
+     fun (funct3: bits_t 3) (inst_30: bits_t 1)
+         (a: bits_t 32) (b: bits_t 32): bits_t 32 =>
+       let shamt := b[Ob~0~0~0~0~0 :+ 5] in
+       match funct3 with
+       | #funct3_ADD  => if (inst_30 == Ob~1) then a - b else a + b
+       | #funct3_SLL  => a << shamt
+       | #funct3_SLT  => zeroExtend(a <s b, 32)
+       | #funct3_SLTU => zeroExtend(a < b, 32)
+       | #funct3_XOR  => a ^ b
+       | #funct3_SRL  => if (inst_30 == Ob~1) then a >>> shamt else a >> shamt
+       | #funct3_OR   => a || b
+       | #funct3_AND  => a && b
+       return default: |32`d0|
+       end
+   }}.
+
+.. _lispy-verilog:
+
+Machine-friendly input
+----------------------
+
+When generating Kôika code from another language, it can be easier to target a format with a simpler syntax than our Coq EDSL.  In that case you can use Lispy Verilog, an alternative syntax for Kôika based on s-expressions.  See the `<examples>`_ and `<tests>`_ directories for more information; here is one example:
+
+.. code:: lisp
+
+   ;;; Computing terms of the Collatz sequence (Lispy Verilog version)
+
+   (defun times_three ((v (bits 16))) (bits 16)
+     (+ (<< v 1'1) v))
+
+   (module collatz
+     (register r0 16'19)
+
+     (rule divide
+       (let ((v (read.0 r0))
+             (odd (sel v 4'0)))
+         (when (not odd)
+           (write.0 r0 (lsr v 1'1)))))
+
+     (rule multiply
+       (let ((v (read.1 r0))
+             (odd (sel v 4'0)))
+         (when odd
+           (write.1 r0 (+ (times_three v) 16'1)))))
+
+     (scheduler main
+       (sequence divide multiply)))
+
+
 Browsing the sources
 ====================
 
 The following list shows the current state of the repo:
+
+.. _repo-map:
 
 .. begin repo architecture
 
