@@ -4,7 +4,7 @@
 
 This is the home of |koika|, an experimental hardware design language inspired by `BlueSpec SystemVerilog <http://wiki.bluespec.com/>`_.  |koika| programs are built from *rules*, small bits of hardware that operate concurrently to compute state updates but provide `the illusion of serializable (atomic) updates <atomic-actions>`_.  |koika| has simple, precise semantics that give you `strong guarantees about the behavior of your designs <oraat>`_.
 
-Our distribution includes an `executable reference implementation of the language <formal-semantics>`_ written using the `Coq proof assistant <coq>`_, machine-checked proofs ensuring that |koika|'s semantics are compatible with `one-rule-at-a-time execution <oraat>`_, and a `formally-verified compiler <compiler-verification>`_ that generates circuits guaranteed to correctly implement your designs.
+Our distribution includes an `executable reference implementation of the language <formal-semantics>`_ written using the `Coq proof assistant <https://coq.inria.fr/>`_, machine-checked proofs ensuring that |koika|'s semantics are compatible with `one-rule-at-a-time execution <oraat>`_, and a `formally-verified compiler <compiler-verification>`_ that generates circuits guaranteed to correctly implement your designs.
 
 |koika| programs are typically written inside of Coq using an `embedded DSL <syntax>`_ (this lets you leverage Coq's powerful metaprogramming features and modular abstractions), though we also have a more limited `standalone front-end <lispy-verilog>`_ that accepts programs in serialized (s-expressions) form.  For simulation, debugging, and testing purposes, |koika| programs can be compiled into `readable, cycle-accurate C++ models <cuttlesim>`_, and for synthesis the |koika| compiler targets a minimal subset of synthesizable Verilog supported by all major downstream tools.
 
@@ -66,7 +66,7 @@ Our compiler supports multiple targets:
 Programs written in the Coq EDSL
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-On the Coq side, after implementing your design, use the following to define a “package”:
+On the Coq side, after implementing your design, use the following to define a “package” (see the `<examples/>`_ directory for more information, or read the `<syntax>`_ section below):
 
 .. code:: coq
 
@@ -100,7 +100,7 @@ Execution model
 
 .. code:: coq
 
-   Definition gcd_compute: uaction reg_t ext_fn_t := {{
+   Definition gcd_compute := {{
      let a := read0(gcd_a) in
      let b := read0(gcd_b) in
      if a != |16`d0| then
@@ -115,7 +115,7 @@ Execution model
 
 .. _oraat:
 
-The semantics of |koika| guarantee that each rule executes atomically, and that generated circuits behave one-rule-at-a-time — that is, even when multiple rules fire in the same cycle, the updates that they compute are as if only one rule had run per cycle.
+The semantics of |koika| guarantee that each rule executes atomically, and that generated circuits behave one-rule-at-a-time — that is, even when multiple rules fire in the same cycle, the updates that they compute are as if only one rule had run per cycle (previous work used this property to define the language; in contrast, our semantics are more precise, and this atomicity property is proven in `<coq/OneRuleAtATime.v>`_).
 
 As an example, consider a simple two-stage pipeline with two single-element input FIFOs and one single-element output FIFO:
 
@@ -125,7 +125,8 @@ We implement these FIFOs using three single-bit registers (``…_empty``) indica
 
 .. code:: coq
 
-   Definition urules (rl: rule_name_t) : uaction reg_t empty_ext_fn_t :=
+   (* This is a compact way to define deq0, deq1, and process: *)
+   Definition rules (rl: rule_name_t) :=
      match rl with
      | deq0 =>
        {{ guard(!read0(in0_empty) && read0(fifo_empty));
@@ -153,7 +154,7 @@ A conflict arises when both inputs are available; what should happen in this cas
 
 This sequence indicates that ``deq0`` has priority, so ``in_data0`` is processed first.  When both inputs are available and the middle FIFO is empty, when ``deq1`` attempts to run, it will dynamically fail when trying to write into ``fifo_data``.
 
-This example includes a simple form of backpressure: if the middle FIFO is full, the first two rules will not run; if the output FIFO is full, the last rule will not run.  This is made explicit by the ``guard`` statements (those would be hidden inside the implementation of the ``dequeue`` and ``enqueue`` methods of the FIFO in a larger example).
+This example includes a simple form of backpressure: if the middle FIFO is full, the first two rules will not run; if the output FIFO is full, the last rule will not run.  This is made explicit by the ``guard`` statements (those would be hidden inside the implementation of the ``dequeue`` and ``enqueue`` methods of the FIFO in a larger example, as demonstrated `below <modularity>`_).
 
 Looking carefully, you'll notice that ``read``\ s and ``write``\ s are annotated with ``0``\ s and ``1``\ s.  These are forwarding specifications, or “ports”.  Values written at port 0 are visible in the same cycle at port 1, and values written at port 1 overwrite values written at port 0.  Hence, this example defines a bypassing FIFO: values written by ``deq0`` and ``deq1`` are processed by ``process`` in the same cycle as they are written, assuming that there is space in the output FIFO.  If we had used a ``read0`` instead, we would have had a pipelined FIFO.
 
@@ -209,7 +210,7 @@ Start by defining the following types:
      | pc
      | epoch.
 
-- ``ext_fn_t``: An enumerated type describing custom combinational primitives (custom IP) that your program should have access to (custom sequential IP is implemented using external rules, which are currently a work in progress; see `<examples/rv/RVCore.v>`_ for a concrete example).  For example,
+- ``ext_fn_t``: An enumerated type describing custom combinational primitives (custom IP) that your program should have access to (custom sequential IP is implemented using external rules, which are currently a work in progress; see `<examples/rv/RVCore.v>`_ for a concrete example).  Use ``empty_ext_fn_t`` if you don't use external IP in your design.  For example,
 
   .. code::
 
@@ -323,13 +324,13 @@ The main part of your program is rules.  You have access to the following syntax
   Like get and subst, but on packed bitsets
 ``!x``, ``x && y``, ``x || y``, ``x ^ y``
   Logical operators (not, and, or, xor)
-``x + y``, ``x - y``, ``x << y``, ``x >> y``, ``x >>> y``
-  Arithmetic operators (plus, minus, logical shits, arithmetic shift right)
+``x + y``, ``x - y``, ``x << y``, ``x >> y``, ``x >>> y``, ``zeroExtend(x, width)``, ``sext(x, width)``
+  Arithmetic operators (plus, minus, logical shits, arithmetic shift right, left zero-extension, sign extension)
 ``x < y``, ``x <s y``, ``x > y``, ``x >s y``, ``x <= y``, ``x <s= y``, ``x >= y``, ``x >s= y``, ``x == y``, ``x != y``
   Comparison operators, signed and unsigned
 ``x ++ y``, ``x[y]``, ``x[y :+ z]``
   Bitset operators (concat, select, indexed part-select)
-``reg.(method)(arg, …)``
+``instance.(method)(arg, …)``
   Call a method of a module
 ``function(args…)``
   Call an internal function
@@ -348,7 +349,7 @@ For example, the following rule decreases the ``ttl`` field of an ICMP packet:
 
 .. code:: coq
 
-   Definition _decr_icmp_ttl: uaction _ empty_ext_fn_t := {{
+   Definition _decr_icmp_ttl := {{
      let hdr := unpack(struct_t ipv4_header, read0(input)) in
      let valid := Ob~1 in
      match get(hdr, protocol) with
@@ -365,14 +366,14 @@ This rule fetches the next instruction in our RV32I core:
 
 .. code:: coq
 
-   Definition fetch: uaction reg_t empty_ext_fn_t := {{
+   Definition fetch := {{
      let pc := read1(pc) in
-     let req := struct mem_req {|
-                           byte_en := |4`d0|; (* Load *)
-                           addr := pc;
-                           data := |32`d0| |} in
-     toIMem.(MemReq.enq)(req);
      write1(pc, pc + |32`d4|);
+     toIMem.(MemReq.enq)(struct mem_req {|
+          byte_en := |4`d0|; (* Load *)
+          addr := pc;
+          data := |32`d0|
+        |});
      f2d.(fromFetch.enq)(struct fetch_bookkeeping {|
           pc := pc;
           ppc := pc + |32`d4|;
@@ -490,7 +491,7 @@ For instance, in the following example, our theorem guarantees that ``circuits_r
 Simulation
 ----------
 
-To simulation, debugging, and testing purposes, we have a separate compiler, ``cuttlesim``, which generates C++ models from |koika| designs.  The models are reasonably readable, suitable for debugging with GDB or LLDB, and typically run significantly faster than RTL simulation.  Here is a concrete example:
+To simulation, debugging, and testing purposes, we have a separate compiler, ``cuttlesim``, which generates C++ models from |koika| designs.  The models are reasonably readable, suitable for debugging with GDB or LLDB, and typically run significantly faster than RTL simulation.  Here is a concrete example, generated from `<examples/gcd_machine.v>`_:
 
 .. code:: c
 
@@ -525,9 +526,9 @@ Compilation
 
 The usual compilation process for program defined using our Coq EDSL in as follows:
 
-1. Write you program as shown above
-2. Write a *package*, gathering all pieces of your program together
-3. Export that package using extraction to OCaml
+1. Write you program as shown above.
+2. Write a *package*, gathering all pieces of your program together; packages are documented in `<coq/Interop.v>`_.
+3. Export that package using extraction to OCaml.
 4. Compile this package to Verilog, C++, etc. using ``cuttlec``; this invokes the verified compiler to circuits and a thin unverified layer to produce RTL, or separate (unverified) code to produce C++ models and graphs.
 
 Additional topics
@@ -536,7 +537,7 @@ Additional topics
 Function definitions
 --------------------
 
-It is often convenient to define reusable combinational functions separately; for example:
+It is often convenient to define reusable combinational functions separately, as in `this example <examples/rv/RVCore.v>`_:
 
 .. code:: coq
 
@@ -557,12 +558,83 @@ It is often convenient to define reusable combinational functions separately; fo
        end
    }}.
 
+That function would be called by writing ``alu32(fn3, i30, a, b)``.
+
+.. _modularity:
+
+Modularity
+----------
+
+Function definitions are best for stateless (combinational) programs.  For stateful code fragments, |koika| has a limited form of method calls.
+
+The following (excerpted from `<examples/modular_conflicts.v>`_) defines a ``Queue32`` module implementing a bypassing FIFO, with methods to dequeue at port 0 and 1 and a method to enqueue at port 0.
+
+.. code::
+
+   Module Import Queue32.
+     Inductive reg_t := empty | data.
+
+     Definition R reg :=
+       match reg with
+       | empty => bits_t 1
+       | data => bits_t 32
+       end.
+
+     Definition dequeue0: UInternalFunction reg_t empty_ext_fn_t :=
+       {{ fun _ : bits_t 32 =>
+            guard(!read0(empty));
+            write0(empty, Ob~1);
+            read0(data) }}.
+
+     Definition enqueue0: UInternalFunction reg_t empty_ext_fn_t :=
+       {{ fun (val: bits_t 32) : unit_t =>
+            guard(read0(empty));
+            write0(empty, Ob~0);
+            write0(data, val) }}.
+
+     Definition dequeue1: UInternalFunction reg_t empty_ext_fn_t :=
+       {{ fun _ : bits_t 32 =>
+            guard(!read1(empty));
+            write1(empty, Ob~1);
+            read1(data) }}.
+   End Queue32.
+
+Our earlier example of conflicts can then be written thus:
+
+.. code::
+
+   Inductive reg_t :=
+   | in0: Queue32.reg_t -> reg_t
+   | in1: Queue32.reg_t -> reg_t
+   | fifo: Queue32.reg_t -> reg_t
+   | out: Queue32.reg_t -> reg_t.
+
+   Inductive rule_name_t := deq0 | deq1 | process.
+
+   Definition R (reg: reg_t) : type :=
+     match reg with
+     | in0 st => Queue32.R st
+     | in1 st => Queue32.R st
+     | fifo st => Queue32.R st
+     | out st => Queue32.R st
+     end.
+
+   Definition urules (rl: rule_name_t) :=
+     match rl with
+     | deq0 =>
+       {{ fifo.(enqueue0)(in0.(dequeue0)()) }}
+     | deq1 =>
+       {{ fifo.(enqueue0)(in1.(dequeue0)()) }}
+     | process =>
+       {{ out.(enqueue0)(fifo.(dequeue1)() + |32`d412|) }}
+     end.
+
 .. _lispy-verilog:
 
 Machine-friendly input
 ----------------------
 
-When generating Kôika code from another language, it can be easier to target a format with a simpler syntax than our Coq EDSL.  In that case you can use Lispy Verilog, an alternative syntax for Kôika based on s-expressions.  See the `<examples>`_ and `<tests>`_ directories for more information; here is one example:
+When generating Kôika code from another language, it can be easier to target a format with a simpler syntax than our Coq EDSL.  In that case you can use Lispy Verilog, an alternative syntax for Kôika based on s-expressions.  See the `<examples/>`_ and `<tests/>`_ directories for more information; here is `one example <examples/collatz.lv>`_; the Coq version of the same program is in `<examples/collatz.v>`_:
 
 .. code:: lisp
 
@@ -588,7 +660,6 @@ When generating Kôika code from another language, it can be easier to target a 
 
      (scheduler main
        (sequence divide multiply)))
-
 
 Browsing the sources
 ====================
