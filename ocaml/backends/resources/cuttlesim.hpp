@@ -501,7 +501,7 @@ namespace prims {
     return mask(bits<sz1>::mk(data.v << shift.v));
   }
 
-  bits<1> operator!(const bits<1> x) {
+  static _unused bits<1> operator!(const bits<1> x) {
     return bits<1>::mk(!x.v);
   }
 
