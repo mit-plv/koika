@@ -11,7 +11,7 @@ Definition empty_CSigma (fn: empty_ext_fn_t)
   : CExternalSignature := CSigma_of_Sigma empty_Sigma fn.
 Definition empty_csigma fn
   : CSig_denote (empty_CSigma fn) := csigma_of_sigma empty_sigma fn.
-Definition empty_fn_names (fn: empty_ext_fn_t)
+Definition empty_ext_fn_names (fn: empty_ext_fn_t)
   : string := match fn with end.
 
 Section Packages.

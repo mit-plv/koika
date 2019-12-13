@@ -80,10 +80,10 @@ Definition package : interop_package_t :=
                    koika_scheduler := bring;
                    koika_module_name := "external_rule" |};
 
-     ip_sim := {| sp_ext_fn_names := empty_fn_names;
+     ip_sim := {| sp_ext_fn_names := empty_ext_fn_names;
                  sp_extfuns := None |};
 
-     ip_verilog := {| vp_ext_fn_names := empty_fn_names |} |}.
+     ip_verilog := {| vp_ext_fn_names := empty_ext_fn_names |} |}.
 
 Definition prog := Interop.Backends.register package.
 Extraction "external_rule.ml" prog.
