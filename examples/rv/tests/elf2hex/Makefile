@@ -1,4 +1,3 @@
-
 # Copyright (c) 2017 Massachusetts Institute of Technology
 
 # Permission is hereby granted, free of charge, to any person

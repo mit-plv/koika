@@ -1,17 +1,8 @@
-#include "median.h"
+// See LICENSE.riscv-tests for license details.
 
-//--------------------------------------------------------------------------
-// Input/Reference Data
-#include "dataset1.h"
+#include "../mmio.h"
+#include "rvbench_median_dataset.h"
 
-//--------------------------------------------------------------------------
-// Main
-
-// See LICENSE for license details.
-
-//**************************************************************************
-// Median filter (c version)
-//--------------------------------------------------------------------------
 static int verify(int n, const volatile int* test, const int* verify) {
   // correct: return 0
   // wrong: return wrong idx + 1
@@ -62,19 +53,17 @@ void median( int n, int input[], int results[] )
 
 }
 
-
-int main( int argc, char* argv[] )
-{
+int main() {
 	int results_data[DATA_SIZE];
 
-
-	median( DATA_SIZE, input_data, results_data );
+	median(DATA_SIZE, input_data, results_data);
 
 	// Check the results
 	int ret = verify( DATA_SIZE, results_data, verify_data );
 	if (ret == 0) {
-	  putchar('o');
-	  putchar('k');
-    } else { putchar('f'); putchar('a'); putchar('i'); putchar('l');}
+	  putchars("ok");
+    } else {
+      putchars("fail");
+    }
 	return ret;
 }

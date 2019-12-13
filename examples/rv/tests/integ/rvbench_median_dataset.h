@@ -1,4 +1,4 @@
-// See LICENSE for license details.
+// See LICENSE.riscv-tests for license details.
 
 
 #define DATA_SIZE 400
