@@ -5,7 +5,8 @@ BUILDDIR=build
 
 bmarks = \
 	median_main \
-	qsort_main
+	qsort_main \
+	primes
 
 SOURCES=$(notdir $(foreach bench,$(bmarks),$(wildcard $(SRCDIR)/$(bench).c)))
 # SOURCES=$(notdir $(wildcard $(SRCDIR)/*.c))
