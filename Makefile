@@ -125,14 +125,18 @@ PHONY += examples clean-examples tests clean-tests
 readme:
 	./etc/readme/update.py README.rst
 
+package:
+	etc/package.sh
+
 all: coq ocaml examples tests readme
 	@printf "\n== Completing full build ==\n"
 	dune build @all
 
 clean: clean-tests clean-examples
 	dune clean
+	rm -f koika-*.tar.gz
 
-PHONY += all clean
+PHONY += readme package all clean
 
 .PHONY: ${PHONY}
 .SUFFIXES:

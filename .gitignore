@@ -29,6 +29,10 @@ setup.log
 # Local OPAM switch
 _opam/
 
+# Packages
+/README.html
+/koika-*.tar.gz
+
 # Other
 .local/
 _objects/
