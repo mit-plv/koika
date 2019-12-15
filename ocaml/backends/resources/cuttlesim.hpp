@@ -163,7 +163,7 @@ namespace prims {
     }
 
     // Not constexpr because Boost's >> isn't constexpr
-    static const bits_t<sz> bitmask() noexcept {
+    static bits_t<sz> bitmask() noexcept {
       auto pw = bits<sz>::padding_width(); // https://stackoverflow.com/questions/8452952/
       return std::numeric_limits<bits_t<sz>>::max() >> pw;
     }
@@ -201,7 +201,8 @@ namespace prims {
 
     /// Constants
 
-    static const bits<sz> ones() {
+    // Not constexpr because of ::bitmask
+    static bits<sz> ones() {
       return bits<sz>::mk(bits<sz>::bitmask());
     }
 
@@ -600,17 +601,17 @@ namespace prims {
   }
 
   template<bitwidth times, bitwidth sz> struct repeat_t {
-    static const bits<sz * times> v(bits<sz> bs) {
+    static bits<sz * times> v(bits<sz> bs) {
       return concat(repeat_t<times - 1, sz>::v(bs), bs);
     };
   };
 
   template<bitwidth sz> struct repeat_t<0, sz> {
-    static const bits<0> v(bits<sz> /*unused*/) { return tt; };
+    static bits<0> v(bits<sz> /*unused*/) { return tt; };
   };
 
   template<bitwidth times> struct repeat_t<times, 1> {
-    static const bits<times> v(bits<1> bs) { return sext<times>(bs); };
+    static bits<times> v(bits<1> bs) { return sext<times>(bs); };
   };
 
   template<bitwidth sz> struct repeat_t<1, sz> {
