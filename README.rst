@@ -54,14 +54,14 @@ See `browsing the sources <repo-map_>`_ below for information about the reposito
 Compiling your own programs
 ---------------------------
 
-Our compiler supports multiple targets:
+Our compiler (``cuttlec``) supports multiple targets:
 
-- verilog (an RTL implementation of your design expressed in the synthesizable subset of Verilog 2000)
-- hpp (a cuttlesim model of your design, i.e. a cycle-accurate C++ implementation of it, useful for debugging)
-- cpp (a driver for the cuttlesim model of your design)
-- verilator (a simple C++ driver to simulate the Verilog using Verilator)
-- makefile (an auto-generated Makefile including convenient targets to debug, profile, trace, or visualize the outputs of your design)
-- dot (a basic representation of the RTL generated from your design)
+- ``verilog`` (an RTL implementation of your design expressed in the synthesizable subset of Verilog 2000)
+- ``hpp`` (a cuttlesim model of your design, i.e. a cycle-accurate C++ implementation of it, useful for debugging)
+- ``cpp`` (a driver for the cuttlesim model of your design)
+- ``verilator`` (a simple C++ driver to simulate the Verilog using Verilator)
+- ``makefile`` (an auto-generated Makefile including convenient targets to debug, profile, trace, or visualize the outputs of your design)
+- ``dot`` (a basic representation of the RTL generated from your design)
 
 Programs written in the Coq EDSL
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
