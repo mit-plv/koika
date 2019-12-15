@@ -20,6 +20,7 @@ Extraction "extracted.ml"
            Syntax.uscheduler
            Desugaring.desugar_action
            TypeInference.type_action TypeInference.type_rule TypeInference.type_scheduler
+           TypedSyntaxTools.unannot
            TypedSyntaxTools.scheduler_rules
            TypedSyntaxTools.action_mentions_var
            TypedSyntaxTools.member_mentions_shadowed_binding

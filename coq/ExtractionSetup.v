@@ -21,6 +21,7 @@ Global Set Extraction KeepSingleton.
 
 (* The following commands make these functions much easier to use from the OCaml
    side by removing unnecessary arguments. *)
+Extraction Implicit TypedSyntaxTools.unannot [R Sigma sig tau].
 Extraction Implicit TypedSyntaxTools.AnyAction [sig tau].
 Extraction Implicit TypedSyntaxTools.action_footprint [R Sigma sig tau].
 Extraction Implicit TypedSyntaxTools.action_footprint' [R Sigma sig tau].

@@ -38,7 +38,7 @@ Section SyntaxMacros.
     match branches with
     | nil => default
     | (label, action) :: branches =>
-      UIf (UBinop UEq var label) action (uswitch var default branches)
+      UIf (UBinop (UEq false) var label) action (uswitch var default branches)
     end.
 
   Fixpoint uswitch_nodefault (var: uaction)
@@ -47,7 +47,7 @@ Section SyntaxMacros.
     match nb return vect _ (S nb) -> uaction with
     | 0 => fun _ => action
     | S nb => fun branches =>
-               UIf (UBinop UEq var label) action
+               UIf (UBinop (UEq false) var label) action
                    (uswitch_nodefault var (vect_tl branches))
     end branches.
 
@@ -63,7 +63,7 @@ Section SyntaxMacros.
     | 0 => fun _ => uskip
     | S nb => fun branches =>
                let '(label, action) := vect_hd branches in
-               USeq (UIf (UBinop UEq var label)
+               USeq (UIf (UBinop (UEq false) var label)
                          action uskip)
                     (uswitch_stateful var (vect_tl branches))
     end branches.

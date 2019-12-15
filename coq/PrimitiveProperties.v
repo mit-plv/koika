@@ -107,17 +107,24 @@ Proof.
   reflexivity.
 Qed.
 
-Lemma bits_eq_of_value:
-  forall {tau: type} (a1 a2: tau),
-    bits_eq (bits_of_value a1) (bits_of_value a2) =
-    (if eq_dec a1 a2 then Ob~1 else Ob~0).
-Proof.
-  unfold bits_eq;
+Ltac _eq_t :=
+  unfold _eq, _neq, beq_dec;
     intros; repeat destruct eq_dec;
       try match goal with
           | [ H: bits_of_value _ = bits_of_value _ |- _ ] => apply bits_of_value_inj in H
           end; subst; congruence.
-Qed.
+
+Lemma _eq_of_value:
+  forall {tau: type} {EQ: EqDec tau} (a1 a2: tau),
+    _eq (bits_of_value a1) (bits_of_value a2) =
+    _eq a1 a2.
+Proof. _eq_t. Qed.
+
+Lemma _neq_of_value:
+  forall {tau: type} {EQ: EqDec tau} (a1 a2: tau),
+    _neq (bits_of_value a1) (bits_of_value a2) =
+    _neq a1 a2.
+Proof. _eq_t. Qed.
 
 Lemma get_field_bits_slice:
   forall {sig} (idx : struct_index sig) (a : type_denote (struct_t sig)),

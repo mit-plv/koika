@@ -36,7 +36,8 @@ let bits2_name =
   | Concat (_sz1, _sz2) -> "Concat"
   | Plus _sz -> "Plus"
   | Minus _sz -> "Minus"
-  | EqBits _sz -> "Eq"
+  | EqBits (_sz, false) -> "Eq"
+  | EqBits (_sz, true) -> "NEq"
   | Compare (signed, op, _sz) ->
      sprintf "%s %s" (if signed then "signed" else "unsigned")
        (comparison_name op)

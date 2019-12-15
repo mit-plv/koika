@@ -19,6 +19,12 @@ Section TypedSyntaxTools.
     | SPos _ s => scheduler_rules s
     end.
 
+  Fixpoint unannot {sig tau} (a: action sig tau) :=
+    match a in TypedSyntax.action _ _ _ _ sig tau return action sig tau with
+    | APos _ a => unannot a
+    | a => a
+    end.
+
   Inductive RW := RWRead | RWWrite.
   Notation event_t := (RW * Port)%type.
 

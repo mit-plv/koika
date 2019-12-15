@@ -69,7 +69,7 @@ Module PrimUntyped.
   | UArray1 (fn: uarray1).
 
   Inductive ufn2 :=
-  | UEq
+  | UEq (negate: bool)
   | UBits2 (fn: ubits2)
   | UStruct2 (fn: ustruct2)
   | UArray2 (fn: uarray2).
@@ -104,7 +104,7 @@ Module PrimTyped.
   | IndexedSlice (sz: nat) (width: nat)
   | Plus (sz : nat)
   | Minus (sz : nat)
-  | EqBits (sz: nat)
+  | EqBits (sz: nat) (negate: bool)
   | Compare (signed: bool) (c: bits_comparison) (sz: nat).
 
   Inductive fstruct1 :=
@@ -127,7 +127,7 @@ Module PrimTyped.
   | Array1 (fn: farray1) (sig: array_sig) (idx: array_index sig).
 
   Inductive fn2 :=
-  | Eq (tau: type)
+  | Eq (tau: type) (negate: bool)
   | Bits2 (fn: fbits2)
   | Struct2 (fn: fstruct2) (sig: struct_sig) (f: struct_index sig)
   | Array2 (fn: farray2) (sig: array_sig) (idx: array_index sig).
@@ -204,7 +204,7 @@ Module PrimTypeInference.
 
   Definition tc2 (fn: ufn2) (tau1: type) (tau2: type): result fn2 fn_tc_error :=
     match fn with
-    | UEq => Success (Eq tau1)
+    | UEq negate => Success (Eq tau1 negate)
     | UBits2 fn =>
       let/res sz1 := assert_kind kind_bits Arg1 tau1 in
       let/res sz2 := assert_kind kind_bits Arg2 tau2 in
@@ -272,7 +272,7 @@ Module CircuitSignatures.
     | Lsr bits_sz shift_sz => {$ bits_sz ~> shift_sz ~> bits_sz $}
     | Asr bits_sz shift_sz => {$ bits_sz ~> shift_sz ~> bits_sz $}
     | Concat sz1 sz2 => {$ sz1 ~> sz2 ~> (sz2 + sz1) $}
-    | EqBits sz => {$ sz ~> sz ~> 1 $}
+    | EqBits sz _ => {$ sz ~> sz ~> 1 $}
     | Plus sz => {$ sz ~> sz ~> sz $}
     | Minus sz => {$ sz ~> sz ~> sz $}
     | Compare _ _ sz => {$ sz ~> sz ~> 1 $}
@@ -303,7 +303,7 @@ Module PrimSignatures.
 
   Definition Sigma2 (fn: fn2) : Sig 2 :=
     match fn with
-    | Eq tau => {$ tau ~> tau ~> bits_t 1 $}
+    | Eq tau _ => {$ tau ~> tau ~> bits_t 1 $}
     | Bits2 fn => Sig_of_CSig (CSigma2 fn)
     | Struct2 SubstField sig idx => {$ struct_t sig ~> field_type sig idx ~> struct_t sig $}
     | Array2 SubstElement sig idx => {$ array_t sig ~> sig.(array_type) ~> array_t sig $}
@@ -329,8 +329,11 @@ Module BitFuns.
   Definition asr {bits_sz shift_sz} (bs: bits bits_sz) (places: bits shift_sz) :=
     Bits.asr (Bits.to_nat places) bs.
 
-  Definition bits_eq {sz} (bs1 bs2: bits sz) :=
-    if eq_dec bs1 bs2 then Ob~1 else Ob~0.
+  Definition _eq {tau} {EQ: EqDec tau} (v1 v2: tau) :=
+    Ob~(beq_dec v1 v2).
+
+  Definition _neq {tau} {EQ: EqDec tau} (v1 v2: tau) :=
+    Ob~(negb (beq_dec v1 v2)).
 
   Definition slice {sz} (offset: nat) (width: nat) (bs: bits sz) :=
     vect_extend_end_firstn (vect_firstn width (vect_skipn offset bs)) false.
@@ -404,7 +407,8 @@ Module CircuitPrimSpecs.
     | Concat _ _ => Bits.app
     | Plus _ => Bits.plus
     | Minus _ => Bits.minus
-    | EqBits _ => bits_eq
+    | EqBits _ false => _eq
+    | EqBits _ true => _neq
     | Compare true cLt _ => bitfun_of_predicate Bits.signed_lt
     | Compare true cGt _ => bitfun_of_predicate Bits.signed_gt
     | Compare true cLe _ => bitfun_of_predicate Bits.signed_le
@@ -439,7 +443,8 @@ Module PrimSpecs.
 
   Definition sigma2 (fn: fn2) : Sig_denote (PrimSignatures.Sigma2 fn) :=
     match fn with
-    | Eq tau => fun v1 v2 => if eq_dec v1 v2 then Ob~1 else Ob~0
+    | Eq tau false  => _eq
+    | Eq tau true  => _neq
     | Bits2 fn => CircuitPrimSpecs.sigma2 fn
     | Struct2 SubstField sig idx => fun s v => subst_field sig.(struct_fields) s idx v
     | Array2 SubstElement sig idx => fun a e => vect_replace a idx e

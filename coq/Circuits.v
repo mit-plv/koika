@@ -512,7 +512,7 @@ Section CircuitCompilation.
       let cArg2 fn := circuit (type_sz (PrimSignatures.Sigma2 fn).(arg2Type)) in
       let cRet fn := circuit (type_sz (PrimSignatures.Sigma2 fn).(retType)) in
       match fn return cArg1 fn -> cArg2 fn -> cRet fn with
-      | Eq tau => fun a1 a2 => CBinop (EqBits (type_sz tau)) a1 a2
+      | Eq tau negate => fun a1 a2 => CBinop (EqBits (type_sz tau) negate) a1 a2
       | Bits2 fn => fun a1 a2 => CBinop fn a1 a2
       | Struct2 fn sig f => fun a1 a2 =>
         match fn return cArg1 (Struct2 fn sig f) -> cArg2 (Struct2 fn sig f) -> cRet (Struct2 fn sig f) with
