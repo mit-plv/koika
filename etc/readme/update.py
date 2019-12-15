@@ -122,6 +122,9 @@ BLOCK_END = ".. end repo architecture"
 BLOCK_RE = re.compile(re.escape(BLOCK_START) + "[^\0]+" + re.escape(BLOCK_END))
 
 def main():
+    if not os.path.exists(".git"):
+        print("README.rst: Not in a git clone, skipping README update.")
+        return
     files = list(collect_files())
     tree = "\n".join(serialize_tree(build_tree(files)))
     trailer = "\n".join(serialize_trailer(files))
