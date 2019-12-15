@@ -725,7 +725,7 @@ The following list shows the current state of the repo:
 ``examples/``
    ``rv/``
       ``etc/``
-         - |examples/rv/etc/rvcore.cuttlesim.cpp|_: C++ driver for rv32i simulation with cuttlesim
+         - |examples/rv/etc/rvcore.cuttlesim.cpp|_: C++ driver for rv32i simulation with Cuttlesim
          - |examples/rv/etc/rvcore.verilator.cpp|_: C++ driver for rv32i simulation with Verilator
 
       - |examples/rv/RVCore.v|_: Implementation of our RISC-V core
@@ -748,7 +748,10 @@ The following list shows the current state of the repo:
 ``ocaml/``
    ``backends/``
       ``resources/``
+         - |ocaml/backends/resources/cuttlesim.cpp|_: Default driver for |koika| programs compiled to C++ using Cuttlesim
          - |ocaml/backends/resources/cuttlesim.hpp|_: Preamble shared by all |koika| programs compiled to C++
+         - |ocaml/backends/resources/verilator.cpp|_: Default driver for |koika| programs compiled to C++ using Verilator
+         - |ocaml/backends/resources/verilator.hpp|_: Preamble shared by all |koika| programs compiled to C++ using Verilator
 
       - |ocaml/backends/coq.ml|_: Coq backend (from Lispy Verilog sources)
       - |ocaml/backends/cpp.ml|_: C++ backend
@@ -905,8 +908,14 @@ The following list shows the current state of the repo:
 .. _ocaml/backends/gen.ml: ocaml/backends/gen.ml
 .. |ocaml/backends/makefile.ml| replace:: ``makefile.ml``
 .. _ocaml/backends/makefile.ml: ocaml/backends/makefile.ml
+.. |ocaml/backends/resources/cuttlesim.cpp| replace:: ``cuttlesim.cpp``
+.. _ocaml/backends/resources/cuttlesim.cpp: ocaml/backends/resources/cuttlesim.cpp
 .. |ocaml/backends/resources/cuttlesim.hpp| replace:: ``cuttlesim.hpp``
 .. _ocaml/backends/resources/cuttlesim.hpp: ocaml/backends/resources/cuttlesim.hpp
+.. |ocaml/backends/resources/verilator.cpp| replace:: ``verilator.cpp``
+.. _ocaml/backends/resources/verilator.cpp: ocaml/backends/resources/verilator.cpp
+.. |ocaml/backends/resources/verilator.hpp| replace:: ``verilator.hpp``
+.. _ocaml/backends/resources/verilator.hpp: ocaml/backends/resources/verilator.hpp
 .. |ocaml/backends/verilator.ml| replace:: ``verilator.ml``
 .. _ocaml/backends/verilator.ml: ocaml/backends/verilator.ml
 .. |ocaml/backends/verilog.ml| replace:: ``verilog.ml``

@@ -95,9 +95,6 @@ EXCLUDED = {
     "examples/rv/etc/SizedFIFO.v",
     "examples/rv/etc/elf.hpp",
     "examples/rv/etc/mkProc.v",
-    "ocaml/backends/resources/cuttlesim.cpp",
-    "ocaml/backends/resources/verilator.cpp",
-    "ocaml/backends/resources/verilator.hpp"
 }
 
 def collect_files():

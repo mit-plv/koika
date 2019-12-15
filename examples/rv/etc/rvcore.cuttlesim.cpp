@@ -1,4 +1,4 @@
-/*! C++ driver for rv32i simulation with cuttlesim !*/
+/*! C++ driver for rv32i simulation with Cuttlesim !*/
 #include <iostream>
 #include <optional>
 

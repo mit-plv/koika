@@ -1,3 +1,4 @@
+/*! Preamble shared by all Kôika programs compiled to C++ using Verilator !*/
 #include "verilated.h"
 
 #ifdef TRACE

@@ -1,3 +1,4 @@
+/*! Default driver for Kôika programs compiled to C++ using Cuttlesim !*/
 #include "__CUTTLEC_MODULE_NAME__.hpp"
 
 __CUTTLEC_EXTFUNS__

@@ -1,3 +1,4 @@
+/*! Default driver for Kôika programs compiled to C++ using Verilator !*/
 #include "verilator.hpp"
 #include "V__CUTTLEC_MODULE_NAME__.h"
 
