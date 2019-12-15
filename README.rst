@@ -212,7 +212,7 @@ Start by defining the following types:
 
 - ``ext_fn_t``: An enumerated type describing custom combinational primitives (custom IP) that your program should have access to (custom sequential IP is implemented using external rules, which are currently a work in progress; see `<examples/rv/RVCore.v>`_ for a concrete example).  Use ``empty_ext_fn_t`` if you don't use external IP in your design.  For example,
 
-  .. code::
+  .. code:: coq
 
      Inductive ext_fn_t :=
      | custom_adder (size: nat).
@@ -232,7 +232,7 @@ Then, declare the types of the data held in each part of your state and the sign
      | epoch => bits_t 1
      end.
 
-.. code::
+.. code:: coq
 
    Definition Sigma (fn: ext_fn_t): ExternalSignature :=
      match fn with
@@ -567,9 +567,9 @@ Modularity
 
 Function definitions are best for stateless (combinational) programs.  For stateful code fragments, |koika| has a limited form of method calls.
 
-The following (excerpted from `<examples/modular_conflicts.v>`_) defines a ``Queue32`` module implementing a bypassing FIFO, with methods to dequeue at port 0 and 1 and a method to enqueue at port 0.
+The following (excerpted from `<examples/conflicts_modular.v>`_) defines a ``Queue32`` module implementing a bypassing FIFO, with methods to dequeue at port 0 and 1 and a method to enqueue at port 0.
 
-.. code::
+.. code:: coq
 
    Module Import Queue32.
      Inductive reg_t := empty | data.
@@ -601,7 +601,7 @@ The following (excerpted from `<examples/modular_conflicts.v>`_) defines a ``Que
 
 Our earlier example of conflicts can then be written thus:
 
-.. code::
+.. code:: coq
 
    Inductive reg_t :=
    | in0: Queue32.reg_t -> reg_t
