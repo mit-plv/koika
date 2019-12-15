@@ -2,17 +2,17 @@
  |koika|: A Core Language for Rule-Based Hardware Design
 =========================================================
 
-This is the home of |koika|, an experimental hardware design language inspired by `BlueSpec SystemVerilog <http://wiki.bluespec.com/>`_.  |koika| programs are built from *rules*, small bits of hardware that operate concurrently to compute state updates but provide `the illusion of serializable (atomic) updates <atomic-actions>`_.  |koika| has simple, precise semantics that give you `strong guarantees about the behavior of your designs <oraat>`_.
+This is the home of |koika|, an experimental hardware design language inspired by `BlueSpec SystemVerilog <http://wiki.bluespec.com/>`_.  |koika| programs are built from *rules*, small bits of hardware that operate concurrently to compute state updates but provide `the illusion of serializable (atomic) updates <atomic-actions_>`_.  |koika| has simple, precise semantics that give you `strong guarantees about the behavior of your designs <oraat_>`_.
 
-Our distribution includes an `executable reference implementation of the language <formal-semantics>`_ written using the `Coq proof assistant <https://coq.inria.fr/>`_, machine-checked proofs ensuring that |koika|'s semantics are compatible with `one-rule-at-a-time execution <oraat>`_, and a `formally-verified compiler <compiler-verification>`_ that generates circuits guaranteed to correctly implement your designs.
+Our distribution includes an `executable reference implementation of the language <formal-semantics_>`_ written using the `Coq proof assistant <https://coq.inria.fr/>`_, machine-checked proofs ensuring that |koika|'s semantics are compatible with `one-rule-at-a-time execution <oraat_>`_, and a `formally-verified compiler <compiler-verification_>`_ that generates circuits guaranteed to correctly implement your designs.
 
-|koika| programs are typically written inside of Coq using an `embedded DSL <syntax>`_ (this lets you leverage Coq's powerful metaprogramming features and modular abstractions), though we also have a more limited `standalone front-end <lispy-verilog>`_ that accepts programs in serialized (s-expressions) form.  For simulation, debugging, and testing purposes, |koika| programs can be compiled into `readable, cycle-accurate C++ models <cuttlesim>`_, and for synthesis the |koika| compiler targets a minimal subset of synthesizable Verilog supported by all major downstream tools.
+|koika| programs are typically written inside of Coq using an `embedded DSL <syntax_>`_ (this lets you leverage Coq's powerful metaprogramming features and modular abstractions), though we also have a more limited `standalone front-end <lispy-verilog_>`_ that accepts programs in serialized (s-expressions) form.  For simulation, debugging, and testing purposes, |koika| programs can be compiled into `readable, cycle-accurate C++ models <cuttlesim_>`_, and for synthesis the |koika| compiler targets a minimal subset of synthesizable Verilog supported by all major downstream tools.
 
 |koika| is a research prototype: the circuits that our compiler generates typically have reasonable-to-good performance, but area usage is still very much a work in progress.  Because our simulator can take advantage of high-level information, |koika| designs typically run reasonably fast in C++ simulation.
 
 Our largest example at the moment is a simple RISCV (RV32I) `4-stage pipelined core <examples/rv/RVCore.v>`_.
 
-|koika| is currently developed as a joint research effort at MIT, involving members of CSG (the Computation Structure Group) and PLV (the Programming Languages & Verification group).  Our `latest draft <koika-paper>`_ is a good place to get details about the research that powers it.  The name “|koika|” (甲イカ) is Japanese for “`cuttlefish <https://en.wikipedia.org/wiki/Cuttlefish>`_”; we chose it because cuttlefishes have blue blood (a tribute to the name Bluespec), and because each of their eight arms are equipped with independent neurons that allow them operate semi-independently towards a shared purpose, much like rules in |koika| designs.
+|koika| is currently developed as a joint research effort at MIT, involving members of CSG (the Computation Structure Group) and PLV (the Programming Languages & Verification group).  Our `latest draft <koika-paper_>`_ is a good place to get details about the research that powers it.  The name “|koika|” (甲イカ) is Japanese for “`cuttlefish <https://en.wikipedia.org/wiki/Cuttlefish>`_”; we chose it because cuttlefishes have blue blood (a tribute to the name Bluespec), and because each of their eight arms are equipped with independent neurons that allow them operate semi-independently towards a shared purpose, much like rules in |koika| designs.
 
 Getting started
 ===============
@@ -49,7 +49,7 @@ The examples can be compiled using ``make examples``, and browsed in either
 CoqIDE or Proof General.  There is basic Emacs support for ``.lv`` files (the “Lispy
 Verilog” alternative frontend for |koika|) in ``etc/lv-mode.el``.
 
-See `browsing the sources <repo-map>`_ below for information about the repository's organization.
+See `browsing the sources <repo-map_>`_ below for information about the repository's organization.
 
 Compiling your own programs
 ---------------------------
@@ -66,7 +66,7 @@ Our compiler supports multiple targets:
 Programs written in the Coq EDSL
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-On the Coq side, after implementing your design, use the following to define a “package” (see the `<examples/>`_ directory for more information, or read the `<syntax>`_ section below):
+On the Coq side, after implementing your design, use the following to define a “package” (see the `<examples/>`_ directory for more information, or read the `<syntax_>`_ section below):
 
 .. code:: coq
 
@@ -154,7 +154,7 @@ A conflict arises when both inputs are available; what should happen in this cas
 
 This sequence indicates that ``deq0`` has priority, so ``in_data0`` is processed first.  When both inputs are available and the middle FIFO is empty, when ``deq1`` attempts to run, it will dynamically fail when trying to write into ``fifo_data``.
 
-This example includes a simple form of backpressure: if the middle FIFO is full, the first two rules will not run; if the output FIFO is full, the last rule will not run.  This is made explicit by the ``guard`` statements (those would be hidden inside the implementation of the ``dequeue`` and ``enqueue`` methods of the FIFO in a larger example, as demonstrated `below <modularity>`_).
+This example includes a simple form of backpressure: if the middle FIFO is full, the first two rules will not run; if the output FIFO is full, the last rule will not run.  This is made explicit by the ``guard`` statements (those would be hidden inside the implementation of the ``dequeue`` and ``enqueue`` methods of the FIFO in a larger example, as demonstrated `below <modularity_>`_).
 
 Looking carefully, you'll notice that ``read``\ s and ``write``\ s are annotated with ``0``\ s and ``1``\ s.  These are forwarding specifications, or “ports”.  Values written at port 0 are visible in the same cycle at port 1, and values written at port 1 overwrite values written at port 0.  Hence, this example defines a bypassing FIFO: values written by ``deq0`` and ``deq1`` are processed by ``process`` in the same cycle as they are written, assuming that there is space in the output FIFO.  If we had used a ``read0`` instead, we would have had a pipelined FIFO.
 
