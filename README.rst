@@ -426,7 +426,9 @@ Formal semantics
 
 The semantics of |koika| programs are given by a reference interpreter written in Coq.  The results computed by this interpreter are the specification of the meaning of each program.
 
-To run the reference interpreter, you need two more things:
+The reference interpreter takes three inputs:
+
+- A program, using the syntax described above
 
 - The initial value of each state element, ``r``
 
