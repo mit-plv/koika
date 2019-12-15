@@ -91,7 +91,6 @@ EXCLUDED = {
     "examples/rv/tests/elf2hex/ElfFile.hpp",
     "examples/rv/tests/elf2hex/elf2hex.cpp",
     "examples/rv/etc/BRAM2BELoad.v",
-    "examples/rv/etc/Counter.v",
     "examples/rv/etc/SizedFIFO.v",
     "examples/rv/etc/elf.hpp",
     "examples/rv/etc/mkProc.v",
