@@ -9,7 +9,7 @@ import sys
 
 KNOWN_EXTENSIONS = [".ml", ".v", ".lv", ".hpp", ".cpp"]
 EMACS_LINE_RE = re.compile("(-[*]-.*-[*]-)")
-HEADER_BODY_RE = r" *((?P<category>.*?): *)?(?P<docstring>.*?) *"
+HEADER_BODY_RE = r" *((?P<category>.*?) *\| *)?(?P<docstring>.*?) *"
 ML_HEADER_RE = re.compile(r"^[/(][*]!" + HEADER_BODY_RE + "![*][/)]$")
 C_HEADER_RE = re.compile(r"^[/][*]!" + HEADER_BODY_RE + "![*][/]$")
 LISP_HEADER_RE = re.compile(r"^;;;" + HEADER_BODY_RE + "$")
@@ -56,6 +56,8 @@ def insert_path(fobj, offset, tree):
 def filter(elements, type):
     return sorted(x for x in elements if isinstance(x, type))
 
+KOIKA_RE = re.compile("[kK][oô]ika")
+
 BASE_INDENT = '   '
 def serialize_tree(node, indent=''):
     if isinstance(node, dict):
@@ -71,9 +73,9 @@ def serialize_tree(node, indent=''):
             yield from serialize_tree(node[c], subindent)
         for f in files:
             fobj = node[f]
-            doc = fobj.docstring
+            doc = KOIKA_RE.sub("|koika|", fobj.docstring)
             if doc:
-                yield f"{indent}- |{fobj.fpath}|_: {fobj.docstring}"
+                yield f"{indent}- |{fobj.fpath}|_: {doc}"
             else:
                 print(f"!! No documentation for {fobj.fpath}", file=sys.stderr)
         yield ""
@@ -82,29 +84,32 @@ def serialize_tree(node, indent=''):
 def ddict():
     return defaultdict(ddict)
 
-EXCLUDED = [
+EXCLUDED = {
     "examples/function_call.v.etc/extfuns.hpp",
     "examples/function_call.v.etc/fetch_instr.v",
-    "examples/rv/elf2hex/ElfFile.cpp",
-    "examples/rv/elf2hex/ElfFile.hpp",
-    "examples/rv/elf2hex/elf2hex.cpp",
+    "examples/rv/tests/elf2hex/ElfFile.cpp",
+    "examples/rv/tests/elf2hex/ElfFile.hpp",
+    "examples/rv/tests/elf2hex/elf2hex.cpp",
     "examples/rv/etc/BRAM2BELoad.v",
     "examples/rv/etc/Counter.v",
     "examples/rv/etc/SizedFIFO.v",
-    "examples/rv/etc/TopLevel.v",
     "examples/rv/etc/elf.hpp",
     "examples/rv/etc/mkProc.v",
     "ocaml/backends/resources/cuttlesim.cpp",
     "ocaml/backends/resources/verilator.cpp",
-    "ocaml/backends/resources/verilator.hpp"]
+    "ocaml/backends/resources/verilator.hpp"
+}
 
 def collect_files():
     files = subprocess.check_output(["git", "ls-files"], encoding="utf-8")
     for f in files.splitlines():
         if f in EXCLUDED:
-            print(f"Skipping excluded file {f}")
+            print(f"README.rst: Skipping excluded file {f}")
+            EXCLUDED.remove(f)
         elif os.path.splitext(f)[1] in KNOWN_EXTENSIONS:
             yield File(f)
+    if EXCLUDED:
+        print(f"README.rst: Some excluded files are not in the repo: {EXCLUDED}")
 
 def build_tree(files):
     tree = ddict()

@@ -671,40 +671,56 @@ The following list shows the current state of the repo:
 .. begin repo architecture
 
 ``coq/``
-   - |coq/CircuitCorrectness.v|_: Circuits | Compiler correctness proof
-   - |coq/CircuitProperties.v|_: Circuits | Lemmas used in the compiler-correctness proof
-   - |coq/Circuits.v|_: Circuits | Syntax, semantics, compilation, and optimization of circuits
-   - |coq/Common.v|_: Utilities | Shared utilities
-   - |coq/DeriveShow.v|_: Utilities | Automatic derivation of Show instances
-   - |coq/Desugaring.v|_: Frontend | Desugaring of untyped actions
-   - |coq/Environments.v|_: Utilities | Environments used to track variable bindings
-   - |coq/EqDec.v|_: Utilities | Decidable equality typeclass
-   - |coq/ErrorReporting.v|_: Frontend | Typechecking errors and error-reporting functions
-   - |coq/Extraction.v|_: Interop | Extraction to OCaml (compiler and utilities)
-   - |coq/ExtractionSetup.v|_: Interop | Custom extraction settings (also used by external |koika| programs
-   - |coq/FiniteType.v|_: Utilities | Finiteness typeclass
-   - |coq/Frontend.v|_: Frontend | Top-level module imported by |koika| programs
-   - |coq/IdentParsing.v|_: Frontend | Ltac2-based identifier parsing for prettier notations
-   - |coq/IndexUtils.v|_: Utilities | Functions on Vect.index elements
-   - |coq/Interop.v|_: Interop | Exporting |koika| programs for use with the cuttlec command-line tool
-   - |coq/Member.v|_: Utilities | Dependent type tracking membership into a list
-   - |coq/OneRuleAtATime.v|_: ORAAT | Proof of the One-rule-at-a-time theorem
-   - |coq/Parsing.v|_: Frontend | Parser for the |koika| EDSL
+   (Circuits)
+      - |coq/CircuitCorrectness.v|_: Compiler correctness proof
+      - |coq/CircuitProperties.v|_: Lemmas used in the compiler-correctness proof
+      - |coq/Circuits.v|_: Syntax, semantics, compilation, and optimization of circuits
+
+   (Frontend)
+      - |coq/Desugaring.v|_: Desugaring of untyped actions
+      - |coq/ErrorReporting.v|_: Typechecking errors and error-reporting functions
+      - |coq/Frontend.v|_: Top-level module imported by |koika| programs
+      - |coq/IdentParsing.v|_: Ltac2-based identifier parsing for prettier notations
+      - |coq/Parsing.v|_: Parser for the |koika| EDSL
+      - |coq/Syntax.v|_: Untyped syntax
+      - |coq/SyntaxMacros.v|_: Macros used in untyped programs
+      - |coq/TypeInference.v|_: Type inference and typechecking
+      - |coq/UntypedSyntaxTools.v|_: Functions on untyped ASTs, including error localization
+
+   (Interop)
+      - |coq/Extraction.v|_: Extraction to OCaml (compiler and utilities)
+      - |coq/ExtractionSetup.v|_: Custom extraction settings (also used by external |koika| programs
+      - |coq/Interop.v|_: Exporting |koika| programs for use with the cuttlec command-line tool
+
+   (Language)
+      - |coq/Primitives.v|_: Combinational primitivies available in all |koika| programs
+      - |coq/Semantics.v|_: Semantics of typed |koika| programs
+      - |coq/TypedSyntax.v|_: Typed ASTs
+      - |coq/Types.v|_: Types used by |koika| programs
+
+   (ORAAT)
+      - |coq/OneRuleAtATime.v|_: Proof of the One-rule-at-a-time theorem
+      - |coq/SemanticProperties.v|_: Properties of the semantics used in the one-rule-at-a-time theorem
+
+   (Stdlib)
+      - |coq/Std.v|_: Standard library
+
+   (Tools)
+      - |coq/TypedSyntaxProperties.v|_: Lemmas pertaining to tools on typed syntax
+      - |coq/TypedSyntaxTools.v|_: Functions defined on typed ASTs
+
+   (Utilities)
+      - |coq/Common.v|_: Shared utilities
+      - |coq/DeriveShow.v|_: Automatic derivation of Show instances
+      - |coq/Environments.v|_: Environments used to track variable bindings
+      - |coq/EqDec.v|_: Decidable equality typeclass
+      - |coq/FiniteType.v|_: Finiteness typeclass
+      - |coq/IndexUtils.v|_: Functions on Vect.index elements
+      - |coq/Member.v|_: Dependent type tracking membership into a list
+      - |coq/Show.v|_: Show typeclass (α → string)
+      - |coq/Vect.v|_: Vectors and bitvector library
+
    - |coq/PrimitiveProperties.v|_: Equations showing how to implement functions on structures and arrays as bitfuns
-   - |coq/Primitives.v|_: Language | Combinational primitivies available in all |koika| programs
-   - |coq/SemanticProperties.v|_: ORAAT | Properties of the semantics used in the one-rule-at-a-time theorem
-   - |coq/Semantics.v|_: Language | Semantics of typed |koika| programs
-   - |coq/Show.v|_: Utilities | Show typeclass (α → string)
-   - |coq/Std.v|_: Stdlib | Standard library
-   - |coq/Syntax.v|_: Frontend | Untyped syntax
-   - |coq/SyntaxMacros.v|_: Frontend | Macros used in untyped programs
-   - |coq/TypeInference.v|_: Frontend | Type inference and typechecking
-   - |coq/TypedSyntax.v|_: Language | Typed ASTs
-   - |coq/TypedSyntaxProperties.v|_: Tools | Lemmas pertaining to tools on typed syntax
-   - |coq/TypedSyntaxTools.v|_: Tools | Functions defined on typed ASTs
-   - |coq/Types.v|_: Language | Types used by |koika| programs
-   - |coq/UntypedSyntaxTools.v|_: Frontend | Functions on untyped ASTs, including error localization
-   - |coq/Vect.v|_: Utilities | Vectors and bitvector library
 
 ``examples/``
    ``rv/``
@@ -719,6 +735,8 @@ The following list shows the current state of the repo:
 
    - |examples/collatz.lv|_: Computing terms of the Collatz sequence (Lispy Verilog version)
    - |examples/collatz.v|_: Computing terms of the Collatz sequence (Coq version)
+   - |examples/conflicts.v|_: Understanding conflicts and forwarding
+   - |examples/conflicts_modular.v|_: Understanding conflicts and forwarding, with modules
    - |examples/datatypes.v|_: Using structures, enums, and arrays
    - |examples/external_rule.v|_: Calling external (verilog) modules from |koika|
    - |examples/function_call.v|_: Calling external functions
@@ -847,6 +865,10 @@ The following list shows the current state of the repo:
 .. _examples/collatz.lv: examples/collatz.lv
 .. |examples/collatz.v| replace:: ``collatz.v``
 .. _examples/collatz.v: examples/collatz.v
+.. |examples/conflicts.v| replace:: ``conflicts.v``
+.. _examples/conflicts.v: examples/conflicts.v
+.. |examples/conflicts_modular.v| replace:: ``conflicts_modular.v``
+.. _examples/conflicts_modular.v: examples/conflicts_modular.v
 .. |examples/datatypes.v| replace:: ``datatypes.v``
 .. _examples/datatypes.v: examples/datatypes.v
 .. |examples/external_rule.v| replace:: ``external_rule.v``
