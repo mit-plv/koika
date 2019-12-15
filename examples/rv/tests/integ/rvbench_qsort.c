@@ -152,16 +152,6 @@ void sort(size_t n, type arr[])
 
 int main( int argc, char* argv[] )
 {
-
-	// Do the sort
 	sort( DATA_SIZE, input_data );
-
-	int ret = verify(DATA_SIZE, input_data, verify_data);
-	if (ret == 0) {
-	  putchars("ok");
-    } else {
-      putchars("fail");
-    }
-
-	return ret;
+	return verify(DATA_SIZE, input_data, verify_data);
 }

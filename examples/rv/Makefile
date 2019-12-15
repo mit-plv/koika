@@ -6,28 +6,35 @@ opt_cuttlesim := $(dut).opt
 opt_verilator := obj_dir/V$(basename $(VERILATOR_TOPLEVEL))
 tests_build := tests/_build
 
+verilator := $(objects_dir)/$(opt_verilator)
+cuttlesim := $(objects_dir)/$(opt_cuttlesim)
+cuttlesim_runner := tests/run.sh "$(cuttlesim)"
+verilator_runner := tests/run.sh "$(verilator)"
+
 all: cuttlesim-tests verilator-tests
 
 core:
 	$(MAKE) -C ../.. examples/rv/$(objects_dir)
 
-$(tests_build):
+$(tests_build): core .FORCE
 	$(MAKE) -C tests
 
-cuttlesim-tests: core $(tests_build)
-	echo "Running RISCV tests:"
-	find $(tests_build)/rv32ui/ -name "*.rv32" -exec \
-		bash -c "echo 'Test {}'; $(objects_dir)/$(opt_cuttlesim) {} -1; if [ \$$? -eq 0 ]; then echo '[0;32mPassed[0m'; else echo '[0;31mFailed[0m {}'; fi" \;
-	time $(objects_dir)/$(opt_cuttlesim) $(tests_build)/integ/primes.rv32 -1
+$(objects_dir)/%: core .FORCE
+	$(MAKE) -C $(objects_dir) $*
 
-$(objects_dir)/mem.vmh: $(tests_build)/integ/primes.vmh
-	cp $< $@
+.FORCE:
 
-verilator-tests: core $(tests_build) $(objects_dir)/mem.vmh
-	$(MAKE) -C $(objects_dir) $(opt_verilator)
-	cd $(objects_dir); time $(opt_verilator)
+cuttlesim-tests: $(tests_build) $(cuttlesim)
+	@echo "-- Running tests with Cuttlesim --"
+	find $(tests_build)/rv32ui -name "*.rv32" -exec $(cuttlesim_runner) {} \;
+	find $(tests_build)/integ -name "*.rv32" -exec $(cuttlesim_runner) {} \;
+
+verilator-tests: $(tests_build) $(verilator)
+	@echo "-- Running tests with Verilator --"
+	find $(tests_build)/rv32ui -name "*.vmh" -exec $(verilator_runner) {} \;
+	find $(tests_build)/integ -name "*.vmh" -exec $(verilator_runner) {} \;
 
 clean:
-	rm -rf $(tests_build) ../../_build/default/examples/rv/
+	rm -rf $(tests_build) $(cuttlesim) $(verilator) ../../_build/default/examples/rv/
 
-.PHONY: all $(tests_build) cuttlesim-tests verilator-tests clean
+.PHONY: all .FORCE cuttlesim-tests verilator-tests clean

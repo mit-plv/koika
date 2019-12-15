@@ -55,15 +55,6 @@ void median( int n, int input[], int results[] )
 
 int main() {
 	int results_data[DATA_SIZE];
-
 	median(DATA_SIZE, input_data, results_data);
-
-	// Check the results
-	int ret = verify( DATA_SIZE, results_data, verify_data );
-	if (ret == 0) {
-	  putchars("ok");
-    } else {
-      putchars("fail");
-    }
-	return ret;
+	return verify( DATA_SIZE, results_data, verify_data );
 }

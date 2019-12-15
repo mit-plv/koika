@@ -2,6 +2,11 @@
 #include "verilator.hpp"
 #include "VmkProc.h"
 
+// Overridden to remove the message
+void vl_finish (const char* /*filename*/, int /*linenum*/, const char* /*hier*/) VL_MT_UNSAFE {
+  Verilated::gotFinish(true);
+}
+
 template<typename Dut>
 class RVToplevel : public Toplevel<Dut> {
   using Toplevel<Dut>::dut;
@@ -26,5 +31,5 @@ int main(int argc, char** argv) {
 }
 
 // Local Variables:
-// flycheck-clang-include-path: ("/usr/share/verilator/include" "/usr/share/verilator/include/vltstd/" "../_objects/rv32i_core_pipelined.v/" "../_objects/rv32i_core_pipelined.v/Vobj_dir/trace/" "../_objects/rv32i_core_pipelined.v/Vobj_dir/opt/")
+// flycheck-clang-include-path: ("/usr/share/verilator/include" "/usr/share/verilator/include/vltstd/" "../_objects/rv32i_core_pipelined.v/" "../_objects/rv32i_core_pipelined.v/obj_dir/" "../_objects/rv32i_core_pipelined.v/obj_dir.trace/")
 // End:

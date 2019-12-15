@@ -92,11 +92,11 @@ module mkProc(Proc);
     			if (req.addr == 'h4000_1000) begin
     			    // Exiting Simulation
     			if (req.data == 0) begin
-    			    $fdisplay(stderr, "PASSED");
+    			    $fdisplay(stderr, "  [0;32mPASS[0m");
     			end
     			else
     			    begin
-    				$fdisplay(stderr, "FAILED %0d", req.data);
+    				$fdisplay(stderr, "  [0;31mFAIL[0m %0d", req.data);
     			    end
     			$fflush(stderr);
     			$finish;

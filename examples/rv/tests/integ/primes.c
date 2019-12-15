@@ -107,6 +107,7 @@ bool is_amicable(uint n) {
 
 int main() {
   for (uint l = 0; l < LINE_COUNT; l++) {
+    putchar(' '); putchar(' ');
     for (uint c = 0; c < LINE_LENGTH; c++) {
       uint n = 1 + OFFSET + l * LINE_LENGTH + c;
       char c = ' ';
