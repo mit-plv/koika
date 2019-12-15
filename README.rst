@@ -725,6 +725,7 @@ The following list shows the current state of the repo:
 ``examples/``
    ``rv/``
       ``etc/``
+         - |examples/rv/etc/elf.hpp|_: Support for loading ELF files
          - |examples/rv/etc/rvcore.cuttlesim.cpp|_: C++ driver for rv32i simulation with Cuttlesim
          - |examples/rv/etc/rvcore.verilator.cpp|_: C++ driver for rv32i simulation with Verilator
 
@@ -890,6 +891,8 @@ The following list shows the current state of the repo:
 .. _examples/rv/RVEncoding.v: examples/rv/RVEncoding.v
 .. |examples/rv/Scoreboard.v| replace:: ``Scoreboard.v``
 .. _examples/rv/Scoreboard.v: examples/rv/Scoreboard.v
+.. |examples/rv/etc/elf.hpp| replace:: ``elf.hpp``
+.. _examples/rv/etc/elf.hpp: examples/rv/etc/elf.hpp
 .. |examples/rv/etc/rvcore.cuttlesim.cpp| replace:: ``rvcore.cuttlesim.cpp``
 .. _examples/rv/etc/rvcore.cuttlesim.cpp: examples/rv/etc/rvcore.cuttlesim.cpp
 .. |examples/rv/etc/rvcore.verilator.cpp| replace:: ``rvcore.verilator.cpp``
