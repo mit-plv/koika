@@ -277,7 +277,7 @@ help:
 	@echo '      CUTTLEC_WARNINGS = $(CUTTLEC_WARNINGS)'
 	@echo '        Additional C++ compiler flags controlling warnings'
 	@echo '      VCD_SCOPES = $(VCD_SCOPES)'
-	@echo '        Module hierarchy (space-separated, unquoted) to use in Cuttlesim\'s VCD files'
+	@echo '        Module hierarchy (space-separated, unquoted) to use in Cuttlesim'"'"'s VCD files'
 	@echo '    Run-time settings'
 	@echo '      NCYCLES = $(NCYCLES)'
 	@echo '        How many cycles to run the simulation for'
