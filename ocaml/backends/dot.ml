@@ -46,7 +46,7 @@ let rec label_ptrs tag_to_parents = function
   | CNot c -> Some ("Not", [c], [])
   | CAnd (c1, c2) -> Some ("And", [c1; c2], [])
   | COr (c1, c2) -> Some ("Or", [c1; c2], [])
-  | CMux (_sz, s, c1, c2) -> Some ("Mux", [s; c1; c2], [])
+  | CMux (sz, s, c1, c2) -> Some (sprintf "Mux@%d" sz, [s; c1; c2], [])
   | CUnop (fn, c) -> Some (bits1_name fn, [c], [])
   | CBinop (fn, c1, c2) -> Some (bits2_name fn, [c1; c2], [])
   | CExternal (ffi, c) -> Some (ffi.ffi_name, [c], [])
