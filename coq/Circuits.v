@@ -127,7 +127,12 @@ Section CircuitOptimizer.
   Proof. induction c; eauto. Qed.
 
   Section MuxElim.
-    (** This pass implements the Mux(s, c1, c1) → c1 simplification.
+    (** This pass the following Mux simplifications:
+          Mux(_, c1, c1) → c1
+          Mux(k, Mux(k', c2, c12), c2) → Mux(k && ~k', c12, c2 )
+          Mux(k, Mux(k', c11, c2), c2) → Mux(k &&  k', c11, c2 )
+          Mux(k, c1, Mux(k', c1, c22)) → Mux(k ||  k', c1 , c22)
+          Mux(k, c1, Mux(k', c21, c1)) → Mux(k || ~k', c1 , c21)
         [eqb] needs to be sound, but does not need to be complete
         (comparing two circuits can be very costly). **)
     Context (eqb: forall {sz}, circuit sz -> circuit sz -> bool).
@@ -136,23 +141,117 @@ Section CircuitOptimizer.
     Context {REnv: Env reg_t}.
     Context (cr: REnv.(env_t) (fun idx => bits (CR idx))).
 
-    Definition opt_muxelim {sz} (c: circuit sz): circuit sz :=
+    Notation eqb_unannot c1 c2 := (eqb _ (unannot c1) (unannot c2)).
+
+    Lemma eqb_unannot_sound :
+      forall {sz} (c1 c2: circuit sz),
+        eqb_unannot c1 c2 = true ->
+        interp_circuit cr csigma c1 = interp_circuit cr csigma c2.
+    Proof.
+      intros * H%eqb_sound.
+      rewrite <- (unannot_sound c1), <- (unannot_sound c2), H;
+        reflexivity.
+    Qed.
+
+    Definition opt_muxelim_identical {sz} (c: circuit sz): circuit sz :=
       match c in Circuit _ _ sz return circuit sz -> circuit sz with
-      | CMux _ c1 c2 =>
-        fun c0 => if eqb _ (unannot c1) (unannot c2) then c1 else c0
-      | _ => fun c0 => c0
+      | CMux k c1 c2 =>
+        fun c0 => if eqb_unannot c1 c2 then c1 else c0
+      | _  => fun c0 => c0
       end c.
+
+    Lemma opt_muxelim_identical_sound :
+      forall {sz} (c: circuit sz),
+        interp_circuit cr csigma (opt_muxelim_identical c) = interp_circuit cr csigma c.
+    Proof.
+      destruct c; simpl; try reflexivity.
+      destruct eqb eqn:Heqb.
+      - destruct Bits.single; auto using eqb_unannot_sound.
+      - reflexivity.
+    Qed.
+
+    Definition opt_muxelim_nested_l {sz} (c: circuit sz): circuit sz :=
+      match c in Circuit _ _ sz return circuit sz -> circuit sz with
+      | CMux k c1 c2 =>
+        fun c =>
+        match unannot c1 in Circuit _ _ sz return circuit sz -> circuit sz -> circuit sz with
+        | CMux k' c11 c12 =>
+          fun c c2 =>
+          if eqb_unannot c11 c2 then
+            (* Mux(k, Mux(k', c2, c12), c2) *)
+            CMux (CAnnot "nested_mux" (CAnd k (CNot k'))) c12 c2
+          else if eqb_unannot c12 c2 then
+                 (* Mux(k, Mux(k', c11, c2), c2) *)
+                 CMux (CAnnot "nested_mux" (CAnd k k')) c11 c2
+               else c
+        | _ =>
+          fun c c2 => c
+        end c c2
+      | _ => fun c => c
+      end c.
+
+    Definition opt_muxelim_nested_r {sz} (c: circuit sz): circuit sz :=
+      match c in Circuit _ _ sz return circuit sz -> circuit sz with
+      | CMux k c1 c2 =>
+        fun c =>
+          match unannot c2 in Circuit _ _ sz return circuit sz -> circuit sz -> circuit sz with
+          | CMux k' c21 c22 =>
+            fun c c1 =>
+              if eqb_unannot c1 c21 then
+                (* Mux(k, c1, Mux(k', c1, c22)) *)
+                CMux (CAnnot "nested_mux" (COr k k')) c1 c22
+              else if eqb_unannot c1 c22 then
+                     (* Mux(k, c1, Mux(k', c21, c1)) *)
+                     CMux (CAnnot "nested_mux" (COr k (CNot k'))) c1 c21
+                   else c
+          | _ =>
+            fun c c1 => c
+            end c c1
+      | _ => fun c => c
+      end c.
+
+    Ltac mux_elim_nested_step :=
+      match goal with
+      | _ => reflexivity
+      | _ => progress (intros || simpl)
+      | [  |- context[match ?c with _ => _ end] ] =>
+        match type of c with circuit _ => destruct c eqn:? end
+      | [  |- context[if eqb_unannot ?c ?c' then _ else _] ] =>
+        destruct (eqb_unannot c c') eqn:?
+      | [ Heq: unannot ?c = _ |- context[interp_circuit _ _ ?c] ] =>
+        rewrite <- (unannot_sound c), Heq
+      | [  |- context[Bits.single ?c] ] =>
+        destruct (Bits.single c) eqn:?
+      | _ => auto using eqb_unannot_sound, eq_sym
+      end.
+
+    Lemma opt_muxelim_nested_l_sound :
+      forall {sz} (c: circuit sz),
+        interp_circuit cr csigma (opt_muxelim_nested_l c) = interp_circuit cr csigma c.
+    Proof.
+      unfold opt_muxelim_nested_l; repeat mux_elim_nested_step.
+    Qed.
+
+    Lemma opt_muxelim_nested_r_sound :
+      forall {sz} (c: circuit sz),
+        interp_circuit cr csigma (opt_muxelim_nested_r c) = interp_circuit cr csigma c.
+    Proof.
+      unfold opt_muxelim_nested_r; repeat mux_elim_nested_step.
+    Qed.
+
+    Definition opt_muxelim {sz} :=
+      @lco_opt_compose
+        (@opt_muxelim_identical)
+        (lco_opt_compose (@opt_muxelim_nested_l) (@opt_muxelim_nested_r))
+        sz.
 
     Lemma opt_muxelim_sound :
       forall {sz} (c: circuit sz),
         interp_circuit cr csigma (opt_muxelim c) = interp_circuit cr csigma c.
     Proof.
-      destruct c; simpl; try reflexivity.
-      destruct eqb eqn:Heqb.
-      - apply eqb_sound in Heqb.
-        rewrite <- (unannot_sound c2), <- (unannot_sound c3), Heqb.
-        destruct Bits.single; reflexivity.
-      - reflexivity.
+      intros; unfold opt_muxelim, lco_opt_compose.
+      rewrite opt_muxelim_nested_r_sound, opt_muxelim_nested_l_sound, opt_muxelim_identical_sound;
+        reflexivity.
     Qed.
   End MuxElim.
 
