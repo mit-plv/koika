@@ -1,9 +1,10 @@
 default:
 	$(MAKE) -C .. examples
 
-objects := $(patsubst %,_objects/%,$(wildcard *.v) $(wildcard *.lv))
+obj := $(patsubst %,_objects/%,$(wildcard *.v) $(wildcard *.lv))
+objects := $(obj) $(patsubst %,%/,$(obj))
 
-${objects}/ ${objects}:
+$(objects):
 	$(MAKE) -C .. "examples/$@"
 
 .PHONY: ${objects}
