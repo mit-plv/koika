@@ -138,7 +138,11 @@ Section CircuitOptimizer.
         [eqb] needs to be sound, but does not need to be complete
         (comparing two circuits can be very costly). **)
     Context (eqb: forall {sz}, circuit sz -> circuit sz -> bool).
-    Context (eqb_sound: forall {sz} (c1 c2: circuit sz), eqb _ c1 c2 = true -> c1 = c2).
+
+    Context (eqb_sound: forall {REnv: Env reg_t} (cr: REnv.(env_t) (fun idx => bits (CR idx)))
+                          {sz} (c1 c2: circuit sz),
+                eqb _ c1 c2 = true ->
+                interp_circuit cr csigma c1 = interp_circuit cr csigma c2).
 
     Context {REnv: Env reg_t}.
     Context (cr: REnv.(env_t) (fun idx => bits (CR idx))).
@@ -150,9 +154,8 @@ Section CircuitOptimizer.
         eqb_unannot c1 c2 = true ->
         interp_circuit cr csigma c1 = interp_circuit cr csigma c2.
     Proof.
-      intros * H%eqb_sound.
-      rewrite <- (unannot_sound c1), <- (unannot_sound c2), H;
-        reflexivity.
+      intros * H%(eqb_sound _ cr).
+      rewrite <- (unannot_sound c1), <- (unannot_sound c2); assumption.
     Qed.
 
     Definition opt_muxelim_identical {sz} (c: circuit sz): circuit sz :=
