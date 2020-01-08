@@ -321,11 +321,41 @@ module Compilation = struct
     Extr.type_rule Util.string_eq_dec _R _Sigma pos (Extr.desugar_action pos ast)
     |> result_of_type_result
 
+  let rec extr_circuit_equivb sz (c1: _ extr_circuit) (c2: _ extr_circuit) =
+    let eqb = extr_circuit_equivb sz in
+    match Extr.unannot0 sz c1, Extr.unannot0 sz c2 with
+    | CNot c1, CNot c2 -> eqb c1 c2
+    | CAnd (c11, c12), CAnd (c21, c22) -> eqb c11 c21 && eqb c12 c22
+    | COr (c11, c12), COr (c21, c22) -> eqb c11 c21 && eqb c12 c22
+    | CMux (_, s1, c11, c12), CMux (_, s2, c21, c22) -> eqb s1 s2 && eqb c11 c21 && eqb c12 c22
+    | CConst (sz1, v1), CConst (sz2, v2) -> Util.array_of_vect sz1 v1 = Util.array_of_vect sz2 v2
+    | CReadRegister r1, CReadRegister r2 -> r1 = r2
+    | CUnop (op1, c1), CUnop (op2, c2) -> op1 = op2 && eqb c1 c2
+    | CBinop (op1, c11, c12), CBinop (op2, c21, c22) -> op1 = op2 && eqb c11 c21 && eqb c12 c22
+    | CExternal (f1, c1), CExternal (f2, c2) -> f1 = f2 && eqb c1 c2
+    | CBundleRef (_, _, _, _, _, _), CBundleRef (_, _, _, _, _, _) -> c1 == c2
+    | CAnnot (_, a1, c1), CAnnot (_, a2, c2) -> a1 = a2 && eqb c1 c2
+    | _, _ -> false
+
+  let extr_circuit_incomplete_equivb sz c1 c2 =
+    (* FIXME: instead of a recursive comparison, we could do the hashconsing as
+       an additional optimization pass, which would make pointer-equality
+       comparisons complete.  Care should be taken to handle annotations
+       correctly, though. *)
+    if c1 == c2 then
+      true
+    else if Hashtbl.hash c1 = Hashtbl.hash c2 then
+      extr_circuit_equivb sz c1 c2
+    else
+      (* This function doesn't need to be complete, but it needs to be sound. *)
+      false
+
   let opt _R _Sigma =
     let open Extr in
-    let eqb _ c1 c2 = c1 == c2 in
+    (* let equivb _ c1 c2 = c1 == c2 in *)
+    let equivb = extr_circuit_incomplete_equivb in
     let cR, cSigma = cR_of_R _R, cSigma_of_Sigma _Sigma in
-    lco_opt_compose cR cSigma (opt_constprop cR cSigma) (opt_muxelim cR cSigma eqb)
+    lco_opt_compose cR cSigma (opt_constprop cR cSigma) (opt_muxelim cR cSigma equivb)
 
   let compile (cu: 'f compile_unit) : (reg_signature -> compiled_circuit) =
     let finiteType = Util.finiteType_of_list cu.c_registers in
@@ -536,10 +566,19 @@ module Graphs = struct
          circuit
     and hashcons c =
       CircuitHashcons.hashcons deduplicated_circuits c in
+    let _interesting_register r =
+      let nm = (pkg.di_reg_sigs r).reg_name in
+      let matches haystack needle =
+        Str.string_match (Str.regexp needle) haystack 0 in
+      matches nm "scoreboard_Scores_rData_[0-8]$" in
+    let interesting_register _ = true in
     let graph_roots = List.map (fun reg ->
                           let c = pkg.di_circuits reg in
-                          { root_reg = pkg.di_reg_sigs reg;
-                            root_circuit = dedup c })
+                          let r = pkg.di_reg_sigs reg in
+                          { root_reg = r;
+                            root_circuit =
+                              if interesting_register reg then dedup c
+                              else hashcons (CConst (Util.bits_of_value r.reg_init)) })
                         pkg.di_regs in
     let graph_nodes = list_of_hashcons deduplicated_circuits in
     let cmp (x: circuit) (y: circuit) = compare x.tag y.tag in
