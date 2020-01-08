@@ -135,33 +135,33 @@ Section CircuitOptimizer.
           Mux(k, c1, Mux(k', c21, c1)) → Mux(k || ~k', c1 , c21)
           Mux(k, Mux(k, c11, c12), c2) → Mux(k, c11, c2)
           Mux(k, c1, Mux(k, c21, c22)) → Mux(k, c1, c22)
-        [eqb] needs to be sound, but does not need to be complete
+        [equivb] needs to be sound, but does not need to be complete
         (comparing two circuits can be very costly). **)
-    Context (eqb: forall {sz}, circuit sz -> circuit sz -> bool).
+    Context (equivb: forall {sz}, circuit sz -> circuit sz -> bool).
 
-    Context (eqb_sound: forall {REnv: Env reg_t} (cr: REnv.(env_t) (fun idx => bits (CR idx)))
+    Context (equivb_sound: forall {REnv: Env reg_t} (cr: REnv.(env_t) (fun idx => bits (CR idx)))
                           {sz} (c1 c2: circuit sz),
-                eqb _ c1 c2 = true ->
+                equivb _ c1 c2 = true ->
                 interp_circuit cr csigma c1 = interp_circuit cr csigma c2).
 
     Context {REnv: Env reg_t}.
     Context (cr: REnv.(env_t) (fun idx => bits (CR idx))).
 
-    Notation eqb_unannot c1 c2 := (eqb _ (unannot c1) (unannot c2)).
+    Notation equivb_unannot c1 c2 := (equivb _ (unannot c1) (unannot c2)).
 
-    Lemma eqb_unannot_sound :
+    Lemma equivb_unannot_sound :
       forall {sz} (c1 c2: circuit sz),
-        eqb_unannot c1 c2 = true ->
+        equivb_unannot c1 c2 = true ->
         interp_circuit cr csigma c1 = interp_circuit cr csigma c2.
     Proof.
-      intros * H%(eqb_sound _ cr).
+      intros * H%(equivb_sound _ cr).
       rewrite <- (unannot_sound c1), <- (unannot_sound c2); assumption.
     Qed.
 
     Definition opt_muxelim_identical {sz} (c: circuit sz): circuit sz :=
       match c in Circuit _ _ sz return circuit sz -> circuit sz with
       | CMux k c1 c2 =>
-        fun c0 => if eqb_unannot c1 c2 then c1 else c0
+        fun c0 => if equivb_unannot c1 c2 then c1 else c0
       | _  => fun c0 => c0
       end c.
 
@@ -170,8 +170,8 @@ Section CircuitOptimizer.
         interp_circuit cr csigma (opt_muxelim_identical c) = interp_circuit cr csigma c.
     Proof.
       destruct c; simpl; try reflexivity.
-      destruct eqb eqn:Heqb.
-      - destruct Bits.single; auto using eqb_unannot_sound.
+      destruct equivb eqn:Hequivb.
+      - destruct Bits.single; auto using equivb_unannot_sound.
       - reflexivity.
     Qed.
 
@@ -182,7 +182,7 @@ Section CircuitOptimizer.
           match unannot c1 in Circuit _ _ sz return circuit sz -> circuit sz -> circuit sz with
           | CMux k' c11 c12 =>
             fun c c2 =>
-              if eqb_unannot k k' then
+              if equivb_unannot k k' then
                 (* Mux(k, Mux(k, c11, c12), c2) *)
                 (CAnnot "simplified_mux" (CMux k c11 c2))
               else c
@@ -199,7 +199,7 @@ Section CircuitOptimizer.
           match unannot c2 in Circuit _ _ sz return circuit sz -> circuit sz -> circuit sz with
           | CMux k' c21 c22 =>
             fun c c1 =>
-              if eqb_unannot k k' then
+              if equivb_unannot k k' then
                 (* Mux(k, c1, Mux(k, c21, c22)) *)
                 (CAnnot "simplified_mux" (CMux k c1 c22))
               else c
@@ -216,10 +216,10 @@ Section CircuitOptimizer.
           match unannot c1 in Circuit _ _ sz return circuit sz -> circuit sz -> circuit sz with
           | CMux k' c11 c12 =>
             fun c c2 =>
-              if eqb_unannot c11 c2 then
+              if equivb_unannot c11 c2 then
                 (* Mux(k, Mux(k', c2, c12), c2) *)
                 CMux (CAnnot "nested_mux" (CAnd k (CNot k'))) c12 c2
-              else if eqb_unannot c12 c2 then
+              else if equivb_unannot c12 c2 then
                      (* Mux(k, Mux(k', c11, c2), c2) *)
                      CMux (CAnnot "nested_mux" (CAnd k k')) c11 c2
                    else c
@@ -236,10 +236,10 @@ Section CircuitOptimizer.
           match unannot c2 in Circuit _ _ sz return circuit sz -> circuit sz -> circuit sz with
           | CMux k' c21 c22 =>
             fun c c1 =>
-              if eqb_unannot c1 c21 then
+              if equivb_unannot c1 c21 then
                 (* Mux(k, c1, Mux(k', c1, c22)) *)
                 CMux (CAnnot "nested_mux" (COr k k')) c1 c22
-              else if eqb_unannot c1 c22 then
+              else if equivb_unannot c1 c22 then
                      (* Mux(k, c1, Mux(k', c21, c1)) *)
                      CMux (CAnnot "nested_mux" (COr k (CNot k'))) c1 c21
                    else c
@@ -256,13 +256,13 @@ Section CircuitOptimizer.
       | _ => progress (intros || simpl)
       | [  |- context[match ?c with _ => _ end] ] =>
         match type of c with circuit _ => destruct c eqn:? end
-      | [  |- context[if eqb_unannot ?c ?c' then _ else _] ] =>
-        destruct (eqb_unannot c c') eqn:?
+      | [  |- context[if equivb_unannot ?c ?c' then _ else _] ] =>
+        destruct (equivb_unannot c c') eqn:?
       | [ Heq: unannot ?c = _ |- context[interp_circuit _ _ ?c] ] =>
         rewrite <- (unannot_sound c), Heq
       | [  |- context[Bits.single ?c] ] =>
         destruct c as ([ | ] & []) eqn:?
-      | [ H: eqb_unannot ?c ?c' = true |- _ ] => apply eqb_unannot_sound in H
+      | [ H: equivb_unannot ?c ?c' = true |- _ ] => apply equivb_unannot_sound in H
       end.
 
     Lemma opt_muxelim_redundant_l_sound :
@@ -475,8 +475,8 @@ Arguments unannot_sound {rule_name_t reg_t ext_fn_t CR CSigma rwdata} csigma [RE
 Arguments opt_constprop {rule_name_t reg_t ext_fn_t CR CSigma rwdata} [sz] c : assert.
 Arguments opt_constprop_sound {rule_name_t reg_t ext_fn_t CR CSigma rwdata} csigma [REnv] cr [sz] c : assert.
 
-Arguments opt_muxelim {rule_name_t reg_t ext_fn_t CR CSigma rwdata} eqb [sz] c : assert.
-Arguments opt_muxelim_sound {rule_name_t reg_t ext_fn_t CR CSigma rwdata} csigma {eqb} eqb_sound [REnv] cr [sz] c : assert.
+Arguments opt_muxelim {rule_name_t reg_t ext_fn_t CR CSigma rwdata} equivb [sz] c : assert.
+Arguments opt_muxelim_sound {rule_name_t reg_t ext_fn_t CR CSigma rwdata} csigma {equivb} equivb_sound [REnv] cr [sz] c : assert.
 
 Arguments lco_fn {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} l [sz] c : assert.
 Arguments lco_proof {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} l {REnv} cr [sz] c : assert.
@@ -499,15 +499,15 @@ Section LCO.
     {| lco_fn := opt_constprop;
        lco_proof := opt_constprop_sound csigma |}.
 
-  Definition lco_muxelim eqb eqb_sound
+  Definition lco_muxelim equivb equivb_sound
     : @local_circuit_optimizer rule_name_t _ _ CR _ rwdata csigma :=
-    {| lco_fn := opt_muxelim eqb;
-       lco_proof := opt_muxelim_sound csigma eqb_sound |}.
+    {| lco_fn := opt_muxelim equivb;
+       lco_proof := opt_muxelim_sound csigma equivb_sound |}.
 End LCO.
 
 Arguments lco_unannot {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} : assert.
 Arguments lco_constprop {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} : assert.
-Arguments lco_muxelim {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} {eqb} eqb_sound : assert.
+Arguments lco_muxelim {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} {equivb} equivb_sound : assert.
 
 Section CircuitCompilation.
   Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
