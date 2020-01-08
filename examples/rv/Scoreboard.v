@@ -11,8 +11,7 @@ End Scoreboard_sig.
 
 (* Definition read_style tau := SequentialSwitch tau "tmp". *)
 Definition write_style := @SequentialSwitchTt var_t.
-Definition read_style (T:type) := @TreeSwitch var_t.
-(* Definition write_style := @TreeSwitch var_t. *)
+Definition read_style (nbits: nat) := @OrTreeSwitch var_t nbits.
 
 Module Scoreboard (s:Scoreboard_sig).
   Definition sz:= s.idx_sz.
@@ -22,7 +21,7 @@ Module Scoreboard (s:Scoreboard_sig).
     Definition idx_sz := sz.
     Definition T := bits_t logScore.
     Definition init := Bits.zeroes logScore.
-    Definition read_style := read_style T.
+    Definition read_style := read_style logScore.
     Definition write_style := write_style.
   End Rf_32.
   Module Rf := RfPow2 Rf_32.

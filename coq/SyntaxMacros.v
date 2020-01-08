@@ -68,7 +68,7 @@ Section SyntaxMacros.
                     (uswitch_stateful var (vect_tl branches))
     end branches.
 
-  Fixpoint utree var_logsz bit_idx (var: var_t) {sz} (bodies: bits sz -> uaction) :=
+  Fixpoint muxtree var_logsz bit_idx (var: var_t) {sz} (bodies: bits sz -> uaction) :=
     match sz return (bits sz -> uaction) -> uaction with
     | 0 =>
       fun bodies =>
@@ -78,16 +78,36 @@ Section SyntaxMacros.
       (* FIXME add a version of sel taking a compile-time constant? *)
       let bidx := UConst (tau := bits_t var_logsz) (Bits.of_nat var_logsz bit_idx) in
       UIf (UBinop (UBits2 USel) (UVar var) bidx)
-          (utree var_logsz (S bit_idx) var (fun bs => bodies bs~1))
-          (utree var_logsz (S bit_idx) var (fun bs => bodies bs~0))
+          (muxtree var_logsz (S bit_idx) var (fun bs => bodies bs~1))
+          (muxtree var_logsz (S bit_idx) var (fun bs => bodies bs~0))
     end bodies.
 
-  Definition UCompleteTree sz
+  Definition UCompleteMuxTree sz
              (var: var_t) (branch_bodies: bits sz -> uaction) :=
-    utree (log2 sz) 0 var branch_bodies.
+    muxtree (log2 sz) 0 var branch_bodies.
+
+  Fixpoint ortree {sz} (bodies: bits sz -> uaction) :=
+    match sz return (bits sz -> uaction) -> uaction with
+    | 0 =>
+      fun bodies =>
+        bodies Ob
+    | S n =>
+      fun bodies =>
+      (UBinop (UBits2 UOr)
+              (ortree (fun bs => bodies bs~1))
+              (ortree (fun bs => bodies bs~0)))
+    end bodies.
+
+  Definition UCompleteOrTree sz nbits
+             (var: var_t) (branch_bodies: bits sz -> uaction) :=
+    ortree
+      (fun bs => UIf (UBinop (UEq false) (UConst (tau := bits_t sz) bs) (UVar var))
+                  (branch_bodies bs)
+                  (UConst (tau := bits_t nbits) Bits.zero)).
 
   Inductive switch_style :=
   | TreeSwitch
+  | OrTreeSwitch (nbits: nat)
   | NestedSwitch
   | SequentialSwitchTt
   | SequentialSwitch (tau: type) (output_var: var_t).
@@ -98,7 +118,9 @@ Section SyntaxMacros.
         gen_branches sz (pow2 sz) bodies in
     match style with
     | TreeSwitch =>
-      UCompleteTree sz var (fun bs => branch_bodies (Bits.to_index_safe bs))
+      UCompleteMuxTree sz var (fun bs => branch_bodies (Bits.to_index_safe bs))
+    | OrTreeSwitch nbits =>
+      UCompleteOrTree sz nbits var (fun bs => branch_bodies (Bits.to_index_safe bs))
     | NestedSwitch =>
       uswitch_nodefault (UVar var) (branches branch_bodies)
     | SequentialSwitchTt =>
