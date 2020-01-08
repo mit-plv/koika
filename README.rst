@@ -8,7 +8,7 @@ Our distribution includes an `executable reference implementation of the languag
 
 |koika| programs are typically written inside of Coq using an `embedded DSL <syntax_>`_ (this lets you leverage Coq's powerful metaprogramming features and modular abstractions), though we also have a more limited `standalone front-end <lispy-verilog_>`_ that accepts programs in serialized (s-expressions) form.  For simulation, debugging, and testing purposes, |koika| programs can be compiled into `readable, cycle-accurate C++ models <cuttlesim_>`_, and for synthesis the |koika| compiler targets a minimal subset of synthesizable Verilog supported by all major downstream tools.
 
-|koika| is a research prototype: the circuits that our compiler generates typically have reasonable-to-good performance, but area usage is still very much a work in progress.  Because our simulator can take advantage of high-level information, |koika| designs typically run reasonably fast in C++ simulation.
+|koika| is a research prototype: the circuits that our compiler generates typically have reasonable-to-good performance and area usage, but our RTL optimizer is very simple and can miss obvious improvements.  Because our simulator can take advantage of high-level information, |koika| designs typically run reasonably fast in C++ simulation.
 
 Our largest example at the moment is a simple RISCV (RV32I) `4-stage pipelined core <examples/rv/RVCore.v>`_.
 
