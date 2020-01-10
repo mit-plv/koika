@@ -6,7 +6,7 @@ Require Koika.Common
         Koika.TypedSyntax
         Koika.TypeInference
         Koika.TypedSyntaxTools
-        Koika.Circuits
+        Koika.CircuitGeneration
         Koika.Interop.
 
 Unset Extraction SafeImplicits.
@@ -17,9 +17,9 @@ Extraction "extracted.ml"
            IndexUtils.List_nth
            Environments.ContextEnv Environments.to_list
            Vect.vect_to_list Vect.vect_of_list Vect.Bits.to_nat Vect.index_to_nat Vect.vect_zip
-           Syntax.uscheduler
+           Syntax.scheduler
            Desugaring.desugar_action
-           TypeInference.type_action TypeInference.type_rule TypeInference.type_scheduler
+           TypeInference.type_action TypeInference.type_rule
            TypedSyntaxTools.unannot
            TypedSyntaxTools.scheduler_rules
            TypedSyntaxTools.action_mentions_var
@@ -34,8 +34,10 @@ Extraction "extracted.ml"
            TypedSyntaxTools.compute_register_histories
            TypedSyntaxTools.may_fail_without_revert
            TypedSyntaxTools.rule_max_log_size
-           Circuits.compile_scheduler
-           Circuits.lco_opt_compose Circuits.opt_constprop Circuits.opt_muxelim
+           CircuitGeneration.compile_scheduler
+           CircuitOptimization.lco_opt_compose
+           CircuitOptimization.opt_constprop
+           CircuitOptimization.opt_muxelim
            Interop.koika_package_t Interop.circuit_package_t Interop.sim_package_t Interop.verilog_package_t Interop.interop_package_t
            Interop.struct_of_list Interop.struct_to_list
            Interop.compile_koika_package.

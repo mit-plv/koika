@@ -41,13 +41,13 @@ Section Syntax.
                 (fn: InternalFunction fn_name_t var_t (@uaction module_reg_t module_ext_fn_t))
                 (args: list uaction).
 
-  Inductive uscheduler :=
-  | UDone
-  | UTry (r: rule_name_t) (s1 s2: uscheduler)
-  | UCons (r: rule_name_t) (s: uscheduler)
-  | USPos (p: pos_t) (s: uscheduler).
+  Inductive scheduler :=
+  | Done
+  | Try (r: rule_name_t) (s1 s2: scheduler)
+  | Cons (r: rule_name_t) (s: scheduler)
+  | SPos (p: pos_t) (s: scheduler).
 End Syntax.
 
 Arguments usugar : clear implicits.
 Arguments uaction : clear implicits.
-Arguments uscheduler : clear implicits.
+Arguments scheduler : clear implicits.

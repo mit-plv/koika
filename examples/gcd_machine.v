@@ -83,7 +83,7 @@ Module GCDMachine.
                      | get_result => gcd_get_result end).
 
   Definition bring : scheduler :=
-    tc_scheduler (start |> step_compute |> get_result |> done).
+    start |> step_compute |> get_result |> done.
 
   Definition package :=
     {| ip_koika := {| koika_reg_types := R;

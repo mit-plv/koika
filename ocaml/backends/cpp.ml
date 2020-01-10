@@ -258,6 +258,8 @@ let cpp_bits1_fn_name (f: Extr.PrimTyped.fbits1) =
   | ZExtR (_sz, width) -> sprintf "prims::zextr<%d>" width
   | Repeat (_sz, times) -> sprintf "prims::repeat<%d>" times
   | Slice (_sz, offset, width) -> sprintf "prims::slice<%d, %d>" offset width
+  | Lowered (IgnoreBits _sz) -> "prims::ignore"
+  | Lowered (DisplayBits _) -> failwith "Do not use DisplayBits; use Display with Unpack instead"
 
 let cpp_bits2_fn_name (f: Extr.PrimTyped.fbits2) =
   match f with

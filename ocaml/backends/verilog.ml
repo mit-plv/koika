@@ -234,7 +234,7 @@ let assignment_to_string' (gensym: int ref) (assignment: assignment) =
        | Not _ -> default_left ^ "~" ^ arg1
        | Repeat (_, times) -> default_left ^ Printf.sprintf "{%d{%s}}" times arg1
        | Slice (_, offset, slice_sz) -> default_left ^ arg1 ^ "[" ^ (string_of_int offset) ^ " +: " ^ string_of_int slice_sz ^ "]"
-       | SExt _ | ZExtL _ | ZExtR _ -> failwith_unlowered ())
+       | SExt _ | ZExtL _ | ZExtR _ | Lowered _ -> failwith_unlowered ())
    | EBinop (fn, arg1, arg2) ->
       (match fn with
        | Plus _ -> default_left ^ arg1 ^ " + " ^ arg2

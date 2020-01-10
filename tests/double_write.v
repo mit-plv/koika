@@ -25,7 +25,7 @@ Definition rules :=
   tc_rules R empty_Sigma urules.
 
 Definition sched : scheduler :=
-  tc_scheduler (wr0 |> skip |> wr0_fail |> done).
+  wr0 |> skip |> wr0_fail |> done.
 
 Definition sched_result :=
   tc_compute (interp_scheduler (ContextEnv.(create) r) empty_sigma rules sched).

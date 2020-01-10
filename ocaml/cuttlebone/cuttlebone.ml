@@ -290,12 +290,11 @@ module Compilation = struct
 
   type 'f extr_uaction =
     ('f, fn_name_t, var_t, reg_signature, ffi_signature) Extr.uaction
-  type 'f extr_uscheduler =
-    ('f, rule_name_t) Extr.uscheduler
+  type 'f extr_scheduler =
+    ('f, rule_name_t) Extr.scheduler
 
   type 'f extr_action = ('f, var_t, reg_signature, ffi_signature) Extr.action
   type 'f extr_rule = [ `ExternalRule | `InternalRule ] * 'f extr_action
-  type 'f extr_scheduler = ('f, var_t) Extr.scheduler
 
   let _R = fun rs -> Util.extr_type_of_typ (reg_type rs)
   let _Sigma fn = Util.extr_external_sig_of_ffi_sig fn
@@ -311,9 +310,6 @@ module Compilation = struct
 
   type compiled_circuit =
     (string, reg_signature, ffi_signature) extr_circuit
-
-  let typecheck_scheduler pos (ast: 'f extr_uscheduler) : 'f extr_scheduler =
-    Extr.type_scheduler pos ast
 
   let result_of_type_result = function
     | Extr.Success s -> Ok s

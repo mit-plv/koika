@@ -45,7 +45,6 @@ Section TypeInference.
 
   Notation usugar := (usugar pos_t var_t fn_name_t).
   Notation uaction := (uaction pos_t var_t fn_name_t).
-  Notation uscheduler := (uscheduler pos_t rule_name_t).
 
   Notation action := (action pos_t var_t R Sigma).
   Notation rule := (rule pos_t var_t R Sigma).
@@ -182,23 +181,4 @@ Section TypeInference.
       let/res rl := type_action pos [] e in
       cast_rule pos (``rl).
   End Action.
-
-  Section Scheduler.
-    Fixpoint type_scheduler
-             (pos: pos_t)
-             (s: uscheduler): scheduler :=
-      match s with
-      | UDone =>
-        Done
-      | UTry r s1 s2 =>
-        let s1 := type_scheduler pos s1 in
-        let s2 := type_scheduler pos s2 in
-        Try r s1 s2
-      | UCons r s =>
-        let s := type_scheduler pos s in
-        Cons r s
-      | USPos pos s =>
-        SPos pos (type_scheduler pos s)
-      end.
-  End Scheduler.
 End TypeInference.

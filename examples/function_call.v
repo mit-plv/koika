@@ -61,8 +61,8 @@ Definition rules :=
                   | incr_pc => _incr_pc
                   end).
 
-Definition sched :=
-  tc_scheduler (fetch_internal |> fetch_external |> incr_pc |> done).
+Definition sched : scheduler :=
+  fetch_internal |> fetch_external |> incr_pc |> done.
 
 Definition ext_fn_names (fn: ext_fn_t) :=
   match fn with

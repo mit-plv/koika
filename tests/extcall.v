@@ -34,7 +34,7 @@ Definition rules :=
   tc_rules R Sigma urules.
 
 Definition sched : scheduler :=
-  tc_scheduler (rl0 |> done).
+  rl0 |> done.
 
 Definition sched_result :=
   tc_compute (interp_scheduler (ContextEnv.(create) r) sigma rules sched).

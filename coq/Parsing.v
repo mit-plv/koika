@@ -198,10 +198,10 @@ Notation "'#' s" := (USugar (UConstBits s)) (in custom koika at level 98, s cons
 
 
 Notation "r '|>' s" :=
-  (UCons r s)
+  (Cons r s)
     (at level 99, s at level 99, right associativity).
 Notation "'done'" :=
-  UDone (at level 99).
+  Done (at level 99).
 
 Module Type Tests.
   Parameter pos_t : Type.

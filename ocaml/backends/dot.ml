@@ -13,6 +13,8 @@ let bits1_name =
   | ZExtR (_sz, _width) -> "ZExtR"
   | Repeat (_, _) -> "Repeat"
   | Slice (_logsz, _offset, _width) -> "Slice"
+  | Lowered (IgnoreBits _) -> "IgnoreBits"
+  | Lowered (DisplayBits _) -> "DisplayBits"
 
 let comparison_name (cmp: Cuttlebone.Extr.bits_comparison)=
   match cmp with

@@ -51,7 +51,7 @@ Definition rules :=
             end).
 
 Definition sched : scheduler :=
-  tc_scheduler (unpack_manual |> unpack_unpack |> done).
+  unpack_manual |> unpack_unpack |> done.
 
 Definition package :=
   {| ip_koika := {| koika_reg_types := R;

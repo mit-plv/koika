@@ -65,7 +65,7 @@ Definition rules :=
                    end).
 
 Definition bring : scheduler :=
-  tc_scheduler (outsideWorld |> receive |> done).
+  outsideWorld |> receive |> done.
 
 (* Annotating [outsideWorld] in [koika_rule_external] below indicates that the
    corresponding rule should be removed by the Verilog backend to let us insert

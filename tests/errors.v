@@ -19,8 +19,8 @@ Fail Example unbound_variable : uaction reg_t empty_ext_fn_t  :=
   let u := {{ write0(R0, y) }} in
   tc_action R empty_Sigma u.
 
-Definition empty_scheduler : TypedSyntax.scheduler pos_t rule_name_t :=
-  tc_scheduler (done).
+Definition empty_scheduler : Syntax.scheduler pos_t rule_name_t :=
+  done.
 
 Definition r idx : R idx :=
   match idx with

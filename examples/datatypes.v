@@ -98,7 +98,7 @@ Definition rules :=
                    end).
 
 Definition scheduler : scheduler :=
-  tc_scheduler (decr_icmp_ttl |> clear_checksum |> done).
+  decr_icmp_ttl |> clear_checksum |> done.
 
 Definition package :=
   {| ip_koika := {| koika_reg_types := R;

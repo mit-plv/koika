@@ -356,7 +356,7 @@ let pp_scheduler print_positions ppf (name, scheduler) =
          pp_app ppf "UTry" "%a@ @[<v>%a@ %a@]"
            pp_raw r.lcnt loop s1 loop s2 in
     pp_maybe_pos print_positions "USPos" pp ppf s in
-  fprintf ppf "@[<2>Definition %s : scheduler :=@ tc_scheduler @[%a@]@]."
+  fprintf ppf "@[<2>Definition %s : scheduler :=@ @[%a@]@]."
     name loop scheduler;
   brk 2 ppf;
   fprintf ppf "@[<2>Definition %s_circuit : register_update_circuitry R Sigma :=@ " name;

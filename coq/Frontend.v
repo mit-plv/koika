@@ -4,7 +4,8 @@ Require Export
         Koika.Desugaring
         Koika.TypeInference
         Koika.TypedSemantics
-        Koika.Circuits
+        Koika.CircuitOptimization
+        Koika.CircuitGeneration
         Koika.Primitives
         Koika.UntypedSyntaxTools
         Koika.TypedSyntaxTools
@@ -56,7 +57,6 @@ Notation uaction := (uaction pos_t var_t fn_name_t).
 Notation action := (action pos_t var_t).
 Notation rule := (rule pos_t var_t).
 
-Notation uscheduler := (uscheduler pos_t _).
 Notation scheduler := (scheduler pos_t _).
 
 Notation UInternalFunction reg_t ext_fn_t := (InternalFunction fn_name_t var_t (uaction reg_t ext_fn_t)).
@@ -205,9 +205,6 @@ Ltac _tc_rules R Sigma uactions :=
 
 Notation tc_rules R Sigma actions :=
   (ltac:(_tc_rules R Sigma actions)) (only parsing).
-
-Notation tc_scheduler uscheduler :=
-  (type_scheduler dummy_pos uscheduler) (only parsing).
 
 Notation tc_compute t :=
   ltac:(let t := tc_eval_body t in

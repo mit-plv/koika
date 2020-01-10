@@ -52,7 +52,7 @@ Definition rules : rule_name_t -> rule R empty_Sigma :=
   tc_rules R empty_Sigma urules.
 
 Definition pipeline : scheduler :=
-  tc_scheduler (deq0 |> deq1 |> process |> done).
+  deq0 |> deq1 |> process |> done.
 
 Definition external (r: rule_name_t) := false.
 

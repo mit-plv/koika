@@ -1,5 +1,5 @@
 (*! Circuits | Lemmas used in the compiler-correctness proof !*)
-Require Export Koika.Circuits.
+Require Export Koika.CircuitGeneration.
 Require Import Koika.Common Koika.Environments Koika.Types.
 
 Section Bools.

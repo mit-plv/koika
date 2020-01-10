@@ -2,11 +2,12 @@
 Require Export Coq.extraction.Extraction.
 From Coq.extraction Require Export ExtrOcamlBasic ExtrOcamlString ExtrOcamlNatInt ExtrOcamlZInt.
 
-Require Koika.Circuits
+Require Koika.CircuitGeneration
+        Koika.CircuitOptimization
         Koika.Types.
 
 (* The following commands work around problems due to incorrect extraction: *)
-Extraction Inline Koika.Circuits.retVal.
+Extraction Inline Koika.CircuitGeneration.retVal.
 Extraction Inline Types.argSigs.
 
 Extract Constant Vect.index => int.
@@ -21,7 +22,7 @@ Global Set Extraction KeepSingleton.
 
 (* The following commands make these functions much easier to use from the OCaml
    side by removing unnecessary arguments. *)
-Extraction Implicit Circuits.unannot [CR CSigma rwdata].
+Extraction Implicit CircuitOptimization.unannot [CR CSigma rwdata].
 Extraction Implicit TypedSyntaxTools.unannot [R Sigma sig tau].
 Extraction Implicit TypedSyntaxTools.AnyAction [sig tau].
 Extraction Implicit TypedSyntaxTools.action_footprint [R Sigma sig tau].

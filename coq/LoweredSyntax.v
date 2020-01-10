@@ -8,7 +8,7 @@ Section Syntax.
   Context {R: reg_t -> nat}.
   Context {Sigma: ext_fn_t -> CExternalSignature}.
 
-  Inductive action : csig var_t -> nat -> Type :=
+  Inductive action : lsig var_t -> nat -> Type :=
   | Fail {sig} sz : action sig sz
   | Var {sig} {k: var_t} {sz: nat}
         (m: member (k, sz) sig) : action sig sz
@@ -48,15 +48,8 @@ Section Syntax.
   | APos {sig sz} (pos: pos_t) (a: action sig sz)
     : action sig sz.
 
-  Inductive scheduler :=
-  | Done
-  | Cons (r: rule_name_t) (s: scheduler)
-  | Try (r: rule_name_t) (s1 s2: scheduler)
-  | SPos (pos: pos_t) (s: scheduler).
-
   Definition rule := action nil 0.
 End Syntax.
 
 Arguments rule pos_t var_t {reg_t ext_fn_t} R Sigma : assert.
 Arguments action pos_t var_t {reg_t ext_fn_t} R Sigma sig sz : assert.
-Arguments scheduler : clear implicits.

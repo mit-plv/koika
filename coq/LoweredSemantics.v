@@ -1,4 +1,4 @@
-(*! Language | Semantics of typed Kôika programs !*)
+(*! Language | Semantics of Lowered Kôika programs !*)
 Require Export Koika.Common Koika.Environments Koika.Vect Koika.Syntax Koika.TypedSemantics Koika.LoweredSyntax.
 
 Section Interp.
@@ -18,19 +18,19 @@ Section Interp.
   Notation action := (action pos_t var_t R Sigma).
   Notation scheduler := (scheduler pos_t rule_name_t).
 
-  Definition bcontext (sig: csig var_t) :=
+  Definition lcontext (sig: lsig var_t) :=
     context (fun '(k, sz) => bits sz) sig.
 
   Section Action.
     Fixpoint interp_action
-             {sig: csig var_t}
+             {sig: lsig var_t}
              {sz}
-             (Gamma: bcontext sig)
+             (Gamma: lcontext sig)
              (sched_log: Log)
              (action_log: Log)
              (a: action sig sz)
-    : option (Log * bits sz * (bcontext sig)) :=
-      match a in LoweredSyntax.action _ _ _ _ ts sz return (bcontext ts -> option (Log * bits sz * (bcontext ts)))  with
+    : option (Log * bits sz * (lcontext sig)) :=
+      match a in LoweredSyntax.action _ _ _ _ ts sz return (lcontext ts -> option (Log * bits sz * (lcontext ts)))  with
       | Fail sz => fun _ =>
         None
       | Var m => fun Gamma =>
@@ -43,7 +43,7 @@ Section Interp.
       | @Assign _ _ _ _ _ _ _ k sz m ex => fun Gamma =>
         let/opt3 action_log, v, Gamma := interp_action Gamma sched_log action_log ex in
         Some (action_log, Ob, creplace m v Gamma)
-      | @Bind _ _ _ _ _ _ sig sz sz' var ex body => fun (Gamma : bcontext sig) =>
+      | @Bind _ _ _ _ _ _ sig sz sz' var ex body => fun (Gamma : lcontext sig) =>
         let/opt3 action_log1, v, Gamma := interp_action Gamma sched_log action_log ex in
         let/opt3 action_log2, v, Gamma := interp_action (CtxCons (var, sz) v Gamma) sched_log action_log1 body in
         Some (action_log2, v, ctl Gamma)
@@ -91,27 +91,4 @@ Section Interp.
       | None => None
       end.
   End Action.
-
-  Section Scheduler.
-    Context (rules: rule_name_t -> rule).
-
-    Fixpoint interp_scheduler'
-             (sched_log: Log)
-             (s: scheduler)
-             {struct s} :=
-      let interp_try r s1 s2 :=
-          match interp_rule sched_log (rules r) with
-          | Some l => interp_scheduler' (log_app l sched_log) s1
-          | None => interp_scheduler' sched_log s2
-          end in
-      match s with
-      | Done => sched_log
-      | Cons r s => interp_try r s s
-      | Try r s1 s2 => interp_try r s1 s2
-      | SPos _ s => interp_scheduler' sched_log s
-      end.
-
-    Definition interp_scheduler (s: scheduler) :=
-      interp_scheduler' log_empty s.
-  End Scheduler.
 End Interp.

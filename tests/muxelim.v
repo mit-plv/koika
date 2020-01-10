@@ -71,7 +71,7 @@ Definition rules :=
   tc_rules R empty_Sigma urules.
 
 Definition sched : scheduler :=
-  tc_scheduler (rl_nested |> rl_redundant |> rl_bitwise |> done).
+  rl_nested |> rl_redundant |> rl_bitwise |> done.
 
 Definition sched_result :=
   tc_compute (interp_scheduler (ContextEnv.(create) r) empty_sigma rules sched).

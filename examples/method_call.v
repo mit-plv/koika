@@ -69,7 +69,7 @@ Definition rules :=
                    end).
 
 Definition sched : scheduler :=
-  tc_scheduler (rl |> done).
+  rl |> done.
 
 Instance FiniteType_reg_t : FiniteType reg_t := _.
 

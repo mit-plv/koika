@@ -39,7 +39,7 @@ Module Collatz.
          fail }}.
 
   Definition collatz : scheduler :=
-    tc_scheduler (divide |> multiply |> done).
+    divide |> multiply |> done.
 
   Definition cr := ContextEnv.(create) r.
 

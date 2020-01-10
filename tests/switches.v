@@ -52,7 +52,7 @@ Definition rules :=
   tc_rules R empty_Sigma urules.
 
 Definition sched : scheduler :=
-  tc_scheduler (sequential_copy |> tree_copy |> comb_copy |> manual_switch |> tick |> done).
+  sequential_copy |> tree_copy |> comb_copy |> manual_switch |> tick |> done.
 
 Definition package :=
   {| ip_koika := {| koika_reg_types := R;

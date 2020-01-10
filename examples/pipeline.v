@@ -67,7 +67,7 @@ Definition rules :=
                    end).
 
 Definition pipeline : scheduler :=
-  tc_scheduler (doG |> doF |> done).
+  doG |> doF |> done.
 
 Definition external (r: rule_name_t) := false.
 

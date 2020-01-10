@@ -33,7 +33,7 @@ Definition rules :=
   tc_rules R empty_Sigma urules.
 
 Definition sched : scheduler :=
-  tc_scheduler (wr_butlast |> wr_last |> done).
+  wr_butlast |> wr_last |> done.
 
 Definition r0 :=
   tc_compute (ContextEnv.(create) r).

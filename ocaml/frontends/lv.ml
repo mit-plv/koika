@@ -140,17 +140,14 @@ module ResolvedAST = struct
                 UArrayInit (Util.extr_type_of_typ sg.array_type, elements)))
 
   let rec translate_scheduler ({ lpos; lcnt }: uscheduler locd) =
-    Extr.USPos
+    Extr.SPos
       (lpos,
        match lcnt with
-       | Done -> Extr.UDone
+       | Done -> Extr.Done
        | Cons (r, s) ->
-          Extr.UCons (r.lcnt, translate_scheduler s)
+          Extr.Cons (r.lcnt, translate_scheduler s)
        | Try (r, s1, s2) ->
-          Extr.UTry (r.lcnt, translate_scheduler s1, translate_scheduler s2))
-
-  let typecheck_scheduler (raw_ast: uscheduler locd) : (Pos.t, rule_name_t) Extr.scheduler =
-    typecheck_scheduler raw_ast.lpos (translate_scheduler raw_ast)
+          Extr.Try (r.lcnt, translate_scheduler s1, translate_scheduler s2))
 
   let typecheck_rule (raw_ast: uaction locd) : (Pos.t extr_action, (Pos.t * _)) result =
     typecheck_rule raw_ast.lpos (translate_action raw_ast)
@@ -1672,7 +1669,7 @@ let typecheck_module { name; cpp_preamble; registers; rules; schedulers }
   : Pos.t Cuttlebone.Compilation.compile_unit =
   let tc_rule (nm, r) = (nm, (`InternalRule, check_result (ResolvedAST.typecheck_rule r))) in
   let c_rules = Delay.map tc_rule rules in
-  let schedulers = Delay.map (ResolvedAST.typecheck_scheduler << snd) schedulers in
+  let schedulers = Delay.map (ResolvedAST.translate_scheduler << snd) schedulers in
   if schedulers = [] then name_error name.lpos @@ MissingScheduler { modname = name.lcnt };
   { c_modname = name.lcnt;
     c_registers = registers;

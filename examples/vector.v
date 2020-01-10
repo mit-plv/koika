@@ -57,7 +57,7 @@ Definition rules :=
                    end).
 
 Definition regfile : scheduler :=
-  tc_scheduler (read_reg_sequential |> read_reg_tree |> incr_index |> done).
+  read_reg_sequential |> read_reg_tree |> incr_index |> done.
 
 Definition external (r: rule_name_t) := false.
 

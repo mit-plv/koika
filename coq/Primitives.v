@@ -83,13 +83,18 @@ Module PrimTyped.
   Inductive fconv :=
     Pack | Unpack | Ignore.
 
+  Inductive lowered1 :=
+  | IgnoreBits (sz: nat)
+  | DisplayBits (fn: fdisplay).
+
   Inductive fbits1 :=
   | Not (sz: nat)
   | SExt (sz: nat) (width: nat)
   | ZExtL (sz: nat) (width: nat)
   | ZExtR (sz: nat) (width: nat)
   | Repeat (sz: nat) (times: nat)
-  | Slice (sz: nat) (offset: nat) (width: nat).
+  | Slice (sz: nat) (offset: nat) (width: nat)
+  | Lowered (fn: lowered1).
 
   Inductive fbits2 :=
   | And (sz: nat)
@@ -250,6 +255,12 @@ Module CircuitSignatures.
   Import PrimTyped.
   Import SigNotations.
 
+  Definition DisplaySigma (fn: fdisplay) : Sig 1 :=
+    {$ match fn with
+       | DisplayUtf8 len => array_t {| array_len := len; array_type := bits_t 8 |}
+       | DisplayValue tau _ => tau
+       end ~> unit_t $}.
+
   Definition CSigma1 (fn: fbits1) : CSig 1 :=
     match fn with
     | Not sz => {$ sz ~> sz $}
@@ -258,6 +269,11 @@ Module CircuitSignatures.
     | ZExtR sz width => {$ sz ~> (Nat.max sz width) $}
     | Repeat sz times => {$ sz ~> times * sz $}
     | Slice sz offset width => {$ sz ~> width $}
+    | Lowered fn =>
+      match fn with
+      | DisplayBits fn => CSig_of_Sig (DisplaySigma fn)
+      | IgnoreBits sz => {$ sz ~> 0 $}
+      end
     end.
 
   Definition CSigma2 (fn: PrimTyped.fbits2) : CSig 2 :=
@@ -291,11 +307,7 @@ Module PrimSignatures.
       | Unpack => {$ bits_t (type_sz tau) ~> tau $}
       | Ignore => {$ tau ~> unit_t $}
       end
-    | Display fn =>
-      {$ match fn with
-         | DisplayUtf8 len => array_t {| array_len := len; array_type := bits_t 8 |}
-         | DisplayValue tau _ => tau
-         end ~> unit_t $}
+    | Display fn => DisplaySigma fn
     | Bits1 fn => Sig_of_CSig (CSigma1 fn)
     | Struct1 GetField sig idx => {$ struct_t sig ~> field_type sig idx $}
     | Array1 GetElement sig idx => {$ array_t sig ~> sig.(array_type) $}
@@ -391,6 +403,8 @@ Module CircuitPrimSpecs.
     | ZExtR sz width => fun bs => Bits.extend_beginning bs width false
     | Repeat sz times => fun bs => Bits.repeat times bs
     | Slice _ offset width => slice offset width
+    | Lowered (DisplayBits _) => fun bs => Ob
+    | Lowered (IgnoreBits _) => fun bs => Ob
     end.
 
   Definition sigma2 (fn: PrimTyped.fbits2) : CSig_denote (CircuitSignatures.CSigma2 fn) :=

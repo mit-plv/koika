@@ -61,7 +61,7 @@ Definition rules :=
   tc_rules R empty_Sigma urules.
 
 Definition sched : scheduler :=
-  tc_scheduler (writeback |> read_nth |> done).
+  writeback |> read_nth |> done.
 
 Instance FiniteType_Rf4_reg_t : FiniteType Rf4.reg_t := _.
 

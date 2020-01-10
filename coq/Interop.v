@@ -1,5 +1,7 @@
 (*! Interop | Exporting Kôika programs for use with the cuttlec command-line tool !*)
-Require Import Koika.Common Koika.Environments Koika.Types Koika.TypedSyntax Koika.Circuits.
+Require Import
+        Koika.Common Koika.Environments Koika.Types
+        Koika.TypedSyntax Koika.Lowering Koika.CircuitGeneration.
 Require Export Koika.Primitives.
 
 Inductive empty_ext_fn_t :=.
@@ -63,7 +65,7 @@ Section Packages.
       koika_rule_names: Show rule_name_t;
 
       (** [koika_scheduler]: The scheduler. **)
-      koika_scheduler: TypedSyntax.scheduler pos_t rule_name_t;
+      koika_scheduler: Syntax.scheduler pos_t rule_name_t;
 
       (** [koika_module_name]: The name of the current package. **)
       koika_module_name: string
