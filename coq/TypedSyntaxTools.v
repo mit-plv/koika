@@ -465,8 +465,8 @@ Section TypedSyntaxTools.
     | @If _ _ _ _ _ _ _ tau _ _ _ => Some tau
     | @Read _ _ _ _ _ _ _ _ _ => None
     | @Write _ _ _ _ _ _ _ _ _ _ => Some unit_t
-    | @Unop _ _ _ _ _ _ _ fn _ => Some (PrimSignatures.Sigma1 fn).(retType)
-    | @Binop _ _ _ _ _ _ _ fn _ _ => Some (PrimSignatures.Sigma2 fn).(retType)
+    | @Unop _ _ _ _ _ _ _ fn _ => Some (PrimSignatures.Sigma1 fn).(retSig)
+    | @Binop _ _ _ _ _ _ _ fn _ _ => Some (PrimSignatures.Sigma2 fn).(retSig)
     | @ExternalCall _ _ _ _ _ _ _ _ _ => None
     | @APos _ _ _ _ _ _ _ tau _ _ => Some tau
     end.

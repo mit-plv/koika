@@ -208,7 +208,7 @@ let locd_of_pair (pos, x) =
 type 'action internal_function = {
     int_name: string;
     int_argspec: (string * typ) list;
-    int_retType: typ;
+    int_retSig: typ;
     int_body: 'action
   }
 

@@ -97,7 +97,7 @@ Section Circuits.
   Context {Show_rule_name_t : Show rule_name_t}.
 
   Definition csigma_spec (sigma: forall f, Sig_denote (Sigma f)) csigma :=
-    forall fn (a: (Sigma fn).(arg1Type)),
+    forall fn (a: (Sigma fn).(arg1Sig)),
       csigma fn (bits_of_value a) = bits_of_value (sigma fn a).
 
   Lemma csigma_spec_csigma_of_sigma :

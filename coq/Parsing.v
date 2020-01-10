@@ -131,13 +131,13 @@ Notation "'`' a '`'" := ( a) (in custom koika at level 99, a constr at level 99)
 Notation "'fun' args ':' ret '=>' body" :=
   {| int_name := "";
      int_argspec := args;
-     int_retType := ret;
+     int_retSig := ret;
      int_body := body |}
     (in custom koika at level 99, args custom koika_types, ret constr at level 0, body custom koika at level 99, format "'[v' 'fun'  args  ':'  ret  '=>' '/' body ']'").
 Notation "'fun' '_' ':' ret '=>' body" :=
   {| int_name := "";
      int_argspec := nil;
-     int_retType := ret;
+     int_retSig := ret;
      int_body := body |}
     (in custom koika at level 99,  ret constr at level 0, body custom koika at level 99, format "'[v' 'fun'  '_'   ':'  ret  '=>' '/' body ']'").
 

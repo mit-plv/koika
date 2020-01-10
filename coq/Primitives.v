@@ -248,7 +248,7 @@ End PrimTypeInference.
 
 Module CircuitSignatures.
   Import PrimTyped.
-  Import CSigNotations.
+  Import SigNotations.
 
   Definition CSigma1 (fn: fbits1) : CSig 1 :=
     match fn with

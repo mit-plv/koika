@@ -30,13 +30,13 @@ Section Circuit.
   | CMux {sz} (select: circuit 1) (c1 c2: circuit sz): circuit sz
   | CConst {sz} (cst: bits sz): circuit sz
   | CReadRegister (reg: reg_t): circuit (CR reg)
-  | CUnop (fn: fbits1) (a1: circuit (CSigma1 fn).(arg1Size))
-    : circuit (CSigma1 fn).(retSize)
-  | CBinop (fn: fbits2) (a1: circuit (CSigma2 fn).(arg1Size)) (a2: circuit (CSigma2 fn).(arg2Size))
-    : circuit (CSigma2 fn).(retSize)
+  | CUnop (fn: fbits1) (a1: circuit (CSigma1 fn).(arg1Sig))
+    : circuit (CSigma1 fn).(retSig)
+  | CBinop (fn: fbits2) (a1: circuit (CSigma2 fn).(arg1Sig)) (a2: circuit (CSigma2 fn).(arg2Sig))
+    : circuit (CSigma2 fn).(retSig)
   | CExternal (idx: ext_fn_t)
-              (a: circuit (CSigma idx).(arg1Size))
-    : circuit (CSigma idx).(retSize)
+              (a: circuit (CSigma idx).(arg1Sig))
+    : circuit (CSigma idx).(retSig)
   | CBundleRef {sz} (name: rule_name_t) (regs: list reg_t)
                (bundle: context (fun r => rwdata (CR r)) regs)
                (field: rwcircuit_field) (c: circuit sz): circuit sz
@@ -620,10 +620,10 @@ Section CircuitCompilation.
   Defined.
 
   Section Action.
-    Definition compile_unop (fn: fn1) (a: circuit (type_sz (PrimSignatures.Sigma1 fn).(arg1Type))):
-      circuit (type_sz (PrimSignatures.Sigma1 fn).(retType)) :=
-      let cArg1 fn := circuit (type_sz (PrimSignatures.Sigma1 fn).(arg1Type)) in
-      let cRet fn := circuit (type_sz (PrimSignatures.Sigma1 fn).(retType)) in
+    Definition compile_unop (fn: fn1) (a: circuit (type_sz (PrimSignatures.Sigma1 fn).(arg1Sig))):
+      circuit (type_sz (PrimSignatures.Sigma1 fn).(retSig)) :=
+      let cArg1 fn := circuit (type_sz (PrimSignatures.Sigma1 fn).(arg1Sig)) in
+      let cRet fn := circuit (type_sz (PrimSignatures.Sigma1 fn).(retSig)) in
       match fn return cArg1 fn -> cRet fn with
       | Display fn => fun _ => CConst Ob
       | Conv tau fn => fun a =>
@@ -663,12 +663,12 @@ Section CircuitCompilation.
       end a.
 
     Definition compile_binop (fn: fn2)
-               (a1: circuit (type_sz (PrimSignatures.Sigma2 fn).(arg1Type)))
-               (a2: circuit (type_sz (PrimSignatures.Sigma2 fn).(arg2Type))):
-      circuit (type_sz (PrimSignatures.Sigma2 fn).(retType)) :=
-      let cArg1 fn := circuit (type_sz (PrimSignatures.Sigma2 fn).(arg1Type)) in
-      let cArg2 fn := circuit (type_sz (PrimSignatures.Sigma2 fn).(arg2Type)) in
-      let cRet fn := circuit (type_sz (PrimSignatures.Sigma2 fn).(retType)) in
+               (a1: circuit (type_sz (PrimSignatures.Sigma2 fn).(arg1Sig)))
+               (a2: circuit (type_sz (PrimSignatures.Sigma2 fn).(arg2Sig))):
+      circuit (type_sz (PrimSignatures.Sigma2 fn).(retSig)) :=
+      let cArg1 fn := circuit (type_sz (PrimSignatures.Sigma2 fn).(arg1Sig)) in
+      let cArg2 fn := circuit (type_sz (PrimSignatures.Sigma2 fn).(arg2Sig)) in
+      let cRet fn := circuit (type_sz (PrimSignatures.Sigma2 fn).(retSig)) in
       match fn return cArg1 fn -> cArg2 fn -> cRet fn with
       | Eq tau negate => fun a1 a2 => CBinop (EqBits (type_sz tau) negate) a1 a2
       | Bits2 fn => fun a1 a2 => CBinop fn a1 a2
@@ -967,7 +967,7 @@ Section Helpers.
 
   Context {REnv: Env reg_t}.
   Context (r: REnv.(env_t) R).
-  Context (sigma: forall f, Sigma f).
+  Context (sigma: forall f, Sig_denote (Sigma f)).
 
   Definition interp_circuits
              (circuits: register_update_circuitry rule_name_t R Sigma REnv) :=

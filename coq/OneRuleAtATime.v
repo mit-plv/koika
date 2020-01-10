@@ -14,7 +14,7 @@ Section Proof.
   Context {Sigma: ext_fn_t -> ExternalSignature}.
   Context {REnv: Env reg_t}.
   Context (r: REnv.(env_t) R).
-  Context (sigma: forall f, Sigma f).
+  Context (sigma: forall f, Sig_denote (Sigma f)).
 
   Notation Log := (Log R REnv).
   Notation action := (action pos_t var_t R Sigma).

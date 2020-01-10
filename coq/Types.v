@@ -237,68 +237,46 @@ Coercion type_denote : type >-> Sortclass.
 
 (** * Anonymous function signatures **)
 
-(* Example ufn := {{{ "A" | "x" :: unit_t ~> bits_t 5 | tt }}}. *)
+Record _Sig {argKind: Type} {nArgs: nat} :=
+  { argSigs : vect argKind nArgs; retSig : argKind }.
+Arguments _Sig : clear implicits.
 
-Record CSig {n: nat} := { argSizes : vect nat n; retSize : nat }.
-Arguments CSig : clear implicits.
-
-Fixpoint CSig_denote' {n} (args: vect nat n) (ret: nat) :=
-  match n return vect nat n -> Type with
-  | 0 => fun _ => bits ret
-  | S n => fun arg => bits (vect_hd arg) -> CSig_denote' (vect_tl arg) ret
+Fixpoint _Sig_denote {nArgs argKind} (type_of_argKind: argKind -> Type)
+         (args: vect argKind nArgs) (ret: argKind) :=
+  match nArgs return vect argKind nArgs -> Type with
+  | 0 => fun _ => type_of_argKind ret
+  | S n => fun arg => type_of_argKind (vect_hd arg) ->
+                  _Sig_denote type_of_argKind (vect_tl arg) ret
   end args.
+
+Notation Sig n := (_Sig type n).
+Notation CSig n := (_Sig nat n).
 
 Definition CSig_denote {n} (sg: CSig n) :=
-  CSig_denote' sg.(argSizes) sg.(retSize).
-
-Coercion CSig_denote: CSig >-> Sortclass.
-
-Notation arg1Size fsig := (vect_hd fsig.(argSizes)).
-Notation arg2Size fsig := (vect_hd (vect_tl fsig.(argSizes))).
-
-Module CSigNotations.
-  Notation "{$  a1 ~> ret  $}" :=
-    {| argSizes := vect_cons a1 vect_nil;
-       retSize := ret |}.
-
-  Notation "{$  a1 ~> a2 ~> ret  $}" :=
-    {| argSizes := vect_cons a1 (vect_cons a2 vect_nil);
-       retSize := ret |}.
-End CSigNotations.
-
-Record Sig {n: nat} := { argTypes : vect type n; retType : type }.
-Arguments Sig : clear implicits.
-
-Definition CSig_of_Sig {n} (sig: Sig n) : CSig n :=
-  {| argSizes := vect_map type_sz sig.(argTypes);
-     retSize := type_sz sig.(retType) |}.
-
-Definition Sig_of_CSig {n} (sig: CSig n) : Sig n :=
-  {| argTypes := vect_map bits_t sig.(argSizes);
-     retType := bits_t sig.(retSize) |}.
-
-Fixpoint Sig_denote' {n} (args: vect type n) (ret: type) :=
-  match n return vect type n -> Type with
-  | 0 => fun _ => ret
-  | S n => fun arg => vect_hd arg -> Sig_denote' (vect_tl arg) ret
-  end args.
+  _Sig_denote (@Bits.bits) sg.(argSigs) sg.(retSig).
 
 Definition Sig_denote {n} (sg: Sig n) :=
-  Sig_denote' sg.(argTypes) sg.(retType).
+  _Sig_denote type_denote sg.(argSigs) sg.(retSig).
 
-Coercion Sig_denote: Sig >-> Sortclass.
+Definition CSig_of_Sig {n} (sig: Sig n) : CSig n :=
+  {| argSigs := vect_map type_sz sig.(argSigs);
+     retSig := type_sz sig.(retSig) |}.
 
-Notation arg1Type fsig := (vect_hd fsig.(argTypes)).
-Notation arg2Type fsig := (vect_hd (vect_tl fsig.(argTypes))).
+Definition Sig_of_CSig {n} (sig: CSig n) : Sig n :=
+  {| argSigs := vect_map bits_t sig.(argSigs);
+     retSig := bits_t sig.(retSig) |}.
+
+Notation arg1Sig fsig := (vect_hd fsig.(argSigs)).
+Notation arg2Sig fsig := (vect_hd (vect_tl fsig.(argSigs))).
 
 Module SigNotations.
   Notation "{$  a1 ~> ret  $}" :=
-    {| argTypes := vect_cons a1 vect_nil;
-       retType := ret |}.
+    {| argSigs := vect_cons a1 vect_nil;
+       retSig := ret |}.
 
   Notation "{$  a1 ~> a2 ~> ret  $}" :=
-    {| argTypes := vect_cons a1 (vect_cons a2 vect_nil);
-       retType := ret |}.
+    {| argSigs := vect_cons a1 (vect_cons a2 vect_nil);
+       retSig := ret |}.
 End SigNotations.
 
 (** * External functions **)
@@ -313,11 +291,11 @@ Definition tsig var_t := list (var_t * type).
 Record InternalFunction {fn_name_t var_t action: Type} :=
   { int_name : fn_name_t;
     int_argspec : tsig var_t;
-    int_retType : type;
+    int_retSig : type;
     int_body : action }.
 Arguments InternalFunction : clear implicits.
 Arguments Build_InternalFunction {fn_name_t var_t action}
-          int_name int_argspec int_retType int_body : assert.
+          int_name int_argspec int_retSig int_body : assert.
 
 Record arg_sig {var_t} :=
   { arg_name: var_t;

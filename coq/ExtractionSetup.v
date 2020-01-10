@@ -7,7 +7,7 @@ Require Koika.Circuits
 
 (* The following commands work around problems due to incorrect extraction: *)
 Extraction Inline Koika.Circuits.retVal.
-Extraction Inline Types.argTypes Types.argSizes.
+Extraction Inline Types.argSigs.
 
 Extract Constant Vect.index => int.
 Extract Inductive Vect.index' => int [ "0" "Pervasives.succ" ]

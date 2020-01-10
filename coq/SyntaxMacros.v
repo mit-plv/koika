@@ -151,7 +151,7 @@ Module Display.
     Definition empty_printer : InternalFunction fn_name_t var_t uaction :=
       {| int_name := "";
          int_argspec := [];
-         int_retType := unit_t;
+         int_retSig := unit_t;
          int_body := USugar USkip |}.
 
     Definition display_utf8 s : uaction :=
@@ -160,7 +160,7 @@ Module Display.
     Definition nl_printer : InternalFunction fn_name_t var_t uaction :=
       {| int_name := "";
          int_argspec := [];
-         int_retType := unit_t;
+         int_retSig := unit_t;
          int_body := display_utf8 "\n" |}.
 
     Fixpoint extend_printer f (offset: nat) (printer: intfun) : intfun :=
@@ -168,19 +168,19 @@ Module Display.
           {| display_newline := false; display_strings := false; display_style := dFull |} in
       let display_value arg :=
           UUnop (UDisplay (UDisplayValue opts)) (UVar arg) in
-      let '(Build_InternalFunction int_name int_argspec int_retType int_body) :=
+      let '(Build_InternalFunction int_name int_argspec int_retSig int_body) :=
           printer in
       match f with
       | Str s =>
         {| int_name := int_name;
            int_argspec := int_argspec;
-           int_retType := int_retType;
+           int_retSig := int_retSig;
            int_body := (USeq (display_utf8 s) int_body) |}
       | Value tau =>
         let arg := String.append "arg" (show offset) in
         {| int_name := int_name;
            int_argspec := (arg, tau) :: int_argspec;
-           int_retType := unit_t;
+           int_retSig := unit_t;
            int_body := (USeq (display_value arg) int_body) |}
       end.
 

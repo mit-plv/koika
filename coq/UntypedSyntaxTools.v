@@ -43,7 +43,7 @@ Section SyntaxTools.
           let ufn :=
               {| int_name := ufn.(int_name);
                  int_argspec := ufn.(int_argspec);
-                 int_retType := ufn.(int_retType);
+                 int_retSig := ufn.(int_retSig);
                  int_body := r 0 ufn.(int_body) |} in
           let args := snd (foldi (fun n a args => (r n a :: args)) 1 [] args) in
           UInternalCall ufn args
@@ -85,7 +85,7 @@ Section SyntaxTools.
              let ufn :=
                  {| int_name := ufn.(int_name);
                     int_argspec := ufn.(int_argspec);
-                    int_retType := ufn.(int_retType);
+                    int_retSig := ufn.(int_retSig);
                     int_body := r 0 ufn.(int_body) |} in
              let args := snd (foldi (fun n a args => (r n a :: args)) 1 [] args) in
              UCallModule fR fSigma ufn args
@@ -168,7 +168,7 @@ Section SyntaxTools.
                     (* Only unfold the body if the error is in it *)
                     {| int_name := ufn.(int_name);
                        int_argspec := ufn.(int_argspec);
-                       int_retType := ufn.(int_retType);
+                       int_retSig := ufn.(int_retSig);
                        int_body := body |}
                   else ufn in
               let '(n, (fargs, args)) :=
@@ -245,7 +245,7 @@ Section SyntaxTools.
                     (* Only unfold the body if the error is in it *)
                     {| int_name := ufn.(int_name);
                        int_argspec := ufn.(int_argspec);
-                       int_retType := ufn.(int_retType);
+                       int_retSig := ufn.(int_retSig);
                        int_body := body |}
                   else ufn in
               let '(n, (fargs, args)) :=

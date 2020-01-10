@@ -34,17 +34,17 @@ Section TypedSyntax.
           (value: action sig (R idx)) : action sig unit_t
   | Unop {sig}
           (fn: fn1)
-          (arg1: action sig (Sigma1 fn).(arg1Type))
-    : action sig (Sigma1 fn).(retType)
+          (arg1: action sig (Sigma1 fn).(arg1Sig))
+    : action sig (Sigma1 fn).(retSig)
   | Binop {sig}
           (fn: fn2)
-          (arg1: action sig (Sigma2 fn).(arg1Type))
-          (arg2: action sig (Sigma2 fn).(arg2Type))
-    : action sig (Sigma2 fn).(retType)
+          (arg1: action sig (Sigma2 fn).(arg1Sig))
+          (arg2: action sig (Sigma2 fn).(arg2Sig))
+    : action sig (Sigma2 fn).(retSig)
   | ExternalCall {sig}
                  (fn: ext_fn_t)
-                 (arg: action sig (Sigma fn).(arg1Type))
-    : action sig (Sigma fn).(retType)
+                 (arg: action sig (Sigma fn).(arg1Sig))
+    : action sig (Sigma fn).(retSig)
   | APos {sig tau} (pos: pos_t) (a: action sig tau)
     : action sig tau.
 

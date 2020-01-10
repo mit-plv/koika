@@ -13,7 +13,7 @@ Section PrimCompilerCorrectness.
 
   Context {REnv: Env reg_t}.
   Context (cr: REnv.(env_t) (fun idx => bits (CR_of_R R idx))).
-  Context (csigma: forall f, CSigma_of_Sigma Sigma f).
+  Context (csigma: forall f, CSig_denote (CSigma_of_Sigma Sigma f)).
 
   Notation interp_circuit := (interp_circuit (rule_name_t := rule_name_t) cr csigma).
 
@@ -76,8 +76,8 @@ Section CompilerCorrectness.
 
   Notation rwdata := (rwdata (rule_name_t := rule_name_t) R Sigma).
 
-  Context (sigma: forall f, Sigma f).
-  Context (csigma: forall f, CSigma f).
+  Context (sigma: forall f, Sig_denote (Sigma f)).
+  Context (csigma: forall f, CSig_denote (CSigma f)).
   Context {csigma_correct: csigma_spec sigma csigma}.
   Context (lco: (@local_circuit_optimizer
                    rule_name_t reg_t ext_fn_t CR CSigma
@@ -1622,7 +1622,7 @@ Section CircuitInit.
   Context {REnv: Env reg_t}.
 
   Context (r: REnv.(env_t) R).
-  Context (sigma: forall f, Sigma f).
+  Context (sigma: forall f, Sig_denote (Sigma f)).
 
   Lemma circuit_env_equiv_CReadRegister :
     forall (csigma: forall f, CSig_denote (CSigma_of_Sigma Sigma f)),
@@ -1647,7 +1647,7 @@ Section Thm.
   Context {Show_rule_name_t : Show rule_name_t}.
 
   Context (r: ContextEnv.(env_t) R).
-  Context (sigma: forall f, Sigma f).
+  Context (sigma: forall f, Sig_denote (Sigma f)).
   Context (lco: (@local_circuit_optimizer
                    rule_name_t reg_t ext_fn_t
                    (CR_of_R R) (CSigma_of_Sigma Sigma)

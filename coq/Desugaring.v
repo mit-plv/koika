@@ -17,7 +17,7 @@ Section Desugaring.
              (f: action -> action') (fn: InternalFunction fn_name_t var_t action) :=
     {| int_name := fn.(int_name);
        int_argspec := fn.(int_argspec);
-       int_retType := fn.(int_retType);
+       int_retSig := fn.(int_retSig);
        int_body := f fn.(int_body) |}.
 
   Fixpoint desugar_action' {reg_t' ext_fn_t'} (pos: pos_t)

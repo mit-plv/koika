@@ -147,7 +147,7 @@ let pp_internal_function ppf (f: _ internal_function) =
   fprintf ppf "{{{ %a | %a ~> %a }}}"
     pp_quoted f.int_name
     (pp_seq (pp_sep " ~> ") pp_internal_sig_arg) f.int_argspec
-    (pp_type ~wrap:false) f.int_retType
+    (pp_type ~wrap:false) f.int_retSig
 
 let pp_ext_fn_Sigma ppf (extfuns: ffi_signature list) =
   fprintf ppf "@[<hv 2>Definition Sigma (f: ext_fn_t): ExternalSignature :=@ %a@]."
@@ -365,12 +365,12 @@ let pp_scheduler print_positions ppf (name, scheduler) =
   fprintf ppf "@[<2>Definition %s_eval (sigma: forall f, Sigma f)@ : Log R ContextEnv :=@ " name;
   fprintf ppf "@[<2>interp_scheduler@ (ContextEnv.(create) r)@ sigma@ rules@ %s@].@]" name
 
-let pp_int_fn ~print_positions ppf (_, { int_name; int_argspec; int_retType; int_body }) =
+let pp_int_fn ~print_positions ppf (_, { int_name; int_argspec; int_retSig; int_body }) =
   let p fmt = fprintf ppf fmt in
   p "@[<v>@[<hv 2>Definition %s {reg_t ext_fn_t} : UInternalFunction reg_t ext_fn_t := {|@ " int_name;
   p "int_name := %a;@ " pp_quoted int_name;
   p "int_argspec := %a;@ " (pp_list (pp_pair pp_quoted pp_type_unwrapped)) int_argspec;
-  p "int_retType := %a;@ " pp_type_unwrapped int_retType;
+  p "int_retSig := %a;@ " pp_type_unwrapped int_retSig;
   p "int_body := %a;" (pp_action print_positions) int_body;
   p "@]@ |}.@]"
 

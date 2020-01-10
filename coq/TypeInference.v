@@ -151,13 +151,13 @@ Section TypeInference.
         let tc_args_w_pos := List.combine arg_positions tc_args in
         let/res arg_ctx := assert_argtypes e fn.(int_name) pos fn.(int_argspec) tc_args_w_pos in
         let/res fn_body' := type_action (actpos pos fn.(int_body)) fn.(int_argspec) fn.(int_body) in
-        let/res fn_body' := cast_action (actpos pos fn.(int_body)) fn.(int_retType) (``fn_body') in
+        let/res fn_body' := cast_action (actpos pos fn.(int_body)) fn.(int_retSig) (``fn_body') in
         Success (EX (InternalCall sig fn.(int_argspec) fn_body' arg_ctx))
       | UUnop fn arg1 =>
         let pos1 := actpos pos arg1 in
         let/res arg1' := type_action pos sig arg1 in
         let/res fn := lift_fn1_tc_result pos1 ``arg1' (PrimTypeInference.tc1 fn `arg1') in
-        let/res arg1' := cast_action pos1 (PrimSignatures.Sigma1 fn).(arg1Type) (``arg1') in
+        let/res arg1' := cast_action pos1 (PrimSignatures.Sigma1 fn).(arg1Sig) (``arg1') in
         Success (EX (Unop fn arg1'))
       | UBinop fn arg1 arg2 =>
         let pos1 := actpos pos arg1 in
@@ -165,13 +165,13 @@ Section TypeInference.
         let/res arg1' := type_action pos sig arg1 in
         let/res arg2' := type_action pos sig arg2 in
         let/res fn := lift_fn2_tc_result pos1 ``arg1' pos2 ``arg2' (PrimTypeInference.tc2 fn `arg1' `arg2') in
-        let/res arg1' := cast_action pos1 (PrimSignatures.Sigma2 fn).(arg1Type) (``arg1') in
-        let/res arg2' := cast_action pos2 (PrimSignatures.Sigma2 fn).(arg2Type) (``arg2') in
+        let/res arg1' := cast_action pos1 (PrimSignatures.Sigma2 fn).(arg1Sig) (``arg1') in
+        let/res arg2' := cast_action pos2 (PrimSignatures.Sigma2 fn).(arg2Sig) (``arg2') in
         Success (EX (Binop fn arg1' arg2'))
       | UExternalCall fn arg1 =>
         let pos1 := actpos pos arg1 in
         let/res arg1' := type_action pos1 sig arg1 in
-        let/res arg1' := cast_action pos1 (Sigma fn).(arg1Type) (``arg1') in
+        let/res arg1' := cast_action pos1 (Sigma fn).(arg1Sig) (``arg1') in
         Success (EX (ExternalCall fn arg1'))
       | UAPos pos e =>
         let/res e := type_action pos sig e in

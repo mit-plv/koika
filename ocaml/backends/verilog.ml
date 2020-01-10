@@ -137,11 +137,11 @@ let internal_decl_for_reg (root: circuit_root) =
 
 let fn1_sz fn =
   let fsig = Cuttlebone.Extr.PrimSignatures.coq_Sigma1 (Bits1 fn) in
-  typ_sz (Cuttlebone.Util.retType fsig)
+  typ_sz (Cuttlebone.Util.retSig fsig)
 
 let fn2_sz fn =
   let fsig = Cuttlebone.Extr.PrimSignatures.coq_Sigma2 (Bits2 fn) in
-  typ_sz (Cuttlebone.Util.retType fsig)
+  typ_sz (Cuttlebone.Util.retSig fsig)
 
 let circuit_sz (c: circuit) =
   match c.node with
