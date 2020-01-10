@@ -402,9 +402,7 @@ A scheduler refers to rules by name, so you need three things:
   .. code:: coq
 
      Definition scheduler :=
-       tc_scheduler
-         (start |> step_compute |>
-          get_result |> done).
+       start |> step_compute |> get_result |> done.
 
 - A mapping from rule names to (typechecked) rules:
 
@@ -700,8 +698,11 @@ The following list shows the current state of the repo:
 ``coq/``
    (Circuits)
       - |coq/CircuitCorrectness.v|_: Compiler correctness proof
+      - |coq/CircuitGeneration.v|_: Compilation from lowered ASTs
+      - |coq/CircuitOptimization.v|_: Local optimization of circuits
       - |coq/CircuitProperties.v|_: Lemmas used in the compiler-correctness proof
-      - |coq/Circuits.v|_: Syntax, semantics, compilation, and optimization of circuits
+      - |coq/CircuitSemantics.v|_: Interpretation of circuits
+      - |coq/CircuitSyntax.v|_: Syntax of circuits (RTL)
 
    (Frontend)
       - |coq/Desugaring.v|_: Desugaring of untyped actions
@@ -720,8 +721,12 @@ The following list shows the current state of the repo:
       - |coq/Interop.v|_: Exporting |koika| programs for use with the cuttlec command-line tool
 
    (Language)
+      - |coq/Logs.v|_: Logs of reads and writes
+      - |coq/LoweredSemantics.v|_: Semantics of Lowered |koika| programs
+      - |coq/LoweredSyntax.v|_: Lowered ASTs (weakly-typed)
+      - |coq/Lowering.v|_: Compilation from typed ASTs to lowered ASTs
       - |coq/Primitives.v|_: Combinational primitives available in all |koika| programs
-      - |coq/Semantics.v|_: Semantics of typed |koika| programs
+      - |coq/TypedSemantics.v|_: Semantics of typed |koika| programs
       - |coq/TypedSyntax.v|_: Typed ASTs
       - |coq/Types.v|_: Types used by |koika| programs
 
@@ -815,6 +820,7 @@ The following list shows the current state of the repo:
    - |tests/extcall.v|_: External functions
    - |tests/large_trace.lv|_: Make sure that snapshots in large traces don't copy data
    - |tests/large_writeset.v|_: Make sure that the large writeset heuristics in the scheduler don't break things
+   - |tests/muxelim.v|_: Sanity check for mux-elimination optimization
    - |tests/name_mangling.lv|_: Unit tests for name mangling
    - |tests/register_file_bypassing.v|_: Ensure that area is reasonable when bypasses don't need extra tracking
    - |tests/shadowing.lv|_: Unit tests for name shadowing
@@ -826,10 +832,16 @@ The following list shows the current state of the repo:
 
 .. |coq/CircuitCorrectness.v| replace:: ``CircuitCorrectness.v``
 .. _coq/CircuitCorrectness.v: coq/CircuitCorrectness.v
+.. |coq/CircuitGeneration.v| replace:: ``CircuitGeneration.v``
+.. _coq/CircuitGeneration.v: coq/CircuitGeneration.v
+.. |coq/CircuitOptimization.v| replace:: ``CircuitOptimization.v``
+.. _coq/CircuitOptimization.v: coq/CircuitOptimization.v
 .. |coq/CircuitProperties.v| replace:: ``CircuitProperties.v``
 .. _coq/CircuitProperties.v: coq/CircuitProperties.v
-.. |coq/Circuits.v| replace:: ``Circuits.v``
-.. _coq/Circuits.v: coq/Circuits.v
+.. |coq/CircuitSemantics.v| replace:: ``CircuitSemantics.v``
+.. _coq/CircuitSemantics.v: coq/CircuitSemantics.v
+.. |coq/CircuitSyntax.v| replace:: ``CircuitSyntax.v``
+.. _coq/CircuitSyntax.v: coq/CircuitSyntax.v
 .. |coq/Common.v| replace:: ``Common.v``
 .. _coq/Common.v: coq/Common.v
 .. |coq/DeriveShow.v| replace:: ``DeriveShow.v``
@@ -856,6 +868,14 @@ The following list shows the current state of the repo:
 .. _coq/IndexUtils.v: coq/IndexUtils.v
 .. |coq/Interop.v| replace:: ``Interop.v``
 .. _coq/Interop.v: coq/Interop.v
+.. |coq/Logs.v| replace:: ``Logs.v``
+.. _coq/Logs.v: coq/Logs.v
+.. |coq/LoweredSemantics.v| replace:: ``LoweredSemantics.v``
+.. _coq/LoweredSemantics.v: coq/LoweredSemantics.v
+.. |coq/LoweredSyntax.v| replace:: ``LoweredSyntax.v``
+.. _coq/LoweredSyntax.v: coq/LoweredSyntax.v
+.. |coq/Lowering.v| replace:: ``Lowering.v``
+.. _coq/Lowering.v: coq/Lowering.v
 .. |coq/Member.v| replace:: ``Member.v``
 .. _coq/Member.v: coq/Member.v
 .. |coq/OneRuleAtATime.v| replace:: ``OneRuleAtATime.v``
@@ -868,8 +888,6 @@ The following list shows the current state of the repo:
 .. _coq/Primitives.v: coq/Primitives.v
 .. |coq/SemanticProperties.v| replace:: ``SemanticProperties.v``
 .. _coq/SemanticProperties.v: coq/SemanticProperties.v
-.. |coq/Semantics.v| replace:: ``Semantics.v``
-.. _coq/Semantics.v: coq/Semantics.v
 .. |coq/Show.v| replace:: ``Show.v``
 .. _coq/Show.v: coq/Show.v
 .. |coq/Std.v| replace:: ``Std.v``
@@ -880,6 +898,8 @@ The following list shows the current state of the repo:
 .. _coq/SyntaxMacros.v: coq/SyntaxMacros.v
 .. |coq/TypeInference.v| replace:: ``TypeInference.v``
 .. _coq/TypeInference.v: coq/TypeInference.v
+.. |coq/TypedSemantics.v| replace:: ``TypedSemantics.v``
+.. _coq/TypedSemantics.v: coq/TypedSemantics.v
 .. |coq/TypedSyntax.v| replace:: ``TypedSyntax.v``
 .. _coq/TypedSyntax.v: coq/TypedSyntax.v
 .. |coq/TypedSyntaxProperties.v| replace:: ``TypedSyntaxProperties.v``
@@ -986,6 +1006,8 @@ The following list shows the current state of the repo:
 .. _tests/large_trace.lv: tests/large_trace.lv
 .. |tests/large_writeset.v| replace:: ``large_writeset.v``
 .. _tests/large_writeset.v: tests/large_writeset.v
+.. |tests/muxelim.v| replace:: ``muxelim.v``
+.. _tests/muxelim.v: tests/muxelim.v
 .. |tests/name_mangling.lv| replace:: ``name_mangling.lv``
 .. _tests/name_mangling.lv: tests/name_mangling.lv
 .. |tests/register_file_bypassing.v| replace:: ``register_file_bypassing.v``
