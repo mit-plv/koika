@@ -41,7 +41,7 @@ Section TypedSyntaxProperties.
     end.
 
   Lemma returns_zero_correct {sig tau} :
-    forall (a: action sig tau) (Gamma: vcontext sig) (sched_log: Log) (action_log: Log),
+    forall (a: action sig tau) (Gamma: tcontext sig) (sched_log: Log) (action_log: Log),
       returns_zero a = true ->
       match interp_action r sigma Gamma sched_log action_log a with
       | Some (_, v, _) => bits_of_value v = Bits.zeroes (type_sz tau)
@@ -63,7 +63,7 @@ Section TypedSyntaxProperties.
   Qed.
 
   Lemma is_pure_correct {sig tau} :
-    forall (a: action sig tau) (Gamma: vcontext sig) (sched_log: Log) (action_log: Log),
+    forall (a: action sig tau) (Gamma: tcontext sig) (sched_log: Log) (action_log: Log),
       is_pure a = true ->
       match interp_action r sigma Gamma sched_log action_log a with
       | Some (l, _, _) => l = action_log
@@ -88,7 +88,7 @@ Section TypedSyntaxProperties.
   Proof. destruct a; cbn; inversion 1; reflexivity. Qed.
 
   Lemma is_tt_correct {sig tau} :
-    forall (a: action sig tau) (Gamma: vcontext sig) (sched_log: Log) (action_log: Log),
+    forall (a: action sig tau) (Gamma: tcontext sig) (sched_log: Log) (action_log: Log),
       is_tt a = true ->
       tau = unit_t /\
       match interp_action r sigma Gamma sched_log action_log a with
@@ -110,7 +110,7 @@ Section TypedSyntaxProperties.
   Qed.
 
   Lemma interp_arithmetic_correct {sig tau} :
-    forall (a: action sig tau) (Gamma: vcontext sig) (sched_log: Log) (action_log: Log) res,
+    forall (a: action sig tau) (Gamma: tcontext sig) (sched_log: Log) (action_log: Log) res,
       interp_arithmetic a = Some res ->
       match interp_action r sigma Gamma sched_log action_log a with
       | Some (_, v, _) => v = res

@@ -18,19 +18,19 @@ Section Interp.
   Notation action := (action pos_t var_t R Sigma).
   Notation scheduler := (scheduler pos_t rule_name_t).
 
-  Definition vcontext (sig: tsig var_t) :=
+  Definition tcontext (sig: tsig var_t) :=
     context (fun '(k, tau) => type_denote tau) sig.
 
   Section Action.
     Fixpoint interp_action
              {sig: tsig var_t}
              {tau}
-             (Gamma: vcontext sig)
+             (Gamma: tcontext sig)
              (sched_log: Log)
              (action_log: Log)
              (a: action sig tau)
-    : option (Log * tau * (vcontext sig)) :=
-      match a in TypedSyntax.action _ _ _ _ ts tau return (vcontext ts -> option (Log * tau * (vcontext ts)))  with
+    : option (Log * tau * (tcontext sig)) :=
+      match a in TypedSyntax.action _ _ _ _ ts tau return (tcontext ts -> option (Log * tau * (tcontext ts)))  with
       | Fail tau => fun _ =>
         None
       | Var m => fun Gamma =>
@@ -43,7 +43,7 @@ Section Interp.
       | @Assign _ _ _ _ _ _ _ k tau m ex => fun Gamma =>
         let/opt3 action_log, v, Gamma := interp_action Gamma sched_log action_log ex in
         Some (action_log, Ob, creplace m v Gamma)
-      | @Bind _ _ _ _ _ _ sig tau tau' var ex body => fun (Gamma : vcontext sig) =>
+      | @Bind _ _ _ _ _ _ sig tau tau' var ex body => fun (Gamma : tcontext sig) =>
         let/opt3 action_log1, v, Gamma := interp_action Gamma sched_log action_log ex in
         let/opt3 action_log2, v, Gamma := interp_action (CtxCons (var, tau) v Gamma) sched_log action_log1 body in
         Some (action_log2, v, ctl Gamma)

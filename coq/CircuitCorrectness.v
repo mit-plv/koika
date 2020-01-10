@@ -699,7 +699,7 @@ Section CompilerCorrectness.
 
   Context {var_t_eq_dec: EqDec var_t}.
 
-  Definition circuit_gamma_equiv {sig} (Gamma : vcontext sig) (gamma : ccontext sig) :=
+  Definition circuit_gamma_equiv {sig} (Gamma : tcontext sig) (gamma : ccontext sig) :=
     forall (k: var_t) tau (m : member (k, tau) sig),
       interp_circuit (cassoc m gamma) = bits_of_value (cassoc m Gamma).
 
@@ -712,7 +712,7 @@ Section CompilerCorrectness.
 
   Lemma circuit_gamma_equiv_CtxCons {sig}:
     forall Gamma gamma,
-      circuit_gamma_equiv (Gamma: vcontext sig) (gamma: ccontext sig) ->
+      circuit_gamma_equiv (Gamma: tcontext sig) (gamma: ccontext sig) ->
       forall (tau : type) (var : var_t) (t: tau) (c : circuit (type_sz tau)),
         interp_circuit c = bits_of_value t ->
         circuit_gamma_equiv (CtxCons (var, tau) t Gamma) (CtxCons (var, tau) c gamma).
@@ -934,7 +934,7 @@ Section CompilerCorrectness.
            end.
 
   Lemma circuit_gamma_equiv_CtxCons_rev {sig}:
-    forall (k: var_t) (tau: type) (Gamma: vcontext sig) (gamma: ccontext sig) v (c: circuit (type_sz tau)),
+    forall (k: var_t) (tau: type) (Gamma: tcontext sig) (gamma: ccontext sig) v (c: circuit (type_sz tau)),
       circuit_gamma_equiv (CtxCons (k, tau) v Gamma) (CtxCons (k, tau) c gamma) ->
       circuit_gamma_equiv Gamma gamma.
   Proof.
@@ -943,7 +943,7 @@ Section CompilerCorrectness.
   Qed.
 
   Lemma circuit_gamma_equiv_ctl {sig}:
-    forall (k: var_t) (tau: type) (Gamma: vcontext ((k, tau) :: sig)) (gamma: ccontext ((k, tau) :: sig)),
+    forall (k: var_t) (tau: type) (Gamma: tcontext ((k, tau) :: sig)) (gamma: ccontext ((k, tau) :: sig)),
       circuit_gamma_equiv Gamma gamma ->
       circuit_gamma_equiv (ctl Gamma) (ctl gamma).
   Proof.
@@ -953,7 +953,7 @@ Section CompilerCorrectness.
 
   Lemma circuit_gamma_equiv_creplace:
     forall (sig : tsig var_t) (k : var_t) (tau : type)
-      (m : member (k, tau) sig) (vGamma : vcontext sig)
+      (m : member (k, tau) sig) (vGamma : tcontext sig)
       (a : action_circuit R Sigma REnv (type_sz tau)) (cGamma : ccontext sig) t,
       interp_circuit (retVal a) = bits_of_value t ->
       circuit_gamma_equiv vGamma cGamma -> circuit_gamma_equiv (creplace m t vGamma) (creplace m (retVal a) cGamma).
@@ -992,7 +992,7 @@ Section CompilerCorrectness.
   Qed.
 
   Lemma circuit_gamma_equiv_ccontext_equiv {sig}:
-    forall (c0 c1: ccontext sig) (v: vcontext sig),
+    forall (c0 c1: ccontext sig) (v: tcontext sig),
       ccontext_equiv c0 c1 ->
       circuit_gamma_equiv v c0 ->
       circuit_gamma_equiv v c1.
@@ -1021,7 +1021,7 @@ Section CompilerCorrectness.
   Lemma mux_gamma_equiv_t:
     forall (sig : tsig var_t) (cond: circuit 1),
       Bits.single (interp_circuit cond) = true ->
-      forall (v0 : vcontext sig) (c0 c1 : ccontext sig),
+      forall (v0 : tcontext sig) (c0 c1 : ccontext sig),
         circuit_gamma_equiv v0 c0 ->
         circuit_gamma_equiv v0 (mux_ccontext cond c0 c1).
   Proof.
@@ -1034,7 +1034,7 @@ Section CompilerCorrectness.
   Lemma mux_gamma_equiv_f:
     forall (sig : tsig var_t) (cond: circuit 1),
       Bits.single (interp_circuit cond) = false ->
-      forall (v0 : vcontext sig) (c0 c1 : ccontext sig),
+      forall (v0 : tcontext sig) (c0 c1 : ccontext sig),
         circuit_gamma_equiv v0 c1 ->
         circuit_gamma_equiv v0 (mux_ccontext cond c0 c1).
   Proof.
@@ -1046,7 +1046,7 @@ Section CompilerCorrectness.
 
   Theorem action_compiler_correct rl {sig tau} Log cLog:
     forall (ex: action sig tau) (clog: rwcircuit)
-      (Gamma: vcontext sig) (gamma: ccontext sig) log,
+      (Gamma: tcontext sig) (gamma: ccontext sig) log,
       log_rwdata_consistent log clog.(regs) ->
       log_rwdata_consistent Log cLog ->
       log_data0_consistent log Log clog.(regs) ->

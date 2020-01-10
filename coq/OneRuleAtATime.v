@@ -183,7 +183,7 @@ Section Proof.
     repeat t_step.
 
   Lemma interp_action_commit:
-    forall {sig tau} (a: action sig tau) (Gamma: vcontext sig) (sl sl': Log) action_log lv,
+    forall {sig tau} (a: action sig tau) (Gamma: tcontext sig) (sl sl': Log) action_log lv,
       interp_action r sigma Gamma (log_app sl sl') action_log a = Some lv ->
       interp_action (commit_update r sl') sigma Gamma sl action_log a = Some lv.
   Proof.
