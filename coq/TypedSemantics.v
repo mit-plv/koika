@@ -1,49 +1,5 @@
 (*! Language | Semantics of typed Kôika programs !*)
-Require Export Koika.Common Koika.Environments Koika.Vect Koika.Syntax Koika.TypedSyntax.
-
-Section Logs.
-  Inductive LogEntryKind :=
-    LogRead | LogWrite.
-
-  Record LogEntry {T} :=
-    LE { kind: LogEntryKind;
-         port: Port;
-         val: match kind with
-              | LogRead => unit: Type
-              | LogWrite => T
-              end }.
-
-  Definition RLog T :=
-    list (@LogEntry T).
-
-  Context {reg_t: Type}.
-  Context {R: reg_t -> type}.
-  Context {REnv: Env reg_t}.
-  Definition Log := REnv.(env_t) (fun idx => RLog (R idx)).
-
-  Definition log_empty : Log :=
-    REnv.(create) (fun _ => []).
-
-  Definition log_app (l1 l2: Log) :=
-    map2 REnv (fun _ ll1 ll2 => ll1 ++ ll2) l1 l2.
-
-  Definition log_find {T} (log: Log) reg (f: @LogEntry (R reg) -> option T) : option T :=
-    list_find_opt f (REnv.(getenv) log reg).
-
-  Definition log_cons (reg: reg_t) le (l: Log) :=
-    REnv.(putenv) l reg (le :: REnv.(getenv) l reg).
-
-  Definition log_forallb (log: Log) reg (f: LogEntryKind -> Port -> bool) :=
-    List.forallb (fun '(LE _ kind prt _) => f kind prt) (REnv.(getenv) log reg).
-
-  Definition log_existsb (log: Log) reg (f: LogEntryKind -> Port -> bool) :=
-    List.existsb (fun '(LE _ kind prt _) => f kind prt) (REnv.(getenv) log reg).
-End Logs.
-
-Arguments LE {T} kind port val : assert.
-Arguments LogEntry: clear implicits.
-Arguments RLog: clear implicits.
-Arguments Log {reg_t} R REnv : assert.
+Require Export Koika.Common Koika.Environments Koika.Vect Koika.Logs Koika.Syntax Koika.TypedSyntax.
 
 Section Interp.
   Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
@@ -57,61 +13,6 @@ Section Interp.
   Context (sigma: forall f, Sig_denote (Sigma f)).
 
   Notation Log := (Log R REnv).
-
-  Definition is_read0 kind prt :=
-    match kind, prt with
-    | LogRead, P0 => true
-    | _, _ => false
-    end.
-
-  Definition is_read1 kind prt :=
-    match kind, prt with
-    | LogRead, P1 => true
-    | _, _ => false
-    end.
-
-  Definition is_write0 kind prt :=
-    match kind, prt with
-    | LogWrite, P0 => true
-    | _, _ => false
-    end.
-
-  Definition is_write1 kind prt :=
-    match kind, prt with
-    | LogWrite, P1 => true
-    | _, _ => false
-    end.
-
-  Open Scope bool_scope.
-
-  Definition may_read0 (sched_log: Log) idx :=
-    negb (log_existsb sched_log idx is_write0) &&
-    negb (log_existsb sched_log idx is_write1).
-
-  Definition may_read1 (sched_log: Log) idx :=
-    negb (log_existsb sched_log idx is_write1).
-
-  Definition latest_write0 (log: Log) idx :=
-    log_find log idx
-             (fun le => match le with
-                     | (LE LogWrite P0 v) => Some v
-                     | _ => None
-                     end).
-
-  Definition latest_write1 (log: Log) idx :=
-    log_find log idx
-             (fun le => match le with
-                     | (LE LogWrite P1 v) => Some v
-                     | _ => None
-                     end).
-
-  Definition may_write (sched_log rule_log: Log) prt idx :=
-    match prt with
-    | P0 => negb (log_existsb (log_app rule_log sched_log) idx is_read1) &&
-           negb (log_existsb (log_app rule_log sched_log) idx is_write0) &&
-           negb (log_existsb (log_app rule_log sched_log) idx is_write1)
-    | P1 => negb (log_existsb (log_app rule_log sched_log) idx is_write1)
-    end.
 
   Notation rule := (rule pos_t var_t R Sigma).
   Notation action := (action pos_t var_t R Sigma).
@@ -214,25 +115,3 @@ Section Interp.
       interp_scheduler' log_empty s.
   End Scheduler.
 End Interp.
-
-Section EnvUpdates.
-  Context {reg_t: Type}.
-  Context {R: reg_t -> type}.
-  Context {REnv: Env reg_t}.
-
-  Definition rlog_latest_write_fn {k} (le: LogEntry (R k)) :=
-    match le with
-    | LE LogWrite _ v => Some v
-    | _ => None
-    end.
-
-  Definition latest_write (log: Log R REnv) idx :=
-    log_find log idx rlog_latest_write_fn.
-
-  Definition commit_update (r0: REnv.(env_t) R) (log: Log R REnv) : REnv.(env_t) R :=
-    REnv.(create) (fun k => match latest_write log k with
-                         | Some v => v
-                         | None => REnv.(getenv) r0 k
-                         end).
-End EnvUpdates.
-

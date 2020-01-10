@@ -3,7 +3,7 @@ Require Export Koika.Common Koika.Environments Koika.Types Koika.Primitives.
 
 Import PrimTyped PrimSignatures.
 
-Section TypedSyntax.
+Section Syntax.
   Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
   Context {R: reg_t -> type}.
   Context {Sigma: ext_fn_t -> ExternalSignature}.
@@ -14,8 +14,8 @@ Section TypedSyntax.
         (m: member (k, tau) sig) : action sig tau
   | Const {sig} {tau: type}
           (cst: type_denote tau) : action sig tau
-  | Assign {sig} {k:var_t} {tau:type}
-           (m: member (k,tau) sig) (ex: action sig tau) : action sig unit_t
+  | Assign {sig} {k: var_t} {tau: type}
+           (m: member (k, tau) sig) (ex: action sig tau) : action sig unit_t
   | Seq {sig tau}
         (r1: action sig unit_t)
         (r2: action sig tau) : action sig tau
@@ -55,7 +55,7 @@ Section TypedSyntax.
   | SPos (pos: pos_t) (s: scheduler).
 
   Definition rule := action nil unit_t.
-End TypedSyntax.
+End Syntax.
 
 Arguments rule pos_t var_t {reg_t ext_fn_t} R Sigma : assert.
 Arguments action pos_t var_t {reg_t ext_fn_t} R Sigma sig tau : assert.

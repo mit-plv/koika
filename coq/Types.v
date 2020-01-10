@@ -287,6 +287,7 @@ Definition CExternalSignature := CSig 1.
 (** * Internal functions **)
 
 Definition tsig var_t := list (var_t * type).
+Definition csig var_t := list (var_t * nat).
 
 Record InternalFunction {fn_name_t var_t action: Type} :=
   { int_name : fn_name_t;
