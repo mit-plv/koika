@@ -698,7 +698,7 @@ The following list shows the current state of the repo:
 ``coq/``
    (Circuits)
       - |coq/CircuitCorrectness.v|_: Compiler correctness proof
-      - |coq/CircuitGeneration.v|_: Compilation from lowered ASTs
+      - |coq/CircuitGeneration.v|_: Compilation of lowered ASTs into RTL circuits
       - |coq/CircuitOptimization.v|_: Local optimization of circuits
       - |coq/CircuitProperties.v|_: Lemmas used in the compiler-correctness proof
       - |coq/CircuitSemantics.v|_: Interpretation of circuits
@@ -711,9 +711,9 @@ The following list shows the current state of the repo:
       - |coq/IdentParsing.v|_: Ltac2-based identifier parsing for prettier notations
       - |coq/Parsing.v|_: Parser for the |koika| EDSL
       - |coq/Syntax.v|_: Untyped syntax
+      - |coq/SyntaxFunctions.v|_: Functions on untyped ASTs, including error localization
       - |coq/SyntaxMacros.v|_: Macros used in untyped programs
       - |coq/TypeInference.v|_: Type inference and typechecking
-      - |coq/UntypedSyntaxTools.v|_: Functions on untyped ASTs, including error localization
 
    (Interop)
       - |coq/Extraction.v|_: Extraction to OCaml (compiler and utilities)
@@ -738,8 +738,9 @@ The following list shows the current state of the repo:
       - |coq/Std.v|_: Standard library
 
    (Tools)
+      - |coq/LoweredSyntaxFunctions.v|_: Functions defined on lowered ASTs
+      - |coq/TypedSyntaxFunctions.v|_: Functions defined on typed ASTs
       - |coq/TypedSyntaxProperties.v|_: Lemmas pertaining to tools on typed syntax
-      - |coq/TypedSyntaxTools.v|_: Functions defined on typed ASTs
 
    (Utilities)
       - |coq/Common.v|_: Shared utilities
@@ -874,6 +875,8 @@ The following list shows the current state of the repo:
 .. _coq/LoweredSemantics.v: coq/LoweredSemantics.v
 .. |coq/LoweredSyntax.v| replace:: ``LoweredSyntax.v``
 .. _coq/LoweredSyntax.v: coq/LoweredSyntax.v
+.. |coq/LoweredSyntaxFunctions.v| replace:: ``LoweredSyntaxFunctions.v``
+.. _coq/LoweredSyntaxFunctions.v: coq/LoweredSyntaxFunctions.v
 .. |coq/Lowering.v| replace:: ``Lowering.v``
 .. _coq/Lowering.v: coq/Lowering.v
 .. |coq/Member.v| replace:: ``Member.v``
@@ -894,6 +897,8 @@ The following list shows the current state of the repo:
 .. _coq/Std.v: coq/Std.v
 .. |coq/Syntax.v| replace:: ``Syntax.v``
 .. _coq/Syntax.v: coq/Syntax.v
+.. |coq/SyntaxFunctions.v| replace:: ``SyntaxFunctions.v``
+.. _coq/SyntaxFunctions.v: coq/SyntaxFunctions.v
 .. |coq/SyntaxMacros.v| replace:: ``SyntaxMacros.v``
 .. _coq/SyntaxMacros.v: coq/SyntaxMacros.v
 .. |coq/TypeInference.v| replace:: ``TypeInference.v``
@@ -902,14 +907,12 @@ The following list shows the current state of the repo:
 .. _coq/TypedSemantics.v: coq/TypedSemantics.v
 .. |coq/TypedSyntax.v| replace:: ``TypedSyntax.v``
 .. _coq/TypedSyntax.v: coq/TypedSyntax.v
+.. |coq/TypedSyntaxFunctions.v| replace:: ``TypedSyntaxFunctions.v``
+.. _coq/TypedSyntaxFunctions.v: coq/TypedSyntaxFunctions.v
 .. |coq/TypedSyntaxProperties.v| replace:: ``TypedSyntaxProperties.v``
 .. _coq/TypedSyntaxProperties.v: coq/TypedSyntaxProperties.v
-.. |coq/TypedSyntaxTools.v| replace:: ``TypedSyntaxTools.v``
-.. _coq/TypedSyntaxTools.v: coq/TypedSyntaxTools.v
 .. |coq/Types.v| replace:: ``Types.v``
 .. _coq/Types.v: coq/Types.v
-.. |coq/UntypedSyntaxTools.v| replace:: ``UntypedSyntaxTools.v``
-.. _coq/UntypedSyntaxTools.v: coq/UntypedSyntaxTools.v
 .. |coq/Vect.v| replace:: ``Vect.v``
 .. _coq/Vect.v: coq/Vect.v
 .. |examples/collatz.lv| replace:: ``collatz.lv``
