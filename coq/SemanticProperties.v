@@ -361,7 +361,7 @@ Section CommitUpdates.
   Lemma getenv_commit_update :
     forall sl r idx,
       REnv.(getenv) (commit_update r sl) idx =
-      match latest_write (R := R) sl idx with
+      match latest_write (RKind_denote := type_denote) (_R := R) sl idx with
       | Some v' => v'
       | None => REnv.(getenv) r idx
       end.

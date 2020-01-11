@@ -43,8 +43,8 @@ Section Syntax.
 
   Inductive scheduler :=
   | Done
-  | Try (r: rule_name_t) (s1 s2: scheduler)
   | Cons (r: rule_name_t) (s: scheduler)
+  | Try (r: rule_name_t) (s1 s2: scheduler)
   | SPos (p: pos_t) (s: scheduler).
 End Syntax.
 

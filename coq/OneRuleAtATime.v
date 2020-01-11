@@ -58,7 +58,7 @@ Section Proof.
                 log_empty (Try rl Done Done) in
     Some (commit_update r log).
 
-  Notation latest_write l idx := (latest_write (R := R) (REnv := REnv) l idx).
+  Notation latest_write l idx := (latest_write (RKind_denote := type_denote) (_R := R) (REnv := REnv) l idx).
 
   Ltac set_forallb_fns :=
     repeat match goal with
@@ -144,7 +144,7 @@ Section Proof.
     - intros * H; cbn in H.
       repeat (bool_step || cleanup_step).
       rewrite (IHls ltac:(eassumption)).
-      unfold rlog_latest_write_fn; cbn.
+      unfold log_latest_write_fn; cbn.
       destruct a, kind, port; try discriminate; reflexivity.
   Qed.
 
@@ -199,7 +199,7 @@ Section Proof.
         reflexivity.
       + (* Read1 *)
         rewrite log_app_assoc.
-        rewrite (latest_write0_app (log_app _ _)).
+        rewrite (latest_write0_app (log_app action_log sl) sl').
         destruct latest_write0.
         * reflexivity.
         * erewrite getenv_commit_update by eassumption.
