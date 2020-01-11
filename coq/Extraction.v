@@ -5,7 +5,7 @@ Require Koika.Common
         Koika.Environments
         Koika.TypedSyntax
         Koika.TypeInference
-        Koika.TypedSyntaxTools
+        Koika.TypedSyntaxFunctions
         Koika.CircuitGeneration
         Koika.Interop.
 
@@ -20,24 +20,29 @@ Extraction "extracted.ml"
            Syntax.scheduler
            Desugaring.desugar_action
            TypeInference.type_action TypeInference.type_rule
-           TypedSyntaxTools.unannot
-           TypedSyntaxTools.scheduler_rules
-           TypedSyntaxTools.action_mentions_var
-           TypedSyntaxTools.member_mentions_shadowed_binding
-           TypedSyntaxTools.action_footprint
-           TypedSyntaxTools.returns_zero
-           TypedSyntaxTools.is_pure
-           TypedSyntaxTools.is_tt
-           TypedSyntaxTools.action_type
-           TypedSyntaxTools.interp_arithmetic
-           TypedSyntaxTools.classify_registers
-           TypedSyntaxTools.compute_register_histories
-           TypedSyntaxTools.may_fail_without_revert
-           TypedSyntaxTools.rule_max_log_size
-           CircuitGeneration.compile_scheduler
+           TypedSyntaxFunctions.unannot
+           TypedSyntaxFunctions.scheduler_rules
+           TypedSyntaxFunctions.action_mentions_var
+           TypedSyntaxFunctions.member_mentions_shadowed_binding
+           TypedSyntaxFunctions.action_footprint
+           TypedSyntaxFunctions.returns_zero
+           TypedSyntaxFunctions.is_pure
+           TypedSyntaxFunctions.is_tt
+           TypedSyntaxFunctions.action_type
+           TypedSyntaxFunctions.interp_arithmetic
+           TypedSyntaxFunctions.classify_registers
+           TypedSyntaxFunctions.compute_register_histories
+           TypedSyntaxFunctions.may_fail_without_revert
+           TypedSyntaxFunctions.rule_max_log_size
            CircuitOptimization.lco_opt_compose
            CircuitOptimization.opt_constprop
            CircuitOptimization.opt_muxelim
-           Interop.koika_package_t Interop.circuit_package_t Interop.sim_package_t Interop.verilog_package_t Interop.interop_package_t
-           Interop.struct_of_list Interop.struct_to_list
+           Interop.koika_package_t
+           Interop.circuit_package_t
+           Interop.sim_package_t
+           Interop.verilog_package_t
+           Interop.interop_package_t
+           Interop.struct_of_list
+           Interop.struct_to_list
+           Interop.compile_scheduler
            Interop.compile_koika_package.

@@ -1,7 +1,7 @@
 (*! Interop | Exporting Kôika programs for use with the cuttlec command-line tool !*)
 Require Import
         Koika.Common Koika.Environments Koika.Types
-        Koika.TypedSyntax Koika.Lowering Koika.CircuitGeneration.
+        Koika.Syntax Koika.TypedSyntax Koika.Lowering Koika.CircuitGeneration.
 Require Export Koika.Primitives.
 
 Inductive empty_ext_fn_t :=.
@@ -84,7 +84,8 @@ Section Packages.
         compiler (really a list of circuits, one per register). *)
       cp_circuits: @register_update_circuitry
                     rule_name_t reg_t ext_fn_t
-                    (cp_pkg.(koika_reg_types)) (cp_pkg.(koika_ext_fn_types))
+                    (CR_of_R cp_pkg.(koika_reg_types))
+                    (CSigma_of_Sigma cp_pkg.(koika_ext_fn_types))
                     cp_reg_Env;
     }.
 
@@ -183,6 +184,45 @@ Section TypeConv.
       reflexivity.
   Qed.
 End TypeConv.
+
+Section Helpers.
+  Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
+
+  Context {R: reg_t -> type}.
+  Context {Sigma: ext_fn_t -> ExternalSignature}.
+  Context {FiniteType_reg_t: FiniteType reg_t}.
+
+  Context {Show_var_t: Show var_t}.
+  Context {Show_rule_name_t: Show rule_name_t}.
+
+  Notation CR := (CR_of_R R).
+  Notation CSigma := (CSigma_of_Sigma Sigma).
+
+  Notation circuit :=
+    (circuit (rule_name_t := rule_name_t)
+             (rwdata := rwdata (rule_name_t := rule_name_t) CR CSigma)
+             CR CSigma).
+
+  Context (opt: forall {sz}, circuit sz -> circuit sz).
+
+  Definition compile_scheduler
+             (rules: rule_name_t -> rule pos_t var_t R Sigma)
+             (external: rule_name_t -> bool)
+             (s: scheduler pos_t rule_name_t)
+    : register_update_circuitry rule_name_t CR CSigma _ :=
+    let cr := ContextEnv.(create) (readRegisters CR CSigma) in
+    compile_scheduler' opt cr (fun rl => lower_action (rules rl)) external s.
+
+  Context {REnv: Env reg_t}.
+  Context (r: REnv.(env_t) R).
+  Context (sigma: forall f, Sig_denote (Sigma f)).
+
+  Definition interp_circuits
+             (circuits: register_update_circuitry rule_name_t CR CSigma REnv) :=
+    let cr := cr_of_r r in
+    let csigma := csigma_of_sigma sigma in
+    Environments.map REnv (fun _ c => interp_circuit cr csigma c) circuits.
+End Helpers.
 
 Section Compilation.
   Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.

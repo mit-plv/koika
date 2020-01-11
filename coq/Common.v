@@ -247,6 +247,15 @@ Section Lists.
     - reflexivity.
     - intros; f_equal; eauto.
   Qed.
+
+  Fixpoint dedup {A} {EQ: EqDec A} (acc: list A) (l: list A) :=
+    match l with
+    | [] => acc
+    | a :: l =>
+      let already_seen := List.in_dec eq_dec a acc in
+      let acc := if already_seen then acc else a :: acc in
+      dedup acc l
+    end.
 End Lists.
 
 Inductive result {S F} :=

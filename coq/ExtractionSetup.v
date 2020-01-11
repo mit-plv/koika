@@ -2,9 +2,10 @@
 Require Export Coq.extraction.Extraction.
 From Coq.extraction Require Export ExtrOcamlBasic ExtrOcamlString ExtrOcamlNatInt ExtrOcamlZInt.
 
-Require Koika.CircuitGeneration
-        Koika.CircuitOptimization
-        Koika.Types.
+Require Koika.Types
+        Koika.TypedSyntaxFunctions
+        Koika.CircuitGeneration
+        Koika.CircuitOptimization.
 
 (* The following commands work around problems due to incorrect extraction: *)
 Extraction Inline Koika.CircuitGeneration.retVal.
@@ -23,19 +24,21 @@ Global Set Extraction KeepSingleton.
 (* The following commands make these functions much easier to use from the OCaml
    side by removing unnecessary arguments. *)
 Extraction Implicit CircuitOptimization.unannot [CR CSigma rwdata].
-Extraction Implicit TypedSyntaxTools.unannot [R Sigma sig tau].
-Extraction Implicit TypedSyntaxTools.AnyAction [sig tau].
-Extraction Implicit TypedSyntaxTools.action_footprint [R Sigma sig tau].
-Extraction Implicit TypedSyntaxTools.action_footprint' [R Sigma sig tau].
-Extraction Implicit TypedSyntaxTools.action_mentions_var [R Sigma sig tau].
-Extraction Implicit TypedSyntaxTools.annotate_action_register_histories [Sigma sig tau].
-Extraction Implicit TypedSyntaxTools.annotate_rule_register_histories [Sigma].
-Extraction Implicit TypedSyntaxTools.compute_register_histories [Sigma].
-Extraction Implicit TypedSyntaxTools.rule_max_log_size [R Sigma sig tau].
-Extraction Implicit TypedSyntaxTools.action_mentions_shadowed_var [R Sigma sig tau].
-Extraction Implicit TypedSyntaxTools.existsb_subterm [R Sigma sig tau].
-Extraction Implicit TypedSyntaxTools.returns_zero [R Sigma sig tau].
-Extraction Implicit TypedSyntaxTools.is_pure [R Sigma sig tau].
-Extraction Implicit TypedSyntaxTools.is_tt [R Sigma sig tau].
-Extraction Implicit TypedSyntaxTools.action_type [R Sigma sig tau].
-Extraction Implicit TypedSyntaxTools.interp_arithmetic [R Sigma sig tau].
+Extraction Implicit TypedSyntaxFunctions.unannot [R Sigma sig tau].
+Extraction Implicit TypedSyntaxFunctions.AnyAction [sig tau].
+Extraction Implicit TypedSyntaxFunctions.action_footprint [R Sigma sig tau].
+Extraction Implicit TypedSyntaxFunctions.action_footprint' [R Sigma sig tau].
+Extraction Implicit TypedSyntaxFunctions.action_mentions_var [R Sigma sig tau].
+Extraction Implicit TypedSyntaxFunctions.annotate_action_register_histories [Sigma sig tau].
+Extraction Implicit TypedSyntaxFunctions.annotate_rule_register_histories [Sigma].
+Extraction Implicit TypedSyntaxFunctions.compute_register_histories [Sigma].
+Extraction Implicit TypedSyntaxFunctions.rule_max_log_size [R Sigma sig tau].
+Extraction Implicit TypedSyntaxFunctions.action_mentions_shadowed_var [R Sigma sig tau].
+Extraction Implicit TypedSyntaxFunctions.existsb_subterm [R Sigma sig tau].
+Extraction Implicit TypedSyntaxFunctions.returns_zero [R Sigma sig tau].
+Extraction Implicit TypedSyntaxFunctions.is_pure [R Sigma sig tau].
+Extraction Implicit TypedSyntaxFunctions.is_tt [R Sigma sig tau].
+Extraction Implicit TypedSyntaxFunctions.action_type [R Sigma sig tau].
+Extraction Implicit TypedSyntaxFunctions.interp_arithmetic [R Sigma sig tau].
+Extraction Implicit LoweredSyntaxFunctions.action_footprint [R Sigma sig tau].
+Extraction Implicit LoweredSyntaxFunctions.action_footprint' [R Sigma sig tau].

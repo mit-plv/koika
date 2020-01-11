@@ -1,7 +1,7 @@
 (*! Tools | Functions defined on typed ASTs !*)
 Require Import Koika.Member Koika.TypedSyntax Koika.Primitives Koika.TypedSemantics.
 
-Section TypedSyntaxTools.
+Section TypedSyntaxFunctions.
   Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
   Context {R: reg_t -> type}
           {Sigma: ext_fn_t -> ExternalSignature}.
@@ -25,8 +25,9 @@ Section TypedSyntaxTools.
     | a => a
     end.
 
-  Inductive RW := RWRead | RWWrite.
-  Notation event_t := (RW * Port)%type.
+  Inductive TRW := TRWRead | TRWWrite.
+  Notation event_t := (TRW * Port)%type.
+
 
   Section Footprint.
     Notation footprint_t := (list (reg_t * event_t)).
@@ -38,8 +39,8 @@ Section TypedSyntaxTools.
       | Seq r1 r2 => action_footprint' (action_footprint' acc r1) r2
       | Bind var ex body => action_footprint' (action_footprint' acc ex) body
       | If cond tbranch fbranch => action_footprint' (action_footprint' (action_footprint' acc cond) tbranch) fbranch
-      | Read port idx => (idx, (RWRead, port)) :: acc
-      | Write port idx value => action_footprint' ((idx, (RWWrite, port)) :: acc) value
+      | Read port idx => (idx, (TRWRead, port)) :: acc
+      | Write port idx value => action_footprint' ((idx, (TRWWrite, port)) :: acc) value
       | Unop fn arg1 => action_footprint' acc arg1
       | Binop fn arg1 arg2 => action_footprint' (action_footprint' acc arg1) arg2
       | ExternalCall fn arg => action_footprint' acc arg
@@ -92,8 +93,8 @@ Section TypedSyntaxTools.
              List.fold_left
                (fun (rbr: reg_rules_map) '(reg, evt_port) =>
                   match evt_port with
-                  | (RWRead, P1) => update REnv rbr reg (fun _ rr => rr_add_read1 rr rl)
-                  | (RWWrite, P0) => update REnv rbr reg (fun _ rr => rr_add_write0 rr rl)
+                  | (TRWRead, P1) => update REnv rbr reg (fun _ rr => rr_add_read1 rr rl)
+                  | (TRWWrite, P0) => update REnv rbr reg (fun _ rr => rr_add_write0 rr rl)
                   | _ => rbr
                   end)
                action_footprint rbr)
@@ -191,19 +192,19 @@ Section TypedSyntaxTools.
 
     Definition update_cf l evt :=
       match evt with
-      | (RWRead, P0)
-      | (RWRead, P1) => tTrue
-      | (RWWrite, P0) => !l.(hr1) && !l.(hw0) && !l.(hw1)
-      | (RWWrite, P1) => !l.(hw1)
+      | (TRWRead, P0)
+      | (TRWRead, P1) => tTrue
+      | (TRWWrite, P0) => !l.(hr1) && !l.(hw0) && !l.(hw1)
+      | (TRWWrite, P1) => !l.(hw1)
       end.
 
     Definition update_history l (evt: event_t) :=
       let hcf := l.(hcf) && update_cf l evt in
       match evt with
-      | (RWRead, P0)  => {| hr0 := tTrue; hr1 := l.(hr1); hw0 := l.(hw0); hw1 := l.(hw1); hcf := hcf |}
-      | (RWRead, P1)  => {| hr0 := l.(hr0); hr1 := tTrue; hw0 := l.(hw0); hw1 := l.(hw1); hcf := hcf |}
-      | (RWWrite, P0) => {| hr0 := l.(hr0); hr1 := l.(hr1); hw0 := tTrue; hw1 := l.(hw1); hcf := hcf |}
-      | (RWWrite, P1) => {| hr0 := l.(hr0); hr1 := l.(hr1); hw0 := l.(hw0); hw1 := tTrue; hcf := hcf |}
+      | (TRWRead, P0)  => {| hr0 := tTrue; hr1 := l.(hr1); hw0 := l.(hw0); hw1 := l.(hw1); hcf := hcf |}
+      | (TRWRead, P1)  => {| hr0 := l.(hr0); hr1 := tTrue; hw0 := l.(hw0); hw1 := l.(hw1); hcf := hcf |}
+      | (TRWWrite, P0) => {| hr0 := l.(hr0); hr1 := l.(hr1); hw0 := tTrue; hw1 := l.(hw1); hcf := hcf |}
+      | (TRWWrite, P1) => {| hr0 := l.(hr0); hr1 := l.(hr1); hw0 := l.(hw0); hw1 := tTrue; hcf := hcf |}
       end.
 
     Definition update_map lenv reg (evt: event_t) :=
@@ -235,11 +236,11 @@ Section TypedSyntaxTools.
         let '(fenv, fbranch) := annotate_action_register_histories env fbranch in
         (join_history_maps tenv fenv, If cond tbranch fbranch)
       | Read port idx =>
-        (update_map env idx (RWRead, port),
+        (update_map env idx (TRWRead, port),
          APos (HistoryAnnot env) (Read port idx))
       | Write port idx value =>
         let (env, value) := annotate_action_register_histories env value in
-        (update_map env idx (RWWrite, port),
+        (update_map env idx (TRWWrite, port),
          APos (HistoryAnnot env) (Write port idx value))
       | Unop fn arg1 =>
         let '(env, arg1) := annotate_action_register_histories env arg1 in
@@ -495,4 +496,4 @@ Section TypedSyntaxTools.
     | ExternalCall fn arg => None
     | APos pos a => interp_arithmetic a
     end.
-End TypedSyntaxTools.
+End TypedSyntaxFunctions.

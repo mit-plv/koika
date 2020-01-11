@@ -7,8 +7,8 @@ Require Export
         Koika.CircuitOptimization
         Koika.CircuitGeneration
         Koika.Primitives
-        Koika.UntypedSyntaxTools
-        Koika.TypedSyntaxTools
+        Koika.SyntaxFunctions
+        Koika.TypedSyntaxFunctions
         Koika.Interop
         Koika.Parsing
         Koika.DeriveShow

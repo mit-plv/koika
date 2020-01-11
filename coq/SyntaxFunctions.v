@@ -1,7 +1,7 @@
 (*! Frontend | Functions on untyped ASTs, including error localization !*)
 Require Import Koika.Syntax.
 
-Section SyntaxTools.
+Section SyntaxFunctions.
   Section CoqErrorReporting.
     (* We don't have explicit positions in Coq, so the next best thing is to
   annotate terms ourselves. *)
@@ -255,4 +255,4 @@ Section SyntaxTools.
               (fbody ++ fargs, UCallModule fR fSigma ufn args)
            end.
   End CoqErrorReporting.
-End SyntaxTools.
+End SyntaxFunctions.
