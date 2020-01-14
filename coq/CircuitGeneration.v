@@ -1,6 +1,6 @@
-(*! Circuits | Compilation from lowered ASTs !*)
+(*! Circuits | Compilation of lowered ASTs into RTL circuits !*)
 Require Export Koika.Common Koika.Environments.
-Require Import Koika.Syntax Koika.TypedSyntax Koika.TypedSyntaxTools.
+Require Import Koika.Syntax Koika.LoweredSyntax Koika.LoweredSyntaxFunctions.
 Require Export Koika.CircuitSemantics.
 
 Import PrimTyped CircuitSignatures.
@@ -8,29 +8,12 @@ Import PrimTyped CircuitSignatures.
 Section CircuitCompilation.
   Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
 
-  Context {R: reg_t -> type}.
-  Context {Sigma: ext_fn_t -> ExternalSignature}.
+  Context {CR: reg_t -> nat}.
+  Context {CSigma: ext_fn_t -> CExternalSignature}.
   Context {REnv: Env reg_t}.
 
   Context {Show_var_t : Show var_t}.
   Context {Show_rule_name_t : Show rule_name_t}.
-
-  Definition CR_of_R idx :=
-    type_sz (R idx).
-  Notation CR := CR_of_R.
-
-  Definition CSigma_of_Sigma fn :=
-    CSig_of_Sig (Sigma fn).
-  Notation CSigma := CSigma_of_Sigma.
-
-  Definition cr_of_r (r: REnv.(env_t) R)
-    : REnv.(env_t) (fun idx => bits (CR idx)) :=
-    map REnv (fun idx v => bits_of_value v) r.
-
-  Definition csigma_of_sigma (sigma: forall f, Sig_denote (Sigma f))
-    : forall f, CSig_denote (CSigma f) :=
-    fun f => fun bs => bits_of_value (sigma f (value_of_bits bs)).
-
   Notation circuit' rwdata := (circuit (rule_name_t := rule_name_t) (rwdata := rwdata) CR CSigma).
 
   Inductive rwdata {sz: nat} :=
@@ -93,8 +76,8 @@ Section CircuitCompilation.
   Definition scheduler_circuit :=
     rwset.
 
-  Definition ccontext (sig: tsig var_t) :=
-    context (fun '(k, tau) => circuit (type_sz tau)) sig.
+  Definition ccontext (sig: lsig var_t) :=
+    context (fun '(k, sz) => circuit sz) sig.
 
   Definition mux_rwdata {sz} an (cond: circuit 1) (tReg fReg: @rwdata sz) :=
     {| read0 := CMuxAnnotOpt an cond (tReg.(read0)) (fReg.(read0));
@@ -109,88 +92,49 @@ Section CircuitCompilation.
                 tRegs fRegs.
 
   Fixpoint mux_ccontext {sig} (cond: circuit 1) (ctxT: ccontext sig) (ctxF: ccontext sig) : ccontext sig.
-    destruct sig as [ | (k, tau)]; cbn.
+    destruct sig as [ | (k, sz)]; cbn.
     - exact CtxEmpty.
-    - apply (CtxCons (k, tau) (CMuxAnnotOpt "mux_ccontext" cond (chd ctxT) (chd ctxF))
+    - apply (CtxCons (k, sz) (CMuxAnnotOpt "mux_ccontext" cond (chd ctxT) (chd ctxF))
                      (mux_ccontext _ cond (ctl ctxT) (ctl ctxF))).
   Defined.
 
   Section Action.
-    Definition compile_unop (fn: fn1) (a: circuit (type_sz (PrimSignatures.Sigma1 fn).(arg1Sig))):
-      circuit (type_sz (PrimSignatures.Sigma1 fn).(retSig)) :=
-      let cArg1 fn := circuit (type_sz (PrimSignatures.Sigma1 fn).(arg1Sig)) in
-      let cRet fn := circuit (type_sz (PrimSignatures.Sigma1 fn).(retSig)) in
-      match fn return cArg1 fn -> cRet fn with
-      | Display fn => fun _ => CConst Ob
-      | Conv tau fn => fun a =>
-        match fn return cArg1 (Conv tau fn) -> cRet (Conv tau fn) with
-        | Pack => fun a => a
-        | Unpack => fun a => a
-        | Ignore => fun _ => CConst Ob
-        end a
-      | Bits1 fn => fun a =>
-        match fn return cArg1 (Bits1 fn) -> cRet (Bits1 fn) -> cRet (Bits1 fn) with
-        | Not _ => fun a c => c
-        | Repeat _ _ => fun a c => c
-        | SExt sz width => fun a c =>
-                            ltac:(subst cRet; simpl; rewrite <- vect_extend_end_cast, <- (Nat.mul_1_r (width - sz));
-                                  exact (CBinop (Concat _ _)
-                                                (CUnop (Repeat 1 (width - sz))
-                                                       (CBinop (Sel sz) a (CConst (Bits.of_nat (log2 sz) (pred sz)))))
-                                                a))
-        | ZExtL sz width => fun a c =>
-                             ltac:(subst cRet; simpl; rewrite <- vect_extend_end_cast;
-                                     exact (CBinop (Concat _ _) (CConst Bits.zero) a))
-        | ZExtR sz width => fun a c =>
-                             ltac:(subst cRet; simpl; rewrite <- vect_extend_beginning_cast;
-                                     exact (CBinop (Concat _ _) a (CConst Bits.zero)))
-        | Slice sz offset width => fun a c => c
-        | Lowered fn => fun a c => c
-        end a (CUnop fn a)
-      | Struct1 fn sig f => fun a =>
-        match fn return cArg1 (Struct1 fn sig f) -> cRet (Struct1 fn sig f) with
-        | GetField => fun a =>
-          CUnop (GetFieldBits sig f) a
-        end a
-      | Array1 fn sig idx => fun a =>
-        match fn return cArg1 (Array1 fn sig idx) -> cRet (Array1 fn sig idx) with
-        | GetElement => fun a =>
-          CUnop (GetElementBits sig idx) a
-        end a
-      end a.
-
-    Definition compile_binop (fn: fn2)
-               (a1: circuit (type_sz (PrimSignatures.Sigma2 fn).(arg1Sig)))
-               (a2: circuit (type_sz (PrimSignatures.Sigma2 fn).(arg2Sig))):
-      circuit (type_sz (PrimSignatures.Sigma2 fn).(retSig)) :=
-      let cArg1 fn := circuit (type_sz (PrimSignatures.Sigma2 fn).(arg1Sig)) in
-      let cArg2 fn := circuit (type_sz (PrimSignatures.Sigma2 fn).(arg2Sig)) in
-      let cRet fn := circuit (type_sz (PrimSignatures.Sigma2 fn).(retSig)) in
-      match fn return cArg1 fn -> cArg2 fn -> cRet fn with
-      | Eq tau negate => fun a1 a2 => CBinop (EqBits (type_sz tau) negate) a1 a2
-      | Bits2 fn => fun a1 a2 => CBinop fn a1 a2
-      | Struct2 fn sig f => fun a1 a2 =>
-        match fn return cArg1 (Struct2 fn sig f) -> cArg2 (Struct2 fn sig f) -> cRet (Struct2 fn sig f) with
-        | SubstField => fun a1 a2 =>
-          CBinop (SubstFieldBits sig f) a1 a2
-        end a1 a2
-      | Array2 fn sig idx => fun a1 a2 =>
-        match fn return cArg1 (Array2 fn sig idx) -> cArg2 (Array2 fn sig idx) -> cRet (Array2 fn sig idx) with
-        | SubstElement => fun a1 a2 =>
-          CBinop (SubstElementBits sig idx) a1 a2
-        end a1 a2
-      end a1 a2.
+    Definition compile_unop (fn: fbits1) (a: circuit (CSigma1 fn).(arg1Sig)):
+      circuit (CSigma1 fn).(retSig) :=
+      let cArg1 fn := circuit (CSigma1 fn).(arg1Sig) in
+      let cRet fn := circuit (CSigma1 fn).(retSig) in
+      match fn return circuit (CSigma1 fn).(arg1Sig) ->
+                      circuit (CSigma1 fn).(retSig) ->
+                      circuit (CSigma1 fn).(retSig) with
+      | Not _ => fun a c => c
+      | Repeat _ _ => fun a c => c
+      | SExt sz width => fun a c =>
+        ltac:(subst cRet; simpl; rewrite <- vect_extend_end_cast, <- (Nat.mul_1_r (width - sz));
+                exact (CBinop (Concat _ _)
+                              (CUnop (Repeat 1 (width - sz))
+                                     (CBinop (Sel sz) a (CConst (Bits.of_nat (log2 sz) (pred sz)))))
+                              a))
+      | ZExtL sz width => fun a c =>
+        ltac:(subst cRet; simpl; rewrite <- vect_extend_end_cast;
+                exact (CBinop (Concat _ _) (CConst Bits.zero) a))
+      | ZExtR sz width => fun a c =>
+        ltac:(subst cRet; simpl; rewrite <- vect_extend_beginning_cast;
+                exact (CBinop (Concat _ _) a (CConst Bits.zero)))
+      | Slice sz offset width => fun a c => c
+      | Lowered (IgnoreBits _) => fun a c => CConst Ob
+      | Lowered (DisplayBits _) => fun a c => CConst Ob
+      end a (CUnop fn a).
 
     Fixpoint compile_action
-             {sig: tsig var_t}
-             {tau}
+             {sig: lsig var_t}
+             {sz}
              (Gamma: ccontext sig)
-             (a: action pos_t var_t R Sigma sig tau)
+             (a: action pos_t var_t CR CSigma sig sz)
              (clog: rwcircuit):
-      @action_circuit (type_sz tau) * (ccontext sig) :=
-      match a in action _ _ _ _ ts tau return ccontext ts -> @action_circuit (type_sz tau) * ccontext ts with
-      | Fail tau => fun Gamma =>
-        ({| retVal := $`"fail"`Bits.zeroes (type_sz tau); (* LATER: Question mark here *)
+      @action_circuit sz * (ccontext sig) :=
+      match a in action _ _ _ _ ts sz return ccontext ts -> @action_circuit sz * ccontext ts with
+      | Fail sz => fun Gamma =>
+        ({| retVal := $`"fail"`Bits.zeroes sz; (* LATER: Question mark here *)
             erwc := {| canFire := $`"fail_cF"` Ob~0;
                        regs := clog.(regs) |} |},
          Gamma)
@@ -199,20 +143,20 @@ Section CircuitCompilation.
             erwc := clog |},
          Gamma)
       | Const cst => fun Gamma =>
-        ({| retVal := CAnnotOpt "constant_value_from_source" (CConst (bits_of_value cst));
+        ({| retVal := CAnnotOpt "constant_value_from_source" (CConst cst);
            erwc := clog |},
          Gamma)
       | Seq r1 r2 => fun Gamma =>
         let (cex, Gamma) := (compile_action Gamma r1 clog) in
         compile_action Gamma r2 cex.(erwc)
-      | @Assign _ _ _ _ _ _ _ k tau m ex => fun Gamma =>
+      | @Assign _ _ _ _ _ _ _ k sz m ex => fun Gamma =>
         let (cex, Gamma) := compile_action Gamma ex clog in
         ({| retVal := $`"assign_retVal"`Bits.nil;
             erwc := cex.(erwc) |},
          creplace m cex.(retVal) Gamma)
-      | @Bind _ _ _ _ _ _ sig tau tau' var ex body => fun Gamma =>
+      | @Bind _ _ _ _ _ _ sig sz sz' var ex body => fun Gamma =>
         let (ex, Gamma) := compile_action Gamma ex clog in
-        let (ex, Gamma) := compile_action (CtxCons (var, tau) ex.(retVal) Gamma) body ex.(erwc) in
+        let (ex, Gamma) := compile_action (CtxCons (var, sz) ex.(retVal) Gamma) body ex.(erwc) in
         (ex, ctl Gamma)
       | If cond tbranch fbranch => fun Gamma =>
         let (cond, Gamma) := compile_action Gamma cond clog in
@@ -283,7 +227,7 @@ Section CircuitCompilation.
       | Binop fn a1 a2 => fun Gamma =>
         let (a1, Gamma) := compile_action Gamma a1 clog in
         let (a2, Gamma) := compile_action Gamma a2 a1.(erwc) in
-        ({| retVal := compile_binop fn a1.(retVal) a2.(retVal);
+        ({| retVal := CBinop fn a1.(retVal) a2.(retVal);
             erwc := a2.(erwc) |},
          Gamma)
       | ExternalCall fn a => fun Gamma =>
@@ -364,14 +308,14 @@ Section CircuitCompilation.
        regs := bundleref_wrap_rwset rl rs bundle erwc.(regs) |}.
 
   Definition bundleref_wrap_action_circuit
-             {tau} (rs: list reg_t)
-             (input: rwset) (rl: @action_circuit tau) (rl_name: rule_name_t)
-    : @action_circuit tau :=
+             {sz} (rs: list reg_t)
+             (input: rwset) (rl: @action_circuit sz) (rl_name: rule_name_t)
+    : @action_circuit sz :=
     let bundle := ccreate rs (fun r _ => REnv.(getenv) input r) in
     {| erwc := bundleref_wrap_erwc rl_name rs bundle rl.(erwc);
        retVal := rl.(retVal) |}.
 
-  Context (rules: rule_name_t -> rule pos_t var_t R Sigma).
+  Context (rules: rule_name_t -> rule pos_t var_t CR CSigma).
   Context (external: rule_name_t -> bool).
 
   Fixpoint compile_scheduler_circuit
@@ -427,48 +371,8 @@ Section CircuitCompilation.
     map REnv (fun k r => commit_rwdata r) s.
 End CircuitCompilation.
 
-Arguments CR_of_R {reg_t} R idx : assert.
-Arguments CSigma_of_Sigma {ext_fn_t} Sigma fn : assert.
-Arguments cr_of_r {reg_t} {R} {REnv} r : assert.
-Arguments csigma_of_sigma {ext_fn_t} {Sigma} sigma f a : assert.
-
-Arguments readRegisters {rule_name_t reg_t ext_fn_t} R Sigma idx : assert.
-Arguments rwdata {rule_name_t reg_t ext_fn_t} R Sigma sz : assert.
-Arguments action_circuit {rule_name_t reg_t ext_fn_t} R Sigma REnv sz : assert.
-Arguments scheduler_circuit {rule_name_t reg_t ext_fn_t} R Sigma REnv : assert.
-Arguments register_update_circuitry rule_name_t {reg_t ext_fn_t} R Sigma REnv : assert.
-
-Section Helpers.
-  Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
-
-  Context {R: reg_t -> type}.
-  Context {Sigma: ext_fn_t -> ExternalSignature}.
-  Context {FiniteType_reg_t: FiniteType reg_t}.
-
-  Context {Show_var_t: Show var_t}.
-  Context {Show_rule_name_t: Show rule_name_t}.
-
-  Notation circuit :=
-    (circuit (rule_name_t := rule_name_t)
-             (rwdata := rwdata (rule_name_t := rule_name_t) R Sigma)
-             (CR_of_R R) (CSigma_of_Sigma Sigma)).
-  Context (opt: forall {sz}, circuit sz -> circuit sz).
-
-  Definition compile_scheduler
-             (rules: rule_name_t -> rule pos_t var_t R Sigma)
-             (external: rule_name_t -> bool)
-             (s: scheduler pos_t rule_name_t)
-    : register_update_circuitry rule_name_t R Sigma _ :=
-    let cr := ContextEnv.(create) (readRegisters R Sigma) in
-    compile_scheduler' opt cr rules external s.
-
-  Context {REnv: Env reg_t}.
-  Context (r: REnv.(env_t) R).
-  Context (sigma: forall f, Sig_denote (Sigma f)).
-
-  Definition interp_circuits
-             (circuits: register_update_circuitry rule_name_t R Sigma REnv) :=
-    let cr := cr_of_r r in
-    let csigma := csigma_of_sigma sigma in
-    map REnv (fun _ c => interp_circuit cr csigma c) circuits.
-End Helpers.
+Arguments readRegisters {rule_name_t reg_t ext_fn_t} CR CSigma idx : assert.
+Arguments rwdata {rule_name_t reg_t ext_fn_t} CR CSigma sz : assert.
+Arguments action_circuit {rule_name_t reg_t ext_fn_t} CR CSigma REnv sz : assert.
+Arguments scheduler_circuit {rule_name_t reg_t ext_fn_t} CR CSigma REnv : assert.
+Arguments register_update_circuitry rule_name_t {reg_t ext_fn_t} CR CSigma REnv : assert.
