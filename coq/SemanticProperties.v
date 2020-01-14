@@ -45,10 +45,12 @@ End Lists.
 
 Section Logs.
   Context {reg_t: Type}.
-  Context {R: reg_t -> type}.
+  Context {RKind: Type}.
+  Context {RKind_denote: RKind -> Type}.
+  Context {_R: reg_t -> RKind}.
   Context {REnv: Env reg_t}.
 
-  Notation Log := (Log R REnv).
+  Notation Log := (@_Log reg_t RKind RKind_denote _R REnv).
 
   Lemma getenv_logapp:
     forall (l l': Log) idx,
@@ -58,21 +60,21 @@ Section Logs.
     unfold log_app, map2; intros; rewrite getenv_create; reflexivity.
   Qed.
 
-  Lemma log_find_empty {T} idx (f: @LogEntry (R idx) -> option T):
+  Lemma log_find_empty {T} idx (f: @LogEntry (RKind_denote (_R idx)) -> option T):
     log_find (log_empty: Log) idx f = None.
   Proof.
     unfold log_find, log_empty; intros; rewrite getenv_create; reflexivity.
   Qed.
 
   Lemma log_find_create {T}:
-    forall fn idx (f: LogEntry (R idx) -> option T),
+    forall fn idx (f: LogEntry (RKind_denote (_R idx)) -> option T),
       log_find (REnv.(create) fn) idx f =
       list_find_opt f (fn idx).
   Proof.
     unfold log_find; intros; rewrite getenv_create; reflexivity.
   Qed.
 
-  Lemma log_find_app {T} (l l': Log) reg (f: @LogEntry (R reg) -> option T) :
+  Lemma log_find_app {T} (l l': Log) reg (f: LogEntry (RKind_denote (_R reg)) -> option T) :
     log_find (log_app l l') reg f =
     match log_find l reg f with
     | Some x => Some x
@@ -210,12 +212,81 @@ Section Logs.
   Qed.
 End Logs.
 
-Section LatestWrites.
+Section LogMaps.
   Context {reg_t: Type}.
-  Context {R: reg_t -> type}.
+  Context {RKind1 RKind2: Type}.
+  Context {RKind1_denote: RKind1 -> Type}.
+  Context {RKind2_denote: RKind2 -> Type}.
+  Context {_R1: reg_t -> RKind1}.
+  Context {_R2: reg_t -> RKind2}.
   Context {REnv: Env reg_t}.
 
-  Notation Log := (Log R REnv).
+  Notation Log1 := (@_Log reg_t RKind1 RKind1_denote _R1 REnv).
+  Notation Log2 := (@_Log reg_t RKind2 RKind2_denote _R2 REnv).
+
+  Lemma log_existsb_map_values :
+    forall (l1: Log1) f idx pred,
+      log_existsb (log_map_values f l1 : Log2) idx pred =
+      log_existsb l1 idx pred.
+  Proof.
+    unfold log_existsb, log_map_values, log_map; intros; rewrite getenv_map.
+    induction (getenv _ _) as [| hd tl IH].
+    - reflexivity.
+    - destruct hd, kind; cbn; rewrite <- IH; reflexivity.
+  Qed.
+
+  Lemma map_values_log_app :
+    forall (L l: Log1) f,
+      (log_app (log_map_values f L) (log_map_values f l) : Log2) =
+      log_map_values f (log_app L l).
+  Proof.
+    unfold log_app, log_map_values, log_map; intros.
+    apply create_funext; intros; rewrite !getenv_map, !getenv_map2.
+    symmetry; apply map_app.
+  Qed.
+
+  Lemma may_read_map_values :
+    forall (l1: Log1) f prt idx,
+      may_read (log_map_values f l1 : Log2) prt idx =
+      may_read l1 prt idx.
+  Proof.
+    unfold may_read; intros; rewrite !log_existsb_map_values; reflexivity.
+  Qed.
+
+  Lemma may_write_map_values :
+    forall (L1 l1: Log1) f prt idx,
+      may_write (log_map_values f L1 : Log2) (log_map_values f l1 : Log2) prt idx =
+      may_write L1 l1 prt idx.
+  Proof.
+    unfold may_write; intros.
+    repeat setoid_rewrite map_values_log_app;
+      repeat setoid_rewrite log_existsb_map_values;
+      reflexivity.
+  Qed.
+
+  Lemma latest_write0_map_values :
+    forall (l1: Log1) f idx,
+      latest_write0 (log_map_values f l1 : Log2) idx =
+      match latest_write0 l1 idx with
+      | Some v => Some (f idx v)
+      | None => None
+      end.
+  Proof.
+    unfold latest_write0, log_find, log_map_values, log_map, RLog_map, LogEntry_map; intros.
+    rewrite !getenv_map. induction (getenv REnv l1 idx) as [ | hd tl ]; cbn.
+    - reflexivity.
+    - destruct hd, kind, port; cbn in *; auto.
+  Qed.
+End LogMaps.
+
+Section LatestWrites.
+  Context {reg_t: Type}.
+  Context {RKind: Type}.
+  Context {RKind_denote: RKind -> Type}.
+  Context {_R: reg_t -> RKind}.
+  Context {REnv: Env reg_t}.
+
+  Notation Log := (@_Log reg_t RKind RKind_denote _R REnv).
 
   Lemma latest_write0_empty idx:
     latest_write0 (log_empty: Log) idx = None.
@@ -224,8 +295,10 @@ Section LatestWrites.
   Qed.
 
   Lemma latest_write0_app :
-    forall (sl sl': Log) idx,
-      latest_write0 (log_app sl sl') idx =
+    forall (sl sl': Log) (idx: reg_t),
+      (* COQ BUG: Why do I need a let binding? *)
+      let lw := latest_write0 (log_app sl sl') idx in
+      lw =
       match latest_write0 sl idx with
       | Some e => Some e
       | None => latest_write0 sl' idx
@@ -243,7 +316,7 @@ Section LatestWrites.
       end.
   Proof.
     unfold latest_write0; intros.
-    rewrite log_find_cons_eq; destruct le, kind, port; reflexivity.
+    setoid_rewrite log_find_cons_eq; destruct le, kind, port; reflexivity.
   Qed.
 
   Lemma latest_write0_cons_neq :
@@ -253,7 +326,7 @@ Section LatestWrites.
       latest_write0 log idx.
   Proof.
     unfold latest_write0; intros.
-    rewrite log_find_cons_neq by assumption; reflexivity.
+    setoid_rewrite log_find_cons_neq; auto.
   Qed.
 
   Lemma latest_write1_empty idx:
@@ -264,7 +337,8 @@ Section LatestWrites.
 
   Lemma latest_write1_app :
     forall (sl sl': Log) idx,
-      latest_write1 (log_app sl sl') idx =
+      let lw := latest_write1 (log_app sl sl') idx in
+      lw =
       match latest_write1 sl idx with
       | Some e => Some e
       | None => latest_write1 sl' idx
@@ -282,7 +356,7 @@ Section LatestWrites.
       end.
   Proof.
     unfold latest_write1; intros.
-    rewrite log_find_cons_eq; destruct le, kind, port; reflexivity.
+    setoid_rewrite log_find_cons_eq; destruct le, kind, port; reflexivity.
   Qed.
 
   Lemma latest_write1_cons_neq :
@@ -292,7 +366,7 @@ Section LatestWrites.
       latest_write1 log idx.
   Proof.
     unfold latest_write1; intros.
-    rewrite log_find_cons_neq by assumption; reflexivity.
+    setoid_rewrite log_find_cons_neq; auto.
   Qed.
 
   Ltac latest_write_t :=

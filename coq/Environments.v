@@ -101,18 +101,26 @@ Section Contexts.
     - rewrite IHm; reflexivity.
   Qed.
 
-  Lemma cassoc_creplace_neq {sig} :
+  Lemma cassoc_creplace_neq_idx {sig} :
+    forall (ctx: context sig) {k k'} (m: member k sig) (m': member k' sig) (v: V k),
+      member_idx m <> member_idx m' ->
+      cassoc m' (creplace m v ctx) = cassoc m' ctx.
+  Proof.
+    induction m; cbn; intros; rewrite (ceqn ctx).
+    - destruct (mdestruct m') as [ (-> & Heq) | (m'' & Heq)]; subst; cbn in *; subst; cbn in *.
+      + congruence.
+      + reflexivity.
+    - destruct (mdestruct m') as [ (-> & Heq) | (m'' & Heq)]; subst; cbn in *; subst; cbn in *.
+      + reflexivity.
+      + rewrite IHm; eauto.
+  Qed.
+
+  Lemma cassoc_creplace_neq_k {sig} :
     forall (ctx: context sig) {k k'} (m: member k sig) (m': member k' sig) (v: V k),
       k <> k' ->
       cassoc m' (creplace m v ctx) = cassoc m' ctx.
   Proof.
-    induction m; cbn; intros; rewrite (ceqn ctx).
-    - destruct (mdestruct m') as [ (eqn & Heq) | (m'' & Heq)]; subst; cbn in *; subst; cbn.
-      + congruence.
-      + reflexivity.
-    - destruct (mdestruct m') as [ (-> & Heq) | (m'' & Heq)]; subst; cbn in *; subst; cbn.
-      + reflexivity.
-      + cbn. rewrite IHm; eauto.
+    eauto using cassoc_creplace_neq_idx, member_idx_inj_k_contra.
   Qed.
 
   Global Instance EqDec_member sig (k: K) {EQ: EqDec K} : EqDec (member k sig).
@@ -154,6 +162,50 @@ Section Contexts.
 End Contexts.
 
 Arguments context {K} V sig : assert.
+
+Section Maps.
+  Context {K K': Type}.
+  Context {V: K -> Type} {V': K' -> Type}.
+  Context (fK: K -> K').
+  Context (fV: forall k, V k -> V' (fK k)).
+
+  Fixpoint cmap {sig} (ctx: context V sig) {struct ctx} : context V' (List.map fK sig) :=
+    match ctx in context _ sig return context V' (List.map fK sig) with
+    | CtxEmpty => CtxEmpty
+    | CtxCons k v ctx => CtxCons (fK k) (fV k v) (cmap ctx)
+    end.
+
+  Lemma cmap_creplace :
+    forall {sig} (ctx: context V sig) {k} (m: member k sig) v,
+      cmap (creplace m v ctx) =
+      creplace (member_map fK m) (fV k v) (cmap ctx).
+  Proof.
+    induction ctx; cbn; intros.
+    - destruct (mdestruct m).
+    - destruct (mdestruct m) as [(-> & ->) | (? & ->)]; cbn in *.
+      + reflexivity.
+      + rewrite IHctx; reflexivity.
+  Qed.
+
+  Lemma cmap_cassoc :
+    forall {sig} (ctx: context V sig) {k} (m: member k sig),
+      cassoc (member_map fK m) (cmap ctx) =
+      fV k (cassoc m ctx).
+  Proof.
+    induction ctx; cbn; intros.
+    - destruct (mdestruct m).
+    - destruct (mdestruct m) as [(-> & ->) | (? & ->)]; cbn in *.
+      + reflexivity.
+      + rewrite IHctx; reflexivity.
+  Qed.
+
+  Lemma cmap_ctl :
+    forall {k sig} (ctx: context V (k :: sig)),
+      cmap (ctl ctx) = ctl (cmap ctx).
+  Proof.
+    intros; rewrite (ceqn ctx); reflexivity.
+  Qed.
+End Maps.
 
 Notation esig K := (forall k: K, Type).
 
@@ -250,5 +302,5 @@ Definition ContextEnv {K} {FT: FiniteType K}: Env K.
   - intros; apply ccreate_funext; eauto.
   - intros; apply cassoc_ccreate.
   - intros; apply cassoc_creplace_eq.
-  - intros; apply cassoc_creplace_neq; eassumption.
+  - intros; apply cassoc_creplace_neq_k; eassumption.
 Defined.

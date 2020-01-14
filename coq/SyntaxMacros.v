@@ -205,23 +205,6 @@ Section TypedSyntaxMacros.
 
   Notation action := (action pos_t var_t R Sigma).
 
-  Fixpoint mshift {K} (prefix: list K) {sig: list K} {k} (m: member k sig)
-    : member k (prefix ++ sig) :=
-    match prefix return member k sig -> member k (prefix ++ sig) with
-    | [] => fun m => m
-    | k' :: prefix => fun m => MemberTl k k' (prefix ++ sig) (mshift prefix m)
-    end m.
-
-  Fixpoint mshift' {K} (infix: list K) {sig sig': list K} {k} (m: member k (sig ++ sig'))
-    : member k (sig ++ infix ++ sig').
-  Proof.
-    destruct sig as [ | k' sig].
-    - exact (mshift infix m).
-    - destruct (mdestruct m) as [(-> & Heq) | (m' & Heq)]; cbn in *.
-      + exact (MemberHd k' (sig ++ infix ++ sig')).
-      + exact (MemberTl k k' (sig ++ infix ++ sig') (mshift' _ infix sig sig' k m')).
-  Defined.
-
   Fixpoint infix_action (infix: tsig var_t) {sig sig': tsig var_t} {tau} (a: action (sig ++ sig') tau)
     : action (sig ++ infix ++ sig') tau.
   Proof.

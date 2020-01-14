@@ -48,14 +48,59 @@ Proof.
     eauto using MemberHd, MemberTl.
 Defined.
 
-Fixpoint member_map {K K'} (f: K -> K') (k: K) (ls: list K)
+Lemma member_idx_inj {K sig} `{EqDec K} {k: K}
+      (m m': member k sig) :
+  member_idx m = member_idx m' ->
+  m = m'.
+Proof.
+  induction m; cbn; intros * Hidx;
+    destruct (mdestruct m') as [(Hr & Heq) | (m'' & ->)]; cbn in *; subst; cbn in *;
+      try destruct Hr; try rewrite <- Eqdep_dec.eq_rect_eq_dec in * by apply eq_dec;
+        cbn in *; subst; cbn in *; inversion Hidx; subst.
+  - reflexivity.
+  - f_equal; eauto.
+Qed.
+
+Lemma member_idx_inj_contra {K sig} `{EqDec K} {k: K}
+      (m m': member k sig) :
+  m <> m' ->
+  member_idx m <> member_idx m'.
+Proof.
+  intros ** Heq%member_idx_inj; congruence.
+Qed.
+
+Lemma member_idx_inj_k {K sig} {k k': K}
+      (m: member k sig) (m': member k' sig) :
+  member_idx m = member_idx m' ->
+  k = k'.
+Proof.
+  intros * Heq;
+    eapply f_equal in Heq; erewrite !member_idx_nth in Heq;
+      congruence.
+Qed.
+
+Lemma member_idx_inj_k_contra {K sig} {k k': K}
+      (m: member k sig) (m': member k' sig) :
+  k <> k' -> member_idx m <> member_idx m'.
+Proof.
+  intros ** Heq%member_idx_inj_k; congruence.
+Qed.
+
+Fixpoint member_map {K K'} (f: K -> K') {k: K} {ls: list K}
          (m: member k ls) : member (f k) (List.map f ls) :=
   match m in (member k ls) return (member (f k) (List.map f ls)) with
   | MemberHd k sig =>
     MemberHd (f k) (List.map f sig)
   | MemberTl k k' sig m' =>
-    MemberTl (f k) (f k') (List.map f sig) (member_map f k sig m')
+    MemberTl (f k) (f k') (List.map f sig) (member_map f m')
   end.
+
+Lemma member_map_idx  {K K'} (f: K -> K') (k: K) (ls: list K)
+      (m: member k ls) :
+  member_idx (member_map f m) = member_idx m.
+Proof.
+  induction m; cbn; eauto.
+Qed.
 
 Fixpoint member_unmap {K K'} (f: K -> K') (k': K') (ls: list K)
          (m: member k' (List.map f ls)) : { k: K & member k ls }.
@@ -141,3 +186,20 @@ Fixpoint mmap {K V} (l: list K) (f: forall k: K, member k l -> V) {struct l} : l
    | [] => fun _ => []
    | k :: l => fun f => f k (MemberHd k l) :: mmap l (fun k' m => f k' (MemberTl k' k l m))
    end f.
+
+Fixpoint mshift {K} (prefix: list K) {sig: list K} {k} (m: member k sig)
+  : member k (prefix ++ sig) :=
+  match prefix return member k sig -> member k (prefix ++ sig) with
+  | [] => fun m => m
+  | k' :: prefix => fun m => MemberTl k k' (prefix ++ sig) (mshift prefix m)
+  end m.
+
+Fixpoint mshift' {K} (infix: list K) {sig sig': list K} {k} (m: member k (sig ++ sig'))
+  : member k (sig ++ infix ++ sig').
+Proof.
+  destruct sig as [ | k' sig].
+  - exact (mshift infix m).
+  - destruct (mdestruct m) as [(-> & Heq) | (m' & Heq)]; cbn in *.
+    + exact (MemberHd k' (sig ++ infix ++ sig')).
+    + exact (MemberTl k k' (sig ++ infix ++ sig') (mshift' _ infix sig sig' k m')).
+Defined.

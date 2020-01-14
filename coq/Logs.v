@@ -119,6 +119,47 @@ Arguments LE {T} kind port val : assert.
 Arguments LogEntry: clear implicits.
 Arguments RLog: clear implicits.
 
+Section Maps.
+  Context {reg_t: Type}.
+
+  Context {RKind1: Type}.
+  Context {RKind2: Type}.
+  Context {RKind1_denote: RKind1 -> Type}.
+  Context {RKind2_denote: RKind2 -> Type}.
+
+  Context {REnv: Env reg_t}.
+  Context {_R1: reg_t -> RKind1}.
+  Context {_R2: reg_t -> RKind2}.
+
+  Notation Log1 := (@_Log reg_t RKind1 RKind1_denote _R1 REnv).
+  Notation Log2 := (@_Log reg_t RKind2 RKind2_denote _R2 REnv).
+
+  Definition LogEntry_map {T T'} (f: T -> T') :=
+    fun '(LE kind prt v) =>
+      match kind return match kind with
+                        | LogRead => unit: Type
+                        | LogWrite => T
+                        end -> _ with
+      | LogRead => fun v => LE LogRead prt v
+      | LogWrite => fun v => LE LogWrite prt (f v)
+      end v.
+
+  Definition RLog_map {T T'} (f: T -> T') l :=
+    List.map (LogEntry_map f) l.
+
+  Definition log_map
+             (f: forall idx, RLog (RKind1_denote (_R1 idx)) ->
+                        RLog (RKind2_denote (_R2 idx)))
+             (log: Log1) : Log2 :=
+    Environments.map REnv (fun k l1 => f k l1) log.
+
+  Definition log_map_values
+             (f: forall idx, RKind1_denote (_R1 idx) ->
+                        RKind2_denote (_R2 idx))
+             (log: Log1) : Log2 :=
+    log_map (fun k => RLog_map (f k)) log.
+End Maps.
+
 Definition Log {reg_t} R REnv := @_Log reg_t type type_denote R REnv.
 Definition CLog {reg_t} R REnv := @_Log reg_t nat Bits.bits R REnv.
 
