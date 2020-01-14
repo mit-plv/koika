@@ -70,12 +70,12 @@ Section Logs.
 
   Open Scope bool_scope.
 
-  Definition may_read0 (sched_log: Log) idx :=
-    negb (log_existsb sched_log idx is_write0) &&
-    negb (log_existsb sched_log idx is_write1).
-
-  Definition may_read1 (sched_log: Log) idx :=
-    negb (log_existsb sched_log idx is_write1).
+  Definition may_read (sched_log: Log) prt idx :=
+    match prt with
+    | P0 => negb (log_existsb sched_log idx is_write0) &&
+           negb (log_existsb sched_log idx is_write1)
+    | P1 => negb (log_existsb sched_log idx is_write1)
+    end.
 
   Definition latest_write0 (log: Log) idx :=
     log_find log idx
@@ -121,3 +121,6 @@ Arguments RLog: clear implicits.
 
 Definition Log {reg_t} R REnv := @_Log reg_t type type_denote R REnv.
 Definition CLog {reg_t} R REnv := @_Log reg_t nat Bits.bits R REnv.
+
+Arguments may_read : simpl never.
+Arguments may_write : simpl never.

@@ -924,7 +924,7 @@ Section CompilerCorrectness.
            end; cbn.
 
   Ltac may_read_write_t :=
-    unfold may_read0, may_read1, may_write in *;
+    unfold may_read, may_write in *;
     repeat match goal with
            | _ => rewrite lco_proof in *
            | _ => progress bool_cleanup

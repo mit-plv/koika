@@ -68,35 +68,23 @@ Section Proof.
              end
            end.
 
-  Lemma may_read0_app_sl :
-    forall (sl sl': Log) idx,
-      may_read0 (log_app sl sl') idx =
-      may_read0 sl idx && may_read0 sl' idx.
+  Lemma may_read_app_sl :
+    forall (sl sl': Log) prt idx,
+      may_read (log_app sl sl') prt idx =
+      may_read sl prt idx && may_read sl' prt idx.
   Proof.
-    unfold may_read0; intros.
-    rewrite !log_forallb_not_existsb, !log_forallb_app.
-    set_forallb_fns.
-    ring_simplify.
-    f_equal.
-  Qed.
-
-  Lemma may_read1_app :
-    forall (sl sl': Log) idx,
-      may_read1 (log_app sl sl') idx =
-      may_read1 sl idx && may_read1 sl' idx.
-  Proof.
-    unfold may_read1; intros.
-    rewrite !log_forallb_not_existsb, !log_forallb_app.
-    reflexivity.
+    unfold may_read; intros.
+    destruct prt; rewrite !log_forallb_not_existsb, !log_forallb_app;
+      ring_simplify; f_equal.
   Qed.
 
   Lemma may_write_app_sl :
-    forall (sl sl': Log) l lvl idx,
-      may_write (log_app sl sl') l lvl idx =
-      may_write sl l lvl idx && may_write sl' l lvl idx.
+    forall (sl sl': Log) l prt idx,
+      may_write (log_app sl sl') l prt idx =
+      may_write sl l prt idx && may_write sl' l prt idx.
   Proof.
     unfold may_write; intros.
-    destruct lvl; rewrite !log_forallb_not_existsb, !log_forallb_app;
+    destruct prt; rewrite !log_forallb_not_existsb, !log_forallb_app;
       ring_simplify;
       repeat (destruct (log_forallb _ _ _); cbn; try reflexivity).
   Qed.
@@ -110,10 +98,10 @@ Section Proof.
 
   Lemma may_read0_no_writes :
     forall sl idx,
-      may_read0 sl idx = true ->
+      may_read sl P0 idx = true ->
       latest_write sl idx = None.
   Proof.
-    unfold may_read0; intros.
+    unfold may_read; intros.
     rewrite !log_forallb_not_existsb in H.
     repeat (cleanup_step || bool_step).
     unfold log_forallb in *.
@@ -130,10 +118,10 @@ Section Proof.
 
   Lemma may_read1_latest_write_is_0 :
     forall (l: Log) idx,
-      may_read1 l idx = true ->
+      may_read l P1 idx = true ->
       latest_write l idx = latest_write0 l idx.
   Proof.
-    unfold may_read1, latest_write, latest_write0, log_find, log_forallb.
+    unfold may_read, latest_write, latest_write0, log_find, log_forallb.
     intros * H.
     rewrite log_forallb_not_existsb in H; unfold log_forallb in H.
     set (getenv REnv l idx) as ls in *; cbn in *; clearbody ls.
@@ -155,10 +143,8 @@ Section Proof.
     match goal with
     | _ => cleanup_step
     | _ => progress autounfold with oraat in *
-    | [ H: context[may_read0 (log_app _ _) _] |- _ ] =>
-      rewrite may_read0_app_sl in H
-    | [ H: context[may_read1 (log_app _ _) _] |- _ ] =>
-      rewrite may_read1_app in H
+    | [ H: context[may_read (log_app _ _) _ _] |- _ ] =>
+      rewrite may_read_app_sl in H
     | [ H: context[may_write (log_app _ _) _ _ _] |- _ ] =>
       rewrite may_write_app_sl in H
     | [ H: Some _ = Some _ |- _ ] =>

@@ -53,18 +53,17 @@ Section Interp.
           interp_action Gamma sched_log action_log tbranch
         else
           interp_action Gamma sched_log action_log fbranch
-      | Read P0 idx => fun Gamma =>
-        if may_read0 sched_log idx then
-          Some (log_cons idx (LE LogRead P0 tt) action_log, REnv.(getenv) r idx, Gamma)
-        else None
-      | Read P1 idx => fun Gamma =>
-        if may_read1 sched_log idx then
-          Some (log_cons idx (LE LogRead P1 tt) action_log,
-                match latest_write0 (log_app action_log sched_log) idx with
-                | Some v => v
-                | None => REnv.(getenv) r idx
+      | Read prt idx => fun Gamma =>
+        if may_read sched_log prt idx then
+          Some (log_cons idx (LE LogRead prt tt) action_log,
+                match prt with
+                | P0 => REnv.(getenv) r idx
+                | P1 => match latest_write0 (log_app action_log sched_log) idx with
+                       | Some v => v
+                       | None => REnv.(getenv) r idx
+                       end
                 end,
-               Gamma)
+                Gamma)
         else None
       | Write prt idx val => fun Gamma =>
         let/opt3 action_log, val, Gamma_new := interp_action Gamma sched_log action_log val in
