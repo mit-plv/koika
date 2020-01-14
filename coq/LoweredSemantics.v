@@ -90,4 +90,27 @@ Section Interp.
       | None => None
       end.
   End Action.
+
+  Section Scheduler.
+    Context (rules: rule_name_t -> rule).
+
+    Fixpoint interp_scheduler'
+             (sched_log: Log)
+             (s: scheduler)
+             {struct s} :=
+      let interp_try r s1 s2 :=
+          match interp_rule sched_log (rules r) with
+          | Some l => interp_scheduler' (log_app l sched_log) s1
+          | None => interp_scheduler' sched_log s2
+          end in
+      match s with
+      | Done => sched_log
+      | Cons r s => interp_try r s s
+      | Try r s1 s2 => interp_try r s1 s2
+      | SPos _ s => interp_scheduler' sched_log s
+      end.
+
+    Definition interp_scheduler (s: scheduler) :=
+      interp_scheduler' log_empty s.
+  End Scheduler.
 End Interp.

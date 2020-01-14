@@ -167,22 +167,13 @@ Section LoweringCorrectness.
   Qed.
 
   Definition log_equiv (tL: tlog) (lL: llog) : Prop :=
-    lL = Logs.log_map (fun k l => Logs.RLog_map bits_of_value l) tL.
+    lL = log_map_values (fun idx => bits_of_value) tL.
 
-  Lemma log_equiv_may_read:
-    forall (tL: tlog) (lL: llog),
-      log_equiv tL lL ->
-      forall (port: Port) (idx: reg_t),
-        Logs.may_read tL port idx = Logs.may_read lL port idx.
-  Proof. intros * -> *; symmetry; apply may_read_map_values. Qed.
-
-  Lemma log_equiv_may_write:
-    forall (tL tl: tlog) (lL ll: llog),
-      log_equiv tL lL ->
-      log_equiv tl ll ->
-      forall (port: Port) (idx: reg_t),
-        Logs.may_write tL tl port idx = Logs.may_write lL ll port idx.
-  Proof. intros * -> -> *; symmetry; apply may_write_map_values. Qed.
+  Lemma log_equiv_empty:
+    log_equiv log_empty log_empty.
+  Proof.
+    unfold log_equiv; symmetry; apply log_map_values_empty.
+  Qed.
 
   Lemma log_equiv_cons:
     forall (tL: tlog) (lL: llog),
@@ -191,14 +182,34 @@ Section LoweringCorrectness.
         lle = LogEntry_map bits_of_value tle ->
         log_equiv (log_cons idx tle tL) (log_cons idx lle lL).
   Proof.
-    intros * -> * ->.
-    apply equiv_eq; intro.
-    unfold log_equiv, log_cons, log_map.
-    rewrite !getenv_map.
-    destruct (eq_dec (EqDec := EqDec_FiniteType (FT := REnv.(finite_keys))) k idx); subst.
-    - rewrite !get_put_eq; reflexivity.
-    - rewrite !get_put_neq, !getenv_map; congruence.
+    intros * -> * ->; red; rewrite log_map_values_cons; reflexivity.
   Qed.
+
+  Lemma log_equiv_app:
+    forall (tL: tlog) (lL: llog),
+      log_equiv tL lL ->
+      forall (tl: tlog) (ll: llog),
+        log_equiv tl ll ->
+        log_equiv (log_app tL tl) (log_app lL ll).
+  Proof.
+    unfold log_equiv; intros * -> * ->.
+    rewrite <- log_map_values_log_app; reflexivity.
+  Qed.
+
+  Lemma log_equiv_may_read:
+    forall (tL: tlog) (lL: llog),
+      log_equiv tL lL ->
+      forall (port: Port) (idx: reg_t),
+        Logs.may_read tL port idx = Logs.may_read lL port idx.
+  Proof. intros * -> *; symmetry; apply may_read_log_map_values. Qed.
+
+  Lemma log_equiv_may_write:
+    forall (tL tl: tlog) (lL ll: llog),
+      log_equiv tL lL ->
+      log_equiv tl ll ->
+      forall (port: Port) (idx: reg_t),
+        Logs.may_write tL tl port idx = Logs.may_write lL ll port idx.
+  Proof. intros * -> -> *; symmetry; apply may_write_log_map_values. Qed.
 
   Lemma log_equiv_latest_write0:
     forall (tl: tlog) (ll: llog),
@@ -210,8 +221,7 @@ Section LoweringCorrectness.
         | None => None
         end.
   Proof.
-    intros * -> *.
-    setoid_rewrite latest_write0_map_values; reflexivity.
+    intros * -> *; rewrite latest_write0_log_map_values; reflexivity.
   Qed.
 
   Create HintDb lowering.
@@ -299,5 +309,46 @@ Section LoweringCorrectness.
     - lowering_correct_t.
     - lowering_correct_t.
     - lowering_correct_t.
+  Qed.
+
+  Context (rules: rule_name_t -> TypedSyntax.rule pos_t var_t R Sigma).
+  Notation lrules r := (lower_action (rules r)).
+
+  Hint Resolve log_equiv_app : lowering.
+
+  Lemma scheduler_lowering_correct':
+    forall s tL lL,
+      log_equiv tL lL ->
+      log_equiv
+        (TypedSemantics.interp_scheduler' r sigma rules tL s)
+        (LoweredSemantics.interp_scheduler' lr lsigma (fun r => lrules r) lL s).
+  Proof.
+    induction s; intros; cbn;
+      unfold TypedSemantics.interp_rule, LoweredSemantics.interp_rule.
+    - assumption.
+    - pose proof (action_lowering_correct
+                    (rules r0) CtxEmpty tL log_empty CtxEmpty lL log_empty
+                    eq_refl ltac:(eassumption) log_equiv_empty) as Hc;
+        destruct tinterp as [((?, ?), ?) | ];
+        destruct linterp as [((?, ?), ?) | ];
+        cbn in *; destruct Hc; repeat cleanup_step; apply IHs;
+          eauto with lowering.
+    - pose proof (action_lowering_correct
+                    (rules r0) CtxEmpty tL log_empty CtxEmpty lL log_empty
+                    eq_refl ltac:(eassumption) log_equiv_empty) as Hc;
+        destruct tinterp as [((?, ?), ?) | ];
+        destruct linterp as [((?, ?), ?) | ];
+        cbn in *; destruct Hc; repeat cleanup_step; apply IHs1 || apply IHs2;
+          eauto with lowering.
+    - eauto.
+  Qed.
+
+  Theorem scheduler_lowering_correct:
+    forall s,
+      log_equiv
+        (TypedSemantics.interp_scheduler r sigma rules s)
+        (LoweredSemantics.interp_scheduler lr lsigma (fun r => lrules r) s).
+  Proof.
+    intros; apply scheduler_lowering_correct', log_equiv_empty.
   Qed.
 End LoweringCorrectness.

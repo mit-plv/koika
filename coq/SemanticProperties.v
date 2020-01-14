@@ -224,8 +224,11 @@ Section LogMaps.
   Notation Log1 := (@_Log reg_t RKind1 RKind1_denote _R1 REnv).
   Notation Log2 := (@_Log reg_t RKind2 RKind2_denote _R2 REnv).
 
-  Lemma log_existsb_map_values :
-    forall (l1: Log1) f idx pred,
+  Context (f: forall idx : reg_t, RKind1_denote (_R1 idx) ->
+                             RKind2_denote (_R2 idx)).
+
+  Lemma log_existsb_log_map_values :
+    forall (l1: Log1) idx pred,
       log_existsb (log_map_values f l1 : Log2) idx pred =
       log_existsb l1 idx pred.
   Proof.
@@ -235,37 +238,57 @@ Section LogMaps.
     - destruct hd, kind; cbn; rewrite <- IH; reflexivity.
   Qed.
 
-  Lemma map_values_log_app :
-    forall (L l: Log1) f,
+  Lemma log_map_values_empty :
+    log_map_values f (log_empty: Log1) = (log_empty: Log2).
+  Proof.
+    unfold log_app, log_map_values, log_map, log_empty; intros.
+    apply equiv_eq; intro; repeat rewrite ?getenv_map, ?getenv_map2, ?getenv_create.
+    reflexivity.
+  Qed.
+
+  Lemma log_map_values_cons :
+    forall (L: Log1) idx le,
+      log_map_values f (log_cons idx le L) =
+      log_cons idx (LogEntry_map (f idx) le) (log_map_values f L).
+  Proof.
+    unfold log_cons, log_map_values, log_map; intros.
+    apply equiv_eq; intro; repeat rewrite ?getenv_map.
+    destruct (let _ := REnv.(finite_keys) in eq_dec k idx); subst; cbn.
+    - rewrite !get_put_eq. cbn. reflexivity.
+    - rewrite !get_put_neq, !getenv_map; congruence.
+  Qed.
+
+  Lemma log_map_values_log_app :
+    forall (L l: Log1),
       (log_app (log_map_values f L) (log_map_values f l) : Log2) =
       log_map_values f (log_app L l).
   Proof.
     unfold log_app, log_map_values, log_map; intros.
-    apply create_funext; intros; rewrite !getenv_map, !getenv_map2.
+    apply equiv_eq; intro; repeat rewrite ?getenv_map, ?getenv_map2.
     symmetry; apply map_app.
   Qed.
 
-  Lemma may_read_map_values :
-    forall (l1: Log1) f prt idx,
+  Lemma may_read_log_map_values :
+    forall (l1: Log1) prt idx,
       may_read (log_map_values f l1 : Log2) prt idx =
       may_read l1 prt idx.
   Proof.
-    unfold may_read; intros; rewrite !log_existsb_map_values; reflexivity.
+    unfold may_read; intros; rewrite !log_existsb_log_map_values; reflexivity.
   Qed.
 
-  Lemma may_write_map_values :
-    forall (L1 l1: Log1) f prt idx,
+  Lemma may_write_log_map_values :
+    forall (L1 l1: Log1) prt idx,
       may_write (log_map_values f L1 : Log2) (log_map_values f l1 : Log2) prt idx =
       may_write L1 l1 prt idx.
   Proof.
     unfold may_write; intros.
-    repeat setoid_rewrite map_values_log_app;
-      repeat setoid_rewrite log_existsb_map_values;
+    repeat setoid_rewrite log_map_values_log_app;
+      repeat setoid_rewrite log_existsb_log_map_values;
       reflexivity.
   Qed.
 
-  Lemma latest_write0_map_values :
-    forall (l1: Log1) f idx,
+  Lemma latest_write0_log_map_values :
+    forall (l1: Log1) idx,
       latest_write0 (log_map_values f l1 : Log2) idx =
       match latest_write0 l1 idx with
       | Some v => Some (f idx v)
