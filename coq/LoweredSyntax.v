@@ -8,21 +8,20 @@ Section Syntax.
   Context {R: reg_t -> nat}.
   Context {Sigma: ext_fn_t -> CExternalSignature}.
 
-  Inductive action : lsig var_t -> nat -> Type :=
+  Inductive action : lsig -> nat -> Type :=
   | Fail {sig} sz : action sig sz
-  | Var {sig} {k: var_t} {sz: nat}
-        (m: member (k, sz) sig) : action sig sz
+  | Var {sig} (k: var_t) {sz: nat}
+        (m: member sz sig) : action sig sz
   | Const {sig} {sz: nat}
           (cst: bits sz) : action sig sz
-  | Assign {sig} {k: var_t} {sz: nat}
-           (m: member (k, sz) sig) (ex: action sig sz) : action sig 0
+  | Assign {sig} (k: var_t) {sz: nat}
+           (m: member sz sig) (ex: action sig sz) : action sig 0
   | Seq {sig sz}
         (r1: action sig 0)
         (r2: action sig sz) : action sig sz
-  | Bind {sig} {sz sz'}
-         (var: var_t)
+  | Bind {sig} (k: var_t) {sz sz'}
          (ex: action sig sz)
-         (body: action (List.cons (var, sz) sig) sz') : action sig sz'
+         (body: action (List.cons sz sig) sz') : action sig sz'
   | If {sig sz}
        (cond: action sig 1)
        (tbranch fbranch: action sig sz) : action sig sz

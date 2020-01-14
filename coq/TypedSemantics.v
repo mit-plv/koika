@@ -19,7 +19,7 @@ Section Interp.
   Notation scheduler := (scheduler pos_t rule_name_t).
 
   Definition tcontext (sig: tsig var_t) :=
-    context (fun '(k, tau) => type_denote tau) sig.
+    context (fun k_tau => type_denote (snd k_tau)) sig.
 
   Section Action.
     Fixpoint interp_action

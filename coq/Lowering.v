@@ -12,8 +12,8 @@ Section Lowering.
   Context {Sigma: ext_fn_t -> ExternalSignature}.
   Context {REnv: Env reg_t}.
 
-  Definition lsig_of_tsig (sig: tsig var_t) : lsig var_t :=
-    List.map (fun '(k, tau) => (k, type_sz tau)) sig.
+  Definition lsig_of_tsig (sig: tsig var_t) : lsig :=
+    List.map (fun k_tau => type_sz (snd k_tau)) sig.
 
   Definition lower_R idx :=
     type_sz (R idx).

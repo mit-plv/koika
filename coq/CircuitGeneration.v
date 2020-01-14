@@ -76,8 +76,8 @@ Section CircuitCompilation.
   Definition scheduler_circuit :=
     rwset.
 
-  Definition ccontext (sig: lsig var_t) :=
-    context (fun '(k, sz) => circuit sz) sig.
+  Definition ccontext (sig: lsig) :=
+    context (fun sz => circuit sz) sig.
 
   Definition mux_rwdata {sz} an (cond: circuit 1) (tReg fReg: @rwdata sz) :=
     {| read0 := CMuxAnnotOpt an cond (tReg.(read0)) (fReg.(read0));
@@ -92,9 +92,9 @@ Section CircuitCompilation.
                 tRegs fRegs.
 
   Fixpoint mux_ccontext {sig} (cond: circuit 1) (ctxT: ccontext sig) (ctxF: ccontext sig) : ccontext sig.
-    destruct sig as [ | (k, sz)]; cbn.
+    destruct sig as [ | sz]; cbn.
     - exact CtxEmpty.
-    - apply (CtxCons (k, sz) (CMuxAnnotOpt "mux_ccontext" cond (chd ctxT) (chd ctxF))
+    - apply (CtxCons sz (CMuxAnnotOpt "mux_ccontext" cond (chd ctxT) (chd ctxF))
                      (mux_ccontext _ cond (ctl ctxT) (ctl ctxF))).
   Defined.
 
@@ -126,7 +126,7 @@ Section CircuitCompilation.
       end a (CUnop fn a).
 
     Fixpoint compile_action
-             {sig: lsig var_t}
+             {sig: lsig}
              {sz}
              (Gamma: ccontext sig)
              (a: action pos_t var_t CR CSigma sig sz)
@@ -154,9 +154,9 @@ Section CircuitCompilation.
         ({| retVal := $`"assign_retVal"`Bits.nil;
             erwc := cex.(erwc) |},
          creplace m cex.(retVal) Gamma)
-      | @Bind _ _ _ _ _ _ sig sz sz' var ex body => fun Gamma =>
+      | @Bind _ _ _ _ _ _ sig var sz sz' ex body => fun Gamma =>
         let (ex, Gamma) := compile_action Gamma ex clog in
-        let (ex, Gamma) := compile_action (CtxCons (var, sz) ex.(retVal) Gamma) body ex.(erwc) in
+        let (ex, Gamma) := compile_action (CtxCons sz ex.(retVal) Gamma) body ex.(erwc) in
         (ex, ctl Gamma)
       | If cond tbranch fbranch => fun Gamma =>
         let (cond, Gamma) := compile_action Gamma cond clog in

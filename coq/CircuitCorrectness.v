@@ -700,7 +700,7 @@ Section CompilerCorrectness.
   Context {var_t_eq_dec: EqDec var_t}.
 
   Definition circuit_gamma_equiv {sig} (Gamma : tcontext sig) (gamma : ccontext sig) :=
-    forall (k: var_t) tau (m : member (k, tau) sig),
+    forall (k: var_t) tau (m : member tau sig),
       interp_circuit (cassoc m gamma) = bits_of_value (cassoc m Gamma).
 
 
@@ -952,8 +952,8 @@ Section CompilerCorrectness.
   Qed.
 
   Lemma circuit_gamma_equiv_creplace:
-    forall (sig : tsig var_t) (k : var_t) (tau : type)
-      (m : member (k, tau) sig) (vGamma : tcontext sig)
+    forall (sig : tsig) (k : var_t) (tau : type)
+      (m : member tau sig) (vGamma : tcontext sig)
       (a : action_circuit R Sigma REnv (type_sz tau)) (cGamma : ccontext sig) t,
       interp_circuit (retVal a) = bits_of_value t ->
       circuit_gamma_equiv vGamma cGamma -> circuit_gamma_equiv (creplace m t vGamma) (creplace m (retVal a) cGamma).
@@ -968,7 +968,7 @@ Section CompilerCorrectness.
   Qed.
 
   Definition ccontext_equiv {sig} (c0 c1 : ccontext sig) :=
-    forall (k: var_t) (tau: type) (m: member (k, tau) sig),
+    forall (k: var_t) (tau: type) (m: member tau sig),
       interp_circuit (cassoc m c0) = interp_circuit (cassoc m c1).
 
   Lemma ccontext_equiv_sym {sig}:
@@ -1019,7 +1019,7 @@ Section CompilerCorrectness.
   Qed.
 
   Lemma mux_gamma_equiv_t:
-    forall (sig : tsig var_t) (cond: circuit 1),
+    forall (sig : tsig) (cond: circuit 1),
       Bits.single (interp_circuit cond) = true ->
       forall (v0 : tcontext sig) (c0 c1 : ccontext sig),
         circuit_gamma_equiv v0 c0 ->
@@ -1032,7 +1032,7 @@ Section CompilerCorrectness.
   Qed.
 
   Lemma mux_gamma_equiv_f:
-    forall (sig : tsig var_t) (cond: circuit 1),
+    forall (sig : tsig) (cond: circuit 1),
       Bits.single (interp_circuit cond) = false ->
       forall (v0 : tcontext sig) (c0 c1 : ccontext sig),
         circuit_gamma_equiv v0 c1 ->
@@ -1062,7 +1062,7 @@ Section CompilerCorrectness.
         log_data0_consistent l' Log cExpr.(erwc).(regs) /\
         log_data1_consistent l' Log cExpr.(erwc).(regs) /\
         interp_circuit (willFire_of_canFire rl cExpr.(erwc) cLog) = Ob~1 /\
-        circuit_gamma_equiv Gamma_new gamma_new (* 6 > 5 :( for eauto *)
+        circuit_gamma_equiv Gamma_new gamma_new
       | None =>
         interp_circuit (willFire_of_canFire rl cExpr.(erwc) cLog) = Ob~0
       end.

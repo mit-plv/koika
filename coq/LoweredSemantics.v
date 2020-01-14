@@ -18,12 +18,12 @@ Section Interp.
   Notation action := (action pos_t var_t R Sigma).
   Notation scheduler := (scheduler pos_t rule_name_t).
 
-  Definition lcontext (sig: lsig var_t) :=
-    context (fun '(k, sz) => bits sz) sig.
+  Definition lcontext (sig: lsig) :=
+    context Bits.bits sig.
 
   Section Action.
     Fixpoint interp_action
-             {sig: lsig var_t}
+             {sig: lsig}
              {sz}
              (Gamma: lcontext sig)
              (sched_log: Log)
@@ -33,19 +33,19 @@ Section Interp.
       match a in LoweredSyntax.action _ _ _ _ ts sz return (lcontext ts -> option (Log * bits sz * (lcontext ts)))  with
       | Fail sz => fun _ =>
         None
-      | Var m => fun Gamma =>
+      | Var k m => fun Gamma =>
         Some (action_log, cassoc m Gamma, Gamma)
       | Const cst => fun Gamma =>
         Some (action_log, cst, Gamma)
       | Seq r1 r2 => fun Gamma =>
         let/opt3 action_log, _, Gamma := interp_action Gamma sched_log action_log r1 in
         interp_action Gamma sched_log action_log r2
-      | @Assign _ _ _ _ _ _ _ k sz m ex => fun Gamma =>
+      | Assign k m ex => fun Gamma =>
         let/opt3 action_log, v, Gamma := interp_action Gamma sched_log action_log ex in
         Some (action_log, Ob, creplace m v Gamma)
-      | @Bind _ _ _ _ _ _ sig sz sz' var ex body => fun (Gamma : lcontext sig) =>
+      | @Bind _ _ _ _ _ _ sig _ sz sz' ex body => fun (Gamma : lcontext sig) =>
         let/opt3 action_log1, v, Gamma := interp_action Gamma sched_log action_log ex in
-        let/opt3 action_log2, v, Gamma := interp_action (CtxCons (var, sz) v Gamma) sched_log action_log1 body in
+        let/opt3 action_log2, v, Gamma := interp_action (CtxCons sz v Gamma) sched_log action_log1 body in
         Some (action_log2, v, ctl Gamma)
       | If cond tbranch fbranch => fun Gamma =>
         let/opt3 action_log, cond, Gamma := interp_action Gamma sched_log action_log cond in

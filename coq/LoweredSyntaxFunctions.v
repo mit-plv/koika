@@ -19,10 +19,10 @@ Section LoweredSyntaxFunctions.
 
     Fixpoint action_footprint' {sig tau} (acc: footprint_t) (a: action sig tau) :=
       match a with
-      | Fail _ | Var _ | Const _ => acc
-      | Assign m ex => action_footprint' acc ex
+      | Fail _ | Var _ _ | Const _ => acc
+      | Assign _ m ex => action_footprint' acc ex
       | Seq r1 r2 => action_footprint' (action_footprint' acc r1) r2
-      | Bind var ex body => action_footprint' (action_footprint' acc ex) body
+      | Bind _ ex body => action_footprint' (action_footprint' acc ex) body
       | If cond tbranch fbranch => action_footprint' (action_footprint' (action_footprint' acc cond) tbranch) fbranch
       | Read port idx => (idx, (LRWRead, port)) :: acc
       | Write port idx value => action_footprint' ((idx, (LRWWrite, port)) :: acc) value
