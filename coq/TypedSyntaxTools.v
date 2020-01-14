@@ -1,5 +1,5 @@
 (*! Tools | Functions defined on typed ASTs !*)
-Require Import Koika.Member Koika.TypedSyntax Koika.Primitives Koika.Semantics.
+Require Import Koika.Member Koika.TypedSyntax Koika.Primitives Koika.TypedSemantics.
 
 Section TypedSyntaxTools.
   Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.

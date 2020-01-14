@@ -1,5 +1,5 @@
 (*! ORAAT | Properties of the semantics used in the one-rule-at-a-time theorem !*)
-Require Export Koika.Common Koika.Semantics.
+Require Export Koika.Common Koika.TypedSemantics.
 
 Section Lists.
   Lemma list_find_opt_app {A B} (f: A -> option B) (l l': list A) :

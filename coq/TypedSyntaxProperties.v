@@ -1,5 +1,5 @@
 (*! Tools | Lemmas pertaining to tools on typed syntax !*)
-Require Import Koika.TypedSyntaxTools Koika.Semantics.
+Require Import Koika.TypedSyntaxTools Koika.TypedSemantics.
 
 Section TypedSyntaxProperties.
   Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.

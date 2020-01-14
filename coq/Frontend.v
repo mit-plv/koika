@@ -3,7 +3,7 @@ Require Export
         Koika.SyntaxMacros
         Koika.Desugaring
         Koika.TypeInference
-        Koika.Semantics
+        Koika.TypedSemantics
         Koika.Circuits
         Koika.Primitives
         Koika.UntypedSyntaxTools
