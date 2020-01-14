@@ -84,39 +84,22 @@ End Bools.
 Section Circuits.
   Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
 
-  Context {R: reg_t -> type}.
-  Notation CR := (lower_R R).
-
-  Context {Sigma: ext_fn_t -> ExternalSignature}.
-  Notation CSigma := (lower_Sigma Sigma).
+  Context {CR: reg_t -> nat}.
+  Context {CSigma: ext_fn_t -> CExternalSignature}.
 
   Context {REnv: Env reg_t}.
-  Context (r: REnv.(env_t) R).
-  Notation cr := (lower_r r).
+  Context (cr: REnv.(env_t) (fun idx => bits (CR idx))).
 
   Context {Show_rule_name_t : Show rule_name_t}.
-
-  Definition csigma_spec (sigma: forall f, Sig_denote (Sigma f)) csigma :=
-    forall fn (a: (Sigma fn).(arg1Sig)),
-      csigma fn (bits_of_value a) = bits_of_value (sigma fn a).
-
-  Lemma csigma_spec_lower_sigma :
-    forall (sigma: forall f, Sig_denote (Sigma f)),
-      csigma_spec sigma (lower_sigma sigma).
-  Proof.
-    unfold csigma_spec, lower_sigma.
-    intros; rewrite !value_of_bits_of_value.
-    reflexivity.
-  Qed.
 
   Context (csigma: forall f, CSig_denote (CSigma f)).
   Context (lco: (@local_circuit_optimizer
                    rule_name_t reg_t ext_fn_t CR CSigma
-                   (rwdata (rule_name_t := rule_name_t) R Sigma)
+                   (rwdata (rule_name_t := rule_name_t) CR CSigma)
                    csigma)).
 
   Notation circuit := (circuit (rule_name_t := rule_name_t)
-                              (rwdata := rwdata (rule_name_t := rule_name_t) R Sigma)
+                              (rwdata := rwdata (rule_name_t := rule_name_t) CR CSigma)
                               CR CSigma).
   Notation interp_circuit := (interp_circuit cr csigma).
 
@@ -292,7 +275,7 @@ Section Circuits.
   Qed.
 
   Lemma circuit_le_willFire_of_canFire_canFire :
-    forall rl_name c1 (cLog: scheduler_circuit (rule_name_t := rule_name_t) R Sigma REnv) rws,
+    forall rl_name c1 (cLog: scheduler_circuit (rule_name_t := rule_name_t) CR CSigma REnv) rws,
       circuit_le (willFire_of_canFire lco rl_name {| canFire := c1; regs := rws |} cLog) c1.
   Proof.
     unfold willFire_of_canFire; intros.
@@ -309,8 +292,6 @@ Section Circuits.
       + apply circuit_le_CAnd_l; eassumption.
   Qed.
 End Circuits.
-
-Arguments csigma_spec {ext_fn_t Sigma} sigma csigma : assert.
 
 Ltac circuit_le_f_equal :=
   repeat (apply circuit_le_CAnnot_l ||
