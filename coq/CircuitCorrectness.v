@@ -12,8 +12,8 @@ Section PrimCompilerCorrectness.
   Context {Sigma: ext_fn_t -> ExternalSignature}.
 
   Context {REnv: Env reg_t}.
-  Context (cr: REnv.(env_t) (fun idx => bits (CR_of_R R idx))).
-  Context (csigma: forall f, CSig_denote (CSigma_of_Sigma Sigma f)).
+  Context (cr: REnv.(env_t) (fun idx => bits (lower_R R idx))).
+  Context (csigma: forall f, CSig_denote (lower_Sigma Sigma f)).
 
   Notation interp_circuit := (interp_circuit (rule_name_t := rule_name_t) cr csigma).
 
@@ -59,10 +59,10 @@ Section CompilerCorrectness.
   Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
 
   Context {R: reg_t -> type}.
-  Notation CR := (CR_of_R R).
+  Notation CR := (lower_R R).
 
   Context {Sigma: ext_fn_t -> ExternalSignature}.
-  Notation CSigma := (CSigma_of_Sigma Sigma).
+  Notation CSigma := (lower_Sigma Sigma).
 
   Context {REnv: Env reg_t}.
 
@@ -70,7 +70,7 @@ Section CompilerCorrectness.
   Context {Show_rule_name_t : Show rule_name_t}.
 
   Context (r: REnv.(env_t) R).
-  Notation cr := (cr_of_r r).
+  Notation cr := (lower_r r).
 
   Instance reg_t_eq_dec : EqDec reg_t := @EqDec_FiniteType _ (REnv.(finite_keys)).
 
@@ -1625,11 +1625,11 @@ Section CircuitInit.
   Context (sigma: forall f, Sig_denote (Sigma f)).
 
   Lemma circuit_env_equiv_CReadRegister :
-    forall (csigma: forall f, CSig_denote (CSigma_of_Sigma Sigma f)),
+    forall (csigma: forall f, CSig_denote (lower_Sigma Sigma f)),
       csigma_spec sigma csigma ->
       circuit_env_equiv (rule_name_t := rule_name_t) r csigma (REnv.(create) CReadRegister).
   Proof.
-    unfold circuit_env_equiv, cr_of_r; intros.
+    unfold circuit_env_equiv, lower_r; intros.
     rewrite getenv_create; cbn;
       rewrite getenv_map; cbn;
         reflexivity.
@@ -1650,9 +1650,9 @@ Section Thm.
   Context (sigma: forall f, Sig_denote (Sigma f)).
   Context (lco: (@local_circuit_optimizer
                    rule_name_t reg_t ext_fn_t
-                   (CR_of_R R) (CSigma_of_Sigma Sigma)
+                   (lower_R R) (lower_Sigma Sigma)
                    (rwdata (rule_name_t := rule_name_t) R Sigma)
-                   (csigma_of_sigma sigma))).
+                   (lower_sigma sigma))).
 
   Context (s: scheduler pos_t rule_name_t).
 
@@ -1664,11 +1664,11 @@ Section Thm.
       let spec_results := commit_update r (interp_scheduler r sigma rules s) in
       let circuits := compile_scheduler lco rules external s in
       forall reg,
-        interp_circuit (cr_of_r r) (csigma_of_sigma sigma) (ContextEnv.(getenv) circuits reg) =
+        interp_circuit (lower_r r) (lower_sigma sigma) (ContextEnv.(getenv) circuits reg) =
         bits_of_value (ContextEnv.(getenv) spec_results reg).
     Proof.
       apply compile_scheduler'_correct;
-        eauto using csigma_spec_csigma_of_sigma, circuit_env_equiv_CReadRegister, csigma_spec_csigma_of_sigma.
+        eauto using csigma_spec_lower_sigma, circuit_env_equiv_CReadRegister, csigma_spec_lower_sigma.
     Qed.
   End Standalone.
 End Thm.

@@ -10,9 +10,9 @@ Definition empty_Sigma (fn: empty_ext_fn_t)
 Definition empty_sigma fn
   : Sig_denote (empty_Sigma fn) := match fn with end.
 Definition empty_CSigma (fn: empty_ext_fn_t)
-  : CExternalSignature := CSigma_of_Sigma empty_Sigma fn.
+  : CExternalSignature := lower_Sigma empty_Sigma fn.
 Definition empty_csigma fn
-  : CSig_denote (empty_CSigma fn) := csigma_of_sigma empty_sigma fn.
+  : CSig_denote (empty_CSigma fn) := lower_sigma empty_sigma fn.
 Definition empty_ext_fn_names (fn: empty_ext_fn_t)
   : string := match fn with end.
 
@@ -84,8 +84,8 @@ Section Packages.
         compiler (really a list of circuits, one per register). *)
       cp_circuits: @register_update_circuitry
                     rule_name_t reg_t ext_fn_t
-                    (CR_of_R cp_pkg.(koika_reg_types))
-                    (CSigma_of_Sigma cp_pkg.(koika_ext_fn_types))
+                    (lower_R cp_pkg.(koika_reg_types))
+                    (lower_Sigma cp_pkg.(koika_ext_fn_types))
                     cp_reg_Env;
     }.
 
@@ -195,8 +195,8 @@ Section Helpers.
   Context {Show_var_t: Show var_t}.
   Context {Show_rule_name_t: Show rule_name_t}.
 
-  Notation CR := (CR_of_R R).
-  Notation CSigma := (CSigma_of_Sigma Sigma).
+  Notation CR := (lower_R R).
+  Notation CSigma := (lower_Sigma Sigma).
 
   Notation circuit :=
     (circuit (rule_name_t := rule_name_t)
@@ -219,8 +219,8 @@ Section Helpers.
 
   Definition interp_circuits
              (circuits: register_update_circuitry rule_name_t CR CSigma REnv) :=
-    let cr := cr_of_r r in
-    let csigma := csigma_of_sigma sigma in
+    let cr := lower_r r in
+    let csigma := lower_sigma sigma in
     Environments.map REnv (fun _ c => interp_circuit cr csigma c) circuits.
 End Helpers.
 
@@ -229,8 +229,8 @@ Section Compilation.
 
   Definition compile_koika_package
              (s: @koika_package_t pos_t var_t rule_name_t reg_t ext_fn_t)
-             (opt: let circuit sz := circuit (CR_of_R s.(koika_reg_types))
-                                            (CSigma_of_Sigma s.(koika_ext_fn_types)) sz in
+             (opt: let circuit sz := circuit (lower_R s.(koika_reg_types))
+                                            (lower_Sigma s.(koika_ext_fn_types)) sz in
                    forall {sz}, circuit sz -> circuit sz)
     : circuit_package_t :=
     let _ := s.(koika_reg_finite) in

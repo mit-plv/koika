@@ -352,7 +352,7 @@ module Compilation = struct
     let open Extr in
     (* let equivb _ c1 c2 = c1 == c2 in *)
     let equivb = extr_circuit_incomplete_equivb in
-    let cR, cSigma = cR_of_R _R, cSigma_of_Sigma _Sigma in
+    let cR, cSigma = lower_R _R, lower_Sigma _Sigma in
     lco_opt_compose cR cSigma (opt_constprop cR cSigma) (opt_muxelim cR cSigma equivb)
 
   let compile (cu: 'f compile_unit) : (reg_signature -> compiled_circuit) =

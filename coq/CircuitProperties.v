@@ -1,6 +1,6 @@
 (*! Circuits | Lemmas used in the compiler-correctness proof !*)
-Require Export Koika.CircuitGeneration.
-Require Import Koika.Common Koika.Environments Koika.Types.
+Require Export Koika.CircuitGeneration Koika.CircuitOptimization.
+Require Import Koika.Common Koika.Environments Koika.Types Koika.Lowering.
 
 Section Bools.
   Definition bool_le b1 b2 :=
@@ -85,14 +85,14 @@ Section Circuits.
   Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
 
   Context {R: reg_t -> type}.
-  Notation CR := (CR_of_R R).
+  Notation CR := (lower_R R).
 
   Context {Sigma: ext_fn_t -> ExternalSignature}.
-  Notation CSigma := (CSigma_of_Sigma Sigma).
+  Notation CSigma := (lower_Sigma Sigma).
 
   Context {REnv: Env reg_t}.
   Context (r: REnv.(env_t) R).
-  Notation cr := (cr_of_r r).
+  Notation cr := (lower_r r).
 
   Context {Show_rule_name_t : Show rule_name_t}.
 
@@ -100,11 +100,11 @@ Section Circuits.
     forall fn (a: (Sigma fn).(arg1Sig)),
       csigma fn (bits_of_value a) = bits_of_value (sigma fn a).
 
-  Lemma csigma_spec_csigma_of_sigma :
+  Lemma csigma_spec_lower_sigma :
     forall (sigma: forall f, Sig_denote (Sigma f)),
-      csigma_spec sigma (csigma_of_sigma sigma).
+      csigma_spec sigma (lower_sigma sigma).
   Proof.
-    unfold csigma_spec, csigma_of_sigma.
+    unfold csigma_spec, lower_sigma.
     intros; rewrite !value_of_bits_of_value.
     reflexivity.
   Qed.

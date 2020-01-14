@@ -15,24 +15,24 @@ Section Lowering.
   Definition lsig_of_tsig (sig: tsig var_t) : lsig var_t :=
     List.map (fun '(k, tau) => (k, type_sz tau)) sig.
 
-  Definition CR_of_R idx :=
+  Definition lower_R idx :=
     type_sz (R idx).
-  Notation CR := CR_of_R.
+  Notation lR := lower_R.
 
-  Definition CSigma_of_Sigma fn :=
+  Definition lower_Sigma fn :=
     CSig_of_Sig (Sigma fn).
-  Notation CSigma := CSigma_of_Sigma.
+  Notation lSigma := lower_Sigma.
 
-  Definition cr_of_r (r: REnv.(env_t) R)
-    : REnv.(env_t) (fun idx => bits (CR idx)) :=
+  Definition lower_r (r: REnv.(env_t) R)
+    : REnv.(env_t) (fun idx => bits (lR idx)) :=
     map REnv (fun idx v => bits_of_value v) r.
 
-  Definition csigma_of_sigma (sigma: forall f, Sig_denote (Sigma f))
-    : forall f, CSig_denote (CSigma f) :=
+  Definition lower_sigma (sigma: forall f, Sig_denote (Sigma f))
+    : forall f, CSig_denote (lSigma f) :=
     fun f => fun bs => bits_of_value (sigma f (value_of_bits bs)).
 
   Notation typed_action := (TypedSyntax.action pos_t var_t R Sigma).
-  Notation low_action := (LoweredSyntax.action pos_t var_t CR CSigma).
+  Notation low_action := (LoweredSyntax.action pos_t var_t lR lSigma).
 
   Section Action.
     Definition lower_unop {sig} (fn: fn1)
@@ -83,6 +83,12 @@ Section Lowering.
         end a1 a2
       end a1 a2.
 
+    Definition lower_member
+               {k: var_t} {tau: type} {sig}
+               (m: member (k, tau) sig) :
+      member (type_sz tau) (lsig_of_tsig sig) :=
+      member_map _ m.
+
     Fixpoint lower_action
              {sig: tsig var_t} {tau}
              (a: typed_action sig tau):
@@ -91,14 +97,14 @@ Section Lowering.
       match a with
       | TypedSyntax.Fail tau =>
         LoweredSyntax.Fail (type_sz tau)
-      | TypedSyntax.Var m =>
-        LoweredSyntax.Var (member_map _ _ _ m)
+      | @TypedSyntax.Var _ _ _ _ _ _ _ k _ m =>
+        LoweredSyntax.Var k (lower_member m)
       | TypedSyntax.Const cst =>
         LoweredSyntax.Const (bits_of_value cst)
       | TypedSyntax.Seq r1 r2 =>
         LoweredSyntax.Seq (l r1) (l r2)
-      | TypedSyntax.Assign m ex =>
-        LoweredSyntax.Assign (member_map _ _ _ m) (l ex)
+      | @TypedSyntax.Assign _ _ _ _ _ _ _ k _ m ex =>
+        LoweredSyntax.Assign k (lower_member m) (l ex)
       | TypedSyntax.Bind var ex body =>
         LoweredSyntax.Bind var (l ex) (l body)
       | TypedSyntax.If cond tbranch fbranch =>
@@ -119,7 +125,7 @@ Section Lowering.
   End Action.
 End Lowering.
 
-Arguments CR_of_R {reg_t} R idx : assert.
-Arguments CSigma_of_Sigma {ext_fn_t} Sigma fn : assert.
-Arguments cr_of_r {reg_t} {R} {REnv} r : assert.
-Arguments csigma_of_sigma {ext_fn_t} {Sigma} sigma f a : assert.
+Arguments lower_R {reg_t} R idx : assert.
+Arguments lower_Sigma {ext_fn_t} Sigma fn : assert.
+Arguments lower_r {reg_t} {R} {REnv} r : assert.
+Arguments lower_sigma {ext_fn_t} {Sigma} sigma f a : assert.
