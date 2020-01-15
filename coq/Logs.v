@@ -77,19 +77,23 @@ Section Logs.
     | P1 => negb (log_existsb sched_log idx is_write1)
     end.
 
+  Definition log_latest_write0_fn {T} (le: @LogEntry T) :=
+    match le with
+    | LE _ LogWrite P0 v => Some v
+    | _ => None
+    end.
+
   Definition latest_write0 (log: Log) idx :=
-    log_find log idx
-             (fun le => match le with
-                     | (LE _ LogWrite P0 v) => Some v
-                     | _ => None
-                     end).
+    log_find log idx log_latest_write0_fn.
+
+  Definition log_latest_write1_fn {T} (le: @LogEntry T) :=
+    match le with
+    | LE _ LogWrite P1 v => Some v
+    | _ => None
+    end.
 
   Definition latest_write1 (log: Log) idx :=
-    log_find log idx
-             (fun le => match le with
-                     | (LE _ LogWrite P1 v) => Some v
-                     | _ => None
-                     end).
+    log_find log idx log_latest_write1_fn.
 
   Definition may_write (sched_log rule_log: Log) prt idx :=
     match prt with

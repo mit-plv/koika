@@ -287,6 +287,46 @@ Section LogMaps.
       reflexivity.
   Qed.
 
+  Lemma log_find_log_map_values (pred: forall {T}, LogEntry T -> option T):
+    forall (l1: Log1) idx,
+      (forall prt val,
+          @pred (RKind2_denote (_R2 idx)) {| kind := LogRead; port := prt; val := val |} =
+          match pred {| kind := LogRead; port := prt; val := val |} with
+          | Some v => Some (f idx v)
+          | None => None
+          end) ->
+      (forall prt val,
+          pred {| kind := LogWrite; port := prt; val := f idx val |} =
+          match pred {| kind := LogWrite; port := prt; val := val |} with
+          | Some v => Some (f idx v)
+          | None => None
+          end) ->
+      log_find (log_map_values f l1: Log2) idx pred =
+      match log_find l1 idx pred with
+      | Some v => Some (f idx v)
+      | None => None
+      end.
+  Proof.
+    unfold log_find, log_map_values, log_map, RLog_map, LogEntry_map; intros * Hr Hw.
+    rewrite !getenv_map; induction (getenv REnv l1 idx) as [ | hd tl ]; cbn.
+    - reflexivity.
+    - destruct hd, kind, port; cbn in *; auto.
+      all: rewrite IHtl, ?Hr, ?Hw.
+      all: destruct pred; reflexivity.
+  Qed.
+
+  Lemma latest_write_log_map_values :
+    forall (l1: Log1) idx,
+      latest_write (log_map_values f l1 : Log2) idx =
+      match latest_write l1 idx with
+      | Some v => Some (f idx v)
+      | None => None
+      end.
+  Proof.
+    unfold latest_write; intros;
+      apply log_find_log_map_values; reflexivity.
+  Qed.
+
   Lemma latest_write0_log_map_values :
     forall (l1: Log1) idx,
       latest_write0 (log_map_values f l1 : Log2) idx =
@@ -295,10 +335,18 @@ Section LogMaps.
       | None => None
       end.
   Proof.
-    unfold latest_write0, log_find, log_map_values, log_map, RLog_map, LogEntry_map; intros.
-    rewrite !getenv_map. induction (getenv REnv l1 idx) as [ | hd tl ]; cbn.
-    - reflexivity.
-    - destruct hd, kind, port; cbn in *; auto.
+    unfold latest_write0; intros.
+    apply log_find_log_map_values; destruct prt; reflexivity.
+  Qed.
+
+  Lemma commit_update_log_map_values :
+    forall (l1: Log1) (r: REnv.(env_t) (fun idx => RKind1_denote (_R1 idx))),
+      commit_update (Environments.map REnv f r) (log_map_values f l1) =
+      Environments.map REnv f (commit_update r l1).
+  Proof.
+    unfold commit_update; intros; apply equiv_eq; intro.
+    repeat rewrite ?getenv_create, ?getenv_map.
+    rewrite latest_write_log_map_values; destruct latest_write; reflexivity.
   Qed.
 End LogMaps.
 
@@ -432,12 +480,17 @@ End LatestWrites.
 
 Section CommitUpdates.
   Context {reg_t: Type}.
-  Context {R: reg_t -> type}.
+  Context {RKind: Type}.
+  Context {RKind_denote: RKind -> Type}.
+  Context {_R: reg_t -> RKind}.
   Context {REnv: Env reg_t}.
 
+  Notation Log := (@_Log reg_t RKind RKind_denote _R REnv).
+
+  Context (r: REnv.(env_t) (fun idx => RKind_denote (_R idx))).
+
   Lemma commit_update_assoc:
-    forall (r : REnv.(env_t) R) (l l' : Log R REnv),
-      commit_update (commit_update r l) l' = commit_update r (log_app l' l).
+    forall (l l' : Log), commit_update (commit_update r l) l' = commit_update r (log_app l' l).
   Proof.
     unfold commit_update, log_app, map2, latest_write, log_find; intros.
     apply create_funext; intros.
@@ -447,8 +500,7 @@ Section CommitUpdates.
   Qed.
 
   Lemma commit_update_empty:
-    forall (r : REnv.(env_t) R),
-      commit_update r log_empty = r.
+    commit_update r log_empty = r.
   Proof.
     intros; apply equiv_eq; intro.
     unfold commit_update, log_empty, latest_write, log_find; rewrite !getenv_create.
@@ -456,9 +508,9 @@ Section CommitUpdates.
   Qed.
 
   Lemma getenv_commit_update :
-    forall sl r idx,
-      REnv.(getenv) (commit_update r sl) idx =
-      match latest_write (RKind_denote := type_denote) (_R := R) sl idx with
+    forall (l: Log) idx,
+      REnv.(getenv) (commit_update r l) idx =
+      match latest_write l idx with
       | Some v' => v'
       | None => REnv.(getenv) r idx
       end.
