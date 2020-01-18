@@ -993,7 +993,9 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
         let bindings, body = loop pos [] action in
         List.rev bindings, body in
 
-      let rec p_action (pos: Pos.t) (target: assignment_target)
+      let rec p_action
+                (at_top: bool)
+                (pos: Pos.t) (target: assignment_target)
                 (rl: ((pos_t, reg_t) Extr.register_annotation,
                       var_t, fn_name_t, reg_t, _) Extr.action) =
         p_pos pos;
@@ -1020,18 +1022,19 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
            assert_no_shadowing sg v tau hpp.cpp_var_names m;
            let vtarget = VarTarget { tau = Cuttlebone.Util.typ_of_extr_type tau;
                                      declared = true; name = hpp.cpp_var_names v } in
-           p_assign_and_ignore vtarget (p_action pos vtarget ex);
+           p_assign_and_ignore vtarget (p_action at_top pos vtarget ex);
            p_assign_expr target (PureExpr "prims::tt")
         | Extr.Seq (_, _, a1, a2) ->
-           p_assign_and_ignore NoTarget (p_action pos NoTarget a1);
-           p_action pos target a2
+           p_assign_and_ignore NoTarget (p_action false pos NoTarget a1);
+           p_action at_top pos target a2
         | Extr.Bind _ ->
            let bindings, (pos, body) = collect_bindings pos rl in
            p_declare_target target;
-           p_scoped "/* bind */" (fun () ->
+           let p () =
              List.iter (fun (var, (pos, tau, expr)) ->
                  p_bound_var_assign pos tau var expr) bindings;
-             p_assign_expr target (p_action pos target body))
+             p_assign_expr target (p_action false pos target body) in
+           if at_top then p () else p_scoped "/* bind */" p
         | Extr.If (_, _, cond, tbr, fbr) ->
            p_declare_target target;
            (match reconstruct_switch rl with
@@ -1039,15 +1042,15 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
                let tau = Cuttlebone.Util.typ_of_extr_type tau in
                p_switch pos target tau var default branches
             | None ->
-               let ctarget = gensym_target (Bits_t 1) "c" in
-               let cexpr = p_action pos ctarget cond in
+               let ctarget = gensym_target (Bits_t 1) "test" in
+               let cexpr = p_action false pos ctarget cond in
                let tres =
                  p_scoped (sprintf "if (%s)" (must_value cexpr))
-                   (fun () -> p_assign_expr target (p_action pos target tbr)) in
+                   (fun () -> p_assign_expr target (p_action true pos target tbr)) in
                let fres =
                  if Extr.is_tt fbr then tres
                  else p_scoped "else"
-                        (fun () -> p_assign_expr target (p_action pos target fbr)) in
+                        (fun () -> p_assign_expr target (p_action true pos target fbr)) in
                assert (tres = fres); tres)
         | Extr.APos (_, _, Extr.HistoryAnnot _,
                      Extr.Read (_, port, reg)) ->
@@ -1063,26 +1066,26 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
                      Extr.Write (_, port, reg, expr)) ->
            let r = hpp.cpp_register_sigs reg in
            let vt = gensym_target (reg_type r) "v" in
-           let v = must_value (p_action pos vt expr) in
+           let v = must_value (p_action false pos vt expr) in
            let pt = match port with P0 -> 0 | P1 -> 1 in
            p "%s(%s, %s, %s);" (write reg pt) rule_name_unprefixed r.reg_name v;
            p_assign_expr target (PureExpr "prims::tt")
         | Extr.Unop (_, Extr.PrimTyped.Conv (tau, Extr.PrimTyped.Unpack), a)
              when Extr.(returns_zero a && is_pure a) ->
-           p_assign_and_ignore NoTarget (p_action pos NoTarget a);
+           p_assign_and_ignore NoTarget (p_action at_top pos NoTarget a);
            PureExpr (sp_initializer (Cuttlebone.Util.typ_of_extr_type tau))
         | Extr.Unop (_, fn, a) ->
            let fsig = Extr.PrimSignatures.coq_Sigma1 fn in
-           let a = p_action pos (gensym_target (Cuttlebone.Util.argType 1 fsig 0) "x") a in
+           let a = p_action false pos (gensym_target (Cuttlebone.Util.argType 1 fsig 0) "x") a in
            taint [a] (p_unop fn (must_value a))
         | Extr.Binop (_, fn, a1, a2) ->
            let fsig = Extr.PrimSignatures.coq_Sigma2 fn in
-           let a1 = p_action pos (maybe_gensym_target target (Cuttlebone.Util.argType 2 fsig 0) "x") a1 in
-           let a2 = p_action pos (gensym_target (Cuttlebone.Util.argType 2 fsig 1) "y") a2 in
+           let a1 = p_action false pos (maybe_gensym_target target (Cuttlebone.Util.argType 2 fsig 0) "x") a1 in
+           let a2 = p_action false pos (gensym_target (Cuttlebone.Util.argType 2 fsig 1) "y") a2 in
            taint [a1; a2] (p_binop target fn (must_value a1) (must_value a2))
         | Extr.ExternalCall (_, fn, a) ->
            let ffi = hpp.cpp_ext_sigs fn in
-           let a = p_action pos (gensym_target ffi.ffi_argtype "x") a in
+           let a = p_action false pos (gensym_target ffi.ffi_argtype "x") a in
            Hashtbl.replace program_info.pi_ext_funcalls ffi ();
            let expr = cpp_ext_funcall ffi.ffi_name (must_value a) in
            (* See ‘Read’ case for why returning just ImpureExpr isn't safe *)
@@ -1093,9 +1096,9 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
                Extr.cfoldl (fun (arg_name, arg_type) arg () ->
                    p_bound_var_assign pos arg_type arg_name arg)
                  argspec args ();
-               p_assign_expr target (p_action pos target body))
+               p_assign_expr target (p_action at_top pos target body))
         | Extr.APos (_, _, Extr.PosAnnot pos, a) ->
-           p_action (hpp.cpp_pos_of_pos pos) target a
+           p_action at_top (hpp.cpp_pos_of_pos pos) target a
         | Extr.Fail (_, _) -> while true do () done; failwith "Missing annotation on fail"
         | Extr.Read (_, _, _) -> failwith "Missing annotation on read"
         | Extr.Write (_, _, _, _) -> failwith "Missing annotation on write"
@@ -1104,12 +1107,12 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
         let rec loop = function
           | [] ->
              p "default:";
-             let res = p_assign_expr target (p_action pos target default) in
+             let res = p_assign_expr target (p_action false pos target default) in
              p "break;"; (* Ensure that we don't print an empty ‘default:’ case *)
              res
           | (const, action) :: branches ->
              p "case %s:" (sp_value ~immediate:true const);
-             p_assign_and_ignore target (p_action pos target action);
+             p_assign_and_ignore target (p_action false pos target action);
              p "break;";
              loop branches in
         let varname = hpp.cpp_var_names var in
@@ -1127,8 +1130,8 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
             (* ‘int x = x + 1;’ doesn't work in C++ (basic.scope.pdecl), so if
                the rhs uses a variable with name ‘v’ we need a temp variable. *)
             let vtmp = gensym_target tau "tmp" in
-            must_expr (p_assign_expr vtmp (p_action pos vtmp expr))
-          else p_action pos vtarget expr in
+            must_expr (p_assign_expr vtmp (p_action false pos vtmp expr))
+          else p_action false pos vtarget expr in
         p_assign_and_ignore vtarget expr
       and p_assign_and_ignore target expr =
         ignore (p_assign_expr target expr) in
@@ -1149,7 +1152,7 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
 
       p_fn ~typ:(flags ^ "bool") ~name:rl_main ~annot (fun () ->
           if use_dynamic_log then (p "dynamic_log_t<%d> dlog{};" rule_max_log_size; nl ());
-          p_assign_and_ignore NoTarget (p_action Pos.Unknown NoTarget rule.rl_body);
+          p_assign_and_ignore NoTarget (p_action true Pos.Unknown NoTarget rule.rl_body);
           nl ();
           p "%s(%s);" commit rule_name_unprefixed;
           p "return true;") in
