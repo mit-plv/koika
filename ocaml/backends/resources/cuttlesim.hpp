@@ -1173,41 +1173,55 @@ namespace cuttlesim {
 #define FAIL(rule_name) \
   { reset_##rule_name(); return false; }
 #define FAIL_UNLESS(rule_name, can_fire) \
-  { if (!(can_fire)) { FAIL(rule_name); } }
-#define READ0(rule_name, reg, ptr) \
-  FAIL_UNLESS(rule_name, read0((ptr), Log.state.reg, log.rwset.reg, Log.rwset.reg))
-#define READ1(rule_name, reg, ptr) \
-  FAIL_UNLESS(rule_name, read1((ptr), log.state.reg, log.rwset.reg, Log.rwset.reg))
+  { if (!(can_fire)) { FAIL(rule_name); }  }
+#define READ(rule_name, reg, source, read_fn) \
+  ({ decltype(source.reg) tmp; \
+     FAIL_UNLESS(rule_name, read_fn(&tmp, source.reg, log.rwset.reg, Log.rwset.reg)); \
+     tmp; })
+#define WRITE(rule_name, reg, val, write_fn) \
+  FAIL_UNLESS(rule_name, write_fn(log.state.reg, (val), log.rwset.reg))
+#define READ0(rule_name, reg) \
+  READ(rule_name, reg, Log.state, read0)
+#define READ1(rule_name, reg) \
+  READ(rule_name, reg, log.state, read1)
 #define WRITE0(rule_name, reg, val) \
-  FAIL_UNLESS(rule_name, write0(log.state.reg, (val), log.rwset.reg))
+  WRITE(rule_name, reg, val, write0)
 #define WRITE1(rule_name, reg, val) \
-  FAIL_UNLESS(rule_name, write1(log.state.reg, (val), log.rwset.reg))
+  WRITE(rule_name, reg, val, write1)
 #define COMMIT(rule_name) \
-  (commit_##rule_name())
+  commit_##rule_name()
 
 #define FAIL_FAST(_rule_name) \
   { return false; }
-#define READ0_FAST(_rule_name, reg, ptr) \
-  cuttlesim::read_fast((ptr), Log.state.reg)
-#define READ1_FAST(_rule_name, reg, ptr) \
-  cuttlesim::read_fast((ptr), log.state.reg)
+#define READ0_FAST(_rule_name, reg) \
+  Log.state.reg
+#define READ1_FAST(_rule_name, reg) \
+  log.state.reg
 #define WRITE0_FAST(_rule_name, reg, val) \
-  cuttlesim::write_fast(log.state.reg, (val))
+  log.state.reg = (val)
 #define WRITE1_FAST(_rule_name, reg, val) \
-  cuttlesim::write_fast(log.state.reg, (val))
+  log.state.reg = (val)
 
 #define FAIL_DL(rule_name) \
   { dlog.apply(log, Log); return false; }
 #define FAIL_UNLESS_DL(rule_name, can_fire) \
   { if (!(can_fire)) { FAIL_DL(rule_name); } }
-#define READ0_DL(rule_name, reg, ptr) \
-  { dlog.push(reg_name_t::reg); FAIL_UNLESS_DL(rule_name, read0((ptr), Log.state.reg, log.rwset.reg, Log.rwset.reg)) }
-#define READ1_DL(rule_name, reg, ptr) \
-  { dlog.push(reg_name_t::reg); FAIL_UNLESS_DL(rule_name, read1((ptr), log.state.reg, log.rwset.reg, Log.rwset.reg)) }
+#define READ_DL(rule_name, reg, source, read_fn) \
+  ({ dlog.push(reg_name_t::reg); \
+     decltype(source.reg) tmp; \
+     FAIL_UNLESS_DL(rule_name, read_fn(&tmp, source.reg, log.rwset.reg, Log.rwset.reg)); \
+     tmp; })
+#define WRITE_DL(rule_name, reg, write_fn) \
+  { dlog.push(reg_name_t::reg); \
+    FAIL_UNLESS_DL(rule_name, write_fn(log.state.reg, (val), log.rwset.reg)) }
+#define READ0_DL(rule_name, reg) \
+  READ_DL(rule_name, reg, Log.state, read0)
+#define READ1_DL(rule_name, reg) \
+  READ_DL(rule_name, reg, log.state, read1)
 #define WRITE0_DL(rule_name, reg, val) \
-  { dlog.push(reg_name_t::reg); FAIL_UNLESS_DL(rule_name, write0(log.state.reg, (val), log.rwset.reg)) }
+  WRITE_DL(rule_name, reg, val, write0)
 #define WRITE1_DL(rule_name, reg, val) \
-  { dlog.push(reg_name_t::reg); FAIL_UNLESS_DL(rule_name, write1(log.state.reg, (val), log.rwset.reg)) }
+  WRITE_DL(rule_name, reg, val, write1)
 #define COMMIT_DL(rule_name) \
   dlog.apply(Log, log)
 
@@ -1219,14 +1233,22 @@ namespace cuttlesim {
   dlog.push({ \
       offsetof(struct state_t, reg), sizeof(state_t::reg), \
       offsetof(struct rwset_t, reg), sizeof(rwset_t::reg), })
-#define READ0_DOL(rule_name, reg, ptr) \
-  { PUSH_DOL(reg); FAIL_UNLESS_DOL(rule_name, read0((ptr), Log.state.reg, log.rwset.reg, Log.rwset.reg)) }
-#define READ1_DOL(rule_name, reg, ptr) \
-  { PUSH_DOL(reg); FAIL_UNLESS_DOL(rule_name, read1((ptr), log.state.reg, log.rwset.reg, Log.rwset.reg)) }
+#define READ_DOL(rule_name, reg, source, read_fn) \
+  ({ PUSH_DOL(reg); \
+     decltype(source.reg) tmp; \
+     FAIL_UNLESS_DOL(rule_name, read_fn(&tmp, source.reg, log.rwset.reg, Log.rwset.reg)); \
+     tmp; })
+#define WRITE_DOL(rule_name, reg, val, write_fn) \
+  { PUSH_DOL(reg); \
+    FAIL_UNLESS_DOL(rule_name, write_fn(log.state.reg, (val), log.rwset.reg)) }
+#define READ0_DOL(rule_name, reg) \
+  READ_DOL(rule_name, reg, Log.state, read0)
+#define READ1_DOL(rule_name, reg) \
+  READ_DOL(rule_name, reg, log.state, read1)
 #define WRITE0_DOL(rule_name, reg, val) \
-  { PUSH_DOL(reg); FAIL_UNLESS_DOL(rule_name, write0(log.state.reg, (val), log.rwset.reg)) }
+  WRITE_DOL(rule_name, reg, val, write0)
 #define WRITE1_DOL(rule_name, reg, val) \
-  { PUSH_DOL(reg); FAIL_UNLESS_DOL(rule_name, write1(log.state.reg, (val), log.rwset.reg)) }
+  WRITE_DOL(rule_name, reg, val, write1)
 #define COMMIT_DOL(rule_name) \
   dlog.apply(Log, log)
 

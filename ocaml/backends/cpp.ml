@@ -890,11 +890,6 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
         | NoTarget -> gensym_target_info tau "ignored"
         | VarTarget info -> info in
 
-      let p_ensure_declared tinfo =
-        if not tinfo.declared then
-          p_decl tinfo.tau tinfo.name;
-        tinfo.name in
-
       let p_assign_expr ?(prefix = "") target result =
         match target, result with
         | VarTarget ({ declared; name; tau } as ti), (PureExpr e | ImpureExpr e) ->
@@ -1045,17 +1040,20 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
         | Extr.APos (_, _, Extr.HistoryAnnot _,
                      Extr.Read (_, port, reg)) ->
            let r = hpp.cpp_register_sigs reg in
-           let var = p_ensure_declared (ensure_target (reg_type r) target) in
            let pt = match port with P0 -> 0 | P1 -> 1 in
-           pr "%s(%s, %s, &%s);" (read reg pt) rule_name_unprefixed r.reg_name var;
-           Assigned var
+           let expr = sprintf "%s(%s, %s)" (read reg pt) rule_name_unprefixed r.reg_name in
+           (* It wouldn't be safe to return the result directly (as a plain
+              ImpureExpr) without writing it out, because of sequencing issues
+              in expressions like “a := read0(x) + (write0(x); 0)” (we'd end up
+              compiling to “WRITE0(x); a = read0(x) + 0;”, which is wrong) *)
+           p_assign_expr target (ImpureExpr expr)
         | Extr.APos (_, _, Extr.HistoryAnnot _,
                      Extr.Write (_, port, reg, expr)) ->
            let r = hpp.cpp_register_sigs reg in
            let vt = gensym_target (reg_type r) "v" in
            let v = must_value (p_action pos vt expr) in
            let pt = match port with P0 -> 0 | P1 -> 1 in
-           pr "%s(%s, %s, %s);" (write reg pt) rule_name_unprefixed r.reg_name v;
+           p "%s(%s, %s, %s);" (write reg pt) rule_name_unprefixed r.reg_name v;
            p_assign_expr target (PureExpr "prims::tt")
         | Extr.Unop (_, Extr.PrimTyped.Conv (tau, Extr.PrimTyped.Unpack), a)
              when Extr.(returns_zero a && is_pure a) ->
@@ -1074,7 +1072,9 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
            let ffi = hpp.cpp_ext_sigs fn in
            let a = p_action pos (gensym_target ffi.ffi_argtype "x") a in
            Hashtbl.replace program_info.pi_ext_funcalls ffi ();
-           ImpureExpr (cpp_ext_funcall ffi.ffi_name (must_value a))
+           let expr = cpp_ext_funcall ffi.ffi_name (must_value a) in
+           (* See ‘Read’ case for why returning just ImpureExpr isn't safe *)
+           p_assign_expr target (ImpureExpr expr)
         | Extr.InternalCall (_, _, fn, argspec, args, body) ->
            p_declare_target target;
            p_scoped (sprintf "/* Call to %s */" @@ hpp.cpp_fn_names fn) (fun () ->
