@@ -983,6 +983,16 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
       let rule_name_unprefixed =
         hpp.cpp_rule_names ~prefix:"" rule.rl_name in
 
+      let collect_bindings pos action =
+        let rec loop pos bindings = function
+          | Extr.Bind (_, tau, _, var, expr, body) when not (List.mem_assoc var bindings) ->
+             loop pos ((var, (pos, tau, expr)) :: bindings) body
+          | Extr.APos (_, _, Extr.PosAnnot pos, a) ->
+             loop (hpp.cpp_pos_of_pos pos) bindings a
+          | body -> bindings, (pos, body) in
+        let bindings, body = loop pos [] action in
+        List.rev bindings, body in
+
       let rec p_action (pos: Pos.t) (target: assignment_target)
                 (rl: ((pos_t, reg_t) Extr.register_annotation,
                       var_t, fn_name_t, reg_t, _) Extr.action) =
@@ -1015,11 +1025,13 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
         | Extr.Seq (_, _, a1, a2) ->
            p_assign_and_ignore NoTarget (p_action pos NoTarget a1);
            p_action pos target a2
-        | Extr.Bind (_, tau, _, v, expr, rl) ->
+        | Extr.Bind _ ->
+           let bindings, (pos, body) = collect_bindings pos rl in
            p_declare_target target;
-           p_scoped "" (fun () ->
-               p_bound_var_assign pos tau v expr;
-               p_assign_expr target (p_action pos target rl))
+           p_scoped "/* bind */" (fun () ->
+             List.iter (fun (var, (pos, tau, expr)) ->
+                 p_bound_var_assign pos tau var expr) bindings;
+             p_assign_expr target (p_action pos target body))
         | Extr.If (_, _, cond, tbr, fbr) ->
            p_declare_target target;
            (match reconstruct_switch rl with
