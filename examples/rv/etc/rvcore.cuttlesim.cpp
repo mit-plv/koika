@@ -92,7 +92,7 @@ protected:
 };
 
 #ifdef SIM_MINIMAL
-template simulator::state_t cuttlesim::init_and_run<simulator>(int);
+template simulator::state_t cuttlesim::init_and_run<simulator>(unsigned long long);
 #else
 int main(int argc, char** argv) {
   if (argc <= 1) {
