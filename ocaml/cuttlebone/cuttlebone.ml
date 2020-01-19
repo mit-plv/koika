@@ -98,6 +98,12 @@ module Util = struct
       Extr.int_retSig = extr_type_of_typ fsig.int_retSig;
       Extr.int_body = fbody fsig.int_body }
 
+  let intfun_of_extr_intfun fbody (fsig: _ Extr.internalFunction) =
+    { int_name = fsig.int_name;
+      int_argspec = List.map (fun (nm, tau) -> nm, typ_of_extr_type tau) fsig.int_argspec;
+      int_retSig = typ_of_extr_type fsig.int_retSig;
+      int_body = fbody fsig.int_body }
+
   let extr_type_to_string tau =
     typ_to_string (typ_of_extr_type tau)
 

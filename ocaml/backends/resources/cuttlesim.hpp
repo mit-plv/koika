@@ -1188,6 +1188,10 @@ namespace cuttlesim {
   WRITE(rule_name, reg, val, write0)
 #define WRITE1(rule_name, reg, val) \
   WRITE(rule_name, reg, val, write1)
+#define CALL(rule_name, fn_name, ...) \
+  ({ ti_##fn_name tmp; \
+     FAIL_UNLESS(rule_name, fn_name(&tmp,##__VA_ARGS__)); \
+     tmp; })
 #define COMMIT(rule_name) \
   commit_##rule_name()
 

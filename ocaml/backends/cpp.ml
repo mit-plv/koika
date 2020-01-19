@@ -815,6 +815,9 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
         | Range (filename, { rbeg = { line; _ }; _ }) ->
            p "#line %d \"%s\"" line (sp_escaped_string filename) in
 
+    (* Map used to avoid collisions between function names *)
+    let internal_fnames = Hashtbl.create 20 in
+
     let p_rule (rule: (pos_t, var_t, fn_name_t, rule_name_t, reg_t, ext_fn_t) cpp_rule_t) =
       gensym_reset ();
 
@@ -839,6 +842,7 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
         else "" in
       let fail safe = sprintf "FAIL%s" (if safe then "_FAST" else dl_suffix) in
       let commit = sprintf "COMMIT%s" dl_suffix in
+      let call = sprintf "CALL%s" dl_suffix in
       let rw_suffix reg =
         if hpp.cpp_register_kinds reg = Value then "_FAST" else dl_suffix in
       let read reg pt =
@@ -993,6 +997,22 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
         let bindings, body = loop pos [] action in
         List.rev bindings, body in
 
+      let package_intfun fn argspec tau body =
+      { Extr.int_name = hpp.cpp_fn_names fn;
+        Extr.int_argspec = argspec;
+        Extr.int_retSig = tau;
+        Extr.int_body = body } in
+
+      (* Table mapping function objects to unique names.  This is reset for each
+         rules, because each implementation of a function is specific to one
+         rule (this is true at least for rules that may fail, because these need
+         to invoke a rule-specific reset function *)
+      let internal_functions = Hashtbl.create 20 in
+
+      let lookup_intfun fn argspec tau body =
+        let intf = package_intfun fn argspec tau body in
+        intf, Hashtbl.find_opt internal_functions intf in
+
       let rec p_action
                 (at_top: bool)
                 (pos: Pos.t) (target: assignment_target)
@@ -1087,16 +1107,24 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
            let ffi = hpp.cpp_ext_sigs fn in
            let a = p_action false pos (gensym_target ffi.ffi_argtype "x") a in
            Hashtbl.replace program_info.pi_ext_funcalls ffi ();
-           let expr = cpp_ext_funcall ffi.ffi_name (must_value a) in
            (* See ‘Read’ case for why returning just ImpureExpr isn't safe *)
+           let expr = cpp_ext_funcall ffi.ffi_name (must_value a) in
            p_assign_expr target (ImpureExpr expr)
-        | Extr.InternalCall (_, _, fn, argspec, args, body) ->
-           p_declare_target target;
-           p_scoped (sprintf "/* Call to %s */" @@ hpp.cpp_fn_names fn) (fun () ->
-               Extr.cfoldl (fun (arg_name, arg_type) arg () ->
-                   p_bound_var_assign pos arg_type arg_name arg)
-                 argspec args ();
-               p_assign_expr target (p_action at_top pos target body))
+        | Extr.InternalCall (_, tau, fn, argspec, args, body) ->
+           let fn_name = match snd (lookup_intfun fn argspec tau body) with
+             | Some fn -> fn
+             | None -> assert false in
+           let rev_args = Extr.cfoldl (fun (argname, tau) arg argstrs ->
+                          let tau = Cuttlebone.Util.typ_of_extr_type tau in
+                          let argname = hpp.cpp_var_names argname in
+                          let target = gensym_target tau argname in
+                          must_value (p_action false pos target arg) :: argstrs)
+                        argspec args [] in
+           (* FIXME need the type of the return value in the macro to know what kind of parameter to declare *)
+           (* See ‘Read’ case for why returning just ImpureExpr isn't safe *)
+           let args = String.concat ", " (fn_name :: List.rev rev_args) in
+           let invocation = sprintf "%s(%s, %s)" call rule_name_unprefixed args in
+           p_assign_expr target (ImpureExpr invocation)
         | Extr.APos (_, _, Extr.PosAnnot pos, a) ->
            p_action at_top (hpp.cpp_pos_of_pos pos) target a
         | Extr.Fail (_, _) -> while true do () done; failwith "Missing annotation on fail"
@@ -1141,21 +1169,93 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
       let rl_reset = hpp.cpp_rule_names ~prefix:"reset" rule.rl_name in
       let rl_commit = hpp.cpp_rule_names ~prefix:"commit" rule.rl_name in
 
-      let flags =
-        (if rule.rl_external then "virtual " else "") ^ "_noinline " in
+      let virtual_flag =
+        if rule.rl_external then "virtual " else "" in
 
-      if not use_dynamic_log then
-        (p_fn ~typ:(flags ^ "void") ~name:rl_reset ~annot p_reset;
-         nl ();
-         p_fn ~typ:(flags ^ "void") ~name:rl_commit ~annot p_commit;
-         nl ());
+      let rule_flags =
+        virtual_flag ^ "_noinline " in
 
-      p_fn ~typ:(flags ^ "bool") ~name:rl_main ~annot (fun () ->
-          if use_dynamic_log then (p "dynamic_log_t<%d> dlog{};" rule_max_log_size; nl ());
-          p_assign_and_ignore NoTarget (p_action true Pos.Unknown NoTarget rule.rl_body);
-          nl ();
-          p "%s(%s);" commit rule_name_unprefixed;
-          p "return true;") in
+      let p_reset_commit () =
+        if not use_dynamic_log then
+          (p_fn ~typ:(rule_flags ^ "void") ~name:rl_reset ~annot p_reset;
+           nl ();
+           p_fn ~typ:(rule_flags ^ "void") ~name:rl_commit ~annot p_commit;
+           nl ()) in
+
+      let p_rule_body () =
+        p_fn ~typ:(rule_flags ^ "bool") ~name:rl_main ~annot (fun () ->
+            if use_dynamic_log then (p "dynamic_log_t<%d> dlog{};" rule_max_log_size; nl ());
+            p_assign_and_ignore NoTarget (p_action true Pos.Unknown NoTarget rule.rl_body);
+            nl ();
+            p "%s(%s);" commit rule_name_unprefixed;
+            p "return true;") in
+
+      let collect_intfuns pos (action: (_, var_t, fn_name_t, reg_t, _) Extr.action) =
+        let fns = ref [] in
+        let ensure_fresh fn =
+          let fn = sprintf "fn_%s_%s" rule_name_unprefixed fn in
+          let rec loop nm counter =
+            if not (Hashtbl.mem internal_fnames nm) then
+              let () = Hashtbl.add internal_fnames nm () in nm
+            else
+              let nm = fn ^ "_instance" ^ string_of_int counter in
+              loop nm (counter + 1) in
+          loop fn 0 in
+        let register_intfun pos fn argspec tau body =
+          (* FIXME assert that all args have different names *)
+          match lookup_intfun fn argspec tau body with
+          | _, Some _ -> ()
+          | intf, None ->
+             let nm = ensure_fresh (hpp.cpp_fn_names fn) in
+             fns := (pos, nm, intf) :: !fns;
+             Hashtbl.add internal_functions intf nm in
+        let rec loop pos = function
+          | Extr.Fail _
+            | Extr.Var _
+            | Extr.Const _
+            | Extr.Read (_, _, _) -> ()
+          | Extr.Assign (_, _, _, _, a)
+            | Extr.Write (_, _, _, a)
+            | Extr.Unop (_, _, a)
+            | Extr.ExternalCall (_, _, a)
+            | Extr.APos (_, _, _, a) ->
+             loop pos a
+          | Extr.Seq (_, _, a1, a2)
+            | Extr.Bind (_, _, _, _, a1, a2)
+            | Extr.Binop (_, _, a1, a2) ->
+             loop pos a1;
+             loop pos a2
+          | Extr.If (_, _, c, tbr, fbr) ->
+             loop pos c;
+             loop pos tbr;
+             loop pos fbr
+          | Extr.InternalCall (_, tau, fn, argspec, args, body) ->
+             register_intfun pos fn argspec tau body;
+             let _ = Extr.cmap (fun k -> k) (fun _ v -> loop pos v) argspec args in
+             loop pos body in
+        loop pos action;
+        !fns in
+
+      let fn_flags =
+        virtual_flag (* ^ "inline __attribute__((always_inline)) " *) in
+
+      let p_intfun (pos, name, intf) =
+        let sp_arg (nm, tau) =
+          let tau = Cuttlebone.Util.typ_of_extr_type tau in
+          sprintf "%s %s" (cpp_type_of_type tau) (hpp.cpp_var_names nm) in
+        let ret_tau = Cuttlebone.Util.typ_of_extr_type intf.Extr.int_retSig in
+        let ret_type = cpp_type_of_type ret_tau in
+        p "using ti_%s = %s;" name ret_type;
+        let ret_arg = sprintf "%s %s" ret_type "*_ret" in
+        let args = String.concat ", " @@ ret_arg :: List.map sp_arg intf.Extr.int_argspec in
+        p_fn ~typ:(fn_flags ^ "bool") ~name ~annot ~args (fun () ->
+            let target = VarTarget { tau = ret_tau; declared = true; name = "(*_ret)" } in
+            p_assign_and_ignore target (p_action true pos target intf.int_body);
+            p "return true;") in
+
+      iter_sep nl p_intfun (collect_intfuns Pos.Unknown rule.rl_body);
+      p_reset_commit ();
+      p_rule_body () in
 
     let p_initial_state () =
       (* This is a function instead of a variable to avoid polluting GDB's output *)
