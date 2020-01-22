@@ -39,13 +39,9 @@ Section SyntaxFunctions.
         | UBinop ufn2 arg1 arg2 => UBinop ufn2 (r 0 arg1) (r 1 arg2)
         | UExternalCall ufn arg =>
           UExternalCall ufn (r 0 arg)
-        | UInternalCall ufn args =>
-          let ufn :=
-              {| int_name := ufn.(int_name);
-                 int_argspec := ufn.(int_argspec);
-                 int_retSig := ufn.(int_retSig);
-                 int_body := r 0 ufn.(int_body) |} in
-          let args := snd (foldi (fun n a args => (r n a :: args)) 1 [] args) in
+        | UInternalCall ufn arg =>
+          let ufn := map_intf_body (r 0) ufn in
+          let args := snd (foldi (fun n a args => (r n a :: args)) 1 [] arg) in
           UInternalCall ufn args
         | UAPos _ e => (r 0 e)
         | USugar s => USugar (reposition_sugar p s)
@@ -82,11 +78,7 @@ Section SyntaxFunctions.
                  foldi (fun n a elements => (r n a) :: elements) 0 [] elements in
              UArrayInit tau elements
            | UCallModule fR fSigma ufn args =>
-             let ufn :=
-                 {| int_name := ufn.(int_name);
-                    int_argspec := ufn.(int_argspec);
-                    int_retSig := ufn.(int_retSig);
-                    int_body := r 0 ufn.(int_body) |} in
+             let ufn := map_intf_body (r 0) ufn in
              let args := snd (foldi (fun n a args => (r n a :: args)) 1 [] args) in
              UCallModule fR fSigma ufn args
            end.
@@ -166,10 +158,7 @@ Section SyntaxFunctions.
               let ufn :=
                   if fbody then
                     (* Only unfold the body if the error is in it *)
-                    {| int_name := ufn.(int_name);
-                       int_argspec := ufn.(int_argspec);
-                       int_retSig := ufn.(int_retSig);
-                       int_body := body |}
+                    map_intf_body (fun _ => body) ufn
                   else ufn in
               let '(n, (fargs, args)) :=
                   foldi (fun n arg '(fargs, args) =>
@@ -241,12 +230,8 @@ Section SyntaxFunctions.
            | UCallModule fR fSigma ufn args =>
               let '(fbody, body) := pe 0 ufn.(int_body) in
               let ufn :=
-                  if fbody then
-                    (* Only unfold the body if the error is in it *)
-                    {| int_name := ufn.(int_name);
-                       int_argspec := ufn.(int_argspec);
-                       int_retSig := ufn.(int_retSig);
-                       int_body := body |}
+                  if fbody then (* Only unfold the body if the error is in it *)
+                    map_intf_body (fun _ => body) ufn
                   else ufn in
               let '(n, (fargs, args)) :=
                   foldi (fun n arg '(fargs, args) =>

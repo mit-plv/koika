@@ -16,23 +16,25 @@ let add_line_pragmas = false
 let use_dynamic_logs = false
 let use_offsets_in_dynamic_log = false
 
-type ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_rule_t = {
+type ('pos_t, 'var_t, 'fn_name_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_rule_t = {
     rl_external: bool;
     rl_name: 'rule_name_t;
     rl_footprint: 'reg_t array;
-    rl_body: (('pos_t, 'reg_t) Extr.register_annotation, 'var_t, 'reg_t, 'ext_fn_t) Extr.rule;
+    rl_body: (('pos_t, 'reg_t) Extr.register_annotation,
+              'var_t, 'fn_name_t, 'reg_t, 'ext_fn_t) Extr.rule;
   }
 
-type ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_input_t = {
+type ('pos_t, 'var_t, 'fn_name_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_input_t = {
     cpp_classname: string;
     cpp_module_name: string;
 
     cpp_pos_of_pos: 'pos_t -> Pos.t;
     cpp_var_names: 'var_t -> string;
+    cpp_fn_names: 'fn_name_t -> string;
     cpp_rule_names: ?prefix:string -> 'rule_name_t -> string;
 
     cpp_scheduler: ('pos_t, 'rule_name_t) Extr.scheduler;
-    cpp_rules: ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_rule_t list;
+    cpp_rules: ('pos_t, 'var_t, 'fn_name_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_rule_t list;
 
     cpp_registers: 'reg_t array;
     cpp_register_sigs: 'reg_t -> reg_signature;
@@ -142,6 +144,7 @@ module Mangling = struct
     { u with (* The prefixes are needed to prevent collisions with ‘prims::’ *)
       cpp_classname = mangle_name ~prefix:"module" u.cpp_classname;
       cpp_var_names = (fun v -> v |> u.cpp_var_names |> mangle_name);
+      cpp_fn_names = (fun v -> v |> u.cpp_fn_names |> mangle_name);
       cpp_rule_names = (fun ?prefix rl ->
         rl |> u.cpp_rule_names |> mangle_name ~prefix:(default "rule" prefix));
       cpp_register_sigs = (fun r -> r |> u.cpp_register_sigs |> mangle_register_sig);
@@ -330,8 +333,8 @@ let assignment_result_to_string (d: assignment_result) =
   | PureExpr s -> sprintf "PureExpr %s" s
   | ImpureExpr s -> sprintf "ImpureExpr %s" s
 
-let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
-      (hpp: (pos_t, var_t, rule_name_t, reg_t, ext_fn_t) cpp_input_t) =
+let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
+      (hpp: (pos_t, var_t, fn_name_t, rule_name_t, reg_t, ext_fn_t) cpp_input_t) =
   let buffer = ref (Buffer.create 0) in
   let hpp = Mangling.mangle_unit hpp in
 
@@ -812,7 +815,7 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
         | Range (filename, { rbeg = { line; _ }; _ }) ->
            p "#line %d \"%s\"" line (sp_escaped_string filename) in
 
-    let p_rule (rule: (pos_t, var_t, rule_name_t, reg_t, ext_fn_t) cpp_rule_t) =
+    let p_rule (rule: (pos_t, var_t, fn_name_t, rule_name_t, reg_t, ext_fn_t) cpp_rule_t) =
       gensym_reset ();
 
       let footprint_sz =
@@ -986,7 +989,8 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
         hpp.cpp_rule_names ~prefix:"" rule.rl_name in
 
       let rec p_action (pos: Pos.t) (target: assignment_target)
-                (rl: ((pos_t, reg_t) Extr.register_annotation, var_t, reg_t, _) Extr.action) =
+                (rl: ((pos_t, reg_t) Extr.register_annotation,
+                      var_t, fn_name_t, reg_t, _) Extr.action) =
         p_pos pos;
         match rl with
         | Extr.APos (_, _, Extr.HistoryAnnot reg_histories,
@@ -1071,6 +1075,13 @@ let compile (type pos_t var_t rule_name_t reg_t ext_fn_t)
            let a = p_action pos (gensym_target ffi.ffi_argtype "x") a in
            Hashtbl.replace program_info.pi_ext_funcalls ffi ();
            ImpureExpr (cpp_ext_funcall ffi.ffi_name (must_value a))
+        | Extr.InternalCall (_, _, fn, argspec, args, body) ->
+           p_declare_target target;
+           p_scoped (sprintf "/* Call to %s */" @@ hpp.cpp_fn_names fn) (fun () ->
+               Extr.cfoldl (fun (arg_name, arg_type) arg () ->
+                   p_bound_var_assign pos arg_type arg_name arg)
+                 argspec args ();
+               p_assign_expr target (p_action pos target body))
         | Extr.APos (_, _, Extr.PosAnnot pos, a) ->
            p_action (hpp.cpp_pos_of_pos pos) target a
         | Extr.Fail (_, _) -> while true do () done; failwith "Missing annotation on fail"
@@ -1328,12 +1339,15 @@ let input_of_compile_unit (cu: 'f Cuttlebone.Compilation.compile_unit) =
     Cuttlebone.Util.compute_register_histories
       Cuttlebone.Compilation._R cu.c_registers
       (List.map fst cu.c_rules) rulemap cu.c_scheduler in
-  let swap_body (name, (kind, _)) =
+  let swap_body (name, (kind, _))
+      : (_ * (_ * (_, Common.var_t, Common.fn_name_t, Common.reg_signature, 'c)
+                    Cuttlebone.Extr.annotated_rule)) =
     (name, (kind, annotated_rules name)) in
   { cpp_classname = cu.c_modname;
     cpp_module_name = cu.c_modname;
     cpp_pos_of_pos = cu.c_pos_of_pos;
     cpp_var_names = (fun x -> x);
+    cpp_fn_names = (fun x -> x);
     cpp_rule_names = (fun ?prefix:_ rl -> rl);
     cpp_scheduler = cu.c_scheduler;
     cpp_rules = List.map (cpp_rule_of_action cu.c_registers << swap_body) cu.c_rules;
@@ -1350,9 +1364,9 @@ let cpp_rule_of_koika_package_rule (kp: _ Extr.koika_package_t)
     (rn, (kind rn, annotated_rules rn))
 
 let input_of_sim_package
-      (kp: ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) Extr.koika_package_t)
+      (kp: ('pos_t, 'var_t, 'fn_name_t, 'rule_name_t, 'reg_t, 'ext_fn_t) Extr.koika_package_t)
       (sp: ('ext_fn_t) Extr.sim_package_t)
-    : ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_input_t =
+    : ('pos_t, 'var_t, 'fn_name_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_input_t =
   let rule_names =
     Extr.scheduler_rules kp.koika_scheduler |> Cuttlebone.Util.dedup in
   let annotated_rules, register_kinds =
@@ -1366,6 +1380,7 @@ let input_of_sim_package
     cpp_module_name = classname;
     cpp_pos_of_pos = (fun _ -> Pos.Unknown);
     cpp_var_names = (fun x -> Cuttlebone.Util.string_of_coq_string (kp.koika_var_names.show0 x));
+    cpp_fn_names = (fun x -> Cuttlebone.Util.string_of_coq_string (kp.koika_fn_names.show0 x));
     cpp_rule_names = (fun ?prefix:_ rn ->
       Cuttlebone.Util.string_of_coq_string (kp.koika_rule_names.show0 rn));
     cpp_scheduler = kp.koika_scheduler;

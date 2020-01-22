@@ -54,13 +54,13 @@ Definition var_t := string.
 Definition fn_name_t := string.
 
 Notation uaction := (uaction pos_t var_t fn_name_t).
-Notation action := (action pos_t var_t).
-Notation rule := (rule pos_t var_t).
+Notation action := (action pos_t var_t fn_name_t).
+Notation rule := (rule pos_t var_t fn_name_t).
 
 Notation scheduler := (scheduler pos_t _).
 
-Notation UInternalFunction reg_t ext_fn_t := (InternalFunction fn_name_t var_t (uaction reg_t ext_fn_t)).
-Notation InternalFunction R Sigma sig tau := (InternalFunction fn_name_t var_t (action R Sigma sig tau)).
+Notation UInternalFunction reg_t ext_fn_t := (InternalFunction var_t fn_name_t (uaction reg_t ext_fn_t)).
+Notation InternalFunction R Sigma sig tau := (InternalFunction var_t fn_name_t (action R Sigma sig tau)).
 
 Notation register_update_circuitry R Sigma := (register_update_circuitry _ R Sigma ContextEnv).
 

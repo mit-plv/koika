@@ -29,7 +29,7 @@ Module Fifo1 (f: Fifo).
 
 
   Definition enq : UInternalFunction reg_t empty_ext_fn_t :=
-   {{ fun (data : T) : bits_t 0 =>
+   {{ fun enq (data : T) : bits_t 0 =>
       if (!read1(valid0)) then
         write1(data0, data);
         write1(valid0, #Ob~1)
@@ -38,7 +38,7 @@ Module Fifo1 (f: Fifo).
 
 
   Definition deq :  UInternalFunction reg_t empty_ext_fn_t :=
-    {{ fun _ : T =>
+    {{ fun deq () : T =>
       if (read0(valid0)) then
         write0(valid0, Ob~0)
       else
@@ -74,7 +74,7 @@ Module Fifo1Bypass (f: Fifo).
 
 
   Definition enq : UInternalFunction reg_t empty_ext_fn_t :=
-   {{ fun (data : T) : bits_t 0 =>
+   {{ fun enq (data : T) : bits_t 0 =>
       if (!read0(valid0)) then
         write0(data0, data);
         write0(valid0, #Ob~1)
@@ -83,7 +83,7 @@ Module Fifo1Bypass (f: Fifo).
 
 
   Definition deq :  UInternalFunction reg_t empty_ext_fn_t :=
-    {{ fun _ : T =>
+    {{ fun deq () : T =>
       if (read1(valid0)) then
         write1(valid0, Ob~0)
       else
@@ -102,7 +102,7 @@ Definition Maybe tau :=
 Notation maybe tau := (struct_t (Maybe tau)).
 
 Definition valid {reg_t fn} (tau:type) : UInternalFunction reg_t fn :=
-  {{ fun (x: tau) : maybe tau =>
+  {{ fun valid (x: tau) : maybe tau =>
       struct (Maybe tau) {|
                valid := (#(Bits.of_nat 1 1)) ;
                data := x
@@ -110,7 +110,7 @@ Definition valid {reg_t fn} (tau:type) : UInternalFunction reg_t fn :=
   }}.
 
 Definition invalid {reg_t fn} (tau:type) : UInternalFunction reg_t fn :=
-  {{ fun _ : maybe tau =>
+  {{ fun invalid () : maybe tau =>
       struct (Maybe tau) {| valid := (#(Bits.of_nat 1 0)) |}
   }}.
 
@@ -142,22 +142,22 @@ Module RfPow2 (s: RfPow2_sig).
     end.
 
   Definition read_0 : UInternalFunction reg_t empty_ext_fn_t :=
-    {{ fun (idx : bits_t s.idx_sz) : s.T =>
+    {{ fun read_0 (idx : bits_t s.idx_sz) : s.T =>
          `UCompleteSwitch s.read_style s.idx_sz "idx"
               (fun idx => {{ read0(rData idx) }})` }}.
 
   Definition write_0 : UInternalFunction reg_t empty_ext_fn_t :=
-    {{ fun (idx : bits_t s.idx_sz) (val: s.T) : unit_t =>
+    {{ fun write_0 (idx : bits_t s.idx_sz) (val: s.T) : unit_t =>
          `UCompleteSwitch s.write_style s.idx_sz "idx"
               (fun idx => {{ write0(rData idx, val) }})` }}.
 
   Definition read_1 : UInternalFunction reg_t empty_ext_fn_t :=
-    {{ fun (idx : bits_t s.idx_sz) : s.T =>
+    {{ fun read_1 (idx : bits_t s.idx_sz) : s.T =>
          `UCompleteSwitch s.read_style s.idx_sz "idx"
               (fun idx => {{ read1(rData idx) }})` }}.
 
   Definition write_1 : UInternalFunction reg_t empty_ext_fn_t :=
-    {{ fun (idx : bits_t s.idx_sz) (val: s.T) : unit_t =>
+    {{ fun write_1 (idx : bits_t s.idx_sz) (val: s.T) : unit_t =>
          `UCompleteSwitch s.write_style s.idx_sz "idx"
               (fun idx => {{ write1(rData idx, val) }})` }}.
 End RfPow2.
@@ -190,7 +190,7 @@ Module Rf (s: Rf_sig).
     end.
 
   Definition read : UInternalFunction reg_t empty_ext_fn_t :=
-    {{ fun (idx : bits_t log_sz) : s.T =>
+    {{ fun read (idx : bits_t log_sz) : s.T =>
          `USugar
              (USwitch
                 {{idx}}
@@ -206,7 +206,7 @@ Module Rf (s: Rf_sig).
                    (List.seq 0 sz))) ` }}.
 
   Definition write : UInternalFunction reg_t empty_ext_fn_t :=
-    {{ fun (idx : bits_t log_sz) (val: s.T) : unit_t =>
+    {{ fun write (idx : bits_t log_sz) (val: s.T) : unit_t =>
          `USugar
           (USwitch
              {{idx}}
@@ -223,7 +223,7 @@ Module Rf (s: Rf_sig).
 End Rf.
 
 Definition signExtend {reg_t} (n:nat) (m:nat) : UInternalFunction reg_t empty_ext_fn_t :=
-  {{ fun (arg : bits_t n) : bits_t (m+n) => sext(arg, m + n) }}.
+  {{ fun signExtend (arg : bits_t n) : bits_t (m+n) => sext(arg, m + n) }}.
 
 Module RfEhr (s: Rf_sig).
 
@@ -248,7 +248,7 @@ Module RfEhr (s: Rf_sig).
     end.
 
   Definition read_0 : UInternalFunction reg_t empty_ext_fn_t :=
-    {{ fun (idx : bits_t log_sz) : s.T =>
+    {{ fun read_0 (idx : bits_t log_sz) : s.T =>
          `USugar
              (USwitch
                 {{idx}}
@@ -264,7 +264,7 @@ Module RfEhr (s: Rf_sig).
                    (List.seq 0 sz))) ` }}.
 
   Definition read_1 : UInternalFunction reg_t empty_ext_fn_t :=
-    {{ fun (idx : bits_t log_sz) : s.T =>
+    {{ fun read_1 (idx : bits_t log_sz) : s.T =>
          `USugar
              (USwitch
                 {{idx}}
@@ -280,7 +280,7 @@ Module RfEhr (s: Rf_sig).
                    (List.seq 0 sz))) ` }}.
 
   Definition write_0 : UInternalFunction reg_t empty_ext_fn_t :=
-    {{ fun (idx : bits_t log_sz) (val: s.T) : unit_t =>
+    {{ fun write_0 (idx : bits_t log_sz) (val: s.T) : unit_t =>
          `USugar
           (USwitch
              {{idx}}
@@ -296,7 +296,7 @@ Module RfEhr (s: Rf_sig).
                 (List.seq 0 sz))) ` }}.
 
   Definition write_1 : UInternalFunction reg_t empty_ext_fn_t :=
-    {{ fun (idx : bits_t log_sz) (val: s.T) : unit_t =>
+    {{ fun write_1 (idx : bits_t log_sz) (val: s.T) : unit_t =>
          `USugar
           (USwitch
              {{idx}}

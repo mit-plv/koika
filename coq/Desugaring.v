@@ -13,13 +13,6 @@ Section Desugaring.
 
   Import PrimUntyped.
 
-  Definition map_int_fn_body {fn_name_t var_t action action': Type}
-             (f: action -> action') (fn: InternalFunction fn_name_t var_t action) :=
-    {| int_name := fn.(int_name);
-       int_argspec := fn.(int_argspec);
-       int_retSig := fn.(int_retSig);
-       int_body := f fn.(int_body) |}.
-
   Fixpoint desugar_action' {reg_t' ext_fn_t'} (pos: pos_t)
            (fR: reg_t' -> reg_t) (fSigma: ext_fn_t' -> ext_fn_t)
            (a: uaction reg_t' ext_fn_t') {struct a}
@@ -39,7 +32,8 @@ Section Desugaring.
     | UUnop fn arg => UUnop fn (d arg)
     | UBinop fn arg1 arg2 => UBinop fn (d arg1) (d arg2)
     | UExternalCall fn arg => UExternalCall (fSigma fn) (d arg)
-    | UInternalCall fn args => UInternalCall (map_int_fn_body d fn) (List.map d args)
+    | UInternalCall fn args =>
+      UInternalCall (map_intf_body d fn) (List.map d args)
     | UAPos p e => UAPos p (d e)
     | USugar s => desugar pos fR fSigma s
     end
@@ -71,9 +65,8 @@ Section Desugaring.
          | UWhen cond body =>
            UIf (d cond) (d body) (UFail (bits_t 0)) (* FIXME infer the type of the second branch? *)
          | UStructInit sig fields =>
-           let empty := SyntaxMacros.uinit (struct_t sig) in
-           let usubst f := UBinop (UStruct2 (USubstField f)) in
-           List.fold_left (fun acc '(f, a) => (usubst f) acc (d a)) fields empty
+           let fields := List.map (fun '(f, a) => (f, d a)) fields in
+           SyntaxMacros.ustruct_init sig fields
          | UArrayInit tau elements =>
            let sig := {| array_type := tau; array_len := List.length elements |} in
            let usubst pos := UBinop (UArray2 (USubstElement pos)) in
@@ -84,8 +77,7 @@ Section Desugaring.
            SyntaxMacros.uswitch (d var) (d default) branches
          | UCallModule fR' fSigma' fn args =>
            let df body := desugar_action' pos (fun r => fR (fR' r)) (fun fn => fSigma (fSigma' fn)) body in
-           let args := List.map d args in
-           UInternalCall (map_int_fn_body df fn) args
+           UInternalCall (map_intf_body df fn) (List.map d args)
          end.
 
   Definition desugar_action (pos: pos_t) (a: uaction reg_t ext_fn_t)

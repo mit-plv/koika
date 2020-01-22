@@ -1,5 +1,5 @@
 (*! Frontend | Macros used in untyped programs !*)
-Require Import Koika.Common Koika.Syntax Koika.TypedSyntax Koika.Primitives.
+Require Import Koika.Common Koika.Types Koika.Syntax Koika.TypedSyntax Koika.TypedSyntax Koika.Primitives.
 Import PrimUntyped.
 
 Section SyntaxMacros.
@@ -32,6 +32,11 @@ Section SyntaxMacros.
   Definition uinit (tau: type) : uaction :=
     let zeroes := UConst (tau := bits_t _) (Bits.zeroes (type_sz tau)) in
     UUnop (UConv (UUnpack tau)) zeroes.
+
+  Definition ustruct_init (sig: struct_sig) (fields: list (string * uaction)) : uaction :=
+    let empty := SyntaxMacros.uinit (struct_t sig) in
+    let usubst f := UBinop (UStruct2 (USubstField f)) in
+    List.fold_left (fun acc '(f, a) => (usubst f) acc a) fields empty.
 
   Fixpoint uswitch (var: uaction) (default: uaction)
            (branches: list (uaction * uaction)) : uaction :=
@@ -146,10 +151,10 @@ Module Display.
     | Str (s: string)
     | Value (tau: type).
 
-    Notation intfun := (InternalFunction fn_name_t var_t uaction).
+    Notation intfun := (InternalFunction var_t fn_name_t uaction).
 
-    Definition empty_printer : InternalFunction fn_name_t var_t uaction :=
-      {| int_name := "";
+    Definition empty_printer : InternalFunction var_t fn_name_t uaction :=
+      {| int_name := "print";
          int_argspec := [];
          int_retSig := unit_t;
          int_body := USugar USkip |}.
@@ -157,8 +162,8 @@ Module Display.
     Definition display_utf8 s : uaction :=
       UUnop (UDisplay (UDisplayUtf8)) (USugar (UConstString s)).
 
-    Definition nl_printer : InternalFunction fn_name_t var_t uaction :=
-      {| int_name := "";
+    Definition nl_printer : InternalFunction var_t fn_name_t uaction :=
+      {| int_name := "print_nl";
          int_argspec := [];
          int_retSig := unit_t;
          int_body := display_utf8 "\n" |}.
@@ -198,23 +203,25 @@ Module Display.
   End Display.
 End Display.
 
-Section TypedSyntaxMacros.
-  Context {pos_t var_t reg_t ext_fn_t: Type}.
-  Context {R: reg_t -> type}
-          {Sigma: ext_fn_t -> ExternalSignature}.
+Require Import Koika.LoweredSyntax.
 
-  Notation action := (action pos_t var_t R Sigma).
+Section LoweredSyntaxMacros.
+  Context {pos_t var_t fn_name_t reg_t ext_fn_t: Type}.
+  Context {CR: reg_t -> nat}
+          {CSigma: ext_fn_t -> CExternalSignature}.
 
-  Fixpoint infix_action (infix: tsig var_t) {sig sig': tsig var_t} {tau} (a: action (sig ++ sig') tau)
+  Notation action := (action pos_t var_t CR CSigma).
+
+  Fixpoint infix_action (infix: lsig) {sig sig': lsig} {tau} (a: action (sig ++ sig') tau)
     : action (sig ++ infix ++ sig') tau.
   Proof.
     remember (sig ++ sig'); destruct a; subst.
-    - exact (Fail tau).
-    - exact (Var (mshift' infix m)).
+    - exact (Fail sz).
+    - exact (Var k (mshift' infix m)).
     - exact (Const cst).
-    - exact (Assign (mshift' infix m) (infix_action infix _ _ _ a)).
+    - exact (Assign k (mshift' infix m) (infix_action infix _ _ _ a)).
     - exact (Seq (infix_action infix _ _ _ a1) (infix_action infix _ _ _ a2)).
-    - exact (Bind var (infix_action infix _ _ _ a1) (infix_action infix (_ :: sig) sig' _ a2)).
+    - exact (Bind k (infix_action infix _ _ _ a1) (infix_action infix (_ :: sig) sig' _ a2)).
     - exact (If (infix_action infix _ _ _ a1) (infix_action infix _ _ _ a2) (infix_action infix _ _ _ a3)).
     - exact (Read port idx).
     - exact (Write port idx (infix_action infix _ _ _ a)).
@@ -224,44 +231,47 @@ Section TypedSyntaxMacros.
     - exact (infix_action infix _ _ _ a).
   Defined.
 
-  Definition prefix_action (prefix: tsig var_t) {sig: tsig var_t} {tau} (a: action sig tau)
-    : action (prefix ++ sig) tau :=
+  Definition prefix_action (prefix: lsig) {sig: lsig} {sz} (a: action sig sz)
+    : action (prefix ++ sig) sz :=
     infix_action prefix (sig := []) a.
 
   Fixpoint suffix_action_eqn {A} (l: list A) {struct l}:
     l ++ [] = l.
   Proof. destruct l; cbn; [ | f_equal ]; eauto. Defined.
 
-  Definition suffix_action (suffix: tsig var_t) {sig: tsig var_t} {tau} (a: action sig tau)
-    : action (sig ++ suffix) tau.
+  Definition suffix_action (suffix: lsig) {sig: lsig} {sz} (a: action sig sz)
+    : action (sig ++ suffix) sz.
   Proof. rewrite <- (suffix_action_eqn suffix); apply infix_action; rewrite (suffix_action_eqn sig); exact a. Defined.
 
+  Definition lsig_of_tsig (sig: tsig var_t) : lsig :=
+    List.map (fun k_tau => type_sz (snd k_tau)) sig.
+
   Fixpoint InternalCall'
-           {tau: type}
-           (sig: tsig var_t)
+           {sz: nat}
+           (sig: lsig)
            (fn_sig: tsig var_t)
-           (fn_body: action (fn_sig ++ sig) tau)
-           (args: context (fun '(_, tau) => action sig tau) fn_sig)
-    : action sig tau :=
-    match fn_sig return action (fn_sig ++ sig) tau ->
-                        context (fun '(_, tau) => action sig tau) fn_sig ->
-                        action sig tau with
+           (args: context (fun k_tau => action sig (type_sz (snd k_tau))) fn_sig)
+           (fn_body: action (lsig_of_tsig fn_sig ++ sig) sz)
+    : action sig sz :=
+    match fn_sig return context (fun k_tau => action sig (type_sz (snd k_tau))) fn_sig ->
+                        action ((lsig_of_tsig fn_sig) ++ sig) sz ->
+                        action sig sz with
     | [] =>
-      fun fn_body _ =>
+      fun _ fn_body =>
         fn_body
     | (k, tau) :: fn_sig =>
-      fun fn_body args =>
+      fun args fn_body =>
         InternalCall' sig fn_sig
-                      (Bind k (prefix_action fn_sig (chd args)) fn_body)
                       (ctl args)
-    end fn_body args.
+                      (Bind k (prefix_action (lsig_of_tsig fn_sig) (chd args)) fn_body)
+    end args fn_body.
 
   Fixpoint InternalCall
-             {tau: type}
-             (sig: tsig var_t)
-             (fn_sig: tsig var_t)
-             (fn_body: action fn_sig tau)
-             (args: context (fun '(_, tau) => action sig tau) fn_sig)
-    : action sig tau :=
-    InternalCall' sig fn_sig (suffix_action sig fn_body) args.
-End TypedSyntaxMacros.
+             {sz: nat}
+             {sig: lsig}
+             {fn_sig: tsig var_t}
+             (args: context (fun k_tau => action sig (type_sz (snd k_tau))) fn_sig)
+             (fn_body: action (lsig_of_tsig fn_sig) sz)
+    : action sig sz :=
+    InternalCall' sig fn_sig args (suffix_action sig fn_body).
+End LoweredSyntaxMacros.

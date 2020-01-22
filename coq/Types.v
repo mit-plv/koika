@@ -102,7 +102,7 @@ Inductive Port :=
 (** * Denotations *)
 
 Definition struct_denote' (type_denote: type -> Type) (fields: list (string * type)) :=
-  List.fold_right (fun '(_, tau) acc => type_denote tau * acc)%type unit fields.
+  List.fold_right (fun k_tau acc => type_denote (snd k_tau) * acc)%type unit fields.
 
 Fixpoint type_denote tau : Type :=
   match tau with
@@ -289,18 +289,26 @@ Definition CExternalSignature := CSig 1.
 Definition tsig var_t := list (var_t * type).
 Definition lsig := list nat.
 
-Record InternalFunction {fn_name_t var_t action: Type} :=
+Record InternalFunction {var_t fn_name_t action: Type} :=
   { int_name : fn_name_t;
     int_argspec : tsig var_t;
     int_retSig : type;
     int_body : action }.
 Arguments InternalFunction : clear implicits.
-Arguments Build_InternalFunction {fn_name_t var_t action}
+Arguments Build_InternalFunction {var_t fn_name_t action}
           int_name int_argspec int_retSig int_body : assert.
+
+Definition map_intf_body {var_t fn_name_t action action': Type}
+           (f: action -> action') (fn: InternalFunction var_t fn_name_t action) :=
+  {| int_name := fn.(int_name);
+     int_argspec := fn.(int_argspec);
+     int_retSig := fn.(int_retSig);
+     int_body := f fn.(int_body) |}.
 
 Record arg_sig {var_t} :=
   { arg_name: var_t;
     arg_type: type }.
+Arguments arg_sig : clear implicits.
 
 Definition prod_of_argsig {var_t} (a: @arg_sig var_t) :=
   (a.(arg_name), a.(arg_type)).

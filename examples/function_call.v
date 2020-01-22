@@ -34,7 +34,7 @@ Definition Sigma (fn: ext_fn_t) : ExternalSignature :=
   end.
 
 Definition nth_instr_intfun : UInternalFunction reg_t ext_fn_t :=
-  {{ fun (addr: bits_t 3) : bits_t 32 =>
+  {{ fun nth_instr_intfun (addr: bits_t 3) : bits_t 32 =>
        `UCompleteSwitch NestedSwitch 3
         "addr" (List_nth instructions)` }}.
 
@@ -47,7 +47,7 @@ Definition _fetch_external : uaction reg_t ext_fn_t :=
      write1(next_instr, extcall nth_instr_external(addr)) }}.
 
 Definition plus4 : UInternalFunction reg_t ext_fn_t :=
-  {{ fun (v: bits_t 5) : bits_t 5 =>
+  {{ fun plus4 (v: bits_t 5) : bits_t 5 =>
        v + |5`d4| }}.
 
 Definition _incr_pc : uaction reg_t ext_fn_t :=

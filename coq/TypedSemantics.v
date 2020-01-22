@@ -2,7 +2,7 @@
 Require Export Koika.Common Koika.Environments Koika.Vect Koika.Logs Koika.Syntax Koika.TypedSyntax.
 
 Section Interp.
-  Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
+  Context {pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t: Type}.
   Context {reg_t_eq_dec: EqDec reg_t}.
 
   Context {R: reg_t -> type}.
@@ -14,14 +14,42 @@ Section Interp.
 
   Notation Log := (Log R REnv).
 
-  Notation rule := (rule pos_t var_t R Sigma).
-  Notation action := (action pos_t var_t R Sigma).
+  Notation rule := (rule pos_t var_t fn_name_t R Sigma).
+  Notation action := (action pos_t var_t fn_name_t R Sigma).
   Notation scheduler := (scheduler pos_t rule_name_t).
 
   Definition tcontext (sig: tsig var_t) :=
     context (fun k_tau => type_denote (snd k_tau)) sig.
 
+  Definition acontext (sig argspec: tsig var_t) :=
+    context (fun k_tau => action sig (snd k_tau)) argspec.
+
   Section Action.
+    Section Args.
+      Context (interp_action:
+                 forall {sig: tsig var_t} {tau}
+                   (Gamma: tcontext sig)
+                   (sched_log: Log) (action_log: Log)
+                   (a: action sig tau),
+                   option (Log * type_denote tau * (tcontext sig))).
+
+      Fixpoint interp_args
+               {sig: tsig var_t}
+               (Gamma: tcontext sig)
+               (sched_log: Log)
+               (action_log: Log)
+               {argspec: tsig var_t}
+               (args: acontext sig argspec)
+        : option (Log * tcontext argspec * (tcontext sig)) :=
+        match args with
+        | CtxEmpty => Some (action_log, CtxEmpty, Gamma)
+        | @CtxCons _ _ argspec k_tau arg args =>
+          let/opt3 action_log, ctx, Gamma := interp_args Gamma sched_log action_log args in
+          let/opt3 action_log, v, Gamma := interp_action _ _ Gamma sched_log action_log arg in
+          Some (action_log, CtxCons k_tau v ctx, Gamma)
+        end.
+    End Args.
+
     Fixpoint interp_action
              {sig: tsig var_t}
              {tau}
@@ -29,8 +57,9 @@ Section Interp.
              (sched_log: Log)
              (action_log: Log)
              (a: action sig tau)
+             {struct a}
     : option (Log * tau * (tcontext sig)) :=
-      match a in TypedSyntax.action _ _ _ _ ts tau return (tcontext ts -> option (Log * tau * (tcontext ts)))  with
+      match a in TypedSyntax.action _ _ _ _ _ ts tau return (tcontext ts -> option (Log * tau * (tcontext ts)))  with
       | Fail tau => fun _ =>
         None
       | Var m => fun Gamma =>
@@ -40,10 +69,10 @@ Section Interp.
       | Seq r1 r2 => fun Gamma =>
         let/opt3 action_log, _, Gamma := interp_action Gamma sched_log action_log r1 in
         interp_action Gamma sched_log action_log r2
-      | @Assign _ _ _ _ _ _ _ k tau m ex => fun Gamma =>
+      | @Assign _ _ _ _ _ _ _ _ k tau m ex => fun Gamma =>
         let/opt3 action_log, v, Gamma := interp_action Gamma sched_log action_log ex in
         Some (action_log, Ob, creplace m v Gamma)
-      | @Bind _ _ _ _ _ _ sig tau tau' var ex body => fun (Gamma : tcontext sig) =>
+      | @Bind _ _ _ _ _ _ _ sig tau tau' var ex body => fun (Gamma : tcontext sig) =>
         let/opt3 action_log1, v, Gamma := interp_action Gamma sched_log action_log ex in
         let/opt3 action_log2, v, Gamma := interp_action (CtxCons (var, tau) v Gamma) sched_log action_log1 body in
         Some (action_log2, v, ctl Gamma)
@@ -80,6 +109,10 @@ Section Interp.
       | ExternalCall fn arg1 => fun Gamma =>
         let/opt3 action_log, arg1, Gamma := interp_action Gamma sched_log action_log arg1 in
         Some (action_log, sigma fn arg1, Gamma)
+      | InternalCall name args body => fun Gamma =>
+        let/opt3 action_log, results, Gamma := interp_args (@interp_action) Gamma sched_log action_log args in
+        let/opt3 action_log, v, _ := interp_action results sched_log action_log body in
+        Some (action_log, v, Gamma)
       | APos _ a => fun Gamma =>
         interp_action Gamma sched_log action_log a
       end Gamma.

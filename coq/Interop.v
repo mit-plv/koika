@@ -25,6 +25,10 @@ Section Packages.
       Typically [string]. *)
   Context {var_t: Type}.
 
+  (** [fn_name_t]: The type of function names.
+      Typically [string]. **)
+  Context {fn_name_t: Type}.
+
   (** [rule_name_t]: The type of rule names.
       Typically an inductive [rule1 | rule2 | …]. **)
   Context {rule_name_t: Type}.
@@ -41,6 +45,8 @@ Section Packages.
     {
       (** [koika_var_names]: These names are used to generate readable code. *)
       koika_var_names: Show var_t;
+      (** [koika_fn_names]: These names are used to generate readable code. *)
+      koika_fn_names: Show fn_name_t;
 
       (** [koika_reg_names]: These names are used to generate readable code. *)
       koika_reg_names: Show reg_t;
@@ -57,7 +63,7 @@ Section Packages.
 
       (** [koika_rules]: The rules of the program. **)
       koika_rules: forall _: rule_name_t,
-          TypedSyntax.rule pos_t var_t koika_reg_types koika_ext_fn_types;
+          TypedSyntax.rule pos_t var_t fn_name_t koika_reg_types koika_ext_fn_types;
       (** [koika_rule_external]: Whether a rule will be replaced by a native
           implementation. **)
       koika_rule_external: rule_name_t -> bool;
@@ -186,7 +192,7 @@ Section TypeConv.
 End TypeConv.
 
 Section Helpers.
-  Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
+  Context {pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t: Type}.
 
   Context {R: reg_t -> type}.
   Context {Sigma: ext_fn_t -> ExternalSignature}.
@@ -206,7 +212,7 @@ Section Helpers.
   Context (opt: forall {sz}, circuit sz -> circuit sz).
 
   Definition compile_scheduler
-             (rules: rule_name_t -> rule pos_t var_t R Sigma)
+             (rules: rule_name_t -> rule pos_t var_t fn_name_t R Sigma)
              (external: rule_name_t -> bool)
              (s: scheduler pos_t rule_name_t)
     : register_update_circuitry rule_name_t CR CSigma _ :=
@@ -225,10 +231,10 @@ Section Helpers.
 End Helpers.
 
 Section Compilation.
-  Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
+  Context {pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t: Type}.
 
   Definition compile_koika_package
-             (s: @koika_package_t pos_t var_t rule_name_t reg_t ext_fn_t)
+             (s: @koika_package_t pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
              (opt: let circuit sz := circuit (lower_R s.(koika_reg_types))
                                             (lower_Sigma s.(koika_ext_fn_types)) sz in
                    forall {sz}, circuit sz -> circuit sz)
@@ -242,10 +248,11 @@ End Compilation.
 Record interop_package_t :=
   { pos_t := unit;
     var_t := string;
+    fn_name_t := string;
     ip_reg_t : Type;
     ip_rule_name_t : Type;
     ip_ext_fn_t : Type;
-    ip_koika : @koika_package_t pos_t var_t ip_rule_name_t ip_reg_t ip_ext_fn_t;
+    ip_koika : @koika_package_t pos_t var_t fn_name_t ip_rule_name_t ip_reg_t ip_ext_fn_t;
     ip_verilog : @verilog_package_t ip_ext_fn_t;
     ip_sim : @sim_package_t ip_ext_fn_t }.
 
@@ -253,8 +260,8 @@ Require Import Koika.ExtractionSetup.
 
 Module Backends.
   Section Backends.
-    Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
-    Notation koika_package_t := (@koika_package_t pos_t var_t rule_name_t reg_t ext_fn_t).
+    Context {pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t: Type}.
+    Notation koika_package_t := (@koika_package_t pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t).
     Notation verilog_package_t := (@verilog_package_t ext_fn_t).
     Notation sim_package_t := (@sim_package_t ext_fn_t).
 

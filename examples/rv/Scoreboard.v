@@ -44,14 +44,14 @@ Module Scoreboard (s:Scoreboard_sig).
   (* Internal functions *)
   Definition sat_incr : UInternalFunction reg_t empty_ext_fn_t :=
     {{
-        fun (a: bits_t logScore) : bits_t logScore =>
+        fun sat_incr (a: bits_t logScore) : bits_t logScore =>
           (* if ( a == #(Bits.of_nat logScore s.maxScore)) then fail(logScore) *)
           (* else *) a + #(Bits.of_nat logScore 1)
     }}.
 
   Definition sat_decr : UInternalFunction reg_t empty_ext_fn_t :=
     {{
-        fun (a: bits_t logScore) : bits_t logScore =>
+        fun sat_decr (a: bits_t logScore) : bits_t logScore =>
           (* if (a == |logScore`d0|) then fail(logScore) *)
           (* else *) (a - |logScore`d1|)
     }}.
@@ -59,7 +59,7 @@ Module Scoreboard (s:Scoreboard_sig).
   (* Interface: *)
   Definition insert : UInternalFunction reg_t empty_ext_fn_t :=
     {{
-        fun (idx: bits_t sz) : bits_t 0 =>
+        fun insert (idx: bits_t sz) : bits_t 0 =>
           let old_score := Scores.(Rf.read_1)(idx) in
           let new_score := sat_incr(old_score) in
           Scores.(Rf.write_1)(idx, new_score)
@@ -67,7 +67,7 @@ Module Scoreboard (s:Scoreboard_sig).
 
   Definition remove : UInternalFunction reg_t empty_ext_fn_t :=
     {{
-        fun (idx: bits_t sz) : bits_t 0 =>
+        fun remove (idx: bits_t sz) : bits_t 0 =>
           let old_score := Scores.(Rf.read_0)(idx) in
           let new_score := sat_decr(old_score) in
           Scores.(Rf.write_0)(idx, new_score)
@@ -75,7 +75,7 @@ Module Scoreboard (s:Scoreboard_sig).
 
   Definition search : UInternalFunction reg_t empty_ext_fn_t :=
     {{
-        fun (idx: bits_t sz) : bits_t logScore =>
+        fun search (idx: bits_t sz) : bits_t logScore =>
           Scores.(Rf.read_1)(idx)
     }}.
 End Scoreboard.

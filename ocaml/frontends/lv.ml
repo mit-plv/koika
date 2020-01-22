@@ -113,9 +113,11 @@ module ResolvedAST = struct
        | Write (port, reg, v) -> Extr.UWrite (translate_port port, reg.lcnt, translate_action v)
        | Unop { fn; arg } -> UUnop (fn.lcnt, translate_action arg)
        | Binop { fn; a1; a2 } -> UBinop (fn.lcnt, translate_action a1, translate_action a2)
-       | InternalCall { fn; args } ->
-          Extr.UInternalCall (Util.extr_intfun_of_intfun translate_action fn, List.map translate_action args)
        | ExternalCall { fn; arg } -> UExternalCall (fn.lcnt, translate_action arg)
+       | InternalCall { fn; args } ->
+          UInternalCall
+            (Util.extr_intfun_of_intfun translate_action fn,
+             List.map translate_action args)
        | Sugar u ->
           Extr.USugar
             (match u with

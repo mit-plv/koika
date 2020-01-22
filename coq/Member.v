@@ -203,3 +203,16 @@ Proof.
     + exact (MemberHd k' (sig ++ infix ++ sig')).
     + exact (MemberTl k k' (sig ++ infix ++ sig') (mshift' _ infix sig sig' k m')).
 Defined.
+
+Fixpoint mshift_pair {K sig} (k: K) (p: {k': K & member k' sig})
+  : {k': K & member k' (k :: sig)} :=
+  let '(existT _ k' m) := p in
+  existT _ k' (MemberTl k' k _ m).
+
+Fixpoint all_members {K} (sig: list K): list { k: K & member k sig } :=
+  match sig with
+  | [] => []
+  | k :: sig => let ms := all_members sig in
+              let ms := List.map (mshift_pair k) ms in
+              (existT _ k (MemberHd k sig)) :: ms
+  end.

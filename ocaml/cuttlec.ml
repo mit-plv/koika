@@ -58,10 +58,11 @@ type config = {
     cnf_dst_dpath: string;
   }
 
-type ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) package = {
+type ('pos_t, 'var_t, 'fn_name_t, 'rule_name_t, 'reg_t, 'ext_fn_t) package = {
     pkg_modname: string;
     pkg_lv: Lv.resolved_unit lazy_t;
-    pkg_cpp: ('pos_t, 'var_t, 'rule_name_t, 'reg_t, 'ext_fn_t) Backends.Cpp.cpp_input_t lazy_t;
+    pkg_cpp: ('pos_t, 'var_t, 'fn_name_t, 'rule_name_t, 'reg_t, 'ext_fn_t)
+               Backends.Cpp.cpp_input_t lazy_t;
     pkg_graph: Cuttlebone.Graphs.circuit_graph lazy_t;
   }
 

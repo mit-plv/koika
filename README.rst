@@ -606,19 +606,19 @@ The following (excerpted from `<examples/conflicts_modular.v>`_) defines a ``Que
        end.
 
      Definition dequeue0: UInternalFunction reg_t empty_ext_fn_t :=
-       {{ fun _ : bits_t 32 =>
+       {{ fun dequeue0 () : bits_t 32 =>
             guard(!read0(empty));
             write0(empty, Ob~1);
             read0(data) }}.
 
      Definition enqueue0: UInternalFunction reg_t empty_ext_fn_t :=
-       {{ fun (val: bits_t 32) : unit_t =>
+       {{ fun enqueue0 (val: bits_t 32) : unit_t =>
             guard(read0(empty));
             write0(empty, Ob~0);
             write0(data, val) }}.
 
      Definition dequeue1: UInternalFunction reg_t empty_ext_fn_t :=
-       {{ fun _ : bits_t 32 =>
+       {{ fun dequeue1 () : bits_t 32 =>
             guard(!read1(empty));
             write1(empty, Ob~1);
             read1(data) }}.

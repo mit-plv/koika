@@ -12,7 +12,7 @@ Module Delay.
   (* Declaration of a Koika function in a module, called a method *)
   Definition swap tau: UInternalFunction reg_t ext_fn_t  :=
     {{
-        fun (arg1 : tau) : tau =>
+        fun swap (arg1 : tau) : tau =>
           write0(buffer, arg1);
           read0(buffer)
     }}.
@@ -43,7 +43,7 @@ Definition r reg : R reg :=
 (* Declaration of a family of Koika function indexed by a coq integer *)
 Definition nor (sz: nat) : UInternalFunction reg_t ext_fn_t :=
   {{
-      fun (arg1 : bits_t sz) (arg2 : bits_t sz) : bits_t sz =>
+      fun nor (arg1 : bits_t sz) (arg2 : bits_t sz) : bits_t sz =>
         !(arg1 || arg2)
   }}.
 

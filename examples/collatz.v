@@ -19,7 +19,7 @@ Module Collatz.
     end.
 
   Definition times_three : UInternalFunction reg_t empty_ext_fn_t :=
-    {{ fun (bs: bits_t 16) : bits_t 16 =>
+    {{ fun times_three (bs: bits_t 16) : bits_t 16 =>
          (bs << Ob~1) + bs }}.
 
   Definition _divide : uaction reg_t empty_ext_fn_t :=

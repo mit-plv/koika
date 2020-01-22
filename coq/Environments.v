@@ -159,6 +159,20 @@ Section Contexts.
       + rewrite Heq in *. destruct eqn. reflexivity.
       + rewrite IHm; intuition congruence.
   Qed.
+
+  Fixpoint capp {sig sig'} (ctx: context sig) (ctx': context sig'): context (sig ++ sig') :=
+    match sig return context sig -> context (sig ++ sig') with
+    | [] => fun _ => ctx'
+    | k :: sig => fun ctx => CtxCons k (chd ctx) (capp (ctl ctx) ctx')
+    end ctx.
+
+  Fixpoint csplit {sig sig'} (ctx: context (sig ++ sig')): (context sig * context sig') :=
+    match sig return context (sig ++ sig') -> (context sig * context sig') with
+    | [] => fun ctx => (CtxEmpty, ctx)
+    | k :: sig => fun ctx =>
+                  let (l, r) := csplit (ctl ctx) in
+                  (CtxCons k (chd ctx) l, r)
+    end ctx.
 End Contexts.
 
 Arguments context {K} V sig : assert.
@@ -206,6 +220,89 @@ Section Maps.
     intros; rewrite (ceqn ctx); reflexivity.
   Qed.
 End Maps.
+
+
+Section ValueMaps.
+  Context {K: Type}.
+  Context {V: K -> Type} {V': K -> Type}.
+  Context (fV: forall k, V k -> V' k).
+
+  Fixpoint cmapv {sig} (ctx: context V sig) {struct ctx} : context V' sig :=
+    match ctx in context _ sig return context V' sig with
+    | CtxEmpty => CtxEmpty
+    | CtxCons k v ctx => CtxCons k (fV k v) (cmapv ctx)
+    end.
+
+  Lemma cmapv_creplace :
+    forall {sig} (ctx: context V sig) {k} (m: member k sig) v,
+      cmapv (creplace m v ctx) =
+      creplace m (fV k v) (cmapv ctx).
+  Proof.
+    induction ctx; cbn; intros.
+    - destruct (mdestruct m).
+    - destruct (mdestruct m) as [(-> & ->) | (? & ->)]; cbn in *.
+      + reflexivity.
+      + rewrite IHctx; reflexivity.
+  Qed.
+
+  Lemma cmapv_cassoc :
+    forall {sig} (ctx: context V sig) {k} (m: member k sig),
+      cassoc m (cmapv ctx) =
+      fV k (cassoc m ctx).
+  Proof.
+    induction ctx; cbn; intros.
+    - destruct (mdestruct m).
+    - destruct (mdestruct m) as [(-> & ->) | (? & ->)]; cbn in *.
+      + reflexivity.
+      + rewrite IHctx; reflexivity.
+  Qed.
+
+  Lemma cmapv_ctl :
+    forall {k sig} (ctx: context V (k :: sig)),
+      cmapv (ctl ctx) = ctl (cmapv ctx).
+  Proof.
+    intros; rewrite (ceqn ctx); reflexivity.
+  Qed.
+End ValueMaps.
+
+Section Folds.
+  Context {K: Type}.
+  Context {V: K -> Type}.
+
+  Section foldl.
+    Context {T: Type}.
+    Context (f: forall (k: K) (v: V k) (acc: T), T).
+
+    Fixpoint cfoldl {sig} (ctx: context V sig) (init: T) :=
+      match ctx with
+      | CtxEmpty => init
+      | CtxCons k v ctx => cfoldl ctx (f k v init)
+      end.
+
+    Fixpoint cfoldl' {sig} (ctx: context V sig) (init: T) :=
+      match sig return context V sig -> T with
+      | [] => fun _ => init
+      | k :: sig => fun ctx => cfoldl (ctl ctx) (f k (chd ctx) init)
+      end ctx.
+  End foldl.
+
+  Section foldr.
+    Context {T: list K -> Type}.
+    Context (f: forall (sg: list K) (k: K) (v: V k), T sg -> T (k :: sg)).
+
+    Fixpoint cfoldr {sig} (ctx: context V sig) (init: T []) :=
+      match ctx with
+      | CtxEmpty => init
+      | CtxCons k v ctx => f _ k v (cfoldr ctx init)
+      end.
+
+    Fixpoint cfoldr' {sig} (ctx: context V sig) (init: T []) :=
+      match sig return context V sig -> T sig with
+      | [] => fun _ => init
+      | k :: sig => fun ctx => f sig k (chd ctx) (cfoldr' (ctl ctx) init)
+      end ctx.
+  End foldr.
+End Folds.
 
 Notation esig K := (forall k: K, Type).
 

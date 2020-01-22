@@ -126,6 +126,9 @@ module Util = struct
   let any_eq_dec =
     { Extr.eq_dec = fun (s1: 'a) (s2: 'a) -> s1 = s2 }
 
+  let string_show =
+    { Extr.show0 = coq_string_of_string }
+
   type 'var_t extr_error_message =
     | ExplicitErrorInAst
     | SugaredConstructorInAst
@@ -263,13 +266,13 @@ module Util = struct
     List.to_seq l |> Seq.map (fun x -> (x, ()))
     |> Hashtbl.of_seq |> Hashtbl.to_seq_keys |> List.of_seq
 
-  let compute_register_histories (type reg_t rule_name_t)
+  let compute_register_histories (type reg_t fn_name_t rule_name_t)
         (_R: reg_t -> extr_type)
         (registers: reg_t list)
         (rule_names: rule_name_t list)
-        (rules: rule_name_t -> ('pos_t, 'var_t, reg_t, 'fn_t) Extr.rule)
+        (rules: rule_name_t -> ('pos_t, 'var_t, fn_name_t, reg_t, 'ext_fn_t) Extr.rule)
         (scheduler: ('pos_t, rule_name_t) Extr.scheduler)
-      : (rule_name_t -> ('pos_t, 'var_t, reg_t, 'fn_t) Extr.annotated_rule)
+      : (rule_name_t -> ('pos_t, 'var_t, fn_name_t, reg_t, 'fn_t) Extr.annotated_rule)
         * (reg_t -> Extr.register_kind) =
     (* Taking in a list of rules allows us to ensure that we annotate all rules,
        not just those mentioned in the scheduler. *)
@@ -289,11 +292,11 @@ module Compilation = struct
     | P1 -> Extr.P1
 
   type 'f extr_uaction =
-    ('f, fn_name_t, var_t, reg_signature, ffi_signature) Extr.uaction
+    ('f, var_t, fn_name_t, reg_signature, ffi_signature) Extr.uaction
   type 'f extr_scheduler =
     ('f, rule_name_t) Extr.scheduler
 
-  type 'f extr_action = ('f, var_t, reg_signature, ffi_signature) Extr.action
+  type 'f extr_action = ('f, var_t, fn_name_t, reg_signature, ffi_signature) Extr.action
   type 'f extr_rule = [ `ExternalRule | `InternalRule ] * 'f extr_action
 
   let _R = fun rs -> Util.extr_type_of_typ (reg_type rs)
@@ -316,8 +319,9 @@ module Compilation = struct
     | Extr.Failure (err: _ Extr.error) -> Error (err.epos, Util.translate_extr_error_message err.emsg)
 
   let typecheck_rule pos (ast: 'f extr_uaction) : ('f extr_action, ('f * _)) result =
-    Extr.type_rule Util.string_eq_dec _R _Sigma pos (Extr.desugar_action pos ast)
-    |> result_of_type_result
+    let desugared = Extr.desugar_action pos ast in
+    let typed = Extr.type_rule Util.string_eq_dec _R _Sigma pos desugared in
+    result_of_type_result typed
 
   let rec extr_circuit_equivb sz (c1: _ extr_circuit) (c2: _ extr_circuit) =
     let eqb = extr_circuit_equivb sz in
@@ -357,12 +361,11 @@ module Compilation = struct
 
   let compile (cu: 'f compile_unit) : (reg_signature -> compiled_circuit) =
     let finiteType = Util.finiteType_of_list cu.c_registers in
-    let show_string = { Extr.show0 = fun (rl: string) -> Util.coq_string_of_string rl } in
     let rules r = List.assoc r cu.c_rules |> snd in
     let externalp r = (List.assoc r cu.c_rules |> fst) = `ExternalRule in
     let rEnv = Extr.contextEnv finiteType in
     let env = Extr.compile_scheduler _R _Sigma finiteType
-                show_string show_string
+                Util.string_show Util.string_show
                 (opt _R _Sigma) rules externalp cu.c_scheduler in
     (fun r -> Extr.getenv rEnv env r)
 end
@@ -595,8 +598,8 @@ module Graphs = struct
         di_circuits = Compilation.compile cu;
         di_strip_annotations = strip_annotations }
 
-  let graph_of_verilog_package (type pos_t var_t rule_name_t reg_t ext_fn_t)
-        (kp: (pos_t, var_t, rule_name_t, reg_t, ext_fn_t) Extr.koika_package_t)
+  let graph_of_verilog_package (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
+        (kp: (pos_t, var_t, fn_name_t, rule_name_t, reg_t, ext_fn_t) Extr.koika_package_t)
         (vp: ext_fn_t Extr.verilog_package_t)
       : circuit_graph =
     let di_regs =

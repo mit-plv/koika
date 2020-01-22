@@ -50,7 +50,7 @@ Section RV32IHelpers.
 
   Definition getFields : UInternalFunction reg_t empty_ext_fn_t :=
     {{
-        fun (inst : bits_t 32) : struct_t inst_field =>
+        fun getFields (inst : bits_t 32) : struct_t inst_field =>
           let res := struct inst_field
                             {|
                               opcode := inst[|5`d0| :+ 7];
@@ -84,7 +84,7 @@ Section RV32IHelpers.
 
   Definition isLegalInstruction : UInternalFunction reg_t empty_ext_fn_t :=
     {{
-        fun (inst : bits_t 32) : bits_t 1 =>
+        fun isLegalInstruction (inst : bits_t 32) : bits_t 1 =>
           let fields := getFields (inst) in
           match get(fields, opcode) with
           | #opcode_LOAD =>
@@ -166,7 +166,7 @@ Section RV32IHelpers.
 
   Definition getImmediateType : UInternalFunction reg_t empty_ext_fn_t :=
     {{
-        fun (inst : bits_t 32) : maybe (enum_t imm_type) =>
+        fun getImmediateType (inst : bits_t 32) : maybe (enum_t imm_type) =>
           match (inst[|5`d2|:+5]) with
           | #opcode_LOAD[|3`d2|:+5]      => {valid (enum_t imm_type)}(enum imm_type {| ImmI |})
           | #opcode_OP_IMM[|3`d2|:+5]    => {valid (enum_t imm_type)}(enum imm_type {| ImmI |})
@@ -182,7 +182,7 @@ Section RV32IHelpers.
 
   Definition usesRS1 : UInternalFunction reg_t empty_ext_fn_t :=
     {{
-        fun (inst : bits_t 32) : bits_t 1 =>
+        fun usesRS1 (inst : bits_t 32) : bits_t 1 =>
           match (inst[Ob~0~0~0~1~0 :+ 5]) with
           | Ob~1~1~0~0~0 => Ob~1 (* // bge, bne, bltu, blt, bgeu, beq *)
           | Ob~0~0~0~0~0 => Ob~1 (* // lh, ld, lw, lwu, lbu, lhu, lb *)
@@ -197,7 +197,7 @@ Section RV32IHelpers.
 
   Definition usesRS2 : UInternalFunction reg_t empty_ext_fn_t :=
     {{
-        fun (inst : bits_t 32) : bits_t 1 =>
+        fun usesRS2 (inst : bits_t 32) : bits_t 1 =>
             match (inst[Ob~0~0~0~1~0 :+ 5]) with
             | Ob~1~1~0~0~0 => Ob~1 (* // bge, bne, bltu, blt, bgeu, beq *)
             | Ob~0~1~0~0~0 => Ob~1 (* // sh, sb, sw, sd *)
@@ -209,7 +209,7 @@ Section RV32IHelpers.
 
   Definition usesRD : UInternalFunction reg_t empty_ext_fn_t :=
     {{
-        fun (inst : bits_t 32) : bits_t 1 =>
+        fun usesRD (inst : bits_t 32) : bits_t 1 =>
           match (inst[Ob~0~0~0~1~0 :+ 5]) with
           | Ob~0~1~1~0~1 => Ob~1 (* // lui*)
           | Ob~1~1~0~1~1 => Ob~1 (* // jal*)
@@ -223,7 +223,7 @@ Section RV32IHelpers.
     }}.
 
   Definition decode_fun : UInternalFunction reg_t empty_ext_fn_t :=
-    {{ fun (arg_inst : bits_t 32) : struct_t decoded_sig =>
+    {{ fun decode_fun (arg_inst : bits_t 32) : struct_t decoded_sig =>
            struct decoded_sig {|
                     valid_rs1     := usesRS1 (arg_inst);
                     valid_rs2     := usesRS2 (arg_inst);
@@ -236,7 +236,7 @@ Section RV32IHelpers.
 
   Definition getImmediate : UInternalFunction reg_t empty_ext_fn_t :=
     {{
-        fun (dInst: struct_t decoded_sig) : bits_t 32 =>
+        fun getImmediate (dInst: struct_t decoded_sig) : bits_t 32 =>
           let imm_type_v := get(dInst, immediateType) in
           if (get(imm_type_v, valid) == Ob~1) then
             let fields := getFields (get(dInst,inst)) in
@@ -253,7 +253,7 @@ Section RV32IHelpers.
     }}.
 
   Definition alu32 : UInternalFunction reg_t empty_ext_fn_t :=
-    {{ fun (funct3  : bits_t 3)
+    {{ fun alu32 (funct3  : bits_t 3)
          (inst_30 : bits_t 1)
          (a       : bits_t 32)
          (b       : bits_t 32)
@@ -274,9 +274,8 @@ Section RV32IHelpers.
 
 
   Definition execALU32 : UInternalFunction reg_t empty_ext_fn_t :=
-
     {{
-        fun (inst    : bits_t 32)
+        fun execALU32 (inst    : bits_t 32)
           (rs1_val : bits_t 32)
           (rs2_val : bits_t 32)
           (imm_val : bits_t 32)
@@ -311,7 +310,7 @@ Section RV32IHelpers.
 
   Definition execControl32 : UInternalFunction reg_t empty_ext_fn_t :=
     {{
-        fun (inst    : bits_t 32)
+        fun execControl32 (inst    : bits_t 32)
           (rs1_val : bits_t 32)
           (rs2_val : bits_t 32)
           (imm_val : bits_t 32)
@@ -550,17 +549,17 @@ Module  RV32ICore.
     tc_action R empty_Sigma decode.
 
   (* Useful for debugging *)
-  Arguments Var {pos_t var_t reg_t ext_fn_t R Sigma sig} k {tau m} : assert.
+  Arguments Var {pos_t var_t fn_name_t reg_t ext_fn_t R Sigma sig} k {tau m} : assert.
 
   Definition isMemoryInst : UInternalFunction reg_t empty_ext_fn_t :=
     {{
-        fun (dInst: struct_t decoded_sig) : bits_t 1 =>
+        fun isMemoryInst (dInst: struct_t decoded_sig) : bits_t 1 =>
           (get(dInst,inst)[|5`d6|] == Ob~0) && (get(dInst,inst)[|5`d3|:+2] == Ob~0~0)
     }}.
 
   Definition isControlInst : UInternalFunction reg_t empty_ext_fn_t :=
     {{
-        fun (dInst: struct_t decoded_sig) : bits_t 1 =>
+        fun isControlInst (dInst: struct_t decoded_sig) : bits_t 1 =>
           get(dInst,inst)[|5`d4| :+ 3] == Ob~1~1~0
     }}.
 

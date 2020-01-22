@@ -1,19 +1,16 @@
 (*! Language | Compilation from typed ASTs to lowered ASTs !*)
 Require Export Koika.Common Koika.Environments.
-Require Import Koika.Syntax Koika.TypedSyntaxFunctions.
-Require Koika.TypedSyntax Koika.LoweredSyntax.
+Require Import Koika.Syntax Koika.TypedSyntaxFunctions Koika.SyntaxMacros.
+Require Koika.SyntaxMacros Koika.TypedSyntax Koika.LoweredSyntax.
 
 Import PrimTyped CircuitSignatures.
 
 Section Lowering.
-  Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
+  Context {pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t: Type}.
 
   Context {R: reg_t -> type}.
   Context {Sigma: ext_fn_t -> ExternalSignature}.
   Context {REnv: Env reg_t}.
-
-  Definition lsig_of_tsig (sig: tsig var_t) : lsig :=
-    List.map (fun k_tau => type_sz (snd k_tau)) sig.
 
   Definition lower_R idx :=
     type_sz (R idx).
@@ -31,7 +28,7 @@ Section Lowering.
     : forall f, CSig_denote (lSigma f) :=
     fun f => fun bs => bits_of_value (sigma f (value_of_bits bs)).
 
-  Notation typed_action := (TypedSyntax.action pos_t var_t R Sigma).
+  Notation typed_action := (TypedSyntax.action pos_t var_t fn_name_t R Sigma).
   Notation low_action := (LoweredSyntax.action pos_t var_t lR lSigma).
 
   Section Action.
@@ -97,13 +94,13 @@ Section Lowering.
       match a with
       | TypedSyntax.Fail tau =>
         LoweredSyntax.Fail (type_sz tau)
-      | @TypedSyntax.Var _ _ _ _ _ _ _ k _ m =>
+      | @TypedSyntax.Var _ _ _ _ _ _ _ _ k _ m =>
         LoweredSyntax.Var k (lower_member m)
       | TypedSyntax.Const cst =>
         LoweredSyntax.Const (bits_of_value cst)
       | TypedSyntax.Seq r1 r2 =>
         LoweredSyntax.Seq (l r1) (l r2)
-      | @TypedSyntax.Assign _ _ _ _ _ _ _ k _ m ex =>
+      | @TypedSyntax.Assign _ _ _ _ _ _ _ _ k _ m ex =>
         LoweredSyntax.Assign k (lower_member m) (l ex)
       | TypedSyntax.Bind var ex body =>
         LoweredSyntax.Bind var (l ex) (l body)
@@ -119,6 +116,8 @@ Section Lowering.
         lower_binop fn (l a1) (l a2)
       | TypedSyntax.ExternalCall fn a =>
         LoweredSyntax.ExternalCall fn (l a)
+      | TypedSyntax.InternalCall fn args body =>
+        SyntaxMacros.InternalCall (cmapv (fun _ a => l a) args) (l body)
       | TypedSyntax.APos p a =>
         LoweredSyntax.APos p (l a)
       end.

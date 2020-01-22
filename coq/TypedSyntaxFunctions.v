@@ -2,13 +2,13 @@
 Require Import Koika.Member Koika.TypedSyntax Koika.Primitives Koika.TypedSemantics.
 
 Section TypedSyntaxFunctions.
-  Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
+  Context {pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t: Type}.
   Context {R: reg_t -> type}
           {Sigma: ext_fn_t -> ExternalSignature}.
   Context {REnv : Env reg_t}.
 
-  Notation rule := (rule pos_t var_t R Sigma).
-  Notation action := (action pos_t var_t R Sigma).
+  Notation rule := (rule pos_t var_t fn_name_t R Sigma).
+  Notation action := (action pos_t var_t fn_name_t R Sigma).
   Notation scheduler := (scheduler pos_t rule_name_t).
 
   Fixpoint scheduler_rules (s: scheduler) :=
@@ -20,7 +20,7 @@ Section TypedSyntaxFunctions.
     end.
 
   Fixpoint unannot {sig tau} (a: action sig tau) :=
-    match a in TypedSyntax.action _ _ _ _ sig tau return action sig tau with
+    match a in TypedSyntax.action _ _ _ _ _ sig tau return action sig tau with
     | APos _ a => unannot a
     | a => a
     end.
@@ -32,7 +32,7 @@ Section TypedSyntaxFunctions.
   Section Footprint.
     Notation footprint_t := (list (reg_t * event_t)).
 
-    Fixpoint action_footprint' {sig tau} (acc: footprint_t) (a: action sig tau) :=
+    Fixpoint action_footprint' {sig tau} (acc: footprint_t) (a: action sig tau) {struct a} :=
       match a with
       | Fail _ | Var _ | Const _ => acc
       | Assign m ex => action_footprint' acc ex
@@ -44,6 +44,9 @@ Section TypedSyntaxFunctions.
       | Unop fn arg1 => action_footprint' acc arg1
       | Binop fn arg1 arg2 => action_footprint' (action_footprint' acc arg1) arg2
       | ExternalCall fn arg => action_footprint' acc arg
+      | InternalCall fn args body =>
+        let acc := cfoldl (fun _ arg acc => action_footprint' acc arg) args acc in
+        action_footprint' acc body
       | APos _ a => action_footprint' acc a
       end.
 
@@ -152,7 +155,7 @@ Section TypedSyntaxFunctions.
     | HistoryAnnot (rh: reg_history_map).
 
     Notation annotated_action sig tau :=
-      (TypedSyntax.action register_annotation var_t R Sigma sig tau).
+      (TypedSyntax.action register_annotation var_t fn_name_t R Sigma sig tau).
 
     Definition join_tribools t1 t2 :=
       match t1, t2 with
@@ -252,6 +255,16 @@ Section TypedSyntaxFunctions.
       | ExternalCall fn arg =>
         let '(env, arg) := annotate_action_register_histories env arg in
         (env, ExternalCall fn arg)
+      | InternalCall fn args body =>
+        let '(env, args) :=
+            cfoldr (fun sg k arg cont =>
+                      fun env =>
+                        let '(env, arg) := annotate_action_register_histories env arg in
+                        let '(env, args) := cont env in
+                        (env, CtxCons k arg args)) args
+                   (fun env => (env, CtxEmpty)) env in
+        let '(env, body) := annotate_action_register_histories env body in
+        (env, InternalCall fn args body)
       | APos pos a =>
         let '(env, a) := annotate_action_register_histories env a in
         (env, APos (PosAnnot pos) a)
@@ -340,7 +353,7 @@ Section TypedSyntaxFunctions.
       Context (s: scheduler).
 
       Definition annotated_rule :=
-        TypedSyntax.action register_annotation var_t R Sigma [] unit_t.
+        TypedSyntax.action register_annotation var_t fn_name_t R Sigma [] unit_t.
 
       Definition compute_register_histories
         : RLEnv.(env_t) (fun _ => (reg_history_map * annotated_rule)%type) *
@@ -377,6 +390,9 @@ Section TypedSyntaxFunctions.
       | Unop fn arg1 => rule_max_log_size arg1
       | Binop fn arg1 arg2 => rule_max_log_size arg1 + rule_max_log_size arg2
       | ExternalCall fn arg => rule_max_log_size arg
+      | InternalCall fn args body =>
+        cfoldl (fun k arg acc => acc + rule_max_log_size arg) args 0
+        + rule_max_log_size body
       | APos pos a => rule_max_log_size a
       end.
   End StaticAnalysis.
@@ -399,6 +415,9 @@ Section TypedSyntaxFunctions.
       | Unop fn a => existsb_subterm f a
       | Binop fn a1 a2 => existsb_subterm f a1 || existsb_subterm f a2
       | ExternalCall fn arg => existsb_subterm f arg
+      | InternalCall fn args body =>
+        cfoldl (fun k arg acc => acc || existsb_subterm f arg) args false
+        || existsb_subterm f body
       | APos _ a => existsb_subterm f a
       end.
 
@@ -417,7 +436,7 @@ Section TypedSyntaxFunctions.
 
   Fixpoint action_mentions_var {EQ: EqDec var_t} {sig tau} (k: var_t) (a: action sig tau) :=
     existsb_subterm (fun a => match a with
-                           | AnyAction (@Var _ _ _ _ _ _ _ k' _ m) => beq_dec k k'
+                           | AnyAction (@Var _ _ _ _ _ _ _ _ k' _ m) => beq_dec k k'
                            | _ => false
                            end) a.
 
@@ -435,6 +454,9 @@ Section TypedSyntaxFunctions.
     | Unop fn arg1 => is_pure arg1
     | Binop fn arg1 arg2 => is_pure arg1 && is_pure arg2
     | ExternalCall fn arg => false
+    | InternalCall fn args body =>
+      cfoldl (fun k arg acc => acc && is_pure arg) args true
+      && is_pure body
     | APos pos a => is_pure a
     end.
 
@@ -452,24 +474,26 @@ Section TypedSyntaxFunctions.
     | Unop fn arg1 => false
     | Binop fn arg1 arg2 => false
     | ExternalCall fn arg => false
+    | InternalCall fn args body => returns_zero body
     | APos pos a => returns_zero a
     end.
 
   Definition action_type {sig tau} (a: action sig tau) : option type :=
     match a with
-    | @Fail _ _ _ _ _ _ _ tau => Some tau
-    | @Var _ _ _ _ _ _ _ _ tau _ => Some tau
-    | @Const _ _ _ _ _ _ _ tau cst => Some tau
-    | @Assign _ _ _ _ _ _ _ _ _ _ _ => Some unit_t
-    | @Seq _ _ _ _ _ _ _ tau _ _ => Some tau
-    | @Bind _ _ _ _ _ _ _ _ tau' _ _ _ => Some tau'
-    | @If _ _ _ _ _ _ _ tau _ _ _ => Some tau
-    | @Read _ _ _ _ _ _ _ _ _ => None
-    | @Write _ _ _ _ _ _ _ _ _ _ => Some unit_t
-    | @Unop _ _ _ _ _ _ _ fn _ => Some (PrimSignatures.Sigma1 fn).(retSig)
-    | @Binop _ _ _ _ _ _ _ fn _ _ => Some (PrimSignatures.Sigma2 fn).(retSig)
-    | @ExternalCall _ _ _ _ _ _ _ _ _ => None
-    | @APos _ _ _ _ _ _ _ tau _ _ => Some tau
+    | @Fail _ _ _ _ _ _ _ _ tau => Some tau
+    | @Var _ _ _ _ _ _ _ _ _ tau _ => Some tau
+    | @Const _ _ _ _ _ _ _ _ tau cst => Some tau
+    | @Assign _ _ _ _ _ _ _ _ _ _ _ _ => Some unit_t
+    | @Seq _ _ _ _ _ _ _ _ tau _ _ => Some tau
+    | @Bind _ _ _ _ _ _ _ _ _ tau' _ _ _ => Some tau'
+    | @If _ _ _ _ _ _ _ _ tau _ _ _ => Some tau
+    | @Read _ _ _ _ _ _ _ _ _ _ => None
+    | @Write _ _ _ _ _ _ _ _ _ _ _ => Some unit_t
+    | @Unop _ _ _ _ _ _ _ _ fn _ => Some (PrimSignatures.Sigma1 fn).(retSig)
+    | @Binop _ _ _ _ _ _ _ _ fn _ _ => Some (PrimSignatures.Sigma2 fn).(retSig)
+    | @ExternalCall _ _ _ _ _ _ _ _ _ _ => None
+    | @InternalCall _ _ _ _ _ _ _ _ tau _ _ _ _ => Some tau
+    | @APos _ _ _ _ _ _ _ _ tau _ _ => Some tau
     end.
 
   Definition is_tt {sig tau} (a: action sig tau) :=
@@ -494,6 +518,7 @@ Section TypedSyntaxFunctions.
       let/opt r2 := interp_arithmetic arg2 in
       Some (PrimSpecs.sigma2 fn r1 r2)
     | ExternalCall fn arg => None
+    | InternalCall fn args body => None
     | APos pos a => interp_arithmetic a
     end.
 End TypedSyntaxFunctions.

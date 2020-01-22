@@ -4,7 +4,7 @@ Require Export Koika.Common Koika.Environments Koika.Types Koika.Primitives.
 Import PrimTyped PrimSignatures.
 
 Section Syntax.
-  Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
+  Context {pos_t var_t rule_name_t fn_name_t reg_t ext_fn_t: Type}.
   Context {R: reg_t -> type}.
   Context {Sigma: ext_fn_t -> ExternalSignature}.
 
@@ -45,11 +45,17 @@ Section Syntax.
                  (fn: ext_fn_t)
                  (arg: action sig (Sigma fn).(arg1Sig))
     : action sig (Sigma fn).(retSig)
+  | InternalCall {sig tau}
+                 (fn : fn_name_t)
+                 {argspec : tsig var_t}
+                 (args: context (fun k_tau => action sig (snd k_tau)) argspec)
+                 (body : action argspec tau)
+    : action sig tau
   | APos {sig tau} (pos: pos_t) (a: action sig tau)
     : action sig tau.
 
   Definition rule := action nil unit_t.
 End Syntax.
 
-Arguments rule pos_t var_t {reg_t ext_fn_t} R Sigma : assert.
-Arguments action pos_t var_t {reg_t ext_fn_t} R Sigma sig tau : assert.
+Arguments action pos_t var_t fn_name_t {reg_t ext_fn_t} R Sigma sig tau : assert.
+Arguments rule pos_t var_t fn_name_t {reg_t ext_fn_t} R Sigma : assert.

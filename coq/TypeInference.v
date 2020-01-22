@@ -10,7 +10,7 @@ Section ErrorReporting.
           {Sigma: ext_fn_t -> ExternalSignature}.
 
   Definition lift_basic_error_message
-             (pos: pos_t) {sig tau} (e: action pos_t var_t R Sigma sig tau)
+             (pos: pos_t) {sig tau} (e: action pos_t var_t fn_name_t R Sigma sig tau)
              (err: basic_error_message) : error pos_t var_t fn_name_t :=
     {| epos := pos;
        emsg := BasicError err;
@@ -18,15 +18,15 @@ Section ErrorReporting.
 
   Definition lift_fn1_tc_result
              {A sig tau}
-             pos (e: action pos_t var_t R Sigma sig tau)
+             pos (e: action pos_t var_t fn_name_t R Sigma sig tau)
              (r: result A fn_tc_error)
     : result A (error pos_t var_t fn_name_t) :=
     result_map_failure (fun '(side, err) => lift_basic_error_message pos e err) r.
 
   Definition lift_fn2_tc_result
              {A sig1 tau1 sig2 tau2}
-             pos1 (e1: action pos_t var_t R Sigma sig1 tau1)
-             pos2 (e2: action pos_t var_t R Sigma sig2 tau2)
+             pos1 (e1: action pos_t var_t fn_name_t R Sigma sig1 tau1)
+             pos2 (e2: action pos_t var_t fn_name_t R Sigma sig2 tau2)
              (r: result A fn_tc_error)
     : result A (error pos_t var_t fn_name_t) :=
     result_map_failure (fun '(side, err) =>
@@ -38,6 +38,7 @@ End ErrorReporting.
 
 Section TypeInference.
   Context {pos_t rule_name_t fn_name_t var_t reg_t ext_fn_t: Type}.
+
   Context {var_t_eq_dec: EqDec var_t}.
 
   Context (R: reg_t -> type).
@@ -46,8 +47,8 @@ Section TypeInference.
   Notation usugar := (usugar pos_t var_t fn_name_t).
   Notation uaction := (uaction pos_t var_t fn_name_t).
 
-  Notation action := (action pos_t var_t R Sigma).
-  Notation rule := (rule pos_t var_t R Sigma).
+  Notation action := (action pos_t var_t fn_name_t R Sigma).
+  Notation rule := (rule pos_t var_t fn_name_t R Sigma).
   Notation scheduler := (scheduler pos_t rule_name_t).
 
   Section Action.
@@ -87,7 +88,7 @@ Section TypeInference.
     Fixpoint assert_argtypes' {T} {sig} (src: T) nexpected (fn_name: fn_name_t) pos
              (args_desc: tsig var_t)
              (args: list (pos_t * {tau : type & action sig tau}))
-      : result (context (K := (var_t * type)) (fun '(_, tau) => action sig tau) args_desc) :=
+      : result (context (K := (var_t * type)) (fun k_tau => action sig (snd k_tau)) args_desc) :=
       match args_desc, args with
       | [], [] => Success CtxEmpty
       | [], _ => Failure (mkerror pos (TooManyArguments fn_name nexpected (List.length args)) src)
@@ -103,7 +104,7 @@ Section TypeInference.
                (fn_name: fn_name_t) pos
                (args_desc: tsig var_t)
                (args: list (pos_t * {tau : type & action sig tau}))
-      : result (context (K := (var_t * type)) (fun '(_, tau) => action sig tau) args_desc) :=
+      : result (context (K := (var_t * type)) (fun k_tau => action sig (snd k_tau)) args_desc) :=
       assert_argtypes' src (List.length args_desc) fn_name pos args_desc args.
 
     Fixpoint type_action
@@ -148,10 +149,12 @@ Section TypeInference.
         let/res tc_args := result_list_map (type_action pos sig) args in
         let arg_positions := List.map (actpos pos) args in
         let tc_args_w_pos := List.combine arg_positions tc_args in
-        let/res arg_ctx := assert_argtypes e fn.(int_name) pos fn.(int_argspec) tc_args_w_pos in
+        let/res args_ctx := assert_argtypes e fn.(int_name) pos fn.(int_argspec) tc_args_w_pos in
+
         let/res fn_body' := type_action (actpos pos fn.(int_body)) fn.(int_argspec) fn.(int_body) in
         let/res fn_body' := cast_action (actpos pos fn.(int_body)) fn.(int_retSig) (``fn_body') in
-        Success (EX (InternalCall sig fn.(int_argspec) fn_body' arg_ctx))
+
+        Success (EX (TypedSyntax.InternalCall fn.(int_name) args_ctx fn_body'))
       | UUnop fn arg1 =>
         let pos1 := actpos pos arg1 in
         let/res arg1' := type_action pos sig arg1 in
