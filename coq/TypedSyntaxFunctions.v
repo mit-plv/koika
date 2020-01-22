@@ -455,7 +455,7 @@ Section TypedSyntaxFunctions.
     | Binop fn arg1 arg2 => is_pure arg1 && is_pure arg2
     | ExternalCall fn arg => false
     | InternalCall fn args body =>
-      cfoldl (fun k arg acc => acc && is_pure arg) args true
+      cfoldr (fun _ k arg acc => acc && is_pure arg) args true
       && is_pure body
     | APos pos a => is_pure a
     end.

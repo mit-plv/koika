@@ -33,7 +33,7 @@ Section Interp.
                    (a: action sig tau),
                    option (Log * type_denote tau * (tcontext sig))).
 
-      Fixpoint interp_args
+      Fixpoint interp_args'
                {sig: tsig var_t}
                (Gamma: tcontext sig)
                (sched_log: Log)
@@ -44,7 +44,7 @@ Section Interp.
         match args with
         | CtxEmpty => Some (action_log, CtxEmpty, Gamma)
         | @CtxCons _ _ argspec k_tau arg args =>
-          let/opt3 action_log, ctx, Gamma := interp_args Gamma sched_log action_log args in
+          let/opt3 action_log, ctx, Gamma := interp_args' Gamma sched_log action_log args in
           let/opt3 action_log, v, Gamma := interp_action _ _ Gamma sched_log action_log arg in
           Some (action_log, CtxCons k_tau v ctx, Gamma)
         end.
@@ -110,7 +110,7 @@ Section Interp.
         let/opt3 action_log, arg1, Gamma := interp_action Gamma sched_log action_log arg1 in
         Some (action_log, sigma fn arg1, Gamma)
       | InternalCall name args body => fun Gamma =>
-        let/opt3 action_log, results, Gamma := interp_args (@interp_action) Gamma sched_log action_log args in
+        let/opt3 action_log, results, Gamma := interp_args' (@interp_action) Gamma sched_log action_log args in
         let/opt3 action_log, v, _ := interp_action results sched_log action_log body in
         Some (action_log, v, Gamma)
       | APos _ a => fun Gamma =>
@@ -147,3 +147,6 @@ Section Interp.
       interp_scheduler' log_empty s.
   End Scheduler.
 End Interp.
+
+Notation interp_args r sigma Gamma sched_log action_log args :=
+  (interp_args' (@interp_action _ _ _ _ _ _ _ _ r sigma) Gamma sched_log action_log args).
