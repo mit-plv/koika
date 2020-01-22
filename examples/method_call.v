@@ -50,16 +50,16 @@ Definition nor (sz: nat) : UInternalFunction reg_t ext_fn_t :=
 Definition display :=
   (Display.Printer (ext_fn_t := empty_ext_fn_t) (reg_t := reg_t) (pos_t := pos_t)).
 
-Definition swap8 := Delay.swap (bits_t 8).
 Definition swap16 := Delay.swap (bits_t 16).
 
 Definition _rl : uaction reg_t empty_ext_fn_t :=
   {{
       let a := read0(rA) in
-      let old_a := rDelay2.(swap16) (a) in (* Method call *)
-      let old_al := rDelay1.(swap8)(old_a[Ob~0~0~0~0 :+8])  in
-      write0(rA, {nor 16}(read0(rA), old_a)); (* Function call parametrized at coq level use { } notations *)
-      {display (Display.Str "rA: " :: Display.Value (bits_t 16) :: nil)}(a)
+       (* Methods are called as reg.(method)(args...) *)
+      let old_a := rDelay2.(swap16)(a) in
+      (* Parametric functions can be called with {fn params...}(args...) *)
+      write0(rA, {nor 16}(read0(rA), old_a));
+      {display [Display.Str "rA: "; Display.Value (bits_t 16)]}(a)
   }}.
 
 Definition rules :=

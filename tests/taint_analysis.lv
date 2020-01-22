@@ -1,6 +1,6 @@
 ;;; Unit tests to ensure that impure functions are not optimized out
 
-(extfun impure () (bits 5))
+(extfun impure ((arg (bits 5))) (bits 5))
 
 (module taint_analysis
   (register v 5'b0)
@@ -9,15 +9,15 @@
 class extfuns {
   bits<5> state{0u};
 public:
-  bits<5> impure(const unit& /*ignored*/) {
-    state = state + bits<5>{1u};
-    return state;
+  bits<5> impure(const bits<5>& arg) {
+    std::cerr << arg << std::endl;
+    return (state = state + arg);
   }
 };")
 
   (rule keep_impure_exprs
-    (ignore (+ (impure) (impure)))
-    (write.0 v (impure)))
+    (ignore (+ (impure 5'b0) (impure 5'b1)))
+    (write.0 v (impure 5'2)))
 
   (rule keep_impure_branches
     (if true
