@@ -1,11 +1,12 @@
 (*! Circuits | Proof of correctness for the lowering phase !*)
 Require Import Coq.setoid_ring.Ring_theory Coq.setoid_ring.Ring Coq.setoid_ring.Ring.
 Require Import Koika.Common Koika.Environments Koika.Syntax
-        Koika.SemanticProperties Koika.PrimitiveProperties Koika.Lowering.
+        Koika.SemanticProperties Koika.PrimitiveProperties Koika.SyntaxMacros Koika.Lowering.
 Require Koika.TypedSemantics Koika.LoweredSemantics.
+Import EqNotations.
 
 Section LoweringCorrectness.
-  Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
+  Context {pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t: Type}.
 
   Context {R: reg_t -> type}.
   Context {Sigma: ext_fn_t -> ExternalSignature}.
@@ -33,7 +34,7 @@ Section LoweringCorrectness.
     unfold lsigma; intros; rewrite value_of_bits_of_value; reflexivity.
   Qed.
 
-  Notation taction := (TypedSyntax.action pos_t var_t R Sigma).
+  Notation taction := (TypedSyntax.action pos_t var_t fn_name_t R Sigma).
   Notation laction := (LoweredSyntax.action pos_t var_t CR CSigma).
   Notation tinterp := (TypedSemantics.interp_action r sigma).
   Notation linterp := (LoweredSemantics.interp_action lr lsigma).
@@ -110,64 +111,60 @@ Section LoweringCorrectness.
     lower_op_correct_t.
   Qed.
 
+  Definition lower_context  {sig}
+             (tGamma: tcontext sig) :=
+    cmap (V := fun k_tau => type_denote (snd k_tau))
+         (V' := Bits.bits)
+         (fun k_tau => type_sz (@snd var_t type k_tau))
+         (fun _ v => bits_of_value v)
+         tGamma.
+  Arguments lower_context : simpl never.
+
   Definition context_equiv {sig}
              (tGamma: tcontext sig)
              (lGamma: lcontext (lsig_of_tsig sig)) :=
-    lGamma = cmap (V := fun k_tau => type_denote (snd k_tau))
-                  (V' := Bits.bits)
-                  (fun k_tau => type_sz (@snd var_t type k_tau))
-                  (fun _ v => bits_of_value v)
-                  tGamma.
+    lGamma = lower_context tGamma.
 
   Lemma context_equiv_cassoc {sig: tsig var_t} :
-    forall (tGamma: tcontext sig)
-      (lGamma: lcontext (lsig_of_tsig sig)),
-      context_equiv tGamma lGamma ->
-      forall {k tau} (m: member (k, tau) sig),
-        cassoc (lower_member m) lGamma =
+    forall (tGamma: tcontext sig) {k tau} (m: member (k, tau) sig),
+        cassoc (lower_member m) (lower_context tGamma) =
         bits_of_value (cassoc m tGamma).
   Proof.
-    intros * -> *.
-    rewrite <- (cmap_cassoc _ (fun _ v => bits_of_value v) _ m); reflexivity.
+    intros; rewrite <- (cmap_cassoc _ (fun _ v => bits_of_value v) _ m); reflexivity.
   Qed.
 
   Lemma context_equiv_creplace:
     forall {sig: tsig var_t} {k: var_t} {tau: type}
       (m: member (k, tau) sig) (v: tau)
-      (tGamma: tcontext sig)
-      (lGamma: lcontext (lsig_of_tsig sig)),
-      context_equiv tGamma lGamma ->
+      (tGamma: tcontext sig),
       context_equiv
         (creplace m v tGamma)
-        (creplace (lower_member m) (bits_of_value v) lGamma).
+        (creplace (lower_member m) (bits_of_value v) (lower_context tGamma)).
   Proof.
-    unfold context_equiv, lower_member; intros * ->.
+    unfold context_equiv, lower_member, lower_context; intros.
     rewrite cmap_creplace; reflexivity.
   Qed.
 
   Lemma context_equiv_CtxCons:
-    forall (sig: tsig var_t) (tau: type) (k: var_t) (v: tau)
-      (tGamma: tcontext sig) (lGamma: lcontext (lsig_of_tsig sig)),
-      context_equiv tGamma lGamma ->
+    forall (sig: tsig var_t) (tau: type) (k: var_t) (v: tau) (tGamma: tcontext sig),
       context_equiv (CtxCons (k, tau) v tGamma)
-                    (CtxCons (type_sz tau) (bits_of_value v) lGamma).
-  Proof.
-    unfold context_equiv; intros * ->; reflexivity.
-  Qed.
+                    (CtxCons (type_sz tau) (bits_of_value v) (lower_context tGamma)).
+  Proof. reflexivity. Qed.
 
   Lemma context_equiv_ctl:
     forall (sig: tsig var_t) (tau: type) (k: var_t)
-      (tGamma: tcontext ((k, tau) :: sig))
-      (lGamma: lcontext (lsig_of_tsig ((k, tau) :: sig))),
-      context_equiv tGamma lGamma ->
-      context_equiv (ctl tGamma) (ctl lGamma).
+      (tGamma: tcontext ((k, tau) :: sig)),
+      context_equiv (ctl tGamma) (ctl (lower_context tGamma)).
   Proof.
-    unfold context_equiv; intros * ->.
-    rewrite cmap_ctl; reflexivity.
+    unfold context_equiv, lower_context; intros; rewrite cmap_ctl; reflexivity.
   Qed.
 
+  Definition lower_log (tL: tlog) :=
+    log_map_values (fun idx => bits_of_value) tL.
+  Arguments lower_log : simpl never.
+
   Definition log_equiv (tL: tlog) (lL: llog) : Prop :=
-    lL = log_map_values (fun idx => bits_of_value) tL.
+    lL = lower_log tL.
 
   Lemma log_equiv_empty:
     log_equiv log_empty log_empty.
@@ -176,123 +173,269 @@ Section LoweringCorrectness.
   Qed.
 
   Lemma log_equiv_cons:
-    forall (tL: tlog) (lL: llog),
-      log_equiv tL lL ->
-      forall idx tle lle,
-        lle = LogEntry_map bits_of_value tle ->
-        log_equiv (log_cons idx tle tL) (log_cons idx lle lL).
+    forall (tL: tlog) idx tle,
+      log_equiv (log_cons idx tle tL)
+                (log_cons idx (LogEntry_map bits_of_value tle) (lower_log tL)).
   Proof.
-    intros * -> * ->; red; rewrite log_map_values_cons; reflexivity.
+    intros; red; unfold lower_log; rewrite log_map_values_cons; reflexivity.
   Qed.
 
   Lemma log_equiv_app:
-    forall (tL: tlog) (lL: llog),
-      log_equiv tL lL ->
-      forall (tl: tlog) (ll: llog),
-        log_equiv tl ll ->
-        log_equiv (log_app tL tl) (log_app lL ll).
+    forall (tL tl: tlog),
+      log_equiv (log_app tL tl)
+                (log_app (lower_log tL) (lower_log tl)).
   Proof.
-    unfold log_equiv; intros * -> * ->.
+    unfold log_equiv, lower_log; intros.
     rewrite <- log_map_values_log_app; reflexivity.
   Qed.
 
   Lemma log_equiv_may_read:
-    forall (tL: tlog) (lL: llog),
-      log_equiv tL lL ->
-      forall (port: Port) (idx: reg_t),
-        Logs.may_read tL port idx = Logs.may_read lL port idx.
-  Proof. intros * -> *; symmetry; apply may_read_log_map_values. Qed.
+    forall (tL: tlog) (port: Port) (idx: reg_t),
+      Logs.may_read tL port idx =
+      Logs.may_read (_R := CR) (lower_log tL) port idx.
+  Proof. intros; symmetry; apply may_read_log_map_values. Qed.
 
   Lemma log_equiv_may_write:
-    forall (tL tl: tlog) (lL ll: llog),
-      log_equiv tL lL ->
-      log_equiv tl ll ->
-      forall (port: Port) (idx: reg_t),
-        Logs.may_write tL tl port idx = Logs.may_write lL ll port idx.
-  Proof. intros * -> -> *; symmetry; apply may_write_log_map_values. Qed.
+    forall (tL tl: tlog) (port: Port) (idx: reg_t),
+      Logs.may_write tL tl port idx =
+      Logs.may_write (_R := CR) (lower_log tL) (lower_log tl) port idx.
+  Proof. intros; symmetry; apply may_write_log_map_values. Qed.
 
   Lemma log_equiv_latest_write0:
-    forall (tl: tlog) (ll: llog),
-      log_equiv tl ll ->
-      forall idx,
-        latest_write0 ll idx =
-        match latest_write0 tl idx with
-        | Some v => Some (bits_of_value v)
-        | None => None
-        end.
+    forall (tl: tlog) idx,
+      latest_write0 (lower_log tl) idx =
+      match latest_write0 tl idx with
+      | Some v => Some (bits_of_value v)
+      | None => None
+      end.
   Proof.
-    intros * -> *; rewrite latest_write0_log_map_values; reflexivity.
+    intros; unfold lower_log; rewrite latest_write0_log_map_values; reflexivity.
   Qed.
 
+  Definition lower_result {sig tau} (r: option (tlog * type_denote tau * tcontext sig))
+    : option (llog * bits (type_sz tau) * lcontext (lsig_of_tsig sig)) :=
+    match r with
+    | None => None
+    | Some (tl, tv, tGamma) =>
+      Some (lower_log tl, bits_of_value tv, lower_context tGamma)
+    end.
+
+  Definition lower_results {sig argspec} (r: option (tlog * tcontext argspec * tcontext sig))
+    : option (llog * lcontext _ * lcontext (lsig_of_tsig sig)) :=
+    match r with
+    | None => None
+    | Some (tl, tvs, tGamma) =>
+      Some (lower_log tl,
+            cmap (fun (k_tau: var_t * type) => type_sz (snd k_tau))
+                 (fun k v => bits_of_value v)
+                 tvs,
+            lower_context tGamma)
+    end.
+
+  Definition lacontext (sig arg_sigs: lsig) :=
+    context (fun sz => laction sig sz) arg_sigs.
+
+  Fixpoint linterp_args
+             {sig: lsig}
+             (Gamma: lcontext sig)
+             (sched_log: llog)
+             (action_log: llog)
+             {arg_sigs: lsig}
+             (args: context (fun sz => var_t * laction sig sz)%type arg_sigs)
+    : option (llog * lcontext arg_sigs * (lcontext sig)) :=
+    match args with
+    | CtxEmpty => Some (action_log, CtxEmpty, Gamma)
+    | @CtxCons _ _ arg_sigs k_tau (k, arg) args =>
+      let/opt3 action_log, ctx, Gamma := linterp_args Gamma sched_log action_log args in
+      let/opt3 action_log, v, Gamma := linterp Gamma sched_log action_log arg in
+      Some (action_log, CtxCons _ v ctx, Gamma)
+    end.
+
+  Lemma interp_infixed':
+    forall {sg: lsig} {sz: nat} (a: laction sg sz) {sig sig'} (Heq: sg = sig ++ sig')
+      {infix: lsig} (gamma: lcontext infix) (Gamma : lcontext sg)
+      (L l: llog),
+      linterp (infix_context gamma (rew Heq in Gamma)) L l
+              (infix_action infix (rew [fun sg => laction sg sz] Heq in a)) =
+      match linterp Gamma L l a with
+      | Some (l, v, Gamma) => Some (l, v, infix_context gamma (rew Heq in Gamma))
+      | None => None
+      end.
+  Proof.
+    Arguments infix_context : simpl never.
+    induction a;
+      repeat match goal with
+             | _ => reflexivity
+             | _ => progress intros
+             | _ => progress subst
+             | _ => progress cbn
+             | _ => progress change (CtxCons ?sz ?v (infix_context ?gamma ?Gamma)) with
+                   (infix_context (sig := sz :: _) gamma (CtxCons sz v Gamma))
+             | [ H: forall _ _ (Heq: _ = _), _ |- _ ] =>
+               change (?x :: ?a ++ ?b) with ((x :: a) ++ b) in H;
+               specialize (H _ _ eq_refl); cbn in H
+             | [ H: context[_ = _] |- _ ] => rewrite H
+             | [ |- context[if ?x then _ else _] ] => destruct x
+             | _ => destruct linterp as [((?, ?), ?) | ]; [ | reflexivity ]
+             | _ => rewrite ?cassoc_minfix, ?creplace_minfix
+             end.
+  Qed.
+
+  Lemma interp_infixed:
+    forall {sig sig': lsig} {sz: nat} (a: laction (sig ++ sig') sz)
+      {infix: lsig} (gamma: lcontext infix) (Gamma : lcontext (sig ++ sig'))
+      (L l: llog),
+      linterp (infix_context gamma Gamma) L l (infix_action infix a) =
+      match linterp Gamma L l a with
+      | Some (l, v, Gamma) => Some (l, v, infix_context gamma Gamma)
+      | None => None
+      end.
+  Proof. intros; apply (interp_infixed' a eq_refl). Qed.
+
+  Lemma interp_prefixed:
+    forall {sig: lsig} {sz: nat} (a: laction sig sz)
+      {prefix: lsig} (gamma: lcontext prefix) (Gamma : lcontext sig)
+      (L l: llog),
+      linterp (capp gamma Gamma) L l (prefix_action prefix a) =
+      match linterp Gamma L l a with
+      | Some (l, v, Gamma) => Some (l, v, capp gamma Gamma)
+      | None => None
+      end.
+  Proof. intros; apply (@interp_infixed []). Qed.
+
+  Lemma linterp_cast:
+    forall {sg: lsig} {sz: nat} f (a: laction (f sg) sz) {sg'} (Heq: sg = sg')
+      (Gamma : lcontext (f sg)) (L l: llog),
+      linterp (rew [fun sg => lcontext (f sg)] Heq in Gamma) L l
+              (rew [fun sg => laction (f sg) sz] Heq in a) =
+      rew [fun sg => option (llog * bits sz * lcontext (f sg))] Heq in
+        (linterp Gamma L l a).
+  Proof. destruct Heq; cbn; reflexivity. Qed.
+
+  Lemma interp_suffixed:
+    forall {sig: lsig} {sz: nat} (a: laction sig sz)
+      {suffix: lsig} (gamma: lcontext suffix) (Gamma : lcontext sig)
+      (L l: llog),
+      linterp (capp Gamma gamma) L l (suffix_action suffix a) =
+      match linterp Gamma L l a with
+      | Some (l, v, Gamma) => Some (l, v, capp Gamma gamma)
+      | None => None
+      end.
+  Proof. unfold suffix_action; intros.
+     rewrite capp_as_infix.
+     rewrite linterp_cast.
+     unfold eq_rect_r; rewrite interp_infixed'.
+     destruct linterp as [((?, ?), ?) | ]; cbn.
+     - rewrite capp_as_infix.
+       destruct (capp_nil_r suffix); cbn.
+       reflexivity.
+     - destruct capp_nil_r; reflexivity.
+  Qed.
+
+  Theorem InternalCall'_linterp_args :
+    forall {sig sz argspec} (args: context (fun sz => var_t * laction sig sz)%type argspec)
+      Gamma L l (body: laction (argspec ++ sig) sz),
+      linterp Gamma L l (InternalCall' args body) =
+      (let/opt3 l', results, Gamma' := linterp_args Gamma L l args in
+       let/opt3 l'', v, Gamma'' := linterp (capp results Gamma') L l' body in
+       Some (l'', v, snd (csplit Gamma''))).
+  Proof.
+    induction args as [ | sig' sz' (var, arg) tl IH ]; cbn; intros.
+    - destruct linterp as [((?, ?), ?) | ]; reflexivity.
+    - rewrite IH; cbn.
+      destruct linterp_args as [((?, ?), ?) | ]; cbn; try reflexivity.
+      rewrite interp_prefixed.
+      repeat (destruct linterp as [((?, ?), ?) | ]; cbn; try reflexivity).
+  Qed.
+
+  Section Args.
+    Context (IH: forall sig tau (v: taction sig tau) (Gamma: tcontext sig) tL tl,
+                linterp (lower_context Gamma) (lower_log tL) (lower_log tl) (lower_action v) =
+                lower_result (tinterp Gamma tL tl v)).
+
+    Lemma linterp_args_correct:
+      forall {sig argspec} (args : context (fun k_tau : var_t * type => taction sig (snd k_tau)) argspec)
+        (tGamma: tcontext sig) tL tl,
+        linterp_args (lower_context tGamma) (lower_log tL) (lower_log tl) (lower_args args) =
+        lower_results (interp_args r sigma tGamma tL tl args).
+    Proof.
+      induction args; cbn; intros.
+      - reflexivity.
+      - rewrite IHargs by eauto.
+        destruct (interp_args _ _ _ _ _ _) as [((?, ?), ?) | ]; cbn; try reflexivity.
+        rewrite IH; destruct tinterp as [((?, ?), ?) | ]; reflexivity.
+    Defined.
+
+    Lemma InternalCall_correct:
+      forall {sig argspec} (args : context (fun k_tau : var_t * type => taction sig (snd k_tau)) argspec)
+        {tau} (ta: taction argspec tau) (tGamma : tcontext sig) tL tl,
+        linterp (lower_context tGamma) (lower_log tL) (lower_log tl)
+                (InternalCall (lower_args args) (lower_action ta)) =
+        lower_result
+          (let/opt3 action_log, results, Gamma := interp_args r sigma tGamma tL tl args in
+           let/opt3 action_log0, v, _ := tinterp results tL action_log ta in
+           Some (action_log0, v, Gamma)).
+    Proof.
+      unfold InternalCall; intros.
+      rewrite InternalCall'_linterp_args.
+      rewrite linterp_args_correct by auto.
+      destruct (interp_args r sigma tGamma tL tl args) as [((?, ?), ?) | ]; cbn; try reflexivity.
+      rewrite interp_suffixed.
+      rewrite IH.
+      destruct tinterp as [((?, ?), ?) | ]; cbn.
+      - rewrite csplit_capp; reflexivity.
+      - reflexivity.
+    Defined.
+  End Args.
+
   Create HintDb lowering.
-  Hint Resolve lower_r_eqn : lowering.
-  Hint Extern 1 => apply lower_sigma_eqn : lowering.
 
-  Hint Resolve context_equiv_cassoc : lowering.
-  Hint Resolve context_equiv_creplace : lowering.
-  Hint Resolve context_equiv_CtxCons : lowering.
-  Hint Resolve context_equiv_ctl : lowering.
-
-  Hint Resolve log_equiv_cons : lowering.
-
+  Hint Rewrite @context_equiv_cassoc : lowering.
+  Hint Rewrite @context_equiv_creplace : lowering.
+  Hint Rewrite @context_equiv_CtxCons : lowering.
+  Hint Rewrite @context_equiv_ctl : lowering.
+  Hint Rewrite <- @log_equiv_cons : lowering.
   Hint Rewrite @lower_unop_correct : lowering.
   Hint Rewrite @lower_binop_correct : lowering.
   Hint Rewrite @value_of_bits_of_value : lowering.
+  Hint Rewrite @lower_r_eqn : lowering.
+  Hint Rewrite @lower_sigma_eqn : lowering.
+  Hint Rewrite @log_equiv_may_read : lowering.
+  Hint Rewrite @log_equiv_may_write : lowering.
+  Hint Rewrite @log_equiv_latest_write0 : lowering.
+  Hint Rewrite @latest_write0_app : lowering.
+  Hint Rewrite @csplit_capp : lowering.
+  Hint Rewrite @InternalCall_correct : lowering.
 
   Ltac destruct_res r :=
     destruct r as [((?, ?), ?) | ] eqn:?; cbn.
 
   Ltac lowering_correct_t_step :=
     match goal with
-    | [  |- True ] => exact I
-    | [ H: False |- _ ] => destruct H
-    | _ => progress (subst; unfold opt_bind)
     | _ => cleanup_step
+    | _ => progress (subst; unfold opt_bind)
     | _ => progress autorewrite with lowering
-    | _ => progress erewrite ?log_equiv_may_read, ?log_equiv_may_write,
-          ?latest_write0_app, ?log_equiv_latest_write0 by eassumption
-    | [  |- context[match ?res with _ => _ end] ] =>
-      lazymatch res with
-      | tinterp _ _ _ _ => destruct_res res
-      | linterp _ _ _ _ => destruct_res res
-      | Bits.single ?v => destruct v as [ [ | ] [] ]
-      end
-    | [ IH: (forall tGamma tL tl lGamma lL ll, let tres := tinterp tGamma tL tl ?ta in _),
-        Ht: tinterp ?tGamma ?tL ?tl ?ta = _,
-        Hl: linterp ?lGamma ?lL ?ll (lower_action ?ta) = _ |- _ ] =>
-      specialize (IH tGamma tL tl lGamma lL ll);
-      cbn in IH;
-      (rewrite Ht in IH || setoid_rewrite Ht in IH);
-      (rewrite Hl in IH || setoid_rewrite Hl in IH)
-    | [ H: {| vhd := _; vtl := _ |} = {| vhd := _; vtl := _ |} |- _ ] =>
-      inversion H; subst; clear H
-    | [ IH: context_equiv _ _ -> _ |- _ ] =>
-      specialize (IH ltac:(eauto with lowering))
-    | [ IH: log_equiv _ _ -> _ |- _ ] =>
-      specialize (IH ltac:(eauto))
+    | [ H: context[linterp _ _ _ _ = _] |-
+        context[linterp (lower_context ?G) (lower_log ?L) (lower_log ?l) (lower_action ?ta)] ] =>
+      setoid_rewrite (H _ _ ta G L l)
+    | [  |- context[linterp (CtxCons _ _ _) _ _ _] ] => setoid_rewrite context_equiv_CtxCons
+    | [  |- context[ctl (lower_context _)] ] => setoid_rewrite context_equiv_ctl
+    | [  |- context[tinterp] ] => destruct tinterp as [((?, ?), ?) | ]
+    | [  |- context[latest_write0] ] => destruct latest_write0
+    | [  |- context[if ?x then _ else _] ] => destruct x
+    | _ => eauto using InternalCall_correct
     end.
 
   Ltac lowering_correct_t :=
-    repeat lowering_correct_t_step; intuition eauto with lowering.
+    repeat lowering_correct_t_step.
 
   Theorem action_lowering_correct:
-    forall {sig tau} (ta: taction sig tau) tGamma tL tl lGamma lL ll,
-      let tres := tinterp tGamma tL tl ta in
-      let lres := linterp lGamma lL ll (lower_action ta) in
-      context_equiv tGamma lGamma ->
-      log_equiv tL lL ->
-      log_equiv tl ll ->
-      match tres, lres with
-      | None, None => True
-      | None, Some _ => False
-      | Some _, None => False
-      | Some (tl, tv, tGamma), Some (ll, lv, lGamma) =>
-        lv = bits_of_value tv /\
-        context_equiv tGamma lGamma /\
-        log_equiv tl ll
-      end.
+    forall {sig tau} (ta: taction sig tau) tGamma tL tl,
+      linterp (lower_context tGamma) (lower_log tL) (lower_log tl) (lower_action ta) =
+      lower_result (tinterp tGamma tL tl ta).
   Proof.
-    induction ta; simpl; intros.
+    fix IHta 3; destruct ta; simpl; intros; cbn.
+
     - lowering_correct_t.
     - lowering_correct_t.
     - lowering_correct_t.
@@ -301,54 +444,42 @@ Section LoweringCorrectness.
     - lowering_correct_t.
     - lowering_correct_t.
     - lowering_correct_t.
-      destruct Logs.may_read, port; lowering_correct_t.
-      repeat destruct latest_write0; lowering_correct_t.
-    - repeat lowering_correct_t_step.
-      destruct Logs.may_write; lowering_correct_t.
+    - lowering_correct_t.
+    - lowering_correct_t.
     - lowering_correct_t.
     - lowering_correct_t.
     - lowering_correct_t.
     - lowering_correct_t.
   Qed.
 
-  Context (rules: rule_name_t -> TypedSyntax.rule pos_t var_t R Sigma).
+  Context (rules: rule_name_t -> TypedSyntax.rule pos_t var_t fn_name_t R Sigma).
   Notation lrules r := (lower_action (rules r)).
 
-  Hint Resolve log_equiv_app : lowering.
-
   Lemma scheduler_lowering_correct':
-    forall s tL lL,
-      log_equiv tL lL ->
-      log_equiv
-        (TypedSemantics.interp_scheduler' r sigma rules tL s)
-        (LoweredSemantics.interp_scheduler' lr lsigma (fun r => lrules r) lL s).
+    forall s L,
+      LoweredSemantics.interp_scheduler' lr lsigma (fun r => lrules r) (lower_log L) s =
+      lower_log (TypedSemantics.interp_scheduler' r sigma rules L s).
   Proof.
     induction s; intros; cbn;
       unfold TypedSemantics.interp_rule, LoweredSemantics.interp_rule.
-    - assumption.
-    - pose proof (action_lowering_correct
-                    (rules r0) CtxEmpty tL log_empty CtxEmpty lL log_empty
-                    eq_refl ltac:(eassumption) log_equiv_empty) as Hc;
-        destruct tinterp as [((?, ?), ?) | ];
-        destruct linterp as [((?, ?), ?) | ];
-        cbn in *; destruct Hc; repeat cleanup_step; apply IHs;
-          eauto with lowering.
-    - pose proof (action_lowering_correct
-                    (rules r0) CtxEmpty tL log_empty CtxEmpty lL log_empty
-                    eq_refl ltac:(eassumption) log_equiv_empty) as Hc;
-        destruct tinterp as [((?, ?), ?) | ];
-        destruct linterp as [((?, ?), ?) | ];
-        cbn in *; destruct Hc; repeat cleanup_step; apply IHs1 || apply IHs2;
-          eauto with lowering.
+    - reflexivity.
+    - rewrite log_equiv_empty.
+      setoid_rewrite (action_lowering_correct (rules r0) CtxEmpty L log_empty).
+      destruct tinterp as [((?, ?), ?) | ]; cbn;
+        try rewrite log_equiv_app; eauto.
+    - rewrite log_equiv_empty.
+      setoid_rewrite (action_lowering_correct (rules r0) CtxEmpty L log_empty).
+      destruct tinterp as [((?, ?), ?) | ]; cbn;
+        try rewrite log_equiv_app; eauto.
     - eauto.
   Qed.
 
   Theorem scheduler_lowering_correct:
     forall s,
-      log_equiv
-        (TypedSemantics.interp_scheduler r sigma rules s)
-        (LoweredSemantics.interp_scheduler lr lsigma (fun r => lrules r) s).
+      LoweredSemantics.interp_scheduler lr lsigma (fun r => lrules r) s =
+      lower_log (TypedSemantics.interp_scheduler r sigma rules s).
   Proof.
-    intros; apply scheduler_lowering_correct', log_equiv_empty.
+    unfold TypedSemantics.interp_scheduler; intros.
+    rewrite <- scheduler_lowering_correct', <- log_equiv_empty; reflexivity.
   Qed.
 End LoweringCorrectness.

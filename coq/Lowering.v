@@ -86,6 +86,20 @@ Section Lowering.
       member (type_sz tau) (lsig_of_tsig sig) :=
       member_map _ m.
 
+    Section Args.
+      Context (lower_action:
+                 forall {sig: tsig var_t} {tau}
+                   (a: typed_action sig tau),
+                   low_action (lsig_of_tsig sig) (type_sz tau)).
+
+      Definition lower_args' {sig argspec}
+                 (args: context (fun k_tau => typed_action sig (snd k_tau)) argspec) :=
+        cmap (V' := fun sz => (var_t * low_action _ sz)%type)
+             (fun k_tau => type_sz (snd k_tau))
+             (fun k_tau a => ((fst k_tau), lower_action _ _ a))
+             args.
+    End Args.
+
     Fixpoint lower_action
              {sig: tsig var_t} {tau}
              (a: typed_action sig tau):
@@ -117,12 +131,16 @@ Section Lowering.
       | TypedSyntax.ExternalCall fn a =>
         LoweredSyntax.ExternalCall fn (l a)
       | TypedSyntax.InternalCall fn args body =>
-        SyntaxMacros.InternalCall (cmapv (fun _ a => l a) args) (l body)
+        SyntaxMacros.InternalCall
+          (lower_args' (@lower_action) args)
+          (l body)
       | TypedSyntax.APos p a =>
         LoweredSyntax.APos p (l a)
       end.
   End Action.
 End Lowering.
+
+Notation lower_args args := (lower_args' (@lower_action _ _ _ _ _ _ _) args).
 
 Arguments lower_R {reg_t} R idx : assert.
 Arguments lower_Sigma {ext_fn_t} Sigma fn : assert.

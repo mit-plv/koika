@@ -3,7 +3,7 @@ Require Import Koika.Common Koika.Types Koika.Environments Koika.Logs.
 Require Import Koika.Lowering Koika.CircuitGeneration Koika.CircuitOptimization Koika.Interop.
 
 Section Thm.
-  Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
+  Context {pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t: Type}.
   Context {eq_dec_var_t: EqDec var_t}.
 
   Context {R: reg_t -> type}.
@@ -30,7 +30,7 @@ Section Thm.
 
   Section Standalone.
     Context (s: Syntax.scheduler pos_t rule_name_t).
-    Context (rules: rule_name_t -> TypedSyntax.rule pos_t var_t R Sigma).
+    Context (rules: rule_name_t -> TypedSyntax.rule pos_t var_t fn_name_t R Sigma).
     Context (external: rule_name_t -> bool).
 
     Theorem compiler_correct:
@@ -43,7 +43,7 @@ Section Thm.
       cbv zeta; intros.
       setoid_rewrite compile_scheduler'_correct.
       - rewrite scheduler_lowering_correct.
-        unfold lower_r;
+        unfold lower_r, lower_log;
           rewrite SemanticProperties.commit_update_log_map_values, getenv_map;
           reflexivity.
       - apply circuit_env_equiv_CReadRegister.

@@ -106,7 +106,8 @@ Fixpoint member_unmap {K K'} (f: K -> K') (k': K') (ls: list K)
          (m: member k' (List.map f ls)) : { k: K & member k ls }.
   destruct ls; cbn in *.
   - destruct (mdestruct m).
-  - destruct (mdestruct m) as [(-> & Heq) | (m' & ->)]; cbn in *.
+  - destruct (mdestruct m) as [(eqn & Heq) | (m' & Heq)]; cbn in *;
+      [ destruct eqn | destruct Heq ].
     + exact (existT _ k (MemberHd k ls)).
     + destruct (member_unmap _ _ f k' ls m') as [ k0 m0 ].
       exact (existT _ k0 (MemberTl k0 k ls m0)).
@@ -187,24 +188,25 @@ Fixpoint mmap {K V} (l: list K) (f: forall k: K, member k l -> V) {struct l} : l
    | k :: l => fun f => f k (MemberHd k l) :: mmap l (fun k' m => f k' (MemberTl k' k l m))
    end f.
 
-Fixpoint mshift {K} (prefix: list K) {sig: list K} {k} (m: member k sig)
+Fixpoint mprefix {K} (prefix: list K) {sig: list K} {k} (m: member k sig)
   : member k (prefix ++ sig) :=
   match prefix return member k sig -> member k (prefix ++ sig) with
   | [] => fun m => m
-  | k' :: prefix => fun m => MemberTl k k' (prefix ++ sig) (mshift prefix m)
+  | k' :: prefix => fun m => MemberTl k k' (prefix ++ sig) (mprefix prefix m)
   end m.
 
-Fixpoint mshift' {K} (infix: list K) {sig sig': list K} {k} (m: member k (sig ++ sig'))
+Fixpoint minfix {K} (infix: list K) {sig sig': list K} {k} (m: member k (sig ++ sig'))
   : member k (sig ++ infix ++ sig').
 Proof.
   destruct sig as [ | k' sig].
-  - exact (mshift infix m).
-  - destruct (mdestruct m) as [(-> & Heq) | (m' & Heq)]; cbn in *.
-    + exact (MemberHd k' (sig ++ infix ++ sig')).
-    + exact (MemberTl k k' (sig ++ infix ++ sig') (mshift' _ infix sig sig' k m')).
+  - exact (mprefix infix m).
+  - destruct (mdestruct m) as [(eqn & Heq) | (m' & Heq)];
+      [ destruct eqn | ]; cbn in *.
+    + exact (MemberHd k (sig ++ infix ++ sig')).
+    + exact (MemberTl k k' (sig ++ infix ++ sig') (minfix _ infix sig sig' k m')).
 Defined.
 
-Fixpoint mshift_pair {K sig} (k: K) (p: {k': K & member k' sig})
+Fixpoint mprefix_pair {K sig} (k: K) (p: {k': K & member k' sig})
   : {k': K & member k' (k :: sig)} :=
   let '(existT _ k' m) := p in
   existT _ k' (MemberTl k' k _ m).
@@ -213,6 +215,6 @@ Fixpoint all_members {K} (sig: list K): list { k: K & member k sig } :=
   match sig with
   | [] => []
   | k :: sig => let ms := all_members sig in
-              let ms := List.map (mshift_pair k) ms in
+              let ms := List.map (mprefix_pair k) ms in
               (existT _ k (MemberHd k sig)) :: ms
   end.

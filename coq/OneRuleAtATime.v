@@ -7,7 +7,7 @@ Require Import Coq.setoid_ring.Ring_theory Coq.setoid_ring.Ring Coq.setoid_ring.
 Open Scope bool_scope.
 
 Section Proof.
-  Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.
+  Context {pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t: Type}.
   Context {reg_t_eq_dec: EqDec reg_t}.
 
   Context {R: reg_t -> type}.
@@ -17,8 +17,8 @@ Section Proof.
   Context (sigma: forall f, Sig_denote (Sigma f)).
 
   Notation Log := (Log R REnv).
-  Notation action := (action pos_t var_t R Sigma).
-  Notation rule := (rule pos_t var_t R Sigma).
+  Notation action := (action pos_t var_t fn_name_t R Sigma).
+  Notation rule := (rule pos_t var_t fn_name_t R Sigma).
   Notation scheduler := (scheduler pos_t rule_name_t).
 
   Context (rules: rule_name_t -> rule).
@@ -53,8 +53,9 @@ Section Proof.
   Definition update_one r rl: option (REnv.(env_t) R) :=
     let/opt r := r in
     let log := @interp_scheduler'
-                pos_t var_t rule_name_t reg_t ext_fn_t
-                R Sigma REnv r sigma rules
+                pos_t var_t fn_name_t rule_name_t
+                reg_t ext_fn_t
+                 R Sigma REnv r sigma rules
                 log_empty (Try rl Done Done) in
     Some (commit_update r log).
 
@@ -160,7 +161,7 @@ Section Proof.
       is_constructor c_hd; destruct x eqn:?
     | [ H: ?x = _ |- context[match ?x with _ => _ end] ] =>
       rewrite H
-    | [ H: context[_ -> interp_action _ _ _ _ _ ?a = Some _] |- _ ] =>
+    | [ H: context[_ -> _ = Some _] |- _ ] =>
       erewrite H by eauto
     | _ => reflexivity
     end.
@@ -173,7 +174,9 @@ Section Proof.
       interp_action r sigma Gamma (log_app sl sl') action_log a = Some lv ->
       interp_action (commit_update r sl') sigma Gamma sl action_log a = Some lv.
   Proof.
-    induction a; cbn; intros Gamma sl sl' action_log lv HSome; try congruence.
+    fix IH 3; destruct a; cbn;
+      intros Gamma sl sl' action_log lv HSome; try congruence.
+
     - (* Assign *) t.
     - (* Seq *) t.
     - (* Bind *) t.
@@ -195,6 +198,18 @@ Section Proof.
     - (* UnOp *) t.
     - (* BinOp *) t.
     - (* ExternalCall *) t.
+    - (* InternalCall *)
+      assert (let interp_action r sigma :=
+                  @interp_action pos_t var_t fn_name_t reg_t ext_fn_t R Sigma REnv r sigma in
+              forall argspec (args: acontext sig argspec) (Gamma: tcontext sig) (sl sl': Log) action_log lv,
+                interp_args' (interp_action r sigma) Gamma (log_app sl sl') action_log args = Some lv ->
+                interp_args' (interp_action (commit_update r sl') sigma) Gamma sl action_log args = Some lv).
+      { clear -IH; intro.
+        fix IHargs 2; destruct args; cbn;
+          intros Gamma sl sl' action_log lv **.
+        + t.
+        + t. }
+      t.
     - (* APos *) t.
   Qed.
 

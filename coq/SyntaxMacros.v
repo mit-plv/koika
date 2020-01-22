@@ -217,9 +217,9 @@ Section LoweredSyntaxMacros.
   Proof.
     remember (sig ++ sig'); destruct a; subst.
     - exact (Fail sz).
-    - exact (Var k (mshift' infix m)).
+    - exact (Var k (minfix infix m)).
     - exact (Const cst).
-    - exact (Assign k (mshift' infix m) (infix_action infix _ _ _ a)).
+    - exact (Assign k (minfix infix m) (infix_action infix _ _ _ a)).
     - exact (Seq (infix_action infix _ _ _ a1) (infix_action infix _ _ _ a2)).
     - exact (Bind k (infix_action infix _ _ _ a1) (infix_action infix (_ :: sig) sig' _ a2)).
     - exact (If (infix_action infix _ _ _ a1) (infix_action infix _ _ _ a2) (infix_action infix _ _ _ a3)).
@@ -235,43 +235,37 @@ Section LoweredSyntaxMacros.
     : action (prefix ++ sig) sz :=
     infix_action prefix (sig := []) a.
 
-  Fixpoint suffix_action_eqn {A} (l: list A) {struct l}:
-    l ++ [] = l.
-  Proof. destruct l; cbn; [ | f_equal ]; eauto. Defined.
-
   Definition suffix_action (suffix: lsig) {sig: lsig} {sz} (a: action sig sz)
     : action (sig ++ suffix) sz.
-  Proof. rewrite <- (suffix_action_eqn suffix); apply infix_action; rewrite (suffix_action_eqn sig); exact a. Defined.
+  Proof. rewrite <- (capp_nil_r suffix); apply infix_action; rewrite (capp_nil_r sig); exact a. Defined.
 
   Definition lsig_of_tsig (sig: tsig var_t) : lsig :=
     List.map (fun k_tau => type_sz (snd k_tau)) sig.
 
   Fixpoint InternalCall'
            {sz: nat}
-           (sig: lsig)
-           (fn_sig: tsig var_t)
-           (args: context (fun k_tau => action sig (type_sz (snd k_tau))) fn_sig)
-           (fn_body: action (lsig_of_tsig fn_sig ++ sig) sz)
+           {sig: lsig}
+           {fn_sig: lsig}
+           (args: context (fun sz => var_t * action sig sz)%type fn_sig)
+           (fn_body: action (fn_sig ++ sig) sz)
     : action sig sz :=
-    match fn_sig return context (fun k_tau => action sig (type_sz (snd k_tau))) fn_sig ->
-                        action ((lsig_of_tsig fn_sig) ++ sig) sz ->
-                        action sig sz with
-    | [] =>
-      fun _ fn_body =>
-        fn_body
-    | (k, tau) :: fn_sig =>
-      fun args fn_body =>
-        InternalCall' sig fn_sig
-                      (ctl args)
-                      (Bind k (prefix_action (lsig_of_tsig fn_sig) (chd args)) fn_body)
-    end args fn_body.
+    match args in context _ fn_sig
+          return action (fn_sig ++ sig) sz ->
+                 action sig sz with
+    | CtxEmpty =>
+      fun fn_body => fn_body
+    | CtxCons sz (k, v) tl =>
+      fun fn_body =>
+        let fn_body := Bind k (prefix_action _ v) fn_body in
+        InternalCall' tl fn_body
+    end fn_body.
 
-  Fixpoint InternalCall
+  Definition InternalCall
              {sz: nat}
              {sig: lsig}
-             {fn_sig: tsig var_t}
-             (args: context (fun k_tau => action sig (type_sz (snd k_tau))) fn_sig)
-             (fn_body: action (lsig_of_tsig fn_sig) sz)
+             {fn_sig: lsig}
+             (args: context (fun sz => var_t * action sig sz)%type fn_sig)
+             (fn_body: action fn_sig sz)
     : action sig sz :=
-    InternalCall' sig fn_sig args (suffix_action sig fn_body).
+    InternalCall' args (suffix_action sig fn_body).
 End LoweredSyntaxMacros.

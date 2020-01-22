@@ -1,6 +1,7 @@
 (*! Utilities | Environments used to track variable bindings !*)
 Require Import Koika.Common.
 Require Export Koika.Member.
+Import EqNotations.
 
 Section Contexts.
   Context {K: Type}.
@@ -166,13 +167,108 @@ Section Contexts.
     | k :: sig => fun ctx => CtxCons k (chd ctx) (capp (ctl ctx) ctx')
     end ctx.
 
+  Fixpoint capp_nil_r {A} (l: list A) {struct l}:
+    l ++ [] = l.
+  Proof. destruct l; cbn; [ | f_equal ]; eauto. Defined.
+
+  Lemma capp_empty:
+    forall {sig} (ctx: context sig),
+      capp ctx CtxEmpty =
+      rew <- capp_nil_r sig in ctx.
+  Proof.
+    induction ctx; cbn.
+    - reflexivity.
+    - rewrite IHctx.
+      rewrite eq_trans_refl_l.
+      unfold eq_rect_r.
+      rewrite eq_sym_map_distr.
+      rewrite <- rew_map.
+      destruct (eq_sym _); reflexivity.
+  Qed.
+
   Fixpoint csplit {sig sig'} (ctx: context (sig ++ sig')): (context sig * context sig') :=
     match sig return context (sig ++ sig') -> (context sig * context sig') with
     | [] => fun ctx => (CtxEmpty, ctx)
     | k :: sig => fun ctx =>
-                  let (l, r) := csplit (ctl ctx) in
-                  (CtxCons k (chd ctx) l, r)
+                  let split := csplit (ctl ctx) in
+                  (CtxCons k (chd ctx) (fst split), (snd split))
     end ctx.
+
+  Lemma csplit_capp :
+    forall {sig sig'} (ctx: context sig) (ctx': context sig'),
+      csplit (capp ctx ctx') = (ctx, ctx').
+  Proof.
+    induction sig; cbn; intros; rewrite (ceqn ctx).
+    - reflexivity.
+    - rewrite IHsig; reflexivity.
+  Qed.
+
+  Definition infix_context {infix} (ctx': context infix)
+             {sig sig'} (ctx: context (sig ++ sig')) :=
+    capp (fst (csplit ctx)) (capp ctx' (snd (csplit ctx))).
+
+  Lemma cassoc_mprefix:
+    forall {k prefix sig} (m: member k sig)
+      (ctx: context sig) (ctx': context prefix),
+      cassoc (mprefix prefix m) (capp ctx' ctx) = cassoc m ctx.
+  Proof. induction prefix; cbn; eauto. Qed.
+
+  Lemma cassoc_minfix:
+    forall {k sig sig'} (m: member k (sig ++ sig')) {infix}
+      (ctx: context (sig ++ sig')) (ctx': context infix),
+      cassoc (minfix infix m) (infix_context ctx' ctx) = cassoc m ctx.
+  Proof.
+    induction sig; cbn; intros.
+    - apply cassoc_mprefix.
+    - destruct (mdestruct m) as [(eqn & Heq) | (m' & Heq)];
+        [ destruct eqn | ]; cbn in *; subst; rewrite (ceqn ctx).
+      + reflexivity.
+      + setoid_rewrite IHsig; reflexivity.
+  Qed.
+
+  Lemma creplace_mprefix:
+    forall {k prefix sig} (m: member k sig)
+      (ctx: context sig) (ctx': context prefix)
+      (v : V k),
+    creplace (mprefix prefix m) v (capp ctx' ctx) =
+    capp ctx' (creplace m v ctx).
+  Proof. induction prefix; cbn; eauto using f_equal. Qed.
+
+  Lemma creplace_minfix:
+    forall {k sig sig'} (m: member k (sig ++ sig')) {infix}
+      (ctx: context (sig ++ sig')) (ctx': context infix) v,
+      creplace (minfix infix m) v (infix_context ctx' ctx) =
+      (infix_context ctx' (creplace m v ctx)).
+  Proof.
+    induction sig; cbn; intros.
+    - apply creplace_mprefix.
+    - destruct (mdestruct m) as [(eqn & Heq) | (m' & Heq)];
+        [ destruct eqn | ]; cbn in *; subst; rewrite (ceqn ctx).
+      + reflexivity.
+      + setoid_rewrite IHsig; reflexivity.
+  Qed.
+
+  Lemma capp_as_infix':
+    forall {sig sig'} (ctx: context sig) (ctx': context sig'),
+      (rew <- [fun sig' => context (sig ++ sig')] capp_nil_r sig' in capp ctx ctx') =
+      infix_context ctx' (rew <- capp_nil_r sig in ctx).
+  Proof.
+    unfold infix_context; intros.
+    rewrite <- capp_empty.
+    rewrite !csplit_capp; cbn.
+    rewrite capp_empty.
+    unfold eq_rect_r; cbn.
+    destruct (eq_sym _); reflexivity.
+  Qed.
+
+  Lemma capp_as_infix:
+    forall {sig sig'} (ctx: context sig) (ctx': context sig'),
+      capp ctx ctx' =
+      (rew [fun sig' => context (sig ++ sig')] capp_nil_r sig' in
+          infix_context ctx' (rew <- capp_nil_r sig in ctx)).
+  Proof.
+    intros; rewrite <- capp_as_infix', rew_opp_r; reflexivity.
+  Qed.
 End Contexts.
 
 Arguments context {K} V sig : assert.
