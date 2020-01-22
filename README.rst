@@ -703,6 +703,7 @@ The following list shows the current state of the repo:
       - |coq/CircuitProperties.v|_: Lemmas used in the compiler-correctness proof
       - |coq/CircuitSemantics.v|_: Interpretation of circuits
       - |coq/CircuitSyntax.v|_: Syntax of circuits (RTL)
+      - |coq/LoweringCorrectness.v|_: Proof of correctness for the lowering phase
 
    (Frontend)
       - |coq/Desugaring.v|_: Desugaring of untyped actions
@@ -753,6 +754,7 @@ The following list shows the current state of the repo:
       - |coq/Show.v|_: Show typeclass (α → string)
       - |coq/Vect.v|_: Vectors and bitvector library
 
+   - |coq/Correctness.v|_: End-to-end correctness theorem
    - |coq/PrimitiveProperties.v|_: Equations showing how to implement functions on structures and arrays as bitfuns
 
 ``examples/``
@@ -845,6 +847,8 @@ The following list shows the current state of the repo:
 .. _coq/CircuitSyntax.v: coq/CircuitSyntax.v
 .. |coq/Common.v| replace:: ``Common.v``
 .. _coq/Common.v: coq/Common.v
+.. |coq/Correctness.v| replace:: ``Correctness.v``
+.. _coq/Correctness.v: coq/Correctness.v
 .. |coq/DeriveShow.v| replace:: ``DeriveShow.v``
 .. _coq/DeriveShow.v: coq/DeriveShow.v
 .. |coq/Desugaring.v| replace:: ``Desugaring.v``
@@ -879,6 +883,8 @@ The following list shows the current state of the repo:
 .. _coq/LoweredSyntaxFunctions.v: coq/LoweredSyntaxFunctions.v
 .. |coq/Lowering.v| replace:: ``Lowering.v``
 .. _coq/Lowering.v: coq/Lowering.v
+.. |coq/LoweringCorrectness.v| replace:: ``LoweringCorrectness.v``
+.. _coq/LoweringCorrectness.v: coq/LoweringCorrectness.v
 .. |coq/Member.v| replace:: ``Member.v``
 .. _coq/Member.v: coq/Member.v
 .. |coq/OneRuleAtATime.v| replace:: ``OneRuleAtATime.v``

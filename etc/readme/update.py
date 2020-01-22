@@ -73,8 +73,8 @@ def serialize_tree(node, indent=''):
             yield from serialize_tree(node[c], subindent)
         for f in files:
             fobj = node[f]
-            doc = KOIKA_RE.sub("|koika|", fobj.docstring)
-            if doc:
+            if fobj.docstring:
+                doc = KOIKA_RE.sub("|koika|", fobj.docstring)
                 yield f"{indent}- |{fobj.fpath}|_: {doc}"
             else:
                 print(f"!! No documentation for {fobj.fpath}", file=sys.stderr)
