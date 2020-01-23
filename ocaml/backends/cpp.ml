@@ -1193,14 +1193,13 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
       let collect_intfuns pos (action: (_, var_t, fn_name_t, reg_t, _) Extr.action) =
         let fns = ref [] in
         let ensure_fresh fn =
-          let fn = sprintf "fn_%s_%s" rule_name_unprefixed fn in
-          let rec loop nm counter =
+          let rec loop counter =
+            let nm = sprintf "fn%d_%s_%s" counter rule_name_unprefixed fn in
             if not (Hashtbl.mem internal_fnames nm) then
               let () = Hashtbl.add internal_fnames nm () in nm
             else
-              let nm = fn ^ "_instance" ^ string_of_int counter in
-              loop nm (counter + 1) in
-          loop fn 0 in
+              loop (counter + 1) in
+          loop 0 in
         let register_intfun pos fn argspec tau body =
           (* FIXME assert that all args have different names *)
           match lookup_intfun fn argspec tau body with
@@ -1234,7 +1233,7 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
              let _ = Extr.cmap (fun k -> k) (fun _ v -> loop pos v) argspec args in
              loop pos body in
         loop pos action;
-        !fns in
+        List.rev !fns in
 
       let fn_flags =
         virtual_flag (* ^ "inline __attribute__((always_inline)) " *) in
