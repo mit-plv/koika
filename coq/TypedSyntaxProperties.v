@@ -74,7 +74,7 @@ Section TypedSyntaxProperties.
       revert dependent Gamma.
       revert dependent sched_log.
       revert dependent action_log.
-      revert dependent argspec.
+      generalize dependent (rev argspec); clear argspec.
       fix IHargs 2; destruct args; cbn; intros;
         repeat dec_step. }
 

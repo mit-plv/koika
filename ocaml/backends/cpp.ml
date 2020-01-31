@@ -1110,19 +1110,19 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
            (* See ‘Read’ case for why returning just ImpureExpr isn't safe *)
            let expr = cpp_ext_funcall ffi.ffi_name (must_value a) in
            p_assign_expr target (ImpureExpr expr)
-        | Extr.InternalCall (_, tau, fn, argspec, args, body) ->
+        | Extr.InternalCall (_, tau, fn, argspec, rev_args, body) ->
            let fn_name = match snd (lookup_intfun fn argspec tau body) with
              | Some fn -> fn
              | None -> assert false in
-           let rev_args = Extr.cfoldl (fun (argname, tau) arg argstrs ->
+           let args = Extr.cfoldl (fun (argname, tau) arg argstrs ->
                           let tau = Cuttlebone.Util.typ_of_extr_type tau in
                           let argname = hpp.cpp_var_names argname in
                           let target = gensym_target tau argname in
                           must_value (p_action false pos target arg) :: argstrs)
-                        argspec args [] in
+                        argspec rev_args [] in
            (* FIXME need the type of the return value in the macro to know what kind of parameter to declare *)
            (* See ‘Read’ case for why returning just ImpureExpr isn't safe *)
-           let args = String.concat ", " (fn_name :: List.rev rev_args) in
+           let args = String.concat ", " (fn_name :: args) in
            let invocation = sprintf "%s(%s, %s)" call rule_name_unprefixed args in
            p_assign_expr target (ImpureExpr invocation)
         | Extr.APos (_, _, Extr.PosAnnot pos, a) ->
@@ -1228,9 +1228,9 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
              loop pos c;
              loop pos tbr;
              loop pos fbr
-          | Extr.InternalCall (_, tau, fn, argspec, args, body) ->
+          | Extr.InternalCall (_, tau, fn, argspec, rev_args, body) ->
              register_intfun pos fn argspec tau body;
-             let _ = Extr.cmap (fun k -> k) (fun _ v -> loop pos v) argspec args in
+             Extr.cfoldr (fun _ _ arg () -> loop pos arg) argspec rev_args ();
              loop pos body in
         loop pos action;
         List.rev !fns in

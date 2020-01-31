@@ -149,9 +149,9 @@ Section TypeInference.
         let/res tc_args := result_list_map (type_action pos sig) args in
         let arg_positions := List.map (actpos pos) args in
         let tc_args_w_pos := List.combine arg_positions tc_args in
-        let/res args_ctx := assert_argtypes e fn.(int_name) pos fn.(int_argspec) tc_args_w_pos in
+        let/res args_ctx := assert_argtypes e fn.(int_name) pos (List.rev fn.(int_argspec)) (List.rev tc_args_w_pos) in
 
-        let/res fn_body' := type_action (actpos pos fn.(int_body)) fn.(int_argspec) fn.(int_body) in
+        let/res fn_body' := type_action (actpos pos fn.(int_body)) (List.rev fn.(int_argspec)) fn.(int_body) in
         let/res fn_body' := cast_action (actpos pos fn.(int_body)) fn.(int_retSig) (``fn_body') in
 
         Success (EX (TypedSyntax.InternalCall fn.(int_name) args_ctx fn_body'))

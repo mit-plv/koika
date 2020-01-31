@@ -48,8 +48,8 @@ Section Syntax.
   | InternalCall {sig tau}
                  (fn : fn_name_t)
                  {argspec : tsig var_t}
-                 (args: context (fun k_tau => action sig (snd k_tau)) argspec)
-                 (body : action argspec tau)
+                 (args: context (fun k_tau => action sig (snd k_tau)) (List.rev argspec))
+                 (body : action (List.rev argspec) tau)
     : action sig tau
   | APos {sig tau} (pos: pos_t) (a: action sig tau)
     : action sig tau.
