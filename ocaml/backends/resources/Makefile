@@ -270,7 +270,7 @@ help:
 	@echo '        C++ compiler flags used in opt mode'
 	@echo '      CUTTLEC_DEBUG_FLAGS = $(CUTTLEC_DEBUG_FLAGS)'
 	@echo '        C++ compiler flags used in debug mode'
-	@echo '      CUTTLEC_DEBUG_FLAGS = $(CUTTLEC_DEBUG_FLAGS)'
+	@echo '      CUTTLEC_PERF_FLAGS = $(CUTTLEC_PERF_FLAGS)'
 	@echo '        C++ compiler flags used in perf mode'
 	@echo '      CUTTLEC_S_FLAGS = $(CUTTLEC_S_FLAGS)'
 	@echo '        C++ compiler flags used to generate assembly listings'
