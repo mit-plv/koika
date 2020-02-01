@@ -18,8 +18,9 @@ CPPFLAGS ?=
 CXXFLAGS ?=
 CPP_DRIVER ?= $(mod).cpp
 CUTTLEC_OPT_FLAGS ?= __CUTTLEC_CXX_OPT_FLAGS__
-CUTTLEC_DEBUG_FLAGS ?= -g
+CUTTLEC_DEBUG_FLAGS ?= -Og -ggdb3
 CUTTLEC_PERF_FLAGS ?= -DSIM_NOINLINE $(CUTTLEC_OPT_FLAGS) $(CUTTLEC_DEBUG_FLAGS)
+CUTTLEC_COV_FLAGS ?= $(CUTTLEC_DEBUG_FLAGS)
 CUTTLEC_S_FLAGS ?= -DSIM_MINIMAL -fverbose-asm
 CUTTLEC_WARNINGS ?= __CUTTLEC_CXX_WARNINGS__
 VCD_SCOPES ?= TOP $(mod)
@@ -33,6 +34,12 @@ ifeq (,$(findstring --std,$(cxx_flags)))
 cxx_flags += __CUTTLEC_CXX_STANDARD__
 endif
 
+ifdef CUTTLEC_DEBUG_SANITIZE
+export LSAN_OPTIONS ?= verbosity=1
+export UBSAN_OPTIONS ?= print_stacktrace=1
+cuttlec_debug_flags += -fsanitize=address,undefined -fsanitize-recover=all
+endif
+
 $(mod).opt: $(cuttlesim_helper) $(mod).hpp $(CPP_DRIVER)
 	$(CXX) $(cxx_flags) $(CUTTLEC_OPT_FLAGS) $(CPP_DRIVER) -o "$@"
 
@@ -43,7 +50,7 @@ $(mod).perf: $(mod).hpp $(CPP_DRIVER)
 	$(CXX) $(cxx_flags) $(CUTTLEC_PERF_FLAGS) $(CPP_DRIVER) -o "$@"
 
 $(mod).gcno $(mod).cov:
-	$(CXX) $(cxx_flags) $(CUTTLEC_DEBUG_FLAGS) --coverage $(CPP_DRIVER) -o "$@"
+	$(CXX) $(cxx_flags) $(CUTTLEC_COV_FLAGS) --coverage $(CPP_DRIVER) -o "$@"
 
 cxx_s_flags := $(CUTTLEC_S_FLAGS) -fno-asynchronous-unwind-tables -fno-exceptions -fno-rtti -masm=intel -S
 $(mod).s: $(mod).hpp $(CPP_DRIVER)
@@ -272,6 +279,8 @@ help:
 	@echo '        C++ compiler flags used in debug mode'
 	@echo '      CUTTLEC_PERF_FLAGS = $(CUTTLEC_PERF_FLAGS)'
 	@echo '        C++ compiler flags used in perf mode'
+	@echo '      CUTTLEC_COV_FLAGS = $(CUTTLEC_COV_FLAGS)'
+	@echo '        C++ compiler flags used in coverage mode'
 	@echo '      CUTTLEC_S_FLAGS = $(CUTTLEC_S_FLAGS)'
 	@echo '        C++ compiler flags used to generate assembly listings'
 	@echo '      CUTTLEC_WARNINGS = $(CUTTLEC_WARNINGS)'
