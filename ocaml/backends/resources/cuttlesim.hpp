@@ -479,6 +479,7 @@ namespace prims {
 
   template<bitwidth sz1, bitwidth sz2>
   bits<sz1> asr(const bits<sz1> data, const bits<sz2> shift) {
+    // Implementation-defined, assumes that the compiler does an arithmetic shift
     return bits<sz1>::of_shifted_sbits(data.to_shifted_sbits() >> shift.v);
   }
 
@@ -586,6 +587,7 @@ namespace prims {
   bits<std::max(sz, width)> sext(const bits<sz> x) {
     constexpr bitwidth maxsz = std::max(sz, width);
     constexpr bitwidth nbits = width >= sz ? width - sz : bitwidth{0};
+    // Implementation-defined, assumes that the compiler does an arithmetic shift
     return bits<maxsz>::of_shifted_sbits((widen<maxsz>(x) << nbits).to_shifted_sbits() >> nbits);
   }
 
