@@ -189,13 +189,13 @@ namespace prims {
     }
 
     sbits_t<sz> to_shifted_sbits() const {
-      return to_sbits() << bits<sz>::padding_width();
-    }
-
-    static bits<sz> of_shifted_sbits(sbits_t<sz> sx) {
       // This constructs an int of the same bitsize as x, with the same
       // bitpattern, except that it uses the high bits of the storage type instead
       // of the low ones (e.g. 4'b1101 is represented as 8'b11010000).
+      return (*this << bits<sz>::padding_width()).to_sbits();
+    }
+
+    static bits<sz> of_shifted_sbits(sbits_t<sz> sx) {
       return of_sbits(sx) >> bits<sz>::padding_width();
     }
 
