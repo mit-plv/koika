@@ -246,6 +246,18 @@ Section CircuitOptimizer.
 
     Instance EqDec_ListBool : EqDec (list bool) := _.
 
+    (** This pass performs the following simplifications:
+
+        Not(1) => 0
+        Not(0) => 1
+        And(_, 0) | And(0, _) => 0
+        And(c, 1) | And(1, c) => c
+        Or(_, 1) | Or(1, _) => 1
+        Or(c, 0) | Or(0, c) => c
+        Mux(0, x, y) => x
+        Mux(1, x, y) => y
+        Mux(c, x, x) => x *)
+
     Definition opt_constprop' {sz} (c: circuit sz): circuit sz :=
       match c in Circuit _ _ sz return circuit sz with
       | (CNot c) as c0 =>
@@ -281,6 +293,13 @@ Section CircuitOptimizer.
         end
       | c => c
       end.
+
+    (** This pass performs the following simplification:
+
+        Mux(c, 1, 0) => c
+        Mux(c, 0, 1) => Not(c)
+        Mux(c, 1, x) => Or(c, x)
+        Mux(c, x, 0) => And(c, x) *)
 
     Definition opt_mux_bit1 {sz} (c: circuit sz): circuit sz :=
       match c in Circuit _ _ sz return circuit sz -> circuit sz with
