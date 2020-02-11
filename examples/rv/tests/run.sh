@@ -12,7 +12,7 @@ case $prog in
             0) echo "  [0;32mPASS[0m";;
             *) echo "  [0;31mFAIL[0m";;
         esac;;
-    *.vmh) # mkProc.v expected the memory in mem.vmh
+    *.vmh) # top.v expects the memory in mem.vmh
         sim_dir=$(dirname "$(realpath "$sim")")
         ln -f -s "$(realpath "$prog")" "$sim_dir/mem.vmh";
         # The verilator driver always returns 0

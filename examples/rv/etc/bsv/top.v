@@ -26,7 +26,7 @@
   `define BSV_RESET_EDGE negedge
 `endif
 
-module mkProc(CLK,
+module top(CLK,
 	      RST_N);
   input  CLK;
   input  RST_N;
@@ -976,5 +976,5 @@ module mkProc(CLK,
 	$write("\n");
   end
   // synopsys translate_on
-endmodule  // mkProc
+endmodule  // top
 

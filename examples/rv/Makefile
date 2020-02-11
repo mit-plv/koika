@@ -11,10 +11,13 @@ cuttlesim := $(objects_dir)/$(opt_cuttlesim)
 cuttlesim_runner := tests/run.sh "$(cuttlesim)"
 verilator_runner := tests/run.sh "$(verilator)"
 
+DRIVER ?= bsv
+
 all: cuttlesim-tests verilator-tests
 
 core:
 	$(MAKE) -C ../.. examples/rv/$(objects_dir)
+	cp $(objects_dir)/$(DRIVER)/*.v $(objects_dir)/
 
 $(tests_build): core .FORCE
 	$(MAKE) -C tests

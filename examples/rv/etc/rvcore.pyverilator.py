@@ -1,6 +1,6 @@
 from pyverilator import PyVerilator
 
-sim = PyVerilator.build("mkProc.v")
+sim = PyVerilator.build("top.v")
 
 sim.io.CLK = 0
 

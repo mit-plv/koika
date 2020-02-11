@@ -7,7 +7,7 @@ interface Proc;
     interface RS232 uart_pins;
 endinterface
 
-module mkProc(Proc);
+module top(Proc);
     Bit#(16) div_reg = 54; //100 MHz / (16*54) ~ 115200 bauds
     UART#(16) uart <- mkUART(8, NONE, STOP_1, div_reg);
     // Instantiate the dual ported memory

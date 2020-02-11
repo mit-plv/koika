@@ -90,9 +90,9 @@ EXCLUDED = {
     "examples/rv/tests/elf2hex/ElfFile.cpp",
     "examples/rv/tests/elf2hex/ElfFile.hpp",
     "examples/rv/tests/elf2hex/elf2hex.cpp",
-    "examples/rv/etc/BRAM2BELoad.v",
-    "examples/rv/etc/SizedFIFO.v",
-    "examples/rv/etc/mkProc.v",
+    "examples/rv/etc/bsv/BRAM2BELoad.v",
+    "examples/rv/etc/bsv/SizedFIFO.v",
+    "examples/rv/etc/bsv/top.v",
 }
 
 def collect_files():

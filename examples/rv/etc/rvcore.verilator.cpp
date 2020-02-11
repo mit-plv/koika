@@ -1,6 +1,6 @@
 /*! C++ driver for rv32i simulation with Verilator !*/
 #include "verilator.hpp"
-#include "VmkProc.h"
+#include "Vtop.h"
 
 // Overridden to remove the message
 void vl_finish (const char* /*filename*/, int /*linenum*/, const char* /*hier*/) VL_MT_UNSAFE {
@@ -27,7 +27,7 @@ public:
 };
 
 int main(int argc, char** argv) {
-  return _main<RVToplevel<VmkProc>>(argc, argv);
+  return _main<RVToplevel<Vtop>>(argc, argv);
 }
 
 // Local Variables:
