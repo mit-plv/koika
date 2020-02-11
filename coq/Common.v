@@ -7,23 +7,6 @@ Export ListNotations.
 Global Open Scope string_scope.
 Global Open Scope list_scope.
 
-(* https://coq-club.inria.narkive.com/HeWqgvKm/boolean-simplification *)
-Hint Rewrite
-     orb_false_r (** b || false -> b *)
-     orb_false_l (** false || b -> b *)
-     orb_true_r (** b || true -> true *)
-     orb_true_l (** true || b -> true *)
-     andb_false_r (** b && false -> false *)
-     andb_false_l (** false && b -> false *)
-     andb_true_r (** b && true -> b *)
-     andb_true_l (** true && b -> b *)
-     negb_orb (** negb (b || c) -> negb b && negb c *)
-     negb_andb (** negb (b && c) -> negb b || negb c *)
-     negb_involutive (** negb( (negb b) -> b *)
-  : bool_simpl.
-Ltac bool_simpl :=
-  autorewrite with bool_simpl in *.
-
 Ltac bool_step :=
   match goal with
   | [ H: _ && _ = true |- _ ] => rewrite andb_true_iff in H

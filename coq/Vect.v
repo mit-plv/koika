@@ -1,5 +1,5 @@
 (*! Utilities | Vectors and bitvector library !*)
-Require Import Coq.Lists.List.
+Require Import Coq.Lists.List Coq.Bool.Bool.
 Require Import Coq.omega.Omega.
 Require Export Coq.NArith.NArith.          (* Coq bug: If this isn't exported, other files can't import Vect.vo *)
 Require Import Koika.EqDec.
@@ -251,6 +251,12 @@ Fixpoint vect_nth {T n} (v: vect T n) (idx: index n) {struct n} : T :=
             end
   end v idx.
 
+Fixpoint vect_nth_const {T} (n: nat) (t: T) idx {struct n} :
+  vect_nth (vect_const n t) idx = t.
+Proof.
+  destruct n; cbn; destruct idx; eauto.
+Defined.
+
 Fixpoint vect_replace {T n} (v: vect T n) (idx: index n) (t: T) :=
   match n return (vect T n -> index n -> vect T n) with
   | 0 => fun _ idx => False_rect _ idx
@@ -290,7 +296,7 @@ Fixpoint vect_nth_map {T T' sz} (f: T -> T') {struct sz}:
   forall (v: vect T sz) idx,
     vect_nth (vect_map f v) idx = f (vect_nth v idx).
 Proof.
-  destruct sz, v, idx; cbn; auto.
+  destruct sz, idx; cbn; eauto.
 Defined.
 
 Lemma vect_map_map {T T' T'' n} (f: T -> T') (f': T' -> T'') :
@@ -314,15 +320,27 @@ Proof.
   induction n; destruct v; cbn; intros; rewrite ?H, ?IHn by eassumption; reflexivity.
 Qed.
 
-Fixpoint vect_zip {T1 T2 n} (v1: vect T1 n) (v2: vect T2 n) : vect (T1 * T2) n :=
-  match n return vect T1 n -> vect T2 n -> vect (T1 * T2) n with
+Fixpoint vect_map2 {T1 T2 T n} (f: T1 -> T2 -> T) (v1: vect T1 n) (v2: vect T2 n) : vect T n :=
+  match n return vect T1 n -> vect T2 n -> vect T n with
   | O => fun _ _ => vect_nil
-  | S _ => fun v1 v2 => vect_cons (vect_hd v1,  vect_hd v2)
-                              (vect_zip (vect_tl v1) (vect_tl v2))
+  | S _ => fun v1 v2 => vect_cons (f (vect_hd v1) (vect_hd v2))
+                              (vect_map2 f (vect_tl v1) (vect_tl v2))
   end v1 v2.
 
-Definition vect_map2 {T1 T2 T n} (f: T1 -> T2 -> T) (v1: vect T1 n) (v2: vect T2 n) : vect T n :=
-  vect_map (fun '(b1, b2) => f b1 b2) (vect_zip v1 v2).
+Fixpoint vect_nth_map2 {T1 T2 T n} (f: T1 -> T2 -> T) (v1: vect T1 n) (v2: vect T2 n) {struct n}:
+  forall idx, vect_nth (vect_map2 f v1 v2) idx = f (vect_nth v1 idx) (vect_nth v2 idx).
+Proof.
+  destruct n, idx; cbn; eauto.
+Defined.
+
+Definition vect_zip {T1 T2 n} (v1: vect T1 n) (v2: vect T2 n) : vect (T1 * T2) n :=
+  vect_map2 (fun b1 b2 => (b1, b2)) v1 v2.
+
+Definition vect_nth_zip {T1 T2 n} (v1: vect T1 n) (v2: vect T2 n) :
+  forall idx, vect_nth (vect_zip v1 v2) idx = (vect_nth v1 idx, vect_nth v2 idx).
+Proof.
+  apply vect_nth_map2.
+Defined.
 
 Fixpoint vect_fold_left {A T n} (f: A -> T -> A) (a0: A) (v: vect T n) : A :=
   match n return vect T n -> A with
@@ -875,6 +893,23 @@ End VectNotations.
 
 Export VectNotations.
 
+(* https://coq-club.inria.narkive.com/HeWqgvKm/boolean-simplification *)
+Hint Rewrite
+     orb_false_r (** b || false -> b *)
+     orb_false_l (** false || b -> b *)
+     orb_true_r (** b || true -> true *)
+     orb_true_l (** true || b -> true *)
+     andb_false_r (** b && false -> false *)
+     andb_false_l (** false && b -> false *)
+     andb_true_r (** b && true -> b *)
+     andb_true_l (** true && b -> b *)
+     negb_orb (** negb (b || c) -> negb b && negb c *)
+     negb_andb (** negb (b && c) -> negb b || negb c *)
+     negb_involutive (** negb( (negb b) -> b *)
+  : bool_simpl.
+Ltac bool_simpl :=
+  autorewrite with bool_simpl in *.
+
 Module Bits.
   Notation bits := (vect bool).
   Notation nil := (@vect_nil bool).
@@ -941,6 +976,13 @@ Module Bits.
 
   Definition neg {sz} (b: bits sz) :=
     map negb b.
+
+  Definition and {sz} (b1: bits sz) (b2: bits sz) :=
+    map2 andb b1 b2.
+  Definition or {sz} (b1: bits sz) (b2: bits sz) :=
+    map2 orb b1 b2.
+  Definition xor {sz} (b1: bits sz) (b2: bits sz) :=
+    map2 xorb b1 b2.
 
   Definition asr1 {sz} (b: bits sz) :=
     match sz return bits sz -> bits sz with
@@ -1191,7 +1233,55 @@ Module Bits.
       intros * Heq; rewrite <- (single_cons bs1), <- (single_cons bs2), Heq; reflexivity.
     Qed.
   End Properties.
+
+  Section Binops.
+    Ltac t_map sz bs :=
+      destruct sz, bs; cbn; bool_simpl; try apply f_equal; auto.
+
+    Fixpoint and_zeroes_l {sz} (bs: bits sz) {struct sz}:
+      Bits.and (Bits.zeroes _) bs = Bits.zeroes _.
+    Proof. unfold and in *; t_map sz bs. Defined.
+
+    Fixpoint and_zeroes_r {sz} (bs: bits sz) {struct sz}:
+      Bits.and bs (Bits.zeroes _) = Bits.zeroes _.
+    Proof. unfold and in *; t_map sz bs. Defined.
+
+    Fixpoint and_ones_l {sz} (bs: bits sz) {struct sz}:
+      Bits.and (Bits.ones _) bs = bs.
+    Proof. unfold and in *; t_map sz bs. Defined.
+
+    Fixpoint and_ones_r {sz} (bs: bits sz) {struct sz}:
+      Bits.and bs (Bits.ones _) = bs.
+    Proof. unfold and in *; t_map sz bs. Defined.
+
+    Fixpoint or_zeroes_l {sz} (bs: bits sz) {struct sz}:
+      Bits.or (Bits.zeroes _) bs = bs.
+    Proof. unfold or in *; t_map sz bs. Defined.
+
+    Fixpoint or_zeroes_r {sz} (bs: bits sz) {struct sz}:
+      Bits.or bs (Bits.zeroes _) = bs.
+    Proof. unfold or in *; t_map sz bs. Defined.
+
+    Fixpoint or_ones_l {sz} (bs: bits sz) {struct sz}:
+      Bits.or (Bits.ones _) bs = Bits.ones _.
+    Proof. unfold or in *; t_map sz bs. Defined.
+
+    Fixpoint or_ones_r {sz} (bs: bits sz) {struct sz}:
+      Bits.or bs (Bits.ones _) = Bits.ones _.
+    Proof. unfold or in *; t_map sz bs. Defined.
+  End Binops.
 End Bits.
+
+Hint Rewrite
+     @Bits.or_zeroes_r
+     @Bits.or_zeroes_l
+     @Bits.or_ones_r
+     @Bits.or_ones_l
+     @Bits.and_zeroes_r
+     @Bits.and_zeroes_l
+     @Bits.and_ones_r
+     @Bits.and_ones_l
+  : bool_simpl.
 
 Declare Scope bits.
 Notation bits n := (Bits.bits n).

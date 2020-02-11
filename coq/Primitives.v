@@ -412,9 +412,9 @@ Module CircuitPrimSpecs.
     | Sel _ => sel
     | SliceSubst _ offset width => slice_subst offset width
     | IndexedSlice _ width => fun bs offset => slice (Bits.to_nat offset) width bs
-    | And _ => Bits.map2 andb
-    | Or _ => Bits.map2 orb
-    | Xor _ => Bits.map2 xorb
+    | And _ => Bits.and
+    | Or _ => Bits.or
+    | Xor _ => Bits.xor
     | Lsl _ _ => lsl
     | Lsr _ _ => lsr
     | Asr _ _ => asr
