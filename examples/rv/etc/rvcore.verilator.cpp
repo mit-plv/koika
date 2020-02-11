@@ -16,18 +16,17 @@ protected:
   void clock(bool up) {
     dut.CLK = up;
   }
-public:
-  RVToplevel() : Toplevel<Dut>{} {
-    dut.RST_N = 0;
-    dut.CLK = 0;
-    dut.eval();
-    cycle();
-    dut.RST_N = 1;
+
+  void reset(bool up) {
+    dut.RST_N = up;
   }
+
+public:
+  RVToplevel() : Toplevel<Dut>{} {}
 };
 
 int main(int argc, char** argv) {
-  return _main<RVToplevel<Vtop>>(argc, argv);
+  return _main<KoikaToplevel<Vtop>>(argc, argv);
 }
 
 // Local Variables:

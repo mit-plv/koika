@@ -5,43 +5,69 @@
 #include "verilated_vcd_c.h"
 #endif
 
+#define TIMESTEP 5
+
 template<typename Dut>
 class Toplevel {
 protected:
   Dut dut;
+  uint64_t time;
+
+#ifdef TRACE
+  VerilatedVcdC* tfp{};
+#endif
 
   virtual void clock(bool /*up*/) = 0;
+  virtual void reset(bool /*up*/) = 0;
+
+  void dump() {
+#ifdef TRACE
+    tfp->dump(time);
+#endif
+  }
 
   void cycle() {
+    dump();
     clock(1);
     dut.eval();
+    time += TIMESTEP;
+    dump();
     clock(0);
     dut.eval();
+    time += TIMESTEP;
+  }
+
+  void reset() {
+    reset(0);
+    clock(0);
+    dut.eval();
+    time = 0;
+    cycle();
+    reset(1);
   }
 
 public:
+  void run(uint64_t ncycles) {
+    reset();
+    for (uint64_t cid = 0; !Verilated::gotFinish() && cid < ncycles; cid++) {
+      cycle();
+    }
+  }
+
 #ifdef TRACE
   void trace(uint64_t ncycles, char* vcdpath) {
     Verilated::traceEverOn(true);
-    VerilatedVcdC tfp{};
-
-    dut.trace(&tfp, 99);
-    tfp.open(vcdpath);
-
-    for (uint64_t cid = 0; !Verilated::gotFinish() && cid < ncycles; cid++) {
-      cycle();
-      tfp.dump(cid);
-    }
+    tfp = new VerilatedVcdC{};
+    dut.trace(tfp, 99);
+    tfp->open(vcdpath);
+    run(ncycles);
+    dump();
+    tfp->close();
+    delete tfp;
   }
 #endif
 
-  void run(uint64_t ncycles) {
-    for (uint64_t cid = 0; !Verilated::gotFinish() && cid < ncycles; cid++) {
-      cycle();
-    }
-  }
-
-  Toplevel() : dut{} {}
+  Toplevel() : dut{}, time{0} {}
 };
 
 template<typename Dut>
@@ -50,17 +76,18 @@ class KoikaToplevel : public Toplevel<Dut> {
   using Toplevel<Dut>::cycle;
 
 protected:
+  // Change CLK to the name of your clock signal
   void clock(bool up) {
     dut.CLK = up;
   }
-public:
-  KoikaToplevel() : Toplevel<Dut>{} {
-    dut.reset = 0;
-    dut.CLK = 0;
-    dut.eval();
-    cycle();
-    dut.reset = 1;
+
+  // Change RST_N to the name of your clock signal
+  void reset(bool up) {
+    dut.RST_N = up;
   }
+
+public:
+  KoikaToplevel() : Toplevel<Dut>{} {}
 };
 
 struct cli_arguments {
