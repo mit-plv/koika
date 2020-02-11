@@ -7,6 +7,8 @@ open Cuttlebone.Graphs
 (* TODO: What to do with bit 0?
  *)
 
+let add_reset_lines = true
+
 (* Phase I: IO declarations *)
 type kind_io =
   | Clock
@@ -113,16 +115,20 @@ let io_declarations (circuit: circuit_graph) : io_decls =
 
  *)
 type internal_decl =
- | Reg of string * int
+ | Reg of reg_signature
  | Wire of string * int
  | Nothing
 
 let internal_decl_to_string (internal_decl: internal_decl) =
   match internal_decl with
   | Nothing -> ""
-  | Reg (r, sz) ->  if sz <= 1
-                     then "\treg " ^ r ^ ";"
-                     else "\treg " ^ "[" ^ string_of_int (sz-1) ^ ":0] " ^ r ^ ";"
+  | Reg (r) ->
+     let sz = typ_sz (reg_type r) in
+     let init = Cuttlebone.Util.bits_of_value r.reg_init in
+     (if sz <= 1
+      then "\treg " ^ r.reg_name
+      else "\treg " ^ "[" ^ string_of_int (sz - 1) ^ ":0] " ^ r.reg_name)
+     ^ " = " ^ string_of_bits init ^ ";"
   | Wire (w, sz) ->  if sz <= 1
                      then "\twire " ^ w ^ ";"
                      else "\twire " ^ "[" ^ string_of_int (sz-1) ^ ":0] " ^ w ^ ";"
@@ -131,9 +137,7 @@ type internal_decls = internal_decl list
 
 
 let internal_decl_for_reg (root: circuit_root) =
-  let reg_name = root.root_reg.reg_name in
-  let reg_type = reg_type root.root_reg in
-  Reg(reg_name, typ_sz reg_type)
+  Reg(root.root_reg)
 
 let fn1_sz fn =
   let fsig = Cuttlebone.Extr.PrimSignatures.coq_Sigma1 (Bits1 fn) in
@@ -394,19 +398,26 @@ let format_assign_net ~debug { upd_reg_name; upd_reg_net; _ } =
   else
     assignment
 
-let format_always_block ?(debug=false) statements =
+let format_always_block' body =
+  Printf.sprintf "	always @(posedge CLK) begin\n%s\n	end" body
+
+let format_always_block_with_reset ?(debug=false) statements =
   let sep = "\n			" in
   let inits = List.map format_assign_init statements in
   let nets = List.map (format_assign_net ~debug) statements in
-  Printf.sprintf "	always @(posedge CLK) begin
+  format_always_block'
+    (Printf.sprintf "\
 		if (!reset) begin
 			%s
 		end else begin
 			%s
-		end
-	end"
-    (String.concat sep inits)
-    (String.concat sep nets)
+		end" (String.concat sep inits) (String.concat sep nets))
+
+let format_always_block_no_reset ?(debug=false) statements =
+  let sep = "\n			" in
+  let nets = List.map (format_assign_net ~debug) statements in
+  format_always_block'
+    (Printf.sprintf "        %s" (String.concat sep nets))
 
 type statements = statement list
 
@@ -593,6 +604,7 @@ let main target_dpath (modname: string) (circuit: circuit_graph) =
     let string_prologue = "module " ^ modname ^ "(" ^ (String.concat ",\n\t" string_io_decls) ^ ");" in
     let string_internal_decls = String.concat "\n" (List.map internal_decl_to_string internal_decls) in
     let string_continous_assignments = String.concat "\n" (List.map (assignment_to_string instance_external_gensym)  continous_assignments) in
+    let format_always_block = if add_reset_lines then format_always_block_with_reset else format_always_block_no_reset in
     let string_statements = String.concat "\n\n" (List.map (fun s -> format_always_block [s]) statements) in
     let string_epilogue = "endmodule" in
     List.iter (Printf.fprintf out "%s\n")
