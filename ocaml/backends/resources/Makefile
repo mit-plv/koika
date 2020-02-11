@@ -177,18 +177,18 @@ $(mod).verilator.vcd: $(verilator_tracedir)/$(vmod)
 ifeq (, $(shell which xml2stems))
 $(warning xml2stems not found: not showing rtlbrowse; try installing a more recent version of GTKWave.)
 gtkwave.verilator: $(mod).verilator.vcd
-	gtkwave --optimize $<
+	gtkwave -A --optimize $<
 else
 # Use xml2stems because Vermin only parses up to Verilog 1995 and we use [+:] from Verilog 2000
 $(VERILATOR_TOPLEVEL).stems: $(verilator_optdir)/$(vmod).xml
 	xml2stems $< $@
 
 gtkwave.verilator: $(VERILATOR_TOPLEVEL).stems $(mod).verilator.vcd
-	gtkwave --optimize --stems $^
+	gtkwave -A --optimize --stems $^
 endif
 
 twinwave: $(mod).cuttlesim.vcd $(mod).verilator.vcd
-	twinwave $(mod).cuttlesim.vcd + $(mod).verilator.vcd
+	twinwave -A $(mod).cuttlesim.vcd + -A $(mod).verilator.vcd
 
 ###################
 # Default targets #
