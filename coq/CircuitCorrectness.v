@@ -207,8 +207,6 @@ Section CompilerCorrectness.
     [ specialize (H1 eq_refl idx) | specialize (H0 eq_refl idx) ];
     eauto.
 
-  Arguments EqDec_ListBool : simpl never.
-
   Lemma log_data0_consistent'_mux :
     forall cond rws0 rws1 s l,
       (interp_circuit cond = Ob~0 -> log_data0_consistent' l rws0) ->

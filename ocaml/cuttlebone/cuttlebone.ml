@@ -332,9 +332,6 @@ module Compilation = struct
   let rec extr_circuit_equivb sz (c1: _ extr_circuit) (c2: _ extr_circuit) =
     let eqb = extr_circuit_equivb sz in
     match Extr.unannot0 sz c1, Extr.unannot0 sz c2 with
-    | CNot c1, CNot c2 -> eqb c1 c2
-    | CAnd (c11, c12), CAnd (c21, c22) -> eqb c11 c21 && eqb c12 c22
-    | COr (c11, c12), COr (c21, c22) -> eqb c11 c21 && eqb c12 c22
     | CMux (_, s1, c11, c12), CMux (_, s2, c21, c22) -> eqb s1 s2 && eqb c11 c21 && eqb c12 c22
     | CConst (sz1, v1), CConst (sz2, v2) -> Util.array_of_vect sz1 v1 = Util.array_of_vect sz2 v2
     | CReadRegister r1, CReadRegister r2 -> r1 = r2
@@ -381,9 +378,6 @@ module Graphs = struct
      Hashcons.hash_consed record. *)
   type circuit = circuit' Hashcons.hash_consed
   and circuit' =
-    | CNot of circuit
-    | CAnd of circuit * circuit
-    | COr of circuit * circuit
     | CMux of int * circuit * circuit * circuit
     | CConst of bits_value
     | CReadRegister of reg_signature
@@ -432,12 +426,6 @@ module Graphs = struct
     type t = circuit'
     let rec equal (c: circuit') (c': circuit') =
       match c, c' with
-      | CNot c1, CNot c1' ->
-         c1 == c1'
-      | CAnd (c1, c2), CAnd (c1', c2') ->
-         c1 == c1' && c2 == c2'
-      | COr (c1, c2), COr (c1', c2') ->
-         c1 == c1' && c2 == c2'
       | CMux (_, c1, c2, c3), CMux (_, c1', c2', c3') ->
          c1 == c1' && c2 == c2' && c3 == c3'
       | CConst b, CConst b' ->
@@ -523,12 +511,6 @@ module Graphs = struct
 
     let rec rebuild_circuit_for_deduplication (c0: (rule_name_t, reg_t, ext_fn_t) extr_circuit) =
       match c0 with
-      | Extr.CNot c ->
-         CNot (dedup c)
-      | Extr.CAnd (c1, c2) ->
-         CAnd (dedup c1, dedup c2)
-      | Extr.COr (c1, c2) ->
-         COr (dedup c1, dedup c2)
       | Extr.CMux (sz, s, c1, c2) ->
          CMux (sz, dedup s, dedup c1, dedup c2)
       | Extr.CConst (sz, bs) ->

@@ -149,9 +149,6 @@ let fn2_sz fn =
 
 let circuit_sz (c: circuit) =
   match c.node with
-  | CNot _
-    | CAnd (_, _)
-    | COr (_, _) -> 1
   | CMux (n, _, _, _)
   | CAnnot (n, _, _) -> n
   | CConst l -> Array.length l
@@ -205,9 +202,6 @@ let internal_declarations (environment: (int, string) Hashtbl.t) (circuit: circu
  *)
 type expression =
   (* | EQuestionMark of size_t *)
-  | ENot of string
-  | EAnd of string * string
-  | EOr of string * string
   | EMux of size_t * string * string * string
   | EIO of size_t * string
   | EConst of size_t * string
@@ -227,9 +221,6 @@ let assignment_to_string' (gensym: int ref) (assignment: assignment) =
   let default_left = "\tassign " ^ lhs ^ " = " in
   (match expr with
    (* | EQuestionMark _ -> default_left ^ "0" (\* TODO check other ways to do  *\) *)
-   | ENot n -> default_left ^ "~" ^ n
-   | EAnd (arg1, arg2) -> default_left ^ arg1 ^ " & " ^ arg2
-   | EOr (arg1, arg2) -> default_left ^ arg1 ^ " | " ^ arg2
    | EMux (_, sel, t, f) -> default_left ^ sel ^ " ? " ^ t ^ " : " ^ f
    | EIO (_sz, s) -> default_left ^ s
    | EConst (_sz, s) -> default_left ^ s
@@ -281,7 +272,6 @@ let assignment_to_string' (gensym: int ref) (assignment: assignment) =
 
 let expr_sz (e: expression) =
   match e with
-  | ENot _ | EAnd _ | EOr _ -> 1
   | EMux (sz, _, _, _)
   | EIO (sz, _)
   | EConst (sz, _) -> sz
@@ -327,9 +317,6 @@ let assignment_node
      let rhs_name = env c.tag in (* And by then the ptr has been given a name. *)
      let expr = match node with
        (* Assumes no dangling pointers  *)
-       | CNot c -> ENot (env c.tag)
-       | CAnd (c_1, c_2) -> EAnd (env c_1.tag, env c_2.tag)
-       | COr (c_1, c_2) -> EOr (env c_1.tag, env c_2.tag)
        | CMux (sz, c_sel, c_t, c_f) -> EMux (sz,
                                              env c_sel.tag,
                                              env c_t.tag,

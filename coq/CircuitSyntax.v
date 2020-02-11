@@ -23,9 +23,6 @@ Section Circuit.
   | rwcircuit_canfire.
 
   Inductive circuit: nat -> Type :=
-  | CNot (c: circuit 1): circuit 1
-  | CAnd (c1 c2: circuit 1): circuit 1
-  | COr (c1 c2: circuit 1): circuit 1
   | CMux {sz} (select: circuit 1) (c1 c2: circuit sz): circuit sz
   | CConst {sz} (cst: bits sz): circuit sz
   | CReadRegister (reg: reg_t): circuit (CR reg)
@@ -41,5 +38,9 @@ Section Circuit.
                (field: rwcircuit_field) (c: circuit sz): circuit sz
   | CAnnot {sz} (annot: string) (c: circuit sz): circuit sz.
 End Circuit.
+
+Notation CAnd := (CBinop (And _)).
+Notation COr := (CBinop (Or _)).
+Notation CNot := (CUnop (Not _)).
 
 Arguments circuit {rule_name_t reg_t ext_fn_t rwdata} CR CSigma sz : assert.

@@ -18,12 +18,6 @@ Section Interpretation.
 
   Fixpoint interp_circuit {n} (c: circuit n) : bits n :=
     match c with
-    | CNot c =>
-      Ob~(negb (Bits.single (interp_circuit c)))
-    | CAnd c1 c2 =>
-      Ob~(andb (Bits.single (interp_circuit c1)) (Bits.single (interp_circuit c2)))
-    | COr c1 c2 =>
-      Ob~(orb (Bits.single (interp_circuit c1)) (Bits.single (interp_circuit c2)))
     | CMux select c1 c2 =>
       if Bits.single (interp_circuit select) then interp_circuit c1
       else interp_circuit c2

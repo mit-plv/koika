@@ -235,16 +235,11 @@ Section CircuitOptimizer.
     Context {REnv: Env reg_t}.
     Context (cr: REnv.(env_t) (fun idx => bits (CR idx))).
 
-    Definition asconst {sz} (c: circuit sz) : option (list bool) :=
+    Definition asconst {sz} (c: circuit sz) : option (bits sz) :=
       match unannot c with
-      | CConst cst => Some (vect_to_list cst)
+      | CConst cst => Some cst
       | c => None
       end.
-
-    Notation ltrue := (cons true nil).
-    Notation lfalse := (cons false nil).
-
-    Instance EqDec_ListBool : EqDec (list bool) := _.
 
     (** This pass performs the following simplifications:
 
@@ -255,44 +250,41 @@ Section CircuitOptimizer.
         Or(_, 1) | Or(1, _) => 1
         Or(c, 0) | Or(0, c) => c
         Mux(0, x, y) => x
-        Mux(1, x, y) => y
-        Mux(c, x, x) => x *)
+        Mux(1, x, y) => y *)
+
+    Definition isconst {sz} (c: circuit sz) (cst: bits sz) :=
+      match asconst c with
+      | Some cst' => beq_dec cst cst'
+      | None => false
+      end.
+
+    Infix "~" := isconst.
+    Notation b1 := (Bits.ones _).
+    Notation b0 := (Bits.zeroes _).
 
     Definition opt_constprop' {sz} (c: circuit sz): circuit sz :=
-      match c in Circuit _ _ sz return circuit sz with
-      | (CNot c) as c0 =>
+      match unannot c in Circuit _ _ sz return circuit sz -> circuit sz with
+      | CNot c =>
         match asconst c with
-        | Some ltrue => CConst Ob~0
-        | Some lfalse => CConst Ob~1
-        | _ => c0
+        | Some cst => fun _ => CConst (Bits.neg cst)
+        | c => fun c0 => c0
         end
-      | (CAnd c1 c2) as c0 =>
-        match asconst c1, asconst c2 with
-        | Some lfalse, _ | _, Some lfalse => CConst Ob~0
-        | _, Some ltrue => c1
-        | Some ltrue, _ => c2
-        | _, _ => c0
-        end
-      | (COr c1 c2) as c0 =>
-        match asconst c1, asconst c2 with
-        | Some ltrue, _ | _, Some ltrue => CConst Ob~1
-        | _, Some lfalse => c1
-        | Some lfalse, _ => c2
-        | _, _ => c0
-        end
-      | (CMux select c1 c2) as c0 =>
-        match asconst select with
-        | Some ltrue => c1
-        | Some lfalse => c2
-        | _ => match asconst c1, asconst c2 with
-              | Some bs1, Some bs2 =>
-                if eq_dec bs1 bs2 then c1
-                else c0
-              | _, _ => c0
-              end
-        end
-      | c => c
-      end.
+      | CAnd c1 c2 =>
+        if c1 ~ b0 || c2 ~ b0 then fun c0 => CConst b0
+        else if c1 ~ b1 then fun c0 => c2
+             else if c2 ~ b1 then fun c0 => c1
+                  else fun c0 => c0
+      | COr c1 c2 =>
+        if c1 ~ b1 || c2 ~ b1 then fun c0 => CConst b1
+        else if c1 ~ b0 then fun c0 => c2
+             else if c2 ~ b0 then fun c0 => c1
+                  else fun c0 => c0
+      | CMux select c1 c2 =>
+        if select ~ b1 then fun _ => c1
+        else if select ~ b0 then fun _ => c2
+             else fun c0 => c0
+      | c => fun c0 => c0
+      end c.
 
     (** This pass performs the following simplification:
 
@@ -301,10 +293,14 @@ Section CircuitOptimizer.
         Mux(c, 1, x) => Or(c, x)
         Mux(c, x, 0) => And(c, x) *)
 
+    Notation ltrue := {| vhd := true; vtl := _vect_nil |}.
+    Notation lfalse := {| vhd := false; vtl := _vect_nil |}.
+
     Definition opt_mux_bit1 {sz} (c: circuit sz): circuit sz :=
-      match c in Circuit _ _ sz return circuit sz -> circuit sz with
+      match unannot c in Circuit _ _ sz return circuit sz -> circuit sz with
       | @CMux _ _ _ _ _ _ n s c1 c2 =>
-        fun c0 => match n return Circuit _ _ n -> Circuit _ _ n -> Circuit _ _ n -> Circuit _ _ n with
+        fun c0 =>
+          match n return Circuit _ _ n -> Circuit _ _ n -> Circuit _ _ n -> Circuit _ _ n with
                | 1 => fun c0 c1 c2 =>
                        let annot := CAnnot "optimized_mux" in
                        match asconst c1, asconst c2 with
@@ -333,7 +329,7 @@ Section CircuitOptimizer.
     Lemma asconst_Some :
       forall {sz} (c: circuit sz) bs,
         asconst c = Some bs ->
-        vect_to_list (interp_circuit cr csigma c) = bs.
+        interp_circuit cr csigma c = bs.
     Proof.
       induction c; intros b Heq;
         repeat match goal with
@@ -346,28 +342,42 @@ Section CircuitOptimizer.
       apply IHc; eassumption.
     Qed.
 
-    Arguments EqDec_ListBool: simpl never.
+    Lemma isconst_correct {sz} :
+      forall (c: circuit sz) cst,
+        isconst c cst = true ->
+        interp_circuit cr csigma c = cst.
+    Proof.
+      unfold isconst; intros * Htrue; destruct (asconst c) eqn:Heq.
+      - apply asconst_Some in Heq; rewrite beq_dec_iff in Htrue; congruence.
+      - congruence.
+    Qed.
+
+    Ltac unannot_rew :=
+      repeat match goal with
+             | [ Heq: unannot ?c = _ |- context[interp_circuit _ _ ?c] ] =>
+               rewrite <- (unannot_sound c), Heq; cbn
+             end.
+
     Lemma opt_constprop'_sound :
       forall {sz} (c: circuit sz),
         interp_circuit cr csigma (opt_constprop' c) = interp_circuit cr csigma c.
     Proof.
-      induction c; cbn.
+      unfold opt_constprop'; intros; destruct (unannot c) eqn:?; cbn.
+      Arguments Bits.and : simpl never.
+      Arguments Bits.or : simpl never.
       Ltac t := match goal with
                | _ => reflexivity
-               | _ => progress bool_simpl
-               | _ => progress cbn in *
-               | [  |- context[match asconst ?c with _ => _ end] ] =>
-                 destruct (asconst c) as [ | ] eqn:?
+               | _ => progress bool_simpl || bool_step || cleanup_step || unannot_rew || cbn in *
+               | [ fn : fbits1 |- _ ] => destruct fn
+               | [ fn : fbits2 |- _ ] => destruct fn
+               | [  |- context[match asconst ?c with _ => _ end] ] => destruct (asconst c) as [ | ] eqn:?
+               | [  |- context[if ?b then _ else _] ] =>
+                 match b with context[?bs ~ ?cst] => destruct (bs ~ cst) eqn:? end
                | [ H: asconst _ = Some _ |- _ ] => apply asconst_Some in H
-               | [  |- _ = ?y ] =>
-                 match y with
-                 | context[Bits.single (interp_circuit cr csigma ?c)] =>
-                   destruct (interp_circuit cr csigma c) as [ ? [] ] eqn:? ;
-                   cbn in *; subst
-                 end
+               | [ H: isconst _ _ = true |- _ ] => apply isconst_correct in H
                | [ H: ?x = _ |- context[?x] ] => rewrite H
-               | [  |- context[if ?b then _ else _] ] => destruct b eqn:?
-               | _ => eauto using vect_to_list_inj
+               | [ H: _ \/ _ |- _ ] => destruct H
+               | _ => eauto
                end.
       all: repeat t.
     Qed.
@@ -376,21 +386,20 @@ Section CircuitOptimizer.
       forall {sz} (c: circuit sz),
         interp_circuit cr csigma (opt_mux_bit1 c) = interp_circuit cr csigma c.
     Proof.
-      destruct c; simpl; try reflexivity; [].
-      destruct sz as [ | [ | ] ]; simpl; try reflexivity; [].
-      destruct (asconst c2) as [ [ | [ | ] [ | ] ] | ] eqn:Hc2; try reflexivity;
-        destruct (asconst c3) as [ [ | [ | ] [ | ] ] | ] eqn:Hc3; try reflexivity.
-      Ltac tmux :=
-        match goal with
-        | _ => progress (cbn in * || subst)
-        | [ H: _ :: _ = _ :: _ |- _ ] => inversion H; subst; clear H
-        | [ v: vect_nil_t _ |- _ ] => destruct v
-        | [ H: asconst _ = Some _ |- _ ] => apply asconst_Some in H
-        | [  |- context[interp_circuit _ _ ?c] ] => destruct (interp_circuit _ _ c) eqn:?
-        | [  |- context[if ?x then _ else _] ] => destruct x
-        | _ => reflexivity || discriminate
-        end.
-      all: solve [repeat tmux].
+      unfold opt_mux_bit1; intros; destruct (unannot c) eqn:?; cbn;
+        simpl; try reflexivity; [].
+      destruct sz as [ | [ | ] ]; simpl; unannot_rew; try reflexivity; [].
+      destruct (asconst c0_2) as [ ([ | ] & []) | ] eqn:Hc2; try reflexivity;
+        destruct (asconst c0_3) as [ ([ | ] & []) | ] eqn:Hc3;
+        unannot_rew; try reflexivity.
+      all: repeat
+             match goal with
+             | _ => progress (cbn in * || subst || bool_simpl)
+             | [ H: asconst ?c = Some ?bs |- _ ] => apply (asconst_Some c bs) in H
+             | [ H: interp_circuit _ _ _ = _ |- _ ] => rewrite H
+             | [  |- context[interp_circuit _ _ ?c] ] => destruct (interp_circuit _ _ c) as ([ | ] & [])
+             | _ => reflexivity || discriminate
+             end.
     Qed.
 
     Lemma opt_constprop_sound :
