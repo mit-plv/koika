@@ -136,7 +136,7 @@ Section CircuitCompilation.
       match a in action _ _ _ _ ts sz return ccontext ts -> @action_circuit sz * ccontext ts with
       | Fail sz => fun Gamma =>
         ({| retVal := $`"fail"`Bits.zeroes sz; (* LATER: Question mark here *)
-            erwc := {| canFire := $`"fail_cF"` Ob~0;
+            erwc := {| canFire := $`"fail_canFire"` Ob~0;
                        regs := clog.(regs) |} |},
          Gamma)
       | @Var _ _ _ _ _ _ _ k _ m => fun Gamma =>
@@ -163,10 +163,11 @@ Section CircuitCompilation.
         let (cond, Gamma) := compile_action Gamma cond clog in
         let (tbranch, Gamma_t) := compile_action Gamma tbranch cond.(erwc) in
         let (fbranch, Gamma_f) := compile_action Gamma fbranch cond.(erwc) in
-        ({| retVal := CMuxAnnotOpt "if_retVal" cond.(retVal) tbranch.(retVal) fbranch.(retVal);
-           erwc := {| canFire := CMuxAnnotOpt "if_cF" cond.(retVal) tbranch.(erwc).(canFire) fbranch.(erwc).(canFire);
-                     regs := mux_rwsets "if_mux" cond.(retVal) tbranch.(erwc).(regs) fbranch.(erwc).(regs) |} |},
-         mux_ccontext cond.(retVal) Gamma_t Gamma_f)
+        let cond_val := CAnnotOpt "cond" cond.(retVal) in
+        ({| retVal := CMuxAnnotOpt "if_retVal" cond_val tbranch.(retVal) fbranch.(retVal);
+           erwc := {| canFire := CMuxAnnotOpt "if_canFire" cond_val tbranch.(erwc).(canFire) fbranch.(erwc).(canFire);
+                     regs := mux_rwsets "if_mux" cond_val tbranch.(erwc).(regs) fbranch.(erwc).(regs) |} |},
+         mux_ccontext cond_val Gamma_t Gamma_f)
       | Read P0 idx => fun Gamma =>
         let reg := REnv.(getenv) clog.(regs) idx in
         ({| retVal := REnv.(getenv) cr idx;
@@ -195,9 +196,9 @@ Section CircuitCompilation.
         let (val, Gamma) := compile_action Gamma val clog in
         let reg := REnv.(getenv) val.(erwc).(regs) idx in
         ({| retVal := $`"write_retVal"`Bits.nil;
-            erwc := {| canFire := (val.(erwc).(canFire) &&`"write0_cF"`
-                                 (!`"no_read1"` reg.(read1) &&`"write0_cF"`
-                                  !`"no_write0"` reg.(write0) &&`"write0_cF"`
+            erwc := {| canFire := (val.(erwc).(canFire) &&`"write0_canFire"`
+                                 (!`"no_read1"` reg.(read1) &&`"write0_canFire"`
+                                  !`"no_write0"` reg.(write0) &&`"write0_canFire"`
                                   !`"no_write1"` reg.(write1)));
                       regs := REnv.(putenv) val.(erwc).(regs) idx {| write0 := $`"write0"` (Ob~1);
                                                                     data0 := val.(retVal);
@@ -211,7 +212,7 @@ Section CircuitCompilation.
         let (val, Gamma) := compile_action Gamma val clog in
         let reg := REnv.(getenv) val.(erwc).(regs) idx in
         ({| retVal := $`"write_retVal"`Bits.nil;
-            erwc := {| canFire := val.(erwc).(canFire) &&`"write1_cF"` !`"no_write1"` reg.(write1);
+            erwc := {| canFire := val.(erwc).(canFire) &&`"write1_canFire"` !`"no_write1"` reg.(write1);
                       regs := REnv.(putenv) val.(erwc).(regs) idx {| write1 := $`"write1"` (Ob~1);
                                                                     data1 := val.(retVal);
                                                                     (* Unchanged *)
@@ -252,17 +253,17 @@ Section CircuitCompilation.
                          cs |}.
 
   Definition willFire_of_canFire'_read0 {sz} (ruleReg inReg: @rwdata sz) :=
-    (ruleReg.(read0)) ==>`"read0_wF_of_cF"`
-    (!`"read0_wF_no_writes"` ((inReg.(write0)) ||`""` (inReg.(write1)))).
+    (ruleReg.(read0)) ==>`"read0_willFire_of_canFire"`
+    (!`"read0_willFire_no_writes"` ((inReg.(write0)) ||`""` (inReg.(write1)))).
 
   Definition willFire_of_canFire'_write0 {sz} (ruleReg inReg: @rwdata sz) :=
-    (ruleReg.(write0)) ==>`"write0_wF_of_cF"`
-    (!`"write0_wF_no_writes_no_read1"`
+    (ruleReg.(write0)) ==>`"write0_willFire_of_canFire"`
+    (!`"write0_willFire_no_writes_no_read1"`
        ((inReg.(write0)) ||`""` (inReg.(write1)) ||`""` (inReg.(read1)))).
 
   Definition willFire_of_canFire'_rw1 {sz} (ruleReg inReg: @rwdata sz) :=
-    ((ruleReg.(read1)) ||`""` (ruleReg.(write1))) ==>`"read_write1_wF_of_cF"`
-    (!`"read_write1_wF_no_write1"` (inReg.(write1))).
+    ((ruleReg.(read1)) ||`""` (ruleReg.(write1))) ==>`"read_write1_willFire_of_canFire"`
+    (!`"read_write1_willFire_no_write1"` (inReg.(write1))).
 
   Definition willFire_of_canFire' {sz} (ruleReg inReg: @rwdata sz) :=
     (willFire_of_canFire'_read0 ruleReg inReg) &&`""`
@@ -340,7 +341,7 @@ Section CircuitCompilation.
     | Cons rl_name s =>
       let (rl, acc) := compile_action rl_name in
       let will_fire := willFire_of_canFire rl_name rl.(erwc) input in
-      let input := mux_rwsets "mux_input" will_fire acc input in
+      let input := mux_rwsets (show rl_name ++ "_out") will_fire acc input in
       compile_scheduler_circuit s input
     | Try rl_name st sf =>
       let (rl, acc) := compile_action rl_name in

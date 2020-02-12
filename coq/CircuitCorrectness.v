@@ -1005,6 +1005,8 @@ Section CompilerCorrectness.
     rewrite Heq; assumption.
   Qed.
 
+  Hint Extern 1 => (cbn; rewrite lco_proof) : circuits.
+
   Theorem action_compiler_correct rl {sig tau} Log cLog:
     forall (ex: action sig tau) (clog: rwcircuit)
       (Gamma: lcontext sig) (gamma: ccontext sig) log,
@@ -1030,7 +1032,7 @@ Section CompilerCorrectness.
   Proof.
     induction ex; intros.
     - (* Fail *) t; interp_willFire_cleanup; t.
-    - (* Var *) cbn; rewrite lco_proof; eauto 6.
+    - (* Var *) eauto 7 with circuits.
     - (* Const *) cbn; eauto 6.
     - (* Assign *)
       t; interp_willFire_cleanup; t; eauto using circuit_gamma_equiv_creplace.
@@ -1053,7 +1055,7 @@ Section CompilerCorrectness.
             eauto with circuits.
         * unfold mux_rwsets; interp_willFire_cleanup; t.
           rewrite (interp_circuit_willFire_of_canFire'_mux_rwdata idx); t.
-        * eauto using mux_gamma_equiv_t.
+        * eauto using mux_gamma_equiv_t with circuits.
       + unfold mux_rwsets; interp_willFire_cleanup; t.
         right. exists x; t.
         rewrite (interp_circuit_willFire_of_canFire'_mux_rwdata x); t.
@@ -1066,7 +1068,7 @@ Section CompilerCorrectness.
             eauto with circuits.
         * unfold mux_rwsets; interp_willFire_cleanup; t.
           rewrite (interp_circuit_willFire_of_canFire'_mux_rwdata idx); t.
-        * eauto using mux_gamma_equiv_f.
+        * eauto using mux_gamma_equiv_f with circuits.
       + unfold mux_rwsets; interp_willFire_cleanup; t.
         right; exists x; t.
         rewrite (interp_circuit_willFire_of_canFire'_mux_rwdata x); t.
