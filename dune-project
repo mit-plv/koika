@@ -7,8 +7,8 @@
 (name koika)
 (version 0.0.1)
 (source (github mit-plv/koika))
-(authors "Thomas Bourgeat <bthom@mit.edu>, Clément Pit-Claudel <clement.pitclaudel@live.com>")
-(maintainers "Clément Pit-Claudel <clement.pitclaudel@live.com>, Thomas Bourgeat <bthom@mit.edu>")
+(authors "Clément Pit-Claudel <clement.pitclaudel@live.com>" "Thomas Bourgeat <bthom@mit.edu>")
+(maintainers "clement.pitclaudel@live.com")
 (documentation "https://github.com/mit-plv/koika/")
 
 (package
