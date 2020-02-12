@@ -9,8 +9,8 @@ type ('name_t, 'reg_t, 'ext_fn_t) extr_circuit =
   ('name_t, 'reg_t, 'ext_fn_t, ('name_t, 'reg_t, 'ext_fn_t) Extr.rwdata) Extr.circuit
 
 (* FIXME: expose these options on the command line *)
-let strip_annotations = true
-let hashcons_circuits = true
+let strip_annotations = false
+let hashcons_circuits = false
 
 type extr_type = Extr.type0
 
@@ -494,21 +494,6 @@ module Graphs = struct
     let circuit_to_deduplicated = ExtrCircuitHashtbl.create 50 in
     let deduplicated_circuits = CircuitHashcons.create 50 in
 
-    let gather_annots (c: (rule_name_t, reg_t, ext_fn_t) extr_circuit) =
-      let rec collect_annots (c: _ extr_circuit) =
-        match c with
-        | CAnnot (_, annot, c) ->
-           let annots, c = collect_annots c in
-           (Util.string_of_coq_string annot) :: annots, c
-        | _ -> [], c in
-      let rec deduplicate seen = function
-        | [] -> []
-        | x :: xs ->
-           if StringSet.mem x seen then deduplicate seen xs
-           else x :: deduplicate (StringSet.add x seen) xs in
-      let annots, c = collect_annots c in
-      c, deduplicate StringSet.empty annots in
-
     let rec rebuild_circuit_for_deduplication (c0: (rule_name_t, reg_t, ext_fn_t) extr_circuit) =
       match c0 with
       | Extr.CMux (sz, s, c1, c2) ->
@@ -533,12 +518,11 @@ module Graphs = struct
            CBundleRef(sz, hashcons bundle, rwcircuit_of_extr_rwcircuit pkg.di_reg_sigs field)
          else
            rebuild_circuit_for_deduplication circuit
-      | Extr.CAnnot (sz, _, c) ->
+      | Extr.CAnnot (sz, annot, c) ->
          if pkg.di_strip_annotations then
            rebuild_circuit_for_deduplication c
          else
-           let c, annots = gather_annots c0 in
-           CAnnot (sz, String.concat "__" annots, dedup c)
+           CAnnot (sz, Util.string_of_coq_string annot, dedup c)
     and rebuild_rwdata_for_deduplication (rw : (rule_name_t, reg_t, ext_fn_t) Extr.rwdata) =
       { read0 = dedup rw.read0;
         read1 = dedup rw.read1;
