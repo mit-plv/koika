@@ -24,6 +24,14 @@ Global Set Extraction KeepSingleton.
 (* The following commands make these functions much easier to use from the OCaml
    side by removing unnecessary arguments. *)
 Extraction Implicit CircuitOptimization.unannot [CR CSigma rwdata].
+Extraction Implicit CircuitOptimization.lco_iter [csigma].
+Extraction Implicit CircuitOptimization.lco_compose [csigma].
+Extraction Implicit CircuitOptimization.lco_constprop [csigma].
+Extraction Implicit CircuitOptimization.lco_identical [csigma].
+Extraction Implicit CircuitOptimization.lco_muxelim [csigma].
+Extraction Implicit CircuitOptimization.lco_all [csigma].
+Extraction Implicit CircuitOptimization.lco_all_iterated [csigma].
+Extraction Implicit CircuitOptimization.unannot [CR CSigma rwdata].
 Extraction Implicit TypedSyntaxFunctions.unannot [R Sigma sig tau].
 Extraction Implicit TypedSyntaxFunctions.AnyAction [sig tau].
 Extraction Implicit TypedSyntaxFunctions.action_footprint [R Sigma sig tau].

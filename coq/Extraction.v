@@ -9,7 +9,7 @@ Require Koika.Common
         Koika.CircuitGeneration
         Koika.Interop.
 
-Unset Extraction SafeImplicits.
+(* Unset Extraction SafeImplicits. *)
 Extraction "extracted.ml"
            EqDec.EqDec
            FiniteType.FiniteType Member.mem Member.mmap
@@ -34,9 +34,7 @@ Extraction "extracted.ml"
            TypedSyntaxFunctions.compute_register_histories
            TypedSyntaxFunctions.may_fail_without_revert
            TypedSyntaxFunctions.rule_max_log_size
-           CircuitOptimization.lco_opt_compose
-           CircuitOptimization.opt_constprop
-           CircuitOptimization.opt_muxelim
+           CircuitOptimization.lco_all_iterated
            Interop.koika_package_t
            Interop.circuit_package_t
            Interop.sim_package_t

@@ -895,6 +895,8 @@ Export VectNotations.
 
 (* https://coq-club.inria.narkive.com/HeWqgvKm/boolean-simplification *)
 Hint Rewrite
+     andb_diag (** b && b -> b **)
+     orb_diag (** b || b -> b **)
      orb_false_r (** b || false -> b *)
      orb_false_l (** false || b -> b *)
      orb_true_r (** b || true -> true *)
@@ -1238,6 +1240,14 @@ Module Bits.
     Ltac t_map sz bs :=
       destruct sz, bs; cbn; bool_simpl; try apply f_equal; auto.
 
+    Fixpoint and_diag {sz} (bs: bits sz) {struct sz}:
+      Bits.and bs bs = bs.
+    Proof. unfold and in *; t_map sz bs. Defined.
+
+    Fixpoint or_diag {sz} (bs: bits sz) {struct sz}:
+      Bits.or bs bs = bs.
+    Proof. unfold or in *; t_map sz bs. Defined.
+
     Fixpoint and_zeroes_l {sz} (bs: bits sz) {struct sz}:
       Bits.and (Bits.zeroes _) bs = Bits.zeroes _.
     Proof. unfold and in *; t_map sz bs. Defined.
@@ -1273,6 +1283,8 @@ Module Bits.
 End Bits.
 
 Hint Rewrite
+     @Bits.and_diag
+     @Bits.or_diag
      @Bits.or_zeroes_r
      @Bits.or_zeroes_l
      @Bits.or_ones_r

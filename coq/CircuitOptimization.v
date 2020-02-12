@@ -31,6 +31,24 @@ Section CircuitOptimizer.
        lco_proof := ltac:(abstract (intros; unfold lco_opt_compose;
                                      cbn; rewrite !lco_proof; reflexivity)) |}.
 
+  Section Iterated.
+    Context (equivb: forall {sz}, circuit sz -> circuit sz -> bool).
+
+    Fixpoint lco_opt_iter
+             (o: forall {sz}, circuit sz -> circuit sz)
+             (fuel: nat) sz (c: circuit sz) :=
+      match fuel with
+      | 0 => c
+      | S fuel => let c' := o c in if equivb _ c c' then c else lco_opt_iter (@o) fuel _ c'
+      end.
+
+    Definition lco_iter (l: local_circuit_optimizer) (fuel: nat) :=
+      {| lco_fn := lco_opt_iter (l.(@lco_fn)) fuel;
+         lco_proof := ltac:(abstract (induction fuel; cbn; intros;
+                                     [ | destruct equivb; try rewrite IHfuel, lco_proof ];
+                                     auto)) |}.
+  End Iterated.
+
   Fixpoint unannot {sz} (c: circuit sz) : circuit sz :=
     match c with
     | CAnnot annot c => unannot c
@@ -43,9 +61,11 @@ Section CircuitOptimizer.
       interp_circuit (REnv := REnv) cr csigma c.
   Proof. induction c; eauto. Qed.
 
-  Section MuxElim.
-    (** This pass performs the following Mux simplifications:
-          Mux(_, c1, c1) → c1
+  Section Equiv.
+    (** This pass performs the following simplifications:
+          Or(c, c) -> c
+          And(c, c) -> c
+          Mux(_, c, c) → c1
           Mux(k, Mux(k', c2, c12), c2) → Mux(k && ~k', c12, c2 )
           Mux(k, Mux(k', c11, c2), c2) → Mux(k &&  k', c11, c2 )
           Mux(k, c1, Mux(k', c1, c22)) → Mux(k ||  k', c1 , c22)
@@ -75,21 +95,32 @@ Section CircuitOptimizer.
       rewrite <- (unannot_sound c1), <- (unannot_sound c2); assumption.
     Qed.
 
-    Definition opt_muxelim_identical {sz} (c: circuit sz): circuit sz :=
+    Definition opt_identical {sz} (c: circuit sz): circuit sz :=
+      let keep_first {sz} (c1 c2: circuit sz) (c0: circuit sz) :=
+          if equivb_unannot c1 c2 then c1 else c0 in
       match c in Circuit _ _ sz return circuit sz -> circuit sz with
-      | CMux k c1 c2 =>
-        fun c0 => if equivb_unannot c1 c2 then c1 else c0
+      | CMux k c1 c2 => fun c0 => keep_first c1 c2 c0
+      | CAnd c1 c2 => fun c0 => keep_first c1 c2 c0
+      | COr c1 c2 => fun c0 => keep_first c1 c2 c0
       | _  => fun c0 => c0
       end c.
 
-    Lemma opt_muxelim_identical_sound :
+    Arguments Bits.and : simpl never.
+    Arguments Bits.or : simpl never.
+
+    Lemma opt_identical_sound :
       forall {sz} (c: circuit sz),
-        interp_circuit cr csigma (opt_muxelim_identical c) = interp_circuit cr csigma c.
+        interp_circuit cr csigma (opt_identical c) = interp_circuit cr csigma c.
     Proof.
-      destruct c; simpl; try reflexivity.
-      destruct equivb eqn:Hequivb.
-      - destruct Bits.single; auto using equivb_unannot_sound.
-      - reflexivity.
+      destruct c; cbn; try destruct fn; try reflexivity;
+        destruct equivb eqn:Hequivb; cbn;
+        repeat match goal with
+               | _ => progress bool_simpl
+               | [  |- context[if ?x then _ else _] ] => destruct x
+               | [ H: equivb_unannot _ _ = true |- _ ] => apply equivb_unannot_sound in H
+               | [ H: _ = _ |- _ ] => rewrite H
+               | _ => auto
+               end.
     Qed.
 
     Definition opt_muxelim_redundant_l {sz} (c: circuit sz): circuit sz :=
@@ -216,10 +247,8 @@ Section CircuitOptimizer.
 
     Definition opt_muxelim {sz} :=
       @lco_opt_compose
-        (@opt_muxelim_identical)
-        (lco_opt_compose
-           (lco_opt_compose (@opt_muxelim_redundant_l) (@opt_muxelim_redundant_r))
-           (lco_opt_compose (@opt_muxelim_nested_l) (@opt_muxelim_nested_r)))
+        (lco_opt_compose (@opt_muxelim_redundant_l) (@opt_muxelim_redundant_r))
+        (lco_opt_compose (@opt_muxelim_nested_l) (@opt_muxelim_nested_r))
         sz.
 
     Lemma opt_muxelim_sound :
@@ -227,13 +256,11 @@ Section CircuitOptimizer.
         interp_circuit cr csigma (opt_muxelim c) = interp_circuit cr csigma c.
     Proof.
       intros; unfold opt_muxelim, lco_opt_compose.
-      rewrite
-        opt_muxelim_nested_r_sound, opt_muxelim_nested_l_sound,
-      opt_muxelim_redundant_r_sound, opt_muxelim_redundant_l_sound,
-      opt_muxelim_identical_sound;
+      rewrite opt_muxelim_nested_r_sound, opt_muxelim_nested_l_sound,
+      opt_muxelim_redundant_r_sound, opt_muxelim_redundant_l_sound;
         reflexivity.
     Qed.
-  End MuxElim.
+  End Equiv.
 
   Section ConstProp.
     Context {REnv: Env reg_t}.
@@ -362,13 +389,14 @@ Section CircuitOptimizer.
                rewrite <- (unannot_sound c), Heq; cbn
              end.
 
+    Arguments Bits.and : simpl never.
+    Arguments Bits.or : simpl never.
+
     Lemma opt_constprop'_sound :
       forall {sz} (c: circuit sz),
         interp_circuit cr csigma (opt_constprop' c) = interp_circuit cr csigma c.
     Proof.
       unfold opt_constprop'; intros; destruct (unannot c) eqn:?; cbn.
-      Arguments Bits.and : simpl never.
-      Arguments Bits.or : simpl never.
       Ltac t := match goal with
                | _ => reflexivity
                | _ => progress bool_simpl || bool_step || cleanup_step || unannot_rew || cbn in *
@@ -424,12 +452,16 @@ Arguments unannot_sound {rule_name_t reg_t ext_fn_t CR CSigma rwdata} csigma [RE
 Arguments opt_constprop {rule_name_t reg_t ext_fn_t CR CSigma rwdata} [sz] c : assert.
 Arguments opt_constprop_sound {rule_name_t reg_t ext_fn_t CR CSigma rwdata} csigma [REnv] cr [sz] c : assert.
 
+Arguments opt_identical {rule_name_t reg_t ext_fn_t CR CSigma rwdata} equivb [sz] c : assert.
+Arguments opt_identical_sound {rule_name_t reg_t ext_fn_t CR CSigma rwdata} csigma {equivb} equivb_sound [REnv] cr [sz] c : assert.
+
 Arguments opt_muxelim {rule_name_t reg_t ext_fn_t CR CSigma rwdata} equivb [sz] c : assert.
 Arguments opt_muxelim_sound {rule_name_t reg_t ext_fn_t CR CSigma rwdata} csigma {equivb} equivb_sound [REnv] cr [sz] c : assert.
 
 Arguments lco_fn {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} l [sz] c : assert.
 Arguments lco_proof {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} l {REnv} cr [sz] c : assert.
 Arguments lco_compose {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} l1 l2 : assert.
+Arguments lco_iter {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} equivb l fuel : assert.
 
 Section LCO.
   Context {rule_name_t reg_t ext_fn_t: Type}.
@@ -440,20 +472,36 @@ Section LCO.
   Context {rwdata: nat -> Type}.
   Context (csigma: forall f, CSig_denote (CSigma f)).
 
-  Definition lco_unannot : @local_circuit_optimizer rule_name_t _ _ CR _ rwdata csigma :=
+  Notation lco := (@local_circuit_optimizer rule_name_t _ _ CR _ rwdata csigma).
+
+  Definition lco_unannot : lco :=
     {| lco_fn := unannot;
        lco_proof := unannot_sound csigma |}.
 
-  Definition lco_constprop: @local_circuit_optimizer rule_name_t _ _ CR _ rwdata csigma :=
+  Definition lco_constprop : lco :=
     {| lco_fn := opt_constprop;
        lco_proof := opt_constprop_sound csigma |}.
 
-  Definition lco_muxelim equivb equivb_sound
-    : @local_circuit_optimizer rule_name_t _ _ CR _ rwdata csigma :=
+  Definition lco_identical equivb equivb_sound : lco :=
+    {| lco_fn := opt_identical equivb;
+       lco_proof := opt_identical_sound csigma equivb_sound |}.
+
+  Definition lco_muxelim equivb equivb_sound : lco :=
     {| lco_fn := opt_muxelim equivb;
        lco_proof := opt_muxelim_sound csigma equivb_sound |}.
+
+  Definition lco_all equivb equivb_sound : lco :=
+    lco_compose lco_constprop
+                (lco_compose (lco_identical equivb equivb_sound)
+                             (lco_muxelim equivb equivb_sound)).
+
+  Definition lco_all_iterated equivb equivb_sound fuel : lco :=
+    lco_iter equivb (lco_all equivb equivb_sound) fuel.
 End LCO.
 
 Arguments lco_unannot {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} : assert.
 Arguments lco_constprop {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} : assert.
+Arguments lco_identical {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} {equivb} equivb_sound : assert.
 Arguments lco_muxelim {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} {equivb} equivb_sound : assert.
+Arguments lco_all {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} {equivb} equivb_sound : assert.
+Arguments lco_all_iterated {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} {equivb} equivb_sound fuel : assert.
