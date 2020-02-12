@@ -288,7 +288,7 @@ Section Circuits.
         * apply circuit_le_true.
     - cbn.
       induction finite_elements; cbn.
-      + apply circuit_le_refl.
+      + apply circuit_le_CAnnot_l, circuit_le_refl.
       + apply circuit_le_CAnd_l; eassumption.
   Qed.
 End Circuits.

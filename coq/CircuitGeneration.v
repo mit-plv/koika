@@ -29,7 +29,8 @@ Section CircuitCompilation.
   Context (cr: REnv.(env_t) (fun reg => circuit (CR reg))).
 
   (* Notation CAnnot an c := (match an : string with _ => c end). *)
-  Notation CAnnotOpt an c := (CAnnot an (opt _ c)).
+  Notation COpt c := (opt _ c).
+  Notation CAnnotOpt an c := (CAnnot an (COpt c)).
 
   Declare Scope circuit.
   Notation "f [ arg ]` an `" :=
@@ -143,7 +144,7 @@ Section CircuitCompilation.
             erwc := clog |},
          Gamma)
       | Const cst => fun Gamma =>
-        ({| retVal := CAnnotOpt "constant_value_from_source" (CConst cst);
+        ({| retVal := (CConst cst);
            erwc := clog |},
          Gamma)
       | Seq r1 r2 => fun Gamma =>
@@ -168,7 +169,7 @@ Section CircuitCompilation.
          mux_ccontext cond.(retVal) Gamma_t Gamma_f)
       | Read P0 idx => fun Gamma =>
         let reg := REnv.(getenv) clog.(regs) idx in
-        ({| retVal := CAnnotOpt "read0" (REnv.(getenv) cr idx);
+        ({| retVal := REnv.(getenv) cr idx;
            erwc := {| canFire := clog.(canFire);
                      regs := REnv.(putenv) clog.(regs) idx {| read0 := $`"read0"` Ob~1;
                                                              (* Unchanged *)
@@ -232,7 +233,7 @@ Section CircuitCompilation.
          Gamma)
       | ExternalCall fn a => fun Gamma =>
         let (a, Gamma) := compile_action Gamma a clog in
-        ({| retVal := CAnnotOpt "External_call" (CExternal fn a.(retVal));
+        ({| retVal := CExternal fn a.(retVal);
             erwc := a.(erwc) |},
          Gamma)
       | APos _ a => fun Gamma =>
@@ -269,11 +270,14 @@ Section CircuitCompilation.
     (willFire_of_canFire'_rw1 ruleReg inReg).
 
   Definition willFire_of_canFire rl_name cRule cInput : circuit 1 :=
-    let annot := String.append "wF_" (show rl_name) in
-    fold_right REnv
-           (fun k '(ruleReg, inReg) acc =>
-              acc &&`annot` willFire_of_canFire' ruleReg inReg)
-           (zip REnv cRule.(regs) cInput) cRule.(canFire).
+    let wf := String.append "wF_" (show rl_name) in
+    let cf := String.append "cF_" (show rl_name) in
+    CAnnot wf (fold_right
+                 REnv
+                 (fun k '(ruleReg, inReg) acc =>
+                    acc &&`wf` willFire_of_canFire' ruleReg inReg)
+                 (zip REnv cRule.(regs) cInput)
+                 (CAnnot cf cRule.(canFire))).
 
   Arguments willFire_of_canFire' : simpl never.
 

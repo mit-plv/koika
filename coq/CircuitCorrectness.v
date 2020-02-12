@@ -423,11 +423,10 @@ Section CompilerCorrectness.
             specialize (H idx ltac:(eauto using @finite_In))
         end.
         eauto using Bits.single_inj.
-    - repeat cleanup_step.
-      rewrite interp_willFire_of_canFire_eqn.
+    - rewrite interp_willFire_of_canFire_eqn.
+      repeat cleanup_step.
+      rewrite H; cbn.
       f_equal.
-      apply (f_equal Bits.single) in H; cbn in H; rewrite H.
-      bool_simpl.
       apply forallb_forall; intros idx **.
       rewrite H0; reflexivity.
   Qed.
@@ -772,6 +771,7 @@ Section CompilerCorrectness.
   Qed.
 
   Arguments CircuitGeneration.willFire_of_canFire' : simpl never.
+  Arguments CircuitGeneration.willFire_of_canFire : simpl never.
 
   Lemma interp_circuit_willFire_of_canFire'_mux_rwdata:
     forall (idx : reg_t) s (rwd1 rwd2 : rwdata (CR idx)) (cCond : circuit 1) (rwdL : rwdata (CR idx)),
@@ -1031,7 +1031,7 @@ Section CompilerCorrectness.
     induction ex; intros.
     - (* Fail *) t; interp_willFire_cleanup; t.
     - (* Var *) cbn; rewrite lco_proof; eauto 6.
-    - (* Const *) cbn; rewrite lco_proof; eauto 6.
+    - (* Const *) cbn; eauto 6.
     - (* Assign *)
       t; interp_willFire_cleanup; t; eauto using circuit_gamma_equiv_creplace.
     - (* Seq *)
@@ -1088,7 +1088,7 @@ Section CompilerCorrectness.
       + cbn.
         destruct (may_read Log P0 idx) eqn:?; cbn.
         * repeat eapply conj.
-          -- rewrite lco_proof; eauto.
+          -- eauto.
           -- apply log_rwdata_consistent_log_cons_putenv;
                [ eauto | red ]; cbn; rewrite ?Bits.single_cons, lco_proof; eauto.
           -- apply log_data0_consistent_putenv_read_write1; eauto.

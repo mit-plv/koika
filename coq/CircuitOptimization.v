@@ -93,6 +93,7 @@ Section CircuitOptimizer.
     Qed.
 
     Definition opt_muxelim_redundant_l {sz} (c: circuit sz): circuit sz :=
+      let annot {sz} (c: circuit sz) := (* CAnnot "simplified_mux" c *) c in
       match c in Circuit _ _ sz return circuit sz -> circuit sz with
       | CMux k c1 c2 =>
         fun c =>
@@ -101,7 +102,7 @@ Section CircuitOptimizer.
             fun c c2 =>
               if equivb_unannot k k' then
                 (* Mux(k, Mux(k, c11, c12), c2) *)
-                (CAnnot "simplified_mux" (CMux k c11 c2))
+                annot (CMux k c11 c2)
               else c
           | _ =>
             fun c c2 => c
@@ -110,6 +111,7 @@ Section CircuitOptimizer.
       end c.
 
     Definition opt_muxelim_redundant_r {sz} (c: circuit sz): circuit sz :=
+      let annot {sz} (c: circuit sz) := (* CAnnot "simplified_mux" c *) c in
       match c in Circuit _ _ sz return circuit sz -> circuit sz with
       | CMux k c1 c2 =>
         fun c =>
@@ -118,7 +120,7 @@ Section CircuitOptimizer.
             fun c c1 =>
               if equivb_unannot k k' then
                 (* Mux(k, c1, Mux(k, c21, c22)) *)
-                (CAnnot "simplified_mux" (CMux k c1 c22))
+                annot (CMux k c1 c22)
               else c
           | _ =>
             fun c c1 => c
@@ -127,6 +129,7 @@ Section CircuitOptimizer.
       end c.
 
     Definition opt_muxelim_nested_l {sz} (c: circuit sz): circuit sz :=
+      let annot {sz} (c: circuit sz) := (* CAnnot "nested_mux" c *) c in
       match c in Circuit _ _ sz return circuit sz -> circuit sz with
       | CMux k c1 c2 =>
         fun c =>
@@ -135,10 +138,10 @@ Section CircuitOptimizer.
             fun c c2 =>
               if equivb_unannot c11 c2 then
                 (* Mux(k, Mux(k', c2, c12), c2) *)
-                CMux (CAnnot "nested_mux" (CAnd k (CNot k'))) c12 c2
+                CMux (annot (CAnd k (CNot k'))) c12 c2
               else if equivb_unannot c12 c2 then
                      (* Mux(k, Mux(k', c11, c2), c2) *)
-                     CMux (CAnnot "nested_mux" (CAnd k k')) c11 c2
+                     CMux (annot (CAnd k k')) c11 c2
                    else c
           | _ =>
             fun c c2 => c
@@ -147,6 +150,7 @@ Section CircuitOptimizer.
       end c.
 
     Definition opt_muxelim_nested_r {sz} (c: circuit sz): circuit sz :=
+      let annot {sz} (c: circuit sz) := (* CAnnot "nested_mux" c *) c in
       match c in Circuit _ _ sz return circuit sz -> circuit sz with
       | CMux k c1 c2 =>
         fun c =>
@@ -155,10 +159,10 @@ Section CircuitOptimizer.
             fun c c1 =>
               if equivb_unannot c1 c21 then
                 (* Mux(k, c1, Mux(k', c1, c22)) *)
-                CMux (CAnnot "nested_mux" (COr k k')) c1 c22
+                CMux (annot (COr k k')) c1 c22
               else if equivb_unannot c1 c22 then
                      (* Mux(k, c1, Mux(k', c21, c1)) *)
-                     CMux (CAnnot "nested_mux" (COr k (CNot k'))) c1 c21
+                     CMux (annot (COr k (CNot k'))) c1 c21
                    else c
           | _ =>
             fun c c1 => c
@@ -302,7 +306,7 @@ Section CircuitOptimizer.
         fun c0 =>
           match n return Circuit _ _ n -> Circuit _ _ n -> Circuit _ _ n -> Circuit _ _ n with
                | 1 => fun c0 c1 c2 =>
-                       let annot := CAnnot "optimized_mux" in
+                       let annot {sz} (c: circuit sz) := (* CAnnot "optimized_mux" c *) c in
                        match asconst c1, asconst c2 with
                        | Some ltrue, Some lfalse => annot s
                        | Some ltrue, _ => annot (COr s c2)
