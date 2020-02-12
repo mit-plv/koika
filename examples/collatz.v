@@ -15,7 +15,7 @@ Module Collatz.
 
   Definition r idx : R idx :=
     match idx with
-    | r0 => Bits.of_nat sz 19
+    | r0 => Bits.of_nat sz 18
     end.
 
   Definition times_three : UInternalFunction reg_t empty_ext_fn_t :=
@@ -51,7 +51,7 @@ Module Collatz.
                     | multiply => _multiply
                     end).
 
-  Definition result :=
+  Definition cycle_log :=
     tc_compute (interp_scheduler cr empty_sigma rules collatz).
 
   Definition divide_result :=
@@ -59,8 +59,10 @@ Module Collatz.
                               (rules divide)).
 
   Definition multiply_result :=
-    tc_compute (interp_action cr empty_sigma CtxEmpty log_empty log_empty
-                              (rules multiply)).
+    tc_compute (interp_action cr empty_sigma CtxEmpty log_empty log_empty (rules multiply)).
+
+  Definition result :=
+    tc_compute (commit_update cr cycle_log).
 
   Definition external (r: rule_name_t) := false.
 
@@ -69,6 +71,9 @@ Module Collatz.
 
   Definition circuits_result :=
     tc_compute (interp_circuits (ContextEnv.(create) r) empty_sigma circuits).
+
+  Example test: circuits_result = Environments.map _ (fun _ => bits_of_value) result :=
+    eq_refl.
 
   Definition package :=
     {| ip_koika := {| koika_reg_types := R;

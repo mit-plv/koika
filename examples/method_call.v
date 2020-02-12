@@ -78,11 +78,13 @@ Definition external (r: rule_name_t) := false.
 Definition circuits :=
   compile_scheduler rules external sched.
 
-Definition circuits_result :=
-  Eval compute in interp_circuits (ContextEnv.(create) r) empty_sigma circuits.
+Definition cr := ContextEnv.(create) r.
 
-Definition sched_result :=
-  Eval compute in interp_scheduler (ContextEnv.(create) r) empty_sigma rules sched.
+Definition interp_result :=
+  tc_compute (commit_update cr (interp_scheduler cr empty_sigma rules sched)).
+
+Definition circuits_result :=
+  tc_compute (interp_circuits cr empty_sigma circuits).
 
 Definition package :=
   {| ip_koika := {| koika_reg_types := R;
