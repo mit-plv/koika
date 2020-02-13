@@ -20,13 +20,13 @@ Getting started
 Installing dependencies and building from source
 ------------------------------------------------
 
-* OCaml, `opam <https://opam.ocaml.org/doc/Install.html>`_, and ``make``.
+* OCaml 4.07, `opam <https://opam.ocaml.org/doc/Install.html>`_, and GNU make.
 
-* Coq 8.9 or later::
+* Coq 8.9 or 8.10 (but not 8.11, where notations are broken)::
 
-    opam install coq
+    opam install coq=8.10.2
 
-* Coq's Ltac2 plugin, which will ship with Coq by default in 8.11::
+* Coq's Ltac2 plugin::
 
     opam repo add coq-released https://coq.inria.fr/opam/released
     opam install coq-ltac2
@@ -40,6 +40,12 @@ Installing dependencies and building from source
 You can compile the full distribution, including examples, tests, and proofs by running ``make`` in the top-level directory of this repo.  Generated files are placed in ``_build``, ``examples/_objects/``,  ``tests/_objects/``, and  ``examples/rv/_objects/``.
 
 Each directory in ``_objects`` contains `a Makefile <makefile_>`_ to ease further experimentation (including RTL simulation, profiling, trace generation, etc.).
+
+.. opam show -f name,version coq dune base core stdio parsexp hashcons zarith | sed 's/name *//' | tr '\n' ' ' | sed 's/ *version */=/g' | xclip
+
+For reproducibility, here is one set of versions known to work:
+
+- OCaml 4.07 with ``opam install base=v0.12.2 coq=8.10.2 coq-ltac2=0.3 core=v0.12.4 dune=1.11.4 hashcons=1.3 parsexp=v0.12.0 stdio=v0.12.0 zarith=1.9.1``
 
 Browsing examples
 -----------------
