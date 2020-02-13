@@ -2,6 +2,8 @@
 type size_t = int
 type ptr_t = int
 
+let poly_cmp = compare
+
 module OrderedString = struct
   type t = string
   let compare = compare

@@ -635,7 +635,7 @@ module Dups(OT: Map.OrderedType) = struct
 end
 
 module StringDuplicates = Dups(OrderedString)
-module BitsDuplicates = Dups(struct type t = bool array let compare = Pervasives.compare end)
+module BitsDuplicates = Dups(struct type t = bool array let compare = poly_cmp end)
 
 let expect_cons loc kind = function
   | [] -> syntax_error loc @@ MissingElement { kind }
@@ -1702,7 +1702,7 @@ let describe_language () =
   let atom x = Base.Sexp.Atom x in
   let list xs = Base.Sexp.List xs in
   let atomlist xs = list (map atom xs) in
-  let pair k v = list [atom k; atomlist (sort Pervasives.compare v)] in
+  let pair k v = list [atom k; atomlist (sort poly_cmp v)] in
   list [pair "language-constructs" (keys language_constructs);
         pair "type-names" (keys type_names);
         pair "core-primitives" (keys special_primitives @ keys core_primitives);

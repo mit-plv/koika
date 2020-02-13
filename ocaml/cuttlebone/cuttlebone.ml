@@ -470,7 +470,7 @@ module Graphs = struct
   module CircuitStructuralHashcons = Hashcons.Make(CircuitHash)
   module CircuitPhysicalHashcons = Hashcons.Make(CircuitPhysicalHash)
 
-  module CoqStringSet = Set.Make(struct type t = char list let compare = Pervasives.compare end)
+  module CoqStringSet = Set.Make(struct type t = char list let compare = poly_cmp end)
 
   let dedup_circuit (type rule_name_t reg_t ext_fn_t)
         (pkg: (rule_name_t, reg_t, ext_fn_t) dedup_input_t) : circuit_graph =

@@ -129,6 +129,8 @@ let dynlink_interop_packages in_fpath : Cuttlebone.Extr.interop_package_t list =
 
 (* https://github.com/janestreet/core/issues/136 *)
 module RelPath = struct
+  let eql = (=)
+
   open Core
 
   let split_common_prefix l1 l2 =
@@ -145,7 +147,7 @@ module RelPath = struct
 
   let rec skip_common_prefix l1 l2 =
     match l1, l2 with
-    | h1 :: t1, h2 :: t2 when h1 = h2 -> skip_common_prefix t1 t2
+    | h1 :: t1, h2 :: t2 when eql h1 h2 -> skip_common_prefix t1 t2
     | _ -> l1, l2
 
   let relpath (path: string) (start: string) =
@@ -238,5 +240,5 @@ let cli =
      and output_specs = flag "-T" (listed string) ~doc:"fmt output in this format"
      in fun () -> run_cli expect_errors src_fpath dst_dpath output_specs)
 
-let _ =
+let _: unit =
   Core.Command.run cli
