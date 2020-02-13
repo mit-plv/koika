@@ -1,5 +1,5 @@
 (*! Language | Semantics of typed Kôika programs !*)
-Require Export Koika.Common Koika.Environments Koika.Vect Koika.Logs Koika.Syntax Koika.TypedSyntax.
+Require Export Koika.Common Koika.Environments Koika.Logs Koika.Syntax Koika.TypedSyntax.
 
 Section Interp.
   Context {pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t: Type}.

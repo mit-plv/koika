@@ -1,5 +1,5 @@
 (*! Language | Logs of reads and writes !*)
-Require Export Koika.Common Koika.Environments Koika.Vect Koika.Syntax Koika.TypedSyntax.
+Require Export Koika.Common Koika.Environments Koika.Syntax Koika.TypedSyntax.
 
 Section Logs.
   Inductive LogEntryKind :=

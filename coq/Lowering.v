@@ -1,6 +1,6 @@
 (*! Language | Compilation from typed ASTs to lowered ASTs !*)
-Require Export Koika.Common Koika.Environments.
 Require Import Koika.Syntax Koika.TypedSyntaxFunctions Koika.SyntaxMacros.
+Require Export Koika.Common Koika.Environments.
 Require Koika.SyntaxMacros Koika.TypedSyntax Koika.LoweredSyntax.
 
 Import PrimTyped CircuitSignatures.

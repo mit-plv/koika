@@ -1,7 +1,6 @@
 (*! Circuits | Compilation of lowered ASTs into RTL circuits !*)
-Require Export Koika.Common Koika.Environments.
 Require Import Koika.Syntax Koika.LoweredSyntax Koika.LoweredSyntaxFunctions.
-Require Export Koika.CircuitSemantics.
+Require Export Koika.CircuitSemantics Koika.Common Koika.Environments.
 
 Import PrimTyped CircuitSignatures.
 

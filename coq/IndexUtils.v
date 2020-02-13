@@ -1,6 +1,7 @@
 (*! Utilities | Functions on Vect.index elements !*)
 Require Coq.Logic.FinFun.
-Require Import Koika.Common Koika.Vect Koika.Member.
+Require Import Koika.Common Koika.Member.
+Require Export Koika.Vect.
 
 Fixpoint all_indices (bound: nat) : vect (index bound) bound :=
   match bound as n return (vect (index n) n) with

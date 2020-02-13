@@ -1,5 +1,5 @@
 (*! Language | Semantics of Lowered Kôika programs !*)
-Require Export Koika.Common Koika.Environments Koika.Vect Koika.Syntax Koika.TypedSemantics Koika.LoweredSyntax.
+Require Export Koika.Common Koika.Environments Koika.Syntax Koika.TypedSemantics Koika.LoweredSyntax.
 
 Section Interp.
   Context {pos_t var_t rule_name_t reg_t ext_fn_t: Type}.

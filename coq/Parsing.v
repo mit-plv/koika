@@ -182,6 +182,11 @@ Notation "a ';' b" := (app a b) (in custom koika_structs_init at level 91, a cus
 Notation "'struct' structtype '{|' fields '|}'" :=
   (USugar (UStructInit structtype fields)) (in custom koika, structtype constr at level 0, fields custom koika_structs_init at level 92).
 
+
+  Definition mem_req :=
+    {| struct_name := "mem_req";
+       struct_fields := cons ("type", bits_t 1) nil |}.
+
 Notation "'enum' enum_type '{|' f '|}'" :=
   (USugar (UConstEnum enum_type f))
     (in custom koika at level 1, enum_type constr at level 1, f custom koika_var at level 1).
@@ -266,8 +271,7 @@ Module Type Tests.
 
   Definition mem_req :=
     {| struct_name := "mem_req";
-       struct_fields := cons ("type", bits_t 1)
-                             nil |}.
+       struct_fields := cons ("type", bits_t 1) nil |}.
 
   Definition test_30'' : uaction reg_t :=
     {{
