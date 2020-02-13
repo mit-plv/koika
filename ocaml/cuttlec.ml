@@ -93,7 +93,7 @@ let run_backend' (backend: backend) cnf pkg =
      let graph = Lazy.force pkg.pkg_graph in
      match backend with
      | `Dot -> Backends.Dot.main (output_fname backend cnf pkg) graph
-     | `Verilog -> Backends.Verilog.main cnf.cnf_dst_dpath pkg.pkg_modname graph
+     | `Verilog -> Backends.Rtl.main cnf.cnf_dst_dpath pkg.pkg_modname graph
 
 let pstderr fmt =
   Printf.kfprintf (fun out -> fprintf out "\n") stderr fmt

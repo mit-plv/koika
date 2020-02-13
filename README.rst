@@ -800,6 +800,7 @@ The following list shows the current state of the repo:
       - |ocaml/backends/dot.ml|_: Graphviz backend
       - |ocaml/backends/gen.ml|_: Embed resources/* into resources.ml at build time
       - |ocaml/backends/makefile.ml|_: Makefile backend (to make it easier to generate traces, statistics, models, etc.)
+      - |ocaml/backends/rtl.ml|_: Generic RTL backend
       - |ocaml/backends/verilator.ml|_: Verilator backend exporting a simple C++ driver
       - |ocaml/backends/verilog.ml|_: Verilog backend
 
@@ -981,6 +982,8 @@ The following list shows the current state of the repo:
 .. _ocaml/backends/resources/verilator.cpp: ocaml/backends/resources/verilator.cpp
 .. |ocaml/backends/resources/verilator.hpp| replace:: ``verilator.hpp``
 .. _ocaml/backends/resources/verilator.hpp: ocaml/backends/resources/verilator.hpp
+.. |ocaml/backends/rtl.ml| replace:: ``rtl.ml``
+.. _ocaml/backends/rtl.ml: ocaml/backends/rtl.ml
 .. |ocaml/backends/verilator.ml| replace:: ``verilator.ml``
 .. _ocaml/backends/verilator.ml: ocaml/backends/verilator.ml
 .. |ocaml/backends/verilog.ml| replace:: ``verilog.ml``
