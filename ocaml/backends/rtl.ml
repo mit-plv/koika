@@ -115,9 +115,7 @@ let name_expr (e: expr) =
     | _ -> []
   and name_node n =
     if n.shared <> Unique then [] else name_expr n.expr in
-  let annots = name_expr e in
-  (* if annots = [] then printf "No name for node whose head is %s\n" (hd e); *)
-  gensym_next (match annots with [] -> "" | hd :: _ -> hd)
+  gensym_next (match name_expr e with [] -> "" | hd :: _ -> hd)
 
 let p_decl out kind sz name expr =
   let range = if sz = 1 then "" else sprintf "[%d:0]" (pred sz) in
@@ -145,6 +143,14 @@ let precedence = function
   | EUnop ((SExt _ | ZExtL _ | ZExtR _ | Lowered _), _) -> unlowered ()
   | EAnnot _ -> -1
 
+let rec complex_op = function
+  | { shared = Shared _; _ } -> false
+  | { expr = (EName _ | EConst _); _ } -> false
+  | { expr = (EUnop (Slice _, _) | EBinop ((Sel _ | IndexedSlice _), _, _)); _ } -> false
+  | { expr = (EUnop _ | EBinop _ | EMux _); _ } -> true
+  | { expr = EPure _; _ } -> failwith "FIXME"
+  | { expr = EAnnot (_, n); _ } -> complex_op n
+
 let sp_cast signed p () x =
   sprintf (if signed then "$signed(%a)" else "$unsigned(%a)") p x
 
@@ -158,6 +164,7 @@ let rec p_expr' out ctx_lvl (e: expr) =
   let lvl = precedence e in
   let sp_str () s = s in
   let p () n = snd (p_node out lvl n) in
+  let pr () n = snd (p_node ~restricted_ctx:true out lvl n) in
   let p0 () n = snd (p_node out min_int n) in
   match e with
   | EName name -> (lvl, name)
@@ -178,9 +185,9 @@ let rec p_expr' out ctx_lvl (e: expr) =
       | Compare(s, CGt, _) -> sprintf "%a > %a" (sp_cast s p) c1 (sp_cast s p) c2
       | Compare(s, CLe, _) -> sprintf "%a <= %a" (sp_cast s p) c1 (sp_cast s p) c2
       | Compare(s, CGe, _) -> sprintf "%a >= %a" (sp_cast s p) c1 (sp_cast s p) c2
-      | Sel _ -> sprintf "%a[%a]" p c1 p0 c2
+      | Sel _ -> sprintf "%a[%a]" pr c1 p0 c2
       | SliceSubst (sz, offset, slice_sz) -> "FIXME: unlowered"
-      | IndexedSlice (_, slice_sz) -> sprintf "%a[%a +: %d]" p c1 p0 c2 slice_sz
+      | IndexedSlice (_, slice_sz) -> sprintf "%a[%a +: %d]" pr c1 p0 c2 slice_sz
       | And 1 ->  sprintf "%a && %a" p c1 p c2
       | And _ ->  sprintf "%a & %a" p c1 p c2
       | Or 1 -> sprintf "%a || %a" p c1 p c2
@@ -211,11 +218,13 @@ and p_shared_node out n =
   p_decl out "wire" n.size name s;
   n.shared <- Shared (Some name);
   (0, name)
-and p_node out ctx_lvl (n: node) =
-  match n.shared with
-  | Shared (Some name) -> (0, name)
-  | Shared None when may_share n.expr -> p_shared_node out n
-  | Unique | Shared None -> p_expr out ctx_lvl n.expr
+and p_node ?(restricted_ctx=false) out ctx_lvl (n: node) =
+  if (n.shared = Unique && restricted_ctx && complex_op n) ||
+       (n.shared = Shared None && may_share n.expr) then
+     p_shared_node out n
+  else match n.shared with
+       | Shared (Some name) -> (0, name)
+       | _ -> p_expr out ctx_lvl n.expr
 
 let p_delayed out name expr =
   fprintf out "\t\t\t%s <= %s;\n" name expr
