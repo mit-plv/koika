@@ -40,17 +40,24 @@ Section CompilerCorrectness.
                    rwdata csigma)).
 
   Section OpCompile.
+    Lemma interp_circuit_cast {sz sz'}:
+      forall (h: sz = sz') (c: circuit sz),
+        interp_circuit (rew h in c) = rew h in (interp_circuit c).
+    Proof. destruct h; reflexivity. Defined.
+
     Ltac compile_op_t :=
       match goal with
       | _ => progress intros
       | _ => progress simpl in *
       | _ => progress unfold Bits.extend_beginning, Bits.extend_end,
-            struct_sz, field_sz, array_sz, element_sz
+            struct_sz, field_sz, array_sz, element_sz, slice_subst_macro, slice_subst_impl
+      | _ => progress rewrite ?sel_msb, ?vect_repeat_single_const,
+            ?slice_subst_impl_correct, ?interp_circuit_cast
       | _ => rewrite bits_of_value_of_bits
       | [ H: interp_circuit _ = _ |- _ ] => rewrite H
       | [  |- context[match ?d with _ => _ end] ] => is_var d; destruct d
+      | [  |- context[match le_gt_dec ?x ?y with _ => _ end] ] => destruct (le_gt_dec x y)
       | [  |- context[eq_rect _ _ _ _ ?pr] ] => destruct pr
-      | _ => rewrite sel_msb, vect_repeat_single_const
       | _ => solve [eauto]
       end.
 
@@ -58,6 +65,15 @@ Section CompilerCorrectness.
       forall fn c a,
         interp_circuit c = a ->
         interp_circuit (compile_unop fn c) = CircuitPrimSpecs.sigma1 fn a.
+    Proof.
+      destruct fn; repeat compile_op_t.
+    Qed.
+
+    Theorem compile_binop_correct :
+      forall fn c1 c2 a1 a2,
+        interp_circuit c1 = a1 ->
+        interp_circuit c2 = a2 ->
+        interp_circuit (compile_binop fn c1 c2) = CircuitPrimSpecs.sigma2 fn a1 a2.
     Proof.
       destruct fn; repeat compile_op_t.
     Qed.
@@ -1171,7 +1187,7 @@ Section CompilerCorrectness.
     - (* Unop *)
       t; eauto 7 using compile_unop_correct.
     - (* Binop *)
-      t; eauto 7 using
+      t; eauto 7 using compile_binop_correct,
          interp_circuit_circuit_le_helper_false,
          action_compile_willFire_of_canFire_decreasing.
     - (* ExternalCall *)

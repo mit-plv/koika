@@ -277,7 +277,6 @@ module Verilog : RTLBackend = struct
         | Compare(s, CLe, _) -> sprintf "%a <= %a" (sp_cast s p) c1 (sp_cast s p) c2
         | Compare(s, CGe, _) -> sprintf "%a >= %a" (sp_cast s p) c1 (sp_cast s p) c2
         | Sel _ -> sprintf "%a[%a]" pr c1 p0 c2
-        | SliceSubst (sz, offset, slice_sz) -> "FIXME: unlowered"
         | IndexedSlice (_, slice_sz) -> sprintf "%a[%a +: %d]" pr c1 p0 c2 slice_sz
         | And 1 ->  sprintf "%a && %a" p c1 p c2
         | And _ ->  sprintf "%a & %a" p c1 p c2
@@ -295,7 +294,8 @@ module Verilog : RTLBackend = struct
            sprintf "%a" (sp_cast false sp_str) (sprintf "%a >>> %a" (sp_cast true p) c1 p c2)
         | EqBits (_, true) -> sprintf "%a != %a" p c1 p c2
         | EqBits (_, false) -> sprintf "%a == %a" p c1 p c2
-        | Concat (_, _) -> sprintf "{%a, %a}" p0 c1 p0 c2)
+        | Concat (_, _) -> sprintf "{%a, %a}" p0 c1 p0 c2
+        | SliceSubst _ -> unlowered ())
     | EMux (s, c1, c2) -> (lvl, sprintf "%a ? %a : %a" p s p c1 p c2)
     | EPure (f, c) -> (lvl, "FIXME: extcall")
   and p_unique_node out ctx_lvl n =

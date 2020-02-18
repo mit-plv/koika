@@ -3,6 +3,7 @@ Require Import Coq.Lists.List Coq.Bool.Bool.
 Require Import Coq.omega.Omega.
 Require Export Coq.NArith.NArith.          (* Coq bug: If this isn't exported, other files can't import Vect.vo *)
 Require Import Koika.EqDec.
+Import EqNotations.
 
 Inductive index' {A} := thisone | anotherone (a: A).
 Arguments index': clear implicits.
@@ -201,6 +202,16 @@ Proof.
     unfold f_equal_nat, f_equal.
     rewrite <- vect_app_nil_cast; reflexivity.
 Defined.
+
+Lemma vect_app_cast_l {T} {sz1 sz1' sz2}:
+  forall (h: sz1 = sz1') (v1: vect T sz1) (v2: vect T sz2),
+    vect_app (rew h in v1) v2 = rew [fun sz => vect T (sz + sz2)] h in (vect_app v1 v2).
+Proof. destruct h; reflexivity. Defined.
+
+Lemma vect_app_cast_r {T} {sz1 sz1' sz2}:
+  forall (h: sz1 = sz1') (v1: vect T sz1) (v2: vect T sz2),
+    vect_app v2 (rew h in v1) = rew [fun sz => vect T (sz2 + sz)] h in (vect_app v2 v1).
+Proof. destruct h; reflexivity. Defined.
 
 Fixpoint vect_repeat {T} {sz} (n: nat) (v: vect T sz) : vect T (n * sz) :=
   match n with
@@ -687,6 +698,11 @@ Section Conversions.
       vect_to_list (eq_rect _ _ v _ pr) = vect_to_list v.
   Proof. destruct pr; reflexivity. Defined.
 
+  Lemma vect_to_list_eq_rect_fn {T sz sz'} (f: nat -> nat):
+    forall (v: vect T (f sz)) (pr: sz = sz'),
+      vect_to_list (rew [fun sz => vect T (f sz)] pr in v) = vect_to_list v.
+  Proof. destruct pr; reflexivity. Defined.
+
   Fixpoint vect_to_list_firstn {T sz}:
     forall n (v: vect T sz),
       vect_to_list (vect_firstn n v) =
@@ -732,11 +748,21 @@ Section Conversions.
 End Conversions.
 
 Hint Rewrite @vect_to_list_eq_rect : vect_to_list.
+Hint Rewrite @vect_to_list_eq_rect_fn : vect_to_list.
 Hint Rewrite @vect_to_list_app : vect_to_list.
 Hint Rewrite @vect_to_list_firstn : vect_to_list.
 Hint Rewrite @vect_to_list_skipn : vect_to_list.
 Hint Rewrite @vect_to_list_const : vect_to_list.
 Hint Rewrite @vect_to_list_map : vect_to_list.
+Hint Rewrite @vect_to_list_length : vect_to_list.
+
+Hint Rewrite @firstn_firstn : vect_to_list_cleanup.
+Hint Rewrite @firstn_app : vect_to_list_cleanup.
+Hint Rewrite @firstn_nil : vect_to_list_cleanup.
+Hint Rewrite @firstn_length : vect_to_list_cleanup.
+Hint Rewrite @Nat.sub_0_r : vect_to_list_cleanup.
+Hint Rewrite @List.app_nil_r : vect_to_list_cleanup.
+Hint Rewrite @Nat.sub_diag : vect_to_list_cleanup.
 
 Definition vect_NoDup {T n} (v: vect T n) : Prop :=
   List.NoDup (vect_to_list v).

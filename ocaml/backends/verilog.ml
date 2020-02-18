@@ -239,20 +239,6 @@ let assignment_to_string' (gensym: int ref) (assignment: assignment) =
           let op = match cmp with CLt -> "<" | CGt -> ">" | CLe -> "<=" | CGe -> ">=" in
           Printf.sprintf "\tassign %s = %s %s %s" lhs (cast arg1) op (cast arg2)
        | Sel _ -> default_left ^ arg1 ^ "[" ^ arg2 ^ "]"
-       | SliceSubst (sz, offset, slice_sz) ->
-          if (offset > 0) then
-            if (offset + slice_sz <= sz-1) then
-              Printf.sprintf "\tassign %s = {%s[%d : %d], %s, %s[%d : %d]}"
-                lhs arg1 (sz-1) (offset+slice_sz)  arg2 arg1 (offset-1) 0
-            else
-              Printf.sprintf "\tassign %s = { %s, %s[%d : %d]}"
-                lhs arg2 arg1 (offset-1) 0
-          else
-            if sz = 0 then
-              failwith "Unhandled case, slicing size 0?"
-            else
-              Printf.sprintf "assign %s = {%s[%d : %d], %s}"
-                lhs arg1 (sz-1) (slice_sz)  arg2
        | IndexedSlice (_, slice_sz) -> default_left ^ arg1 ^ "[" ^ arg2 ^ " +: " ^ string_of_int slice_sz ^ "]"
        | And _ ->  default_left ^ arg1 ^ " & " ^ arg2
        | Or _ -> default_left ^ arg1 ^ " | " ^ arg2
@@ -261,7 +247,8 @@ let assignment_to_string' (gensym: int ref) (assignment: assignment) =
        | Lsr (_, _) -> default_left ^ arg1 ^ " >> " ^ arg2
        | Asr (_, _) -> default_left ^ "$signed(" ^ arg1 ^ ")" ^ " >>> " ^ arg2
        | EqBits (_, negated) -> default_left ^ arg1 ^ (if negated then " != " else " == ") ^ arg2
-       | Concat (_, _) -> default_left ^ "{" ^ arg1 ^ ", " ^ arg2 ^ "}")
+       | Concat (_, _) -> default_left ^ "{" ^ arg1 ^ ", " ^ arg2 ^ "}"
+       | SliceSubst _ -> failwith_unlowered ())
    | EExternal (ffi, arg) ->
       let number_s = !gensym in (* FIXME use the gensym from common.ml *)
       gensym := !gensym + 1 ;

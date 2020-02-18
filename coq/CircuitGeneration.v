@@ -125,6 +125,39 @@ Section CircuitCompilation.
       | Lowered (DisplayBits _) => fun a c => CConst Ob
       end a (CUnop fn a).
 
+    Definition slice_subst_macro {sz} offset {width}
+               (c1: circuit sz) (c2: circuit width) :=
+      match le_gt_dec offset sz with
+      | left pr =>
+        rew (le_plus_minus_r _ _ pr) in
+            (CBinop (Concat _ _)
+                    (match le_gt_dec width (sz - offset) with
+                     | left pr =>
+                       rew (le_plus_minus_r _ _ pr) in
+                           (CBinop (Concat _ _) (CUnop (Slice _ (offset + width) (sz - offset - width)) c1) c2)
+                     | right _ =>
+                       CUnop (Slice _ 0 (sz - offset)) c2
+                     end)
+                    (CUnop (Slice sz 0 offset) c1))
+      | right _ => c1
+      end.
+
+    Definition compile_binop (fn: fbits2)
+               (c1: circuit (CSigma2 fn).(arg1Sig))
+               (c2: circuit (CSigma2 fn).(arg2Sig)):
+      circuit (CSigma2 fn).(retSig) :=
+      let cArg1 fn := circuit (CSigma2 fn).(arg1Sig) in
+      let cArg2 fn := circuit (CSigma2 fn).(arg2Sig) in
+      let cRet fn := circuit (CSigma2 fn).(retSig) in
+      match fn return circuit (CSigma2 fn).(arg1Sig) ->
+                      circuit (CSigma2 fn).(arg2Sig) ->
+                      circuit (CSigma2 fn).(retSig) ->
+                      circuit (CSigma2 fn).(retSig) with
+      | SliceSubst sz offset width => fun c1 c2 c =>
+        slice_subst_macro offset c1 c2
+      | _ => fun c1 c2 c => c
+      end c1 c2 (CBinop fn c1 c2).
+
     Fixpoint compile_action
              {sig: lsig}
              {sz}
@@ -228,7 +261,7 @@ Section CircuitCompilation.
       | Binop fn a1 a2 => fun Gamma =>
         let (a1, Gamma) := compile_action Gamma a1 clog in
         let (a2, Gamma) := compile_action Gamma a2 a1.(erwc) in
-        ({| retVal := CBinop fn a1.(retVal) a2.(retVal);
+        ({| retVal := compile_binop fn a1.(retVal) a2.(retVal);
             erwc := a2.(erwc) |},
          Gamma)
       | ExternalCall fn a => fun Gamma =>

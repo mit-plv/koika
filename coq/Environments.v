@@ -1,7 +1,6 @@
 (*! Utilities | Environments used to track variable bindings !*)
 Require Import Koika.Common.
 Require Export Koika.Member.
-Import EqNotations.
 
 Section Contexts.
   Context {K: Type}.

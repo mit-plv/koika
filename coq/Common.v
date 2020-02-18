@@ -3,6 +3,7 @@ Require Export Coq.omega.Omega.
 Require Export Coq.Lists.List Coq.Bool.Bool Coq.Strings.String.
 Require Export Koika.EqDec Koika.Vect Koika.FiniteType Koika.Show.
 
+Export EqNotations.
 Export ListNotations.
 Global Open Scope string_scope.
 Global Open Scope list_scope.

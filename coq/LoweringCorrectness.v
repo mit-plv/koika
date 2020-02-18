@@ -3,7 +3,6 @@ Require Import Coq.setoid_ring.Ring_theory Coq.setoid_ring.Ring Coq.setoid_ring.
 Require Import Koika.Common Koika.Environments Koika.Syntax
         Koika.SemanticProperties Koika.PrimitiveProperties Koika.SyntaxMacros Koika.Lowering.
 Require Koika.TypedSemantics Koika.LoweredSemantics.
-Import EqNotations.
 
 Section LoweringCorrectness.
   Context {pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t: Type}.

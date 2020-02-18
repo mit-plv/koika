@@ -209,3 +209,38 @@ Proof.
   - rewrite index_of_nat_largest.
     setoid_rewrite vect_last_nth; reflexivity.
 Qed.
+
+Definition slice_subst_impl {sz} offset {width} (a1: bits sz) (a2: bits width) :=
+  match le_gt_dec offset sz with
+  | left pr =>
+    rew le_plus_minus_r offset sz pr in
+      ((BitFuns.slice 0 offset a1) ++
+       (match le_gt_dec width (sz - offset) with
+        | left pr =>
+          rew le_plus_minus_r width (sz - offset) pr in
+            (a2 ++ BitFuns.slice (offset + width) (sz - offset - width) a1)
+        | right _ => BitFuns.slice 0 (sz - offset) a2
+        end))%vect
+  | right _ => a1
+  end.
+
+Lemma slice_subst_impl_correct :
+  forall {sz} offset {width} (a1: bits sz) (a2: bits width),
+    BitFuns.slice_subst offset width a1 a2 =
+    slice_subst_impl offset a1 a2.
+Proof.
+  intros; apply vect_to_list_inj.
+  unfold slice_subst_impl, BitFuns.slice, BitFuns.slice_subst, vect_extend_end_firstn, Bits.extend_end.
+  repeat match goal with
+         | _ => progress cbn
+         | _ => progress autorewrite with vect_to_list vect_to_list_cleanup
+         | [ |- context[match ?x with _ => _ end] ] => destruct x
+         | _ => repeat rewrite ?Min.min_l, ?Min.min_r by omega
+         end.
+  - rewrite (firstn_all2 (n := sz - offset)) by (autorewrite with vect_to_list; omega).
+    reflexivity.
+  - rewrite (skipn_all2 (n := offset + width)) by (autorewrite with vect_to_list; omega).
+    autorewrite with vect_to_list_cleanup; reflexivity.
+  - rewrite (firstn_all2 (n := sz)) by (autorewrite with vect_to_list; omega).
+    reflexivity.
+Qed.
