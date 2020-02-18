@@ -65,7 +65,7 @@ Module GCDMachine.
 
   Definition gcd_get_result : uaction reg_t ext_fn_t :=
     {{
-        if (read1(gcd_a) == |16`d0|) && read1(gcd_busy) then
+        if (read1(gcd_a) == |16`d0|) && read0(gcd_busy) then
           write0(gcd_busy, Ob~0);
           write0(output_data, read1(gcd_b))
         else
