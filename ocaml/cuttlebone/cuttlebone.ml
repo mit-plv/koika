@@ -329,18 +329,22 @@ module Compilation = struct
     let typed = Extr.type_rule Util.string_eq_dec _R _Sigma pos desugared in
     result_of_type_result typed
 
-  let rec extr_circuit_equivb sz (c1: _ extr_circuit) (c2: _ extr_circuit) =
-    let eqb = extr_circuit_equivb sz in
-    match Extr.unannot0 sz c1, Extr.unannot0 sz c2 with
-    | CMux (_, s1, c11, c12), CMux (_, s2, c21, c22) -> eqb s1 s2 && eqb c11 c21 && eqb c12 c22
-    | CConst (sz1, v1), CConst (sz2, v2) -> Util.array_of_vect sz1 v1 = Util.array_of_vect sz2 v2
-    | CReadRegister r1, CReadRegister r2 -> r1 == r2
-    | CUnop (op1, c1), CUnop (op2, c2) -> op1 == op2 && eqb c1 c2
-    | CBinop (op1, c11, c12), CBinop (op2, c21, c22) -> op1 == op2 && eqb c11 c21 && eqb c12 c22
-    | CExternal (f1, c1), CExternal (f2, c2) -> f1 == f2 && eqb c1 c2
-    | CBundleRef (_, _, _, _, _, _), CBundleRef (_, _, _, _, _, _) -> c1 == c2
-    | CAnnot (_, a1, c1), CAnnot (_, a2, c2) -> a1 = a2 && eqb c1 c2
-    | _, _ -> false
+  let rec extr_circuit_equivb sz max_depth (c1: _ extr_circuit) (c2: _ extr_circuit) =
+    if max_depth < 0 then false
+    else
+      let eqb = extr_circuit_equivb sz (max_depth - 1) in
+      let c1, c2 = Extr.unannot0 sz c1, Extr.unannot0 sz c2 in
+      c1 == c2 ||
+        match c1, c2 with
+        | CMux (_, s1, c11, c12), CMux (_, s2, c21, c22) -> eqb s1 s2 && eqb c11 c21 && eqb c12 c22
+        | CConst (sz1, v1), CConst (sz2, v2) -> Util.array_of_vect sz1 v1 = Util.array_of_vect sz2 v2
+        | CReadRegister r1, CReadRegister r2 -> r1 == r2
+        | CUnop (op1, c1), CUnop (op2, c2) -> op1 == op2 && eqb c1 c2
+        | CBinop (op1, c11, c12), CBinop (op2, c21, c22) -> op1 == op2 && eqb c11 c21 && eqb c12 c22
+        | CExternal (f1, c1), CExternal (f2, c2) -> f1 == f2 && eqb c1 c2
+        | CBundleRef (_, _, _, _, _, _), CBundleRef (_, _, _, _, _, _) -> c1 == c2
+        | CAnnot (_, a1, c1), CAnnot (_, a2, c2) -> a1 = a2 && eqb c1 c2
+        | _, _ -> false
 
   let extr_circuit_incomplete_equivb sz c1 c2 =
     (* FIXME: instead of a recursive comparison, we could do the hashconsing as
@@ -350,7 +354,7 @@ module Compilation = struct
     if c1 == c2 then
       true
     else if Hashtbl.hash c1 = Hashtbl.hash c2 then
-      extr_circuit_equivb sz c1 c2
+      extr_circuit_equivb sz max_int c1 c2
     else
       (* This function doesn't need to be complete, but it needs to be sound. *)
       false
