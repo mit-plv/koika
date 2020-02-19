@@ -54,8 +54,9 @@ Section CircuitCompilation.
   Notation "c1 ==>` an ` c2" :=
     (CAnnotOpt an (COr (CAnnotOpt "impl" (CNot c1)) c2))
       (at level 70, no associativity) : circuit.
-  Notation CMuxAnnotOpt an s c1 c2 :=
-    (CAnnotOpt an (CMux s c1 c2)).
+  Notation CUnopOpt f c := (COpt (CUnop f c)).
+  Notation CBinopOpt f c1 c2 := (COpt (CBinop f c1 c2)).
+  Notation CMuxAnnotOpt an s c1 c2 := (CAnnotOpt an (CMux s c1 c2)).
 
   Local Open Scope circuit.
 
@@ -110,35 +111,41 @@ Section CircuitCompilation.
       | Repeat _ _ => fun a c => c
       | SExt sz width => fun a c =>
         ltac:(subst cRet; simpl; rewrite <- vect_extend_end_cast, <- (Nat.mul_1_r (width - sz));
-                exact (CBinop (Concat _ _)
-                              (CUnop (Repeat 1 (width - sz))
-                                     (CBinop (Sel sz) a (CConst (Bits.of_nat (log2 sz) (pred sz)))))
+                exact (CBinopOpt (Concat _ _)
+                                 (CUnopOpt (Repeat 1 (width - sz))
+                                           (CBinopOpt (Sel sz) a (CConst (Bits.of_nat (log2 sz) (pred sz)))))
                               a))
       | ZExtL sz width => fun a c =>
         ltac:(subst cRet; simpl; rewrite <- vect_extend_end_cast;
-                exact (CBinop (Concat _ _) (CConst Bits.zero) a))
+                exact (CBinopOpt (Concat _ _) (CConst Bits.zero) a))
       | ZExtR sz width => fun a c =>
         ltac:(subst cRet; simpl; rewrite <- vect_extend_beginning_cast;
-                exact (CBinop (Concat _ _) a (CConst Bits.zero)))
+                exact (CBinopOpt (Concat _ _) a (CConst Bits.zero)))
       | Slice sz offset width => fun a c => c
       | Lowered (IgnoreBits _) => fun a c => CConst Ob
       | Lowered (DisplayBits _) => fun a c => CConst Ob
       end a (CUnop fn a).
+
+    Lemma lt_plus_minus_r :
+      forall n m : nat, n < m -> n + (m - n) = m.
+    Proof.
+      auto using le_plus_minus_r, Nat.lt_le_incl.
+    Defined.
 
     Definition slice_subst_macro {sz} offset {width}
                (c1: circuit sz) (c2: circuit width) :=
       match le_gt_dec offset sz with
       | left pr =>
         rew (le_plus_minus_r _ _ pr) in
-            (CBinop (Concat _ _)
-                    (match le_gt_dec width (sz - offset) with
-                     | left pr =>
-                       rew (le_plus_minus_r _ _ pr) in
-                           (CBinop (Concat _ _) (CUnop (Slice _ (offset + width) (sz - offset - width)) c1) c2)
-                     | right _ =>
-                       CUnop (Slice _ 0 (sz - offset)) c2
-                     end)
-                    (CUnop (Slice sz 0 offset) c1))
+            (CBinopOpt (Concat _ _)
+                       (match le_gt_dec width (sz - offset) with
+                        | left pr =>
+                          rew (le_plus_minus_r _ _ pr) in
+                              (CBinopOpt (Concat _ _) (CUnop (Slice _ (offset + width) (sz - offset - width)) c1) c2)
+                        | right _ =>
+                          CUnopOpt (Slice _ 0 (sz - offset)) c2
+                        end)
+                       (CUnopOpt (Slice sz 0 offset) c1))
       | right _ => c1
       end.
 

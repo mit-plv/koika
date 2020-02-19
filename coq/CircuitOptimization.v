@@ -1,5 +1,5 @@
 (*! Circuits | Local optimization of circuits !*)
-Require Export Koika.Common Koika.Environments Koika.CircuitSemantics.
+Require Export Koika.Common Koika.Environments Koika.CircuitSemantics Koika.PrimitiveProperties.
 
 Import PrimTyped CircuitSignatures.
 
@@ -30,6 +30,16 @@ Section CircuitOptimizer.
     {| lco_fn := @lco_opt_compose (l1.(@lco_fn)) (l2.(@lco_fn));
        lco_proof := ltac:(abstract (intros; unfold lco_opt_compose;
                                      cbn; rewrite !lco_proof; reflexivity)) |}.
+
+  Section Utils.
+    Context {REnv: Env reg_t}.
+    Context (cr: REnv.(env_t) (fun idx => bits (CR idx))).
+
+    Lemma interp_circuit_cast {sz sz'}:
+      forall (h: sz = sz') (c: circuit sz),
+        interp_circuit cr csigma (rew h in c) = rew h in (interp_circuit cr csigma c).
+    Proof. destruct h; reflexivity. Defined.
+  End Utils.
 
   Section Iterated.
     Context (equivb: forall {sz}, circuit sz -> circuit sz -> bool).
@@ -262,6 +272,12 @@ Section CircuitOptimizer.
     Qed.
   End Equiv.
 
+  Ltac unannot_rew :=
+    repeat match goal with
+           | [ Heq: unannot ?c = _ |- context[interp_circuit _ _ ?c] ] =>
+             rewrite <- (unannot_sound c), Heq; cbn
+           end.
+
   Section ConstProp.
     Context {REnv: Env reg_t}.
     Context (cr: REnv.(env_t) (fun idx => bits (CR idx))).
@@ -383,12 +399,6 @@ Section CircuitOptimizer.
       - congruence.
     Qed.
 
-    Ltac unannot_rew :=
-      repeat match goal with
-             | [ Heq: unannot ?c = _ |- context[interp_circuit _ _ ?c] ] =>
-               rewrite <- (unannot_sound c), Heq; cbn
-             end.
-
     Arguments Bits.and : simpl never.
     Arguments Bits.or : simpl never.
 
@@ -444,6 +454,44 @@ Section CircuitOptimizer.
       - intros; rewrite opt_mux_bit1_sound, opt_constprop'_sound; reflexivity.
     Qed.
   End ConstProp.
+
+  Section Simplify.
+    Context {REnv: Env reg_t}.
+    Context (cr: REnv.(env_t) (fun idx => bits (CR idx))).
+
+    Definition opt_simplify {sz} (c: circuit sz): circuit sz :=
+      match unannot c in Circuit _ _ sz return circuit sz -> circuit sz with
+      | CUnop (Slice sz offset width) c =>
+        match eq_dec offset 0, eq_dec sz width with
+        | left _, left pr_width => fun c0: circuit width => rew pr_width in c
+        | _, _ => fun c0 => c0
+        end
+      | CBinop (Concat sz1 sz2) c1 c2 =>
+        match eq_dec sz1 0, eq_dec sz2 0 with
+        | left pr, _ => fun _ => rew <- [fun sz => circuit (sz2 + sz)] pr in rew <- plus_0_r sz2 in c2
+        | _, left pr => fun _ => rew <- [fun sz => circuit (sz + sz1)] pr in (c1: circuit (0 + sz1))
+        | _, _ => fun c0 => c0
+        end
+      | _ => fun c0 => c0
+      end c.
+
+    Lemma opt_simplify_sound :
+      forall {sz} (c: circuit sz),
+        interp_circuit cr csigma (opt_simplify c) = interp_circuit cr csigma c.
+    Proof.
+      unfold opt_simplify; intros; destruct (unannot c) eqn:? ;
+        try destruct fn;
+        repeat match goal with
+               | _ => reflexivity
+               | _ => progress (cbn || subst || unannot_rew)
+               | [  |- context[match ?x with _ => _ end] ] => destruct x
+               | _ => unfold eq_rect_r; rewrite interp_circuit_cast
+               | _ => rewrite vect_app_nil
+               | _ => apply eq_rect_eqdec_irrel
+               | _ => eauto using slice_full
+               end.
+    Qed.
+  End Simplify.
 End CircuitOptimizer.
 
 Arguments unannot {rule_name_t reg_t ext_fn_t CR CSigma rwdata} [sz] c : assert.
@@ -457,6 +505,9 @@ Arguments opt_identical_sound {rule_name_t reg_t ext_fn_t CR CSigma rwdata} csig
 
 Arguments opt_muxelim {rule_name_t reg_t ext_fn_t CR CSigma rwdata} equivb [sz] c : assert.
 Arguments opt_muxelim_sound {rule_name_t reg_t ext_fn_t CR CSigma rwdata} csigma {equivb} equivb_sound [REnv] cr [sz] c : assert.
+
+Arguments opt_simplify {rule_name_t reg_t ext_fn_t CR CSigma rwdata} [sz] c : assert.
+Arguments opt_simplify_sound {rule_name_t reg_t ext_fn_t CR CSigma rwdata} csigma [REnv] cr [sz] c : assert.
 
 Arguments lco_fn {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} l [sz] c : assert.
 Arguments lco_proof {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} l {REnv} cr [sz] c : assert.
@@ -490,10 +541,15 @@ Section LCO.
     {| lco_fn := opt_muxelim equivb;
        lco_proof := opt_muxelim_sound csigma equivb_sound |}.
 
+  Definition lco_simplify : lco :=
+    {| lco_fn := opt_simplify;
+       lco_proof := opt_simplify_sound csigma |}.
+
   Definition lco_all equivb equivb_sound : lco :=
     lco_compose lco_constprop
                 (lco_compose (lco_identical equivb equivb_sound)
-                             (lco_muxelim equivb equivb_sound)).
+                             (lco_compose (lco_muxelim equivb equivb_sound)
+                                          lco_simplify)).
 
   Definition lco_all_iterated equivb equivb_sound fuel : lco :=
     lco_iter equivb (lco_all equivb equivb_sound) fuel.
@@ -503,5 +559,6 @@ Arguments lco_unannot {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} : ass
 Arguments lco_constprop {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} : assert.
 Arguments lco_identical {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} {equivb} equivb_sound : assert.
 Arguments lco_muxelim {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} {equivb} equivb_sound : assert.
+Arguments lco_simplify {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} : assert.
 Arguments lco_all {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} {equivb} equivb_sound : assert.
 Arguments lco_all_iterated {rule_name_t reg_t ext_fn_t CR CSigma rwdata csigma} {equivb} equivb_sound fuel : assert.

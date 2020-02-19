@@ -224,23 +224,43 @@ Definition slice_subst_impl {sz} offset {width} (a1: bits sz) (a2: bits width) :
   | right _ => a1
   end.
 
+Hint Unfold BitFuns.slice : vect_to_list.
+Hint Unfold BitFuns.slice_subst : vect_to_list.
+Hint Unfold slice_subst_impl : vect_to_list.
+Hint Unfold vect_extend_end : vect_to_list.
+Hint Unfold vect_extend_end_firstn : vect_to_list.
+
+Ltac vect_to_list_t_step :=
+  match goal with
+  | _ => progress cbn
+  | _ => progress (autounfold with vect_to_list)
+  | _ => progress autorewrite with vect_to_list vect_to_list_cleanup
+  | [ |- context[match ?x with _ => _ end] ] => destruct x
+  | _ => repeat rewrite ?Min.min_l, ?Min.min_r by omega
+  end.
+
+Ltac vect_to_list_t :=
+  apply vect_to_list_inj; repeat vect_to_list_t_step.
+
 Lemma slice_subst_impl_correct :
   forall {sz} offset {width} (a1: bits sz) (a2: bits width),
     BitFuns.slice_subst offset width a1 a2 =
     slice_subst_impl offset a1 a2.
 Proof.
-  intros; apply vect_to_list_inj.
-  unfold slice_subst_impl, BitFuns.slice, BitFuns.slice_subst, vect_extend_end_firstn, Bits.extend_end.
-  repeat match goal with
-         | _ => progress cbn
-         | _ => progress autorewrite with vect_to_list vect_to_list_cleanup
-         | [ |- context[match ?x with _ => _ end] ] => destruct x
-         | _ => repeat rewrite ?Min.min_l, ?Min.min_r by omega
-         end.
+  intros; vect_to_list_t.
   - rewrite (firstn_all2 (n := sz - offset)) by (autorewrite with vect_to_list; omega).
     reflexivity.
   - rewrite (skipn_all2 (n := offset + width)) by (autorewrite with vect_to_list; omega).
     autorewrite with vect_to_list_cleanup; reflexivity.
   - rewrite (firstn_all2 (n := sz)) by (autorewrite with vect_to_list; omega).
+    reflexivity.
+Qed.
+
+Lemma slice_full {sz}:
+  forall (bs: bits sz),
+    BitFuns.slice 0 sz bs = bs.
+Proof.
+  intros; vect_to_list_t.
+  rewrite (firstn_all2 (n := sz)) by (autorewrite with vect_to_list; omega);
     reflexivity.
 Qed.

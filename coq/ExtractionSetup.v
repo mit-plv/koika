@@ -29,6 +29,7 @@ Extraction Implicit CircuitOptimization.lco_compose [csigma].
 Extraction Implicit CircuitOptimization.lco_constprop [csigma].
 Extraction Implicit CircuitOptimization.lco_identical [csigma].
 Extraction Implicit CircuitOptimization.lco_muxelim [csigma].
+Extraction Implicit CircuitOptimization.lco_simplify [csigma].
 Extraction Implicit CircuitOptimization.lco_all [csigma].
 Extraction Implicit CircuitOptimization.lco_all_iterated [csigma].
 Extraction Implicit CircuitOptimization.unannot [CR CSigma rwdata].

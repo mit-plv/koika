@@ -23,6 +23,7 @@ Instance EqDec_bool : EqDec bool := _.
 Instance EqDec_ascii : EqDec Ascii.ascii := _.
 Instance EqDec_string : EqDec string := _.
 Instance EqDec_unit : EqDec unit := _.
+Instance EqDec_nat : EqDec nat := {| eq_dec := PeanoNat.Nat.eq_dec |}.
 Instance EqDec_pair A B `{EqDec A} `{EqDec B} : EqDec (A * B) := _.
 Instance EqDec_option A `{EqDec A} : EqDec (option A) := _.
 Instance EqDec_vector A (sz: nat) {EQ: EqDec A}: EqDec (Vector.t A sz).
