@@ -476,16 +476,21 @@ module Graphs = struct
 
   module CoqStringSet = Set.Make(struct type t = char list let compare = poly_cmp end)
 
-  let dedup_circuit (type rule_name_t reg_t ext_fn_t)
-        (pkg: (rule_name_t, reg_t, ext_fn_t) dedup_input_t) : circuit_graph =
-    let module ExtrCircuitHash = struct
-        type t = (rule_name_t, reg_t, ext_fn_t) extr_circuit
+  module PhysicalHashTable (Params: sig type t end) =
+    Hashtbl.Make(struct
+        type t = Params.t
         let equal o1 o2 = o1 == o2
         let hash o = Hashtbl.hash o
-      end in
-    (* ExtrCircuitHashtbl is used to detect and leverage existing physical sharing *)
-    let module ExtrCircuitHashtbl = Hashtbl.Make(ExtrCircuitHash) in
-    (* CircuitStructuralHashcons is used to find duplicate subcircuits *)
+      end)
+
+  let dedup_circuit (type rule_name_t reg_t ext_fn_t)
+        (pkg: (rule_name_t, reg_t, ext_fn_t) dedup_input_t) : circuit_graph =
+    (* BundleHash, ExtrCircuitHashtbl is used to detect and leverage existing physical sharing *)
+    let module ExtrCircuitHashtbl =
+      PhysicalHashTable(struct type t = (rule_name_t, reg_t, ext_fn_t) extr_circuit end) in
+    let module ExtrBundleHashtbl =
+      PhysicalHashTable(struct type t = (reg_t, (rule_name_t, reg_t, ext_fn_t) Extr.rwdata) Extr.context end) in
+    (* CircuitHashcons is used to find duplicate subcircuits *)
     let (module CircuitHashcons: Hashcons.S with type key = circuit') =
       if hashcons_circuits then (module CircuitStructuralHashcons)
       else (module CircuitPhysicalHashcons) in
@@ -497,6 +502,7 @@ module Graphs = struct
 
     let circuit_to_deduplicated = ExtrCircuitHashtbl.create 50 in
     let deduplicated_circuits = CircuitHashcons.create 50 in
+    let bundles = ExtrBundleHashtbl.create 8 in
 
     let rec rebuild_circuit_for_deduplication (c0: (rule_name_t, reg_t, ext_fn_t) extr_circuit) =
       match c0 with
@@ -513,13 +519,19 @@ module Graphs = struct
       | Extr.CExternal (fn, c1) ->
          CExternal (pkg.di_fn_sigs fn, dedup c1)
       | Extr.CBundleRef (sz, rule_name, regs, bundle, field, circuit) ->
-         let bundle =
-           CBundle (pkg.di_rule_names rule_name,
-                    Extr.mmap regs (fun r m ->
-                        let rwdata = Extr.cassoc regs r m bundle in
-                        (pkg.di_reg_sigs r, rebuild_rwdata_for_deduplication rwdata))) in
          if pkg.di_rule_external rule_name then
-           CBundleRef(sz, hashcons bundle, rwcircuit_of_extr_rwcircuit pkg.di_reg_sigs field)
+           let cbundle =
+             match ExtrBundleHashtbl.find_opt bundles bundle with
+             | Some c -> c
+             | None ->
+                let cbundle =
+                  CBundle (pkg.di_rule_names rule_name,
+                           Extr.mmap regs (fun r m ->
+                               let rwdata = Extr.cassoc regs r m bundle in
+                               (pkg.di_reg_sigs r, rebuild_rwdata_for_deduplication rwdata))) in
+                ExtrBundleHashtbl.replace bundles bundle cbundle;
+                cbundle in
+           CBundleRef(sz, hashcons cbundle, rwcircuit_of_extr_rwcircuit pkg.di_reg_sigs field)
          else
            rebuild_circuit_for_deduplication circuit
       | Extr.CAnnot (sz, annot, c) ->
