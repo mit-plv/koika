@@ -11,16 +11,17 @@ bit[31:0] instructions[8] = '{
   32'b11000001011111000110001001111001
 };
 
-module fetch_instr(input wire[2:0] address,
-                   output wire[31:0] data);
-   assign data = instructions[address];
+module fetch_instr(input wire CLK,
+                   input wire[2:0] arg,
+                   output wire[31:0] out);
+   assign out = instructions[arg];
 endmodule
 
 /* An alternative approach would be to use a C function to implement this
    external method; in that case you'd use the following declaration:
-     import "DPI-C" function bit[31:0] c_fetch_instr(input bit[2:0] address);
+     import "DPI-C" function bit[31:0] c_fetch_instr(input bit[2:0] arg);
    and then
-     assign data = c_fetch_instr(address);
+     assign out = c_fetch_instr(arg);
 
    And on the C side you'd use this:
 

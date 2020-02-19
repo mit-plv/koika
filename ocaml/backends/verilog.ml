@@ -253,7 +253,7 @@ let assignment_to_string' (gensym: int ref) (assignment: assignment) =
       let number_s = !gensym in (* FIXME use the gensym from common.ml *)
       gensym := !gensym + 1 ;
       "\t"^ ffi.ffi_name ^ " " ^ (ffi.ffi_name ^ "__instance__" ^ string_of_int number_s) ^
-        "(" ^ arg ^ "," ^ lhs ^ ")"
+        "(CLK, " ^ arg ^ "," ^ lhs ^ ")"
    | EReadRegister r -> default_left ^ r.reg_name
    | EAnnot (_, _, rhs) -> default_left ^ rhs) ^ ";"
 
