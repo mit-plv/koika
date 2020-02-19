@@ -6,7 +6,7 @@ open Cuttlebone.Graphs
 
 open Printf
 
-let debug = true
+let debug = false
 let add_debug_annotations = false
 let omit_reset_line = false
 
@@ -16,13 +16,15 @@ type node_metadata =
 type metadata_map = (int, node_metadata) Hashtbl.t
 
 type expr =
-  | EPtr of node
+  | EPtr of node * string option
   | EName of string
   | EConst of Common.bits_value
   | EUnop of Extr.PrimTyped.fbits1 * node
   | EBinop of Extr.PrimTyped.fbits2 * node * node
   | EMux of node * node * node
-  | EPure of ffi_signature * node
+  | EModule of { name: string;
+                 inputs: input_pin list;
+                 outputs: output_pin list }
 and node =
   { tag: int;
     size: int;
@@ -33,6 +35,10 @@ and node_kind =
   | Unique
   | Shared
   | Printed of { name: string }
+and input_pin =
+  { ip_name: string; ip_node: node }
+and output_pin =
+  { op_name: string; op_wire: string; op_sz: int }
 
 type node_map = (int, node) Hashtbl.t
 
@@ -47,6 +53,12 @@ let fn1_sz fn =
 let fn2_sz fn =
   let fsig = Cuttlebone.Extr.PrimSignatures.coq_Sigma2 (Bits2 fn) in
   typ_sz (Cuttlebone.Util.retSig fsig)
+
+let rwdata_circuits (rwd: Cuttlebone.Graphs.rwdata) =
+  let open Cuttlebone.Extr in
+  [(Rwdata_r0, rwd.read0); (Rwdata_r1, rwd.read1);
+   (Rwdata_w0, rwd.write0); (Rwdata_w1, rwd.write1);
+   (Rwdata_data0, rwd.data0); (Rwdata_data1, rwd.data1)]
 
 let compute_circuit_metadata (metadata: metadata_map) (c: circuit) =
   let rec iter c =
@@ -66,14 +78,33 @@ let compute_circuit_metadata (metadata: metadata_map) (c: circuit) =
     | CUnop (_, c1) -> iter c1
     | CBinop (_, c1, c2) -> iter c1; iter c2
     | CExternal (_, c) -> iter c
-    | CBundle (_, _) -> ()       (* FIXME *)
-    | CBundleRef (_, _, _) -> () (* FIXME *)
+    | CBundle (_, ios) ->
+       List.iter (fun (_, rwd) ->
+           List.iter (fun (_, c) -> iter c) (rwdata_circuits rwd))
+         ios
+    | CBundleRef (_, c, _) -> iter c
     | CAnnot (_, _, c) -> iter c in
   ignore (iter c)
 
+let rwdata_field_to_string (field: Extr.rwdata_field) =
+  match field with
+  | Rwdata_r0 -> "r0"
+  | Rwdata_r1 -> "r1"
+  | Rwdata_w0 -> "w0"
+  | Rwdata_w1 -> "w1"
+  | Rwdata_data0 -> "data0"
+  | Rwdata_data1 -> "data1"
+
+let rwcircuit_to_string (rwc: rwcircuit) =
+  match rwc with
+  | Rwcircuit_canfire -> "canFire"
+  | Rwcircuit_rwdata (reg, field) ->
+     sprintf "%s_%s" reg.reg_name (rwdata_field_to_string field)
+
 let node_of_circuit (metadata: metadata_map) (cache: node_map) (c: circuit) =
+  let fresh_node size expr =
+    { tag = -1; size; annots = []; expr; kind = Unique } in
   let rec lift ({ tag; node = c'; _ }: circuit) =
-    let open Hashcons in
     match Hashtbl.find_opt cache tag with
     | Some node -> node
     | None ->
@@ -90,14 +121,32 @@ let node_of_circuit (metadata: metadata_map) (cache: node_map) (c: circuit) =
     | CReadRegister r -> typ_sz (reg_type r), [], EName (r.reg_name)
     | CUnop (f, c1) -> fn1_sz f, [], EUnop (f, lift c1)
     | CBinop (f, c1, c2) -> fn2_sz f, [], EBinop (f, lift c1, lift c2)
-    | CExternal (f, c) -> typ_sz f.ffi_rettype, [], EPure (f, lift c)
-    | CBundle (_, _) -> 0, [], EName "(FIXME bundle)"
-    | CBundleRef (sz, _, _) -> sz, [], EName "(FIXME BundleRef)"
+    | CExternal (f, c) ->
+       let size = typ_sz f.ffi_rettype in
+       let inputs = [{ ip_name = "arg"; ip_node = lift c }] in
+       let outputs = [{ op_name = "out"; op_wire = "out"; op_sz = typ_sz f.ffi_rettype }] in
+       let mod_expr = EModule { name = f.ffi_name; inputs; outputs } in
+       size, [], EPtr (fresh_node size mod_expr, Some "out")
+    | CBundle (name, ios) ->
+       let reg_ios = List.map inputs_outputs_of_module_io ios in
+       let inputs, outputs = reg_ios |> List.concat |> List.split in
+       let cf_name = rwcircuit_to_string Rwcircuit_canfire in
+       let outputs = { op_name = cf_name; op_wire = cf_name; op_sz = 1 } :: outputs in
+       0, [], EModule { name; inputs; outputs }
+    | CBundleRef (sz, c, field) ->
+       sz, [], EPtr (lift c, Some (rwcircuit_to_string field))
     | CAnnot (sz, annot, c) ->
        let ann = if annot = "" then [] else [annot] in
        match lift c with
        | { kind = Unique; annots; expr; _ } -> sz, ann @ annots, expr
-       | n -> sz, ann, EPtr n in
+       | n -> sz, ann, EPtr (n, None)
+  and inputs_outputs_of_module_io (reg, rwd) =
+    List.map (fun (field, c) ->
+        let ip_node = lift c in
+        let nm = rwcircuit_to_string (Rwcircuit_rwdata (reg, field)) in
+        ({ ip_name = nm ^ "_before"; ip_node },
+         { op_name = nm ^ "_after"; op_wire = nm; op_sz = ip_node.size }))
+      (rwdata_circuits rwd) in
   lift c
 
 module Debug = struct
@@ -131,13 +180,21 @@ module Debug = struct
     | Compare (_, _, _) -> "compare"
 
   let expr_to_str = function
-    | EPtr n -> sprintf "EPtr %d" n.tag
+    | EPtr (n, Some field) -> sprintf "EPtr (%d, %s)" n.tag field
+    | EPtr (n, None) -> sprintf "EPtr (%d, None)" n.tag
     | EName n -> sprintf "EName \"%s\"" n
     | EConst cst -> sprintf "EConst %s" (string_of_bits cst)
     | EMux (s, c1, c2) -> sprintf "EMux (%d, %d, %d)" s.tag c1.tag c2.tag
-    | EPure (_, c) -> sprintf "EPure (_, %d)" c.tag
     | EUnop (f, c) -> sprintf "EUnop (%s, %d)" (unop_to_str f) c.tag
     | EBinop (f, c1, c2) -> sprintf "EBinop (%s, %d, %d)" (binop_to_str f) c1.tag c2.tag
+    | EModule { name; inputs; outputs } ->
+       sprintf "EModule (%s, [%s], [%s])" name
+         (String.concat "; "
+            (List.map (fun { ip_name; ip_node } ->
+                 sprintf "(%s, %d)" ip_name ip_node.tag) inputs))
+         (String.concat "; "
+            (List.map (fun { op_name; _ } ->
+                 sprintf "%s" op_name) outputs))
 
   let node_kind_to_str = function
     | Unique -> "Unique"
@@ -168,7 +225,8 @@ module Debug = struct
   let print_node_cache cache =
     if debug then
       iter_ordered (fun tag node ->
-          eprintf "%d → %s\n" tag (node_to_str node)) cache
+          eprintf "%d → %s\n" tag (node_to_str node))
+        cache
 
   let print_metadata metadata =
     if debug then
@@ -202,14 +260,14 @@ let translate_roots metadata graph_roots =
   roots
 
 let gensym_next, gensym_reset =
-  make_gensym "_"
+  make_gensym ""
 
 let name_node (n: node) =
   let rec last = function
     | [] -> ""
     | [lst] -> lst
     | _ :: tl -> last tl in
-  gensym_next (last n.annots)
+  gensym_next ("_" ^ last n.annots)
 
 let unlowered () =
   failwith "sext, zextl, zextr, etc. must be elaborated away by the compiler."
@@ -219,105 +277,127 @@ module type RTLBackend = sig
 end
 
 module Verilog : RTLBackend = struct
-  let p_decl out kind sz name expr =
+  let p_stmt out indent fmt =
+    fprintf out "%s" (String.make indent '\t');
+    kfprintf (fun out -> fprintf out ";\n") out fmt
+
+  let p_decl out kind sz ?expr name =
     let range = if sz = 1 then "" else sprintf "[%d:0]" (pred sz) in
-    fprintf out "\t%s%s %s = %s;\n" kind range name expr
+    match expr with
+    | None -> p_stmt out 1 "%s%s %s" kind range name
+    | Some expr -> p_stmt out 1 "%s%s %s = %s" kind range name expr
 
   let precedence = function
-    | EPtr _ | EName _ | EConst _ -> 0
-    | EUnop (Slice _, _) | EBinop ((Sel _ | IndexedSlice _), _, _) -> -1
-    | EUnop (Not _, _) -> -2
-    | EBinop (Concat _, _, _) -> -3
-    | EUnop (Repeat _, _) -> -4
-    | EBinop ((Plus _ | Minus _), _, _) -> -5
-    | EBinop ((Lsl _ | Lsr _ | Asr _), _, _) -> -6
-    | EBinop (Compare (_, _, _), _, _) -> -7
-    | EBinop (EqBits _, _, _) -> -8
-    | EBinop (And _, _, _) -> -10 (* -9, but confusing *)
-    | EBinop (Xor _, _, _) -> -10
-    | EBinop (Or _, _, _) -> -10 (* -11, but confusing *)
-    | EMux (_, _, _) -> -12
-    | EPure (_, _) -> failwith "FIXME"
-    | EBinop (SliceSubst _, _, _) -> -1 (* FIXME *)
-    | EUnop ((SExt _ | ZExtL _ | ZExtR _ | Lowered _), _) -> unlowered ()
+    | EName _ | EConst _ | EModule _ -> -1
+    | EPtr _ -> -2
+    | EUnop (Slice _, _) | EBinop ((Sel _ | IndexedSlice _), _, _) -> -3
+    | EUnop (Not _, _) -> -4
+    | EBinop (Concat _, _, _) -> -5
+    | EUnop (Repeat _, _) -> -6
+    | EBinop ((Plus _ | Minus _), _, _) -> -7
+    | EBinop ((Lsl _ | Lsr _ | Asr _), _, _) -> -8
+    | EBinop (Compare (_, _, _), _, _) -> -9
+    | EBinop (EqBits _, _, _) -> -10
+    | EBinop (And _, _, _) -> -11
+    | EBinop (Xor _, _, _) -> -12
+    | EBinop (Or _, _, _) -> -13
+    | EMux (_, _, _) -> -14
+    | EUnop ((SExt _ | ZExtL _ | ZExtR _ | Lowered _), _)
+      | EBinop (SliceSubst _, _, _) -> unlowered ()
 
-  let rec complex_op = function
-    | { expr = (EPtr _ | EName _ | EConst _); _ } -> false
+  let complex_op = function
+    | { expr = (EPtr _ | EName _); _ } -> false
     | { expr = (EUnop (Slice _, _) | EBinop ((Sel _ | IndexedSlice _), _, _)); _ } -> false
-    | { expr = (EUnop _ | EBinop _ | EMux _); _ } -> true
-    | { expr = EPure _; _ } -> failwith "FIXME"
+    | { expr = (EUnop _ | EBinop _ | EMux _ | EConst _); _ } -> true
+    | { expr = EModule _; _ } -> assert false
 
   let sp_cast signed p () x =
     sprintf (if signed then "$signed(%a)" else "$unsigned(%a)") p x
 
-  let rec p_expr out (e: expr) =
+  type result = [`Expr | `Name] * int * string
+
+  let field_name instance field =
+    sprintf "%s_%s" instance field
+
+  let rec p_expr out (e: expr) : result =
     let lvl = precedence e in
     let sp_str () s = s in
     let p () n = snd (p_node out lvl n) in
-    let pr () n = snd (p_node ~restricted_ctx:true out lvl n) in
+    let pr () n = snd (p_node ~restricted_ctx:true out min_int n) in
     let p0 () n = snd (p_node out min_int n) in
+    let sp fmt = ksprintf (fun s -> (`Expr, lvl, s)) fmt in
     match e with
-    | EPtr n -> lvl, p () n
-    | EName name -> (lvl, name)
-    | EConst cst -> (lvl, string_of_bits cst)
-    | EUnop (f, c) ->
-       (lvl,
-        match f with
-        | Not _ -> sprintf "~%a" p c
-        | Repeat (_, times) -> sprintf "{%d{%a}}" times p0 c
-        | Slice (_, offset, slice_sz) -> sprintf "%a[%d +: %d]" p c offset slice_sz
+    | EPtr (n, None) -> (`Expr, lvl, p () n)
+    | EPtr (n, Some field) -> let nm = p () n in (`Expr, lvl, field_name nm field)
+    | EName name -> (`Expr, lvl, name)
+    | EConst cst -> (`Expr, lvl, string_of_bits cst)
+    | EUnop (f, e) ->
+       (match f with
+        | Not _ -> sp "~%a" p e
+        | Repeat (_, times) -> sp "{%d{%a}}" times p0 e
+        | Slice (_, offset, slice_sz) -> sp "%a[%d +: %d]" pr e offset slice_sz
         | SExt _ | ZExtL _ | ZExtR _ | Lowered _ -> unlowered ())
-    | EBinop (f, c1, c2) ->
-       (lvl,
-        match f with
-        | Plus _ -> sprintf "%a + %a" p c1 p c2
-        | Minus _ -> sprintf "%a - %a" p c1 p c2
-        | Compare(s, CLt, _) -> sprintf "%a < %a" (sp_cast s p) c1 (sp_cast s p) c2
-        | Compare(s, CGt, _) -> sprintf "%a > %a" (sp_cast s p) c1 (sp_cast s p) c2
-        | Compare(s, CLe, _) -> sprintf "%a <= %a" (sp_cast s p) c1 (sp_cast s p) c2
-        | Compare(s, CGe, _) -> sprintf "%a >= %a" (sp_cast s p) c1 (sp_cast s p) c2
-        | Sel _ -> sprintf "%a[%a]" pr c1 p0 c2
-        | IndexedSlice (_, slice_sz) -> sprintf "%a[%a +: %d]" pr c1 p0 c2 slice_sz
-        | And 1 ->  sprintf "%a && %a" p c1 p c2
-        | And _ ->  sprintf "%a & %a" p c1 p c2
-        | Or 1 -> sprintf "%a || %a" p c1 p c2
-        | Or _ -> sprintf "%a | %a" p c1 p c2
-        | Xor _ -> sprintf "%a ^ %a" p c1 p c2
-        | Lsl (_, _) -> sprintf "%a << %a" p c1 p c2
-        | Lsr (_, _) -> sprintf "%a >> %a" p c1 p c2
+    | EBinop (f, e1, e2) ->
+       (match f with
+        | Plus _ -> sp "%a + %a" p e1 p e2
+        | Minus _ -> sp "%a - %a" p e1 p e2
+        | Compare(s, CLt, _) -> sp "%a < %a" (sp_cast s p) e1 (sp_cast s p) e2
+        | Compare(s, CGt, _) -> sp "%a > %a" (sp_cast s p) e1 (sp_cast s p) e2
+        | Compare(s, CLe, _) -> sp "%a <= %a" (sp_cast s p) e1 (sp_cast s p) e2
+        | Compare(s, CGe, _) -> sp "%a >= %a" (sp_cast s p) e1 (sp_cast s p) e2
+        | Sel _ -> sp "%a[%a]" pr e1 p0 e2
+        | IndexedSlice (_, slice_sz) -> sp "%a[%a +: %d]" pr e1 p0 e2 slice_sz
+        | And 1 ->  sp "%a && %a" p e1 p e2
+        | And _ ->  sp "%a & %a" p e1 p e2
+        | Or 1 -> sp "%a || %a" p e1 p e2
+        | Or _ -> sp "%a | %a" p e1 p e2
+        | Xor _ -> sp "%a ^ %a" p e1 p e2
+        | Lsl (_, _) -> sp "%a << %a" p e1 p e2
+        | Lsr (_, _) -> sp "%a >> %a" p e1 p e2
         | Asr (_, _) ->
            (* Arithmetic shifts need an explicit cast:
                 reg [2:0] a     =        $signed(3'b100) >>> 1;                     // 3'b110
                 reg [2:0] mux_a = 1'b1 ? $signed(3'b100) >>> 1 : 3'b000;            // 3'b010
                 reg [2:0] b     =        $unsigned($signed(3'b100) >>> 1);          // 3'b110
                 reg [2:0] mux_b = 1'b1 ? $unsigned($signed(3'b100) >>> 1) : 3'b000; // 3'b110 *)
-           sprintf "%a" (sp_cast false sp_str) (sprintf "%a >>> %a" (sp_cast true p) c1 p c2)
-        | EqBits (_, true) -> sprintf "%a != %a" p c1 p c2
-        | EqBits (_, false) -> sprintf "%a == %a" p c1 p c2
-        | Concat (_, _) -> sprintf "{%a, %a}" p0 c1 p0 c2
+           sp "%a" (sp_cast false sp_str) (sprintf "%a >>> %a" (sp_cast true p) e1 p e2)
+        | EqBits (_, true) -> sp "%a != %a" p e1 p e2
+        | EqBits (_, false) -> sp "%a == %a" p e1 p e2
+        | Concat (_, _) -> sp "{%a, %a}" p0 e1 p0 e2
         | SliceSubst _ -> unlowered ())
-    | EMux (s, c1, c2) -> (lvl, sprintf "%a ? %a : %a" p s p c1 p c2)
-    | EPure (f, c) -> (lvl, "FIXME: extcall")
-  and p_unique_node out ctx_lvl n =
-    let lvl, s = p_expr out n.expr in
+    | EMux (s, e1, e2) -> sp "%a ? %a : %a" p s p e1 p e2
+    | EModule { name; inputs; outputs } ->
+       let instance_name = gensym_next ("mod_" ^ name) in
+       let outputs = List.map (fun op -> { op with op_wire = field_name instance_name op.op_wire }) outputs in
+       let in_args = List.map (fun { ip_name; ip_node } -> sprintf ".%s(%a)" ip_name p0 ip_node) inputs in
+       let out_args = List.map (fun { op_name; op_wire; _ } -> sprintf ".%s(%s)" op_name op_wire) outputs in
+       let args = String.concat ", " (".CLK(CLK)" :: in_args @ out_args) in
+       List.iter (fun { op_wire; op_sz; _ } -> p_decl out "wire" op_sz op_wire) outputs;
+       p_stmt out 1 "%s %s(%s)" name instance_name args;
+       (`Name, lvl, instance_name)
+  and p_wrapped_expr out ctx_lvl n =
+    let kd, lvl, s = p_expr out n.expr in
+    if kd = `Name then n.kind <- Printed { name = s };
     let s = Debug.annotate s n in
     if lvl <= ctx_lvl then (0, sprintf "(%s)" s) else (lvl, s)
   and p_shared_node out n =
-    let name = name_node n in
-    let _, s = p_unique_node out min_int n in
-    p_decl out "wire" n.size name s;
-    n.kind <- Printed { name };
-    (0, name)
+    let _, s = p_wrapped_expr out min_int n in
+    match n.kind with (* Check if p_wrapped_expr printed the node (that's the module case) *)
+    | Printed { name } -> 0, name
+    | _ -> let name = name_node n in
+           p_decl out "wire" n.size name ~expr:s;
+           n.kind <- Printed { name };
+           (0, name)
   and p_node ?(restricted_ctx=false) out ctx_lvl (n: node) =
     match n.kind with
     | Shared -> p_shared_node out n
     | Printed { name } -> (0, name)
     | Unique ->
        if restricted_ctx && complex_op n then p_shared_node out n
-       else p_unique_node out ctx_lvl n
+       else p_wrapped_expr out ctx_lvl n
 
   let p_delayed out name expr =
-    fprintf out "\t\t\t%s <= %s;\n" name expr
+    p_stmt out 3 "%s <= %s" name expr
 
   let p_root_init out roots =
     List.iter (fun (name, init, _) -> p_delayed out name (string_of_bits init)) roots
@@ -342,7 +422,7 @@ module Verilog : RTLBackend = struct
     (name, init, snd (p_node out min_int node))
 
   let p_root_decl out (name, init, _) =
-    p_decl out "reg" (Array.length init) name (string_of_bits init)
+    p_decl out "reg" (Array.length init) name ~expr:(string_of_bits init)
 
   let p_module ~modname out { graph_roots; _ } =
     let metadata = compute_roots_metadata graph_roots in
