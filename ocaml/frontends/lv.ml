@@ -1321,6 +1321,7 @@ let bits_primitives =
    ("concat", `Prim0 (binop UConcat));
    ("+", `Prim0 (binop UPlus));
    ("-", `Prim0 (binop UMinus));
+   ("*", `Prim0 (binop UMul));
    ("<", `Prim0 (binop (UCompare (false, CLt))));
    (">", `Prim0 (binop (UCompare (false, CGt))));
    ("<=", `Prim0 (binop (UCompare (false, CLe))));

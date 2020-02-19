@@ -234,6 +234,7 @@ let assignment_to_string' (gensym: int ref) (assignment: assignment) =
       (match fn with
        | Plus _ -> default_left ^ arg1 ^ " + " ^ arg2
        | Minus _ -> default_left ^ arg1 ^ " - " ^ arg2
+       | Mul _ -> default_left ^ arg1 ^ " * " ^ arg2
        | Compare (signed, cmp, _sz) ->
           let cast = Printf.sprintf (if signed then "$signed(%s)" else "%s") in
           let op = match cmp with CLt -> "<" | CGt -> ">" | CLe -> "<=" | CGe -> ">=" in

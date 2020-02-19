@@ -43,6 +43,7 @@ Module PrimUntyped.
   | UIndexedSlice (width: nat)
   | UPlus
   | UMinus
+  | UMul
   | UCompare (signed: bool) (c: bits_comparison).
 
   Inductive ustruct1 :=
@@ -109,6 +110,7 @@ Module PrimTyped.
   | IndexedSlice (sz: nat) (width: nat)
   | Plus (sz : nat)
   | Minus (sz : nat)
+  | Mul (sz1 sz2: nat)
   | EqBits (sz: nat) (negate: bool)
   | Compare (signed: bool) (c: bits_comparison) (sz: nat).
 
@@ -226,6 +228,7 @@ Module PrimTypeInference.
                      | UConcat => Concat sz1 sz2
                      | UPlus => Plus sz1
                      | UMinus => Minus sz1
+                     | UMul => Mul sz1 sz2
                      | UCompare signed c => Compare signed c sz1
                      end)
     | UStruct2 fn =>
@@ -291,6 +294,7 @@ Module CircuitSignatures.
     | EqBits sz _ => {$ sz ~> sz ~> 1 $}
     | Plus sz => {$ sz ~> sz ~> sz $}
     | Minus sz => {$ sz ~> sz ~> sz $}
+    | Mul sz1 sz2 => {$ sz1 ~> sz2 ~> sz1 + sz2 $}
     | Compare _ _ sz => {$ sz ~> sz ~> 1 $}
     end.
 End CircuitSignatures.
@@ -421,6 +425,7 @@ Module CircuitPrimSpecs.
     | Concat _ _ => Bits.app
     | Plus _ => Bits.plus
     | Minus _ => Bits.minus
+    | Mul _ _ => Bits.mul
     | EqBits _ false => _eq
     | EqBits _ true => _neq
     | Compare true cLt _ => bitfun_of_predicate Bits.signed_lt

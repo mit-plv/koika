@@ -38,6 +38,7 @@ let bits2_name =
   | Concat (_sz1, _sz2) -> "Concat"
   | Plus _sz -> "Plus"
   | Minus _sz -> "Minus"
+  | Mul (_sz1, _sz2) -> "Mul"
   | EqBits (_sz, false) -> "Eq"
   | EqBits (_sz, true) -> "NEq"
   | Compare (signed, op, _sz) ->

@@ -278,6 +278,7 @@ let cpp_bits2_fn_name (f: Extr.PrimTyped.fbits2) =
   | IndexedSlice (_sz, width) -> `Fn (sprintf "prims::islice<%d>" width)
   | Plus _ -> `Infix "+"
   | Minus _ -> `Infix "-"
+  | Mul _ -> `Infix "*"
   | EqBits (_, true) -> `Infix "!="
   | EqBits (_, false) -> `Infix "=="
   | Compare (true, cmp, _) ->

@@ -1223,6 +1223,9 @@ Module Bits.
 
     Definition minus {sz} (bs1 bs2: bits sz) :=
       plus (plus bs1 (neg bs2)) (@one sz).
+
+    Definition mul {sz1 sz2} (bs1: bits sz1) (bs2: bits sz2) :=
+      Bits.of_N (sz1 + sz2) (Bits.to_N bs1 * Bits.to_N bs2)%N.
   End Arithmetic.
 
   Section Comparisons.

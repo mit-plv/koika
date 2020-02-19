@@ -569,6 +569,12 @@ namespace prims {
     return mask(bits<sz>::mk(x.v + ~y.v + 1));
   }
 
+  template<bitwidth sz_x, bitwidth sz_y>
+  bits<sz_x + sz_y> operator*(const bits<sz_x> x, const bits<sz_y> y) {
+    return mask(bits<sz_x + sz_y>::mk(widen<sz_x + sz_y>(x).v *
+                                      widen<sz_x + sz_y>(y).v));
+  }
+
   template<bitwidth sz>
   bits<1> operator<(const bits<sz> x, const bits<sz> y) {
     return bits<1>::mk(x.v < y.v);

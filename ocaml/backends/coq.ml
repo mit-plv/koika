@@ -261,6 +261,7 @@ and pp_prim_ubits2 ppf (f: Cuttlebone.Extr.PrimUntyped.ubits2) =
   | UConcat -> pp_raw "UConcat"
   | UPlus -> pp_raw "UPlus"
   | UMinus -> pp_raw "UMinus"
+  | UMul -> pp_raw "UMul"
   | UCompare (signed, cmp) -> pp_app "UCompare" "%a@ %a" pp_bool signed pp_cmp cmp
 and pp_cmp ppf (cmp: Cuttlebone.Extr.bits_comparison) =
   match cmp with
