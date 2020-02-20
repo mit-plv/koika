@@ -1,0 +1,11 @@
+;;; Computations involving multiplication
+
+(module mul
+  (register r1 8'b110)
+  (register r2 8'b111)
+  (register result 16'b0)
+
+  (rule test
+    (write.0 result (* (read.0 r1) (read.0 r2))))  
+
+  (scheduler main (sequence test)))
