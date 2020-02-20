@@ -279,7 +279,7 @@ module top(CLK,
 
   // submodule rv_core
   rv32i_core_pipelined rv_core(.CLK(CLK),
-			       .reset(RST_N),
+			       .RST_N(RST_N),
 			       .rule_ExternalI_input__canfire(32'd1),
 			       .rule_ExternalD_input__canfire(32'd1),
 			       .rule_ExternalD_input_fromDMem_data0_data0(rv_core$rule_ExternalD_input_fromDMem_data0_data0),

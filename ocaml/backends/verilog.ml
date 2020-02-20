@@ -38,7 +38,7 @@ let rwcircuit_to_string (rwc: rwcircuit) =
 let kind_io_to_string kind_io =
   match kind_io with
   | Clock -> "CLK"
-  | Reset -> "reset"
+  | Reset -> "RST_N"
   | CanFire(rule_name) -> "rule_" ^ rule_name ^ "_input__canfire"
   | OutRule(rule_name, reg, port_name) -> "rule_"^ rule_name ^ "_output_" ^ reg.reg_name ^ field_to_string port_name
   | InRule(rule_name, reg, port_name) -> "rule_"^ rule_name ^ "_input_" ^ reg.reg_name ^ field_to_string port_name
@@ -381,7 +381,7 @@ let format_always_block_with_reset ?(debug=false) statements =
   let nets = List.map (format_assign_net ~debug) statements in
   format_always_block'
     (Printf.sprintf "\
-		if (!reset) begin
+		if (!RST_N) begin
 			%s
 		end else begin
 			%s
@@ -560,7 +560,7 @@ let generate_BVI  (module_name: string) (map:  SS.t StringMap.t) =
   (* let ports = Printf.sprintf "port %s = %s;" in *)
   generate_ifcs map
   ^ Printf.sprintf "\ninterface Ifc%s;\n%sendinterface\n" module_name (StringMap.fold (fun rule_name _ s -> s ^ (Printf.sprintf "interface Ifc%s ifc_%s;\n" rule_name rule_name)) map "")
-  ^ Printf.sprintf "import \"BVI\" %s = module mk%s(Ifc%s);\n default_clock clk(CLK);\n default_reset rstn(reset);\n%s\n%s" module_name module_name module_name can_fire (generate_wrapper_ifcs map)
+  ^ Printf.sprintf "import \"BVI\" %s = module mk%s(Ifc%s);\n default_clock clk(CLK);\n default_reset rstn(RST_N);\n%s\n%s" module_name module_name module_name can_fire (generate_wrapper_ifcs map)
   ^ Printf.sprintf "\nschedule (%s) CF (%s);\n" string_methods string_methods
   ^ Printf.sprintf "\nendmodule"
 

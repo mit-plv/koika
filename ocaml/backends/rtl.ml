@@ -9,6 +9,7 @@ open Printf
 let debug = false
 let add_debug_annotations = false
 let omit_reset_line = false
+let compile_bundles_internally = false
 
 type node_metadata =
   { shared: bool; circuit: circuit' }
@@ -23,6 +24,7 @@ type expr =
   | EBinop of Extr.PrimTyped.fbits2 * node * node
   | EMux of node * node * node
   | EModule of { name: string;
+                 internal: bool;
                  inputs: input_pin list;
                  outputs: output_pin list }
 and node =
@@ -41,6 +43,7 @@ and output_pin =
   { op_name: string; op_wire: string; op_sz: int }
 
 type node_map = (int, node) Hashtbl.t
+type pin_set = (string, [`Input | `Output] * int) Hashtbl.t
 
 let may_share = function
   | EUnop _ | EBinop _ | EMux _ -> true
@@ -88,20 +91,27 @@ let compute_circuit_metadata (metadata: metadata_map) (c: circuit) =
 
 let rwdata_field_to_string (field: Extr.rwdata_field) =
   match field with
-  | Rwdata_r0 -> "r0"
-  | Rwdata_r1 -> "r1"
-  | Rwdata_w0 -> "w0"
-  | Rwdata_w1 -> "w1"
+  | Rwdata_r0 -> "read0"
+  | Rwdata_r1 -> "read1"
+  | Rwdata_w0 -> "write0"
+  | Rwdata_w1 -> "write1"
   | Rwdata_data0 -> "data0"
   | Rwdata_data1 -> "data1"
 
 let rwcircuit_to_string (rwc: rwcircuit) =
   match rwc with
-  | Rwcircuit_canfire -> "canFire"
+  | Rwcircuit_canfire -> "_canfire"
   | Rwcircuit_rwdata (reg, field) ->
      sprintf "%s_%s" reg.reg_name (rwdata_field_to_string field)
 
-let node_of_circuit (metadata: metadata_map) (cache: node_map) (c: circuit) =
+(* Our state *before* calling the external rule is an output of this module, and
+   the resulting state produced by the rule is an input of this module. *)
+let before_prefix, after_prefix = "output", "input"
+
+let field_name instance field =
+  sprintf "%s_%s" instance field
+
+let node_of_circuit (metadata: metadata_map) (cache: node_map) (ios: pin_set) (c: circuit) =
   let fresh_node size expr =
     { tag = -1; size; annots = []; expr; kind = Unique } in
   let rec lift ({ tag; node = c'; _ }: circuit) =
@@ -125,16 +135,20 @@ let node_of_circuit (metadata: metadata_map) (cache: node_map) (c: circuit) =
        let size = typ_sz f.ffi_rettype in
        let inputs = [{ ip_name = "arg"; ip_node = lift c }] in
        let outputs = [{ op_name = "out"; op_wire = "out"; op_sz = typ_sz f.ffi_rettype }] in
-       let mod_expr = EModule { name = f.ffi_name; inputs; outputs } in
+       let mod_expr = EModule { name = f.ffi_name; internal = true; inputs; outputs } in
        size, [], EPtr (fresh_node size mod_expr, Some "out")
-    | CBundle (name, ios) ->
-       let reg_ios = List.map inputs_outputs_of_module_io ios in
+    | CBundle (name, bundle_ios) ->
+       let name = "rule_" ^ name in
+       let reg_ios = List.map inputs_outputs_of_module_io bundle_ios in
        let inputs, outputs = reg_ios |> List.concat |> List.split in
        let cf_name = rwcircuit_to_string Rwcircuit_canfire in
-       let outputs = { op_name = cf_name; op_wire = cf_name; op_sz = 1 } :: outputs in
-       0, [], EModule { name; inputs; outputs }
+       let outputs = { op_name = field_name after_prefix cf_name; op_wire = cf_name; op_sz = 1 } :: outputs in
+       (* The module's outputs are our inputs, and vice-versa *)
+       List.iter (fun op -> Hashtbl.replace ios (field_name name op.op_name) (`Input, op.op_sz)) outputs;
+       List.iter (fun ip -> Hashtbl.replace ios (field_name name ip.ip_name) (`Output, ip.ip_node.size)) inputs;
+       0, [], EModule { name; internal = compile_bundles_internally; inputs; outputs }
     | CBundleRef (sz, c, field) ->
-       sz, [], EPtr (lift c, Some (rwcircuit_to_string field))
+       sz, [], EPtr (lift c, Some (field_name after_prefix (rwcircuit_to_string field)))
     | CAnnot (sz, annot, c) ->
        let ann = if annot = "" then [] else [annot] in
        match lift c with
@@ -144,8 +158,8 @@ let node_of_circuit (metadata: metadata_map) (cache: node_map) (c: circuit) =
     List.map (fun (field, c) ->
         let ip_node = lift c in
         let nm = rwcircuit_to_string (Rwcircuit_rwdata (reg, field)) in
-        ({ ip_name = nm ^ "_before"; ip_node },
-         { op_name = nm ^ "_after"; op_wire = nm; op_sz = ip_node.size }))
+        ({ ip_name = field_name before_prefix nm; ip_node },
+         { op_name = field_name after_prefix nm; op_wire = nm; op_sz = ip_node.size }))
       (rwdata_circuits rwd) in
   lift c
 
@@ -187,8 +201,8 @@ module Debug = struct
     | EMux (s, c1, c2) -> sprintf "EMux (%d, %d, %d)" s.tag c1.tag c2.tag
     | EUnop (f, c) -> sprintf "EUnop (%s, %d)" (unop_to_str f) c.tag
     | EBinop (f, c1, c2) -> sprintf "EBinop (%s, %d, %d)" (binop_to_str f) c1.tag c2.tag
-    | EModule { name; inputs; outputs } ->
-       sprintf "EModule (%s, [%s], [%s])" name
+    | EModule { name; internal; inputs; outputs } ->
+       sprintf "EModule (%s, internal=%b, [%s], [%s])" name internal
          (String.concat "; "
             (List.map (fun { ip_name; ip_node } ->
                  sprintf "(%s, %d)" ip_name ip_node.tag) inputs))
@@ -250,14 +264,15 @@ let compute_roots_metadata graph_roots =
   metadata
 
 let translate_roots metadata graph_roots =
+  let ios = Hashtbl.create 50 in
   let cache = Hashtbl.create 500 in
   let translate_root { root_reg; root_circuit } =
     (root_reg.reg_name,
      Cuttlebone.Util.bits_of_value root_reg.reg_init,
-     node_of_circuit metadata cache root_circuit) in
+     node_of_circuit metadata cache ios root_circuit) in
   let roots = List.map translate_root graph_roots in
   Debug.print_node_cache cache;
-  roots
+  roots, ios
 
 let gensym_next, gensym_reset =
   make_gensym ""
@@ -281,11 +296,17 @@ module Verilog : RTLBackend = struct
     fprintf out "%s" (String.make indent '\t');
     kfprintf (fun out -> fprintf out ";\n") out fmt
 
+  let p_assign out name expr =
+    p_stmt out 1 "assign %s = %s" name expr
+
+  let sp_type kind sz =
+    if sz = 1 then kind else sprintf "%s[%d:0]" kind (pred sz)
+
   let p_decl out kind sz ?expr name =
-    let range = if sz = 1 then "" else sprintf "[%d:0]" (pred sz) in
+    let typ = sp_type kind sz in
     match expr with
-    | None -> p_stmt out 1 "%s%s %s" kind range name
-    | Some expr -> p_stmt out 1 "%s%s %s = %s" kind range name expr
+    | None -> p_stmt out 1 "%s %s" typ name
+    | Some expr -> p_stmt out 1 "%s %s = %s" typ name expr
 
   let precedence = function
     | EName _ | EConst _ | EModule _ -> -1
@@ -315,9 +336,6 @@ module Verilog : RTLBackend = struct
     sprintf (if signed then "$signed(%a)" else "$unsigned(%a)") p x
 
   type result = [`Expr | `Name] * int * string
-
-  let field_name instance field =
-    sprintf "%s_%s" instance field
 
   let rec p_expr out (e: expr) : result =
     let lvl = precedence e in
@@ -366,7 +384,7 @@ module Verilog : RTLBackend = struct
         | Concat (_, _) -> sp "{%a, %a}" p0 e1 p0 e2
         | SliceSubst _ -> unlowered ())
     | EMux (s, e1, e2) -> sp "%a ? %a : %a" p s p e1 p e2
-    | EModule { name; inputs; outputs } ->
+    | EModule { name; internal = true; inputs; outputs } ->
        let instance_name = gensym_next ("mod_" ^ name) in
        let outputs = List.map (fun op -> { op with op_wire = field_name instance_name op.op_wire }) outputs in
        let in_args = List.map (fun { ip_name; ip_node } -> sprintf ".%s(%a)" ip_name p0 ip_node) inputs in
@@ -375,6 +393,9 @@ module Verilog : RTLBackend = struct
        List.iter (fun { op_wire; op_sz; _ } -> p_decl out "wire" op_sz op_wire) outputs;
        p_stmt out 1 "%s %s(%s)" name instance_name args;
        (`Name, lvl, instance_name)
+    | EModule { name; internal = false; inputs; _ } ->
+       List.iter (fun { ip_name; ip_node } -> p_assign out (field_name name ip_name) (p0 () ip_node)) inputs;
+       (`Name, lvl, name)
   and p_wrapped_expr out ctx_lvl n =
     let kd, lvl, s = p_expr out n.expr in
     if kd = `Name then n.kind <- Printed { name = s };
@@ -424,11 +445,21 @@ module Verilog : RTLBackend = struct
   let p_root_decl out (name, init, _) =
     p_decl out "reg" (Array.length init) name ~expr:(string_of_bits init)
 
+  let sp_pin (name, (direction, sz)) =
+    let typ = sp_type (match direction with
+                       | `Input -> "input wire"
+                       | `Output -> "output wire") sz in
+    sprintf "%s %s" typ name
+
+  let p_header out modname ios =
+    fprintf out "// -*- mode: verilog -*-\n";
+    let pins = ("CLK", (`Input, 1)) :: ("RST_N", (`Input, 1)) :: ios in
+    fprintf out "module %s(%s);\n" modname (String.concat ", " (List.map sp_pin pins))
+
   let p_module ~modname out { graph_roots; _ } =
     let metadata = compute_roots_metadata graph_roots in
-    let roots = translate_roots metadata graph_roots in
-    fprintf out "// -*- mode: verilog -*-\n";
-    fprintf out "module %s(input wire CLK, input wire RST_N);\n" modname;
+    let roots, ios = translate_roots metadata graph_roots in
+    p_header out modname (List.of_seq (Hashtbl.to_seq ios));
     List.iter (p_root_decl out) roots;
     fprintf out "\n";
     let root_exprs = List.map (p_root_network out) roots in
