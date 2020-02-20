@@ -104,27 +104,29 @@ Section CircuitCompilation.
       circuit (CSigma1 fn).(retSig) :=
       let cArg1 fn := circuit (CSigma1 fn).(arg1Sig) in
       let cRet fn := circuit (CSigma1 fn).(retSig) in
-      match fn return circuit (CSigma1 fn).(arg1Sig) ->
-                      circuit (CSigma1 fn).(retSig) ->
-                      circuit (CSigma1 fn).(retSig) with
-      | Not _ => fun a c => c
-      | Repeat _ _ => fun a c => c
-      | SExt sz width => fun a c =>
-        ltac:(subst cRet; simpl; rewrite <- vect_extend_end_cast, <- (Nat.mul_1_r (width - sz));
-                exact (CBinopOpt (Concat _ _)
-                                 (CUnopOpt (Repeat 1 (width - sz))
-                                           (CBinopOpt (Sel sz) a (CConst (Bits.of_nat (log2 sz) (pred sz)))))
-                              a))
-      | ZExtL sz width => fun a c =>
-        ltac:(subst cRet; simpl; rewrite <- vect_extend_end_cast;
-                exact (CBinopOpt (Concat _ _) (CConst Bits.zero) a))
-      | ZExtR sz width => fun a c =>
-        ltac:(subst cRet; simpl; rewrite <- vect_extend_beginning_cast;
-                exact (CBinopOpt (Concat _ _) a (CConst Bits.zero)))
-      | Slice sz offset width => fun a c => c
-      | Lowered (IgnoreBits _) => fun a c => CConst Ob
-      | Lowered (DisplayBits _) => fun a c => CConst Ob
-      end a (CUnop fn a).
+      let c :=
+        match fn return circuit (CSigma1 fn).(arg1Sig) ->
+                        circuit (CSigma1 fn).(retSig) ->
+                        circuit (CSigma1 fn).(retSig) with
+        | Not _ => fun a c => c
+        | Repeat _ _ => fun a c => c
+        | SExt sz width => fun a c =>
+          ltac:(subst cRet; simpl; rewrite <- vect_extend_end_cast, <- (Nat.mul_1_r (width - sz));
+                  exact (CBinopOpt (Concat _ _)
+                                   (CUnopOpt (Repeat 1 (width - sz))
+                                             (CBinopOpt (Sel sz) a (CConst (Bits.of_nat (log2 sz) (pred sz)))))
+                                a))
+        | ZExtL sz width => fun a c =>
+          ltac:(subst cRet; simpl; rewrite <- vect_extend_end_cast;
+                  exact (CBinopOpt (Concat _ _) (CConst Bits.zero) a))
+        | ZExtR sz width => fun a c =>
+          ltac:(subst cRet; simpl; rewrite <- vect_extend_beginning_cast;
+                  exact (CBinopOpt (Concat _ _) a (CConst Bits.zero)))
+        | Slice sz offset width => fun a c => c
+        | Lowered (IgnoreBits _) => fun a c => CConst Ob
+        | Lowered (DisplayBits _) => fun a c => CConst Ob
+        end a (CUnop fn a) in
+    COpt c.
 
     Lemma lt_plus_minus_r :
       forall n m : nat, n < m -> n + (m - n) = m.
@@ -141,7 +143,7 @@ Section CircuitCompilation.
                        (match le_gt_dec width (sz - offset) with
                         | left pr =>
                           rew (le_plus_minus_r _ _ pr) in
-                              (CBinopOpt (Concat _ _) (CUnop (Slice _ (offset + width) (sz - offset - width)) c1) c2)
+                              (CBinopOpt (Concat _ _) (CUnopOpt (Slice _ (offset + width) (sz - offset - width)) c1) c2)
                         | right _ =>
                           CUnopOpt (Slice _ 0 (sz - offset)) c2
                         end)
@@ -156,14 +158,16 @@ Section CircuitCompilation.
       let cArg1 fn := circuit (CSigma2 fn).(arg1Sig) in
       let cArg2 fn := circuit (CSigma2 fn).(arg2Sig) in
       let cRet fn := circuit (CSigma2 fn).(retSig) in
-      match fn return circuit (CSigma2 fn).(arg1Sig) ->
-                      circuit (CSigma2 fn).(arg2Sig) ->
-                      circuit (CSigma2 fn).(retSig) ->
-                      circuit (CSigma2 fn).(retSig) with
-      | SliceSubst sz offset width => fun c1 c2 c =>
-        slice_subst_macro offset c1 c2
-      | _ => fun c1 c2 c => c
-      end c1 c2 (CBinop fn c1 c2).
+      let c :=
+        match fn return circuit (CSigma2 fn).(arg1Sig) ->
+                        circuit (CSigma2 fn).(arg2Sig) ->
+                        circuit (CSigma2 fn).(retSig) ->
+                        circuit (CSigma2 fn).(retSig) with
+        | SliceSubst sz offset width => fun c1 c2 c =>
+          slice_subst_macro offset c1 c2
+        | _ => fun c1 c2 c => c
+        end c1 c2 (CBinop fn c1 c2) in
+    COpt c.
 
     Fixpoint compile_action
              {sig: lsig}

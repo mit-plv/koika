@@ -44,7 +44,7 @@ Section CompilerCorrectness.
       match goal with
       | _ => progress intros
       | _ => progress simpl in *
-      | _ => progress unfold Bits.extend_beginning, Bits.extend_end,
+      | _ => progress unfold compile_unop, compile_binop, Bits.extend_beginning, Bits.extend_end,
             struct_sz, field_sz, array_sz, element_sz, slice_subst_macro, slice_subst_impl
       | _ => progress rewrite ?sel_msb, ?vect_repeat_single_const,
             ?slice_subst_impl_correct, ?interp_circuit_cast
