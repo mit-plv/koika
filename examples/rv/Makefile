@@ -19,20 +19,24 @@ core:
 	$(MAKE) -C ../.. examples/rv/$(objects_dir)
 	cp $(objects_dir)/$(DRIVER)/*.v $(objects_dir)/
 
-$(tests_build): core .FORCE
+$(tests_build): .FORCE
 	$(MAKE) -C tests
 
 $(objects_dir)/%: core .FORCE
 	$(MAKE) -C $(objects_dir) $*
 
+binaries: $(tests_build);
+verilator: $(verilator);
+cuttlesim: $(cuttlesim);
+
 .FORCE:
 
-cuttlesim-tests: $(tests_build) $(cuttlesim)
+cuttlesim-tests: binaries cuttlesim
 	@echo "-- Running tests with Cuttlesim --"
 	find $(tests_build)/rv32ui -name "*.rv32" -exec $(cuttlesim_runner) {} \;
 	find $(tests_build)/integ -name "*.rv32" -exec $(cuttlesim_runner) {} \;
 
-verilator-tests: $(tests_build) $(verilator)
+verilator-tests: binaries verilator
 	@echo "-- Running tests with Verilator --"
 	find $(tests_build)/rv32ui -name "*.vmh" -exec $(verilator_runner) {} \;
 	find $(tests_build)/integ -name "*.vmh" -exec $(verilator_runner) {} \;
