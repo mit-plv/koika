@@ -85,6 +85,8 @@ On the Coq side, after implementing your design, use the following to define a �
 
 Compile your Coq sources using ``coqc`` or ``dune`` to generate ``xyz.ml``, then compile that file using ``cuttlec xyz.ml -T …``.
 
+Among other things, a package contains instances of the ``Show`` typeclass used to print register names.  These instances are typically derived automatically, but customizing them makes it possible to control the names given to signals in the generated Verilog and C++ code (for example, instead of ``x0``, ``x1``, …, ``x31``, we use ``zero``, ``ra``, ``sp``, ``gp``, etc. in the RISCV core).
+
 Programs written in serialized syntax (“Lispy Verilog”)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

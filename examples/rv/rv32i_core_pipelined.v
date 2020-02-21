@@ -4,11 +4,16 @@ Require Import RV.RVCore.
 Import RV32ICore.
 
 Definition rv_schedule : scheduler :=
-    Writeback |> Execute |> Decode |> WaitImem |> Fetch |> ExternalI |> ExternalD  |>  done.
-
+    Writeback |> Execute |> Decode |> WaitImem |> Fetch |> ExternalI |> ExternalD  |> done.
 
 Definition circuits :=
   compile_scheduler rv_rules rv_external rv_schedule.
+
+Instance Show_rf : Show (Rf.reg_t) :=
+  {| show '(Rf.rData v) := rv_register_name v |}.
+
+Instance Show_scoreboard : Show (Scoreboard.reg_t) :=
+  {| show '(Scoreboard.Scores (Scoreboard.Rf.rData v)) := rv_register_name v |}.
 
 Definition koika_package :=
   {| koika_reg_types := R;
