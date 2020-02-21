@@ -100,12 +100,15 @@ Section CircuitOptimizer.
   Ltac asconst_t :=
     match goal with
     | [  |- context[match ?opt with _ => _ end] ] =>
-      match opt with context[asconst _] => destruct opt as [ | ] eqn:? end
-    | [  |- context[if ?b then _ else _] ] =>
-      match b with context[isconst ?bs ?cst] => destruct (isconst bs cst) eqn:? end
+      match opt with
+      | context[asconst _] => destruct opt as [ | ] eqn:?
+      | context[@isconst ?sz ?bs ?cst] => destruct (@isconst sz bs cst) eqn:?
+      end
     | [ cr: env_t _ _, H: asconst ?c = Some ?bs |- _ ] => apply (asconst_Some (cr := cr) c bs) in H
     | [ cr: env_t _ _, H: isconst ?c ?bs = true |- _ ] => apply (isconst_correct (cr := cr) c bs) in H
     end.
+
+  Infix "~~" := isconst (at level 7).
 
   Section Iterated.
     Context (equivb: forall {sz}, circuit sz -> circuit sz -> bool).
@@ -341,7 +344,6 @@ Section CircuitOptimizer.
         Mux(0, x, y) => x
         Mux(1, x, y) => y *)
 
-    Infix "~" := isconst.
     Notation b1 := (Bits.ones _).
     Notation b0 := (Bits.zeroes _).
 
@@ -353,18 +355,18 @@ Section CircuitOptimizer.
         | c => fun c0 => c0
         end
       | CAnd c1 c2 =>
-        if c1 ~ b0 || c2 ~ b0 then fun c0 => CConst b0
-        else if c1 ~ b1 then fun c0 => c2
-             else if c2 ~ b1 then fun c0 => c1
+        if c1 ~~ b0 || c2 ~~ b0 then fun c0 => CConst b0
+        else if c1 ~~ b1 then fun c0 => c2
+             else if c2 ~~ b1 then fun c0 => c1
                   else fun c0 => c0
       | COr c1 c2 =>
-        if c1 ~ b1 || c2 ~ b1 then fun c0 => CConst b1
-        else if c1 ~ b0 then fun c0 => c2
-             else if c2 ~ b0 then fun c0 => c1
+        if c1 ~~ b1 || c2 ~~ b1 then fun c0 => CConst b1
+        else if c1 ~~ b0 then fun c0 => c2
+             else if c2 ~~ b0 then fun c0 => c1
                   else fun c0 => c0
       | CMux select c1 c2 =>
-        if select ~ b1 then fun _ => c1
-        else if select ~ b0 then fun _ => c2
+        if select ~~ b1 then fun _ => c1
+        else if select ~~ b0 then fun _ => c2
              else fun c0 => c0
       | c => fun c0 => c0
       end c.
@@ -464,6 +466,15 @@ Section CircuitOptimizer.
     Context {REnv: Env reg_t}.
     Context (cr: REnv.(env_t) (fun idx => bits (CR idx))).
 
+    (** This pass performs the following simplification:
+
+        c[0 +: len(c)]        =>  c
+        {c, 0b}, {0b, c}      =>  c
+        c == 0b~1, 0b~1 == c  =>  c
+        c != 0b~0, 0b~0 != c  =>  c
+        c == 0b~0, 0b~0 == c  =>  Not(c)
+        c != 0b~1, 0b~1 != c  =>  Not(c) *)
+
     Definition opt_simplify {sz} (c: circuit sz): circuit sz :=
       match unannot c in Circuit _ _ sz return circuit sz -> circuit sz with
       | CUnop (Slice sz offset width) c =>
@@ -477,6 +488,18 @@ Section CircuitOptimizer.
         | _, left pr => fun _ => rew <- [fun sz => circuit (sz + sz1)] pr in (c1: circuit (0 + sz1))
         | _, _ => fun c0 => c0
         end
+      | CBinop (EqBits 1 false) c1 c2 =>
+        if c1 ~~ Ob~1 then fun _ => c2
+        else if c1 ~~ Ob~0 then fun _ => CNot c2
+             else if c2 ~~ Ob~1 then fun _ => c1
+                  else if c2 ~~ Ob~0 then fun _ => CNot c1
+                       else fun c0 => c0
+      | CBinop (EqBits 1 true) c1 c2 =>
+        if c1 ~~ Ob~0 then fun _ => c2
+        else if c1 ~~ Ob~1 then fun _ => CNot c2
+             else if c2 ~~ Ob~0 then fun _ => c1
+                  else if c2 ~~ Ob~1 then fun _ => CNot c1
+                       else fun c0 => c0
       | _ => fun c0 => c0
       end c.
 
@@ -488,11 +511,14 @@ Section CircuitOptimizer.
         try destruct fn;
         repeat match goal with
                | _ => reflexivity
-               | _ => progress (cbn || subst || unannot_rew)
-               | [  |- context[match ?x with _ => _ end] ] => destruct x
+               | _ => progress (cbn in * || subst || unannot_rew || asconst_t)
+               | [  |- context[match ?x with _ => _ end] ] => destruct x eqn:?
+               | [ H: _ = _ |- _ ] => rewrite H
                | _ => unfold eq_rect_r; rewrite interp_circuit_cast
                | _ => rewrite vect_app_nil
                | _ => apply eq_rect_eqdec_irrel
+               | [  |- context[interp_circuit ?cr ?csigma ?c] ] =>
+                 destruct (interp_circuit cr csigma c) as [ [ | ] [] ]
                | _ => eauto using slice_full
                end.
     Qed.
