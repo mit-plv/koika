@@ -12,7 +12,7 @@ rv32_targets := $(patsubst %.o,%.rv32,$(integ_objects) $(rv32ui_objects))
 vmh_targets := $(patsubst %.o,%.vmh,$(integ_objects) $(rv32ui_objects))
 
 RISCVCC32 ?= riscv-none-embed-gcc
-RISCVCC32_ARGS := -march=rv32i -mabi=ilp32 -mstrict-align -nostartfiles -static
+RISCVCC32_ARGS := -march=rv32im -mabi=ilp32 -mstrict-align -nostartfiles -static
 
 cc := $(RISCVCC32) $(RISCVCC32_ARGS)
 
