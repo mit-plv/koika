@@ -836,6 +836,7 @@ The following list shows the current state of the repo:
    - |tests/name_mangling.lv|_: Unit tests for name mangling
    - |tests/register_file_bypassing.v|_: Ensure that area is reasonable when bypasses don't need extra tracking
    - |tests/shadowing.lv|_: Unit tests for name shadowing
+   - |tests/shifts.v|_: Regression test for signed shifts
    - |tests/signed.lv|_: Computations involving sign bits
    - |tests/switches.v|_: Test various forms of switches
    - |tests/taint_analysis.lv|_: Unit tests to ensure that impure functions are not optimized out
@@ -1034,6 +1035,8 @@ The following list shows the current state of the repo:
 .. _tests/register_file_bypassing.v: tests/register_file_bypassing.v
 .. |tests/shadowing.lv| replace:: ``shadowing.lv``
 .. _tests/shadowing.lv: tests/shadowing.lv
+.. |tests/shifts.v| replace:: ``shifts.v``
+.. _tests/shifts.v: tests/shifts.v
 .. |tests/signed.lv| replace:: ``signed.lv``
 .. _tests/signed.lv: tests/signed.lv
 .. |tests/switches.v| replace:: ``switches.v``
