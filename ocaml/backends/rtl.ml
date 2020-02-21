@@ -328,7 +328,8 @@ module Verilog : RTLBackend = struct
 
   let complex_op = function
     | { expr = (EPtr _ | EName _); _ } -> false
-    | { expr = (EUnop (Slice _, _) | EBinop ((Sel _ | IndexedSlice _), _, _)); _ } -> false
+    (* Yosys doesn't support chained selects (x[4 +: 32][3 +: 2]) *)
+    | { expr = (EUnop (Slice _, _) | EBinop ((Sel _ | IndexedSlice _), _, _)); _ } -> true
     | { expr = (EUnop _ | EBinop _ | EMux _ | EConst _); _ } -> true
     | { expr = EModule _; _ } -> assert false
 
