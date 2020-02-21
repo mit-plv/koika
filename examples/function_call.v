@@ -1,7 +1,7 @@
 (*! Calling external functions !*)
 Require Import Koika.Frontend.
 
-Inductive reg_t := pc | next_instr.
+Inductive reg_t := pc | next_instr_int | next_instr_ext.
 Inductive ext_fn_t := nth_instr_external.
 Inductive rule_name_t := fetch_internal | fetch_external | incr_pc.
 
@@ -19,13 +19,15 @@ Definition instructions : list (uaction reg_t ext_fn_t) :=
 Definition R r :=
   match r with
   | pc => bits_t 5
-  | next_instr => bits_t 32
+  | next_instr_int => bits_t 32
+  | next_instr_ext => bits_t 32
   end.
 
 Definition r idx : R idx :=
   match idx with
   | pc => Bits.zero
-  | next_instr => Bits.zero
+  | next_instr_int => Bits.zero
+  | next_instr_ext => Bits.zero
   end.
 
 Definition Sigma (fn: ext_fn_t) : ExternalSignature :=
@@ -40,11 +42,11 @@ Definition nth_instr_intfun : UInternalFunction reg_t ext_fn_t :=
 
 Definition _fetch_internal : uaction reg_t ext_fn_t :=
   {{ let addr := (read0(pc) >> |5`d2|)[Ob~0~0~0 :+ 3] in
-     write0(next_instr, nth_instr_intfun(addr)) }}.
+     write0(next_instr_int, nth_instr_intfun(addr)) }}.
 
 Definition _fetch_external : uaction reg_t ext_fn_t :=
   {{ let addr := (read0(pc) >> |5`d2|)[Ob~0~0~0 :+ 3] in
-     write1(next_instr, extcall nth_instr_external(addr)) }}.
+     write0(next_instr_ext, extcall nth_instr_external(addr)) }}.
 
 Definition plus4 : UInternalFunction reg_t ext_fn_t :=
   {{ fun plus4 (v: bits_t 5) : bits_t 5 =>

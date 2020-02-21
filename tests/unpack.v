@@ -1,7 +1,7 @@
 (*! Structure unpacking !*)
 Require Import Koika.Frontend.
 
-Inductive reg_t := Rpacked | Runpacked.
+Inductive reg_t := Rpacked | Runpacked_manual | Runpacked_unpack.
 Definition ext_fn_t := empty_ext_fn_t.
 Inductive rule_name_t := unpack_manual | unpack_unpack.
 
@@ -18,13 +18,14 @@ Definition instr :=
 Definition R r :=
   match r with
   | Rpacked => bits_t sz
-  | Runpacked => struct_t instr
+  | Runpacked_manual => struct_t instr
+  | Runpacked_unpack => struct_t instr
   end.
 
 Definition r idx : R idx :=
   match idx with
   | Rpacked => Bits.zero
-  | Runpacked => (Bits.zero, (Bits.zero, (Bits.zero, tt)))
+  | Runpacked_manual | Runpacked_unpack => (Bits.zero, (Bits.zero, (Bits.zero, tt)))
   end.
 
 Definition _unpack_manual : uaction reg_t ext_fn_t :=
@@ -33,14 +34,14 @@ Definition _unpack_manual : uaction reg_t ext_fn_t :=
       let unpacked := struct instr {| imm := getbits(instr, packed, imm);
                                      src := getbits(instr, packed, src);
                                      dst := getbits(instr, packed, dst) |} in
-      write0(Runpacked, unpacked)
+      write0(Runpacked_manual, unpacked)
   }}.
 
 Definition _unpack_unpack : uaction reg_t ext_fn_t :=
   {{
-      let packed := read1(Rpacked) in
+      let packed := read0(Rpacked) in
       let unpacked := unpack(struct_t instr, packed) in
-      write1(Runpacked, unpacked)
+      write0(Runpacked_unpack, unpacked)
   }}.
 
 Definition rules :=
