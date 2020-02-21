@@ -36,6 +36,9 @@ $(build)/integ/%.o: integ/%.c | $(build)/integ/
 $(build)/rv32ui/%.rv32: rv32ui/%.S | $(build)/rv32ui/
 	$(cc) -I rv32ui -Tmmio.ld $< -o $@
 
+$(build)/rv32um/%.rv32: rv32um/%.S | $(build)/rv32um/
+	$(cc) -I rv32um -Tmmio.ld $< -o $@
+
 $(build)/integ/%.rv32: $(build)/integ/%.o $(build)/init32.o $(build)/mmio32.o mmio.ld
 	$(cc) -Tmmio.ld $< $(build)/init32.o $(build)/mmio32.o -o $@
 
