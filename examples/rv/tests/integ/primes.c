@@ -66,6 +66,13 @@ char ground_truth[80 * 30] =
 
 typedef unsigned int uint;
 
+uint rem(uint n, uint m) {
+  while (n >= m) {
+    n = n - m;
+  }
+  return n;
+}
+
 uint uisqrt(uint n) {
   if (n < 2)
     return n;
@@ -77,7 +84,7 @@ uint uisqrt(uint n) {
 bool is_prime(uint n) {
   uint r = uisqrt(n);
   for (uint m = 2; m <= r; m++) {
-    if (n % m == 0)
+    if (rem(n,m) == 0)
       return false;
   }
   return true;
@@ -86,7 +93,7 @@ bool is_prime(uint n) {
 uint aliquot(uint n) {
   uint sum = 0;
   for (uint m = 1; m < n; m++) {
-    if (n % m == 0)
+    if (rem(n,m) == 0)
       sum += m;
   }
   return sum;
