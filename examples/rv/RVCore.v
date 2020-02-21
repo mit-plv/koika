@@ -123,7 +123,9 @@ Section RV32IHelpers.
             end
           | #opcode_OP =>
             match get(fields,funct3) with
-            | #funct3_ADD  => (get(fields,funct7) == Ob~0~0~0~0~0~0~0) || get(fields,funct7) == Ob~0~1~0~0~0~0~0
+            | #funct3_ADD  => (get(fields,funct7) == Ob~0~0~0~0~0~0~0) ||
+                             (get(fields,funct7) == Ob~0~1~0~0~0~0~0) ||
+                             get(fields, funct7) == Ob~0~0~0~0~0~0~1
             | #funct3_SRL  => (get(fields,funct7) == Ob~0~0~0~0~0~0~0) || get(fields,funct7) == Ob~0~1~0~0~0~0~0
             | #funct3_SLL  => get(fields,funct7) == Ob~0~0~0~0~0~0~0
             | #funct3_SLT  => get(fields,funct7) == Ob~0~0~0~0~0~0~0
@@ -254,13 +256,20 @@ Section RV32IHelpers.
 
   Definition alu32 : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun alu32 (funct3  : bits_t 3)
-         (inst_30 : bits_t 1)
+         (funct7 : bits_t 7)
          (a       : bits_t 32)
          (b       : bits_t 32)
          : bits_t 32 =>
          let shamt := b[Ob~0~0~0~0~0 :+ 5] in
+         let inst_30 := funct7[|3`d5|] in
+         let inst_25 := funct7[|3`d0|] in
          match funct3 with
-         | #funct3_ADD  => if (inst_30 == Ob~1) then a - b else a + b
+         | #funct3_ADD  => if (inst_30 == Ob~1) then
+                            a - b
+                          else if (inst_25 == Ob~1) then
+                            (a * b)[|6`d0| :+ 32]
+                          else
+                            a + b
          | #funct3_SLL  => a << shamt
          | #funct3_SLT  => zeroExtend(a <s b, 32)
          | #funct3_SLTU => zeroExtend(a < b, 32)
@@ -286,19 +295,19 @@ Section RV32IHelpers.
           let isIMM := (inst[|5`d5|] == Ob~0) in
           let rd_val := |32`d0| in
           (if (isLUI) then
-             set rd_val := imm_val
-           else if (isAUIPC) then
+             set rd_val := imm_val           else if (isAUIPC) then
                   set rd_val := (pc + imm_val)
                 else
                   let alu_src1 := rs1_val in
                   let alu_src2 := if isIMM then imm_val else rs2_val in
                   let funct3 := get(getFields(inst), funct3) in
-                  let inst_30 := inst[|5`d30|] in
-                  if ((funct3 == #funct3_ADD) && isIMM) then
-                     (* // this is a special caes for addi *)
-                     set inst_30 := Ob~0
+                  let funct7 := get(getFields(inst), funct7) in
+                  let opcode := get(getFields(inst), opcode) in
+                  if ((funct3 == #funct3_ADD) && isIMM) || (opcode == #opcode_BRANCH) then
+                    (* // replace the instruction by an add *)
+                    (set funct7 := #funct7_ADD)
                   else pass;
-                  set rd_val := alu32(funct3, inst_30, alu_src1, alu_src2));
+                  set rd_val := alu32(funct3, funct7, alu_src1, alu_src2));
         rd_val
     }}.
 
