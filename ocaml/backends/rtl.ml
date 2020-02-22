@@ -479,6 +479,85 @@ module Verilog : RTLBackend = struct
     fprintf out "endmodule\n"
 end
 
+module Dot = struct
+  let hd = "hd"
+
+  let p_vertex out name args =
+    let sp_arg (key, value) = sprintf "%s=\"%s\"" key value in
+    let args = String.concat ", " (List.map sp_arg args) in
+    fprintf out "%s [%s]\n" name args
+
+  let p_edge out (n, f) (n', f') =
+    fprintf out "%s:%s -> %s:%s\n" n f n' f'
+
+  let name_of_tag tag =
+    sprintf "N%d" tag
+
+  type structure =
+    | SInline of string
+    | SVertex of string * (node * string) list
+
+  let expr_structure (expr: expr) =
+    match expr with
+    | EPtr (n, None) -> SVertex ("ptr", [(n, hd)])
+    | EPtr (n, Some s) -> SVertex ("ptr", [(n, s)])
+    | EName nm -> SVertex (nm, [])
+    | EConst cst -> SInline (string_of_bits cst)
+    | EUnop (f, e1) -> SVertex (Debug.unop_to_str f, [(e1, hd)])
+    | EBinop (f, e1, e2) -> SVertex (Debug.binop_to_str f, [(e1, hd); (e2, hd)])
+    | EMux (s, e1, e2) -> SVertex ("mux", [(s, hd); (e1, hd); (e2, hd)])
+
+  type result =
+    | Named of string
+    | Inlined of string
+
+  let mark_visited node = function
+    | Inlined _ -> ()
+    | Named name -> node.kind <- Printed { name }
+
+  let rec p_structure out name label args =
+    let p_arg_label idx (n, n_port) =
+      let port = sprintf "f%d" idx in
+      let label_str = match p_node out n with
+        | Named n_name -> p_edge out (n_name, n_port) (name, port); "."
+        | Inlined s -> s in
+      sprintf "<%s> %s" port label_str in
+    let p_node_def name label args =
+      let hd_label = sprintf "<hd> %s" label in
+      let arg_labels = List.mapi p_arg_label args in
+      let label = String.concat  "|" (hd_label :: arg_labels) in
+      p_vertex out name [("label", label); ("shape", "record")] in
+    p_node_def name label args;
+    name
+  and p_expr out tag e =
+    match expr_structure e with
+    | SInline s -> Inlined s
+    | SVertex (label, args) -> Named (p_structure out (name_of_tag tag) label args)
+  and p_node out (n: node) =
+    match n.kind with
+    | Unique | Shared ->
+       let res = match n.entity with
+         | Expr e -> p_expr out n.tag e
+         | Module _ -> Named "FIXME" in
+       mark_visited n res;
+       res
+    | Printed { name } -> Named name
+
+  let p_root out (name, _, node) =
+    ignore (p_structure out name name [(node, hd)])
+
+  let p_module ~modname out { graph_roots; _ } =
+    let metadata = compute_roots_metadata graph_roots in
+    let roots, ios = translate_roots metadata graph_roots in
+    fprintf out "digraph {\n";
+    List.iter (p_root out) roots;
+    fprintf out "}\n"
+
+  let main target_dpath (modname: string) (c: circuit_graph) =
+    with_output_to_file (Filename.concat target_dpath (modname ^ ".dot"))
+      (p_module ~modname) c
+end
+
 let main target_dpath (modname: string) (c: circuit_graph) =
   with_output_to_file (Filename.concat target_dpath (modname ^ ".v"))
     (Verilog.p_module ~modname) c
