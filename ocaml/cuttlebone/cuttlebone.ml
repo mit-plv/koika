@@ -209,7 +209,7 @@ module Util = struct
        (Extr.Array_t (extr_array_sig_of_array_sig sg),
         vect_of_array (Array.map extr_value_of_value values))
 
-  let bits_of_value (v: value) =
+  let bits_of_value (v: value) : bool array =
     let tau, v = extr_value_of_value v in
     array_of_vect (Extr.type_sz tau) (Extr.bits_of_value tau v)
 
