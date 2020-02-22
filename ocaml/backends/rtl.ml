@@ -340,6 +340,58 @@ module Verilog : RTLBackend = struct
   let sp_cast signed p () x =
     sprintf (if signed then "$signed(%a)" else "$unsigned(%a)") p x
 
+  let reserved =
+    StringSet.of_list
+      ["accept_on"; "alias"; "always"; "always_comb"; "always_ff";
+       "always_latch"; "and"; "assert"; "assign"; "assume"; "automatic";
+       "before"; "begin"; "bind"; "bins"; "binsof"; "bit"; "break"; "buf";
+       "bufif0"; "bufif1"; "byte"; "case"; "casex"; "casez"; "cell"; "chandle";
+       "checker"; "class"; "clocking"; "cmos"; "config"; "const"; "constraint";
+       "context"; "continue"; "cover"; "covergroup"; "coverpoint"; "cross";
+       "deassign"; "default"; "defparam"; "disable"; "dist"; "do"; "edge";
+       "else"; "end"; "endcase"; "endchecker"; "endclass"; "endclocking";
+       "endconfig"; "endfunction"; "endgenerate"; "endgroup"; "endinterface";
+       "endmodule"; "endpackage"; "endprimitive"; "endprogram"; "endproperty";
+       "endsequence"; "endspecify"; "endtable"; "endtask"; "enum"; "event";
+       "eventually"; "expect"; "export"; "extends"; "extern"; "final";
+       "first_match"; "for"; "force"; "foreach"; "forever"; "fork"; "forkjoin";
+       "function"; "generate"; "genvar"; "global"; "highz0"; "highz1"; "if";
+       "iff"; "ifnone"; "ignore_bins"; "illegal_bins"; "implies"; "import";
+       "incdir"; "include"; "initial"; "inout"; "input"; "inside"; "instance";
+       "int"; "integer"; "interface"; "intersect"; "join"; "join_any";
+       "join_none"; "large"; "let"; "liblist"; "library"; "local"; "localparam";
+       "logic"; "longint"; "macromodule"; "matches"; "medium"; "modport";
+       "module"; "nand"; "negedge"; "new"; "nexttime"; "nmos"; "nor";
+       "noshowcancelled"; "not"; "notif0"; "notif1"; "null"; "or"; "output";
+       "package"; "packed"; "parameter"; "pmos"; "posedge"; "primitive";
+       "priority"; "program"; "property"; "protected"; "pull0"; "pull1";
+       "pulldown"; "pullup"; "pulsestyle_ondetect"; "pulsestyle_onevent";
+       "pure"; "rand"; "randc"; "randcase"; "randsequence"; "rcmos"; "real";
+       "realtime"; "ref"; "reg"; "reject_on"; "release"; "repeat"; "restrict";
+       "return"; "rnmos"; "rpmos"; "rtran"; "rtranif0"; "rtranif1"; "s_always";
+       "s_eventually"; "s_nexttime"; "s_until"; "s_until_with"; "scalared";
+       "sequence"; "shortint"; "shortreal"; "showcancelled"; "signed"; "small";
+       "solve"; "specify"; "specparam"; "static"; "string"; "strong"; "strong0";
+       "strong1"; "struct"; "super"; "supply0"; "supply1"; "sync_accept_on";
+       "sync_reject_on"; "table"; "tagged"; "task"; "this"; "throughout";
+       "time"; "timeprecision"; "timeunit"; "tran"; "tranif0"; "tranif1"; "tri";
+       "tri0"; "tri1"; "triand"; "trior"; "trireg"; "type"; "typedef"; "union";
+       "unique"; "unique0"; "unsigned"; "until"; "until_with"; "untypted";
+       "use"; "var"; "vectored"; "virtual"; "void"; "wait"; "wait_order";
+       "wand"; "weak"; "weak0"; "weak1"; "while"; "wildcard"; "wire"; "with";
+       "within"; "wor"; "xnor"; "xor"]
+
+  let special_prefix = "_"
+  let mangling_prefix = "renamed_"
+
+  let specials_re =
+    Str.regexp (sprintf "^\\(%s\\|%s\\)" special_prefix mangling_prefix)
+
+  let sp_reg_name nm =
+    if StringSet.mem nm reserved || Str.string_match specials_re nm 0 then
+      mangling_prefix ^ nm
+    else nm
+
   let rec p_expr out (e: expr) =
     let lvl = precedence e in
     let sp_str () s = s in
@@ -350,7 +402,7 @@ module Verilog : RTLBackend = struct
     match e with
     | EPtr (n, None) -> (lvl, p () n)
     | EPtr (n, Some field) -> let nm = p () n in (lvl, field_name nm field)
-    | EName name -> (lvl, name)
+    | EName name -> (lvl, sp_reg_name name)
     | EConst cst -> (lvl, string_of_bits cst)
     | EUnop (f, e) ->
        (match f with
@@ -470,6 +522,7 @@ module Verilog : RTLBackend = struct
   let p_module ~modname out { graph_roots; _ } =
     let metadata = compute_roots_metadata graph_roots in
     let roots, ios = translate_roots metadata graph_roots in
+    let roots = List.map (fun (nm, init, n) -> (sp_reg_name nm, init, n)) roots in
     p_header out modname (List.of_seq (Hashtbl.to_seq ios));
     List.iter (p_root_decl out) roots;
     fprintf out "\n";
