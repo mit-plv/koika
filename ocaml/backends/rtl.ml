@@ -47,10 +47,6 @@ and output_pin =
 type node_map = (int, node) Hashtbl.t
 type pin_set = (string, [`Input | `Output] * int) Hashtbl.t
 
-let may_share = function
-  | Module _ | Expr (EUnop _ | EBinop _ | EMux _) -> true
-  | _ -> false
-
 let fn1_sz fn =
   let fsig = Cuttlebone.Extr.PrimSignatures.coq_Sigma1 (Bits1 fn) in
   typ_sz (Cuttlebone.Util.retSig fsig)
@@ -121,16 +117,16 @@ let node_of_circuit (metadata: metadata_map) (cache: node_map) (ios: pin_set) (c
     | Some node -> node
     | None ->
        let size, annots, entity = lift' c' in
-       let n = { tag; size; entity; annots; kind = Unique } in
        let shared = (Hashtbl.find metadata tag).shared in
-       if shared && may_share entity then n.kind <- Shared;
+       let kind = if shared then Shared else Unique in
+       let n = { tag; size; entity; annots; kind } in
        Hashtbl.replace cache n.tag n;
        n
   and lift' (c: circuit') =
     match c with
     | CMux (sz, s, c1, c2) -> sz, [], Expr (EMux (lift s, lift c1, lift c2))
     | CConst c -> Array.length c, [], Expr (EConst c)
-    | CReadRegister r -> typ_sz (reg_type r), [], Expr (EName (r.reg_name))
+    | CReadRegister r -> typ_sz (reg_type r), [], Expr (EName r.reg_name)
     | CUnop (f, c1) -> fn1_sz f, [], Expr (EUnop (f, lift c1))
     | CBinop (f, c1, c2) -> fn2_sz f, [], Expr (EBinop (f, lift c1, lift c2))
     | CExternal (f, c) ->
@@ -282,12 +278,13 @@ let translate_roots metadata graph_roots =
 let gensym_next, gensym_reset =
   make_gensym ""
 
+let rec last = function
+  | [] -> None
+  | [lst] -> Some lst
+  | _ :: tl -> last tl
+
 let name_node (n: node) =
-  let rec last = function
-    | [] -> ""
-    | [lst] -> lst
-    | _ :: tl -> last tl in
-  gensym_next ("_" ^ last n.annots)
+  gensym_next ("_" ^ match last n.annots with Some a -> a | None -> "")
 
 let unlowered () =
   failwith "sext, zextl, zextr, etc. must be elaborated away by the compiler."
@@ -297,6 +294,10 @@ module type RTLBackend = sig
 end
 
 module Verilog : RTLBackend = struct
+  let may_share = function
+    | Module _ | Expr (EUnop _ | EBinop _ | EMux _) -> true
+    | _ -> false
+
   let p_stmt out indent fmt =
     fprintf out "%s" (String.make indent '\t');
     kfprintf (fun out -> fprintf out ";\n") out fmt
@@ -395,12 +396,13 @@ module Verilog : RTLBackend = struct
   let rec p_expr out (e: expr) =
     let lvl = precedence e in
     let sp_str () s = s in
+    let p_unparens ?restricted_ctx n = p_node ?restricted_ctx out min_int n in
     let p () n = snd (p_node out lvl n) in
-    let pr () n = snd (p_node ~restricted_ctx:true out min_int n) in
-    let p0 () n = snd (p_node out min_int n) in
+    let p0 () n = snd (p_unparens n) in
+    let pr () n = snd (p_unparens ~restricted_ctx:true n) in
     let sp fmt = ksprintf (fun s -> (lvl, s)) fmt in
     match e with
-    | EPtr (n, None) -> (lvl, p () n)
+    | EPtr (n, None) -> p_unparens n (* Parentheses added by caller *)
     | EPtr (n, Some field) -> let nm = p () n in (lvl, field_name nm field)
     | EName name -> (lvl, sp_reg_name name)
     | EConst cst -> (lvl, string_of_bits cst)
@@ -472,9 +474,9 @@ module Verilog : RTLBackend = struct
     (0, name)
   and p_node ?(restricted_ctx=false) out ctx_lvl (n: node) =
     match n.kind with
-    | Shared -> p_shared_node out n
+    | Shared when may_share n.entity -> p_shared_node out n
     | Printed { name } -> (0, name)
-    | Unique ->
+    | Unique | Shared ->
        match n.entity with
        | Module _ -> p_shared_node out n
        | Expr e -> if restricted_ctx && complex_expr e then p_shared_node out n
@@ -535,30 +537,20 @@ end
 module Dot = struct
   let hd = "hd"
 
-  let p_vertex out name args =
-    let sp_arg (key, value) = sprintf "%s=\"%s\"" key value in
-    let args = String.concat ", " (List.map sp_arg args) in
-    fprintf out "%s [%s]\n" name args
+  let p_decl out decl params =
+    fprintf out "%s%s\n" decl
+      (match params with
+       | [] -> ""
+       | params ->
+          let sp_param (key, value) = sprintf "%s=\"%s\"" key value in
+          sprintf " [%s]" (String.concat ", " (List.map sp_param params)))
 
-  let p_edge out (n, f) (n', f') =
-    fprintf out "%s:%s -> %s:%s\n" n f n' f'
+  let p_edge out annots (n, f) (n', f') =
+    p_decl out (sprintf "%s:%s -> %s:%s" n f n' f')
+      (if annots = [] then [] else [("label", String.concat "; " annots)])
 
   let name_of_tag tag =
     sprintf "N%d" tag
-
-  type structure =
-    | SInline of string
-    | SVertex of string * (node * string) list
-
-  let expr_structure (expr: expr) =
-    match expr with
-    | EPtr (n, None) -> SVertex ("ptr", [(n, hd)])
-    | EPtr (n, Some s) -> SVertex ("ptr", [(n, s)])
-    | EName nm -> SVertex (nm, [])
-    | EConst cst -> SInline (string_of_bits cst)
-    | EUnop (f, e1) -> SVertex (Debug.unop_to_str f, [(e1, hd)])
-    | EBinop (f, e1, e2) -> SVertex (Debug.binop_to_str f, [(e1, hd); (e2, hd)])
-    | EMux (s, e1, e2) -> SVertex ("mux", [(s, hd); (e1, hd); (e2, hd)])
 
   type result =
     | Named of string
@@ -568,41 +560,52 @@ module Dot = struct
     | Inlined _ -> ()
     | Named name -> node.kind <- Printed { name }
 
-  let rec p_structure out name label args =
+  let sp_label annots label =
+    if annots = [] then label
+    else sprintf "%s (%s)" label (String.concat "; " annots)
+
+  let rec p_structure out annots name label args =
     let p_arg_label idx (n, n_port) =
       let port = sprintf "f%d" idx in
       let label_str = match p_node out n with
-        | Named n_name -> p_edge out (n_name, n_port) (name, port); "."
+        | Named n_name -> p_edge out [] (n_name, n_port) (name, port); "."
         | Inlined s -> s in
       sprintf "<%s> %s" port label_str in
-    let p_node_def name label args =
-      let hd_label = sprintf "<hd> %s" label in
-      let arg_labels = List.mapi p_arg_label args in
-      let label = String.concat  "|" (hd_label :: arg_labels) in
-      p_vertex out name [("label", label); ("shape", "record")] in
-    p_node_def name label args;
+    let hd_label = sprintf "<hd> %s" (sp_label annots label) in
+    let arg_labels = List.mapi p_arg_label args in
+    let label = String.concat  "|" (hd_label :: arg_labels) in
+    p_decl out name [("label", label); ("shape", "record")];
     name
-  and p_expr out tag e =
-    match expr_structure e with
-    | SInline s -> Inlined s
-    | SVertex (label, args) -> Named (p_structure out (name_of_tag tag) label args)
+  and p_expr out node e =
+    let p_vertex label args =
+      let name = name_of_tag node.tag in
+      Named (p_structure out node.annots name label args) in
+    match e with
+    | EPtr (n, None) when node.kind = Unique -> p_node out n
+    | EPtr (n, None) -> p_vertex "ptr" [(n, hd)]
+    | EPtr (n, Some s) -> p_vertex "ptr" [(n, s)]
+    | EName nm -> p_vertex nm []
+    | EConst cst -> Inlined (string_of_bits cst)
+    | EUnop (f, n1) -> p_vertex (Debug.unop_to_str f) [(n1, hd)]
+    | EBinop (f, n1, n2) -> p_vertex (Debug.binop_to_str f) [(n1, hd); (n2, hd)]
+    | EMux (s, n1, n2) -> p_vertex "mux" [(s, hd); (n1, hd); (n2, hd)]
   and p_node out (n: node) =
     match n.kind with
+    | Printed { name } -> Named name
     | Unique | Shared ->
        let res = match n.entity with
-         | Expr e -> p_expr out n.tag e
+         | Expr e -> p_expr out n e
          | Module _ -> Named "FIXME" in
        mark_visited n res;
        res
-    | Printed { name } -> Named name
 
   let p_root out (name, _, node) =
-    ignore (p_structure out name name [(node, hd)])
+    ignore (p_structure out [] name name [(node, hd)])
 
   let p_module ~modname out { graph_roots; _ } =
     let metadata = compute_roots_metadata graph_roots in
     let roots, ios = translate_roots metadata graph_roots in
-    fprintf out "digraph {\n";
+    fprintf out "digraph %s {\n" modname;
     List.iter (p_root out) roots;
     fprintf out "}\n"
 
