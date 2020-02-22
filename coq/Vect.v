@@ -757,9 +757,10 @@ Hint Rewrite @vect_to_list_map : vect_to_list.
 Hint Rewrite @vect_to_list_length : vect_to_list.
 
 Hint Rewrite @firstn_firstn : vect_to_list_cleanup.
-Hint Rewrite @firstn_app : vect_to_list_cleanup.
-Hint Rewrite @firstn_nil : vect_to_list_cleanup.
-Hint Rewrite @firstn_length : vect_to_list_cleanup.
+Hint Rewrite @List.firstn_app : vect_to_list_cleanup.
+Hint Rewrite @List.skipn_app : vect_to_list.
+Hint Rewrite @List.firstn_nil : vect_to_list_cleanup.
+Hint Rewrite @List.firstn_length : vect_to_list_cleanup.
 Hint Rewrite @Nat.sub_0_r : vect_to_list_cleanup.
 Hint Rewrite @List.app_nil_r : vect_to_list_cleanup.
 Hint Rewrite @Nat.sub_diag : vect_to_list_cleanup.

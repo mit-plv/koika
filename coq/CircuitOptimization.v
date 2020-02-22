@@ -468,19 +468,34 @@ Section CircuitOptimizer.
 
     (** This pass performs the following simplification:
 
-        c[0 +: len(c)]        =>  c
-        {c, 0b}, {0b, c}      =>  c
-        c == 0b~1, 0b~1 == c  =>  c
-        c != 0b~0, 0b~0 != c  =>  c
-        c == 0b~0, 0b~0 == c  =>  Not(c)
-        c != 0b~1, 0b~1 != c  =>  Not(c) *)
+        c[0 +: |c|]            =>  c
+        {c, 0b}, {0b, c}       =>  c
+        {c1, c2}[0 +: |c1|]    => c1
+        {c1, c2}[|c1| +: |c1|] => c2
+        c == 0b~1, 0b~1 == c   =>  c
+        c != 0b~0, 0b~0 != c   =>  c
+        c == 0b~0, 0b~0 == c   =>  Not(c)
+        c != 0b~1, 0b~1 != c   =>  Not(c)
+
+        (Pushing all slices down concatenations would be better, but it's hard
+         to do non-recursively) *)
 
     Definition opt_simplify {sz} (c: circuit sz): circuit sz :=
       match unannot c in Circuit _ _ sz return circuit sz -> circuit sz with
       | CUnop (Slice sz offset width) c =>
         match eq_dec offset 0, eq_dec sz width with
-        | left _, left pr_width => fun c0: circuit width => rew pr_width in c
-        | _, _ => fun c0 => c0
+        | left _, left pr_width => fun _ => rew pr_width in c
+        | _, _ => match unannot c with
+                 | CBinop (Concat sz1 sz2) c1 c2 =>
+                   match eq_dec offset 0, eq_dec sz2 width with
+                   | left _, left pr_width => fun _ => rew pr_width in c2
+                   | _, _ => match eq_dec offset sz2, eq_dec sz1 width with
+                            | left _, left pr_width => fun _ => rew pr_width in c1
+                            | _, _ => fun c0 => c0
+                            end
+                   end
+                 | _ => fun c0 => c0
+                 end
         end
       | CBinop (Concat sz1 sz2) c1 c2 =>
         match eq_dec sz1 0, eq_dec sz2 0 with
@@ -507,20 +522,21 @@ Section CircuitOptimizer.
       forall {sz} (c: circuit sz),
         interp_circuit cr csigma (opt_simplify c) = interp_circuit cr csigma c.
     Proof.
+      Ltac simpl_t :=
+        match goal with
+        | _ => reflexivity
+        | _ => progress (cbn in * || subst || unannot_rew || asconst_t || unfold eq_rect_r)
+        | [  |- context[match ?x with _ => _ end] ] => destruct x eqn:?
+        | [ H: _ = _ |- _ ] => rewrite H
+        | [  |- context[rew ?h in _] ] => rewrite interp_circuit_cast || destruct h
+        | [  |- context[interp_circuit ?cr ?csigma (n := 1) ?c] ] =>
+          destruct (interp_circuit cr csigma c) as [ [ | ] [] ]
+        | _ => rewrite vect_app_nil
+        | _ => apply eq_rect_eqdec_irrel
+        | _ => eauto using slice_full, slice_concat_l, slice_concat_r
+        end.
       unfold opt_simplify; intros; destruct (unannot c) eqn:? ;
-        try destruct fn;
-        repeat match goal with
-               | _ => reflexivity
-               | _ => progress (cbn in * || subst || unannot_rew || asconst_t)
-               | [  |- context[match ?x with _ => _ end] ] => destruct x eqn:?
-               | [ H: _ = _ |- _ ] => rewrite H
-               | _ => unfold eq_rect_r; rewrite interp_circuit_cast
-               | _ => rewrite vect_app_nil
-               | _ => apply eq_rect_eqdec_irrel
-               | [  |- context[interp_circuit ?cr ?csigma ?c] ] =>
-                 destruct (interp_circuit cr csigma c) as [ [ | ] [] ]
-               | _ => eauto using slice_full
-               end.
+        try destruct fn; repeat simpl_t.
     Qed.
   End Simplify.
 

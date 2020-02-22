@@ -838,6 +838,7 @@ The following list shows the current state of the repo:
    - |tests/shadowing.lv|_: Unit tests for name shadowing
    - |tests/shifts.v|_: Regression test for signed shifts
    - |tests/signed.lv|_: Computations involving sign bits
+   - |tests/struct_init.v|_: Structure initialization
    - |tests/switches.v|_: Test various forms of switches
    - |tests/taint_analysis.lv|_: Unit tests to ensure that impure functions are not optimized out
    - |tests/unpack.v|_: Structure unpacking
@@ -1039,6 +1040,8 @@ The following list shows the current state of the repo:
 .. _tests/shifts.v: tests/shifts.v
 .. |tests/signed.lv| replace:: ``signed.lv``
 .. _tests/signed.lv: tests/signed.lv
+.. |tests/struct_init.v| replace:: ``struct_init.v``
+.. _tests/struct_init.v: tests/struct_init.v
 .. |tests/switches.v| replace:: ``switches.v``
 .. _tests/switches.v: tests/switches.v
 .. |tests/taint_analysis.lv| replace:: ``taint_analysis.lv``

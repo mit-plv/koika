@@ -240,7 +240,7 @@ Ltac vect_to_list_t_step :=
   end.
 
 Ltac vect_to_list_t :=
-  apply vect_to_list_inj; repeat vect_to_list_t_step.
+  try apply vect_to_list_inj; repeat vect_to_list_t_step.
 
 Lemma slice_subst_impl_correct :
   forall {sz} offset {width} (a1: bits sz) (a2: bits width),
@@ -263,4 +263,24 @@ Proof.
   intros; vect_to_list_t.
   rewrite (firstn_all2 (n := sz)) by (autorewrite with vect_to_list; omega);
     reflexivity.
+Qed.
+
+Lemma slice_concat_l {sz1 sz2} :
+  forall (bs1: bits sz1) (bs2: bits sz2),
+    BitFuns.slice 0 sz1 (bs1 ++ bs2)%vect = bs1.
+Proof.
+  intros; vect_to_list_t.
+  rewrite (firstn_all2 (n := sz1)) by (autorewrite with vect_to_list; omega);
+    reflexivity.
+Qed.
+
+Lemma slice_concat_r {sz1 sz2} :
+  forall (bs1: bits sz1) (bs2: bits sz2),
+    BitFuns.slice sz1 sz2 (bs1 ++ bs2)%vect = bs2.
+Proof.
+  intros; vect_to_list_t.
+  rewrite (skipn_all2 (n := sz1)) by (autorewrite with vect_to_list; omega).
+  vect_to_list_t.
+  rewrite (firstn_all2 (n := sz2)) by (autorewrite with vect_to_list; omega).
+  reflexivity.
 Qed.
