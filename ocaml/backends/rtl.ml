@@ -380,7 +380,8 @@ module Verilog : RTLBackend = struct
                 reg [2:0] a     =        $signed(3'b100) >>> 1;                     // 3'b110
                 reg [2:0] mux_a = 1'b1 ? $signed(3'b100) >>> 1 : 3'b000;            // 3'b010
                 reg [2:0] b     =        $unsigned($signed(3'b100) >>> 1);          // 3'b110
-                reg [2:0] mux_b = 1'b1 ? $unsigned($signed(3'b100) >>> 1) : 3'b000; // 3'b110 *)
+                reg [2:0] mux_b = 1'b1 ? $unsigned($signed(3'b100) >>> 1) : 3'b000; // 3'b110
+              (see https://stackoverflow.com/questions/60345469/) *)
            sp "%a" (sp_cast false sp_str) (sprintf "%a >>> %a" (sp_cast true p) e1 p e2)
         | EqBits (_, true) -> sp "%a != %a" p e1 p e2
         | EqBits (_, false) -> sp "%a == %a" p e1 p e2
