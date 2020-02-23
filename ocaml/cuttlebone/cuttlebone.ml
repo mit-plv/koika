@@ -290,6 +290,35 @@ module Util = struct
 
   let may_fail_without_revert registers histories =
     Extr.may_fail_without_revert (contextEnv registers) histories
+
+  let unop_to_str =
+    let open Extr.PrimTyped in
+    function
+    | Not _ -> "not"
+    | SExt (_, _) -> "sext"
+    | ZExtL (_, _) -> "zextl"
+    | ZExtR (_, _) -> "zextr"
+    | Repeat (_, _) -> "repeat"
+    | Slice (_, _, _) -> "slice"
+    | Lowered _ -> "lowered"
+
+  let binop_to_str =
+    let open Extr.PrimTyped in
+    function
+    | And _ -> "and"
+    | Or _ -> "or"
+    | Xor _ -> "xor"
+    | Lsl (_, _) -> "lsl"
+    | Lsr (_, _) -> "lsr"
+    | Asr (_, _) -> "asr"
+    | Concat (_, _) -> "concat"
+    | Sel _ -> "sel"
+    | SliceSubst (_, _, _) -> "slicesubst"
+    | IndexedSlice (_, _) -> "indexedslice"
+    | Plus _ -> "plus"
+    | Minus _ -> "minus"
+    | EqBits (_, _) -> "eqbits"
+    | Compare (_, _, _) -> "compare"
 end
 
 module Compilation = struct
@@ -401,6 +430,19 @@ module Graphs = struct
       write1 : circuit;
       data0 : circuit;
       data1 : circuit }
+
+  let circuit_to_str =
+    let open Printf in
+    function
+    | CMux (_, s, c1, c2) -> sprintf "CMux (%d, %d, %d)" s.tag c1.tag c2.tag
+    | CConst cst -> sprintf "CConst %s" (Util.string_of_bits cst)
+    | CReadRegister r -> sprintf "CReadRegister %s" r.reg_name
+    | CUnop (f, c) -> sprintf "CUnop (%s, %d)" (Util.unop_to_str f) c.tag
+    | CBinop (f, c1, c2) -> sprintf "CBinop (%s, %d, %d)" (Util.binop_to_str f) c1.tag c2.tag
+    | CExternal (_, c) -> sprintf "CExternal (_, %d)" c.tag
+    | CBundle (_, _) -> sprintf "CBundle"
+    | CBundleRef (_, _, _) -> sprintf "CBundleRef"
+    | CAnnot (_, a, c) -> sprintf "CAnnot \"%s\" %d" a c.tag
 
   let rec rwcircuit_of_extr_rwcircuit (reg_sigs: 'a -> reg_signature) = function
     | Extr.Rwcircuit_rwdata (r, field) -> Rwcircuit_rwdata (reg_sigs r, field)

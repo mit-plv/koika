@@ -48,15 +48,15 @@ type node_map = (int, node) Hashtbl.t
 type pin_set = (string, [`Input | `Output] * int) Hashtbl.t
 
 let fn1_sz fn =
-  let fsig = Cuttlebone.Extr.PrimSignatures.coq_Sigma1 (Bits1 fn) in
-  typ_sz (Cuttlebone.Util.retSig fsig)
+  let fsig = Extr.PrimSignatures.coq_Sigma1 (Bits1 fn) in
+  typ_sz (retSig fsig)
 
 let fn2_sz fn =
-  let fsig = Cuttlebone.Extr.PrimSignatures.coq_Sigma2 (Bits2 fn) in
-  typ_sz (Cuttlebone.Util.retSig fsig)
+  let fsig = Extr.PrimSignatures.coq_Sigma2 (Bits2 fn) in
+  typ_sz (retSig fsig)
 
-let rwdata_circuits (rwd: Cuttlebone.Graphs.rwdata) =
-  let open Cuttlebone.Extr in
+let rwdata_circuits (rwd: rwdata) =
+  let open Extr in
   [(Rwdata_r0, rwd.read0); (Rwdata_r1, rwd.read1);
    (Rwdata_w0, rwd.write0); (Rwdata_w1, rwd.write1);
    (Rwdata_data0, rwd.data0); (Rwdata_data1, rwd.data1)]
@@ -162,35 +162,6 @@ let node_of_circuit (metadata: metadata_map) (cache: node_map) (ios: pin_set) (c
   lift c
 
 module Debug = struct
-  let unop_to_str =
-    let open Cuttlebone.Extr.PrimTyped in
-    function
-    | Not _ -> "not"
-    | SExt (_, _) -> "sext"
-    | ZExtL (_, _) -> "zextl"
-    | ZExtR (_, _) -> "zextr"
-    | Repeat (_, _) -> "repeat"
-    | Slice (_, _, _) -> "slice"
-    | Lowered _ -> "lowered"
-
-  let binop_to_str =
-    let open Cuttlebone.Extr.PrimTyped in
-    function
-    | And _ -> "and"
-    | Or _ -> "or"
-    | Xor _ -> "xor"
-    | Lsl (_, _) -> "lsl"
-    | Lsr (_, _) -> "lsr"
-    | Asr (_, _) -> "asr"
-    | Concat (_, _) -> "concat"
-    | Sel _ -> "sel"
-    | SliceSubst (_, _, _) -> "slicesubst"
-    | IndexedSlice (_, _) -> "indexedslice"
-    | Plus _ -> "plus"
-    | Minus _ -> "minus"
-    | EqBits (_, _) -> "eqbits"
-    | Compare (_, _, _) -> "compare"
-
   let expr_to_str = function
     | EPtr (n, Some field) -> sprintf "EPtr (%d, %s)" n.tag field
     | EPtr (n, None) -> sprintf "EPtr (%d, None)" n.tag
@@ -219,19 +190,6 @@ module Debug = struct
   let node_to_str { tag; entity; annots; kind; _ } =
     sprintf "{ tag=%d; kind=%s; entity=%s; annots=[%s] }"
       tag (node_kind_to_str kind) (entity_to_str entity) (String.concat "; " annots)
-
-  let circuit_to_str =
-    let open Cuttlebone.Graphs in
-    function
-    | CMux (_, s, c1, c2) -> sprintf "CMux (%d, %d, %d)" s.tag c1.tag c2.tag
-    | CConst cst -> sprintf "CConst %s" (string_of_bits cst)
-    | CReadRegister r -> sprintf "CReadRegister %s" r.reg_name
-    | CUnop (f, c) -> sprintf "CUnop (%s, %d)" (unop_to_str f) c.tag
-    | CBinop (f, c1, c2) -> sprintf "CBinop (%s, %d, %d)" (binop_to_str f) c1.tag c2.tag
-    | CExternal (_, c) -> sprintf "CExternal (_, %d)" c.tag
-    | CBundle (_, _) -> sprintf "CBundle"
-    | CBundleRef (_, _, _) -> sprintf "CBundleRef"
-    | CAnnot (_, a, c) -> sprintf "CAnnot \"%s\" %d" a c.tag
 
   let iter_ordered f tbl =
     List.iter (fun (k, v) -> f k v)
@@ -269,7 +227,7 @@ let translate_roots metadata graph_roots =
   let cache = Hashtbl.create 500 in
   let translate_root { root_reg; root_circuit } =
     (root_reg.reg_name,
-     Cuttlebone.Util.bits_of_value root_reg.reg_init,
+     bits_of_value root_reg.reg_init,
      node_of_circuit metadata cache ios root_circuit) in
   let roots = List.map translate_root graph_roots in
   Debug.print_node_cache cache;
@@ -586,8 +544,8 @@ module Dot = struct
     | EPtr (n, Some s) -> p_vertex "ptr" [(n, s)]
     | EName nm -> p_vertex nm []
     | EConst cst -> Inlined (string_of_bits cst)
-    | EUnop (f, n1) -> p_vertex (Debug.unop_to_str f) [(n1, hd)]
-    | EBinop (f, n1, n2) -> p_vertex (Debug.binop_to_str f) [(n1, hd); (n2, hd)]
+    | EUnop (f, n1) -> p_vertex (unop_to_str f) [(n1, hd)]
+    | EBinop (f, n1, n2) -> p_vertex (binop_to_str f) [(n1, hd); (n2, hd)]
     | EMux (s, n1, n2) -> p_vertex "mux" [(s, hd); (n1, hd); (n2, hd)]
   and p_node out (n: node) =
     match n.kind with
