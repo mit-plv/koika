@@ -219,14 +219,16 @@ module Util = struct
     | Enum (sg, v) -> string_of_enum sg v
     | Struct (sg, v) -> string_of_struct sg v
     | Array (_, v) -> string_of_array v
-  and string_of_bits ?(mode=`Verilog) (bs: bits_value) =
+  and string_of_bits (bs: bits_value) =
+    let sbit b =
+      if b then "1" else "0" in
+    let zerop bs =
+      Array.length bs > 0 && Array.for_all (fun b -> b = false) bs in
     let bitstring =
-      let sbit b = if b then "1" else "0" in
-      let bits = List.rev_map sbit (Array.to_list bs) in
-      String.concat "" bits in
-    (match mode with
-     | `Cpp -> Printf.sprintf "0b%s"
-     | `Verilog -> Printf.sprintf "%d'b%s" (Array.length bs)) bitstring
+      if zerop bs then "0"
+      else let bits = List.rev_map sbit (Array.to_list bs) in
+           String.concat "" bits in
+    Printf.sprintf "%d'b%s" (Array.length bs) bitstring
   and string_of_enum sg bs =
     sg.enum_name ^
       match List.find_opt (fun (_nm, bs') -> bs' = bs) sg.enum_members with

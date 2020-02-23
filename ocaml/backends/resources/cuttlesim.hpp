@@ -814,9 +814,13 @@ namespace prims {
       switch (style) {
       case fmtstyle::bin:
         os << (prefix == prefixes::plain ? "0b" : "b");
-        for (bitwidth pos = sz; pos > 0; pos--) {
-          unsigned int bit = prims::truncate<1>(val >> (pos - 1u)).v;
-          os << bit;
+        if (val == bits<sz>{0}) {
+          os << "0";
+        } else {
+          for (bitwidth pos = sz; pos > 0; pos--) {
+            unsigned int bit = prims::truncate<1>(val >> (pos - 1u)).v;
+            os << bit;
+          }
         }
         break;
       case fmtstyle::hex:
