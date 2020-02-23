@@ -503,9 +503,14 @@ module Dot = struct
           let sp_param (key, value) = sprintf "%s=\"%s\"" key value in
           sprintf " [%s]" (String.concat ", " (List.map sp_param params)))
 
+  let sp_annots annots =
+    match last annots with
+    | None -> ""
+    | Some a -> a
+
   let p_edge out annots (n, f) (n', f') =
     p_decl out (sprintf "%s:%s -> %s:%s" n f n' f')
-      (if annots = [] then [] else [("label", String.concat "; " annots)])
+      (if annots = [] then [] else [("label", sp_annots annots)])
 
   let name_of_tag tag =
     sprintf "N%d" tag
@@ -520,7 +525,11 @@ module Dot = struct
 
   let sp_label annots label =
     if annots = [] then label
-    else sprintf "%s (%s)" label (String.concat "; " annots)
+    else sprintf "%s (%s)" label (sp_annots annots)
+
+  let interesting_annot_re = Str.regexp "^var_"
+  let interesting_annot annot =
+    Str.string_match interesting_annot_re annot 0
 
   let rec p_structure out annots name label args =
     let p_arg_label idx (n, n_port) =
@@ -535,12 +544,14 @@ module Dot = struct
     p_decl out name [("label", label); ("shape", "record")];
     name
   and p_expr out node e =
+    let annots =
+      List.filter interesting_annot node.annots in
     let p_vertex label args =
       let name = name_of_tag node.tag in
-      Named (p_structure out node.annots name label args) in
+      Named (p_structure out annots name label args) in
     match e with
-    | EPtr (n, None) when node.kind = Unique -> p_node out n
-    | EPtr (n, None) -> p_vertex "ptr" [(n, hd)]
+    | EPtr (n, None) when node.kind = Shared && annots <> [] -> p_vertex "ptr" [(n, hd)]
+    | EPtr (n, None) -> p_node out n
     | EPtr (n, Some s) -> p_vertex "ptr" [(n, s)]
     | EName nm -> p_vertex nm []
     | EConst cst -> Inlined (string_of_bits cst)
