@@ -216,13 +216,66 @@ clean-verilator:
 	rm -rf $(verilator_tracedir)
 	rm -f $(verilator_driver).vcd
 
+##################
+# FPGA Synthesis #
+##################
+
+FPGA_TOPLEVEL ?= $(mod).v
+FPGA_DEVICE ?= lp8k
+FPGA_ARACHNE_DEVICE ?=
+FPGA_ARACHNE_PACKAGE ?= cm81
+FPGA_ARACHNE_PCF ?= pins.pcf
+
+fpga_arachne_device :=
+ifneq (, $(FPGA_ARACHNE_DEVICE))
+fpga_arachne_device := $(FPGA_ARACHNE_DEVICE)
+else ifeq ($(FPGA_DEVICE), lp384)
+fpga_arachne_device := 384
+else ifeq ($(FPGA_DEVICE), lp1k)
+fpga_arachne_device := 1k
+else ifeq ($(FPGA_DEVICE), hx1k)
+fpga_arachne_device := 1k
+else ifeq ($(FPGA_DEVICE), up5k)
+fpga_arachne_device := 5k
+else ifeq ($(FPGA_DEVICE), lp8k)
+fpga_arachne_device := 8k
+else ifeq ($(FPGA_DEVICE), hx8k)
+fpga_arachne_device := 8k
+else
+$(error "Unrecognized FPGA_DEVICE `$(FPGA_DEVICE)', please set FPGA_ARACHNE_DEVICE.")
+endif
+
+fpga_toplevel := $(basename $(FPGA_TOPLEVEL))
+
+$(fpga_toplevel).blif: $(FPGA_TOPLEVEL)
+	yosys -p 'read_verilog $(FPGA_TOPLEVEL); hierarchy -libdir . -top $(fpga_toplevel); synth_ice40 -top $(fpga_toplevel) -blif $@'
+
+$(fpga_toplevel).asc: $(FPGA_ARACHNE_PCF) $(fpga_toplevel).blif
+	arachne-pnr --device $(fpga_arachne_device) --package $(FPGA_ARACHNE_PACKAGE) --pcf-file $(FPGA_ARACHNE_PCF) -o $@ -p $^
+
+$(fpga_toplevel).bin: $(fpga_toplevel).asc
+	icepack $< $@
+
+$(fpga_toplevel).rpt: $(fpga_toplevel).asc
+	icetime -d $(FPGA_DEVICE) -mtr $@ $<
+
+$(fpga_toplevel).blif.v: $(fpga_toplevel).blif
+	yosys -p 'read_blif -wideports $^; write_verilog $@'
+
+clean-fpga:
+	rm -f $(fpga_toplevel).blif
+	rm -f $(fpga_toplevel).asc
+	rm -f $(fpga_toplevel).bin
+	rm -f $(fpga_toplevel).rpt
+	rm -f $(fpga_toplevel).blif.v
+
 ###################
 # Default targets #
 ###################
 
 default: $(cuttlesim_driver).opt
 
-clean: clean-verilator clean-cuttlesim;
+clean: clean-verilator clean-cuttlesim clean-fpga;
 
 help:
 	@echo 'Targets'
@@ -334,5 +387,18 @@ help:
 	@echo '        How many cycles to run the simulation for'
 	@echo '      VERILATOR_ARGS = $(VERILATOR_ARGS)'
 	@echo '        Command-line arguments passed to the Verilator model'
+	@echo '  FPGA Synthesis (IceStorm)'
+	@echo '    Compiler settings'
+	@echo '      FPGA_TOPLEVEL = $(FPGA_TOPLEVEL)'
+	@echo '        Verilog or SystemVerilog file wrapping the code compiled by cuttlec.'
+	@echo '      FPGA_DEVICE = $(FPGA_DEVICE)'
+	@echo '        Device name passed to icetime.'
+	@echo '      FPGA_ARACHNE_DEVICE = $(FPGA_ARACHNE_DEVICE)'
+	@echo '        Device name passed to arachne-pnr (inferred from FPGA_DEVICE)'
+	@echo '      FPGA_ARACHNE_PACKAGE = $(FPGA_ARACHNE_PACKAGE)'
+	@echo '        Package name passed to arachne-pnr'
+	@echo '      FPGA_ARACHNE_PCF = $(FPGA_ARACHNE_PCF)'
+	@echo '        Physical contrainsts file passed to arachne-pnr'
 
-.PHONY: gdb lldb perf kcachegrind gtkwave.cuttlesim gtkwave.verilator twinwave clean clean-cuttlesim clean-verilog help
+
+.PHONY: gdb lldb perf kcachegrind gtkwave.cuttlesim gtkwave.verilator twinwave clean clean-cuttlesim clean-verilog clean-fpga help
