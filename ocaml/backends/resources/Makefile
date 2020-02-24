@@ -4,79 +4,79 @@ all: default_target;
 
 -include Makefile.conf
 
-DEFAULT_TARGET ?= $(mod).opt
-default_target: $(DEFAULT_TARGET);
+.DEFAULT_GOAL := default
 
-##############
-# Simulation #
-##############
+#############
+# Cuttlesim #
+#############
 
 # Compilation
 # ===========
 
 CPPFLAGS ?=
 CXXFLAGS ?=
-CPP_DRIVER ?= $(mod).cpp
-CUTTLEC_OPT_FLAGS ?= __CUTTLEC_CXX_OPT_FLAGS__
-CUTTLEC_DEBUG_FLAGS ?= -Og -ggdb3
-CUTTLEC_PERF_FLAGS ?= -DSIM_NOINLINE $(CUTTLEC_OPT_FLAGS) $(CUTTLEC_DEBUG_FLAGS)
-CUTTLEC_COV_FLAGS ?= $(CUTTLEC_DEBUG_FLAGS)
-CUTTLEC_S_FLAGS ?= -DSIM_MINIMAL -fverbose-asm
-CUTTLEC_WARNINGS ?= __CUTTLEC_CXX_WARNINGS__
-VCD_SCOPES ?= TOP $(mod)
+CUTTLESIM_DRIVER ?= $(mod).cpp
+CUTTLESIM_OPT_FLAGS ?= __CUTTLEC_CXX_OPT_FLAGS__
+CUTTLESIM_DEBUG_FLAGS ?= -Og -ggdb3
+CUTTLESIM_PERF_FLAGS ?= -DSIM_NOINLINE $(CUTTLESIM_OPT_FLAGS) $(CUTTLESIM_DEBUG_FLAGS)
+CUTTLESIM_COV_FLAGS ?= $(CUTTLESIM_DEBUG_FLAGS)
+CUTTLESIM_S_FLAGS ?= -DSIM_MINIMAL -fverbose-asm
+CUTTLESIM_WARNINGS ?= __CUTTLEC_CXX_WARNINGS__
+CUTTLESIM_VCD_SCOPES ?= TOP $(mod)
 
 comma := ,
+cuttlesim_driver := $(basename $(CUTTLESIM_DRIVER))
 cuttlesim_helper := cuttlesim.hpp
-cxx_scopes_arg := '-DSIM_VCD_SCOPES={$(patsubst %,"%"$(comma),$(VCD_SCOPES))}'
-cxx_flags := $(CXXFLAGS) $(CPPFLAGS) $(CUTTLEC_WARNINGS) $(cxx_scopes_arg)
+cxx_scopes_arg := '-DSIM_CUTTLESIM_VCD_SCOPES={$(patsubst %,"%"$(comma),$(CUTTLESIM_VCD_SCOPES))}'
+cxx_flags := $(CXXFLAGS) $(CPPFLAGS) $(CUTTLESIM_WARNINGS) $(cxx_scopes_arg)
 
 ifeq (,$(findstring --std,$(cxx_flags)))
 cxx_flags += __CUTTLEC_CXX_STANDARD__
 endif
 
-ifdef CUTTLEC_DEBUG_SANITIZE
+ifdef CUTTLESIM_DEBUG_SANITIZE
 export LSAN_OPTIONS ?= verbosity=1
 export UBSAN_OPTIONS ?= print_stacktrace=1
 cuttlec_debug_flags += -fsanitize=address,undefined -fsanitize-recover=all
 endif
 
-$(mod).opt: $(cuttlesim_helper) $(mod).hpp $(CPP_DRIVER)
-	$(CXX) $(cxx_flags) $(CUTTLEC_OPT_FLAGS) $(CPP_DRIVER) -o "$@"
+$(cuttlesim_driver).opt: $(cuttlesim_helper) $(mod).hpp $(CUTTLESIM_DRIVER)
+	$(CXX) $(cxx_flags) $(CUTTLESIM_OPT_FLAGS) $(CUTTLESIM_DRIVER) -o "$@"
 
-$(mod).debug: $(cuttlesim_helper) $(mod).hpp $(CPP_DRIVER)
-	$(CXX) $(cxx_flags) $(CUTTLEC_DEBUG_FLAGS) $(CPP_DRIVER) -o "$@"
+$(cuttlesim_driver).debug: $(cuttlesim_helper) $(mod).hpp $(CUTTLESIM_DRIVER)
+	$(CXX) $(cxx_flags) $(CUTTLESIM_DEBUG_FLAGS) $(CUTTLESIM_DRIVER) -o "$@"
 
-$(mod).perf: $(mod).hpp $(CPP_DRIVER)
-	$(CXX) $(cxx_flags) $(CUTTLEC_PERF_FLAGS) $(CPP_DRIVER) -o "$@"
+$(cuttlesim_driver).perf: $(mod).hpp $(CUTTLESIM_DRIVER)
+	$(CXX) $(cxx_flags) $(CUTTLESIM_PERF_FLAGS) $(CUTTLESIM_DRIVER) -o "$@"
 
-$(mod).gcno $(mod).cov:
-	$(CXX) $(cxx_flags) $(CUTTLEC_COV_FLAGS) --coverage $(CPP_DRIVER) -o "$@"
+$(cuttlesim_driver).gcno $(cuttlesim_driver).cov: $(mod).hpp $(CUTTLESIM_DRIVER)
+	$(CXX) $(cxx_flags) $(CUTTLESIM_COV_FLAGS) --coverage $(CUTTLESIM_DRIVER) -o "$@"
 
-cxx_s_flags := $(CUTTLEC_S_FLAGS) -fno-asynchronous-unwind-tables -fno-exceptions -fno-rtti -masm=intel -S
-$(mod).s: $(mod).hpp $(CPP_DRIVER)
-	$(CXX) $(cxx_flags) $(CUTTLEC_OPT_FLAGS) $(cxx_s_flags) $(CPP_DRIVER) -o - | c++filt > "$@"
+cxx_s_flags := $(CUTTLESIM_S_FLAGS) -fno-asynchronous-unwind-tables -fno-exceptions -fno-rtti -masm=intel -S
+$(cuttlesim_driver).s: $(mod).hpp $(CUTTLESIM_DRIVER)
+	$(CXX) $(cxx_flags) $(CUTTLESIM_OPT_FLAGS) $(cxx_s_flags) $(CUTTLESIM_DRIVER) -o - | c++filt > "$@"
 
-$(mod).tree $(mod).tree/: $(mod).hpp $(CPP_DRIVER)
-	$(CXX) $(cxx_flags) $(CUTTLEC_OPT_FLAGS) $(cxx_s_flags) -fdump-tree-all $(CPP_DRIVER) -o $(mod).tree/$(mod).s
+$(cuttlesim_driver).tree $(cuttlesim_driver).tree/: $(mod).hpp $(CUTTLESIM_DRIVER)
+	$(CXX) $(cxx_flags) $(CUTTLESIM_OPT_FLAGS) $(cxx_s_flags) -fdump-tree-all $(CUTTLESIM_DRIVER) -o $(cuttlesim_driver).tree/$(cuttlesim_driver).s
 
 # Tracing
 # =======
 
 NCYCLES ?= -1
-SIM_ARGS ?=
+CUTTLESIM_ARGS ?=
 
-sim_invoke_opt := ./$(mod).opt $(SIM_ARGS) $(NCYCLES)
-sim_invoke_debug := ./$(mod).debug $(SIM_ARGS) $(NCYCLES)
-sim_invoke_perf := ./$(mod).perf $(SIM_ARGS) $(NCYCLES)
-sim_invoke_coverage := ./$(mod).cov $(SIM_ARGS) $(NCYCLES)
+sim_invoke_opt := ./$(cuttlesim_driver).opt $(CUTTLESIM_ARGS) $(NCYCLES)
+sim_invoke_debug := ./$(cuttlesim_driver).debug $(CUTTLESIM_ARGS) $(NCYCLES)
+sim_invoke_perf := ./$(cuttlesim_driver).perf $(CUTTLESIM_ARGS) $(NCYCLES)
+sim_invoke_coverage := ./$(cuttlesim_driver).cov $(CUTTLESIM_ARGS) $(NCYCLES)
 
-$(mod).out: $(mod).opt
+$(cuttlesim_driver).out: $(cuttlesim_driver).opt
 	time $(sim_invoke_opt) > "$@"
 
-$(mod).cuttlesim.vcd: $(mod).opt
+$(cuttlesim_driver).vcd: $(cuttlesim_driver).opt
 	time $(sim_invoke_opt) "$@"
 
-gtkwave.cuttlesim: $(mod).cuttlesim.vcd
+gtkwave.cuttlesim: $(cuttlesim_driver).vcd
 	gtkwave $<
 
 # Debugging
@@ -85,36 +85,51 @@ gtkwave.cuttlesim: $(mod).cuttlesim.vcd
 GDB_FLAGS ?= -tui
 GDB_OPTS ?= -ex "set print array on" -ex "set print pretty on"
 
-gdb: $(mod).debug
+gdb: $(cuttlesim_driver).debug
 	gdb $(GDB_FLAGS) $(GDB_OPTS) --args $(sim_invoke_debug)
 
 LLDB_FLAGS ?=
 
-lldb: $(mod).debug
+lldb: $(cuttlesim_driver).debug
 	lldb $(LLDB_FLAGS) -- $(sim_invoke_debug)
 
 # Profiling
 # =========
 
-$(mod).perf.data: $(mod).perf
+$(cuttlesim_driver).perf.data: $(cuttlesim_driver).perf
 	time perf record -e "cycles:pp" -o "$@" -- $(sim_invoke_perf) || (rm -f "$@"; exit 1)
 
 PERF_FLAGS ?= -M intel
 
-perf: $(mod).perf.data
+perf: $(cuttlesim_driver).perf.data
 	perf report $(PERF_FLAGS) -i "$<"
 
-$(mod).callgrind: $(mod).perf
+$(cuttlesim_driver).callgrind: $(cuttlesim_driver).perf
 	time valgrind --tool=callgrind --callgrind-out-file="$@" $(sim_invoke_perf)
 
-kcachegrind: $(mod).callgrind
+kcachegrind: $(cuttlesim_driver).callgrind
 	kcachegrind "$<"
 
 GCOV_OPTS ?= --branch-counts --demangled-names --relative-only
 
-$(mod).hpp.gcov $(CPP_DRIVER).gcov: $(mod).gcno $(mod).cov
+$(mod).hpp.gcov $(CUTTLESIM_DRIVER).gcov: $(cuttlesim_driver).gcno $(cuttlesim_driver).cov
 	time $(sim_invoke_coverage)
-	gcov $(GCOV_OPTS) $(CPP_DRIVER)
+	gcov $(GCOV_OPTS) $(CUTTLESIM_DRIVER)
+
+# Cleanup
+# =======
+
+clean-cuttlesim:
+	rm -f $(cuttlesim_driver).opt
+	rm -f $(cuttlesim_driver).debug
+	rm -f $(cuttlesim_driver).perf
+	rm -f $(cuttlesim_driver).cov
+	rm -f $(cuttlesim_driver).s
+	rm -f $(cuttlesim_driver).out
+	rm -f $(cuttlesim_driver).vcd
+	rm -f $(cuttlesim_driver).perf.data
+	rm -f $(cuttlesim_driver).callgrind
+	rm -f *.gcov
 
 #############
 # Verilator #
@@ -141,125 +156,125 @@ else
 verilator_compiler_flags :=
 endif
 
-vmod := V$(basename $(VERILATOR_TOPLEVEL))
+verilator_toplevel := $(basename $(VERILATOR_TOPLEVEL))
+verilator_driver := $(basename $(VERILATOR_DRIVER))
+verilator_prefix := V$(verilator_toplevel)
 verilator_helper := verilator.hpp
 verilator_cflags := -CFLAGS "-I $(shell pwd)"
-verilator_flags := $(VERILATOR_FLAGS) $(VERILATOR_WARNINGS) $(verilator_cflags) --cc --exe $(verilator_compiler_flags)
+verilator_prefix_flag := --prefix $(verilator_prefix)
+verilator_flags := $(VERILATOR_FLAGS) $(VERILATOR_WARNINGS) $(verilator_cflags) $(verilator_prefix_flag) --cc --exe $(verilator_compiler_flags)
 verilator_inputs := $(VERILATOR_DRIVER) $(VERILATOR_TOPLEVEL)
 verilator_deps := $(verilator_helper) $(verilator_inputs) $(wildcard *.sv) $(wildcard *.v)
 
-$(verilator_optdir)/$(vmod).mk: $(verilator_deps)
+$(verilator_optdir)/$(verilator_prefix).mk: $(verilator_deps)
 	verilator $(verilator_flags) --Mdir $(verilator_optdir) $(VERILATOR_OPT_FLAGS) $(verilator_inputs)
 
-$(verilator_tracedir)/$(vmod).mk: $(verilator_deps)
+$(verilator_tracedir)/$(verilator_prefix).mk: $(verilator_deps)
 	verilator $(verilator_flags) --Mdir $(verilator_tracedir) -CFLAGS "-DTRACE" --trace $(VERILATOR_TRACE_FLAGS) $(verilator_inputs)
 
 # $(verilator_deps) because verilator doesn't always update its Makefiles
-$(verilator_optdir)/$(vmod): $(verilator_optdir)/$(vmod).mk $(verilator_deps)
-	+$(MAKE) OPT="-O3" -C $(verilator_optdir) -f $(vmod).mk $(vmod)
+$(verilator_optdir)/$(verilator_prefix): $(verilator_optdir)/$(verilator_prefix).mk $(verilator_deps)
+	+$(MAKE) OPT="-O3" -C $(verilator_optdir) -f $(verilator_prefix).mk $(verilator_prefix)
 
-$(verilator_tracedir)/$(vmod): $(verilator_tracedir)/$(vmod).mk $(verilator_deps)
-	+$(MAKE) OPT="-g" -C $(verilator_tracedir) -f $(vmod).mk $(vmod)
+$(verilator_tracedir)/$(verilator_prefix): $(verilator_tracedir)/$(verilator_prefix).mk $(verilator_deps)
+	+$(MAKE) OPT="-g" -C $(verilator_tracedir) -f $(verilator_prefix).mk $(verilator_prefix)
 
-$(verilator_optdir)/$(vmod).xml: $(verilator_deps)
-	verilator $(VERILATOR_WARNINGS) $(VERILATOR_TOPLEVEL) --Mdir $(verilator_optdir) -xml-only --bbox-sys
+$(verilator_optdir)/$(verilator_prefix).xml: $(verilator_deps)
+	verilator $(VERILATOR_WARNINGS) $(verilator_prefix_flag) -xml-only --bbox-sys --Mdir $(verilator_optdir) $(VERILATOR_TOPLEVEL)
 
 # Tracing
 # =======
 
 VERILATOR_ARGS ?=
 
-verilator_invoke_trace := ./$(verilator_tracedir)/$(vmod) $(VERILATOR_ARGS) $(NCYCLES)
+verilator_invoke_trace := ./$(verilator_tracedir)/$(verilator_prefix) $(VERILATOR_ARGS) $(NCYCLES)
 
-$(mod).verilator.vcd: $(verilator_tracedir)/$(vmod)
+$(verilator_driver).vcd: $(verilator_tracedir)/$(verilator_prefix)
 	time $(verilator_invoke_trace) "$@"
 
 ifeq (, $(shell which xml2stems))
-gtkwave.verilator: $(mod).verilator.vcd
+gtkwave.verilator: $(verilator_driver).vcd
 	echo "Warning: xml2stems not found: not showing rtlbrowse; try installing a more recent version of GTKWave."
 	gtkwave -A --optimize $<
 else
 # Use xml2stems because Vermin only parses up to Verilog 1995 and we use [+:] from Verilog 2000
-$(VERILATOR_TOPLEVEL).stems: $(verilator_optdir)/$(vmod).xml
+$(verilator_optdir)/$(verilator_prefix).stems: $(verilator_optdir)/$(verilator_prefix).xml
 	xml2stems $< $@
 
-gtkwave.verilator: $(VERILATOR_TOPLEVEL).stems $(mod).verilator.vcd
+gtkwave.verilator: $(verilator_optdir)/$(verilator_prefix).stems $(verilator_driver).vcd
 	gtkwave -A --optimize --stems $^
 endif
 
-twinwave: $(mod).cuttlesim.vcd $(mod).verilator.vcd
-	twinwave -A $(mod).cuttlesim.vcd + -A $(mod).verilator.vcd
+twinwave: $(cuttlesim_driver).vcd $(verilator_driver).vcd
+	twinwave -A $(cuttlesim_driver).vcd + -A $(verilator_driver).vcd
+
+# Cleanup
+# =======
+
+clean-verilator:
+	rm -rf $(verilator_optdir)
+	rm -rf $(verilator_tracedir)
+	rm -f $(verilator_driver).vcd
 
 ###################
 # Default targets #
 ###################
 
-clean:
-	rm -f $(mod).opt
-	rm -f $(mod).debug
-	rm -f $(mod).perf
-	rm -f $(mod).cov
-	rm -f $(mod).s
-	rm -f $(mod).out
-	rm -f $(mod).cuttlesim.vcd
-	rm -f $(mod).perf.data
-	rm -f $(mod).callgrind
-	rm -f *.gcov
-	rm -fr $(verilator_optdir)
-	rm -fr $(verilator_tracedir)
-	rm -f $(mod).verilator.vcd
+default: $(cuttlesim_driver).opt
+
+clean: clean-verilator clean-cuttlesim;
 
 help:
 	@echo 'Targets'
 	@echo '  Cuttlesim'
 	@echo '    Compiling'
-	@echo '      $(mod).opt:'
+	@echo '      $(cuttlesim_driver).opt:'
 	@echo '        Optimized build'
-	@echo '      $(mod).debug:'
+	@echo '      $(cuttlesim_driver).debug:'
 	@echo '        Debugger-friendly build'
-	@echo '      $(mod).perf:'
+	@echo '      $(cuttlesim_driver).perf:'
 	@echo '        Profiler-friendly build'
-	@echo '      $(mod).cov:'
+	@echo '      $(cuttlesim_driver).cov:'
 	@echo '        Coverage-instrumented build'
-	@echo '      $(mod).s:'
+	@echo '      $(cuttlesim_driver).s:'
 	@echo '        Assembly dump in SIM_MINIMAL mode'
-	@echo '      $(mod).tree/:'
+	@echo '      $(cuttlesim_driver).tree/:'
 	@echo '        Dump of GCC’s optimization passes'
 	@echo '    Tracing'
-	@echo '      $(mod).out:'
-	@echo '        Output produced by $(mod).opt'
-	@echo '      $(mod).cuttlesim.vcd:'
-	@echo '        VCD trace of $(mod).opt'
+	@echo '      $(cuttlesim_driver).out:'
+	@echo '        Output produced by $(cuttlesim_driver).opt'
+	@echo '      $(cuttlesim_driver).vcd:'
+	@echo '        VCD trace of $(cuttlesim_driver).opt'
 	@echo '      gtkwave.cuttlesim:'
-	@echo '        View $(mod).cuttlesim.vcd'
+	@echo '        View $(cuttlesim_driver).vcd'
 	@echo '    Debugging'
 	@echo '      gdb:'
-	@echo '        Run $(mod).debug under GDB'
+	@echo '        Run $(cuttlesim_driver).debug under GDB'
 	@echo '      lldb:'
-	@echo '        Run $(mod).debug under LLDB'
+	@echo '        Run $(cuttlesim_driver).debug under LLDB'
 	@echo '    Profiling'
-	@echo '      $(mod).perf.data:'
-	@echo '        ‘perf’ profile of $(mod).perf'
+	@echo '      $(cuttlesim_driver).perf.data:'
+	@echo '        ‘perf’ profile of $(cuttlesim_driver).perf'
 	@echo '      perf:'
 	@echo '        Show perf report'
-	@echo '      $(mod).callgrind:'
-	@echo '        Valgrind trace of $(mod).perf'
+	@echo '      $(cuttlesim_driver).callgrind:'
+	@echo '        Valgrind trace of $(cuttlesim_driver).perf'
 	@echo '      kcachegrind:'
-	@echo '        Visualize $(mod).callgrind'
+	@echo '        Visualize $(cuttlesim_driver).callgrind'
 	@echo '      $(mod).hpp.gcov:'
-	@echo '      $(CPP_DRIVER).gcov:'
+	@echo '      $(CUTTLESIM_DRIVER).gcov:'
 	@echo '        Generate coverage statistics (useful to see how often rules fail and why)'
 	@echo '  Verilator'
 	@echo '    Compiling'
-	@echo '      $(verilator_optdir)/$(vmod):'
+	@echo '      $(verilator_optdir)/$(verilator_prefix):'
 	@echo '        Optimized Verilator binary'
-	@echo '      $(verilator_tracedir)/$(vmod):'
+	@echo '      $(verilator_tracedir)/$(verilator_prefix):'
 	@echo '        Verilator binary built with --trace'
 	@echo '    Tracing'
-	@echo '      $(mod).verilator.vcd:'
-	@echo '        VCD trace of $(verilator_tracedir)/$(vmod)'
+	@echo '      $(verilator_driver).vcd:'
+	@echo '        VCD trace of $(verilator_tracedir)/$(verilator_prefix)'
 	@echo '      gtkwave.verilator:'
-	@echo '        View $(mod).verilator.vcd'
+	@echo '        View $(verilator_driver).vcd'
 	@echo '      twinwave:'
 	@echo '        Compare the traces generated by Verilator and Cuttlesim'
 	@echo ''
@@ -271,26 +286,26 @@ help:
 	@echo '      CPPFLAGS = $(CPPFLAGS)'
 	@echo '      CXXFLAGS = $(CXXFLAGS)'
 	@echo '        Additional C++ compiler flags.'
-	@echo '      CPP_DRIVER = $(CPP_DRIVER)'
+	@echo '      CUTTLESIM_DRIVER = $(CUTTLESIM_DRIVER)'
 	@echo '        CPP file driving the cuttlesim simulation.  Can be generated by cuttlec.'
-	@echo '      CUTTLEC_OPT_FLAGS = $(CUTTLEC_OPT_FLAGS)'
+	@echo '      CUTTLESIM_OPT_FLAGS = $(CUTTLESIM_OPT_FLAGS)'
 	@echo '        C++ compiler flags used in opt mode'
-	@echo '      CUTTLEC_DEBUG_FLAGS = $(CUTTLEC_DEBUG_FLAGS)'
+	@echo '      CUTTLESIM_DEBUG_FLAGS = $(CUTTLESIM_DEBUG_FLAGS)'
 	@echo '        C++ compiler flags used in debug mode'
-	@echo '      CUTTLEC_PERF_FLAGS = $(CUTTLEC_PERF_FLAGS)'
+	@echo '      CUTTLESIM_PERF_FLAGS = $(CUTTLESIM_PERF_FLAGS)'
 	@echo '        C++ compiler flags used in perf mode'
-	@echo '      CUTTLEC_COV_FLAGS = $(CUTTLEC_COV_FLAGS)'
+	@echo '      CUTTLESIM_COV_FLAGS = $(CUTTLESIM_COV_FLAGS)'
 	@echo '        C++ compiler flags used in coverage mode'
-	@echo '      CUTTLEC_S_FLAGS = $(CUTTLEC_S_FLAGS)'
+	@echo '      CUTTLESIM_S_FLAGS = $(CUTTLESIM_S_FLAGS)'
 	@echo '        C++ compiler flags used to generate assembly listings'
-	@echo '      CUTTLEC_WARNINGS = $(CUTTLEC_WARNINGS)'
+	@echo '      CUTTLESIM_WARNINGS = $(CUTTLESIM_WARNINGS)'
 	@echo '        Additional C++ compiler flags controlling warnings'
-	@echo '      VCD_SCOPES = $(VCD_SCOPES)'
+	@echo '      CUTTLESIM_VCD_SCOPES = $(CUTTLESIM_VCD_SCOPES)'
 	@echo '        Module hierarchy (space-separated, unquoted) to use in Cuttlesim'"'"'s VCD files'
 	@echo '    Run-time settings'
 	@echo '      NCYCLES = $(NCYCLES)'
 	@echo '        How many cycles to run the simulation for'
-	@echo '      SIM_ARGS = $(SIM_ARGS)'
+	@echo '      CUTTLESIM_ARGS = $(CUTTLESIM_ARGS)'
 	@echo '        Command-line arguments passed to the Cuttlesim model'
 	@echo '      GDB_FLAGS = $(GDB_FLAGS)'
 	@echo '        Command-line arguments passed to GDB'
@@ -315,9 +330,9 @@ help:
 	@echo '      VERILATOR_TRACE_FLAGS = $(VERILATOR_TRACE_FLAGS)'
 	@echo '        Verilator flags used in trace mode'
 	@echo '    Run-time settings'
-	@echo '      VERILATOR_ARGS = $(VERILATOR_ARGS)'
-	@echo '        Command-line arguments passed to the Verilator model'
 	@echo '      NCYCLES = $(NCYCLES)'
 	@echo '        How many cycles to run the simulation for'
+	@echo '      VERILATOR_ARGS = $(VERILATOR_ARGS)'
+	@echo '        Command-line arguments passed to the Verilator model'
 
-.PHONY: gdb lldb perf kcachegrind gtkwave.cuttlesim gtkwave.verilator twinwave clean help
+.PHONY: gdb lldb perf kcachegrind gtkwave.cuttlesim gtkwave.verilator twinwave clean clean-cuttlesim clean-verilog help

@@ -2,7 +2,7 @@ include etc/Makefile.conf
 
 dut := rv32i_core_pipelined
 objects_dir := _objects/$(dut).v
-opt_cuttlesim := $(dut).opt
+opt_cuttlesim := $(basename $(CUTTLESIM_DRIVER)).opt
 opt_verilator := obj_dir/V$(basename $(VERILATOR_TOPLEVEL))
 tests_build := tests/_build
 
