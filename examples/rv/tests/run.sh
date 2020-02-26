@@ -10,7 +10,7 @@ case $prog in
         time "$sim" "$prog" -1
         case $? in
             0) echo "  [0;32mPASS[0m";;
-            *) echo "  [0;31mFAIL[0m";;
+            *) echo "  [0;31mFAIL[0m ($?)";;
         esac;;
     *.vmh) # top.v expects the memory in mem.vmh
         sim_dir=$(dirname "$(realpath "$sim")")

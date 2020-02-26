@@ -96,7 +96,7 @@ module top(Proc);
     			end
     			else
     			    begin
-    				$fdisplay(stderr, "  [0;31mFAIL[0m %0d", req.data);
+    				$fdisplay(stderr, "  [0;31mFAIL[0m (%0d)", req.data);
     			    end
     			$fflush(stderr);
     			$finish;

@@ -866,7 +866,7 @@ module top(CLK,
 	  32'h40001000 &&
 	  rv_core$rule_ExternalD_output_toDMem_data0_data0[31:0] != 32'd0)
 	$fdisplay(32'h80000002,
-		  "  [0;31mFAIL[0m %0d",
+		  "  [0;31mFAIL[0m (%0d)",
 		  rv_core$rule_ExternalD_output_toDMem_data0_data0[31:0]);
     if (RST_N != `BSV_RESET_VALUE)
       if (WILL_FIRE_RL_requestD &&
