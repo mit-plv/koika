@@ -76,9 +76,6 @@ Definition interp_result :=
 Definition circuits :=
   compile_scheduler rules external pipeline.
 
-Definition circuits_result :=
-  tc_compute (interp_circuits cr empty_sigma circuits).
-
 Definition package :=
   {| ip_koika := {| koika_reg_types := R;
                    koika_reg_init reg := r reg;
