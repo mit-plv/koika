@@ -1289,6 +1289,9 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
       | Extr.SPos (pos, s) ->
          p_scheduler (hpp.cpp_pos_of_pos pos) s in
 
+    let p_strobe () =
+      p "virtual void strobe(std::uint_fast64_t _unused ncycles) const {}" in
+
     let p_cycle () =
       p_fn ~typ:"void" ~name:"cycle" (fun () ->
           p "log.rwset = Log.rwset = rwset_t{};";
@@ -1310,19 +1313,19 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
             p "(this->*rules[uniform(rng)])();") in
 
     let run_typ =
-      sprintf "template<typename T> _flatten %s&" hpp.cpp_classname in
+      sprintf "_flatten %s&" hpp.cpp_classname in
 
     let p_cycle_loop pbody =
-      p_scoped "for (T cycle_id = 0; cycle_id < ncycles; cycle_id++)" pbody in
+      p_scoped "for (std::uint_fast64_t cycle_id = 0; cycle_id < ncycles; cycle_id++)" pbody in
 
     let p_run () =
-      p_fn ~typ:run_typ ~name:"run" ~args:"T ncycles" (fun () ->
-          p_cycle_loop (fun () -> p "cycle();");
+      p_fn ~typ:run_typ ~name:"run" ~args:"std::uint_fast64_t ncycles" (fun () ->
+          p_cycle_loop (fun () -> p "cycle();"; p "strobe(cycle_id);");
           p "return *this;") in
 
     let p_run_randomized () =
-      p_fn ~typ:run_typ ~name:"run_randomized" ~args:"T ncycles" (fun () ->
-          p_cycle_loop (fun () -> p "cycle_randomized();");
+      p_fn ~typ:run_typ ~name:"run_randomized" ~args:"std::uint_fast64_t ncycles" (fun () ->
+          p_cycle_loop (fun () -> p "cycle_randomized();"; p "strobe(cycle_id);");
           p "return *this;") in
 
     let p_snapshot () =
@@ -1332,7 +1335,7 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
     let p_trace () =
       p_ifnminimal (fun () ->
           p_fn ~typ:run_typ ~name:"trace"
-            ~args:"std::string fname, T ncycles" (fun () ->
+            ~args:"std::string fname, std::uint_fast64_t ncycles" (fun () ->
               p "std::ofstream vcd;";
               p "vcd.open(fname);";
               p "state_t::vcd_header(vcd);";
@@ -1344,7 +1347,7 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
                   p "vcd << '#' << cycle_id << std::endl;";
                   p "current.vcd_dumpvars(vcd, latest, false);";
                   p "latest = current;";
-                  p "cycle();");
+                  p "strobe(cycle_id);");
               p "return *this;")) in
 
     p_sim_class (fun () ->
@@ -1380,6 +1383,8 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
         p_constructor ();
         nl ();
         p_cycle ();
+        nl ();
+        p_strobe ();
         nl ();
         p_run ();
         nl ();
