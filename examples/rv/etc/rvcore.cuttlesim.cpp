@@ -89,6 +89,72 @@ struct extfuns_t {
 using simulator = module_rv32<extfuns_t>;
 
 class rv_core : public simulator {
+  void strobe(std::uint_fast64_t ncycles) const {
+#if defined(SIM_STROBE) && !defined(SIM_MINIMAL)
+    std::cout << "# " << ncycles << std::endl;
+    std::cout << "pc = " << Log.state.pc << std::endl;
+    std::cout << "epoch = " << Log.state.epoch << std::endl;
+    std::cout << "inst_count = " << Log.state.inst_count << std::endl;
+    std::cout << "rf = {" << std::endl;
+    std::cout << "  " <<
+      "[01] (ra) = " << Log.state.rf_x01_ra << "; " <<
+      "[02] (sp) = " << Log.state.rf_x02_sp << "; " <<
+      "[03] (gp) = " << Log.state.rf_x03_gp << "; " <<
+      "[04] (tp) = " << Log.state.rf_x04_tp << std::endl;
+    std::cout << "  [05-07] (t0-t2)     = " <<
+      Log.state.rf_x05_t0 << "; " <<
+      Log.state.rf_x06_t1 << "; " <<
+      Log.state.rf_x07_t2 << std::endl;
+    std::cout << "  [08-09] (s0_fp, s1) = " <<
+      Log.state.rf_x08_s0_fp << "; " <<
+      Log.state.rf_x09_s1 << std::endl;
+    std::cout << "  [10-17] (a0-a7)     = " <<
+      Log.state.rf_x10_a0 << "; " <<
+      Log.state.rf_x11_a1 << "; " <<
+      Log.state.rf_x12_a2 << "; " <<
+      Log.state.rf_x13_a3 << "; " <<
+      Log.state.rf_x14_a4 << "; " <<
+      Log.state.rf_x15_a5 << "; " <<
+      Log.state.rf_x16_a6 << "; " <<
+      Log.state.rf_x17_a7 << std::endl;
+    std::cout << "  [18-27] (s2-s11)    = " << Log.state.rf_x18_s2 << "; " <<
+      Log.state.rf_x19_s3 << "; " <<
+      Log.state.rf_x20_s4 << "; " <<
+      Log.state.rf_x21_s5 << "; " <<
+      Log.state.rf_x22_s6 << "; " <<
+      Log.state.rf_x23_s7 << "; " <<
+      Log.state.rf_x24_s8 << "; " <<
+      Log.state.rf_x25_s9 << "; " <<
+      Log.state.rf_x26_s10 << "; " <<
+      Log.state.rf_x27_s11 << std::endl;
+    std::cout << "  [28-31] (t3-t6)     = " <<
+      Log.state.rf_x28_t3 << "; " <<
+      Log.state.rf_x29_t4 << "; " <<
+      Log.state.rf_x30_t5 << "; " <<
+      Log.state.rf_x31_t6 << std::endl;
+    std::cout << "}" << std::endl;
+    std::cout <<
+      "toIMem = { valid0 = " << Log.state.toIMem_valid0
+              << ", data0 = " << Log.state.toIMem_data0 << " };" <<
+      "fromIMem = { valid0 = " << Log.state.fromIMem_valid0
+              << ", data0 = " << Log.state.fromIMem_data0 << " }" << std::endl;
+    std::cout <<
+      "toDMem = { valid0 = " << Log.state.toDMem_valid0
+              << ", data0 = " << Log.state.toDMem_data0 << " };" <<
+      "fromDMem = { valid0 = " << Log.state.fromDMem_valid0
+              << ", data0 = " << Log.state.fromDMem_data0 << " }" << std::endl;
+    std::cout <<
+      "f2d    = { valid0 = " << Log.state.f2d_valid0
+              << ", data0 = " << Log.state.f2d_data0 << " };" <<
+      "f2dprim  = { valid0 = " << Log.state.f2dprim_valid0
+              << ", data0 = " << Log.state.f2dprim_data0 << " }" << std::endl;
+    std::cout <<
+      "d2e    = { valid0 = " << Log.state.d2e_valid0
+              << ", data0 = " << Log.state.d2e_data0 << " };" <<
+      "e2w      = { valid0 = " << Log.state.e2w_valid0
+              << ", data0 = " << Log.state.e2w_data0 << " }" << std::endl;
+#endif
+  }
 
 public:
   explicit rv_core(const std::string& elf_fpath) : simulator{} {
