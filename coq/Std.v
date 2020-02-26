@@ -7,7 +7,7 @@ End Fifo.
 
 Module Fifo1 (f: Fifo).
   Import f.
-  Inductive reg_t := data0 |  valid0.
+  Inductive reg_t := data0 | valid0.
 
   Definition R r :=
     match r with
@@ -27,28 +27,31 @@ Module Fifo1 (f: Fifo).
     | valid0 => "valid0"
     end.
 
+  Definition can_enq : UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun can_enq () : bits_t 1 => !read1(valid0) }}.
 
   Definition enq : UInternalFunction reg_t empty_ext_fn_t :=
-   {{ fun enq (data : T) : bits_t 0 =>
-      if (!read1(valid0)) then
+    {{ fun enq (data : T) : bits_t 0 =>
+        guard (can_enq ());
         write1(data0, data);
-        write1(valid0, #Ob~1)
-      else
-        fail }}.
+        write1(valid0, #Ob~1) }}.
 
+  Definition can_deq : UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun can_deq () : bits_t 1 => read0(valid0) }}.
 
-  Definition deq :  UInternalFunction reg_t empty_ext_fn_t :=
+  Definition peek : UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun peek () : T =>
+        guard (can_deq ());
+        read0(data0) }}.
+
+  Definition deq : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun deq () : T =>
-      if (read0(valid0)) then
-        write0(valid0, Ob~0)
-      else
-        fail;
-       read0(data0)}}.
+        guard (can_deq ());
+        write0(valid0, Ob~0);
+        read0(data0) }}.
 
   Instance FiniteType_reg_t : FiniteType reg_t := _.
-
 End Fifo1.
-
 
 Module Fifo1Bypass (f: Fifo).
   Import f.
@@ -72,26 +75,30 @@ Module Fifo1Bypass (f: Fifo).
     | valid0 => "valid0"
     end.
 
+  Definition can_enq : UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun can_enq () : bits_t 1 => !read0(valid0) }}.
 
   Definition enq : UInternalFunction reg_t empty_ext_fn_t :=
    {{ fun enq (data : T) : bits_t 0 =>
-      if (!read0(valid0)) then
-        write0(data0, data);
-        write0(valid0, #Ob~1)
-      else
-        fail }}.
+       guard (can_enq ());
+       write0(data0, data);
+       write0(valid0, #Ob~1) }}.
 
+  Definition can_deq : UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun can_deq () : bits_t 1 => read1(valid0) }}.
+
+  Definition peek :  UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun peek () : T =>
+       guard (can_deq ());
+       read1(data0) }}.
 
   Definition deq :  UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun deq () : T =>
-      if (read1(valid0)) then
-        write1(valid0, Ob~0)
-      else
-        fail;
-       read1(data0)}}.
+       guard (can_deq ());
+       write1(valid0, Ob~0);
+       read1(data0) }}.
 
   Instance FiniteType_reg_t : FiniteType reg_t := _.
-
 End Fifo1Bypass.
 
 Definition Maybe tau :=
