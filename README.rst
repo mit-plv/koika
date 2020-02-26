@@ -841,6 +841,7 @@ The following list shows the current state of the repo:
    - |tests/extcall.v|_: External functions
    - |tests/large_trace.lv|_: Make sure that snapshots in large traces don't copy data
    - |tests/large_writeset.v|_: Make sure that the large writeset heuristics in the scheduler don't break things
+   - |tests/mul.lv|_: Computations involving multiplication
    - |tests/muxelim.v|_: Sanity check for mux-elimination optimization
    - |tests/name_mangling.lv|_: Unit tests for name mangling
    - |tests/register_file_bypassing.v|_: Ensure that area is reasonable when bypasses don't need extra tracking
@@ -1045,6 +1046,8 @@ The following list shows the current state of the repo:
 .. _tests/large_trace.lv: tests/large_trace.lv
 .. |tests/large_writeset.v| replace:: ``large_writeset.v``
 .. _tests/large_writeset.v: tests/large_writeset.v
+.. |tests/mul.lv| replace:: ``mul.lv``
+.. _tests/mul.lv: tests/mul.lv
 .. |tests/muxelim.v| replace:: ``muxelim.v``
 .. _tests/muxelim.v: tests/muxelim.v
 .. |tests/name_mangling.lv| replace:: ``name_mangling.lv``
