@@ -8,98 +8,93 @@
 
 #define DMEM_SIZE (static_cast<std::size_t>(1) << 25)
 
-struct extfuns {};
-class rv_core final : public module_rv32<extfuns> {
-  std::unique_ptr<bits<32>[]> dmem;
+struct bram {
+  std::unique_ptr<bits<32>[]> mem;
+  std::optional<struct_mem_req> last;
+
+  struct_maybe_mem_resp get(struct_maybe_bits_0 opt_req) {
+    if (!opt_req.valid || !last.has_value())
+      return struct_maybe_mem_resp { .valid = {0}, .data = struct_mem_resp{} };
+
+    auto data = last->data;
+    auto addr = last->addr;
+    auto dEn = last->byte_en;
+    bits<32> current = bits<32>{0};
+
+    if (addr.v == 0x40000000 && dEn.v == 0xf) { // PutChar
+      putchar(static_cast<char>(last->data.v));
+    } else if (addr.v == 0x40001000 && dEn.v == 0xf) {
+      int exitcode = last->data.v;
+      if (exitcode == 0) {
+        printf("  [0;32mPASS[0m\n");
+      } else {
+        printf("  [0;31mFAIL[0m (%d)", exitcode);
+      }
+      std::exit(exitcode);
+    } else {
+      current = mem[addr.v >> 2];
+      mem[addr.v >> 2] =
+        ((dEn[2'0_d] ? data : current) & 0x32'000000ff_x) |
+        ((dEn[2'1_d] ? data : current) & 0x32'0000ff00_x) |
+        ((dEn[2'2_d] ? data : current) & 0x32'00ff0000_x) |
+        ((dEn[2'3_d] ? data : current) & 0x32'ff000000_x);
+    }
+
+    last.reset();
+    return {
+      .valid = {1},
+      .data = { .byte_en = dEn, .addr = addr, .data = current }
+    };
+  }
+
+  struct_maybe_bits_0 put(struct_maybe_mem_req opt_req) {
+    if (!opt_req.valid || last.has_value())
+      return struct_maybe_bits_0{ .valid = {0}, .data = prims::tt };
+
+    last = opt_req.data;
+    return { .valid = {1}, .data = prims::tt };
+  }
+
+  void read_elf(const std::string& elf_fpath) {
+    elf_load(reinterpret_cast<uint32_t*>(mem.get()), elf_fpath.c_str());
+  }
+
+  // Use new … instead of make_unique to avoid 0-initialization
+  bram() : mem{new bits<32>[DMEM_SIZE]}, last{} {}
+};
+
+struct extfuns_t {
+  bram dmem, imem;
+
+  struct_maybe_mem_resp ext_mem_dmem_mget(struct_maybe_bits_0 req) {
+    return dmem.get(req);
+  }
+#undef RULE_NAME
+
+  struct_maybe_mem_resp ext_mem_imem_mget(struct_maybe_bits_0 req) {
+    return imem.get(req);
+  }
+
+  struct_maybe_bits_0 ext_mem_dmem_mput(struct_maybe_mem_req req) {
+    return dmem.put(req);
+  }
+
+  struct_maybe_bits_0 ext_mem_imem_mput(struct_maybe_mem_req req) {
+    return imem.put(req);
+  }
+
+  extfuns_t() : dmem{}, imem{} {}
+};
+
+using simulator = module_rv32<extfuns_t>;
+
+class rv_core : public simulator {
 
 public:
-  explicit rv_core(const std::string& elf_fpath)
-    // Use new … instead of make_unique to avoid 0-initialization
-    : module_rv32{}, dmem(new bits<32>[DMEM_SIZE]) {
-    elf_load(reinterpret_cast<uint32_t*>(dmem.get()), elf_fpath.c_str());
+  explicit rv_core(const std::string& elf_fpath) : simulator{} {
+    extfuns.imem.read_elf(elf_fpath);
+    extfuns.dmem.read_elf(elf_fpath);
   }
-
-protected:
-
-#define PEEK(rn) log.state.rn
-
-#define RULE_NAME ExternalI
-  DEF_RULE(ExternalI) {
-    static std::optional<struct_mem_req> last{};
-
-    if (~PEEK(fromIMem_valid0) && last.has_value()) {
-      PEEK(fromIMem_valid0) = 1'1_b;
-      PEEK(fromIMem_data0) = struct_mem_resp {
-        .byte_en = last->byte_en,
-        .addr = last->addr,
-        .data = dmem[last->addr.v >> 2]
-      };
-      last.reset();
-    }
-
-    if (PEEK(toIMem_valid0) && !last.has_value()) {
-      PEEK(toIMem_valid0) = 1'0_b;
-      last = PEEK(toIMem_data0);
-    }
-
-    COMMIT();
-    return true;
-  }
-#undef RULE_NAME
-
-#define RULE_NAME ExternalD
-  DEF_RULE(ExternalD) {
-    static std::optional<struct_mem_req> last{};
-
-    if (!PEEK(fromDMem_valid0) && last.has_value()) {
-      PEEK(fromDMem_valid0) = 1'1_b;
-
-      auto data = last->data;
-      auto addr = last->addr;
-      auto dEn = last->byte_en;
-      prims::bits<32> current{0};
-
-      if (addr.v == 0x40000000 && dEn.v == 0xf) { // PutChar
-        putchar(static_cast<char>(last->data.v));
-      } else if (addr.v == 0x40001000 && dEn.v == 0xf) {
-        int exitcode = last->data.v;
-        if (exitcode == 0) {
-          printf("  [0;32mPASS[0m\n");
-        } else {
-          printf("  [0;31mFAIL[0m (%d)", exitcode);
-        }
-        std::exit(exitcode);
-      }
-      // else if (addr == 0xffff4 && dEn.v == 0) { // GetChar
-      //   data.data.v = getchar();
-      // }
-      else {
-        current = dmem[addr.v >> 2];
-        dmem[addr.v >> 2] =
-          ((dEn[2'0_d] ? data : current) & 0x32'000000ff_x) |
-          ((dEn[2'1_d] ? data : current) & 0x32'0000ff00_x) |
-          ((dEn[2'2_d] ? data : current) & 0x32'00ff0000_x) |
-          ((dEn[2'3_d] ? data : current) & 0x32'ff000000_x);
-      }
-
-      PEEK(fromDMem_data0) = struct_mem_resp {
-        .byte_en = last->byte_en,
-        .addr = last->addr,
-        .data = current
-      };
-
-      last.reset();
-    }
-
-    if (PEEK(toDMem_valid0) && !last.has_value()) {
-      PEEK(toDMem_valid0) = 1'0_b;
-      last = PEEK(toDMem_data0);
-    }
-
-    COMMIT();
-    return true;
-  }
-#undef RULE_NAME
 };
 
 #ifdef SIM_MINIMAL

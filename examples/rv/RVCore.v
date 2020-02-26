@@ -7,9 +7,9 @@ Require Import RV.RVEncoding.
 Require Import RV.Scoreboard.
 Require Import RV.Multiplier.
 
-
 Section RV32IHelpers.
   Context {reg_t: Type}.
+
   Import ListNotations.
   Definition imm_type :=
     {| enum_name := "immType";
@@ -362,7 +362,6 @@ Section RV32IHelpers.
     }}.
 End RV32IHelpers.
 
-
 Module  RV32ICore.
   Import ListNotations.
 
@@ -463,7 +462,7 @@ Module  RV32ICore.
   | pc
   | epoch.
 
-  (* Boiler-plate typing state *)
+  (* State type *)
   Definition R idx :=
     match idx with
     | toIMem r => MemReq.R r
@@ -482,7 +481,7 @@ Module  RV32ICore.
     | epoch => bits_t 1
     end.
 
-  (* Boiler-plate init value state *)
+  (* Initial values *)
   Definition r idx : R idx :=
     match idx with
     | rf s => Rf.r s
@@ -496,12 +495,24 @@ Module  RV32ICore.
     | e2w s => fromExecute.r s
     | scoreboard s => Scoreboard.r s
     | mulState s => multiplier.r s
-    | pc => Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0
-    | instr_count => Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0
+    | pc => Bits.zero
+    | instr_count => Bits.zero
     | epoch => Bits.zero
     end.
 
-  Definition fetch : uaction reg_t empty_ext_fn_t :=
+  (* External functions, used to model memory *)
+
+  Inductive memory := imem | dmem.
+  Inductive mem_op := mget | mput.
+  Inductive ext_fn_t := ext_mem (m: memory) (k: mem_op).
+
+  Definition Sigma (fn: ext_fn_t) :=
+    match fn with
+    | ext_mem _ mget => {$ maybe (bits_t 0) ~> maybe (struct_t mem_resp) $}
+    | ext_mem _ mput => {$ maybe (struct_t mem_req) ~> maybe (bits_t 0) $}
+    end.
+
+  Definition fetch : uaction reg_t ext_fn_t :=
     {{
         let pc := read1(pc) in
         let req := struct mem_req {|
@@ -519,22 +530,22 @@ Module  RV32ICore.
     }}.
 
   Definition tc_fetch :=
-    tc_action R empty_Sigma fetch .
+    tc_action R Sigma fetch.
 
-  Definition wait_imem : uaction reg_t empty_ext_fn_t :=
+  Definition wait_imem : uaction reg_t ext_fn_t :=
     {{
         let fetched_bookeeping := f2d.(fromFetch.deq)() in
         f2dprim.(waitFromFetch.enq)(fetched_bookeeping)
     }}.
 
   Definition tc_wait_imem :=
-    tc_action R empty_Sigma wait_imem .
+    tc_action R Sigma wait_imem.
 
   (* This rule is interesting because maybe we want to write it *)
   (* differently than Bluespec if we care about simulation *)
   (* performance. Moreover, we could read unconditionaly to avoid potential *)
   (* muxing on the input, TODO check if it changes anything *)
-  Definition decode : uaction reg_t empty_ext_fn_t :=
+  Definition decode : uaction reg_t ext_fn_t :=
     {{
         let instr := fromIMem.(MemResp.deq)() in
         let instr := get(instr,data) in
@@ -562,8 +573,8 @@ Module  RV32ICore.
              d2e.(fromDecode.enq)(decode_bookkeeping))
     }}.
 
-  Definition tc_decode:=
-    tc_action R empty_Sigma decode.
+  Definition tc_decode :=
+    tc_action R Sigma decode.
 
   (* Useful for debugging *)
   Arguments Var {pos_t var_t fn_name_t reg_t ext_fn_t R Sigma sig} k {tau m} : assert.
@@ -589,7 +600,7 @@ Module  RV32ICore.
           get(dInst,inst)[|5`d4| :+ 3] == Ob~1~1~0
     }}.
 
-  Definition step_multiplier : uaction reg_t empty_ext_fn_t :=
+  Definition step_multiplier : uaction reg_t ext_fn_t :=
     {{
         mulState.(multiplier.step)()
     }}.
@@ -597,7 +608,7 @@ Module  RV32ICore.
   Definition tc_step_multiplier :=
     tc_action R empty_Sigma step_multiplier.
 
-  Definition execute : uaction reg_t empty_ext_fn_t :=
+  Definition execute : uaction reg_t ext_fn_t :=
     {{
         let decoded_bookeeping := d2e.(fromDecode.deq)() in
         if get(decoded_bookeeping, epoch) == read0(epoch) then
@@ -666,9 +677,9 @@ Module  RV32ICore.
     }}.
 
   Definition tc_execute :=
-    tc_action R empty_Sigma execute.
+    tc_action R Sigma execute.
 
-  Definition writeback : uaction reg_t empty_ext_fn_t :=
+  Definition writeback : uaction reg_t ext_fn_t :=
     {{
         let execute_bookeeping := e2w.(fromExecute.deq)() in
         let dInst := get(execute_bookeeping, dInst) in
@@ -703,49 +714,61 @@ Module  RV32ICore.
     }}.
 
   Definition tc_writeback :=
-    tc_action R empty_Sigma writeback.
+    tc_action R Sigma writeback.
 
-  Definition externalI_environment : uaction reg_t empty_ext_fn_t :=
+  Definition mem_put (m: memory) : uaction reg_t ext_fn_t :=
+    let Q := match m with imem => toIMem | dmem => toDMem end in
     {{
-        let readRequestI := toIMem.(MemReq.deq)() in
-        let IAddress := get(readRequestI, addr) in
-        let IEn := get(readRequestI, byte_en) in
-        fromIMem.(MemResp.enq)(struct mem_resp {|byte_en := IEn ; addr := IAddress; data := |32`d0| |})
+        let req := struct (Maybe (struct_t mem_req))
+                         {| valid := Q.(MemReq.can_deq)();
+                            data := Q.(MemReq.deq)() |} in
+        let resp := extcall (ext_mem m mput)(req) in
+        guard (get (resp, valid))
     }}.
 
-  Definition tc_externalI :=
-    tc_action R empty_Sigma externalI_environment.
-
-  Definition externalD_environment : uaction reg_t empty_ext_fn_t :=
+  Definition mem_get (m: memory) : uaction reg_t ext_fn_t :=
+    let Q := match m with imem => fromIMem | dmem => fromDMem end in
     {{
-        let readRequestD := toDMem.(MemReq.deq)() in
-        let DAddress := get(readRequestD, addr) in
-        let DEn := get(readRequestD, byte_en) in
-        fromDMem.(MemResp.enq)(struct mem_resp {|byte_en := DEn ; addr := DAddress; data := |32`d0| |})
+        let req := struct (Maybe unit_t)
+                         {| valid := Q.(MemResp.can_enq)();
+                            data := #Ob |} in
+        let resp := extcall (ext_mem m mget)(req) in
+        guard (get (resp, valid));
+        Q.(MemResp.enq)(get(resp, data))
     }}.
 
-  Definition tc_externalD :=
-    tc_action R empty_Sigma externalD_environment.
+  Definition tc_imem_put := tc_action R Sigma (mem_put imem).
+  Definition tc_dmem_put := tc_action R Sigma (mem_put dmem).
+  Definition tc_imem_get := tc_action R Sigma (mem_get imem).
+  Definition tc_dmem_get := tc_action R Sigma (mem_get dmem).
 
-  Inductive rv_rules_t := Fetch | Decode | Execute | Writeback | ExternalI | ExternalD | WaitImem | StepMultiplier.
+  Inductive rv_rules_t :=
+  | Fetch
+  | Decode
+  | Execute
+  | Writeback
+  | FromI
+  | FromD
+  | ToI
+  | ToD
+  | WaitImem
+  | StepMultiplier.
 
-  Definition rv_rules (rl:rv_rules_t) : rule R empty_Sigma:=
+  Definition rv_rules (rl:rv_rules_t) : rule R Sigma :=
     match rl with
     | Fetch     => tc_fetch
     | Decode    => tc_decode
     | Execute   => tc_execute
     | Writeback => tc_writeback
-    | ExternalI => tc_externalI
-    | ExternalD => tc_externalD
     | WaitImem  => tc_wait_imem
+    | FromI => tc_imem_get
+    | FromD => tc_dmem_get
+    | ToI => tc_imem_put
+    | ToD => tc_dmem_put
     | StepMultiplier => tc_step_multiplier
     end.
 
-  Definition rv_external (rl: rv_rules_t) :=
-    match rl with
-    | ExternalI | ExternalD => true
-    | _ => false
-    end.
+  Definition rv_external (rl: rv_rules_t) := false.
 
   Definition rv_register_name (v: Vect.index 32) :=
     match index_to_nat v with
