@@ -6,6 +6,99 @@ Require Import Koika.Std.
 Require Import RV.RVEncoding.
 Require Import RV.Scoreboard.
 
+Module Type MultiplierSize.
+  Parameter n: nat.
+End MultiplierSize.
+
+Module MultiplierModule (s: MultiplierSize).
+  Import s.
+
+  Inductive reg_t := valid | operand1 | operand2 | rd_idx | result | n_step | finished.
+
+  Definition R r :=
+    match r with
+    | valid => bits_t 1          (* A computation is being done *)
+    | operand1 => bits_t n       (* The first operand *)
+    | operand2 => bits_t n       (* The second operand *)
+    | rd_idx => bits_t (log2 n) (* The register that will contain the result *)
+    | result => bits_t (n+n)     (* The result being computed *)
+    | n_step => bits_t (log2 n)  (* At which step of the computation we are *)
+    | finished => bits_t 1       (* Indicates if the computation has finished *)
+    end.
+
+  Definition r idx : R idx :=
+    match idx with
+    | valid => Bits.zero
+    | operand1 => Bits.zero
+    | operand2 => Bits.zero
+    | rd_idx => Bits.zero
+    | result => Bits.zero
+    | n_step => Bits.zero
+    | finished => Bits.zero
+    end.
+
+  Definition name_reg r :=
+    match r with
+    | valid => "valid"
+    | operand1 => "operand1"
+    | operand2 => "operand2"
+    | rd_idx => "rd_idx"
+    | result => "result"
+    | n_step => "n_step"
+    | finished => "finished"
+    end.
+
+  Definition enq : UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun enq (op1 : bits_t n) (op2 : bits_t n) (output_reg : bits_t (log2 n)): bits_t 0 =>
+         if (!read0(valid)) then
+           write0(valid, #Ob~1);
+           write0(operand1, op1);
+           write0(operand2, op2);
+           write0(rd_idx, output_reg);
+           write0(result, |(n+n)`d0|);
+           write0(n_step, |(log2 n)`d0|)
+         else
+           fail
+    }}.
+
+  Definition multiplier_output :=
+    {| struct_name := "multiplierOutput";
+       struct_fields := ("data", bits_t (n+n))
+                          :: ("rd_idx", bits_t (log2 n))
+                          :: nil |}.
+
+  Definition deq : UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun deq () : struct_t multiplier_output =>
+         if (read1(valid) && read1(finished)) then
+           write1(finished, #Ob~0);
+           write1(valid, #Ob~0);
+           let result := read1(result) in
+           let rd_idx := read1(rd_idx) in
+           struct multiplier_output {| data := result; rd_idx := rd_idx |}
+         else
+           fail@(struct_t multiplier_output)
+    }}.
+
+  Definition step : UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun step () : bits_t 0 =>
+         if (read0(valid) && !read0(finished)) then
+           let n_step_val := read0(n_step) in
+           (if read0(operand2)[n_step_val] then
+             let partial_mul := zeroExtend(read0(operand1), n+n) << n_step_val in
+             write0(result, read0(result) + partial_mul)
+           else
+             pass);
+           if (n_step_val == #(Bits.of_nat (log2 n) (n-1))) then
+             write0(finished, #Ob~1)
+           else
+             write0(n_step, n_step_val + |(log2 n)`d1|)
+         else
+           fail
+    }}.
+
+  Instance FiniteType_reg_t : FiniteType reg_t := _.
+
+End MultiplierModule.
 
 Section RV32IHelpers.
   Context {reg_t: Type}.
@@ -262,12 +355,9 @@ Section RV32IHelpers.
          : bits_t 32 =>
          let shamt := b[Ob~0~0~0~0~0 :+ 5] in
          let inst_30 := funct7[|3`d5|] in
-         let inst_25 := funct7[|3`d0|] in
          match funct3 with
          | #funct3_ADD  => if (inst_30 == Ob~1) then
                             a - b
-                          else if (inst_25 == Ob~1) then
-                            (a * b)[|6`d0| :+ 32]
                           else
                             a + b
          | #funct3_SLL  => a << shamt
@@ -295,7 +385,8 @@ Section RV32IHelpers.
           let isIMM := (inst[|5`d5|] == Ob~0) in
           let rd_val := |32`d0| in
           (if (isLUI) then
-             set rd_val := imm_val           else if (isAUIPC) then
+             set rd_val := imm_val
+           else if (isAUIPC) then
                   set rd_val := (pc + imm_val)
                 else
                   let alu_src1 := rs1_val in
@@ -441,6 +532,11 @@ Module  RV32ICore.
   End Scoreboard_32reg.
   Module Scoreboard := Scoreboard Scoreboard_32reg.
 
+  Module SizeMultiplier <: MultiplierSize.
+    Definition n := 32.
+  End SizeMultiplier.
+  Module multiplier := MultiplierModule SizeMultiplier.
+
   (* Declare state *)
   Inductive reg_t :=
   | toIMem (state: MemReq.reg_t)
@@ -452,6 +548,7 @@ Module  RV32ICore.
   | d2e (state: fromDecode.reg_t)
   | e2w (state: fromExecute.reg_t)
   | rf (state: Rf.reg_t)
+  | mulState (state: multiplier.reg_t)
   | scoreboard (state: Scoreboard.reg_t)
   | instr_count
   | pc
@@ -470,6 +567,7 @@ Module  RV32ICore.
     | e2w r => fromExecute.R r
     | rf r => Rf.R r
     | scoreboard r => Scoreboard.R r
+    | mulState r => multiplier.R r
     | pc => bits_t 32
     | instr_count => bits_t 32
     | epoch => bits_t 1
@@ -488,6 +586,7 @@ Module  RV32ICore.
     | d2e s => fromDecode.r s
     | e2w s => fromExecute.r s
     | scoreboard s => Scoreboard.r s
+    | mulState s => multiplier.r s
     | pc => Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0
     | instr_count => Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0
     | epoch => Bits.zero
@@ -572,6 +671,14 @@ Module  RV32ICore.
           get(dInst,inst)[|5`d4| :+ 3] == Ob~1~1~0
     }}.
 
+  Definition step_multiplier : uaction reg_t empty_ext_fn_t :=
+    {{
+        mulState.(multiplier.step)()
+    }}.
+
+  Definition tc_step_multiplier :=
+    tc_action R empty_Sigma step_multiplier.
+
   Definition execute : uaction reg_t empty_ext_fn_t :=
     {{
         let decoded_bookeeping := d2e.(fromDecode.deq)() in
@@ -584,54 +691,60 @@ Module  RV32ICore.
             write0(epoch, read0(epoch)+Ob~1);
             write0(pc, |32`d0|)
           else
-            (let imm := getImmediate(dInst) in
-             let pc := get(decoded_bookeeping, pc) in
-             let fInst := get(dInst, inst) in
+            (let fInst := get(dInst, inst) in
+             let funct3 := get(getFields(fInst), funct3) in
+             let funct7 := get(getFields(fInst), funct7) in
              let rs1_val := get(decoded_bookeeping, rval1) in
              let rs2_val := get(decoded_bookeeping, rval2) in
-             let data := execALU32(fInst, rs1_val, rs2_val, imm, pc) in
-             let isUnsigned := Ob~0 in
-             let funct3 := get(getFields(fInst), funct3) in
-             let size := funct3[|2`d0| :+ 2] in
-             let addr := rs1_val + imm in
-             let offset := addr[|5`d0| :+ 2] in
-             if isMemoryInst(dInst) then
-               let shift_amount := offset ++ |3`d0| in
-               let byte_en := match size with
-                              | Ob~0~0 => Ob~0~0~0~1
-                              | Ob~0~1 => Ob~0~0~1~1
-                              | Ob~1~0 => Ob~1~1~1~1
-                              return default: fail(4)
-                              end << offset in
-               set data := rs2_val << shift_amount;
-               set addr := addr[|5`d2| :+ 30 ] ++ |2`d0|;
-               set isUnsigned := funct3[|2`d2|];
-               let type_mem := if (fInst[|5`d5|] == Ob~1)
-                               then byte_en
-                               else Ob~0~0~0~0 in
-               let req := struct mem_req {|
-                                   byte_en := type_mem;
-                                   addr := addr;
-                                   data := data |} in
-               toDMem.(MemReq.enq)(req)
-             else if (isControlInst(dInst)) then
-                    set data := (pc + |32`d4|)     (* For jump and link *)
-                  else pass;
-             let controlResult := execControl32(fInst, rs1_val, rs2_val, imm, pc) in
-             let nextPc := get(controlResult,nextPC) in
-             if nextPc != get(decoded_bookeeping, ppc) then
-               write0(epoch, read0(epoch)+Ob~1);
-               write0(pc, nextPc)
+             let opcode := get(getFields(fInst), opcode) in
+             (* Use the multiplier module or the ALU *)
+             if ((funct3 == #funct3_MUL) && (funct7 == #funct7_MUL) && (opcode == #opcode_OP)) then
+               mulState.(multiplier.enq)(rs1_val, rs2_val, get(getFields(fInst), rd))
              else
-               pass;
-             let execute_bookkeeping := struct execute_bookkeeping {|
-                                                 isUnsigned := isUnsigned;
-                                                 size := size;
-                                                 offset := offset;
-                                                 newrd := data;
-                                                 dInst := get(decoded_bookeeping, dInst)
-                                               |} in
-             e2w.(fromExecute.enq)(execute_bookkeeping))
+               (let imm := getImmediate(dInst) in
+                let pc := get(decoded_bookeeping, pc) in
+                let data := execALU32(fInst, rs1_val, rs2_val, imm, pc) in
+                let isUnsigned := Ob~0 in
+                let size := funct3[|2`d0| :+ 2] in
+                let addr := rs1_val + imm in
+                let offset := addr[|5`d0| :+ 2] in
+                if isMemoryInst(dInst) then
+                  let shift_amount := offset ++ |3`d0| in
+                  let byte_en := match size with
+                                 | Ob~0~0 => Ob~0~0~0~1
+                                 | Ob~0~1 => Ob~0~0~1~1
+                                 | Ob~1~0 => Ob~1~1~1~1
+                                 return default: fail(4)
+                                 end << offset in
+                  set data := rs2_val << shift_amount;
+                  set addr := addr[|5`d2| :+ 30 ] ++ |2`d0|;
+                  set isUnsigned := funct3[|2`d2|];
+                  let type_mem := if (fInst[|5`d5|] == Ob~1)
+                                  then byte_en
+                                  else Ob~0~0~0~0 in
+                  let req := struct mem_req {|
+                                      byte_en := type_mem;
+                                      addr := addr;
+                                      data := data |} in
+                  toDMem.(MemReq.enq)(req)
+                else if (isControlInst(dInst)) then
+                       set data := (pc + |32`d4|)     (* For jump and link *)
+                else pass;
+                let controlResult := execControl32(fInst, rs1_val, rs2_val, imm, pc) in
+                let nextPc := get(controlResult,nextPC) in
+                if nextPc != get(decoded_bookeeping, ppc) then
+                  write0(epoch, read0(epoch)+Ob~1);
+                  write0(pc, nextPc)
+                else
+                  pass;
+                let execute_bookkeeping := struct execute_bookkeeping {|
+                                                    isUnsigned := isUnsigned;
+                                                    size := size;
+                                                    offset := offset;
+                                                    newrd := data;
+                                                    dInst := get(decoded_bookeeping, dInst)
+                                                  |} in
+                e2w.(fromExecute.enq)(execute_bookkeeping)))
         else
           pass
     }}.
@@ -674,6 +787,20 @@ Module  RV32ICore.
   Definition tc_writeback :=
     tc_action R empty_Sigma writeback.
 
+  Definition multiplier_writeback : uaction reg_t empty_ext_fn_t :=
+    {{
+        let result := mulState.(multiplier.deq)() in
+        let rd_idx := get(result, rd_idx) in
+        let data := get(result, data) in
+        scoreboard.(Scoreboard.remove)(rd_idx);
+        if (rd_idx == |5`d0|)
+        then pass
+        else rf.(Rf.write_0)(rd_idx, data[|6`d0| :+ 32])
+    }}.
+
+  Definition tc_multiplier_writeback :=
+    tc_action R empty_Sigma multiplier_writeback.
+
   Definition externalI_environment : uaction reg_t empty_ext_fn_t :=
     {{
         let readRequestI := toIMem.(MemReq.deq)() in
@@ -696,7 +823,7 @@ Module  RV32ICore.
   Definition tc_externalD :=
     tc_action R empty_Sigma externalD_environment.
 
-  Inductive rv_rules_t := Fetch | Decode | Execute | Writeback | ExternalI | ExternalD | WaitImem.
+  Inductive rv_rules_t := Fetch | Decode | Execute | Writeback | MultiplierWriteback | ExternalI | ExternalD | WaitImem | StepMultiplier.
 
   Definition rv_rules (rl:rv_rules_t) : rule R empty_Sigma:=
     match rl with
@@ -704,9 +831,11 @@ Module  RV32ICore.
     | Decode    => tc_decode
     | Execute   => tc_execute
     | Writeback => tc_writeback
+    | MultiplierWriteback => tc_multiplier_writeback
     | ExternalI => tc_externalI
     | ExternalD => tc_externalD
     | WaitImem  => tc_wait_imem
+    | StepMultiplier => tc_step_multiplier
     end.
 
   Definition rv_external (rl: rv_rules_t) :=
