@@ -16,6 +16,11 @@ Definition empty_csigma fn
 Definition empty_ext_fn_names (fn: empty_ext_fn_t)
   : string := match fn with end.
 
+Instance Lift_empty {A} : Lift empty_ext_fn_t A :=
+  fun fn => match fn with end.
+Instance Lift_self {A} : Lift A A :=
+  fun fn => fn.
+
 Section Packages.
   (** [pos_t]: The type of positions used in actions.
       Typically [string] or [unit]. *)

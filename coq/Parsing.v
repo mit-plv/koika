@@ -73,13 +73,13 @@ Notation "'set' a ':=' b" := (UAssign a b) (in custom koika at level 89, a custo
 Notation "'(' a ')'" := (a) (in custom koika at level 1, a custom koika, format "'[v' '(' a ')' ']'").
 
 Notation "instance  '.(' method ')' args" :=
-  (USugar (UCallModule instance id method args))
+  (USugar (UCallModule instance _ method args))
     (in custom koika at level 1, instance constr at level 0, method constr, args custom koika_args at level 99).
 Notation "'{' method '}' args" :=
-  (UInternalCall method args)
+  (USugar (UCallModule id _ method args))
     (in custom koika at level 1, method constr at level 200 , args custom koika_args at level 99, only parsing).
 Notation "method args" :=
-  (UInternalCall method args)
+  (USugar (UCallModule id _ method args))
     (in custom koika at level 1, method constr at level 0 , args custom koika_args at level 99, only parsing).
 
 Notation "a" := (UVar (ident_to_string a)) (in custom koika at level 1, a constr at level 0, only parsing).
@@ -143,19 +143,19 @@ Notation "'fun' nm '()' ':' ret '=>' body" :=
 
 (* Deprecated *)
 Notation "'call' instance method args" :=
-  (USugar (UCallModule instance id method args))
+  (USugar (UCallModule instance _ method args))
     (in custom koika at level 99, instance constr at level 0, method constr at level 0, args custom koika_args).
 Notation "'funcall' method args" :=
-  (UInternalCall method args)
+  (USugar (UCallModule id _ method args))
     (in custom koika at level 98, method constr at level 0, args custom koika_args).
 Notation "'extcall' method '(' arg ')'" :=
   (UExternalCall method arg)
     (in custom koika at level 98, method constr at level 0, arg custom koika).
 Notation "'call0' instance method " :=
-  (USugar (UCallModule instance id method nil))
+  (USugar (UCallModule instance _ method nil))
     (in custom koika at level 98, instance constr at level 0, method constr).
 Notation "'funcall0' method " :=
-  (UInternalCall method nil)
+  (USugar (UCallModule id _ method nil))
     (in custom koika at level 98,  method constr at level 0).
 
 Notation "'get' '(' v ',' f ')'" :=

@@ -3,6 +3,8 @@ Require Export Koika.Common Koika.Primitives Koika.Types Koika.ErrorReporting.
 
 Section Syntax.
   Context {pos_t var_t rule_name_t fn_name_t: Type}.
+  Class Lift {from to: Type} := lift: from -> to.
+  Hint Mode Lift - ! : typeclass_instances.
 
   Inductive uaction {reg_t ext_fn_t} :=
   | UError (err: error pos_t var_t fn_name_t)
@@ -37,7 +39,7 @@ Section Syntax.
   | UArrayInit (tau: type) (elements: list uaction)
   | UCallModule {module_reg_t module_ext_fn_t: Type}
                 (fR: module_reg_t -> reg_t)
-                (fSigma: module_ext_fn_t -> ext_fn_t)
+                (fSigma: @Lift module_ext_fn_t ext_fn_t)
                 (fn: InternalFunction var_t fn_name_t (@uaction module_reg_t module_ext_fn_t))
                 (args: list uaction).
 
@@ -48,6 +50,7 @@ Section Syntax.
   | SPos (p: pos_t) (s: scheduler).
 End Syntax.
 
+Arguments Lift: clear implicits.
 Arguments usugar : clear implicits.
 Arguments uaction : clear implicits.
 Arguments scheduler : clear implicits.
