@@ -95,7 +95,7 @@ Module Fifo1Bypass (f: Fifo).
 End Fifo1Bypass.
 
 Definition Maybe tau :=
-  {| struct_name := "maybe";
+  {| struct_name := "maybe_" ++ type_id tau;
      struct_fields := ("valid", bits_t 1)
                         :: ("data", tau)
                         :: nil |}.
