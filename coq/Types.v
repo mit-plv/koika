@@ -313,6 +313,16 @@ Arguments arg_sig : clear implicits.
 Definition prod_of_argsig {var_t} (a: @arg_sig var_t) :=
   (a.(arg_name), a.(arg_type)).
 
+(** * Debugging and disambiguation of type names **)
+
+Fixpoint type_id (tau: type) : string :=
+  match tau with
+  | bits_t sz => "bits_" ++ show sz
+  | enum_t sig => sig.(enum_name)
+  | struct_t sig => sig.(struct_name)
+  | array_t sig => "array_" ++ show sig.(array_len) ++ "_" ++ type_id sig.(array_type)
+  end.
+
 (** * Equalities **)
 
 Ltac existT_dec :=
