@@ -103,23 +103,19 @@ namespace cuttlesim {
   static _unused const char* version = "CuttleSim v0.0.1";
 }
 
-struct unit_t {};
-
 template<std::size_t size>
-using bits_t = std::conditional_t<size ==  0, unit_t,
-               std::conditional_t<size <=  8, std::uint8_t,
+using bits_t = std::conditional_t<size <=  8, std::uint8_t,
                std::conditional_t<size <= 16, std::uint16_t,
                std::conditional_t<size <= 32, std::uint32_t,
                std::conditional_t<size <= 64, std::uint64_t,
-                                  wbits_t<size>>>>>>;
+                                  wbits_t<size>>>>>;
 
 template<std::size_t size>
-using sbits_t = std::conditional_t<size ==  0, unit_t,
-                std::conditional_t<size <=  8, std::int8_t,
+using sbits_t = std::conditional_t<size <=  8, std::int8_t,
                 std::conditional_t<size <= 16, std::int16_t,
                 std::conditional_t<size <= 32, std::int32_t,
                 std::conditional_t<size <= 64, std::int64_t,
-                                   wsbits_t<size>>>>>>;
+                                   wsbits_t<size>>>>>;
 
 namespace prims {
   using bitwidth = std::size_t;
@@ -144,6 +140,7 @@ namespace prims {
   };
 
   template <bitwidth sz> struct bits;
+  // https://stackoverflow.com/questions/4660123/
   template <bitwidth sz> std::ostream& operator<<(std::ostream& /*os*/, const bits<sz>& /*bs*/);
 
   template<bitwidth sz>
@@ -241,6 +238,44 @@ namespace prims {
     }
   };
 
+  template<>
+  struct bits<0> {
+    bits_t<0> v = 0;
+
+    /// Representation invariant
+    static constexpr bitwidth padding_width() noexcept { return std::numeric_limits<bits_t<0>>::digits; }
+    static bits_t<0> bitmask() noexcept { return 0; }
+    void invariant() const noexcept { assume(v == 0); }
+
+    /// Casts
+    sbits_t<0> to_sbits() const { return 0; };
+    static bits<0> of_sbits(sbits_t<0>) { return {}; }
+    sbits_t<0> to_shifted_sbits() const { return 0; }
+    static bits<0> of_shifted_sbits(sbits_t<0>) { return {}; }
+
+    /// Constants
+    static bits<0> ones() { return {}; }
+
+    /// Member functions
+    explicit operator bool() const { return false; }
+    explicit operator bits_t<0>() const { return 0; }
+    template<bitwidth idx_sz> bits<1>
+    operator[](bits<idx_sz>) const { return bits<1>{0}; }
+    bits<0>& operator&=(bits<0>) { return *this; }
+    bits<0>& operator|=(bits<0>) { return *this; }
+    bits<0>& operator^=(bits<0>) { return *this; }
+    bits<0>& operator+=(bits<0>) { return *this; }
+    bits<0>& operator-=(bits<0>) { return *this; }
+    bits<0>& operator<<=(size_t) { return *this; }
+    bits<0>& operator>>=(size_t) { return *this; }
+    template<bitwidth shift_sz> bits<0>& operator<<=(bits<shift_sz>) { return *this; }
+    template<bitwidth shift_sz> bits<0>& operator>>=(bits<shift_sz>) { return *this; }
+    friend std::ostream& operator<<<0>(std::ostream& os, const bits<0>& bs);
+
+    /// Constructors
+    template<typename T> static constexpr bits<0> mk(T arg) { return {}; }
+  };
+
   using unit = bits<0>;
   static const _unused unit tt{};
 
@@ -300,6 +335,7 @@ namespace prims {
 
     template <uint base, bitwidth sz, char... cs>
     struct parse_number<parser::u64, base, sz, cs...> {
+      // Not using bits<sz>::bitmask because it isn't constexpr
       static constexpr uint64_t max = std::numeric_limits<bits_t<sz>>::max() >> bits<sz>::padding_width();
       static constexpr bits_t<sz> v = parse_u64<base, max, 0, cs...>();
     };
