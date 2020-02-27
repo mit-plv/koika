@@ -3,12 +3,7 @@ import BRAM::*;
 import rv32_bsv::*;
 typedef Bit#(32) Word;
 
-interface OutProc;
-    method Bool isStopped();
-    method Bit#(32) counter();
-endinterface
-
-module top_bsv(OutProc);
+module top_bsv(Empty);
     // Instantiate the dual ported memory
     BRAM_Configure cfg = defaultValue();
     cfg.loadFormat = tagged Hex "mem.vmh";
@@ -17,15 +12,14 @@ module top_bsv(OutProc);
     RVIfc rv_core <- mkRv32;
     Reg#(Mem) ireq <- mkRegU;
     Reg#(Mem) dreq <- mkRegU;
-    let debug = True;
-    Reg#(Bool) stop <- mkReg(False);
+    let debug = False;
     Reg#(Bit#(32)) cycle_count <- mkReg(0);
 
-    rule tic (!stop);
+    rule tic;
 	    cycle_count <= cycle_count + 1;
     endrule
 
-    rule requestI (!stop);
+    rule requestI;
 	let req <- rv_core.getIReq;
 	if (debug) $display("Get IReq", fshow(req));
 	ireq <= req;
@@ -64,14 +58,13 @@ module top_bsv(OutProc);
 		    if (req.addr == 'h4000_1000) begin
 			// Exiting Simulation
 			if (req.data == 0) begin
-			    $fdisplay(stderr, "PASSED");
+    			    $fdisplay(stderr, "  [0;32mPASS[0m");
 			end
 			else
 			    begin
-				$fdisplay(stderr, "FAILED %0d", req.data);
+    				$fdisplay(stderr, "  [0;31mFAIL[0m (%0d)", req.data);
 			    end
 			$fflush(stderr);
-			stop <= True;
 			$finish;
 		    end
         end
@@ -90,10 +83,4 @@ module top_bsv(OutProc);
         rv_core.getDResp(req);
     endrule
     
-    method Bool isStopped();
-	return stop;
-    endmethod
-    method Bit#(32) counter();
-	return cycle_count;
-    endmethod
 endmodule

@@ -35,7 +35,7 @@ module top(Empty);
     // We only care about the writes.
 
     rule tic;
-            cycle_count <= cycle_count;
+            cycle_count <= cycle_count + 1;
     endrule
 
     rule requestI;

@@ -40,13 +40,14 @@ interface RVIfc;
 endinterface
 
 module mkRv32(RVIfc);
-    FIFO#(Mem) toImem <- mkFIFO;
-    FIFO#(Mem) fromImem <- mkFIFO;
-    FIFO#(Mem) toDmem <- mkFIFO;
-    FIFO#(Mem) fromDmem <- mkFIFO;
-    FIFO#(Fetch_bookkeeping) fromFetch <- mkFIFO;
-    FIFO#(Decode_bookkeeping) fromDecode <- mkFIFO;
-    FIFO#(Execute_bookkeeping) fromExecute <- mkFIFO;
+    FIFO#(Mem) toImem <- mkBypassFIFO;
+    FIFO#(Mem) fromImem <- mkLFIFO;
+    FIFO#(Mem) toDmem <- mkBypassFIFO;
+    FIFO#(Mem) fromDmem <- mkLFIFO;
+    FIFO#(Fetch_bookkeeping) fromFetch <- mkLFIFO;
+    FIFO#(Fetch_bookkeeping) fromFetchprim <- mkLFIFO;
+    FIFO#(Decode_bookkeeping) fromDecode <- mkLFIFO;
+    FIFO#(Execute_bookkeeping) fromExecute <- mkLFIFO;
     Rf rf <- mkRf;
 
     Ehr#(2,Bit#(32)) pc <- mkEhr(32'h00000000);
@@ -58,8 +59,8 @@ module mkRv32(RVIfc);
     Bool debug = False;
 
     rule fetch;
-	if(debug) $display("Fetch %x", pc[1]);
-	let newpc = pc[1];
+	    if(debug) $display("Fetch %x", pc[1]);
+	    let newpc = pc[1];
         let req = Mem {byte_en : 0,
 			   addr : newpc,
 			   data : 0};
@@ -71,20 +72,18 @@ module mkRv32(RVIfc);
         fromFetch.enq(fetch_bookkeeping);
     endrule
 
-    // rule fetchDelay;
-    //    let fetch_bookkeeping = fromFetch.first();
-    //    fromFetch.deq();
-    // 	if (fetch_bookkeeping.epoch == epoch[1]) begin
-    // 	    fromFetchprim.enq(fetch_bookkeeping);
-    // 	end
-    // endrule
+    rule fetchDelay;
+       let fetch_bookkeeping = fromFetch.first();
+       fromFetch.deq();
+       fromFetchprim.enq(fetch_bookkeeping);
+    endrule
 
 
     rule decode;
         let resp = fromImem.first();
         let instr = resp.data;
-        // let fetched_bookkeeping = fromFetchprim.first();
-	let fetched_bookkeeping = fromFetch.first();
+         let fetched_bookkeeping = fromFetchprim.first();
+	//let fetched_bookkeeping = fromFetch.first();
         let decodedInst = decodeInst(instr);
         if (fetched_bookkeeping.epoch == epoch[1]) begin
             let rs1_idx = getInstFields(instr).rs1;
@@ -93,7 +92,8 @@ module mkRv32(RVIfc);
 	    let score2 = scoreboard.search(rs2_idx);
 	    if (score1 == 0 && score2 == 0) begin
 		if(debug) $display("[Decode] Right path: ", fshow(decodedInst));
-		fromFetch.deq();
+		//fromFetch.deq();
+		fromFetchprim.deq();
 		fromImem.deq();
 		if (decodedInst.valid_rd) begin
                     let rd_idx = getInstFields(instr).rd;
@@ -115,7 +115,8 @@ module mkRv32(RVIfc);
 	else begin
 	    if(debug) $display("[Decode] Drop Decoded inst ", fshow(decodedInst));
 	    // Poisoned, drop
-	    fromFetch.deq();
+	    //fromFetch.deq();
+	    fromFetchprim.deq();
 	    fromImem.deq();
 	end
     endrule
@@ -142,8 +143,7 @@ module mkRv32(RVIfc);
 		let funct3 = getInstFields(fInst).funct3;
 		let size = funct3[1:0];// |2`d0| :+ 2];
 		let addr = rs1_val + imm;
-		Bit#(2) offset = 0 // addr[1:0]
-		;
+		Bit#(2) offset = addr[1:0];
 		if (isMemoryInst(dInst)) begin
 		    let shift_amount = {offset, 3'b0};
 		    let byte_en = 0;
