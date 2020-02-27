@@ -2,14 +2,17 @@ include etc/Makefile.conf
 
 dut := rv32i_core_pipelined
 objects_dir := _objects/$(dut).v
-opt_cuttlesim := $(basename $(CUTTLESIM_DRIVER)).opt
-opt_verilator := obj_dir/V$(basename $(VERILATOR_TOPLEVEL))
 tests_build := tests/_build
 
-verilator := $(objects_dir)/$(opt_verilator)
-cuttlesim := $(objects_dir)/$(opt_cuttlesim)
-cuttlesim_runner := tests/run.sh "$(cuttlesim)"
-verilator_runner := tests/run.sh "$(verilator)"
+cuttlesim := $(objects_dir)/$(basename $(CUTTLESIM_DRIVER)).opt
+verilator := $(objects_dir)/obj_dir/V$(basename $(VERILATOR_TOPLEVEL))
+pyverilator := $(objects_dir)/rvcore.pyverilator.py
+
+PYVERILATOR_TOP ?= top.v
+PYVERILATOR_PROBES ?= '*inst*_count' '*cycle_count'
+cuttlesim_runner := tests/run.sh "$(cuttlesim)" {}
+verilator_runner := tests/run.sh "$(verilator)" {}
+pyverilator_runner := tests/run.sh "$(pyverilator)" {} --vtop $(PYVERILATOR_TOP) --exit-probes $(PYVERILATOR_PROBES)
 
 DRIVER ?= bsv
 
@@ -33,19 +36,26 @@ cuttlesim: $(cuttlesim);
 
 cuttlesim-tests: binaries cuttlesim
 	@echo "-- Running tests with Cuttlesim --"
-	find $(tests_build)/rv32ui -name "*.rv32" -exec $(cuttlesim_runner) {} \;
-	find $(tests_build)/integ -name "*.rv32" -exec $(cuttlesim_runner) {} \;
+	find $(tests_build)/rv32ui -name "*.rv32" -exec $(cuttlesim_runner) \;
+	find $(tests_build)/integ -name "*.rv32" -exec $(cuttlesim_runner) \;
 
 verilator-tests: binaries verilator
 	@echo "-- Running tests with Verilator --"
-	find $(tests_build)/rv32ui -name "*.vmh" -exec $(verilator_runner) {} \;
-	find $(tests_build)/integ -name "*.vmh" -exec $(verilator_runner) {} \;
+	find $(tests_build)/rv32ui -name "*.vmh" -exec $(verilator_runner) \;
+	find $(tests_build)/integ -name "*.vmh" -exec $(verilator_runner) \;
 
-nangate45-synthesis: binaries
-	@echo "-- Synthesisizing against Nangate Open Cell Library (45nm) --"
-	$(MAKE) -C $(objects_dir)/etc/nangate45
+pyverilator-tests: binaries
+	@echo "-- Running tests with PyVerilator --"
+	find $(tests_build)/rv32ui -name "*.vmh" -exec $(pyverilator_runner) \;
+	find $(tests_build)/integ -name "*.vmh" -exec $(pyverilator_runner) \;
+
+nangate45-synthesis: core
+	cd $(objects_dir)/nangate45; ./synth.sh
 
 clean:
 	rm -rf $(tests_build) $(cuttlesim) $(verilator) ../../_build/default/examples/rv/
+
+purge:
+	rm -rf _objects
 
 .PHONY: all .FORCE cuttlesim-tests verilator-tests clean
