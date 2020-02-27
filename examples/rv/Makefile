@@ -5,7 +5,7 @@ objects_dir := _objects/$(dut).v
 tests_build := tests/_build
 
 cuttlesim := $(objects_dir)/$(basename $(CUTTLESIM_DRIVER)).opt
-verilator := $(objects_dir)/obj_dir/V$(basename $(VERILATOR_TOPLEVEL))
+verilator := $(objects_dir)/obj_dir.opt/V$(basename $(VERILATOR_TOPLEVEL))
 pyverilator := $(objects_dir)/rvcore.pyverilator.py
 
 PYVERILATOR_TOP ?= top.v

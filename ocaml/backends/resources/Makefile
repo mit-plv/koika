@@ -138,7 +138,7 @@ clean-cuttlesim:
 # Compilation
 # ===========
 
-verilator_optdir := obj_dir
+verilator_optdir := obj_dir.opt
 verilator_tracedir := obj_dir.trace
 
 VERILATOR_FLAGS ?=
