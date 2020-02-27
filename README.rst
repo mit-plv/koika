@@ -775,7 +775,7 @@ The following list shows the current state of the repo:
       - |examples/rv/RVCore.v|_: Implementation of our RISC-V core
       - |examples/rv/RVEncoding.v|_: Encoding-related constants
       - |examples/rv/Scoreboard.v|_: Implementation of a scoreboard
-      - |examples/rv/rv32i_core_pipelined.v|_: Pipelined instantiation of the core
+      - |examples/rv/rv32.v|_: Pipelined instantiation of the core
 
    - |examples/collatz.lv|_: Computing terms of the Collatz sequence (Lispy Verilog version)
    - |examples/collatz.v|_: Computing terms of the Collatz sequence (Coq version)
@@ -964,8 +964,8 @@ The following list shows the current state of the repo:
 .. _examples/rv/etc/rvcore.cuttlesim.cpp: examples/rv/etc/rvcore.cuttlesim.cpp
 .. |examples/rv/etc/rvcore.verilator.cpp| replace:: ``rvcore.verilator.cpp``
 .. _examples/rv/etc/rvcore.verilator.cpp: examples/rv/etc/rvcore.verilator.cpp
-.. |examples/rv/rv32i_core_pipelined.v| replace:: ``rv32i_core_pipelined.v``
-.. _examples/rv/rv32i_core_pipelined.v: examples/rv/rv32i_core_pipelined.v
+.. |examples/rv/rv32.v| replace:: ``rv32.v``
+.. _examples/rv/rv32.v: examples/rv/rv32.v
 .. |examples/vector.v| replace:: ``vector.v``
 .. _examples/vector.v: examples/vector.v
 .. |ocaml/backends/coq.ml| replace:: ``coq.ml``

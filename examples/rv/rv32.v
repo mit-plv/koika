@@ -22,7 +22,7 @@ Definition koika_package :=
      koika_rules := rv_rules;
      koika_rule_external := rv_external;
      koika_scheduler := rv_schedule;
-     koika_module_name := "rv32i_core_pipelined" |}.
+     koika_module_name := "rv32" |}.
 
 Definition package :=
   {| ip_koika := koika_package;
@@ -31,4 +31,4 @@ Definition package :=
      ip_verilog := {| vp_ext_fn_names := empty_ext_fn_names |} |}.
 
 Definition prog := Interop.Backends.register package.
-Extraction "rv32i_core_pipelined.ml" prog.
+Extraction "rv32.ml" prog.

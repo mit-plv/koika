@@ -30,5 +30,5 @@ int main(int argc, char** argv) {
 }
 
 // Local Variables:
-// flycheck-clang-include-path: ("/usr/share/verilator/include" "/usr/share/verilator/include/vltstd/" "../_objects/rv32i_core_pipelined.v/" "../_objects/rv32i_core_pipelined.v/obj_dir/" "../_objects/rv32i_core_pipelined.v/obj_dir.trace/")
+// flycheck-clang-include-path: ("/usr/share/verilator/include" "/usr/share/verilator/include/vltstd/" "../_objects/rv32.v/" "../_objects/rv32.v/obj_dir/" "../_objects/rv32.v/obj_dir.trace/")
 // End:

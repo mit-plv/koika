@@ -21,4 +21,4 @@ Compiling and running
 
 Both test targets run unit tests followed by a few integration tests.
 
-Additional targets (for debugging, tracing, profiling, etc.) are provided by the auto-generated Makefile.  After ``make core``, go to ``_objects/rv32i_core_pipelined.v/`` and run ``make help`` for more information.
+Additional targets (for debugging, tracing, profiling, etc.) are provided by the auto-generated Makefile.  After ``make core``, go to ``_objects/rv32.v/`` and run ``make help`` for more information.

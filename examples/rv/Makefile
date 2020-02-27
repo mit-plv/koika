@@ -1,6 +1,6 @@
 include etc/Makefile.conf
 
-dut := rv32i_core_pipelined
+dut := rv32
 objects_dir := _objects/$(dut).v
 tests_build := tests/_build
 

@@ -99,7 +99,7 @@ $(dirpath) $(dirpath)/: $(1) ocaml
 endef
 
 TESTS := $(wildcard tests/*.lv) $(wildcard tests/*.v)
-EXAMPLES := $(wildcard examples/*.lv) $(wildcard examples/*.v) examples/rv/rv32i_core_pipelined.v
+EXAMPLES := $(wildcard examples/*.lv) $(wildcard examples/*.v) examples/rv/rv32.v
 
 $(foreach fname,$(filter %.lv, $(EXAMPLES) $(TESTS)),\
 	$(eval $(call cuttlec_lv_template,$(fname))))

@@ -2,12 +2,12 @@
 #include <iostream>
 #include <optional>
 
-#include "rv32i_core_pipelined.hpp"
+#include "rv32.hpp"
 #include "elf.hpp"
 
 #define DMEM_SIZE (static_cast<std::size_t>(1) << 30)
 
-using simulator = module_rv32i_core_pipelined<unit>;
+using simulator = module_rv32<unit>;
 
 class rv_core : public simulator {
   std::unique_ptr<bits<32>[]> dmem;
@@ -107,6 +107,6 @@ int main(int argc, char** argv) {
 #endif
 
 // Local Variables:
-// flycheck-clang-include-path: ("../_objects/rv32i_core_pipelined.v/")
+// flycheck-clang-include-path: ("../_objects/rv32.v/")
 // flycheck-clang-language-standard: "c++17"
 // End:
