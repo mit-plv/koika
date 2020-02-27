@@ -12,7 +12,7 @@ module top_bsv(OutProc);
     // Instantiate the dual ported memory
     BRAM_Configure cfg = defaultValue();
     cfg.loadFormat = tagged Hex "mem.vmh";
-    BRAM2PortBE#(Bit#(12), Word, 4) bram <- mkBRAM2ServerBE(cfg);
+    BRAM2PortBE#(Bit#(14), Word, 4) bram <- mkBRAM2ServerBE(cfg);
 
     RVIfc rv_core <- mkRv32;
     Reg#(Mem) ireq <- mkRegU;
