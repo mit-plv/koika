@@ -1,6 +1,6 @@
 import Glue_types::*;
 import BRAM::*;
-import rv32i::*;
+import rv32_bsv::*;
 typedef Bit#(32) Word;
 
 interface OutProc;
@@ -17,12 +17,12 @@ module top_bsv(OutProc);
     RVIfc rv_core <- mkRv32;
     Reg#(Mem) ireq <- mkRegU;
     Reg#(Mem) dreq <- mkRegU;
-    let debug = False;
+    let debug = True;
     Reg#(Bool) stop <- mkReg(False);
-    Reg#(Bit#(32)) count <- mkReg(0);
+    Reg#(Bit#(32)) cycle_count <- mkReg(0);
 
     rule tic (!stop);
-	count <= count + 1;
+	    cycle_count <= cycle_count + 1;
     endrule
 
     rule requestI (!stop);
@@ -94,6 +94,6 @@ module top_bsv(OutProc);
 	return stop;
     endmethod
     method Bit#(32) counter();
-	return count;
+	return cycle_count;
     endmethod
 endmodule

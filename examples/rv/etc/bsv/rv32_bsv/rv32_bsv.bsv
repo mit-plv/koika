@@ -53,14 +53,9 @@ module mkRv32(RVIfc);
     Ehr#(2,Bit#(1)) epoch <- mkEhr(0);
 
     Reg#(Bit#(32)) instr_count <- mkReg(0);
-    Reg#(Bit#(32)) cycle_count <- mkReg(0);
 
     Scoreboard scoreboard <- mkScoreboard;
     Bool debug = False;
-
-    rule tic;
-	cycle_count <= cycle_count + 1;
-    endrule
 
     rule fetch;
 	if(debug) $display("Fetch %x", pc[1]);

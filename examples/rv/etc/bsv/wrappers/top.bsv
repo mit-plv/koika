@@ -8,6 +8,7 @@ module top(Empty);
     BRAM_Configure cfg = defaultValue();
     cfg.loadFormat = tagged Hex "mem.vmh";
     BRAM2PortBE#(Bit#(14), Word, 4) bram <- mkBRAM2ServerBE(cfg);
+    Reg#(Bit#(32)) cycle_count <- mkReg(0);
 
     Ifcrv32 rv_core <- mkrv32;
     Reg#(Mem) ireq <- mkRegU;
@@ -32,6 +33,10 @@ module top(Empty);
     Reg#(Bool) debug <- mkReg(False);
     // For this specific example, we don't care about the reads at all,
     // We only care about the writes.
+
+    rule tic;
+            cycle_count <= cycle_count;
+    endrule
 
     rule requestI;
 	let isValid = rv_core.ifc_ExternalI.read0_toIMem_valid0();
