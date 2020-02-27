@@ -5,11 +5,13 @@ elf2hex := elf2hex/elf2hex
 
 integ_sources := $(wildcard integ/*.c)
 rv32ui_sources := $(wildcard rv32ui/*.S)
+rv32um_sources := $(wildcard rv32um/*.S)
 integ_objects := $(patsubst %.c,$(build)/%.o,$(integ_sources))
 rv32ui_objects := $(patsubst %.S,$(build)/%.o,$(rv32ui_sources))
+rv32um_objects := $(patsubst %.S,$(build)/%.o,$(rv32um_sources))
 
-rv32_targets := $(patsubst %.o,%.rv32,$(integ_objects) $(rv32ui_objects))
-vmh_targets := $(patsubst %.o,%.vmh,$(integ_objects) $(rv32ui_objects))
+rv32_targets := $(patsubst %.o,%.rv32,$(integ_objects) $(rv32ui_objects) $(rv32um_objects))
+vmh_targets := $(patsubst %.o,%.vmh,$(integ_objects) $(rv32ui_objects) $(rv32um_objects))
 
 RISCVCC32 ?= riscv-none-embed-gcc
 RISCVCC32_ARGS := -march=rv32im -mabi=ilp32 -mstrict-align -nostartfiles -static
@@ -18,7 +20,7 @@ cc := $(RISCVCC32) $(RISCVCC32_ARGS)
 
 all: $(rv32_targets) $(vmh_targets);
 
-$(build) $(build)/integ/ $(build)/rv32ui/:
+$(build) $(build)/integ/ $(build)/rv32ui/ $(build)/rv32um/:
 	mkdir -p $@
 
 $(elf2hex):
