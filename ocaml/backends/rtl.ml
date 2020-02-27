@@ -279,14 +279,15 @@ module Verilog : RTLBackend = struct
     | EUnop (Not _, _) -> -4
     | EBinop (Concat _, _, _) -> -5
     | EUnop (Repeat _, _) -> -6
-    | EBinop ((Plus _ | Minus _), _, _) -> -7
-    | EBinop ((Lsl _ | Lsr _ | Asr _), _, _) -> -8
-    | EBinop (Compare (_, _, _), _, _) -> -9
-    | EBinop (EqBits _, _, _) -> -10
-    | EBinop (And _, _, _) -> -11
-    | EBinop (Xor _, _, _) -> -12
-    | EBinop (Or _, _, _) -> -13
-    | EMux (_, _, _) -> -14
+    | EBinop (Mul _, _, _) -> -7
+    | EBinop ((Plus _ | Minus _), _, _) -> -8
+    | EBinop ((Lsl _ | Lsr _ | Asr _), _, _) -> -9
+    | EBinop (Compare (_, _, _), _, _) -> -10
+    | EBinop (EqBits _, _, _) -> -11
+    | EBinop (And _, _, _) -> -12
+    | EBinop (Xor _, _, _) -> -13
+    | EBinop (Or _, _, _) -> -14
+    | EMux (_, _, _) -> -15
     | EUnop ((SExt _ | ZExtL _ | ZExtR _ | Lowered _), _)
       | EBinop (SliceSubst _, _, _) -> unlowered ()
 
@@ -372,6 +373,7 @@ module Verilog : RTLBackend = struct
         | SExt _ | ZExtL _ | ZExtR _ | Lowered _ -> unlowered ())
     | EBinop (f, e1, e2) ->
        (match f with
+        | Mul _ -> sp "%a * %a" p e1 p e2
         | Plus _ -> sp "%a + %a" p e1 p e2
         | Minus _ -> sp "%a - %a" p e1 p e2
         | Compare(s, CLt, _) -> sp "%a < %a" (sp_cast s p) e1 (sp_cast s p) e2

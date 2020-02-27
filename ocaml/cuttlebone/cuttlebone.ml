@@ -307,6 +307,7 @@ module Util = struct
   let binop_to_str =
     let open Extr.PrimTyped in
     function
+    | Mul _ -> "mul"
     | And _ -> "and"
     | Or _ -> "or"
     | Xor _ -> "xor"
