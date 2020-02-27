@@ -41,6 +41,10 @@ verilator-tests: binaries verilator
 	find $(tests_build)/rv32ui -name "*.vmh" -exec $(verilator_runner) {} \;
 	find $(tests_build)/integ -name "*.vmh" -exec $(verilator_runner) {} \;
 
+nangate45-synthesis: binaries
+	@echo "-- Synthesisizing against Nangate Open Cell Library (45nm) --"
+	$(MAKE) -C $(objects_dir)/etc/nangate45
+
 clean:
 	rm -rf $(tests_build) $(cuttlesim) $(verilator) ../../_build/default/examples/rv/
 
