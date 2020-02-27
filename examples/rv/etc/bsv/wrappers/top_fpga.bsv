@@ -1,13 +1,14 @@
 import Glue_types::*;
 import BRAM::*;
-import rv32i_core_pipelined::*;
+import RS232::*;
+import rv32::*;
 typedef Bit#(32) Word;
 
 interface Proc;
     interface RS232 uart_pins;
 endinterface
 
-module top(Proc);
+module top_fpga(Proc);
     Bit#(16) div_reg = 54; //100 MHz / (16*54) ~ 115200 bauds
     UART#(16) uart <- mkUART(8, NONE, STOP_1, div_reg);
     // Instantiate the dual ported memory
@@ -15,7 +16,7 @@ module top(Proc);
     cfg.loadFormat = tagged Hex "mem.vmh";
     BRAM2PortBE#(Bit#(14), Word, 4) bram <- mkBRAM2ServerBE(cfg);
 
-    Ifcrv32i_core_pipelined rv_core <- mkrv32i_core_pipelined;
+    Ifcrv32 rv_core <- mkrv32;
     Reg#(Mem) ireq <- mkRegU;
     Reg#(Mem) dreq <- mkRegU;
 
@@ -96,7 +97,7 @@ module top(Proc);
     			end
     			else
     			    begin
-    				$fdisplay(stderr, "  [0;31mFAIL[0m (%0d)", req.data);
+    				$fdisplay(stderr, "  [0;31mFAIL[0m %0d", req.data);
     			    end
     			$fflush(stderr);
     			$finish;
