@@ -19,9 +19,14 @@ def interact(locals):
         import code
         code.interact(local=locals)
 
+def vl_finish_callback(sim, *_args):
+    sim.finished = True
+
 def init_simulator(top):
     try:
-        return PyVerilator.build(top, build_dir='obj_dir.py')#, quiet=True)
+        sim = PyVerilator.build(top, build_dir='obj_dir.py', quiet=True)
+        sim.set_vl_finish_callback(lambda *args: vl_finish_callback(sim, *args))
+        return sim
     except subprocess.CalledProcessError as e:
         stderr = (e.stderr or b"").decode("utf-8")
         stdout = (e.stdout or b"").decode("utf-8")
@@ -31,6 +36,7 @@ def init_simulator(top):
 class Simulator:
     def __init__(self, top, probes, exit_probes):
         self.time = 0
+        self.top = top
         self.sim = init_simulator(top)
         self.probes = sorted(self.gather_signals(probes), key=signal_name)
         self.exit_probes = sorted(self.gather_signals(exit_probes), key=signal_name)
@@ -78,7 +84,7 @@ class Simulator:
         except KeyboardInterrupt:
             pass
         if self.exit_probes:
-            print("  {} probes:".format(basename(realpath("mem.vmh"))))
+            print("  [{}]@[{}]:".format(basename(realpath("mem.vmh")), self.top))
             self.probe_signals(self.exit_probes, False)
 
 def parse_arguments():
