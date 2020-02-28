@@ -54,10 +54,10 @@ pyverilator-tests: binaries core
 	find $(tests_build)/integ -name "*.vmh" -exec $(pyverilator_runner) \;
 
 nangate45-synthesis: core
-	cd $(objects_dir)/nangate45/default; ./synth.sh
+	cd $(objects_dir)/nangate45; SCRIPT_DIR=default ./synth.sh
 
 nangate45-retiming: core
-	cd $(objects_dir)/nangate45/retiming; ./synth.sh
+	cd $(objects_dir)/nangate45; SCRIPT_DIR=retiming ./synth.sh
 
 clean:
 	rm -rf $(tests_build) $(cuttlesim) $(verilator) ../../_build/default/examples/rv/
