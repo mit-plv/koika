@@ -39,7 +39,7 @@ interface RVIfc;
     method Action getDResp(Mem a);
 endinterface
 
-module mkRv32(RVIfc);
+module rv32_bsv(RVIfc);
     FIFO#(Mem) toImem <- mkBypassFIFO;
     FIFO#(Mem) fromImem <- mkLFIFO;
     FIFO#(Mem) toDmem <- mkBypassFIFO;

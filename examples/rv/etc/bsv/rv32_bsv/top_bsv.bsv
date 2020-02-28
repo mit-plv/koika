@@ -9,7 +9,7 @@ module top_bsv(Empty);
     cfg.loadFormat = tagged Hex "mem.vmh";
     BRAM2PortBE#(Bit#(14), Word, 4) bram <- mkBRAM2ServerBE(cfg);
 
-    RVIfc rv_core <- mkRv32;
+    RVIfc rv_core <- rv32_bsv;
     Reg#(Mem) ireq <- mkRegU;
     Reg#(Mem) dreq <- mkRegU;
     let debug = False;
