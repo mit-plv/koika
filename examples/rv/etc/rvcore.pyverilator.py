@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import argparse
-import code
 import fnmatch
 import subprocess
 import os
@@ -11,6 +10,14 @@ from pyverilator import PyVerilator
 
 def signal_name(signal):
     return signal.verilator_name
+
+def interact(locals):
+    try:
+        from IPython.terminal.embed import InteractiveShellEmbed
+        InteractiveShellEmbed().mainloop(local_ns=locals)
+    except ImportError:
+        import code
+        code.interact(local=locals)
 
 def init_simulator(top):
     try:
@@ -61,7 +68,7 @@ class Simulator:
                 }))
 
     def interact(self):
-        code.interact(local=locals())
+        interact(locals())
 
     def run(self, ncycles=-1):
         try:
