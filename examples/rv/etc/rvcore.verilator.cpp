@@ -1,4 +1,4 @@
-/*! C++ driver for rv32i simulation with Verilator !*/
+/*! C++ driver for rv32 simulation with Verilator !*/
 #include "verilator.hpp"
 #include "Vtop.h"
 

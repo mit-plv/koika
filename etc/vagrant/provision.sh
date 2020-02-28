@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+## Set up a Vagrant VM for Kôika development
 # To set up a non-vagrant VM, run as follows:
 # USERNAME=$USER LOGFILE=~/provision.log sudo --preserve-env ./provision.sh
 

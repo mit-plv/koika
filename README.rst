@@ -773,9 +773,13 @@ The following list shows the current state of the repo:
 ``examples/``
    ``rv/``
       ``etc/``
+         ``nangate45/``
+            - |examples/rv/etc/nangate45/synth.sh|_: Yosys synthesis script for Nangate Open Cell Library (45nm)
+
          - |examples/rv/etc/elf.hpp|_: Support for loading ELF files
          - |examples/rv/etc/rvcore.cuttlesim.cpp|_: C++ driver for rv32i simulation with Cuttlesim
-         - |examples/rv/etc/rvcore.verilator.cpp|_: C++ driver for rv32i simulation with Verilator
+         - |examples/rv/etc/rvcore.pyverilator.py|_: Python driver for C++ simulation with Verilator
+         - |examples/rv/etc/rvcore.verilator.cpp|_: C++ driver for rv32 simulation with Verilator
 
       - |examples/rv/RVCore.v|_: Implementation of our RISC-V core
       - |examples/rv/RVEncoding.v|_: Encoding-related constants
@@ -969,8 +973,12 @@ The following list shows the current state of the repo:
 .. _examples/rv/Scoreboard.v: examples/rv/Scoreboard.v
 .. |examples/rv/etc/elf.hpp| replace:: ``elf.hpp``
 .. _examples/rv/etc/elf.hpp: examples/rv/etc/elf.hpp
+.. |examples/rv/etc/nangate45/synth.sh| replace:: ``synth.sh``
+.. _examples/rv/etc/nangate45/synth.sh: examples/rv/etc/nangate45/synth.sh
 .. |examples/rv/etc/rvcore.cuttlesim.cpp| replace:: ``rvcore.cuttlesim.cpp``
 .. _examples/rv/etc/rvcore.cuttlesim.cpp: examples/rv/etc/rvcore.cuttlesim.cpp
+.. |examples/rv/etc/rvcore.pyverilator.py| replace:: ``rvcore.pyverilator.py``
+.. _examples/rv/etc/rvcore.pyverilator.py: examples/rv/etc/rvcore.pyverilator.py
 .. |examples/rv/etc/rvcore.verilator.cpp| replace:: ``rvcore.verilator.cpp``
 .. _examples/rv/etc/rvcore.verilator.cpp: examples/rv/etc/rvcore.verilator.cpp
 .. |examples/rv/rv32.v| replace:: ``rv32.v``

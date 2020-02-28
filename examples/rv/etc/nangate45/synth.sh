@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Use yosys to synthesize ASIC circuits against Nangate45 (PLDI 2019)
+## Yosys synthesis script for Nangate Open Cell Library (45nm)
 
 set -e
 

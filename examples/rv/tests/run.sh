@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+## Run a RISCV test
 sim=$1
 binary=$2
 args=(${@:3})

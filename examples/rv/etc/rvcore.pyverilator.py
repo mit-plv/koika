@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+## Python driver for C++ simulation with Verilator
 import argparse
 import fnmatch
 import subprocess
