@@ -1,0 +1,17 @@
+# coding: utf-8
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure(2) do |config|
+  config.vm.box = 'hashicorp/bionic64'
+  # config.vm.box = 'generic/ubuntu1810' # Ubuntu 18.10 “Cosmic Cuttlefish”
+
+  config.vm.provider 'virtualbox' do |vb|
+    vb.gui = true
+    vb.name = 'Koika'
+    vb.memory = '2048'
+  end
+
+  # config.vm.synced_folder './', '/vagrant', type: '9p', disabled: false, accessmode: "squash", owner: 'vagrant'
+  config.vm.provision :shell, path: 'provision.sh'
+end
