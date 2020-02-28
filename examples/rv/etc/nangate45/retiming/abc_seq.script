@@ -1,0 +1,73 @@
+echo + strash
+strash
+echo + balance
+balance
+echo + rewrite
+rewrite
+echo + rewrite -z
+rewrite -z
+echo + balance
+balance
+echo + rewrite -z
+rewrite -z
+echo + balance
+balance
+echo + if -x
+if -x
+echo + balance
+balance
+echo + rewrite
+rewrite
+echo + refactor
+refactor
+echo + balance
+balance
+echo + rewrite
+rewrite
+echo + rewrite -z
+rewrite -z
+echo + balance
+balance
+echo + refactor -z
+refactor -z
+echo + rewrite -z
+rewrite -z
+echo + balance
+balance
+echo + if -x
+if -x
+echo + balance -x
+balance -x
+echo + balance
+balance
+echo + rewrite
+rewrite
+echo + refactor
+refactor
+echo + balance
+balance
+echo + rewrite
+rewrite
+echo + rewrite -z
+rewrite -z
+echo + balance
+balance
+echo + refactor -z
+refactor -z
+echo + rewrite -z
+rewrite -z
+echo + balance
+balance
+echo + 
+
+echo + fraig
+fraig
+echo + scorr
+scorr
+echo + retime -D 1 -M 4
+retime -D 1 -M 4
+echo + map -D 1 -B 0.1
+map -D 1 -B 0.1
+echo + cleanup
+cleanup
+echo + 

@@ -49,13 +49,15 @@ verilator-tests: binaries verilator
 	find $(tests_build)/rv32ui -name "*.vmh" -exec $(verilator_runner) \;
 	find $(tests_build)/integ -name "*.vmh" -exec $(verilator_runner) \;
 
-pyverilator-tests: binaries
+pyverilator-tests: binaries core
 	@echo "-- Running tests with PyVerilator --"
-	find $(tests_build)/rv32ui -name "*.vmh" -exec $(pyverilator_runner) \;
 	find $(tests_build)/integ -name "*.vmh" -exec $(pyverilator_runner) \;
 
 nangate45-synthesis: core
-	cd $(objects_dir)/nangate45; ./synth.sh
+	cd $(objects_dir)/nangate45/default; ./synth.sh
+
+nangate45-retiming: core
+	cd $(objects_dir)/nangate45/retiming; ./synth.sh
 
 clean:
 	rm -rf $(tests_build) $(cuttlesim) $(verilator) ../../_build/default/examples/rv/
@@ -63,4 +65,4 @@ clean:
 purge:
 	rm -rf _objects
 
-.PHONY: all .FORCE cuttlesim-tests verilator-tests clean
+.PHONY: all .FORCE cuttlesim-tests verilator-tests nangate45-synthesis nangate45-retiming clean
