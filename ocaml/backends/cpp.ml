@@ -984,6 +984,14 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
         if Extr.member_mentions_shadowed_binding Cuttlebone.Util.any_eq_dec sg v tau m then
           failwith (sprintf "Variable %s is shadowed by a later binding, but the program references the original binding." (v_to_string v)) in
 
+      let assert_no_duplicates ~(descr: string) (elements: string list) =
+        List.fold_left (fun elems e ->
+            if StringSet.mem e elems then
+              failwith (sprintf "Duplicate element in %s: %s" descr e)
+            else StringSet.add e elems)
+          StringSet.empty elements
+        |> ignore in
+
       let rule_name_unprefixed =
         hpp.cpp_rule_names ~prefix:"" rule.rl_name in
 
@@ -1201,7 +1209,8 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
               loop (counter + 1) in
           loop 0 in
         let register_intfun pos fn argspec tau body =
-          (* FIXME assert that all args have different names *)
+          assert_no_duplicates ~descr:"argument list"
+            (List.map (fun (v, _) -> hpp.cpp_var_names v) argspec);
           match lookup_intfun fn argspec tau body with
           | _, Some _ -> ()
           | intf, None ->
