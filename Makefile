@@ -25,7 +25,13 @@ coq-all:
 	@printf "\n== Building Coq proofs ==\n"
 	dune build @coq/all
 
-.PHONY: coq coq-all
+CHECKED_MODULES ?= OneRuleAtATime Correctness
+checked_paths := $(patsubst %,$(COQ_BUILD_DIR)/%.vo,$(CHECKED_MODULES))
+
+coq-check: coq-all
+	coqchk --output-context -R $(COQ_BUILD_DIR) Koika $(checked_paths)
+
+.PHONY: coq coq-all coq-check
 
 #########
 # OCaml #
