@@ -1,7 +1,7 @@
 (*! End-to-end correctness theorem !*)
 Require Import Koika.CircuitCorrectness Koika.LoweringCorrectness.
 Require Import Koika.Common Koika.Types Koika.Environments Koika.Logs.
-Require Import Koika.Lowering Koika.CircuitGeneration Koika.CircuitOptimization Koika.Interop.
+Require Import Koika.Lowering Koika.CircuitGeneration Koika.CircuitOptimization Koika.Compiler.
 
 Section Thm.
   Context {pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t: Type}.

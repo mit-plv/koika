@@ -281,6 +281,4 @@ Section result_list_map.
     end.
 End result_list_map.
 
-Axiom __magic__ : forall {A}, A.
-
 Global Set Nested Proofs Allowed.

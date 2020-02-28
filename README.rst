@@ -728,6 +728,7 @@ The following list shows the current state of the repo:
       - |coq/TypeInference.v|_: Type inference and typechecking
 
    (Interop)
+      - |coq/Compiler.v|_: Top-level compilation function and helpers
       - |coq/Extraction.v|_: Extraction to OCaml (compiler and utilities)
       - |coq/ExtractionSetup.v|_: Custom extraction settings (also used by external |koika| programs
       - |coq/Interop.v|_: Exporting |koika| programs for use with the cuttlec command-line tool
@@ -751,6 +752,7 @@ The following list shows the current state of the repo:
 
    (Tools)
       - |coq/LoweredSyntaxFunctions.v|_: Functions defined on lowered ASTs
+      - |coq/Magic.v|_: Universal axiom to replace the ‘admit’ tactic
       - |coq/TypedSyntaxFunctions.v|_: Functions defined on typed ASTs
       - |coq/TypedSyntaxProperties.v|_: Lemmas pertaining to tools on typed syntax
 
@@ -861,6 +863,8 @@ The following list shows the current state of the repo:
 .. _coq/CircuitSyntax.v: coq/CircuitSyntax.v
 .. |coq/Common.v| replace:: ``Common.v``
 .. _coq/Common.v: coq/Common.v
+.. |coq/Compiler.v| replace:: ``Compiler.v``
+.. _coq/Compiler.v: coq/Compiler.v
 .. |coq/Correctness.v| replace:: ``Correctness.v``
 .. _coq/Correctness.v: coq/Correctness.v
 .. |coq/DeriveShow.v| replace:: ``DeriveShow.v``
@@ -899,6 +903,8 @@ The following list shows the current state of the repo:
 .. _coq/Lowering.v: coq/Lowering.v
 .. |coq/LoweringCorrectness.v| replace:: ``LoweringCorrectness.v``
 .. _coq/LoweringCorrectness.v: coq/LoweringCorrectness.v
+.. |coq/Magic.v| replace:: ``Magic.v``
+.. _coq/Magic.v: coq/Magic.v
 .. |coq/Member.v| replace:: ``Member.v``
 .. _coq/Member.v: coq/Member.v
 .. |coq/OneRuleAtATime.v| replace:: ``OneRuleAtATime.v``

@@ -7,6 +7,7 @@ Require Koika.Common
         Koika.TypeInference
         Koika.TypedSyntaxFunctions
         Koika.CircuitGeneration
+        Koika.Compiler
         Koika.Interop.
 
 (* Unset Extraction SafeImplicits. *)
@@ -35,6 +36,7 @@ Extraction "extracted.ml"
            TypedSyntaxFunctions.may_fail_without_revert
            TypedSyntaxFunctions.rule_max_log_size
            CircuitOptimization.lco_all_iterated
+           Compiler.compile_scheduler
            Interop.koika_package_t
            Interop.circuit_package_t
            Interop.sim_package_t
@@ -42,5 +44,4 @@ Extraction "extracted.ml"
            Interop.interop_package_t
            Interop.struct_of_list
            Interop.struct_to_list
-           Interop.compile_scheduler
            Interop.compile_koika_package.

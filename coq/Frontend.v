@@ -10,6 +10,7 @@ Require Export
         Koika.SyntaxFunctions
         Koika.TypedSyntaxFunctions
         Koika.Interop
+        Koika.Compiler
         Koika.Parsing
         Koika.DeriveShow
         Koika.ExtractionSetup.
