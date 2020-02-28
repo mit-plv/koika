@@ -444,7 +444,7 @@ Module  RV32ICore.
   | e2w (state: fromExecute.reg_t)
   | rf (state: Rf.reg_t)
   | scoreboard (state: Scoreboard.reg_t)
-  | inst_count
+  | instr_count
   | pc
   | epoch.
 
@@ -462,7 +462,7 @@ Module  RV32ICore.
     | rf r => Rf.R r
     | scoreboard r => Scoreboard.R r
     | pc => bits_t 32
-    | inst_count => bits_t 32
+    | instr_count => bits_t 32
     | epoch => bits_t 1
     end.
 
@@ -480,7 +480,7 @@ Module  RV32ICore.
     | e2w s => fromExecute.r s
     | scoreboard s => Scoreboard.r s
     | pc => Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0
-    | inst_count => Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0
+    | instr_count => Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0
     | epoch => Bits.zero
     end.
 
@@ -636,7 +636,7 @@ Module  RV32ICore.
         let dInst := get(execute_bookeeping, dInst) in
         let data := get(execute_bookeeping, newrd) in
         let fields := getFields(get(dInst, inst)) in
-        write0(inst_count, read0(inst_count)+|32`d1|);
+        write0(instr_count, read0(instr_count)+|32`d1|);
         if isMemoryInst(dInst) then (* // write_val *)
           (* Byte enable shifting back *)
           let resp := fromDMem.(MemResp.deq)() in
