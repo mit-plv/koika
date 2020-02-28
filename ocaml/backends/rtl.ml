@@ -573,7 +573,7 @@ module Dot = struct
 
   let p_module ~modname out { graph_roots; _ } =
     let metadata = compute_roots_metadata graph_roots in
-    let roots, ios = translate_roots metadata graph_roots in
+    let roots, _ios = translate_roots metadata graph_roots in
     fprintf out "digraph %s {\n" modname;
     List.iter (p_root out) roots;
     fprintf out "}\n"

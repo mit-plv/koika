@@ -108,7 +108,7 @@ let abort fmt =
 let run_backend backend cnf pkg =
   try run_backend' backend cnf pkg
   with UnsupportedOutput msg -> abort "%s" msg
-     | Common.CompilationError -> abort "Compilation failed"
+     | Common.CompilationError cmd -> abort "Compilation failed: %s" cmd
 
 let run_backends backends cnf pkg =
   List.iter (fun b -> run_backend b cnf pkg) backends

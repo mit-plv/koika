@@ -1,5 +1,7 @@
 include etc/Makefile.conf
 
+.DEFAULT_GOAL := all
+
 dut := rv32
 objects_dir := _objects/$(dut).v
 tests_build := tests/_build
@@ -16,11 +18,14 @@ pyverilator_runner := tests/run.sh "$(pyverilator)" {} --vtop $(PYVERILATOR_TOP)
 
 DRIVER ?= bsv
 
+VERBOSE ?=
+verbose := $(if $(VERBOSE),,@)
+
 all: cuttlesim-tests verilator-tests
 
 core:
 	$(MAKE) -C ../.. examples/rv/$(objects_dir)
-	cp $(objects_dir)/$(DRIVER)/*.v $(objects_dir)/
+	$(verbose)cp $(objects_dir)/$(DRIVER)/*.v $(objects_dir)/
 
 $(tests_build): .FORCE
 	$(MAKE) -C tests

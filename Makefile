@@ -2,7 +2,9 @@ OBJ_DIR := _obj
 BUILD_DIR := _build/default
 COQ_BUILD_DIR := ${BUILD_DIR}/coq
 OCAML_BUILD_DIR := ${BUILD_DIR}/ocaml
-PHONY :=
+
+VERBOSE ?=
+verbose := $(if $(VERBOSE),,@)
 
 default: all
 
@@ -23,7 +25,7 @@ coq-all:
 	@printf "\n== Building Coq proofs ==\n"
 	dune build @coq/all
 
-PHONY += coq coq-all
+.PHONY: coq coq-all
 
 #########
 # OCaml #
@@ -35,7 +37,7 @@ ocaml: coq
 	@printf "\n== Building OCaml library and executables ==\n"
 	dune build ocaml/cuttlec.exe ocaml/cuttlec.bc @install
 
-PHONY += ocaml
+.PHONY: ocaml
 
 ####################
 # Examples & tests #
@@ -64,9 +66,9 @@ endef
 
 # Copy additional example-specific files and execute follow-ups if any
 define cuttlec_recipe_coda =
-	if [ -d $<.etc ]; then cp -r $<.etc/* "$@"; fi
-	if [ -d $(dir $<)etc ]; then cp -r $(dir $<)etc/* "$@"; fi
-	if [ -f "$@/Makefile" ]; then $(MAKE) -C "$@"; fi
+	$(verbose)if [ -d $<.etc ]; then cp -r $<.etc/* "$@"; fi
+	$(verbose)if [ -d $(dir $<)etc ]; then cp -r $(dir $<)etc/* "$@"; fi
+	$(verbose)if [ -f "$@/Makefile" ]; then $(MAKE) -C "$@"; fi
 endef
 
 # Compile a .lv file
@@ -116,7 +118,7 @@ clean-tests:
 	find tests/ -type d -name _objects -exec rm -r {} +
 	rm -rf ${BUILD_DIR}/tests
 
-PHONY += examples clean-examples tests clean-tests
+.PHONY: examples clean-examples tests clean-tests
 
 #################
 # Whole project #
@@ -136,9 +138,8 @@ clean: clean-tests clean-examples
 	dune clean
 	rm -f koika-*.tar.gz
 
-PHONY += readme package all clean
+.PHONY: readme package all clean
 
-.PHONY: ${PHONY}
 .SUFFIXES:
 
 # Running two copies of dune in parallel isn't safe, and dune is already

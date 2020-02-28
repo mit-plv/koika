@@ -3,12 +3,12 @@ let ensure_koikalib () =
   Common.command "ocamlfind" ["query"; "-qe"; "-qo"; "koika"]
 
 let run_ocamlopt incl mli ml pkg =
-  Common.command ~verbose:true "ocamlfind"
+  Common.command "ocamlfind"
     ["ocamlopt"; "-package"; "koika.registry"; "-I"; incl;
      mli; ml; "-shared"; "-o"; pkg]
 
 let run_ocamlc incl mli ml pkg =
-  Common.command ~verbose:true "ocamlfind"
+  Common.command "ocamlfind"
     ["ocamlc"; "-package"; "koika.registry"; "-I"; incl;
      mli; ml; "-c"];
   (* ocamlc can't produce an arbitrarily named output file *)

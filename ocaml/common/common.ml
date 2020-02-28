@@ -233,7 +233,7 @@ let make_gensym gensym_prefix =
     Printf.sprintf "%s%s%d" gensym_prefix prefix counter in
   (next, reset)
 
-exception CompilationError
+exception CompilationError of string
 
 let rec replace_strings haystack = function
   | [] -> haystack
@@ -255,7 +255,7 @@ let command ?(verbose=false) ?(elapsed=false) exe args =
   let cmd = String.concat " " qargs in
   let time = Unix.gettimeofday () in
   if verbose then Printf.eprintf ">> %s\n%!" cmd;
-  if Sys.command cmd <> 0 then raise CompilationError;
+  if Sys.command cmd <> 0 then raise (CompilationError cmd);
   if verbose && elapsed then Printf.eprintf "   (%.2f s)\n%!" (Unix.gettimeofday () -. time)
 
 let (<<) f g x = f (g x)

@@ -1,10 +1,7 @@
 mod := __CUTTLEC_MODULE_NAME__
 
-all: default_target;
-
--include Makefile.conf
-
 .DEFAULT_GOAL := default
+-include Makefile.conf
 
 #############
 # Cuttlesim #
@@ -79,6 +76,8 @@ $(cuttlesim_driver).vcd: $(cuttlesim_driver).opt
 gtkwave.cuttlesim: $(cuttlesim_driver).vcd
 	gtkwave $<
 
+.PHONY: gtkwave.cuttlesim
+
 # Debugging
 # =========
 
@@ -92,6 +91,8 @@ LLDB_FLAGS ?=
 
 lldb: $(cuttlesim_driver).debug
 	lldb $(LLDB_FLAGS) -- $(sim_invoke_debug)
+
+.PHONY: gdb lldb
 
 # Profiling
 # =========
@@ -115,6 +116,8 @@ GCOV_OPTS ?= --branch-counts --demangled-names --relative-only
 $(mod).hpp.gcov $(CUTTLESIM_DRIVER).gcov: $(cuttlesim_driver).gcno $(cuttlesim_driver).cov
 	time $(sim_invoke_coverage)
 	gcov $(GCOV_OPTS) $(CUTTLESIM_DRIVER)
+
+.PHONY: perf kcachegrind
 
 # Cleanup
 # =======
@@ -208,6 +211,8 @@ endif
 twinwave: $(cuttlesim_driver).vcd $(verilator_driver).vcd
 	twinwave -A $(cuttlesim_driver).vcd + -A $(verilator_driver).vcd
 
+.PHONY: gtkwave.verilator twinwave
+
 # Cleanup
 # =======
 
@@ -273,7 +278,8 @@ clean-fpga:
 # Default targets #
 ###################
 
-default: $(cuttlesim_driver).opt
+DEFAULT_TARGET ?= $(cuttlesim_driver).opt
+default: $(DEFAULT_TARGET)
 
 clean: clean-verilator clean-cuttlesim clean-fpga;
 
@@ -398,7 +404,6 @@ help:
 	@echo '      FPGA_ARACHNE_PACKAGE = $(FPGA_ARACHNE_PACKAGE)'
 	@echo '        Package name passed to arachne-pnr'
 	@echo '      FPGA_ARACHNE_PCF = $(FPGA_ARACHNE_PCF)'
-	@echo '        Physical contrainsts file passed to arachne-pnr'
+	@echo '        Physical contraints file passed to arachne-pnr'
 
-
-.PHONY: gdb lldb perf kcachegrind gtkwave.cuttlesim gtkwave.verilator twinwave clean clean-cuttlesim clean-verilog clean-fpga help
+.PHONY: default clean-cuttlesim clean-verilog clean-fpga clean help

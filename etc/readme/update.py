@@ -87,19 +87,25 @@ def ddict():
 EXCLUDED = {
     "examples/function_call.v.etc/extfuns.hpp",
     "examples/function_call.v.etc/fetch_instr.v",
-    "examples/rv/tests/elf2hex/ElfFile.cpp",
-    "examples/rv/tests/elf2hex/ElfFile.hpp",
-    "examples/rv/tests/elf2hex/elf2hex.cpp",
     "examples/rv/etc/bsv/BRAM2BELoad.v",
     "examples/rv/etc/bsv/SizedFIFO.v",
     "examples/rv/etc/bsv/top.v",
+    "examples/rv/etc/bsv/top_fpga.v",
+    "examples/rv/etc/bsv/rv32_bsv/BRAM2BELoad.v",
+    "examples/rv/etc/bsv/rv32_bsv/FIFO2.v",
+    "examples/rv/etc/bsv/rv32_bsv/RevertReg.v",
+    "examples/rv/etc/bsv/rv32_bsv/SizedFIFO.v",
+    "examples/rv/etc/bsv/rv32_bsv/top_bsv.v",
+    "examples/rv/tests/elf2hex/ElfFile.cpp",
+    "examples/rv/tests/elf2hex/ElfFile.hpp",
+    "examples/rv/tests/elf2hex/elf2hex.cpp",
 }
 
 def collect_files():
     files = subprocess.check_output(["git", "ls-files"], encoding="utf-8")
     for f in files.splitlines():
         if f in EXCLUDED:
-            print(f"README.rst: Skipping excluded file {f}")
+            # print(f"README.rst: Skipping excluded file {f}")
             EXCLUDED.remove(f)
         elif os.path.splitext(f)[1] in KNOWN_EXTENSIONS:
             yield File(f)
