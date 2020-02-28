@@ -107,8 +107,8 @@ import "BVI" rv32 =
 module mkrv32(Ifcrv32);
  default_clock clk(CLK);
  default_reset rstn(RST_N);
-port rule_ExternalI_input__canfire = 1;
-port rule_ExternalD_input__canfire = 1;
+port rule_ExternalI_input__canfire = 1'b1;
+port rule_ExternalD_input__canfire = 1'b1;
 
 
 	interface IfcExternalD ifc_ExternalD;
