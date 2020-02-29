@@ -182,7 +182,8 @@ Notation "f ':=' expr" := (cons (f,expr) nil) (in custom koika_structs_init at l
 Notation "a ';' b" := (app a b) (in custom koika_structs_init at level 91, a custom koika_structs_init).
 Notation "'struct' structtype '{|' fields '|}'" :=
   (USugar (UStructInit structtype fields)) (in custom koika, structtype constr at level 0, fields custom koika_structs_init at level 92).
-
+Notation "'struct' structtype '{|' '|}'" :=
+  (USugar (UStructInit structtype [])) (in custom koika, structtype constr at level 0).
 
   Definition mem_req :=
     {| struct_name := "mem_req";
