@@ -1520,7 +1520,8 @@ let input_of_sim_package
 
 let clang_format fname =
   let style = "-style={BasedOnStyle: llvm, ColumnLimit: 100}" in
-  Common.command "clang-format" ["-i"; style; fname]
+  try Common.command "clang-format" ["-i"; style; fname]
+  with CompilationError _ -> ()
 
 let flags_standard =
   ["--std=c++14"]
