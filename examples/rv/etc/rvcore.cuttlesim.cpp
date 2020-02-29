@@ -5,7 +5,7 @@
 #include "rv32.hpp"
 #include "elf.hpp"
 
-#define DMEM_SIZE (static_cast<std::size_t>(1) << 30)
+#define DMEM_SIZE (static_cast<std::size_t>(1) << 25)
 
 using simulator = module_rv32<unit>;
 
@@ -54,13 +54,7 @@ protected:
       auto data = last->data;
       auto addr = last->addr;
       auto dEn = last->byte_en;
-      auto current = dmem[addr.v >> 2];
-
-      PEEK(fromDMem_data0) = struct_mem_resp {
-        .byte_en = last->byte_en,
-        .addr = last->addr,
-        .data = current
-      };
+      prims::bits<32> current{0};
 
       if (addr.v == 0x40000000 && dEn.v == 0xf) { // PutChar
         putchar(static_cast<char>(last->data.v));
@@ -70,12 +64,19 @@ protected:
       //   data.data.v = getchar();
       // }
       else {
+        current = dmem[addr.v >> 2];
         dmem[addr.v >> 2] =
           ((dEn[2'0_d] ? data : current) & 0x32'000000ff_x) |
           ((dEn[2'1_d] ? data : current) & 0x32'0000ff00_x) |
           ((dEn[2'2_d] ? data : current) & 0x32'00ff0000_x) |
           ((dEn[2'3_d] ? data : current) & 0x32'ff000000_x);
       }
+
+      PEEK(fromDMem_data0) = struct_mem_resp {
+        .byte_en = last->byte_en,
+        .addr = last->addr,
+        .data = current
+      };
 
       last.reset();
     }
