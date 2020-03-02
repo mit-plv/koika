@@ -197,7 +197,7 @@ $(verilator_driver).vcd: $(verilator_tracedir)/$(verilator_prefix)
 
 ifeq (, $(shell which xml2stems))
 gtkwave.verilator: $(verilator_driver).vcd
-	echo "Warning: xml2stems not found: not showing rtlbrowse; try installing a more recent version of GTKWave."
+	@echo "Warning: xml2stems not found: not showing rtlbrowse; try installing a more recent version of GTKWave."
 	gtkwave -A --optimize $<
 else
 # Use xml2stems because Vermin only parses up to Verilog 1995 and we use [+:] from Verilog 2000
