@@ -7,24 +7,6 @@ void vl_finish (const char* /*filename*/, int /*linenum*/, const char* /*hier*/)
   Verilated::gotFinish(true);
 }
 
-template<typename Dut>
-class RVToplevel : public Toplevel<Dut> {
-  using Toplevel<Dut>::dut;
-  using Toplevel<Dut>::cycle;
-
-protected:
-  void clock(bool up) {
-    dut.CLK = up;
-  }
-
-  void reset(bool up) {
-    dut.RST_N = up;
-  }
-
-public:
-  RVToplevel() : Toplevel<Dut>{} {}
-};
-
 int main(int argc, char** argv) {
   return _main<KoikaToplevel<Vtop>>(argc, argv);
 }
