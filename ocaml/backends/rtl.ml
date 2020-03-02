@@ -410,7 +410,7 @@ module Verilog : RTLBackend = struct
        let outputs = List.map (fun op -> { op with op_wire = field_name instance_name op.op_wire }) outputs in
        let in_args = List.map (fun { ip_name; ip_node } -> sprintf ".%s(%a)" ip_name p0 ip_node) inputs in
        let out_args = List.map (fun { op_name; op_wire; _ } -> sprintf ".%s(%s)" op_name op_wire) outputs in
-       let args = String.concat ", " (".CLK(CLK)" :: in_args @ out_args) in
+       let args = String.concat ", " (".CLK(CLK)" :: ".RST_N(RST_N)" :: in_args @ out_args) in
        List.iter (fun { op_wire; op_sz; _ } -> p_decl out "wire" op_sz op_wire) outputs;
        p_stmt out 1 "%s %s(%s)" name instance_name args;
        instance_name
