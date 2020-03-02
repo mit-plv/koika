@@ -10,15 +10,20 @@ integ_objects := $(patsubst %.c,$(build)/%.o,$(integ_sources))
 rv32ui_objects := $(patsubst %.S,$(build)/%.o,$(rv32ui_sources))
 rv32um_objects := $(patsubst %.S,$(build)/%.o,$(rv32um_sources))
 
-rv32_targets := $(patsubst %.o,%.rv32,$(integ_objects) $(rv32ui_objects) $(rv32um_objects))
-vmh_targets := $(patsubst %.o,%.vmh,$(integ_objects) $(rv32ui_objects) $(rv32um_objects))
+objects := $(integ_objects) $(rv32ui_objects) $(rv32um_objects)
+rv32_targets := $(patsubst %.o,%.rv32,$(objects))
+vmh_targets := $(patsubst %.o,%.vmh,$(objects))
+dump_targets := $(patsubst %.o,%.dump,$(objects))
 
 RISCVCC32 ?= riscv-none-embed-gcc
 RISCVCC32_ARGS := -march=rv32im -mabi=ilp32 -mstrict-align -nostartfiles -static
+RISCVOBJDUMP32 ?= riscv-none-embed-objdump
+RISCVOBJDUMP32_ARGS := --disassemble --source --full-contents
 
 cc := $(RISCVCC32) $(RISCVCC32_ARGS)
+objdump := $(RISCVOBJDUMP32) $(RISCVOBJDUMP32_ARGS)
 
-all: $(rv32_targets) $(vmh_targets);
+all: $(rv32_targets) $(vmh_targets) $(dump_targets);
 
 $(build) $(build)/integ/ $(build)/riscv_tests/rv32ui/ $(build)/riscv_tests/rv32um/:
 	mkdir -p $@
@@ -43,6 +48,9 @@ $(build)/riscv_tests/rv32um/%.rv32: riscv_tests/rv32um/%.S | $(build)/riscv_test
 
 $(build)/integ/%.rv32: $(build)/integ/%.o $(build)/init32.o $(build)/mmio32.o mmio.ld
 	$(cc) -Tmmio.ld $< $(build)/init32.o $(build)/mmio32.o -o $@
+
+$(build)/%.dump: $(build)/%.rv32
+	$(objdump) $< > $@
 
 $(build)/%.vmh: $(build)/%.rv32 $(elf2hex)
 	$(elf2hex) $< 0 64K 4 $@
