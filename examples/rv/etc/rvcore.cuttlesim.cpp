@@ -12,9 +12,9 @@ struct bram {
   std::unique_ptr<bits<32>[]> mem;
   std::optional<struct_mem_req> last;
 
-  struct_maybe_mem_resp get(struct_maybe_bits_0 opt_req) {
-    if (!opt_req.valid || !last.has_value())
-      return struct_maybe_mem_resp { .valid = {0}, .data = struct_mem_resp{} };
+  std::optional<struct_mem_resp> get(bool enable) {
+    if (!enable || !last.has_value())
+      return std::nullopt;
 
     auto data = last->data;
     auto addr = last->addr;
@@ -41,18 +41,27 @@ struct bram {
     }
 
     last.reset();
-    return {
-      .valid = {1},
-      .data = { .byte_en = dEn, .addr = addr, .data = current }
-    };
+    return std::optional<struct_mem_resp>{{
+        .byte_en = dEn, .addr = addr, .data = current
+      }};
   }
 
-  struct_maybe_bits_0 put(struct_maybe_mem_req opt_req) {
-    if (!opt_req.valid || last.has_value())
-      return struct_maybe_bits_0{ .valid = {0}, .data = prims::tt };
+  bool put(std::optional<struct_mem_req> req) {
+    if (!req.has_value() || last.has_value())
+      return false;
 
-    last = opt_req.data;
-    return { .valid = {1}, .data = prims::tt };
+    last = *req;
+    return true;
+  }
+
+  struct_mem_output getput(struct_mem_input req) {
+    std::optional<struct_mem_resp> get_response = get(bool(req.get_enable));
+    bool put_ready = put(req.put_enable ? std::optional<struct_mem_req>{req.put_request} : std::nullopt);
+    return struct_mem_output{
+      .get_ready = bits<1>{get_response.has_value()},
+      .put_ready = bits<1>{put_ready},
+      .get_response = get_response.value_or(struct_mem_resp{})
+    };
   }
 
   void read_elf(const std::string& elf_fpath) {
@@ -66,21 +75,12 @@ struct bram {
 struct extfuns_t {
   bram dmem, imem;
 
-  struct_maybe_mem_resp ext_mem_dmem_mget(struct_maybe_bits_0 req) {
-    return dmem.get(req);
-  }
-#undef RULE_NAME
-
-  struct_maybe_mem_resp ext_mem_imem_mget(struct_maybe_bits_0 req) {
-    return imem.get(req);
+  struct_mem_output ext_mem_dmem(struct_mem_input req) {
+    return dmem.getput(req);
   }
 
-  struct_maybe_bits_0 ext_mem_dmem_mput(struct_maybe_mem_req req) {
-    return dmem.put(req);
-  }
-
-  struct_maybe_bits_0 ext_mem_imem_mput(struct_maybe_mem_req req) {
-    return imem.put(req);
+  struct_mem_output ext_mem_imem(struct_mem_input req) {
+    return imem.getput(req);
   }
 
   extfuns_t() : dmem{}, imem{} {}

@@ -98,7 +98,7 @@ module BRAM2BELoad(CLKA,
      begin : init_rom_block
         $readmemh("mem.vmh", RAM, 0, MEMSIZE-1);
      end
-`endif // !`ifdef MEM_FILENAME
+`endif
 
    // PORT A
 

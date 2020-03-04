@@ -16,7 +16,7 @@ cuttlesim_runner := tests/run.sh "$(cuttlesim)" {} -1
 verilator_runner := tests/run.sh "$(verilator)" +VMH={} -1
 pyverilator_runner := tests/run.sh "$(pyverilator)" {} -1 --vtop $(PYVERILATOR_TOP) --exit-probes $(PYVERILATOR_PROBES)
 
-DRIVER ?= bsv
+DRIVER ?= sv
 
 VERBOSE ?=
 verbose := $(if $(VERBOSE),,@)

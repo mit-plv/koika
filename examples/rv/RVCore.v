@@ -503,13 +503,23 @@ Module  RV32ICore.
   (* External functions, used to model memory *)
 
   Inductive memory := imem | dmem.
-  Inductive mem_op := mget | mput.
-  Inductive ext_fn_t := ext_mem (m: memory) (k: mem_op).
+  Inductive ext_fn_t := ext_mem (m: memory).
+
+  Definition mem_input :=
+    {| struct_name := "mem_input";
+       struct_fields := [("get_enable", bits_t 1);
+                        ("put_enable", bits_t 1);
+                        ("put_request", struct_t mem_req)] |}.
+
+  Definition mem_output :=
+    {| struct_name := "mem_output";
+       struct_fields := [("get_ready", bits_t 1);
+                        ("put_ready", bits_t 1);
+                        ("get_response", struct_t mem_resp)] |}.
 
   Definition Sigma (fn: ext_fn_t) :=
     match fn with
-    | ext_mem _ mget => {$ maybe (bits_t 0) ~> maybe (struct_t mem_resp) $}
-    | ext_mem _ mput => {$ maybe (struct_t mem_req) ~> maybe (bits_t 0) $}
+    | ext_mem _ => {$ struct_t mem_input ~> struct_t mem_output $}
     end.
 
   Definition fetch : uaction reg_t ext_fn_t :=
@@ -716,41 +726,30 @@ Module  RV32ICore.
   Definition tc_writeback :=
     tc_action R Sigma writeback.
 
-  Definition mem_put (m: memory) : uaction reg_t ext_fn_t :=
-    let Q := match m with imem => toIMem | dmem => toDMem end in
+  Definition mem (m: memory) : uaction reg_t ext_fn_t :=
+    let fromMem := match m with imem => fromIMem | dmem => fromDMem end in
+    let toMem := match m with imem => toIMem | dmem => toDMem end in
     {{
-        let req := struct (Maybe (struct_t mem_req))
-                         {| valid := Q.(MemReq.can_deq)();
-                            data := Q.(MemReq.deq)() |} in
-        let resp := extcall (ext_mem m mput)(req) in
-        guard (get (resp, valid))
+        let get_enable := fromMem.(MemResp.can_enq)() in
+        let put_request_opt := toMem.(MemReq.peek)() in
+        let put_enable := get(put_request_opt, valid) in
+        let put_request := get(put_request_opt, data) in
+        let mem_out := extcall (ext_mem m)(struct mem_input {|
+          get_enable := get_enable; put_enable := put_enable; put_request := put_request |}) in
+        (if (get_enable && get(mem_out, get_ready)) then fromMem.(MemResp.enq)(get(mem_out, get_response)) else pass);
+        (if (put_enable && get(mem_out, put_ready)) then ignore(toMem.(MemReq.deq)()) else pass)
     }}.
 
-  Definition mem_get (m: memory) : uaction reg_t ext_fn_t :=
-    let Q := match m with imem => fromIMem | dmem => fromDMem end in
-    {{
-        let req := struct (Maybe unit_t)
-                         {| valid := Q.(MemResp.can_enq)();
-                            data := #Ob |} in
-        let resp := extcall (ext_mem m mget)(req) in
-        guard (get (resp, valid));
-        Q.(MemResp.enq)(get(resp, data))
-    }}.
-
-  Definition tc_imem_put := tc_action R Sigma (mem_put imem).
-  Definition tc_dmem_put := tc_action R Sigma (mem_put dmem).
-  Definition tc_imem_get := tc_action R Sigma (mem_get imem).
-  Definition tc_dmem_get := tc_action R Sigma (mem_get dmem).
+  Definition tc_imem := tc_action R Sigma (mem imem).
+  Definition tc_dmem := tc_action R Sigma (mem dmem).
 
   Inductive rv_rules_t :=
   | Fetch
   | Decode
   | Execute
   | Writeback
-  | FromI
-  | FromD
-  | ToI
-  | ToD
+  | Imem
+  | Dmem
   | WaitImem
   | StepMultiplier.
 
@@ -761,10 +760,8 @@ Module  RV32ICore.
     | Execute   => tc_execute
     | Writeback => tc_writeback
     | WaitImem  => tc_wait_imem
-    | FromI => tc_imem_get
-    | FromD => tc_dmem_get
-    | ToI => tc_imem_put
-    | ToD => tc_dmem_put
+    | Imem => tc_imem
+    | Dmem => tc_dmem
     | StepMultiplier => tc_step_multiplier
     end.
 
