@@ -62,8 +62,15 @@ protected:
       if (addr.v == 0x40000000 && dEn.v == 0xf) { // PutChar
         putchar(static_cast<char>(last->data.v));
       } else if (addr.v == 0x40001000 && dEn.v == 0xf) {
-        std::exit(last->data.v);
-      } // else if (addr == 0xffff4 && dEn.v == 0) { // GetChar
+        int exitcode = last->data.v;
+        if (exitcode == 0) {
+          printf("  [0;32mPASS[0m\n");
+        } else {
+          printf("  [0;31mFAIL[0m (%d)", exitcode);
+        }
+        std::exit(exitcode);
+      }
+      // else if (addr == 0xffff4 && dEn.v == 0) { // GetChar
       //   data.data.v = getchar();
       // }
       else {

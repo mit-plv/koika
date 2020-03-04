@@ -1467,14 +1467,13 @@ module top_bsv(CLK,
        x__h60681;
 
   // submodule bram_memory
-  BRAM2BELoad #(.FILENAME("mem.vmh"),
+  BRAM2BELoad #(
 		.PIPELINED(1'd0),
 		.ADDR_WIDTH(32'd14),
 		.DATA_WIDTH(32'd32),
 		.CHUNKSIZE(32'd8),
 		.WE_WIDTH(32'd4),
-		.MEMSIZE(15'd16384),
-		.BINARY(1'd0)) bram_memory(.CLKA(CLK),
+		.MEMSIZE(15'd16384)) bram_memory(.CLKA(CLK),
 					   .CLKB(CLK),
 					   .ADDRA(bram_memory$ADDRA),
 					   .ADDRB(bram_memory$ADDRB),

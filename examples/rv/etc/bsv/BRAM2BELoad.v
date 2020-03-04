@@ -41,14 +41,12 @@ module BRAM2BELoad(CLKA,
                    DOB
                   );
 
-   parameter                      FILENAME   = "";
    parameter                      PIPELINED  = 0;
    parameter                      ADDR_WIDTH = 1;
    parameter                      DATA_WIDTH = 1;
    parameter                      CHUNKSIZE  = 1;
    parameter                      WE_WIDTH   = 1;
    parameter                      MEMSIZE    = 1;
-   parameter                      BINARY     = 0;
 
    input                          CLKA;
    input                          ENA;
@@ -83,14 +81,25 @@ module BRAM2BELoad(CLKA,
    end
    // synopsys translate_on
 
+`ifdef BRAM_RUNTIME_INIT
+   wire[8 * 256 - 1:0] filename;
+
    initial
-   begin : init_rom_block
-      if (BINARY)
-        $readmemb(FILENAME, RAM, 0, MEMSIZE-1);
-      else
-        $readmemh(FILENAME, RAM, 0, MEMSIZE-1);
+     begin : init_rom_block
+      if ($value$plusargs("VMH=%s", filename)) begin
+         $readmemh(filename, RAM, 0, MEMSIZE-1);
+      end else begin
+         $fwrite(32'h80000002, "ERROR: No memory image loaded. Use +VMH=<path> to load one\n");
+         $finish(1'b1);
+      end
    end
-   
+`else
+   initial
+     begin : init_rom_block
+        $readmemh("mem.vmh", RAM, 0, MEMSIZE-1);
+     end
+`endif // !`ifdef MEM_FILENAME
+
    // PORT A
 
    // iverilog does not support the full verilog-2001 language.  This fixes that for simulation.

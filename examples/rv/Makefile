@@ -12,9 +12,9 @@ pyverilator := $(objects_dir)/rvcore.pyverilator.py
 
 PYVERILATOR_TOP ?= top.v
 PYVERILATOR_PROBES ?= '*inst*_count' '*cycle_count'
-cuttlesim_runner := tests/run.sh "$(cuttlesim)" {}
-verilator_runner := tests/run.sh "$(verilator)" {}
-pyverilator_runner := tests/run.sh "$(pyverilator)" {} --vtop $(PYVERILATOR_TOP) --exit-probes $(PYVERILATOR_PROBES)
+cuttlesim_runner := tests/run.sh "$(cuttlesim)" {} -1
+verilator_runner := tests/run.sh "$(verilator)" +VMH={} -1
+pyverilator_runner := tests/run.sh "$(pyverilator)" {} -1 --vtop $(PYVERILATOR_TOP) --exit-probes $(PYVERILATOR_PROBES)
 
 DRIVER ?= bsv
 
