@@ -1,6 +1,24 @@
 (*! Stdlib | Standard library !*)
 Require Import Koika.Frontend.
 
+Section Maybe.
+  Context (tau: type).
+
+  Definition Maybe :=
+    {| struct_name := "maybe_" ++ type_id tau;
+       struct_fields := [("valid", bits_t 1); ("data", tau)] |}.
+
+  Definition valid {reg_t fn} : UInternalFunction reg_t fn :=
+    {{ fun valid (x: tau) : struct_t Maybe =>
+         struct Maybe {| valid := Ob~1; data := x |} }}.
+
+  Definition invalid {reg_t fn} : UInternalFunction reg_t fn :=
+    {{ fun invalid () : struct_t Maybe =>
+         struct Maybe {| valid := Ob~0 |} }}.
+End Maybe.
+
+Notation maybe tau := (struct_t (Maybe tau)).
+
 Module Type Fifo.
   Parameter T:type.
 End Fifo.
@@ -40,9 +58,9 @@ Module Fifo1 (f: Fifo).
     {{ fun can_deq () : bits_t 1 => read0(valid0) }}.
 
   Definition peek : UInternalFunction reg_t empty_ext_fn_t :=
-    {{ fun peek () : T =>
-        guard (can_deq ());
-        read0(data0) }}.
+    {{ fun peek () : maybe T =>
+         if can_deq () then {valid T}(read0(data0))
+         else {invalid T}() }}.
 
   Definition deq : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun deq () : T =>
@@ -87,10 +105,10 @@ Module Fifo1Bypass (f: Fifo).
   Definition can_deq : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun can_deq () : bits_t 1 => read1(valid0) }}.
 
-  Definition peek :  UInternalFunction reg_t empty_ext_fn_t :=
-    {{ fun peek () : T =>
-       guard (can_deq ());
-       read1(data0) }}.
+  Definition peek : UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun peek () : maybe T =>
+         if can_deq () then {valid T}(read1(data0))
+         else {invalid T}() }}.
 
   Definition deq :  UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun deq () : T =>
@@ -100,26 +118,6 @@ Module Fifo1Bypass (f: Fifo).
 
   Instance FiniteType_reg_t : FiniteType reg_t := _.
 End Fifo1Bypass.
-
-Definition Maybe tau :=
-  {| struct_name := "maybe_" ++ type_id tau;
-     struct_fields := ("valid", bits_t 1)
-                        :: ("data", tau)
-                        :: nil |}.
-Notation maybe tau := (struct_t (Maybe tau)).
-
-Definition valid {reg_t fn} (tau:type) : UInternalFunction reg_t fn :=
-  {{ fun valid (x: tau) : maybe tau =>
-      struct (Maybe tau) {|
-               valid := (#(Bits.of_nat 1 1)) ;
-               data := x
-             |}
-  }}.
-
-Definition invalid {reg_t fn} (tau:type) : UInternalFunction reg_t fn :=
-  {{ fun invalid () : maybe tau =>
-      struct (Maybe tau) {| valid := (#(Bits.of_nat 1 0)) |}
-  }}.
 
 Module Type RfPow2_sig.
   Parameter idx_sz: nat.
