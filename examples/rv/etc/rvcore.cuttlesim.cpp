@@ -8,15 +8,14 @@
 
 #define DMEM_SIZE (static_cast<std::size_t>(1) << 25)
 
-using simulator = module_rv32<unit>;
-
-class rv_core : public simulator {
+struct extfuns {};
+class rv_core : public module_rv32<extfuns> {
   std::unique_ptr<bits<32>[]> dmem;
 
 public:
   explicit rv_core(const std::string& elf_fpath)
     // Use new … instead of make_unique to avoid 0-initialization
-    : simulator{}, dmem(new bits<32>[DMEM_SIZE]) {
+    : module_rv32{}, dmem(new bits<32>[DMEM_SIZE]) {
     elf_load(reinterpret_cast<uint32_t*>(dmem.get()), elf_fpath.c_str());
   }
 

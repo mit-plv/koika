@@ -1427,7 +1427,7 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
       match hpp.cpp_extfuns with
       | Some cpp -> cpp
       | None -> if Hashtbl.length program_info.pi_ext_funcalls = 0
-                then "using extfuns = unit;"
+                then "struct extfuns {};"
                 else Buffer.contents (sp_extfuns_stub ()) in
 
     let markers =
