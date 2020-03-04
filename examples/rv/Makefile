@@ -5,7 +5,7 @@ SHELL := bash
 
 dut := rv32i
 objects_dir := _objects/$(dut).v
-tests_build := tests/_build
+tests_build := tests/_build/$(dut)
 
 cuttlesim := $(objects_dir)/$(basename $(CUTTLESIM_DRIVER)).opt
 verilator := $(objects_dir)/obj_dir.opt/V$(basename $(VERILATOR_TOP))
