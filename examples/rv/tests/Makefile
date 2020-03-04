@@ -16,7 +16,7 @@ vmh_targets := $(patsubst %.o,%.vmh,$(objects))
 dump_targets := $(patsubst %.o,%.dump,$(objects))
 
 RISCVCC32 ?= riscv-none-embed-gcc
-RISCVCC32_ARGS := -march=rv32im -mabi=ilp32 -mstrict-align -nostartfiles -static
+RISCVCC32_ARGS := -g -march=rv32im -mabi=ilp32 -mstrict-align -nostartfiles -static
 RISCVOBJDUMP32 ?= riscv-none-embed-objdump
 RISCVOBJDUMP32_ARGS := --disassemble --source --full-contents
 
