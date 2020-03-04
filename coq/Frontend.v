@@ -99,6 +99,10 @@ Notation desugar_and_tc_action R Sigma uaction :=
   (let desugared := desugar_action dummy_pos uaction in
    type_action R Sigma dummy_pos List.nil desugared).
 
+Notation desugar_and_tc_function R Sigma ufunction :=
+  (let desugared := desugar_action dummy_pos (int_body ufunction) in
+   type_action R Sigma dummy_pos (int_argspec ufunction) desugared).
+
 Definition is_success {S F} (r: result S F) :=
   match r with
   | Success s => true
@@ -116,6 +120,11 @@ Notation _must_succeed r :=
 
 Ltac _tc_action_fast R Sigma uaction :=
   let result := constr:(desugar_and_tc_action R Sigma uaction) in
+  let typed := constr:(projT2 (_must_succeed result)) in
+  exact typed.
+
+Ltac _tc_function_fast R Sigma ufunction :=
+  let result := constr:(desugar_and_tc_function R Sigma ufunction) in
   let typed := constr:(projT2 (_must_succeed result)) in
   exact typed.
 
@@ -171,9 +180,25 @@ Ltac _tc_illtyped_action R Sigma uaction :=
   let result := constr:(desugar_and_tc_action R Sigma annotated) in
   _report_typechecking_errors uaction result.
 
+Ltac _tc_illtyped_function R Sigma ufunction :=
+  let annotated := constr:(reposition PThis (int_body ufunction)) in
+  let annotated_function := constr:({| int_name := int_name ufunction;
+                                       int_argspec := int_argspec ufunction;
+                                       int_retSig := int_retSig ufunction;
+                                       int_body := annotated
+                                     |}) in
+  let result := constr:(desugar_and_tc_function R Sigma annotated_function) in
+  _report_typechecking_errors ufunction result.
+
+
 Ltac _tc_action R Sigma uaction :=
   (_tc_action_fast R Sigma uaction ||
    _tc_illtyped_action R Sigma uaction).
+
+Ltac _tc_function R Sigma ufunction :=
+  (_tc_function_fast R Sigma ufunction ||
+   _tc_illtyped_function R Sigma ufunction).
+
 
 Definition annotate_uaction_type {reg_t ext_fn_t}
            (R: reg_t -> type) (Sigma: ext_fn_t -> Sig 1)
@@ -190,6 +215,10 @@ Ltac _arg_type R :=
    having to annotate the [{{ skip }}]. *)
 Notation tc_action R Sigma ua :=
   (ltac:(_tc_action R Sigma ua)) (only parsing).
+
+Notation tc_function R Sigma uf :=
+  (ltac:(_tc_function R Sigma uf)) (only parsing).
+
 
 Ltac _tc_rules R Sigma uactions :=
   let rule_name_t := _arg_type uactions in
