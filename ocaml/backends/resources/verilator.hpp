@@ -26,15 +26,16 @@ protected:
 #endif
   }
 
+  void tick(bool up) {
+    time += TIMESTEP;
+    clock(up);
+    dut.eval();
+    dump();
+  }
+
   void cycle() {
-    dump();
-    clock(1);
-    dut.eval();
-    time += TIMESTEP;
-    dump();
-    clock(0);
-    dut.eval();
-    time += TIMESTEP;
+    tick(1);
+    tick(0);
   }
 
   void reset() {
