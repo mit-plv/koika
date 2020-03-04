@@ -85,7 +85,7 @@ GDB_FLAGS ?= -tui
 GDB_OPTS ?= -ex "set print array on" -ex "set print pretty on"
 
 gdb: $(cuttlesim_driver).debug
-	gdb $(GDB_FLAGS) $(GDB_OPTS) --args $(sim_invoke_debug)
+	gdb -quiet $(GDB_FLAGS) $(GDB_OPTS) --args $(sim_invoke_debug)
 
 LLDB_FLAGS ?=
 
