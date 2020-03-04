@@ -17,12 +17,9 @@ Section Logs.
     list (@LogEntry T).
 
   Context {reg_t: Type}.
-  Context {RKind: Type}.
-  Context {RKind_denote: RKind -> Type}.
-  Context {_R: reg_t -> RKind}.
+  Context {R: reg_t -> Type}.
   Context {REnv: Env reg_t}.
 
-  Notation R := (fun idx => RKind_denote (_R idx)).
   Definition _Log := REnv.(env_t) (fun idx => RLog (R idx)).
   Notation Log := _Log.
 
@@ -126,17 +123,12 @@ Arguments RLog: clear implicits.
 Section Maps.
   Context {reg_t: Type}.
 
-  Context {RKind1: Type}.
-  Context {RKind2: Type}.
-  Context {RKind1_denote: RKind1 -> Type}.
-  Context {RKind2_denote: RKind2 -> Type}.
-
   Context {REnv: Env reg_t}.
-  Context {_R1: reg_t -> RKind1}.
-  Context {_R2: reg_t -> RKind2}.
+  Context {R1: reg_t -> Type}.
+  Context {R2: reg_t -> Type}.
 
-  Notation Log1 := (@_Log reg_t RKind1 RKind1_denote _R1 REnv).
-  Notation Log2 := (@_Log reg_t RKind2 RKind2_denote _R2 REnv).
+  Notation Log1 := (@_Log reg_t R1 REnv).
+  Notation Log2 := (@_Log reg_t R2 REnv).
 
   Definition LogEntry_map {T T'} (f: T -> T') :=
     fun '(LE kind prt v) =>
@@ -152,20 +144,20 @@ Section Maps.
     List.map (LogEntry_map f) l.
 
   Definition log_map
-             (f: forall idx, RLog (RKind1_denote (_R1 idx)) ->
-                        RLog (RKind2_denote (_R2 idx)))
+             (f: forall idx, RLog (R1 idx) ->
+                        RLog (R2 idx))
              (log: Log1) : Log2 :=
     Environments.map REnv (fun k l1 => f k l1) log.
 
   Definition log_map_values
-             (f: forall idx, RKind1_denote (_R1 idx) ->
-                        RKind2_denote (_R2 idx))
+             (f: forall idx, R1 idx ->
+                        R2 idx)
              (log: Log1) : Log2 :=
     log_map (fun k => RLog_map (f k)) log.
 End Maps.
 
-Definition Log {reg_t} R REnv := @_Log reg_t type type_denote R REnv.
-Definition CLog {reg_t} R REnv := @_Log reg_t nat Bits.bits R REnv.
+Definition Log {reg_t} R REnv := @_Log reg_t (fun idx => type_denote (R idx)) REnv.
+Definition CLog {reg_t} R REnv := @_Log reg_t (fun idx => Bits.bits (R idx)) REnv.
 
 Arguments may_read : simpl never.
 Arguments may_write : simpl never.

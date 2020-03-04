@@ -158,7 +158,7 @@ Section LoweringCorrectness.
     unfold context_equiv, lower_context; intros; rewrite cmap_ctl; reflexivity.
   Qed.
 
-  Definition lower_log (tL: tlog) :=
+  Definition lower_log (tL: tlog) : llog :=
     log_map_values (fun idx => bits_of_value) tL.
   Arguments lower_log : simpl never.
 
@@ -191,13 +191,13 @@ Section LoweringCorrectness.
   Lemma log_equiv_may_read:
     forall (tL: tlog) (port: Port) (idx: reg_t),
       Logs.may_read tL port idx =
-      Logs.may_read (_R := CR) (lower_log tL) port idx.
+      Logs.may_read (lower_log tL) port idx.
   Proof. intros; symmetry; apply may_read_log_map_values. Qed.
 
   Lemma log_equiv_may_write:
     forall (tL tl: tlog) (port: Port) (idx: reg_t),
       Logs.may_write tL tl port idx =
-      Logs.may_write (_R := CR) (lower_log tL) (lower_log tl) port idx.
+      Logs.may_write (lower_log tL) (lower_log tl) port idx.
   Proof. intros; symmetry; apply may_write_log_map_values. Qed.
 
   Lemma log_equiv_latest_write0:

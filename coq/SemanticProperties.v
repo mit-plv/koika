@@ -45,12 +45,10 @@ End Lists.
 
 Section Logs.
   Context {reg_t: Type}.
-  Context {RKind: Type}.
-  Context {RKind_denote: RKind -> Type}.
-  Context {_R: reg_t -> RKind}.
+  Context {R: reg_t -> Type}.
   Context {REnv: Env reg_t}.
 
-  Notation Log := (@_Log reg_t RKind RKind_denote _R REnv).
+  Notation Log := (@_Log reg_t R REnv).
 
   Lemma getenv_logapp:
     forall (l l': Log) idx,
@@ -60,21 +58,21 @@ Section Logs.
     unfold log_app, map2; intros; rewrite getenv_create; reflexivity.
   Qed.
 
-  Lemma log_find_empty {T} idx (f: @LogEntry (RKind_denote (_R idx)) -> option T):
+  Lemma log_find_empty {T} idx (f: @LogEntry (R idx) -> option T):
     log_find (log_empty: Log) idx f = None.
   Proof.
     unfold log_find, log_empty; intros; rewrite getenv_create; reflexivity.
   Qed.
 
   Lemma log_find_create {T}:
-    forall fn idx (f: LogEntry (RKind_denote (_R idx)) -> option T),
+    forall fn idx (f: LogEntry (R idx) -> option T),
       log_find (REnv.(create) fn) idx f =
       list_find_opt f (fn idx).
   Proof.
     unfold log_find; intros; rewrite getenv_create; reflexivity.
   Qed.
 
-  Lemma log_find_app {T} (l l': Log) reg (f: LogEntry (RKind_denote (_R reg)) -> option T) :
+  Lemma log_find_app {T} (l l': Log) reg (f: LogEntry (R reg) -> option T) :
     log_find (log_app l l') reg f =
     match log_find l reg f with
     | Some x => Some x
@@ -214,18 +212,14 @@ End Logs.
 
 Section LogMaps.
   Context {reg_t: Type}.
-  Context {RKind1 RKind2: Type}.
-  Context {RKind1_denote: RKind1 -> Type}.
-  Context {RKind2_denote: RKind2 -> Type}.
-  Context {_R1: reg_t -> RKind1}.
-  Context {_R2: reg_t -> RKind2}.
+  Context {R1: reg_t -> Type}.
+  Context {R2: reg_t -> Type}.
   Context {REnv: Env reg_t}.
 
-  Notation Log1 := (@_Log reg_t RKind1 RKind1_denote _R1 REnv).
-  Notation Log2 := (@_Log reg_t RKind2 RKind2_denote _R2 REnv).
+  Notation Log1 := (@_Log reg_t R1 REnv).
+  Notation Log2 := (@_Log reg_t R2 REnv).
 
-  Context (f: forall idx : reg_t, RKind1_denote (_R1 idx) ->
-                             RKind2_denote (_R2 idx)).
+  Context (f: forall idx : reg_t, R1 idx -> R2 idx).
 
   Lemma log_existsb_log_map_values :
     forall (l1: Log1) idx pred,
@@ -290,7 +284,7 @@ Section LogMaps.
   Lemma log_find_log_map_values (pred: forall {T}, LogEntry T -> option T):
     forall (l1: Log1) idx,
       (forall prt val,
-          @pred (RKind2_denote (_R2 idx)) {| kind := LogRead; port := prt; val := val |} =
+          @pred (R2 idx) {| kind := LogRead; port := prt; val := val |} =
           match pred {| kind := LogRead; port := prt; val := val |} with
           | Some v => Some (f idx v)
           | None => None
@@ -340,7 +334,7 @@ Section LogMaps.
   Qed.
 
   Lemma commit_update_log_map_values :
-    forall (l1: Log1) (r: REnv.(env_t) (fun idx => RKind1_denote (_R1 idx))),
+    forall (l1: Log1) (r: REnv.(env_t) (fun idx => R1 idx)),
       commit_update (Environments.map REnv f r) (log_map_values f l1) =
       Environments.map REnv f (commit_update r l1).
   Proof.
@@ -352,12 +346,10 @@ End LogMaps.
 
 Section LatestWrites.
   Context {reg_t: Type}.
-  Context {RKind: Type}.
-  Context {RKind_denote: RKind -> Type}.
-  Context {_R: reg_t -> RKind}.
+  Context {R: reg_t -> Type}.
   Context {REnv: Env reg_t}.
 
-  Notation Log := (@_Log reg_t RKind RKind_denote _R REnv).
+  Notation Log := (@_Log reg_t R REnv).
 
   Lemma latest_write0_empty idx:
     latest_write0 (log_empty: Log) idx = None.
@@ -480,14 +472,12 @@ End LatestWrites.
 
 Section CommitUpdates.
   Context {reg_t: Type}.
-  Context {RKind: Type}.
-  Context {RKind_denote: RKind -> Type}.
-  Context {_R: reg_t -> RKind}.
+  Context {R: reg_t -> Type}.
   Context {REnv: Env reg_t}.
 
-  Notation Log := (@_Log reg_t RKind RKind_denote _R REnv).
+  Notation Log := (@_Log reg_t R REnv).
 
-  Context (r: REnv.(env_t) (fun idx => RKind_denote (_R idx))).
+  Context (r: REnv.(env_t) R).
 
   Lemma commit_update_assoc:
     forall (l l' : Log), commit_update (commit_update r l) l' = commit_update r (log_app l' l).

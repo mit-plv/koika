@@ -76,10 +76,10 @@ Section CompilerCorrectness.
   End OpCompile.
 
   Definition circuit_env_equiv :=
-    forall idx, interp_circuit (REnv.(getenv) rc idx) = REnv.(getenv) cr idx.
+    forall (idx: reg_t), interp_circuit (REnv.(getenv) rc idx) = REnv.(getenv) cr idx.
 
   Definition log_data0_consistent' (l: Log) (regs: rwset) :=
-    forall idx,
+    forall (idx: reg_t),
       let cidx := REnv.(getenv) regs idx in
       interp_circuit (cidx.(data0)) =
       match latest_write0 l idx with
@@ -91,7 +91,7 @@ Section CompilerCorrectness.
     log_data0_consistent' (log_app l L) regs.
 
   Definition log_data1_consistent' (l: Log) (regs: rwset) :=
-    forall idx,
+    forall (idx: reg_t),
       let cidx := REnv.(getenv) regs idx in
       log_existsb l idx is_write1 = true ->
       match latest_write1 l idx with
@@ -107,7 +107,7 @@ Section CompilerCorrectness.
     repeat match goal with
            | _ => progress intros
            | [ H: _ = _ |- _ ] => rewrite H
-           | [ H: forall idx, _, idx: reg_t |- _ ] => pose_once H idx
+           | [ H: forall (idx: reg_t), _, idx: reg_t |- _ ] => pose_once H idx
            | [  |- context[REnv.(getenv) (REnv.(putenv) _ ?idx _) ?idx'] ] =>
              destruct (eq_dec idx idx'); subst;
              [ rewrite !get_put_eq | rewrite !get_put_neq by eassumption ]
@@ -117,7 +117,7 @@ Section CompilerCorrectness.
            end; eauto.
 
   Lemma log_data0_consistent_putenv_read_write1 :
-    forall idx k p log Log rws rwd v,
+    forall (idx: reg_t) k p log Log rws rwd v,
       k = LogRead \/ (k = LogWrite /\ p = P1) ->
       data0 rwd = data0 (REnv.(getenv) rws idx) ->
       log_data0_consistent log Log rws ->
@@ -129,11 +129,11 @@ Section CompilerCorrectness.
   Qed.
 
   Lemma log_data0_consistent_putenv_write0 :
-    forall idx log Log rws rwd v,
+    forall (idx: reg_t) log Log rws rwd v,
       v = interp_circuit (data0 rwd) ->
       log_data0_consistent log Log rws ->
       log_data0_consistent (log_cons idx {| kind := LogWrite; port := P0; val := v |} log) Log
-                            (REnv.(putenv) rws idx rwd).
+                           (REnv.(putenv) rws idx rwd).
   Proof.
     data_consistent_putenv_t.
   Qed.
@@ -152,7 +152,7 @@ Section CompilerCorrectness.
     end.
 
   Lemma log_existsb_app_cons_write1_eq:
-    forall idx k p (log: Log) Log v,
+    forall (idx: reg_t) k p (log: Log) Log v,
       k = LogRead \/ (k = LogWrite /\ p = P0) ->
       log_existsb (log_app (log_cons idx {| kind := k; port := p; val := v |} log) Log) idx is_write1 = true ->
       log_existsb (log_app log Log) idx is_write1 = true.
@@ -160,22 +160,22 @@ Section CompilerCorrectness.
     destruct 1; repeat cleanup_step; subst.
 
     all: rewrite !log_existsb_app; intros H; bool_cleanup; destruct H;
-      try rewrite log_existsb_log_cons_eq in H; eauto; bool_simpl; try rewrite H; bool_simpl; reflexivity.
+      try rewrite @log_existsb_log_cons_eq in H; eauto; bool_simpl; try rewrite H; bool_simpl; reflexivity.
   Qed.
 
   Lemma log_existsb_app_cons_write1_neq:
-    forall idx idx' k p (log: Log) Log v,
+    forall (idx: reg_t) idx' k p (log: Log) Log v,
       idx <> idx' ->
       log_existsb (log_app (log_cons idx' {| kind := k; port := p; val := v |} log) Log) idx is_write1 = true ->
       log_existsb (log_app log Log) idx is_write1 = true.
   Proof.
     intros *.
     rewrite !log_existsb_app; intros Hneq H; bool_cleanup; destruct H;
-      try rewrite log_existsb_log_cons_neq in H; eauto; bool_simpl; try rewrite H; bool_simpl; reflexivity.
+      try rewrite @log_existsb_log_cons_neq in H; eauto; bool_simpl; try rewrite H; bool_simpl; reflexivity.
   Qed.
 
   Lemma log_data1_consistent_putenv_read_write0 :
-    forall idx k p log Log rws rwd v,
+    forall (idx: reg_t) k p log Log rws rwd v,
       k = LogRead \/ (k = LogWrite /\ p = P0) ->
       data1 rwd = data1 (REnv.(getenv) rws idx) ->
       log_data1_consistent log Log rws ->
@@ -199,7 +199,7 @@ Section CompilerCorrectness.
   Qed.
 
   Lemma log_data1_consistent_putenv_write1 :
-    forall idx log Log rws rwd v,
+    forall (idx: reg_t) log Log rws rwd v,
       v = interp_circuit (data1 rwd) ->
       log_data1_consistent log Log rws ->
       log_data1_consistent (log_cons idx {| kind := LogWrite; port := P1; val := v |} log) Log
@@ -300,7 +300,7 @@ Section CompilerCorrectness.
   Qed.
 
   Definition log_rwdata_consistent (log: Log) (regs: rwset) :=
-    forall idx,
+    forall (idx: reg_t),
       let cidx := REnv.(getenv) regs idx in
       (interp_circuit (cidx.(read0)) = Ob~(log_existsb log idx is_read0)) /\
       (interp_circuit (cidx.(read1)) = Ob~(log_existsb log idx is_read1)) /\
@@ -327,14 +327,14 @@ Section CompilerCorrectness.
       intros Heq Hcst **; destruct (eq_dec idx idx0); subst;
       [ rewrite !get_put_eq | rewrite !get_put_neq by eassumption ].
     - specialize (Heq idx0).
-      rewrite !log_existsb_log_cons_eq.
+      rewrite !@log_existsb_log_cons_eq.
       repeat cleanup_step.
       repeat match goal with
              | [ H: _ = _ |- _ ] => apply (f_equal Bits.single) in H; cbn in H
              | [ H: _ = _ |- _ ] => rewrite <- H
              end.
       apply Hcst.
-    - rewrite !log_existsb_log_cons_neq;
+    - rewrite !@log_existsb_log_cons_neq;
         eauto.
   Qed.
 
@@ -418,7 +418,7 @@ Section CompilerCorrectness.
     forall clog (cLog: scheduler_circuit),
       interp_circuit (willFire_of_canFire rl clog cLog) = Ob~1 <->
       interp_circuit (canFire clog) = Ob~1 /\
-      forall idx, interp_circuit
+      forall (idx: reg_t), interp_circuit
                (willFire_of_canFire'
                   (REnv.(getenv) clog.(regs) idx)
                   (REnv.(getenv) cLog idx)) = Ob~1.
@@ -513,9 +513,9 @@ Section CompilerCorrectness.
 
   Lemma rwset_circuit_le_invariant_putenv :
     forall rws1 rws2 idx0 rwd0,
-      (forall idx, rwset_circuit_le_invariant rws1 rws2 idx) ->
+      (forall (idx: reg_t), rwset_circuit_le_invariant rws1 rws2 idx) ->
       rwdata_circuit_le_invariant (getenv REnv rws1 idx0) rwd0 ->
-      (forall idx, rwset_circuit_le_invariant rws1 (REnv.(putenv) rws2 idx0 rwd0) idx).
+      (forall (idx: reg_t), rwset_circuit_le_invariant rws1 (REnv.(putenv) rws2 idx0 rwd0) idx).
   Proof.
     intros.
     destruct (eq_dec idx0 idx); subst;
@@ -559,7 +559,7 @@ Section CompilerCorrectness.
     forall (gamma: ccontext sig) (a: action sig tau) (rwc: rwcircuit) c gamma',
       compile_action rc gamma a rwc = (c, gamma') ->
       circuit_le (canFire (erwc c)) (canFire rwc) /\
-      forall idx, rwset_circuit_le_invariant (rwc.(regs)) (c.(erwc).(regs)) idx.
+      forall (idx: reg_t), rwset_circuit_le_invariant (rwc.(regs)) (c.(erwc).(regs)) idx.
   Proof.
     induction a; cbn; intros; circuit_compile_destruct_t; cbn in *;
       try solve [split; circuit_le_f_equal; eauto using rwset_circuit_le_invariant_refl].
@@ -613,7 +613,7 @@ Section CompilerCorrectness.
   Qed.
 
   Lemma circuit_le_willFire_of_canFire':
-    forall idx (rwd0 rwd1 rwd2: rwdata (CR idx)),
+    forall (idx: reg_t) (rwd0 rwd1 rwd2: rwdata (CR idx)),
       rwdata_circuit_le_invariant rwd1 rwd0 ->
       circuit_le (willFire_of_canFire' rwd0 rwd2) (willFire_of_canFire' rwd1 rwd2).
   Proof.
@@ -624,7 +624,7 @@ Section CompilerCorrectness.
   Lemma circuit_le_willFire_of_canFire rl:
     forall (l1 l2: rwcircuit) L,
       circuit_le (canFire l1) (canFire l2) ->
-      (forall idx, rwset_circuit_le_invariant l2.(regs) l1.(regs) idx) ->
+      (forall (idx: reg_t), rwset_circuit_le_invariant l2.(regs) l1.(regs) idx) ->
       circuit_le (willFire_of_canFire rl l1 L) (willFire_of_canFire rl l2 L).
   Proof.
     unfold willFire_of_canFire; intros * Hlt Hfr.
@@ -1566,7 +1566,7 @@ Section CompilerCorrectness.
   Theorem compile_scheduler'_correct:
     forall (s: scheduler),
       circuit_env_equiv ->
-      forall idx,
+      forall (idx: reg_t),
         interp_circuit (REnv.(getenv) (compile_scheduler' rc rules external s) idx) =
         REnv.(getenv) (commit_update cr (interp_scheduler cr csigma rules s)) idx.
   Proof.

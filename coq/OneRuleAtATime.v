@@ -59,8 +59,6 @@ Section Proof.
                 log_empty (Try rl Done Done) in
     Some (commit_update r log).
 
-  Notation latest_write l idx := (latest_write (RKind_denote := type_denote) (_R := R) (REnv := REnv) l idx).
-
   Ltac set_forallb_fns :=
     repeat match goal with
            | [  |- context[log_forallb _ _ ?fn] ] =>
@@ -98,7 +96,7 @@ Section Proof.
     end.
 
   Lemma may_read0_no_writes :
-    forall sl idx,
+    forall (sl: Log) idx,
       may_read sl P0 idx = true ->
       latest_write sl idx = None.
   Proof.
