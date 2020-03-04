@@ -505,8 +505,27 @@ module Graphs = struct
       && rwdata1.write1 == rwdata2.write1
       && rwdata1.data0 == rwdata2.data0
       && rwdata1.data1 == rwdata2.data1
-    let hash c =
-      Hashtbl.hash c (* FIXME see the hashcons docs to improve this *)
+
+    let h1 x = Hashtbl.hash x
+    let h2 h h' = 0x61C8864680B583EB * h + h'
+    let h3 h h' h'' = h2 (h2 h h') h''
+    let rec hash (c: t) =
+      match c with
+      | CMux (_, c1, c2, c3) -> 1 + h3 c1.hkey c2.hkey c3.hkey
+      | CConst c -> 2 + Hashtbl.hash c
+      | CReadRegister { reg_name; _ } -> 3 + h1 reg_name
+      | CUnop (f, a1) -> 4 + h2 (h1 f) a1.hkey
+      | CBinop (f, a1, a2) -> 5 + h3 (h1 f) a1.hkey a2.hkey
+      | CExternal (f, a1) -> 6 + h2 (h1 f) a1.hkey
+      | CBundle (rule_name, rwset) -> 7 + h2 (h1 rule_name) (hash_rwset rwset)
+      | CBundleRef (_, bundle, field) -> 8 + h2 bundle.hkey (h1 field)
+      | CAnnot (_, s, c) -> 9 + h2 (h1 s) c.hkey
+    and hash_rwset r =
+      Hashtbl.hash (List.map (fun (_, rwd) -> hash_rwdata rwd) r)
+    and hash_rwdata rwd =
+      h3 (h2 rwd.read0.hkey rwd.read1.hkey)
+        (h2 rwd.write0.hkey rwd.write1.hkey)
+        (h2 rwd.data0.hkey rwd.data1.hkey)
   end
 
   module CircuitPhysicalHash = struct
