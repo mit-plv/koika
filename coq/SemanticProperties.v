@@ -432,6 +432,46 @@ Section LatestWrites.
     setoid_rewrite log_find_cons_neq; auto.
   Qed.
 
+  Lemma latest_write_empty idx:
+    latest_write (log_empty: Log) idx = None.
+  Proof.
+    apply log_find_empty.
+  Qed.
+
+  Lemma latest_write_app :
+    forall (sl sl': Log) idx,
+      let lw := latest_write (log_app sl sl') idx in
+      lw =
+      match latest_write sl idx with
+      | Some e => Some e
+      | None => latest_write sl' idx
+      end.
+  Proof.
+    unfold latest_write; eauto using log_find_app.
+  Qed.
+
+  Lemma latest_write_cons_eq :
+    forall (log: Log) idx le,
+      latest_write (log_cons idx le log) idx =
+      match le with
+      | LE LogWrite P v => Some v
+      | _ => latest_write log idx
+      end.
+  Proof.
+    unfold latest_write; intros.
+    setoid_rewrite log_find_cons_eq; destruct le, kind, port; reflexivity.
+  Qed.
+
+  Lemma latest_write_cons_neq :
+    forall (log: Log) idx idx' le,
+      idx <> idx' ->
+      latest_write (log_cons idx' le log) idx =
+      latest_write log idx.
+  Proof.
+    unfold latest_write1; intros.
+    setoid_rewrite log_find_cons_neq; auto.
+  Qed.
+
   Ltac latest_write_t :=
     unfold latest_write, latest_write0, latest_write1, log_find, log_existsb;
     induction (getenv REnv _ _);
