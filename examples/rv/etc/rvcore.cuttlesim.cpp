@@ -4,6 +4,7 @@
 
 #include "rv32.hpp"
 #include "elf.hpp"
+#include "cuttlesim.hpp"
 
 #define DMEM_SIZE (static_cast<std::size_t>(1) << 25)
 
@@ -23,7 +24,8 @@ protected:
 
 #define PEEK(rn) log.state.rn
 
-  virtual bool rule_ExternalI() noexcept {
+#define RULE_NAME ExternalI
+  DEF_RULE(ExternalI) {
     static std::optional<struct_mem_req> last{};
 
     if (~PEEK(fromIMem_valid0) && last.has_value()) {
@@ -41,11 +43,13 @@ protected:
       last = PEEK(toIMem_data0);
     }
 
-    COMMIT(ExternalI);
+    COMMIT();
     return true;
   }
+#undef RULE_NAME
 
-  virtual bool rule_ExternalD() noexcept {
+#define RULE_NAME ExternalD
+  DEF_RULE(ExternalD) {
     static std::optional<struct_mem_req> last{};
 
     if (!PEEK(fromDMem_valid0) && last.has_value()) {
@@ -86,10 +90,10 @@ protected:
       last = PEEK(toDMem_data0);
     }
 
-    COMMIT(ExternalD);
+    COMMIT();
     return true;
   }
-
+#undef RULE_NAME
 };
 
 #ifdef SIM_MINIMAL

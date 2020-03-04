@@ -842,7 +842,7 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
         else "" in
       let fail safe = sprintf "FAIL%s" (if safe then "_FAST" else dl_suffix) in
       let commit = sprintf "COMMIT%s" dl_suffix in
-      let call = sprintf "CALL%s" dl_suffix in
+      let call = sprintf "CALL_FN" in
       let rw_suffix reg =
         if hpp.cpp_register_kinds reg = Value then "_FAST" else dl_suffix in
       let read reg pt =
@@ -1031,7 +1031,7 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
         | Extr.APos (_, _, Extr.HistoryAnnot reg_histories,
                      Extr.Fail (_, _)) ->
            let safe = may_fail_fast reg_histories in
-           p "%s(%s);" (fail safe) rule_name_unprefixed;
+           p "%s();" (fail safe);
            (match target with
             | NoTarget -> NotAssigned
             | VarTarget { declared = true; name; _ } -> Assigned name
@@ -1084,7 +1084,7 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
                      Extr.Read (_, port, reg)) ->
            let r = hpp.cpp_register_sigs reg in
            let pt = match port with P0 -> 0 | P1 -> 1 in
-           let expr = sprintf "%s(%s, %s)" (read reg pt) rule_name_unprefixed r.reg_name in
+           let expr = sprintf "%s(%s)" (read reg pt) r.reg_name in
            (* It wouldn't be safe to return the result directly (as a plain
               ImpureExpr) without writing it out, because of sequencing issues
               in expressions like “a := read0(x) + (write0(x); 0)” (we'd end up
@@ -1096,7 +1096,7 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
            let vt = gensym_target (reg_type r) "v" in
            let v = must_value (p_action false pos vt expr) in
            let pt = match port with P0 -> 0 | P1 -> 1 in
-           p "%s(%s, %s, %s);" (write reg pt) rule_name_unprefixed r.reg_name v;
+           p "%s(%s, %s);" (write reg pt) r.reg_name v;
            p_assign_expr target (PureExpr "prims::tt")
         | Extr.Unop (_, Extr.PrimTyped.Conv (tau, Extr.PrimTyped.Unpack), a)
              when Extr.(returns_zero a && is_pure a) ->
@@ -1131,7 +1131,7 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
            (* FIXME need the type of the return value in the macro to know what kind of parameter to declare *)
            (* See ‘Read’ case for why returning just ImpureExpr isn't safe *)
            let args = String.concat ", " (fn_name :: args) in
-           let invocation = sprintf "%s(%s, %s)" call rule_name_unprefixed args in
+           let invocation = sprintf "%s(%s)" call args in
            p_assign_expr target (ImpureExpr invocation)
         | Extr.APos (_, _, Extr.PosAnnot pos, a) ->
            p_action at_top (hpp.cpp_pos_of_pos pos) target a
@@ -1172,37 +1172,29 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
       and p_assign_and_ignore target expr =
         ignore (p_assign_expr target expr) in
 
-      let annot = " noexcept" in
-      let rl_main = hpp.cpp_rule_names rule.rl_name in
-      let rl_reset = hpp.cpp_rule_names ~prefix:"reset" rule.rl_name in
-      let rl_commit = hpp.cpp_rule_names ~prefix:"commit" rule.rl_name in
-
-      let virtual_flag =
-        if rule.rl_external then "virtual " else "" in
-
-      let rule_flags =
-        virtual_flag ^ "_noinline " in
+      let p_special_fn kind ?(args=rule_name_unprefixed) p_body =
+        let virtual_flag = if rule.rl_external then "virtual " else "" in
+        p_scoped (sprintf "%sDEF_%s(%s)" virtual_flag kind args) p_body in
 
       let p_reset_commit () =
         if not use_dynamic_log then
-          (p_fn ~typ:(rule_flags ^ "void") ~name:rl_reset ~annot p_reset;
+          (p_special_fn "RESET" p_reset;
            nl ();
-           p_fn ~typ:(rule_flags ^ "void") ~name:rl_commit ~annot p_commit;
+           p_special_fn "COMMIT" p_commit;
            nl ()) in
 
       let p_rule_body () =
-        p_fn ~typ:(rule_flags ^ "bool") ~name:rl_main ~annot (fun () ->
+        p_special_fn "RULE" (fun () ->
             if use_dynamic_log then (p "dynamic_log_t<%d> dlog{};" rule_max_log_size; nl ());
             p_assign_and_ignore NoTarget (p_action true Pos.Unknown NoTarget rule.rl_body);
             nl ();
-            p "%s(%s);" commit rule_name_unprefixed;
-            p "return true;") in
+            p "%s();" commit) in
 
       let collect_intfuns pos (action: (_, var_t, fn_name_t, reg_t, _) Extr.action) =
         let fns = ref [] in
         let ensure_fresh fn =
           let rec loop counter =
-            let nm = sprintf "fn%d_%s_%s" counter rule_name_unprefixed fn in
+            let nm = sprintf "%s_%d" fn counter in
             if not (Hashtbl.mem internal_fnames nm) then
               let () = Hashtbl.add internal_fnames nm () in nm
             else
@@ -1244,26 +1236,25 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
         loop pos action;
         List.rev !fns in
 
-      let fn_flags =
-        virtual_flag (* ^ "inline __attribute__((always_inline)) " *) in
-
       let p_intfun (pos, name, intf) =
         let sp_arg (nm, tau) =
           let tau = Cuttlebone.Util.typ_of_extr_type tau in
           sprintf "%s %s" (cpp_type_of_type tau) (hpp.cpp_var_names nm) in
         let ret_tau = Cuttlebone.Util.typ_of_extr_type intf.Extr.int_retSig in
         let ret_type = cpp_type_of_type ret_tau in
-        p "using ti_%s = %s;" name ret_type;
         let ret_arg = sprintf "%s %s" ret_type "*_ret" in
-        let args = String.concat ", " @@ ret_arg :: List.map sp_arg intf.Extr.int_argspec in
-        p_fn ~typ:(fn_flags ^ "bool") ~name ~annot ~args (fun () ->
+        let args = String.concat ", " @@ name :: ret_arg :: List.map sp_arg intf.Extr.int_argspec in
+        p "DECL_FN(%s, %s)" name ret_type;
+        p_special_fn "FN" ~args (fun () ->
             let target = VarTarget { tau = ret_tau; declared = true; name = "(*_ret)" } in
             p_assign_and_ignore target (p_action true pos target intf.int_body);
             p "return true;") in
 
-      iter_sep nl p_intfun (collect_intfuns Pos.Unknown rule.rl_body);
+      p "#define RULE_NAME %s" rule_name_unprefixed;
       p_reset_commit ();
-      p_rule_body () in
+      iter_sep nl p_intfun (collect_intfuns Pos.Unknown rule.rl_body);
+      p_rule_body ();
+      p "#undef RULE_NAME" in
 
     let p_initial_state () =
       (* This is a function instead of a variable to avoid polluting GDB's output *)
