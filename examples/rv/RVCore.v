@@ -413,7 +413,7 @@ Module  RV32ICore.
     Definition T:= struct_t fetch_bookkeeping.
   End FifoFetch.
   Module fromFetch := Fifo1 FifoFetch.
-  Module waitFromFetch := Fifo1 FifoFetch.
+  Module waitFromFetch := Fifo1Bypass FifoFetch.
 
   Module FifoDecode <: Fifo.
     Definition T:= struct_t decode_bookkeeping.
