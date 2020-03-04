@@ -9,7 +9,7 @@
 #define DMEM_SIZE (static_cast<std::size_t>(1) << 25)
 
 struct extfuns {};
-class rv_core : public module_rv32<extfuns> {
+class rv_core final : public module_rv32<extfuns> {
   std::unique_ptr<bits<32>[]> dmem;
 
 public:
