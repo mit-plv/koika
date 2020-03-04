@@ -49,10 +49,11 @@ Section Contexts.
     end f.
 
   Fixpoint cassoc {sig} {k} (m: member k sig)
-           (ctx: context sig) {struct m} : V k.
-  Proof.
-    destruct m; inversion ctx; subst; eauto.
-  Defined.
+           (ctx: context sig) {struct m} : V k :=
+    match m in (member y l) return (context l -> V y) with
+    | MemberHd k sig => fun ctx => chd ctx
+    | MemberTl k k' sig m => fun ctx => cassoc m (ctl ctx)
+    end ctx.
 
   Lemma cassoc_ccreate {sig} (f: forall k, _ -> V k) {k} (m: member k sig) :
     cassoc m (ccreate sig f) = f k m.
