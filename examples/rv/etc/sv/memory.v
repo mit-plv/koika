@@ -41,8 +41,11 @@ module memory(input  CLK,
 `endif
 
    function[ADDRESS_WIDTH - 1:0] translate_address(input[`REQ_ADDR_WIDTH - 1:0] address);
-      reg[`REQ_ADDR_WIDTH - 1:0] _untruncated_addr = address >> 2;
-      translate_address = _untruncated_addr[ADDRESS_WIDTH - 1:0];
+      reg[`REQ_ADDR_WIDTH - 1:0] _untruncated_addr;
+      begin
+         _untruncated_addr = address >> 2;
+         translate_address = _untruncated_addr[ADDRESS_WIDTH - 1:0];
+      end
    endfunction
 
    function[`REQ_DATA_WIDTH - 1:0] compute_mask(input[3:0] byte_en);
@@ -80,6 +83,7 @@ module memory(input  CLK,
    wire get_wf = get_enable && get_ready;
 
    always @(negedge CLK) begin
+`ifdef SIMULATION
       if (put_wf && put_request_addr == EXIT_ADDRESS) begin
          if (put_request_data == 0)
     	   $fwrite(32'h80000002, "  [0;32mPASS[0m\n");
@@ -91,6 +95,7 @@ module memory(input  CLK,
 
       if (put_wf && put_request_addr == IO_ADDRESS)
         $fwrite(32'h80000002, "%c", put_request_data[7:0]);
+`endif
 
       if (RST_N == 1) begin
          if (has_request) begin
