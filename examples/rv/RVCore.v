@@ -458,6 +458,7 @@ Module  RV32ICore.
   | rf (state: Rf.reg_t)
   | mulState (state: multiplier.reg_t)
   | scoreboard (state: Scoreboard.reg_t)
+  | cycle_count
   | instr_count
   | pc
   | epoch.
@@ -477,6 +478,7 @@ Module  RV32ICore.
     | scoreboard r => Scoreboard.R r
     | mulState r => multiplier.R r
     | pc => bits_t 32
+    | cycle_count => bits_t 32
     | instr_count => bits_t 32
     | epoch => bits_t 1
     end.
@@ -496,6 +498,7 @@ Module  RV32ICore.
     | scoreboard s => Scoreboard.r s
     | mulState s => multiplier.r s
     | pc => Bits.zero
+    | cycle_count => Bits.zero
     | instr_count => Bits.zero
     | epoch => Bits.zero
     end.
@@ -743,6 +746,14 @@ Module  RV32ICore.
   Definition tc_imem := tc_action R Sigma (mem imem).
   Definition tc_dmem := tc_action R Sigma (mem dmem).
 
+  Definition tick : uaction reg_t ext_fn_t :=
+    {{
+        write0(cycle_count, read0(cycle_count) + |32`d1|)
+    }}.
+
+  Definition tc_tick :=
+    tc_action R Sigma tick.
+
   Inductive rv_rules_t :=
   | Fetch
   | Decode
@@ -751,7 +762,8 @@ Module  RV32ICore.
   | Imem
   | Dmem
   | WaitImem
-  | StepMultiplier.
+  | StepMultiplier
+  | Tick.
 
   Definition rv_rules (rl:rv_rules_t) : rule R Sigma :=
     match rl with
@@ -763,6 +775,7 @@ Module  RV32ICore.
     | Imem => tc_imem
     | Dmem => tc_dmem
     | StepMultiplier => tc_step_multiplier
+    | Tick => tc_tick
     end.
 
   Definition rv_external (rl: rv_rules_t) := false.
