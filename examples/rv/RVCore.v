@@ -547,8 +547,8 @@ Module  RV32ICore.
 
   Definition wait_imem : uaction reg_t ext_fn_t :=
     {{
-        let fetched_bookeeping := f2d.(fromFetch.deq)() in
-        f2dprim.(waitFromFetch.enq)(fetched_bookeeping)
+        let fetched_bookkeeping := f2d.(fromFetch.deq)() in
+        f2dprim.(waitFromFetch.enq)(fetched_bookkeeping)
     }}.
 
   Definition tc_wait_imem :=
@@ -562,9 +562,9 @@ Module  RV32ICore.
     {{
         let instr := fromIMem.(MemResp.deq)() in
         let instr := get(instr,data) in
-        let fetched_bookeeping := f2dprim.(waitFromFetch.deq)() in
+        let fetched_bookkeeping := f2dprim.(waitFromFetch.deq)() in
         let decodedInst := decode_fun(instr) in
-        when (get(fetched_bookeeping, epoch) == read1(epoch)) do
+        when (get(fetched_bookkeeping, epoch) == read1(epoch)) do
              (let rs1_idx := get(getFields(instr), rs1) in
              let rs2_idx := get(getFields(instr), rs2) in
              let score1 := scoreboard.(Scoreboard.search)(rs1_idx) in
@@ -576,9 +576,9 @@ Module  RV32ICore.
              let rs1 := rf.(Rf.read_1)(rs1_idx) in
              let rs2 := rf.(Rf.read_1)(rs2_idx) in
              let decode_bookkeeping := struct decode_bookkeeping {|
-                                                pc    := get(fetched_bookeeping, pc);
-                                                ppc   := get(fetched_bookeeping, ppc);
-                                                epoch := get(fetched_bookeeping, epoch);
+                                                pc    := get(fetched_bookkeeping, pc);
+                                                ppc   := get(fetched_bookkeeping, ppc);
+                                                epoch := get(fetched_bookkeeping, epoch);
                                                 dInst := decodedInst;
                                                 rval1 := rs1;
                                                 rval2 := rs2
@@ -623,10 +623,10 @@ Module  RV32ICore.
 
   Definition execute : uaction reg_t ext_fn_t :=
     {{
-        let decoded_bookeeping := d2e.(fromDecode.deq)() in
-        if get(decoded_bookeeping, epoch) == read0(epoch) then
+        let decoded_bookkeeping := d2e.(fromDecode.deq)() in
+        if get(decoded_bookkeeping, epoch) == read0(epoch) then
           (* By then we guarantee that this instruction is correct-path *)
-          let dInst := get(decoded_bookeeping, dInst) in
+          let dInst := get(decoded_bookkeeping, dInst) in
           if get(dInst, legal) == Ob~0 then
             (* Always say that we had a misprediction in this case for
             simplicity *)
@@ -635,11 +635,11 @@ Module  RV32ICore.
           else
             (let fInst := get(dInst, inst) in
              let funct3 := get(getFields(fInst), funct3) in
-             let rs1_val := get(decoded_bookeeping, rval1) in
-             let rs2_val := get(decoded_bookeeping, rval2) in
+             let rs1_val := get(decoded_bookkeeping, rval1) in
+             let rs2_val := get(decoded_bookkeeping, rval2) in
              (* Use the multiplier module or the ALU *)
              let imm := getImmediate(dInst) in
-             let pc := get(decoded_bookeeping, pc) in
+             let pc := get(decoded_bookkeeping, pc) in
              let data := execALU32(fInst, rs1_val, rs2_val, imm, pc) in
              let isUnsigned := Ob~0 in
              let size := funct3[|2`d0| :+ 2] in
@@ -672,7 +672,7 @@ Module  RV32ICore.
                pass;
              let controlResult := execControl32(fInst, rs1_val, rs2_val, imm, pc) in
              let nextPc := get(controlResult,nextPC) in
-             if nextPc != get(decoded_bookeeping, ppc) then
+             if nextPc != get(decoded_bookkeeping, ppc) then
                write0(epoch, read0(epoch)+Ob~1);
                write0(pc, nextPc)
              else
@@ -682,7 +682,7 @@ Module  RV32ICore.
                                                  size := size;
                                                  offset := offset;
                                                  newrd := data;
-                                                 dInst := get(decoded_bookeeping, dInst)
+                                                 dInst := get(decoded_bookkeeping, dInst)
                                                |} in
              e2w.(fromExecute.enq)(execute_bookkeeping))
         else
@@ -694,17 +694,17 @@ Module  RV32ICore.
 
   Definition writeback : uaction reg_t ext_fn_t :=
     {{
-        let execute_bookeeping := e2w.(fromExecute.deq)() in
-        let dInst := get(execute_bookeeping, dInst) in
-        let data := get(execute_bookeeping, newrd) in
+        let execute_bookkeeping := e2w.(fromExecute.deq)() in
+        let dInst := get(execute_bookkeeping, dInst) in
+        let data := get(execute_bookkeeping, newrd) in
         let fields := getFields(get(dInst, inst)) in
         write0(instr_count, read0(instr_count)+|32`d1|);
         if isMemoryInst(dInst) then (* // write_val *)
           (* Byte enable shifting back *)
           let resp := fromDMem.(MemResp.deq)() in
           let mem_data := get(resp,data) in
-          set mem_data := mem_data >> (get(execute_bookeeping,offset) ++ Ob~0~0~0);
-          match (get(execute_bookeeping,isUnsigned)++get(execute_bookeeping,size)) with
+          set mem_data := mem_data >> (get(execute_bookkeeping,offset) ++ Ob~0~0~0);
+          match (get(execute_bookkeeping,isUnsigned)++get(execute_bookkeeping,size)) with
           | Ob~0~0~0 => set data := {signExtend 8  24}(mem_data[|5`d0|:+8])
           | Ob~0~0~1 => set data := {signExtend 16 16}(mem_data[|5`d0|:+16])
           | Ob~1~0~0 => set data := zeroExtend(mem_data[|5`d0|:+8],32)
