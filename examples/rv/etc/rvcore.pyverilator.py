@@ -27,8 +27,7 @@ def init_simulator(top, args):
     try:
         sim = PyVerilator.build(top, build_dir='obj_dir.py',
                                 quiet=True, command_args=args,
-                                verilator_defines=[("BRAM_RUNTIME_INIT", ""),
-                                                   ("SIMULATION", "")])
+                                verilog_defines=["BRAM_RUNTIME_INIT", "SIMULATION"])
         sim.set_vl_finish_callback(lambda *args: vl_finish_callback(sim, *args))
         return sim
     except subprocess.CalledProcessError as e:
