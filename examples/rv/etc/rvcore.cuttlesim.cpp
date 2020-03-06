@@ -55,8 +55,8 @@ struct bram {
   }
 
   struct_mem_output getput(struct_mem_input req) {
-    std::optional<struct_mem_resp> get_response = get(bool(req.get_enable));
-    bool put_ready = put(req.put_enable ? std::optional<struct_mem_req>{req.put_request} : std::nullopt);
+    std::optional<struct_mem_resp> get_response = get(bool(req.get_valid));
+    bool put_ready = put(req.put_valid ? std::optional<struct_mem_req>{req.put_request} : std::nullopt);
     return struct_mem_output{
       .get_ready = bits<1>{get_response.has_value()},
       .put_ready = bits<1>{put_ready},

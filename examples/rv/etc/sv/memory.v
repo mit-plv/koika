@@ -5,8 +5,8 @@
 
 module memory(input  CLK,
               input  RST_N,
-              input  get_enable,
-              input  put_enable,
+              input  get_valid,
+              input  put_valid,
               input  [`MEM_OP_SIZE - 1:0] put_request,
               output get_ready,
               output put_ready,
@@ -74,13 +74,13 @@ module memory(input  CLK,
    wire[`REQ_DATA_WIDTH - 1:0] data = mem[addr];
 
    assign get_ready = RST_N && has_request;
-   assign put_ready = RST_N && (get_enable || !has_request);
+   assign put_ready = RST_N && (get_valid || !has_request);
 
    wire[`REQ_DATA_WIDTH - 1:0] get_response_data = last_request_byte_en == 4'b0000 ? data : 0;
    assign get_response = {last_request_byte_en, last_request_addr, get_response_data};
 
-   wire put_wf = put_enable && put_ready;
-   wire get_wf = get_enable && get_ready;
+   wire put_wf = put_valid && put_ready;
+   wire get_wf = get_valid && get_ready;
 
    always @(negedge CLK) begin
 `ifdef SIMULATION

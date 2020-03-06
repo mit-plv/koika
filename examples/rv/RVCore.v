@@ -510,8 +510,8 @@ Module  RV32ICore.
 
   Definition mem_input :=
     {| struct_name := "mem_input";
-       struct_fields := [("get_enable", bits_t 1);
-                        ("put_enable", bits_t 1);
+       struct_fields := [("get_valid", bits_t 1);
+                        ("put_valid", bits_t 1);
                         ("put_request", struct_t mem_req)] |}.
 
   Definition mem_output :=
@@ -733,14 +733,14 @@ Module  RV32ICore.
     let fromMem := match m with imem => fromIMem | dmem => fromDMem end in
     let toMem := match m with imem => toIMem | dmem => toDMem end in
     {{
-        let get_enable := fromMem.(MemResp.can_enq)() in
+        let get_valid := fromMem.(MemResp.can_enq)() in
         let put_request_opt := toMem.(MemReq.peek)() in
-        let put_enable := get(put_request_opt, valid) in
         let put_request := get(put_request_opt, data) in
-        let mem_out := extcall (ext_mem m)(struct mem_input {|
-          get_enable := get_enable; put_enable := put_enable; put_request := put_request |}) in
-        (if (get_enable && get(mem_out, get_ready)) then fromMem.(MemResp.enq)(get(mem_out, get_response)) else pass);
-        (if (put_enable && get(mem_out, put_ready)) then ignore(toMem.(MemReq.deq)()) else pass)
+        let put_valid := get(put_request_opt, valid) in
+        let mem_out := extcall (ext_mem m) (struct mem_input {|
+          get_valid := get_valid; put_valid := put_valid; put_request := put_request |}) in
+        (when (get_valid && get(mem_out, get_ready)) do fromMem.(MemResp.enq)(get(mem_out, get_response)));
+        (when (put_valid && get(mem_out, put_ready)) do ignore(toMem.(MemReq.deq)()))
     }}.
 
   Definition tc_imem := tc_action R Sigma (mem imem).
