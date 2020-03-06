@@ -240,6 +240,7 @@ FPGA_DEVICE ?= lp8k
 FPGA_ARACHNE_DEVICE ?=
 FPGA_ARACHNE_PACKAGE ?= cm81
 FPGA_ARACHNE_PCF ?= pins.pcf
+FPGA_YOSYS_OPTS ?= -Q -T -v8
 
 fpga_arachne_device :=
 ifneq (, $(FPGA_ARACHNE_DEVICE))
@@ -263,7 +264,7 @@ endif
 fpga_toplevel := $(basename $(FPGA_TOPLEVEL))
 
 $(fpga_toplevel).blif: $(FPGA_TOPLEVEL)
-	yosys -p 'read_verilog $(FPGA_TOPLEVEL); hierarchy -libdir . -top $(fpga_toplevel); synth_ice40 -top $(fpga_toplevel) -blif $@'
+	yosys $(FPGA_YOSYS_OPTS) -l $(fpga_toplevel).blif.log -p 'read_verilog $(FPGA_TOPLEVEL); hierarchy -libdir . -top $(fpga_toplevel); synth_ice40 -top $(fpga_toplevel) -blif $@'
 
 $(fpga_toplevel).asc: $(FPGA_ARACHNE_PCF) $(fpga_toplevel).blif
 	arachne-pnr --device $(fpga_arachne_device) --package $(FPGA_ARACHNE_PACKAGE) --pcf-file $(FPGA_ARACHNE_PCF) -o $@ -p $^
