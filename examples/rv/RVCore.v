@@ -392,6 +392,7 @@ Module  RV32ICore.
   Definition execute_bookkeeping :=
     {| struct_name := "execute_bookkeeping";
        struct_fields := [("isUnsigned" , bits_t 1);
+                         ("isUARTWrite" , bits_t 1);
                          ("size", bits_t 2);
                          ("offset", bits_t 2);
                          ("newrd" , bits_t 32);
@@ -408,6 +409,12 @@ Module  RV32ICore.
     Definition T:= struct_t mem_resp.
   End FifoMemResp.
   Module MemResp := Fifo1 FifoMemResp.
+
+  Module FifoUART <: Fifo.
+    Definition T:= bits_t 8.
+  End FifoUART.
+  Module UARTReq := Fifo1Bypass FifoUART.
+  Module UARTResp := Fifo1 FifoUART.
 
   Module FifoFetch <: Fifo.
     Definition T:= struct_t fetch_bookkeeping.
@@ -451,6 +458,10 @@ Module  RV32ICore.
   | fromIMem (state: MemResp.reg_t)
   | toDMem (state: MemReq.reg_t)
   | fromDMem (state: MemResp.reg_t)
+  | toUART (state: UARTReq.reg_t)
+  | toUART_ack
+  | fromUART (state: UARTResp.reg_t)
+  | fromUART_req
   | f2d (state: fromFetch.reg_t)
   | f2dprim (state: waitFromFetch.reg_t)
   | d2e (state: fromDecode.reg_t)
@@ -470,6 +481,10 @@ Module  RV32ICore.
     | fromIMem r => MemResp.R r
     | toDMem r => MemReq.R r
     | fromDMem r => MemResp.R r
+    | toUART r => UARTReq.R r
+    | toUART_ack => bits_t 1
+    | fromUART r => UARTResp.R r
+    | fromUART_req => bits_t 1
     | f2d r => fromFetch.R r
     | f2dprim r => waitFromFetch.R r
     | d2e r => fromDecode.R r
@@ -491,6 +506,10 @@ Module  RV32ICore.
     | fromIMem s => MemResp.r s
     | toDMem s => MemReq.r s
     | fromDMem s => MemResp.r s
+    | toUART s => UARTReq.r s
+    | toUART_ack => Bits.zero
+    | fromUART s => UARTResp.r s
+    | fromUART_req => Bits.zero
     | f2d s => fromFetch.r s
     | f2dprim s => waitFromFetch.r s
     | d2e s => fromDecode.r s
@@ -506,7 +525,7 @@ Module  RV32ICore.
   (* External functions, used to model memory *)
 
   Inductive memory := imem | dmem.
-  Inductive ext_fn_t := ext_mem (m: memory).
+  Inductive ext_fn_t := ext_mem (m: memory) | ext_uart_read | ext_uart_write.
 
   Definition mem_input :=
     {| struct_name := "mem_input";
@@ -520,9 +539,15 @@ Module  RV32ICore.
                         ("put_ready", bits_t 1);
                         ("get_response", struct_t mem_resp)] |}.
 
+
+  Definition uart_input := maybe (bits_t 8).
+  Definition uart_output := maybe (bits_t 8).
+
   Definition Sigma (fn: ext_fn_t) :=
     match fn with
     | ext_mem _ => {$ struct_t mem_input ~> struct_t mem_output $}
+    | ext_uart_read => {$ bits_t 1 ~> uart_output $}
+    | ext_uart_write => {$ uart_input ~> bits_t 1 $}
     end.
 
   Definition fetch : uaction reg_t ext_fn_t :=
@@ -621,6 +646,9 @@ Module  RV32ICore.
   Definition tc_step_multiplier :=
     tc_action R empty_Sigma step_multiplier.
 
+  Definition UART_WRITE_ADDRESS :=
+    Ob~0~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0.
+
   Definition execute : uaction reg_t ext_fn_t :=
     {{
         let decoded_bookkeeping := d2e.(fromDecode.deq)() in
@@ -645,25 +673,28 @@ Module  RV32ICore.
              let size := funct3[|2`d0| :+ 2] in
              let addr := rs1_val + imm in
              let offset := addr[|5`d0| :+ 2] in
+             let isUARTWrite := Ob~0 in
              if isMemoryInst(dInst) then
                let shift_amount := offset ++ |3`d0| in
-               let byte_en := match size with
-                              | Ob~0~0 => Ob~0~0~0~1
-                              | Ob~0~1 => Ob~0~0~1~1
-                              | Ob~1~0 => Ob~1~1~1~1
-                              return default: fail(4)
-                              end << offset in
+               let is_write := fInst[|5`d5|] == Ob~1 in
+               let byte_en :=
+                   if is_write then
+                     match size with
+                     | Ob~0~0 => Ob~0~0~0~1
+                     | Ob~0~1 => Ob~0~0~1~1
+                     | Ob~1~0 => Ob~1~1~1~1
+                     return default: fail(4)
+                     end << offset
+                   else Ob~0~0~0~0 in
                set data := rs2_val << shift_amount;
                set addr := addr[|5`d2| :+ 30 ] ++ |2`d0|;
                set isUnsigned := funct3[|2`d2|];
-               let type_mem := if (fInst[|5`d5|] == Ob~1)
-                               then byte_en
-                               else Ob~0~0~0~0 in
-               let req := struct mem_req {|
-                                   byte_en := type_mem;
-                                   addr := addr;
-                                   data := data |} in
-               toDMem.(MemReq.enq)(req)
+               if (addr == #UART_WRITE_ADDRESS) && is_write then
+                 set isUARTWrite := Ob~1;
+                 toUART.(UARTReq.enq)(data[|5`d0| :+ 8])
+               else
+                 toDMem.(MemReq.enq)(struct mem_req {|
+                   byte_en := byte_en; addr := addr; data := data |})
              else if (isControlInst(dInst)) then
                set data := (pc + |32`d4|)     (* For jump and link *)
              else if (isMultiplyInst(dInst)) then
@@ -679,6 +710,7 @@ Module  RV32ICore.
                pass;
              let execute_bookkeeping := struct execute_bookkeeping {|
                                                  isUnsigned := isUnsigned;
+                                                 isUARTWrite := isUARTWrite;
                                                  size := size;
                                                  offset := offset;
                                                  newrd := data;
@@ -701,17 +733,22 @@ Module  RV32ICore.
         write0(instr_count, read0(instr_count)+|32`d1|);
         if isMemoryInst(dInst) then (* // write_val *)
           (* Byte enable shifting back *)
-          let resp := fromDMem.(MemResp.deq)() in
-          let mem_data := get(resp,data) in
-          set mem_data := mem_data >> (get(execute_bookkeeping,offset) ++ Ob~0~0~0);
-          match (get(execute_bookkeeping,isUnsigned)++get(execute_bookkeeping,size)) with
-          | Ob~0~0~0 => set data := {signExtend 8  24}(mem_data[|5`d0|:+8])
-          | Ob~0~0~1 => set data := {signExtend 16 16}(mem_data[|5`d0|:+16])
-          | Ob~1~0~0 => set data := zeroExtend(mem_data[|5`d0|:+8],32)
-          | Ob~1~0~1 => set data := zeroExtend(mem_data[|5`d0|:+16],32)
-          | Ob~0~1~0 => set data := mem_data      (* Load Word *)
-          return default: fail                   (* Load Double or Signed Word *)
-          end
+          (if get(execute_bookkeeping, isUARTWrite) then
+             guard(read0(toUART_ack));
+             write0(toUART_ack, Ob~0);
+             set data := |32`d0|
+           else
+             let resp := fromDMem.(MemResp.deq)() in
+             let mem_data := get(resp,data) in
+             set mem_data := mem_data >> (get(execute_bookkeeping,offset) ++ Ob~0~0~0);
+             match (get(execute_bookkeeping,isUnsigned)++get(execute_bookkeeping,size)) with
+             | Ob~0~0~0 => set data := {signExtend 8  24}(mem_data[|5`d0|:+8])
+             | Ob~0~0~1 => set data := {signExtend 16 16}(mem_data[|5`d0|:+16])
+             | Ob~1~0~0 => set data := zeroExtend(mem_data[|5`d0|:+8],32)
+             | Ob~1~0~1 => set data := zeroExtend(mem_data[|5`d0|:+16],32)
+             | Ob~0~1~0 => set data := mem_data      (* Load Word *)
+             return default: fail                   (* Load Double or Signed Word *)
+             end)
         else if isMultiplyInst(dInst) then
           set data := mulState.(multiplier.deq)()[|6`d0| :+ 32]
         else
@@ -746,6 +783,19 @@ Module  RV32ICore.
   Definition tc_imem := tc_action R Sigma (mem imem).
   Definition tc_dmem := tc_action R Sigma (mem dmem).
 
+  Definition uart_write : uaction reg_t ext_fn_t :=
+    {{
+        let request_opt := toUART.(UARTReq.peek)() in
+        let valid := get(request_opt, valid) && !read1(toUART_ack) in
+        let uart_ready := extcall ext_uart_write (struct (Maybe (bits_t 8)) {|
+          valid := valid; data := get(request_opt, data) |}) in
+        (when (valid && uart_ready) do
+           ignore(toUART.(UARTReq.deq)());
+           write1(toUART_ack, Ob~1))
+    }}.
+
+  Definition tc_uart_write := tc_action R Sigma uart_write.
+
   Definition tick : uaction reg_t ext_fn_t :=
     {{
         write0(cycle_count, read0(cycle_count) + |32`d1|)
@@ -759,10 +809,11 @@ Module  RV32ICore.
   | Decode
   | Execute
   | Writeback
+  | WaitImem
   | Imem
   | Dmem
-  | WaitImem
   | StepMultiplier
+  | UART_write
   | Tick.
 
   Definition rv_rules (rl:rv_rules_t) : rule R Sigma :=
@@ -775,6 +826,7 @@ Module  RV32ICore.
     | Imem => tc_imem
     | Dmem => tc_dmem
     | StepMultiplier => tc_step_multiplier
+    | UART_write => tc_uart_write
     | Tick => tc_tick
     end.
 
@@ -821,6 +873,8 @@ Module  RV32ICore.
     match fn with
     | ext_mem imem => {| ef_name := "ext_mem_imem"; ef_internal := true |}
     | ext_mem dmem => {| ef_name := "ext_mem_dmem"; ef_internal := true |}
+    | ext_uart_write => {| ef_name := "ext_uart_write"; ef_internal := false |}
+    | ext_uart_read => {| ef_name := "ext_uart_read"; ef_internal := false |}
     end.
 
   Instance FiniteType_toIMem : FiniteType MemReq.reg_t := _.

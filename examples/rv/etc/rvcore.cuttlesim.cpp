@@ -21,9 +21,7 @@ struct bram {
     auto dEn = last->byte_en;
     bits<32> current = bits<32>{0};
 
-    if (addr.v == 0x40000000 && dEn.v == 0xf) { // PutChar
-      putchar(static_cast<char>(last->data.v));
-    } else if (addr.v == 0x40001000 && dEn.v == 0xf) {
+    if (addr.v == 0x40001000 && dEn.v == 0xf) {
       int exitcode = last->data.v;
       if (exitcode == 0) {
         printf("  [0;32mPASS[0m\n");
@@ -83,13 +81,20 @@ struct extfuns_t {
     return imem.getput(req);
   }
 
+  bits<1> ext_uart_write(struct_maybe_bits_8 req) {
+    if (req.valid) {
+      putchar(static_cast<char>(req.data.v));
+    }
+    return req.valid;
+  }
+
   extfuns_t() : dmem{}, imem{} {}
 };
 
 using simulator = module_rv32<extfuns_t>;
 
 class rv_core : public simulator {
-  void strobe(std::uint_fast64_t ncycles) const {
+  void strobe(std::uint_fast64_t _unused ncycles) const {
 #if defined(SIM_STROBE) && !defined(SIM_MINIMAL)
     std::cout << "# " << ncycles << std::endl;
     std::cout << "pc = " << Log.state.pc << std::endl;

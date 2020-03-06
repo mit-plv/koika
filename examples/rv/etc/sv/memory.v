@@ -92,9 +92,6 @@ module memory(input  CLK,
 
          $finish(1'b1);
       end
-
-      if (put_wf && put_request_addr == IO_ADDRESS)
-        $fwrite(32'h80000002, "%c", put_request_data[7:0]);
 `endif
 
       if (RST_N == 1) begin

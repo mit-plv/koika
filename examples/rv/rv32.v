@@ -4,7 +4,7 @@ Require Import RV.RVCore.
 Import RV32ICore.
 
 Definition rv_schedule : scheduler :=
-  Writeback |> Execute |> StepMultiplier |> WaitImem |> Decode |> Fetch |> Imem |> Dmem |> Tick |> done.
+  Writeback |> Execute |> StepMultiplier |> WaitImem |> Decode |> Fetch |> Imem |> Dmem |> UART_write |> Tick |> done.
 
 Definition circuits :=
   compile_scheduler rv_rules rv_external rv_schedule.
