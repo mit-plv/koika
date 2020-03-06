@@ -82,7 +82,7 @@ module memory(input  CLK,
    wire put_wf = put_valid && put_ready;
    wire get_wf = get_valid && get_ready;
 
-   always @(negedge CLK) begin
+   always @(posedge CLK) begin
 `ifdef SIMULATION
       if (put_wf && put_request_addr == EXIT_ADDRESS) begin
          if (put_request_data == 0)
