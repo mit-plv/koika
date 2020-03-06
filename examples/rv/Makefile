@@ -1,6 +1,7 @@
 include etc/Makefile.conf
 
 .DEFAULT_GOAL := all
+SHELL := bash
 
 dut := rv32
 objects_dir := _objects/$(dut).v
@@ -39,21 +40,20 @@ cuttlesim: $(cuttlesim);
 
 .FORCE:
 
+# Unit tests are not run every time, because they are verbose (they are mostly
+# useful for debugging, esp. on FPGA)
+
 cuttlesim-tests: binaries cuttlesim
 	@echo "-- Running tests with Cuttlesim --"
-	find $(tests_build)/riscv_tests/rv32ui -name "*.rv32" -exec $(cuttlesim_runner) \;
-	find $(tests_build)/riscv_tests/rv32um -name "*.rv32" -exec $(cuttlesim_runner) \;
-	find $(tests_build)/integ -name "*.rv32" -exec $(cuttlesim_runner) \;
+	find $(tests_build)/ -not -path "*/unit/*" -name "*.rv32" -exec $(cuttlesim_runner) \;
 
 verilator-tests: binaries verilator
 	@echo "-- Running tests with Verilator --"
-	find $(tests_build)/riscv_tests/rv32ui -name "*.vmh" -exec $(verilator_runner) \;
-	find $(tests_build)/riscv_tests/rv32um -name "*.vmh" -exec $(verilator_runner) \;
-	find $(tests_build)/integ -name "*.vmh" -exec $(verilator_runner) \;
+	find $(tests_build)/ -not -path "*/unit/*" -name "*.vmh" -exec $(verilator_runner) \;
 
 pyverilator-tests: binaries core
 	@echo "-- Running tests with PyVerilator --"
-	find $(tests_build)/integ -name "*.vmh" -exec $(pyverilator_runner) \;
+	find $(tests_build)/integ/ -name "*.vmh" -exec $(pyverilator_runner) \;
 
 nangate45-synthesis: core
 	cd $(objects_dir)/nangate45; SCRIPT_DIR=default ./synth.sh

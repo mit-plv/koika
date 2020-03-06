@@ -1,16 +1,14 @@
-.PHONY: all clean
+.PHONY: all clean dirs
 
 build := _build
 elf2hex := elf2hex/elf2hex
 
-integ_sources := $(wildcard integ/*.c)
-rv32ui_sources := $(wildcard riscv_tests/rv32ui/*.S)
-rv32um_sources := $(wildcard riscv_tests/rv32um/*.S)
-integ_objects := $(patsubst %.c,$(build)/%.o,$(integ_sources))
-rv32ui_objects := $(patsubst %.S,$(build)/%.o,$(rv32ui_sources))
-rv32um_objects := $(patsubst %.S,$(build)/%.o,$(rv32um_sources))
+asm_sources := $(wildcard riscv_tests/rv32ui/*.S) $(wildcard riscv_tests/rv32um/*.S) $(wildcard unit/*.S)
+c_sources := $(wildcard unit/*.c) $(wildcard integ/*.c)
+asm_objects := $(patsubst %.S,$(build)/%.o,$(asm_sources))
+c_objects := $(patsubst %.c,$(build)/%.o,$(c_sources))
 
-objects := $(integ_objects) $(rv32ui_objects) $(rv32um_objects)
+objects := $(c_objects) $(asm_objects)
 rv32_targets := $(patsubst %.o,%.rv32,$(objects))
 vmh_targets := $(patsubst %.o,%.vmh,$(objects))
 dump_targets := $(patsubst %.o,%.dump,$(objects))
@@ -25,28 +23,27 @@ objdump := $(RISCVOBJDUMP32) $(RISCVOBJDUMP32_ARGS)
 
 all: $(rv32_targets) $(vmh_targets) $(dump_targets);
 
-$(build) $(build)/integ/ $(build)/riscv_tests/rv32ui/ $(build)/riscv_tests/rv32um/:
-	mkdir -p $@
+dirs:
+	mkdir -p $(build) $(build)/riscv_tests/rv32ui/ $(build)/riscv_tests/rv32um/ $(build)/unit/ $(build)/integ/
 
 $(elf2hex):
 	$(MAKE) -C elf2hex
 
-$(build)/init32.o: init.S | $(build)
+$(build)/init32.o: init.S | dirs
 	$(cc) -c $< -o $@
 
-$(build)/mmio32.o: mmio.c | $(build)
+$(build)/mmio32.o: mmio.c | dirs
 	$(cc) -c $< -o $@
 
-$(build)/integ/%.o: integ/%.c | $(build)/integ/
+$(build)/%.o: %.c | dirs
 	$(cc) -c $< -o $@
 
-$(build)/riscv_tests/rv32ui/%.rv32: riscv_tests/rv32ui/%.S | $(build)/riscv_tests/rv32ui/
-	$(cc) -I rv32ui -Tmmio.ld $< -o $@
+arch = $(if $(findstring rv32ui,$1),rv32ui,rv32um)
 
-$(build)/riscv_tests/rv32um/%.rv32: riscv_tests/rv32um/%.S | $(build)/riscv_tests/rv32um/
-	$(cc) -I rv32um -Tmmio.ld $< -o $@
+$(build)/%.rv32: %.S | dirs
+	$(cc) -I $(arch $<) -Tmmio.ld $< -o $@
 
-$(build)/integ/%.rv32: $(build)/integ/%.o $(build)/init32.o $(build)/mmio32.o mmio.ld
+$(build)/%.rv32: $(build)/%.o $(build)/init32.o $(build)/mmio32.o mmio.ld
 	$(cc) -Tmmio.ld $< $(build)/init32.o $(build)/mmio32.o -o $@
 
 $(build)/%.dump: $(build)/%.rv32
