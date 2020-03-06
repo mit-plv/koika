@@ -4,6 +4,10 @@ Require Import
         Koika.Syntax Koika.TypedSyntax Koika.Lowering Koika.CircuitGeneration Koika.Compiler.
 Require Export Koika.Primitives.
 
+Record ext_fn_spec :=
+  { ef_name: string;
+    ef_internal: bool }.
+
 Inductive empty_ext_fn_t :=.
 Definition empty_Sigma (fn: empty_ext_fn_t)
   : ExternalSignature := match fn with end.
@@ -15,6 +19,8 @@ Definition empty_csigma fn
   : CSig_denote (empty_CSigma fn) := lower_sigma empty_sigma fn.
 Definition empty_ext_fn_names (fn: empty_ext_fn_t)
   : string := match fn with end.
+Definition empty_ext_fn_specs (fn: empty_ext_fn_t)
+  : ext_fn_spec := match fn with end.
 
 Instance Lift_empty {A} : Lift empty_ext_fn_t A :=
   fun fn => match fn with end.
@@ -102,9 +108,10 @@ Section Packages.
 
   Record verilog_package_t :=
     {
-      (** [vp_ext_fn_names]: A map from custom function names to Verilog
-          function names. *)
-      vp_ext_fn_names: forall fn: ext_fn_t, string;
+      (** [vp_ext_fn_specs]: A map from custom function names to Verilog
+          function specifications (names, and whether they should be implemented
+          using internal or external modules). *)
+      vp_ext_fn_specs: forall fn: ext_fn_t, ext_fn_spec;
     }.
 
   Record sim_package_t :=

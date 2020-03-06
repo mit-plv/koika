@@ -99,6 +99,14 @@ Definition ext_fn_names fn :=
   | G => "g"
   end.
 
+Definition ext_fn_specs fn :=
+  {| ef_name := match fn with
+                   | Stream => "stream"
+                   | F => "f"
+                   | G => "g"
+                   end;
+     ef_internal := true |}.
+
 Definition package :=
   {| ip_koika := {| koika_reg_types := R;
                    koika_reg_init reg := r reg;
@@ -111,7 +119,7 @@ Definition package :=
      ip_sim := {| sp_ext_fn_names := ext_fn_names;
                  sp_extfuns := Some cpp_extfuns |};
 
-     ip_verilog := {| vp_ext_fn_names := ext_fn_names |} |}.
+     ip_verilog := {| vp_ext_fn_specs := ext_fn_specs |} |}.
 
 Definition prog := Interop.Backends.register package.
 Extraction "pipeline.ml" prog.

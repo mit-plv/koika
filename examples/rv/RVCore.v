@@ -817,6 +817,12 @@ Module  RV32ICore.
     | _ => ""
     end.
 
+  Definition rv_ext_fn_specs (fn: ext_fn_t) :=
+    match fn with
+    | ext_mem imem => {| ef_name := "ext_mem_imem"; ef_internal := true |}
+    | ext_mem dmem => {| ef_name := "ext_mem_dmem"; ef_internal := true |}
+    end.
+
   Instance FiniteType_toIMem : FiniteType MemReq.reg_t := _.
   Instance FiniteType_fromIMem : FiniteType MemResp.reg_t := _.
   Instance FiniteType_toDMem : FiniteType MemReq.reg_t := _.

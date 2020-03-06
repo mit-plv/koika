@@ -48,7 +48,11 @@ Definition sched_circuits_result :=
   tc_compute (interp_circuits (ContextEnv.(create) r) sigma sched_circuits).
 
 Definition cpp_ext_fn_names fn := match fn with f0 => "cpp_f0" end.
-Definition verilog_ext_fn_names fn := match fn with f0 => "verilog_f0" end.
+Definition verilog_ext_fn_specs fn :=
+  match fn with
+  | f0 => {| ef_name := "verilog_f0";
+            ef_internal := true |}
+  end.
 
 Definition package :=
   {| ip_koika := {| koika_reg_types := R;
@@ -67,7 +71,7 @@ public:
   }
 };" |};
 
-     ip_verilog := {| vp_ext_fn_names := verilog_ext_fn_names |} |}.
+     ip_verilog := {| vp_ext_fn_specs := verilog_ext_fn_specs |} |}.
 
 Definition prog := Interop.Backends.register package.
 Extraction "extcall.ml" prog.

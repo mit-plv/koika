@@ -78,7 +78,7 @@ let compute_circuit_metadata (metadata: metadata_map) (c: circuit) =
     | CReadRegister _ -> ()
     | CUnop (_, c1) -> iter c1
     | CBinop (_, c1, c2) -> iter c1; iter c2
-    | CExternal (_, c) -> iter c
+    | CExternal { arg; _ } -> iter arg
     | CBundle (_, ios) ->
        List.iter (fun (_, rwd) ->
            List.iter (fun (_, c) -> iter c) (rwdata_circuits rwd))
@@ -129,11 +129,13 @@ let node_of_circuit (metadata: metadata_map) (cache: node_map) (ios: pin_set) (c
     | CReadRegister r -> typ_sz (reg_type r), [], Expr (EName r.reg_name)
     | CUnop (f, c1) -> fn1_sz f, [], Expr (EUnop (f, lift c1))
     | CBinop (f, c1, c2) -> fn2_sz f, [], Expr (EBinop (f, lift c1, lift c2))
-    | CExternal (f, c) ->
+    | CExternal { f; internal; arg } ->
+       let name = f.ffi_name in
        let size = typ_sz f.ffi_rettype in
-       let inputs = [{ ip_name = "arg"; ip_node = lift c }] in
+       let inputs = [{ ip_name = "arg"; ip_node = lift arg }] in
        let outputs = [{ op_name = "out"; op_wire = "out"; op_sz = typ_sz f.ffi_rettype }] in
-       let mod_ent = Module { name = f.ffi_name; internal = true; inputs; outputs } in
+       let mod_ent = Module { name; internal; inputs; outputs } in
+       if not internal then register_ios name inputs outputs;
        size, [], Expr (EPtr (fresh_node size mod_ent, Some "out"))
     | CBundle (name, bundle_ios) ->
        let name = "rule_" ^ name in
@@ -141,9 +143,7 @@ let node_of_circuit (metadata: metadata_map) (cache: node_map) (ios: pin_set) (c
        let inputs, outputs = reg_ios |> List.concat |> List.split in
        let cf_name = rwcircuit_to_string Rwcircuit_canfire in
        let outputs = { op_name = field_name after_prefix cf_name; op_wire = cf_name; op_sz = 1 } :: outputs in
-       (* The module's outputs are our inputs, and vice-versa *)
-       List.iter (fun op -> Hashtbl.replace ios (field_name name op.op_name) (`Input, op.op_sz)) outputs;
-       List.iter (fun ip -> Hashtbl.replace ios (field_name name ip.ip_name) (`Output, ip.ip_node.size)) inputs;
+       register_ios name inputs outputs;
        0, [], Module { name; internal = compile_bundles_internally; inputs; outputs }
     | CBundleRef (sz, c, field) ->
        sz, [], Expr (EPtr (lift c, Some (field_name after_prefix (rwcircuit_to_string field))))
@@ -152,6 +152,10 @@ let node_of_circuit (metadata: metadata_map) (cache: node_map) (ios: pin_set) (c
        match lift c with
        | { kind = Unique; annots; entity; _ } -> sz, ann @ annots, entity
        | n -> sz, ann, Expr (EPtr (n, None))
+  and register_ios name inputs outputs =
+    (* The module's outputs are our inputs, and vice-versa *)
+    List.iter (fun op -> Hashtbl.replace ios (field_name name op.op_name) (`Input, op.op_sz)) outputs;
+    List.iter (fun ip -> Hashtbl.replace ios (field_name name ip.ip_name) (`Output, ip.ip_node.size)) inputs
   and inputs_outputs_of_module_io (reg, rwd) =
     List.map (fun (field, c) ->
         let ip_node = lift c in
@@ -410,7 +414,7 @@ module Verilog : RTLBackend = struct
        let outputs = List.map (fun op -> { op with op_wire = field_name instance_name op.op_wire }) outputs in
        let in_args = List.map (fun { ip_name; ip_node } -> sprintf ".%s(%a)" ip_name p0 ip_node) inputs in
        let out_args = List.map (fun { op_name; op_wire; _ } -> sprintf ".%s(%s)" op_name op_wire) outputs in
-       let args = String.concat ", " (".CLK(CLK)" :: ".RST_N(RST_N)" :: in_args @ out_args) in
+       let args = String.concat ", " (".CLK" :: ".RST_N" :: in_args @ out_args) in
        List.iter (fun { op_wire; op_sz; _ } -> p_decl out "wire" op_sz op_wire) outputs;
        p_stmt out 1 "%s %s(%s)" name instance_name args;
        instance_name

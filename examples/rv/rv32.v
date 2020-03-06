@@ -28,7 +28,7 @@ Definition package :=
   {| ip_koika := koika_package;
      ip_sim := {| sp_ext_fn_names fn := show fn;
                  sp_extfuns := None |};
-     ip_verilog := {| vp_ext_fn_names fn := show fn |} |}.
+     ip_verilog := {| vp_ext_fn_specs := rv_ext_fn_specs |} |}.
 
 Definition prog := Interop.Backends.register package.
 Extraction "rv32.ml" prog.

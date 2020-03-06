@@ -49,7 +49,7 @@ let rec label_ptrs tag_to_parents = function
   | CMux (sz, s, c1, c2) -> Some (sprintf "Mux@%d" sz, [s; c1; c2], [])
   | CUnop (fn, c) -> Some (bits1_name fn, [c], [])
   | CBinop (fn, c1, c2) -> Some (bits2_name fn, [c1; c2], [])
-  | CExternal (ffi, c) -> Some (ffi.ffi_name, [c], [])
+  | CExternal { f; arg; _ } -> Some (f.ffi_name, [arg], [])
   | CReadRegister r -> Some (sprintf "Reg %s" r.reg_name, [], [])
   | CBundle (_, _) -> None (* FIXME *)
   | CBundleRef (_, _, _) -> None (* FIXME *)
@@ -93,7 +93,7 @@ let subcircuits = function
   | CMux (_sz, s, c1, c2) -> [s; c1; c2]
   | CUnop (_, c) -> [c]
   | CBinop (_, c1, c2) -> [c1; c2]
-  | CExternal (_, c) -> [c]
+  | CExternal { arg; _ } -> [arg]
   | CReadRegister _r -> []
   | CBundle (_) -> [] (* FIXME *)
   | CBundleRef (_, _, _) -> [] (* FIXME *)

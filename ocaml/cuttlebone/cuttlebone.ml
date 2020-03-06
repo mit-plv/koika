@@ -419,7 +419,7 @@ module Graphs = struct
     | CReadRegister of reg_signature
     | CUnop of Extr.PrimTyped.fbits1 * circuit
     | CBinop of Extr.PrimTyped.fbits2 * circuit * circuit
-    | CExternal of ffi_signature * circuit
+    | CExternal of { f: ffi_signature; internal: bool; arg: circuit }
     | CBundle of string * ((reg_signature * rwdata) list)
     | CBundleRef of int * circuit * rwcircuit
     | CAnnot of int * string * circuit
@@ -442,7 +442,7 @@ module Graphs = struct
     | CReadRegister r -> sprintf "CReadRegister %s" r.reg_name
     | CUnop (f, c) -> sprintf "CUnop (%s, %d)" (Util.unop_to_str f) c.tag
     | CBinop (f, c1, c2) -> sprintf "CBinop (%s, %d, %d)" (Util.binop_to_str f) c1.tag c2.tag
-    | CExternal (_, c) -> sprintf "CExternal (_, %d)" c.tag
+    | CExternal { arg; _ } -> sprintf "CExternal (_, %d)" arg.tag
     | CBundle (_, _) -> sprintf "CBundle"
     | CBundleRef (_, _, _) -> sprintf "CBundleRef"
     | CAnnot (_, a, c) -> sprintf "CAnnot \"%s\" %d" a c.tag
@@ -464,7 +464,7 @@ module Graphs = struct
   type ('rule_name_t, 'reg_t, 'ext_fn_t) dedup_input_t = {
       di_regs: 'reg_t list;
       di_reg_sigs: 'reg_t -> reg_signature;
-      di_fn_sigs: 'ext_fn_t -> ffi_signature;
+      di_fn_specs: 'ext_fn_t -> (ffi_signature * [`Internal | `External]);
       di_rule_names: 'rule_name_t -> string;
       di_rule_external: 'rule_name_t -> bool;
       di_circuits : 'reg_t -> ('rule_name_t, 'reg_t, 'ext_fn_t) extr_circuit;
@@ -485,8 +485,8 @@ module Graphs = struct
          f = f' (* Not hashconsed *) && a1 == a1'
       | CBinop (f, a1, a2), CBinop (f', a1', a2') ->
          f = f' (* Not hashconsed *) && a1 == a1' && a2 == a2'
-      | CExternal (f, a1), CExternal (f', a1') ->
-         f = f' (* Not hashconsed *) && a1 == a1'
+      | CExternal c, CExternal c' ->
+         c.f = c'.f && c.internal = c'.internal (* Not hashconsed *) && c.arg == c'.arg
       | CBundle (rule_name1, rwset1), CBundle (rule_name2, rwset2) ->
          rule_name1 = rule_name2 && equal_rwsets rwset1 rwset2
       | CBundleRef (_, bundle1, field1 ), CBundleRef (_, bundle2, field2) ->
@@ -517,7 +517,7 @@ module Graphs = struct
       | CReadRegister { reg_name; _ } -> 3 + h1 reg_name
       | CUnop (f, a1) -> 4 + h2 (h1 f) a1.hkey
       | CBinop (f, a1, a2) -> 5 + h3 (h1 f) a1.hkey a2.hkey
-      | CExternal (f, a1) -> 6 + h2 (h1 f) a1.hkey
+      | CExternal { f; arg; _ } -> 6 + h2 (h1 f) arg.hkey
       | CBundle (rule_name, rwset) -> 7 + h2 (h1 rule_name) (hash_rwset rwset)
       | CBundleRef (_, bundle, field) -> 8 + h2 bundle.hkey (h1 field)
       | CAnnot (_, s, c) -> 9 + h2 (h1 s) c.hkey
@@ -581,7 +581,8 @@ module Graphs = struct
       | Extr.CBinop (fn, c1, c2) ->
          CBinop (fn, dedup c1, dedup c2)
       | Extr.CExternal (fn, c1) ->
-         CExternal (pkg.di_fn_sigs fn, dedup c1)
+         let f, kind = pkg.di_fn_specs fn in
+         CExternal { f; internal = kind = `Internal; arg = dedup c1 }
       | Extr.CBundleRef (sz, rule_name, regs, bundle, field, circuit) ->
          if pkg.di_rule_external rule_name then
            let cbundle =
@@ -644,7 +645,7 @@ module Graphs = struct
     dedup_circuit
       { di_regs = cu.c_registers;
         di_reg_sigs = (fun r -> r);
-        di_fn_sigs = (fun fn -> fn);
+        di_fn_specs = (fun fn -> (fn, `Internal));
         di_rule_names = (fun rln -> rln);
         di_rule_external = externalp;
         di_circuits = Compilation.compile cu;
@@ -659,16 +660,18 @@ module Graphs = struct
     let di_circuits =
       let cp = Extr.compile_koika_package kp (Compilation.opt kp.koika_reg_types kp.koika_ext_fn_types) in
       fun r -> Extr.getenv cp.cp_reg_Env cp.cp_circuits r in
-    let di_fn_sigs f =
-      let fn_name = Util.string_of_coq_string (vp.vp_ext_fn_names f) in
+    let di_fn_specs f =
+      let fn_spec = vp.vp_ext_fn_specs f in
+      let fn_name = Util.string_of_coq_string fn_spec.ef_name in
       let fn_sig = kp.koika_ext_fn_types f in
-      Util.ffi_sig_of_extr_external_sig fn_name fn_sig in
+      (Util.ffi_sig_of_extr_external_sig fn_name fn_sig,
+       if fn_spec.ef_internal then `Internal else `External) in
     dedup_circuit
       { di_regs;
         di_reg_sigs = Util.reg_sigs_of_koika_package kp;
         di_rule_names = (fun rln -> Util.string_of_coq_string @@ kp.koika_rule_names.show0 rln);
         di_rule_external = kp.koika_rule_external;
-        di_fn_sigs;
+        di_fn_specs;
         di_circuits;
         di_strip_annotations = strip_annotations }
 end

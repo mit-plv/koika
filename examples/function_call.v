@@ -71,6 +71,12 @@ Definition ext_fn_names (fn: ext_fn_t) :=
   | nth_instr_external => "fetch_instr"
   end.
 
+Definition ext_fn_specs fn :=
+  match fn with
+  | nth_instr_external => {| ef_name := "fetch_instr";
+                            ef_internal := true |}
+  end.
+
 Definition package :=
   {| ip_koika := {| koika_reg_types := R;
                    koika_reg_init := r;
@@ -84,7 +90,7 @@ Definition package :=
        {| sp_ext_fn_names := ext_fn_names;
           sp_extfuns := Some "#include ""extfuns.hpp""" |};
 
-     ip_verilog := {| vp_ext_fn_names := ext_fn_names |} |}.
+     ip_verilog := {| vp_ext_fn_specs := ext_fn_specs |} |}.
 
 Unset Extraction Optimize.
 Definition prog := Interop.Backends.register package.

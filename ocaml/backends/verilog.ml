@@ -154,7 +154,7 @@ let circuit_sz (c: circuit) =
   | CConst l -> Array.length l
   | CUnop (fn, _) -> fn1_sz fn
   | CBinop (fn, _, _) -> fn2_sz fn
-  | CExternal (ffi_sig, _) -> typ_sz ffi_sig.ffi_rettype
+  | CExternal { f; _ } -> typ_sz f.ffi_rettype
   | CReadRegister r_sig -> typ_sz (reg_type r_sig)
   | CBundle (_, _) -> 0
   | CBundleRef (sz, _, _) -> sz
@@ -312,7 +312,7 @@ let assignment_node
        | CConst l -> EConst (Array.length l, string_of_bits l) (* TODO *)
        | CUnop (fn, c_1) -> EUnop (fn, env c_1.tag)
        | CBinop (fn, c_1, c_2) -> EBinop (fn, env c_1.tag, env c_2.tag)
-       | CExternal (ffi_sig, c_1) -> EExternal (ffi_sig, env c_1.tag)
+       | CExternal { f; arg; _ } -> EExternal (f, env arg.tag)
        | CReadRegister r_sig -> EReadRegister r_sig
        | CAnnot (sz, name_rhs, c) -> EAnnot (sz, name_rhs, env c.tag)
        | _ -> assert false

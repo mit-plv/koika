@@ -97,7 +97,7 @@ Module GCDMachine.
        ip_sim := {| sp_ext_fn_names := empty_ext_fn_names;
                    sp_extfuns := None |};
 
-       ip_verilog := {| vp_ext_fn_names := empty_ext_fn_names; |} |}.
+       ip_verilog := {| vp_ext_fn_specs := empty_ext_fn_specs; |} |}.
 End GCDMachine.
 
 Definition prog := Interop.Backends.register GCDMachine.package.
