@@ -153,6 +153,7 @@ VERILATOR_DRIVER ?= $(shell pwd)/$(mod).verilator.cpp
 VERILATOR_WARNINGS ?= -Wall -Wno-fatal
 VERILATOR_OPT_FLAGS ?= --x-assign fast --x-initial fast --noassert
 VERILATOR_TRACE_FLAGS ?=
+VERILATOR_PREFIX ?= V$(verilator_top)
 
 ifeq ($(CXX),g++)
 verilator_compiler_flags := --compiler gcc
@@ -164,9 +165,9 @@ endif
 
 verilator_top := $(basename $(notdir $(VERILATOR_TOP)))
 verilator_driver := $(basename $(notdir $(VERILATOR_DRIVER)))
-verilator_prefix := V$(verilator_top)
 verilator_helper := verilator.hpp
 verilator_cflags := -CFLAGS "-I $(shell pwd)"
+verilator_prefix := $(VERILATOR_PREFIX)
 verilator_prefix_flag := --prefix $(verilator_prefix)
 verilator_flags := $(VERILATOR_FLAGS) $(VERILATOR_WARNINGS) $(verilator_cflags) $(verilator_prefix_flag) --cc --exe $(verilator_compiler_flags)
 verilator_inputs := $(VERILATOR_DRIVER) $(VERILATOR_TOP)
