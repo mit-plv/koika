@@ -81,7 +81,7 @@ let gensym, gensym_reset = make_gensym gensym_prefix
 (* Mangling takes care of collisions with the gensym *)
 
 module Mangling = struct
-  let reserved =
+  let cpp_reserved =
     StringSet.of_list
       ["alignas"; "alignof"; "and"; "and_eq"; "asm"; "atomic_cancel";
        "atomic_commit"; "atomic_noexcept"; "auto"; "bitand"; "bitor"; "bool";
@@ -98,6 +98,11 @@ module Mangling = struct
        "synchronized"; "template"; "this"; "thread_local"; "throw"; "true";
        "try"; "typedef"; "typeid"; "typename"; "union"; "unsigned"; "using";
        "virtual"; "void"; "volatile"; "wchar_t"; "while"; "xor"; "xor_eq"]
+  let cuttlesim_reserved =
+    StringSet.of_list
+      ["array"; "unit"; "bits"]
+  let reserved =
+    StringSet.union cpp_reserved cuttlesim_reserved
 
   let mangling_prefix = "renamed_cpp"
   let specials_re = Str.regexp (sprintf "^\\(_[A-Z]\\|%s\\|%s\\)" mangling_prefix gensym_prefix)
