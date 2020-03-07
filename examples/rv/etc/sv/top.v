@@ -1,17 +1,19 @@
 // -*- verilog -*-
-module top(input CLK, input RST_N, output uart_line_out);
-   wire uart_wr_valid;
-   wire[7:0] uart_wr_data;
-   wire uart_wr_ready;
+// This toplevel is mostly for simulation, since it assumes the UART module
+// is always ready to transmit.
+module top(input CLK, input RST_N, output[7:0] uart_wr_data, output uart_wr_valid);
+   wire uart_wr_ready = 1'b1;
 
-   uart uout(.CLK(CLK), .RST_N(RST_N),
-             .wr_valid(uart_wr_valid),
-             .wr_data(uart_wr_data),
-             .wr_ready(uart_wr_ready),
-             .line_out(uart_line_out));
    rv32 core(.CLK(CLK), .RST_N(RST_N),
              .ext_uart_write_arg({uart_wr_valid, uart_wr_data}),
              .ext_uart_write_out(uart_wr_ready));
+
+`ifdef SIMULATION
+   always @(posedge CLK) begin
+      if (uart_wr_ready && uart_wr_valid)
+        $fwrite(32'h80000002, "%c", uart_wr_data);
+   end
+`endif
 endmodule
 
 // Local Variables:

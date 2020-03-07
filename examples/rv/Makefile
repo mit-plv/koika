@@ -24,6 +24,11 @@ verbose := $(if $(VERBOSE),,@)
 
 all: cuttlesim-tests verilator-tests
 
+# The UART module is written in Kôika too, and copied here from the Examples folder
+uart:
+	$(MAKE) -C ../.. examples/_objects/uart.v/
+	cp ../../examples/_objects/uart.v/uart.v etc/sv/
+
 core:
 	$(MAKE) -C ../.. examples/rv/$(objects_dir)
 	$(verbose)cp $(objects_dir)/$(DRIVER)/*.v $(objects_dir)/
