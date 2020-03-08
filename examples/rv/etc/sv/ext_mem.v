@@ -1,4 +1,5 @@
 // -*- verilog -*-
+/*! Wrapper used to connect the BRAM model with Kôika !*/
 module ext_mem(input CLK, input RST_N, input[69:0] arg, output[69:0] out);
    wire get_valid;
    wire put_valid;

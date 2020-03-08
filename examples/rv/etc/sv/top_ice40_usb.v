@@ -1,4 +1,5 @@
 // -*- verilog -*-
+/*! Verilog wrapper for the Kôika core (for use in FPGA synthesis, with a USB interface) !*/
 module top_ice40_usb(input CLK, inout USBP, inout USBN, output USBPU);
    assign USBPU = 1'b1;
 

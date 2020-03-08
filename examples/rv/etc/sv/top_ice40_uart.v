@@ -1,4 +1,5 @@
 // -*- verilog -*-
+/*! Verilog wrapper for the Kôika core (for use in FPGA synthesis, with a UART interface) !*/
 // This toplevel is useful if pin 1 of the board is connected to a UART receiver
 module top_ice40_uart(input CLK, output USBPU, output PIN_1);
    assign USBPU = 1'b0;

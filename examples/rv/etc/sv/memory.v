@@ -1,4 +1,5 @@
 // -*- verilog -*-
+/*! Verilog model of a BRAM !*/
 `define REQ_ADDR_WIDTH 32
 `define REQ_DATA_WIDTH 32
 `define MEM_OP_SIZE (4 + `REQ_ADDR_WIDTH + `REQ_DATA_WIDTH)

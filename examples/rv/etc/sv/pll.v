@@ -1,4 +1,5 @@
 // -*- verilog -*-
+/*! PLL configuration for the TinyFPGA BX board !*/
 /**
  * PLL configuration
  *

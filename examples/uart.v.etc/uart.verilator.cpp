@@ -1,3 +1,4 @@
+/*! Verilator driver for the UART testbench !*/
 #include "verilator.hpp"
 #include "Vtop.h"
 

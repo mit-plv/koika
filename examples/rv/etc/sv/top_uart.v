@@ -1,4 +1,5 @@
 // -*- verilog -*-
+/*! Verilog wrapper for the Kôika core with a UART interface !*/
 // This toplevel is a good starting point to connect directly to a UART receiver
 module top_uart(input CLK, input RST_N, output uart_line_out);
    wire[8:0] uart_opt_byte;

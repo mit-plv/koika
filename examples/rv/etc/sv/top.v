@@ -1,4 +1,5 @@
 // -*- verilog -*-
+/*! Verilog wrapper for the Kôika core (for use in simulation) !*/
 // This toplevel is mostly for simulation, since it assumes the UART module
 // is always ready to transmit.
 module top(input CLK, input RST_N, output[7:0] uart_wr_data, output uart_wr_valid);

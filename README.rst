@@ -778,6 +778,15 @@ The following list shows the current state of the repo:
          ``nangate45/``
             - |examples/rv/etc/nangate45/synth.sh|_: Yosys synthesis script for Nangate Open Cell Library (45nm)
 
+         ``sv/``
+            - |examples/rv/etc/sv/ext_mem.v|_: Wrapper used to connect the BRAM model with |koika|
+            - |examples/rv/etc/sv/memory.v|_: Verilog model of a BRAM
+            - |examples/rv/etc/sv/pll.v|_: PLL configuration for the TinyFPGA BX board
+            - |examples/rv/etc/sv/top.v|_: Verilog wrapper for the |koika| core (for use in simulation)
+            - |examples/rv/etc/sv/top_ice40_uart.v|_: Verilog wrapper for the |koika| core (for use in FPGA synthesis, with a UART interface)
+            - |examples/rv/etc/sv/top_ice40_usb.v|_: Verilog wrapper for the |koika| core (for use in FPGA synthesis, with a USB interface)
+            - |examples/rv/etc/sv/top_uart.v|_: Verilog wrapper for the |koika| core with a UART interface
+
          - |examples/rv/etc/elf.hpp|_: Support for loading ELF files
          - |examples/rv/etc/rvcore.cuttlesim.cpp|_: C++ driver for rv32i simulation with Cuttlesim
          - |examples/rv/etc/rvcore.pyverilator.py|_: Python driver for C++ simulation with Verilator
@@ -800,6 +809,7 @@ The following list shows the current state of the repo:
    - |examples/gcd_machine.v|_: Computing GCDs
    - |examples/method_call.v|_: Calling methods of internal modules
    - |examples/pipeline.v|_: Building simple pipelines
+   - |examples/uart.v|_: UART transmitter
    - |examples/vector.v|_: Representing vectors of registers using Coq inductives
 
 ``ocaml/``
@@ -994,8 +1004,24 @@ The following list shows the current state of the repo:
 .. _examples/rv/etc/rvcore.pyverilator.py: examples/rv/etc/rvcore.pyverilator.py
 .. |examples/rv/etc/rvcore.verilator.cpp| replace:: ``rvcore.verilator.cpp``
 .. _examples/rv/etc/rvcore.verilator.cpp: examples/rv/etc/rvcore.verilator.cpp
+.. |examples/rv/etc/sv/ext_mem.v| replace:: ``ext_mem.v``
+.. _examples/rv/etc/sv/ext_mem.v: examples/rv/etc/sv/ext_mem.v
+.. |examples/rv/etc/sv/memory.v| replace:: ``memory.v``
+.. _examples/rv/etc/sv/memory.v: examples/rv/etc/sv/memory.v
+.. |examples/rv/etc/sv/pll.v| replace:: ``pll.v``
+.. _examples/rv/etc/sv/pll.v: examples/rv/etc/sv/pll.v
+.. |examples/rv/etc/sv/top.v| replace:: ``top.v``
+.. _examples/rv/etc/sv/top.v: examples/rv/etc/sv/top.v
+.. |examples/rv/etc/sv/top_ice40_uart.v| replace:: ``top_ice40_uart.v``
+.. _examples/rv/etc/sv/top_ice40_uart.v: examples/rv/etc/sv/top_ice40_uart.v
+.. |examples/rv/etc/sv/top_ice40_usb.v| replace:: ``top_ice40_usb.v``
+.. _examples/rv/etc/sv/top_ice40_usb.v: examples/rv/etc/sv/top_ice40_usb.v
+.. |examples/rv/etc/sv/top_uart.v| replace:: ``top_uart.v``
+.. _examples/rv/etc/sv/top_uart.v: examples/rv/etc/sv/top_uart.v
 .. |examples/rv/rv32.v| replace:: ``rv32.v``
 .. _examples/rv/rv32.v: examples/rv/rv32.v
+.. |examples/uart.v| replace:: ``uart.v``
+.. _examples/uart.v: examples/uart.v
 .. |examples/vector.v| replace:: ``vector.v``
 .. _examples/vector.v: examples/vector.v
 .. |ocaml/backends/coq.ml| replace:: ``coq.ml``

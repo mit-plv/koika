@@ -1,5 +1,5 @@
 // -*- verilog -*-
-
+/*! UART testbench !*/
 module top(input CLK, input RST_N, output tx);
 `define NINPUTS 5
    reg[7:0] inputs[`NINPUTS - 1:0] = '{"k", "o", "i", "k", "a"};
