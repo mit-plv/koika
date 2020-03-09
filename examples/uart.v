@@ -3,10 +3,18 @@ Require Import Koika.Frontend.
 Require Import Koika.Std.
 
 Module UART.
+  Definition CLOCK_SPEED := 12_000_000%N.
+  Definition BAUD_RATE := 115200%N.
+  Definition _CLOCK_SCALE := (CLOCK_SPEED / BAUD_RATE)%N.
+  Definition CLOCK_DELAY_BITS := N.to_nat (N.log2_up _CLOCK_SCALE).
+  Definition CLOCK_DELAY := Bits.of_N CLOCK_DELAY_BITS (_CLOCK_SCALE - 1).
+
   Inductive reg_t :=
   | state
-  | data
-  | data_offset
+  | in_byte
+  | in_byte_offset
+  | out_bit
+  | delay
   | last_write_ack.
 
   Inductive ext_fn_t := ext_read_byte | ext_write_bit.
@@ -20,16 +28,20 @@ Module UART.
   Definition R r :=
     match r with
     | state => enum_t tx_state
-    | data => bits_t 8
-    | data_offset => bits_t 3
+    | in_byte => bits_t 8
+    | in_byte_offset => bits_t 3
+    | out_bit => bits_t 1
+    | delay => bits_t CLOCK_DELAY_BITS
     | last_write_ack => bits_t 1
     end.
 
   Definition r idx : R idx :=
     match idx with
     | state => Ob~0~0
-    | data => Bits.zero
-    | data_offset => Bits.zero
+    | in_byte => Bits.zero
+    | in_byte_offset => Bits.zero
+    | out_bit => Ob~1
+    | delay => Bits.zero
     | last_write_ack => Bits.zero
     end.
 
@@ -42,34 +54,42 @@ Module UART.
   Definition _read_input : uaction reg_t ext_fn_t :=
     {{
         let ready := read1(state) == enum tx_state {| idle |} in
-        let opt_data := extcall ext_read_byte(ready) in
-        (when ready && get(opt_data, valid) do
-           write1(data, get(opt_data, data));
+        let opt_byte := extcall ext_read_byte(ready) in
+        (when ready && get(opt_byte, valid) do
+           write1(in_byte, get(opt_byte, data));
            write1(state, enum tx_state {| start |}))
     }}.
 
   Definition _transmit : uaction reg_t ext_fn_t :=
     {{
-        let data := read0(data) in
-        let bit := Ob~1 in
-        match read0(state) with
-        | enum tx_state {| start |} =>
-          (set bit := Ob~0;
-           write0(state, enum tx_state {| tx |}))
-        | enum tx_state {| tx |} =>
-          let bits := read0(data) in
-          let offset := read0(data_offset) in
-          let last_char := offset == Ob~1~1~1 in
-          set bit := bits[Ob~0~0~0];
-          write0(data, bits >> Ob~1);
-          write0(data_offset, offset + Ob~0~0~1);
-          when last_char do write0(state, enum tx_state {| finish |})
-        | enum tx_state {| finish |} =>
-          (set bit := Ob~1;
-           write0(state, enum tx_state {| idle |}))
-        return default: pass
-        end;
-        write0(last_write_ack, extcall ext_write_bit(bit)) (* write0 ensures that the call isn't optimized away *)
+        let bit := read0(out_bit) in
+        let state := read0(state) in
+        (if read0(delay) == |CLOCK_DELAY_BITS`d0| then
+          match state with
+          | enum tx_state {| start |} =>
+            (set bit := Ob~0;
+             set state := enum tx_state {| tx |})
+          | enum tx_state {| tx |} =>
+            let bits := read0(in_byte) in
+            let offset := read0(in_byte_offset) in
+            let last_char := offset == Ob~1~1~1 in
+            set bit := bits[Ob~0~0~0];
+            write0(in_byte, bits >> Ob~1);
+            write0(in_byte_offset, offset + Ob~0~0~1);
+            (when last_char do
+               set state := enum tx_state {| finish |})
+          | enum tx_state {| finish |} =>
+            (set bit := Ob~1;
+             set state := enum tx_state {| idle |})
+          return default: pass
+          end;
+          write0(delay, #CLOCK_DELAY)
+        else
+          write0(delay, read0(delay) - |CLOCK_DELAY_BITS`d1|));
+        write0(out_bit, bit);
+        write0(state, state);
+        (* last_write_ack prevents the write from being optimized out *)
+        write0(last_write_ack, extcall ext_write_bit(bit))
     }}.
 
   Definition uart : scheduler :=
