@@ -28,13 +28,15 @@ echo "In directory $PWD"
 
 echo "== Using Nangate Open Cell Library (v1_3_v2010_12) =="
 
+YOSYS_DEFINES="-DMEM_FILENAME=\"../../../../tests/_build/$DUT/integ/primes.vmh\""
+
 echo "----------------------------------------"
 echo "-- Running synthesis for Kôika design --"
 echo "----------------------------------------"
 export VERILOG_TOP=$KOIKA_TOP
 export YOSYS_LIBDIR=$KOIKA_LIBDIR
 export VERILOG_INPUT=$YOSYS_LIBDIR/$VERILOG_TOP.v
-yosys -v8 -c synth.tcl -l $VERILOG_TOP.log
+yosys -v8 "$YOSYS_DEFINES" -c synth.tcl -l $VERILOG_TOP.log
 
 echo "--------------------------------------"
 echo "-- Running synthesis for BSV design --"
@@ -42,7 +44,7 @@ echo "--------------------------------------"
 export VERILOG_TOP=$BSV_TOP
 export YOSYS_LIBDIR=$BSV_LIBDIR
 export VERILOG_INPUT=$YOSYS_LIBDIR/$VERILOG_TOP.v
-yosys -v8 -c synth.tcl -l $VERILOG_TOP.log || true
+yosys -v8 "$YOSYS_DEFINES" -c synth.tcl -l $VERILOG_TOP.log || true
 
 echo "======================="
 echo "== Synthesis results =="

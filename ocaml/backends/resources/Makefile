@@ -240,14 +240,16 @@ FPGA_TOP ?= $(mod).v
 FPGA_DEVICE ?= lp8k
 FPGA_ICE40_PACKAGE ?= cm81
 FPGA_PCF ?= pins.pcf
-FPGA_YOSYS_OPTS ?= -Q -T -v8
+FPGA_YOSYS_FLAGS ?= -Q -T -v8
+FPGA_YOSYS_OPTS ?=
 FPGA_YOSYS_LIBDIRS ?= .
 
 fpga_toplevel := $(basename $(notdir $(FPGA_TOP)))
+yosys_opts := $(FPGA_YOSYS_FLAGS) $(FPGA_YOSYS_OPTS)
 yosys_libdir_args := $(patsubst %,-libdir %,$(FPGA_YOSYS_LIBDIRS))
 
 $(fpga_toplevel).json: $(FPGA_TOP)
-	yosys $(FPGA_YOSYS_OPTS) -l $(fpga_toplevel).json.log -p 'read_verilog $(FPGA_TOP); hierarchy $(yosys_libdir_args) -top $(fpga_toplevel); synth_ice40  -top $(fpga_toplevel) -json $@'
+	yosys $(yosys_opts) -l $(fpga_toplevel).json.log -p 'read_verilog $(FPGA_TOP); hierarchy $(yosys_libdir_args) -top $(fpga_toplevel); synth_ice40  -top $(fpga_toplevel) -json $@'
 
 $(fpga_toplevel).asc: $(FPGA_PCF) $(fpga_toplevel).json
 	nextpnr-ice40 --$(FPGA_DEVICE) --package $(FPGA_ICE40_PACKAGE) --pcf $(FPGA_PCF) --seed 0 --asc $@ --json $(fpga_toplevel).json

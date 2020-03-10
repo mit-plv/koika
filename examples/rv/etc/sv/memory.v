@@ -13,8 +13,8 @@ module memory(input  CLK,
               output put_ready,
               output [`MEM_OP_SIZE - 1:0] get_response);
    parameter ADDRESS_WIDTH = 14;
-   parameter IO_ADDRESS = 32'h40000000;
-   parameter EXIT_ADDRESS = 32'h40001000;
+   parameter IO_ADDRESS = `REQ_ADDR_WIDTH'h40000000;
+   parameter EXIT_ADDRESS = `REQ_ADDR_WIDTH'h40001000;
 
    reg has_request;
    reg [`MEM_OP_SIZE - 1:0] last_request;
@@ -24,20 +24,27 @@ module memory(input  CLK,
 
 `ifdef BRAM_RUNTIME_INIT
    wire[8 * 256 - 1:0] filename;
-
    initial
      begin : init_rom_block
       if ($value$plusargs("VMH=%s", filename)) begin
-         $readmemh(filename, mem, 0, `MEMSIZE - 1);
+         // Omitting the last argument to ‘$readmemh’ prevents complaints when
+         // the ‘mem’ array is larger than the image stored in ‘filename’.
+         $readmemh(filename, mem, 0);
       end else begin
          $fwrite(32'h80000002, "ERROR: No memory image loaded. Use +VMH=<path> to load one\n");
          $finish(1'b1);
       end
    end
 `else
+ `ifndef MEM_FILENAME
+   // We use a macro instead of a parameter because Yosys instantiates the
+   // module with its default parameters when it first reads it (See
+   // https://www.reddit.com/r/yosys/comments/f92bke/)
+  `define MEM_FILENAME "MEM_FILENAME_UNSET"
+ `endif
    initial
      begin : init_rom_block
-        $readmemh("mem.vmh", mem, 0, `MEMSIZE - 1);
+        $readmemh(`MEM_FILENAME, mem, 0);
      end
 `endif
 
@@ -71,7 +78,7 @@ module memory(input  CLK,
    wire [`REQ_DATA_WIDTH - 1:0] last_request_data;
    assign {last_request_byte_en, last_request_addr, last_request_data} = last_request;
 
-   wire[13:0] addr = translate_address(last_request_addr);
+   wire[ADDRESS_WIDTH - 1:0] addr = translate_address(last_request_addr);
    wire[`REQ_DATA_WIDTH - 1:0] data = mem[addr];
 
    assign get_ready = RST_N && has_request;

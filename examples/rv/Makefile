@@ -3,9 +3,9 @@ include etc/Makefile.conf
 .DEFAULT_GOAL := all
 SHELL := bash
 
-dut := rv32i
-objects_dir := _objects/$(dut).v
-tests_build := tests/_build/$(dut)
+export DUT ?= rv32i
+objects_dir := _objects/$(DUT).v
+tests_build := tests/_build/$(DUT)
 
 cuttlesim := $(objects_dir)/$(basename $(CUTTLESIM_DRIVER)).opt
 verilator := $(objects_dir)/obj_dir.opt/V$(basename $(VERILATOR_TOP))
@@ -32,6 +32,7 @@ uart:
 core:
 	$(MAKE) -C ../.. examples/rv/$(objects_dir)
 	$(verbose)cp $(objects_dir)/$(DRIVER)/*.v $(objects_dir)/
+	$(verbose)cp $(objects_dir)/Makefile.$(DUT).conf $(objects_dir)/Makefile.platform.conf
 
 $(tests_build): .FORCE
 	$(MAKE) -C tests
