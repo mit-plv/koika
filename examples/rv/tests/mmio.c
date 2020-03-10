@@ -1,5 +1,5 @@
-int* PUT_ADDR = (int *)0x40000000;
-int* STOP_ADDR = (int *)0x40001000;
+static int* const PUT_ADDR = (int *)0x40000000;
+static int* const STOP_ADDR = (int *)0x40001000;
 
 int getchar() {
   return 0;

@@ -28,9 +28,9 @@ int putchar(int c);
 #define LINE_COUNT 13
 #define OFFSET 0
 
-#define VERIFY true
+// #define VERIFY
 
-#if VERIFY
+#ifdef VERIFY
 char ground_truth[80 * 30] =
   "+++-+*+---+-+---+-+---+----*+-+-----+---+-+---+-----+-----+-+-----+---+-+-----+-"
   "--+-----+-------+---+-+---+-+---+-------------+---+-----+-+---------+-+-----+---"
@@ -128,7 +128,7 @@ int main() {
         c = '-';
       }
       putchar(c);
-#if VERIFY
+#ifdef VERIFY
       if (c != ground_truth[n - 1])
         return 1;
 #endif
