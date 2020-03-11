@@ -13,7 +13,8 @@ Require Export
         Koika.Compiler
         Koika.Parsing
         Koika.DeriveShow
-        Koika.ExtractionSetup.
+        Koika.ExtractionSetup
+        Koika.SemanticProperties.
 
 Notation compile_scheduler :=
   (compile_scheduler opt_constprop).
