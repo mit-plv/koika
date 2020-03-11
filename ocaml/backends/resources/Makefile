@@ -411,8 +411,15 @@ help:
 	@echo '      FPGA_DEVICE = $(FPGA_DEVICE)'
 	@echo '        Device name passed to icetime and nextpnr.'
 	@echo '      FPGA_ICE40_PACKAGE = $(FPGA_ICE40_PACKAGE)'
-	@echo '        Package name passed to arachne-pnr'
+	@echo '        Package name passed to nextpnr.'
 	@echo '      FPGA_PCF = $(FPGA_PCF)'
-	@echo '        Physical contraints file passed to arachne-pnr'
+	@echo '        Physical contraints file passed to nextpnr.'
+	@echo '      FPGA_YOSYS_FLAGS = ?(FPGA_YOSYS_FLAGS)'
+	@echo '        Flags passed to Yosys for FPGA synthesis.'
+	@echo '      FPGA_YOSYS_OPTS = ?(FPGA_YOSYS_OPTS)'
+	@echo '        Additional flags passed to Yosys.'
+	@echo '      FPGA_YOSYS_LIBDIRS = ?(FPGA_YOSYS_LIBDIRS)'
+	@echo '        Directories passed as -libdir to the hierarchy command of Yosys'
+
 
 .PHONY: default clean-cuttlesim clean-verilog clean-fpga clean help
