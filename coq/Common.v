@@ -48,11 +48,33 @@ Ltac destruct_match :=
     destruct x eqn:?
   end.
 
+(** find the head of the given expression *)
+Ltac head expr :=
+  match expr with
+    | ?f _ => head f
+    | _ => expr
+  end.
+
+Ltac head_hnf expr := let expr' := eval hnf in expr in head expr'.
+
 Ltac rewrite_all_hypotheses :=
   repeat match goal with
          | [ H: ?x = ?y |- _ ] => rewrite H
          end.
 
+(* Rewrite all hypotheses that would change a term being matched in the context
+ into a constructor *)
+Ltac rewrite_hypotheses_in_match :=
+  repeat match goal with
+         | [ H: ?x = ?y |- context[match ?x with | _ => _ end ] ] =>
+           let y_hnf := head_hnf y in
+           is_constructor y_hnf;
+           rewrite H
+         | [ H: ?x = ?y, H2: context[match ?x with | _ => _ end ] |- _ ] =>
+           let y_hnf := head_hnf y in
+           is_constructor y_hnf;
+           rewrite H in H2
+         end.
 
 Ltac set_fixes :=
   repeat match goal with
