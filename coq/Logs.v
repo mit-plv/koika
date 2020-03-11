@@ -114,6 +114,14 @@ Section Logs.
                          | Some v => v
                          | None => REnv.(getenv) r0 k
                          end).
+
+  Fixpoint no_latest_writes (log: Log) l :=
+    match l with
+    | [] => True
+    | [a] => latest_write log a = None
+    | a::b => latest_write log a = None /\ no_latest_writes log b
+    end.
+
 End Logs.
 
 Arguments LE {T} kind port val : assert.
