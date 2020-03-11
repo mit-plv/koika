@@ -1157,6 +1157,14 @@ Module Bits.
           discriminate || (rewrite (IHsz vtl0 vtl1) by congruence; reflexivity).
     Qed.
 
+    Lemma to_N_inj_contra :
+      forall sz (bs1 bs2: bits sz),
+        bs1 <> bs2 ->
+        to_N bs1 <> to_N bs2.
+    Proof.
+      auto using to_N_inj.
+    Qed.
+
     Lemma to_N_bounded:
       forall sz (bs: bits sz),
         (to_N bs < 2 ^ N.of_nat sz)%N.
