@@ -48,6 +48,12 @@ Ltac destruct_match :=
     destruct x eqn:?
   end.
 
+Ltac rewrite_all_hypotheses :=
+  repeat match goal with
+         | [ H: ?x = ?y |- _ ] => rewrite H
+         end.
+
+
 Ltac set_fixes :=
   repeat match goal with
          | [  |- context[?x] ] => is_fix x; set x in *
