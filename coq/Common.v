@@ -19,14 +19,25 @@ Ltac bool_step :=
   | [ H: forallb _ (_ ++ _) = _ |- _ ] => rewrite forallb_app in H
   end.
 
+Lemma Some_inj : forall {T} (x y: T), Some x = Some y -> x = y.
+Proof.
+  congruence.
+Qed.
+
+Lemma pair_inj : forall {T U} (t1: T) (u1: U) (t2: T) (u2: U),
+    (t1, u1) = (t2, u2) -> t1 = t2 /\ u1 = u2.
+Proof.
+  inversion 1. auto.
+Qed.
+
 Ltac cleanup_step :=
   match goal with
   | _ => discriminate
   | _ => progress (subst; cbn)
   | [ H: Some _ = Some _ |- _ ] =>
-    inversion H; subst; clear H
+    apply Some_inj in H
   | [ H: (_, _) = (_, _) |- _ ] =>
-    inversion H; subst; clear H
+    apply pair_inj in H
   | [ H: _ /\ _ |- _ ] =>
     destruct H
   end.
