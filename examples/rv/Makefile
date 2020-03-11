@@ -3,7 +3,7 @@ include etc/Makefile.conf
 .DEFAULT_GOAL := all
 SHELL := bash
 
-dut := rv32
+dut := rv32i
 objects_dir := _objects/$(dut).v
 tests_build := tests/_build
 

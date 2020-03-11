@@ -797,7 +797,9 @@ The following list shows the current state of the repo:
       - |examples/rv/RVCore.v|_: Implementation of our RISC-V core
       - |examples/rv/RVEncoding.v|_: Encoding-related constants
       - |examples/rv/Scoreboard.v|_: Implementation of a scoreboard
-      - |examples/rv/rv32.v|_: Pipelined instantiation of the core
+      - |examples/rv/rv32.v|_: Definition of a pipelined schedule
+      - |examples/rv/rv32e.v|_: Pipelined instantiation of an RV32E core
+      - |examples/rv/rv32i.v|_: Pipelined instantiation of an RV32I core
 
    - |examples/collatz.lv|_: Computing terms of the Collatz sequence (Lispy Verilog version)
    - |examples/collatz.v|_: Computing terms of the Collatz sequence (Coq version)
@@ -1020,6 +1022,10 @@ The following list shows the current state of the repo:
 .. _examples/rv/etc/sv/top_uart.v: examples/rv/etc/sv/top_uart.v
 .. |examples/rv/rv32.v| replace:: ``rv32.v``
 .. _examples/rv/rv32.v: examples/rv/rv32.v
+.. |examples/rv/rv32e.v| replace:: ``rv32e.v``
+.. _examples/rv/rv32e.v: examples/rv/rv32e.v
+.. |examples/rv/rv32i.v| replace:: ``rv32i.v``
+.. _examples/rv/rv32i.v: examples/rv/rv32i.v
 .. |examples/uart.v| replace:: ``uart.v``
 .. _examples/uart.v: examples/uart.v
 .. |examples/vector.v| replace:: ``vector.v``

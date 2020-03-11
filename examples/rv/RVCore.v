@@ -7,7 +7,7 @@ Require Import RV.RVEncoding.
 Require Import RV.Scoreboard.
 Require Import RV.Multiplier.
 
-Section RV32IHelpers.
+Section RV32Helpers.
   Context {reg_t: Type}.
 
   Import ListNotations.
@@ -360,10 +360,15 @@ Section RV32IHelpers.
         struct control_result {| taken  := taken;
                                  nextPC := nextPC |}
     }}.
-End RV32IHelpers.
+End RV32Helpers.
 
-Module  RV32ICore.
+Module Type RVParams.
+  Parameter NREGS : nat.
+End RVParams.
+
+Module RV32Core (RVP: RVParams).
   Import ListNotations.
+  Import RVP.
 
   Definition mem_req :=
     {| struct_name := "mem_req";
@@ -432,20 +437,20 @@ Module  RV32ICore.
   End FifoExecute.
   Module fromExecute := Fifo1 FifoExecute.
 
-  Module Rf_32 <: RfPow2_sig.
-    Definition idx_sz := log2 32.
+  Module RfParams <: RfPow2_sig.
+    Definition idx_sz := log2 NREGS.
     Definition T := bits_t 32.
     Definition init := Bits.zeroes 32.
     Definition read_style := Scoreboard.read_style 32.
     Definition write_style := Scoreboard.write_style.
-  End Rf_32.
-  Module Rf := RfPow2 Rf_32.
+  End RfParams.
+  Module Rf := RfPow2 RfParams.
 
-  Module Scoreboard_32reg <: Scoreboard_sig.
-    Definition idx_sz := log2 32.
+  Module ScoreboardParams <: Scoreboard_sig.
+    Definition idx_sz := log2 NREGS.
     Definition maxScore := 3.
-  End Scoreboard_32reg.
-  Module Scoreboard := Scoreboard Scoreboard_32reg.
+  End ScoreboardParams.
+  Module Scoreboard := Scoreboard ScoreboardParams.
 
   Module Multiplier_32bits <: Multiplier_sig.
     Definition n := 32.
@@ -567,17 +572,17 @@ Module  RV32ICore.
         f2d.(fromFetch.enq)(fetch_bookkeeping)
     }}.
 
-  Definition tc_fetch :=
-    tc_action R Sigma fetch.
-
   Definition wait_imem : uaction reg_t ext_fn_t :=
     {{
         let fetched_bookkeeping := f2d.(fromFetch.deq)() in
         f2dprim.(waitFromFetch.enq)(fetched_bookkeeping)
     }}.
 
-  Definition tc_wait_imem :=
-    tc_action R Sigma wait_imem.
+  Definition sliceReg : UInternalFunction reg_t empty_ext_fn_t :=
+    {{
+        fun sliceReg (idx: bits_t 5) : bits_t (log2 NREGS) =>
+          idx[|3`d0| :+ log2 NREGS]
+    }}.
 
   (* This rule is interesting because maybe we want to write it *)
   (* differently than Bluespec if we care about simulation *)
@@ -592,14 +597,14 @@ Module  RV32ICore.
         when (get(fetched_bookkeeping, epoch) == read1(epoch)) do
              (let rs1_idx := get(getFields(instr), rs1) in
              let rs2_idx := get(getFields(instr), rs2) in
-             let score1 := scoreboard.(Scoreboard.search)(rs1_idx) in
-             let score2 := scoreboard.(Scoreboard.search)(rs2_idx) in
+             let score1 := scoreboard.(Scoreboard.search)(sliceReg(rs1_idx)) in
+             let score2 := scoreboard.(Scoreboard.search)(sliceReg(rs2_idx)) in
              guard (score1 == Ob~0~0 && score2 == Ob~0~0);
              (when (get(decodedInst, valid_rd)) do
                   let rd_idx := get(getFields(instr), rd) in
-                  scoreboard.(Scoreboard.insert)(rd_idx));
-             let rs1 := rf.(Rf.read_1)(rs1_idx) in
-             let rs2 := rf.(Rf.read_1)(rs2_idx) in
+                  scoreboard.(Scoreboard.insert)(sliceReg(rd_idx)));
+             let rs1 := rf.(Rf.read_1)(sliceReg(rs1_idx)) in
+             let rs2 := rf.(Rf.read_1)(sliceReg(rs2_idx)) in
              let decode_bookkeeping := struct decode_bookkeeping {|
                                                 pc    := get(fetched_bookkeeping, pc);
                                                 ppc   := get(fetched_bookkeeping, ppc);
@@ -610,9 +615,6 @@ Module  RV32ICore.
                                               |} in
              d2e.(fromDecode.enq)(decode_bookkeeping))
     }}.
-
-  Definition tc_decode :=
-    tc_action R Sigma decode.
 
   (* Useful for debugging *)
   Arguments Var {pos_t var_t fn_name_t reg_t ext_fn_t R Sigma sig} k {tau m} : assert.
@@ -642,9 +644,6 @@ Module  RV32ICore.
     {{
         mulState.(multiplier.step)()
     }}.
-
-  Definition tc_step_multiplier :=
-    tc_action R empty_Sigma step_multiplier.
 
   Definition UART_WRITE_ADDRESS :=
     Ob~0~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0.
@@ -721,9 +720,6 @@ Module  RV32ICore.
           pass
     }}.
 
-  Definition tc_execute :=
-    tc_action R Sigma execute.
-
   Definition writeback : uaction reg_t ext_fn_t :=
     {{
         let execute_bookkeeping := e2w.(fromExecute.deq)() in
@@ -755,16 +751,13 @@ Module  RV32ICore.
           pass;
         if get(dInst,valid_rd) then
           let rd_idx := get(fields,rd) in
-          scoreboard.(Scoreboard.remove)(rd_idx);
+          scoreboard.(Scoreboard.remove)(sliceReg(rd_idx));
           if (rd_idx == |5`d0|)
           then pass
-          else rf.(Rf.write_0)(rd_idx,data)
+          else rf.(Rf.write_0)(sliceReg(rd_idx),data)
         else
           pass
     }}.
-
-  Definition tc_writeback :=
-    tc_action R Sigma writeback.
 
   Definition mem (m: memory) : uaction reg_t ext_fn_t :=
     let fromMem := match m with imem => fromIMem | dmem => fromDMem end in
@@ -779,9 +772,6 @@ Module  RV32ICore.
         (when (get_valid && get(mem_out, get_ready)) do fromMem.(MemResp.enq)(get(mem_out, get_response)));
         (when (put_valid && get(mem_out, put_ready)) do ignore(toMem.(MemReq.deq)()))
     }}.
-
-  Definition tc_imem := tc_action R Sigma (mem imem).
-  Definition tc_dmem := tc_action R Sigma (mem dmem).
 
   Definition uart_write : uaction reg_t ext_fn_t :=
     {{
@@ -804,35 +794,7 @@ Module  RV32ICore.
   Definition tc_tick :=
     tc_action R Sigma tick.
 
-  Inductive rv_rules_t :=
-  | Fetch
-  | Decode
-  | Execute
-  | Writeback
-  | WaitImem
-  | Imem
-  | Dmem
-  | StepMultiplier
-  | UART_write
-  | Tick.
-
-  Definition rv_rules (rl:rv_rules_t) : rule R Sigma :=
-    match rl with
-    | Fetch     => tc_fetch
-    | Decode    => tc_decode
-    | Execute   => tc_execute
-    | Writeback => tc_writeback
-    | WaitImem  => tc_wait_imem
-    | Imem => tc_imem
-    | Dmem => tc_dmem
-    | StepMultiplier => tc_step_multiplier
-    | UART_write => tc_uart_write
-    | Tick => tc_tick
-    end.
-
-  Definition rv_external (rl: rv_rules_t) := false.
-
-  Definition rv_register_name (v: Vect.index 32) :=
+  Definition rv_register_name {n} (v: Vect.index n) :=
     match index_to_nat v with
     | 0  => "x00_zero" (* hardwired zero *)
     | 1  => "x01_ra" (* caller-saved, return address *)
@@ -884,9 +846,117 @@ Module  RV32ICore.
   Instance FiniteType_f2d : FiniteType fromFetch.reg_t := _.
   Instance FiniteType_d2e : FiniteType fromDecode.reg_t := _.
   Instance FiniteType_e2w : FiniteType fromExecute.reg_t := _.
+
+  Instance Show_rf : Show (Rf.reg_t) :=
+    {| show '(Rf.rData v) := rv_register_name v |}.
+
+  Instance Show_scoreboard : Show (Scoreboard.reg_t) :=
+    {| show '(Scoreboard.Scores (Scoreboard.Rf.rData v)) := rv_register_name v |}.
+
+  Instance Show_reg_t : Show reg_t := _.
+  Instance Show_ext_fn_t : Show ext_fn_t := _.
+End RV32Core.
+
+Inductive rv_rules_t :=
+| Fetch
+| Decode
+| Execute
+| Writeback
+| WaitImem
+| Imem
+| Dmem
+| StepMultiplier
+| UART_write
+| Tick.
+
+Definition rv_external (rl: rv_rules_t) := false.
+
+Module Type Core.
+  Parameter _reg_t : Type.
+  Parameter _ext_fn_t : Type.
+  Parameter R : _reg_t -> type.
+  Parameter Sigma : _ext_fn_t -> ExternalSignature.
+  Parameter r : forall reg, R reg.
+  Parameter rv_rules : rv_rules_t -> rule R Sigma.
+  Parameter rv_ext_fn_specs : _ext_fn_t -> ext_fn_spec.
+  Parameter FiniteType_reg_t : FiniteType _reg_t.
+  Parameter Show_reg_t : Show _reg_t.
+  Parameter Show_ext_fn_t : Show _ext_fn_t.
+End Core.
+
+Module RV32IParams <: RVParams.
+  Definition NREGS := 32.
+End RV32IParams.
+
+Module RV32I <: Core.
+  Include (RV32Core RV32IParams).
+
+  Definition _reg_t := reg_t.
+  Definition _ext_fn_t := ext_fn_t.
+
+  Definition tc_fetch := tc_action R Sigma fetch.
+  Definition tc_wait_imem := tc_action R Sigma wait_imem.
+  Definition tc_decode := tc_action R Sigma decode.
+  Definition tc_execute := tc_action R Sigma execute.
+  Definition tc_writeback := tc_action R Sigma writeback.
+  Definition tc_step_multiplier := tc_action R Sigma step_multiplier.
+  Definition tc_imem := tc_action R Sigma (mem imem).
+  Definition tc_dmem := tc_action R Sigma (mem dmem).
+
+  Definition rv_rules (rl:rv_rules_t) : rule R Sigma :=
+    match rl with
+    | Fetch          => tc_fetch
+    | Decode         => tc_decode
+    | Execute        => tc_execute
+    | Writeback      => tc_writeback
+    | WaitImem       => tc_wait_imem
+    | Imem           => tc_imem
+    | Dmem           => tc_dmem
+    | UART_write     => tc_uart_write
+    | StepMultiplier => tc_step_multiplier
+    | Tick           => tc_tick
+    end.
+
   Instance FiniteType_rf : FiniteType Rf.reg_t := _.
   Instance FiniteType_scoreboard_rf : FiniteType Scoreboard.Rf.reg_t := _.
   Instance FiniteType_scoreboard : FiniteType Scoreboard.reg_t := _.
   Instance FiniteType_reg_t : FiniteType reg_t := _.
-  Definition cr := ContextEnv.(create) r.
-End RV32ICore.
+End RV32I.
+
+Module RV32EParams <: RVParams.
+  Definition NREGS := 16.
+End RV32EParams.
+
+Module RV32E <: Core.
+  Include (RV32Core RV32EParams).
+  Definition _reg_t := reg_t.
+  Definition _ext_fn_t := ext_fn_t.
+
+  Definition tc_fetch := tc_action R Sigma fetch.
+  Definition tc_wait_imem := tc_action R Sigma wait_imem.
+  Definition tc_decode := tc_action R Sigma decode.
+  Definition tc_execute := tc_action R Sigma execute.
+  Definition tc_writeback := tc_action R Sigma writeback.
+  Definition tc_step_multiplier := tc_action R Sigma step_multiplier.
+  Definition tc_imem := tc_action R Sigma (mem imem).
+  Definition tc_dmem := tc_action R Sigma (mem dmem).
+
+  Definition rv_rules (rl:rv_rules_t) : rule R Sigma :=
+    match rl with
+    | Fetch          => tc_fetch
+    | Decode         => tc_decode
+    | Execute        => tc_execute
+    | Writeback      => tc_writeback
+    | WaitImem       => tc_wait_imem
+    | Imem           => tc_imem
+    | Dmem           => tc_dmem
+    | UART_write     => tc_uart_write
+    | StepMultiplier => tc_step_multiplier
+    | Tick           => tc_tick
+    end.
+
+  Instance FiniteType_rf : FiniteType Rf.reg_t := _.
+  Instance FiniteType_scoreboard_rf : FiniteType Scoreboard.Rf.reg_t := _.
+  Instance FiniteType_scoreboard : FiniteType Scoreboard.reg_t := _.
+  Instance FiniteType_reg_t : FiniteType reg_t := _.
+End RV32E.

@@ -17,14 +17,14 @@ Module Scoreboard (s:Scoreboard_sig).
   Definition sz:= s.idx_sz.
   Definition logScore := log2 s.maxScore.
 
-  Module Rf_32 <: RfPow2_sig.
+  Module RfParams <: RfPow2_sig.
     Definition idx_sz := sz.
     Definition T := bits_t logScore.
     Definition init := Bits.zeroes logScore.
     Definition read_style := read_style logScore.
     Definition write_style := write_style.
-  End Rf_32.
-  Module Rf := RfPow2 Rf_32.
+  End RfParams.
+  Module Rf := RfPow2 RfParams.
 
   Inductive reg_t := Scores (state: Rf.reg_t).
   Definition R r :=
