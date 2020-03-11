@@ -23,8 +23,8 @@ RISCVOBJDUMP32_ARGS := --disassemble --source --full-contents
 
 cc := $(RISCVCC32) $(RISCVCC32_ARGS)
 objdump := $(RISCVOBJDUMP32) $(RISCVOBJDUMP32_ARGS)
-cc32i := $(cc) -march=rv32im -mabi=ilp32 -T$(build)/rv32i/mmio.ld
-cc32e := $(cc) -march=rv32e -mabi=ilp32e -T$(build)/rv32e/mmio.ld -DRV32E
+cc32i := $(cc) -march=rv32im -mabi=ilp32 -T$(build)/rv32i/link.ld
+cc32e := $(cc) -march=rv32e -mabi=ilp32e -T$(build)/rv32e/link.ld -DRV32E
 
 all: $(rv32_targets) $(vmh_targets) $(dump_targets);
 
@@ -36,22 +36,22 @@ dirs:
 $(elf2hex):
 	$(MAKE) -C elf2hex
 
-$(build)/rv32e/mmio.ld: mmio.ld | dirs
+$(build)/rv32e/link.ld: link.ld | dirs
 	$(cc) -DRV32E -E -x c $< | grep -v '^#' > $@
 
-$(build)/rv32i/mmio.ld: mmio.ld | dirs
+$(build)/rv32i/link.ld: link.ld | dirs
 	$(cc) -E -x c $< | grep -v '^#' > $@
 
-$(build)/rv32e/%.rv32: %.S $(build)/rv32e/mmio.ld | dirs
+$(build)/rv32e/%.rv32: %.S $(build)/rv32e/link.ld | dirs
 	$(cc32e) -I rv32ui $< -o $@
 
-$(build)/rv32e/%.rv32: %.c init.S init.S mmio.c $(build)/rv32e/mmio.ld | dirs
+$(build)/rv32e/%.rv32: %.c init.S init.S mmio.c $(build)/rv32e/link.ld | dirs
 	$(cc32e) init.S mmio.c $< -o $@
 
-$(build)/rv32i/%.rv32: %.S $(build)/rv32i/mmio.ld | dirs
+$(build)/rv32i/%.rv32: %.S $(build)/rv32i/link.ld | dirs
 	$(cc32i) $< -o $@
 
-$(build)/rv32i/%.rv32: %.c init.S mmio.c $(build)/rv32i/mmio.ld | dirs
+$(build)/rv32i/%.rv32: %.c init.S mmio.c $(build)/rv32i/link.ld | dirs
 	$(cc32i) init.S mmio.c $< -o $@
 
 $(build)/%.dump: $(build)/%.rv32
