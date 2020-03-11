@@ -17,7 +17,6 @@ Ltac bool_step :=
   | [ H: negb _ = true |- _ ] => rewrite negb_true_iff in H
   | [ H: negb _ = false |- _ ] => rewrite negb_false_iff in H
   | [ H: forallb _ (_ ++ _) = _ |- _ ] => rewrite forallb_app in H
-  | [ H: Some _ = Some _ |- _ ] => inversion H; subst; clear H
   end.
 
 Ltac cleanup_step :=
