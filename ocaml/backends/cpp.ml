@@ -917,6 +917,15 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
         | (VarTarget _, NotAssigned) -> assert false
       in
 
+      let p_assign_impure ?prefix target result =
+        (* It wouldn't be safe to return the result directly (as a plain
+           ImpureExpr) without writing it out, because of sequencing issues
+           in expressions like “a := read0(x) + (write0(x); 0)” (we'd end up
+           compiling to “WRITE0(x); a = read0(x) + 0;”, which is wrong) *)
+        match result with
+        | ImpureExpr _ -> p_assign_expr ?prefix target result
+        | _ -> result in
+
       let must_expr = function
         | (PureExpr _ | ImpureExpr _) as expr -> expr
         | Assigned v -> PureExpr v
@@ -1057,7 +1066,7 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
            let vtarget = VarTarget { tau = Cuttlebone.Util.typ_of_extr_type tau;
                                      declared = true; name = hpp.cpp_var_names v } in
            p_assign_and_ignore vtarget (p_action at_top pos vtarget ex);
-           p_assign_expr target (PureExpr "prims::tt")
+           PureExpr "prims::tt"
         | Extr.Seq (_, _, a1, a2) ->
            p_assign_and_ignore NoTarget (p_action false pos NoTarget a1);
            p_action at_top pos target a2
@@ -1067,6 +1076,7 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
            let p () =
              List.iter (fun (var, (pos, tau, expr)) ->
                  p_bound_var_assign pos tau var expr) bindings;
+             (* Force assignment to prevent variable from escaping scope *)
              p_assign_expr target (p_action false pos target body) in
            if at_top then p () else p_scoped "/* bind */" p
         | Extr.If (_, _, cond, tbr, fbr) ->
@@ -1091,11 +1101,7 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
            let r = hpp.cpp_register_sigs reg in
            let pt = match port with P0 -> 0 | P1 -> 1 in
            let expr = sprintf "%s(%s)" (read reg pt) r.reg_name in
-           (* It wouldn't be safe to return the result directly (as a plain
-              ImpureExpr) without writing it out, because of sequencing issues
-              in expressions like “a := read0(x) + (write0(x); 0)” (we'd end up
-              compiling to “WRITE0(x); a = read0(x) + 0;”, which is wrong) *)
-           p_assign_expr target (ImpureExpr expr)
+           p_assign_impure target (ImpureExpr expr)
         | Extr.APos (_, _, Extr.HistoryAnnot _,
                      Extr.Write (_, port, reg, expr)) ->
            let r = hpp.cpp_register_sigs reg in
@@ -1103,27 +1109,30 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
            let v = must_value (p_action false pos vt expr) in
            let pt = match port with P0 -> 0 | P1 -> 1 in
            p "%s(%s, %s);" (write reg pt) r.reg_name v;
-           p_assign_expr target (PureExpr "prims::tt")
+           PureExpr "prims::tt"
         | Extr.Unop (_, Extr.PrimTyped.Conv (tau, Extr.PrimTyped.Unpack), a)
              when Extr.(returns_zero a && is_pure a) ->
            p_assign_and_ignore NoTarget (p_action at_top pos NoTarget a);
            PureExpr (sp_initializer (Cuttlebone.Util.typ_of_extr_type tau))
+        | Extr.Unop (_, Conv (_, Ignore), a) ->
+           p_assign_and_ignore NoTarget (p_action false pos NoTarget a);
+           (PureExpr "prims::tt")
         | Extr.Unop (_, fn, a) ->
            let fsig = Extr.PrimSignatures.coq_Sigma1 fn in
            let a = p_action false pos (gensym_target (Cuttlebone.Util.argType 1 fsig 0) "x") a in
-           taint [a] (p_unop fn (must_value a))
+           p_assign_impure target (taint [a] (p_unop fn (must_value a)))
         | Extr.Binop (_, fn, a1, a2) ->
            let fsig = Extr.PrimSignatures.coq_Sigma2 fn in
            let a1 = p_action false pos (maybe_gensym_target target (Cuttlebone.Util.argType 2 fsig 0) "x") a1 in
            let a2 = p_action false pos (gensym_target (Cuttlebone.Util.argType 2 fsig 1) "y") a2 in
-           taint [a1; a2] (p_binop target fn (must_value a1) (must_value a2))
+           p_assign_impure target (taint [a1; a2] (p_binop target fn (must_value a1) (must_value a2)))
         | Extr.ExternalCall (_, fn, a) ->
            let ffi = hpp.cpp_ext_sigs fn in
            let a = p_action false pos (gensym_target ffi.ffi_argtype "x") a in
            Hashtbl.replace program_info.pi_ext_funcalls ffi ();
            (* See ‘Read’ case for why returning just ImpureExpr isn't safe *)
            let expr = cpp_ext_funcall ffi.ffi_name (must_value a) in
-           p_assign_expr target (ImpureExpr expr)
+           p_assign_impure target (ImpureExpr expr)
         | Extr.InternalCall (_, tau, fn, argspec, rev_args, body) ->
            let fn_name = match snd (lookup_intfun fn argspec tau body) with
              | Some fn -> fn
@@ -1138,7 +1147,7 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
            (* See ‘Read’ case for why returning just ImpureExpr isn't safe *)
            let args = String.concat ", " (fn_name :: args) in
            let invocation = sprintf "%s(%s)" call args in
-           p_assign_expr target (ImpureExpr invocation)
+           p_assign_impure target (ImpureExpr invocation)
         | Extr.APos (_, _, Extr.PosAnnot pos, a) ->
            p_action at_top (hpp.cpp_pos_of_pos pos) target a
         | Extr.Fail (_, _) -> while true do () done; failwith "Missing annotation on fail"
