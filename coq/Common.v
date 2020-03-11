@@ -32,6 +32,12 @@ Ltac cleanup_step :=
     destruct H
   end.
 
+Ltac destruct_match :=
+  match goal with
+  | [ |- context[match ?x with _ => _ end] ] =>
+    destruct x eqn:?
+  end.
+
 Ltac set_fixes :=
   repeat match goal with
          | [  |- context[?x] ] => is_fix x; set x in *
