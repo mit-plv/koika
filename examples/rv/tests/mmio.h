@@ -3,11 +3,8 @@
 
 int getchar();
 int putchar(int c);
+void putchars(const char* str);
 
-static inline __attribute__((unused)) void putchars(const char* str) {
-  while (*str) {
-    putchar(*str);
-    str++;
-  }
-}
+int getled();
+int putled(int on);
 #endif

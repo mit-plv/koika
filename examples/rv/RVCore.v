@@ -515,21 +515,26 @@ Module RV32Core (RVP: RVParams).
   (* External functions, used to model memory *)
 
   Inductive memory := imem | dmem.
-  Inductive ext_fn_t := ext_mem (m: memory) | ext_uart_read | ext_uart_write.
+  Inductive ext_fn_t :=
+  | ext_mem (m: memory)
+  | ext_uart_read
+  | ext_uart_write
+  | ext_led.
 
   Definition mem_input :=
     {| struct_name := "mem_input";
-       struct_fields := [("get_valid", bits_t 1);
+       struct_fields := [("get_ready", bits_t 1);
                         ("put_valid", bits_t 1);
                         ("put_request", struct_t mem_req)] |}.
 
   Definition mem_output :=
     {| struct_name := "mem_output";
-       struct_fields := [("get_ready", bits_t 1);
+       struct_fields := [("get_valid", bits_t 1);
                         ("put_ready", bits_t 1);
                         ("get_response", struct_t mem_resp)] |}.
 
 
+  Definition led_input := maybe (bits_t 1).
   Definition uart_input := maybe (bits_t 8).
   Definition uart_output := maybe (bits_t 8).
 
@@ -538,6 +543,7 @@ Module RV32Core (RVP: RVParams).
     | ext_mem _ => {$ struct_t mem_input ~> struct_t mem_output $}
     | ext_uart_read => {$ bits_t 1 ~> uart_output $}
     | ext_uart_write => {$ uart_input ~> bits_t 1 $}
+    | ext_led => {$ led_input ~> bits_t 1 $}
     end.
 
   Definition fetch : uaction reg_t ext_fn_t :=
@@ -654,7 +660,6 @@ Module RV32Core (RVP: RVParams).
              let size := funct3[|2`d0| :+ 2] in
              let addr := rs1_val + imm in
              let offset := addr[|5`d0| :+ 2] in
-             let isUARTWrite := Ob~0 in
              if isMemoryInst(dInst) then
                let shift_amount := offset ++ |3`d0| in
                let is_write := fInst[|5`d5|] == Ob~1 in
@@ -732,28 +737,65 @@ Module RV32Core (RVP: RVParams).
     }}.
 
   Definition MMIO_UART_ADDRESS := Ob~0~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0.
+  Definition MMIO_LED_ADDRESS  := Ob~0~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1~0~0.
 
   Definition memoryBus (m: memory) : UInternalFunction reg_t ext_fn_t :=
-    {{ fun memoryBus (get_valid: bits_t 1) (put_valid: bits_t 1) (put_request: struct_t mem_req) : struct_t mem_output =>
+    {{ fun memoryBus (get_ready: bits_t 1) (put_valid: bits_t 1) (put_request: struct_t mem_req) : struct_t mem_output =>
          `match m with
           | imem => {{ extcall (ext_mem m) (struct mem_input {|
-                        get_valid := get_valid; put_valid := put_valid; put_request := put_request |}) }}
+                        get_ready := get_ready;
+                        put_valid := put_valid;
+                        put_request := put_request |}) }}
           | dmem => {{ let addr := get(put_request, addr) in
                       let byte_en := get(put_request, byte_en) in
-                      let is_valid_write := put_valid && byte_en == Ob~1~1~1~1 in
-                      let uart_valid := is_valid_write && addr == #MMIO_UART_ADDRESS in
-                      let mem_valid := !uart_valid in
-                      if uart_valid then
-                        let ready :=
-                            extcall ext_uart_write (struct (Maybe (bits_t 8)) {|
-                              valid := uart_valid; data := get(put_request, data)[|5`d0| :+ 8] |}) in
-                        struct mem_output {| get_ready := ready; put_ready := ready;
+                      let is_write := byte_en == Ob~1~1~1~1 in
+
+                      let is_uart := addr == #MMIO_UART_ADDRESS in
+                      let is_uart_read := is_uart && !is_write in
+                      let is_uart_write := is_uart && is_write in
+
+                      let is_led := addr == #MMIO_LED_ADDRESS in
+                      let is_led_write := is_led && is_write in
+
+                      let is_mem := !is_uart && !is_led in
+
+                      if is_uart_write then
+                        let char := get(put_request, data)[|5`d0| :+ 8] in
+                        let may_run := get_ready && put_valid && is_uart_write in
+                        let ready := extcall ext_uart_write (struct (Maybe (bits_t 8)) {|
+                          valid := may_run; data := char |}) in
+                        struct mem_output {| get_valid := may_run && ready;
+                                             put_ready := may_run && ready;
                                              get_response := struct mem_resp {|
-                                               byte_en := byte_en; addr := addr; data := |32`d0| |} |}
+                                               byte_en := byte_en; addr := addr;
+                                               data := |32`d0| |} |}
+
+                      else if is_uart_read then
+                        let may_run := get_ready && put_valid && is_uart_read in
+                        let opt_char := extcall ext_uart_read (may_run) in
+                        let ready := get(opt_char, valid) in
+                        struct mem_output {| get_valid := may_run && ready;
+                                             put_ready := may_run && ready;
+                                             get_response := struct mem_resp {|
+                                               byte_en := byte_en; addr := addr;
+                                               data := zeroExtend(get(opt_char, data), 32) |} |}
+
+                      else if is_led then
+                        let on := get(put_request, data)[|5`d0|] in
+                        let may_run := get_ready && put_valid && is_led_write in
+                        let current := extcall ext_led (struct (Maybe (bits_t 1)) {|
+                          valid := may_run; data := on |}) in
+                        let ready := Ob~1 in
+                        struct mem_output {| get_valid := may_run && ready;
+                                             put_ready := may_run && ready;
+                                             get_response := struct mem_resp {|
+                                               byte_en := byte_en; addr := addr;
+                                               data := zeroExtend(current, 32) |} |}
+
                       else
                         extcall (ext_mem m) (struct mem_input {|
-                          get_valid := get_valid && mem_valid;
-                          put_valid := put_valid && mem_valid;
+                          get_ready := get_ready && is_mem;
+                          put_valid := put_valid && is_mem;
                           put_request := put_request |})
                    }}
           end` }}.
@@ -762,12 +804,12 @@ Module RV32Core (RVP: RVParams).
     let fromMem := match m with imem => fromIMem | dmem => fromDMem end in
     let toMem := match m with imem => toIMem | dmem => toDMem end in
     {{
-        let get_valid := fromMem.(MemResp.can_enq)() in
+        let get_ready := fromMem.(MemResp.can_enq)() in
         let put_request_opt := toMem.(MemReq.peek)() in
         let put_request := get(put_request_opt, data) in
         let put_valid := get(put_request_opt, valid) in
-        let mem_out := {memoryBus m}(get_valid, put_valid, put_request) in
-        (when (get_valid && get(mem_out, get_ready)) do fromMem.(MemResp.enq)(get(mem_out, get_response)));
+        let mem_out := {memoryBus m}(get_ready, put_valid, put_request) in
+        (when (get_ready && get(mem_out, get_valid)) do fromMem.(MemResp.enq)(get(mem_out, get_response)));
         (when (put_valid && get(mem_out, put_ready)) do ignore(toMem.(MemReq.deq)()))
     }}.
 
@@ -822,6 +864,7 @@ Module RV32Core (RVP: RVParams).
     | ext_mem dmem => {| ef_name := "ext_mem_dmem"; ef_internal := true |}
     | ext_uart_write => {| ef_name := "ext_uart_write"; ef_internal := false |}
     | ext_uart_read => {| ef_name := "ext_uart_read"; ef_internal := false |}
+    | ext_led => {| ef_name := "ext_led"; ef_internal := false |}
     end.
 
   Instance FiniteType_toIMem : FiniteType MemReq.reg_t := _.

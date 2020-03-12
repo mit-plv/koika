@@ -53,10 +53,10 @@ struct bram {
   }
 
   struct_mem_output getput(struct_mem_input req) {
-    std::optional<struct_mem_resp> get_response = get(bool(req.get_valid));
+    std::optional<struct_mem_resp> get_response = get(bool(req.get_ready));
     bool put_ready = put(req.put_valid ? std::optional<struct_mem_req>{req.put_request} : std::nullopt);
     return struct_mem_output{
-      .get_ready = bits<1>{get_response.has_value()},
+      .get_valid = bits<1>{get_response.has_value()},
       .put_ready = bits<1>{put_ready},
       .get_response = get_response.value_or(struct_mem_resp{})
     };
@@ -72,6 +72,7 @@ struct bram {
 
 struct extfuns_t {
   bram dmem, imem;
+  bits<1> led;
 
   struct_mem_output ext_mem_dmem(struct_mem_input req) {
     return dmem.getput(req);
@@ -88,7 +89,23 @@ struct extfuns_t {
     return req.valid;
   }
 
-  extfuns_t() : dmem{}, imem{} {}
+  struct_maybe_bits_8 ext_uart_read(bits<1> req) {
+    bool valid = req.v;
+    return struct_maybe_bits_8 {
+      .valid = bits<1>{valid},
+      .data = bits<8>{(bits_t<8>)(valid ? getchar() : 0)} };
+  }
+
+  bits<1> ext_led(struct_maybe_bits_1 req) {
+    bits<1> current = led;
+    if (req.valid) {
+      led = req.data;
+      fprintf(stderr, led.v ? "☀" : "🌣");
+    }
+    return current;
+  }
+
+  extfuns_t() : dmem{}, imem{}, led{false} {}
 };
 
 using simulator = module_rv32<extfuns_t>;
@@ -184,6 +201,6 @@ int main(int argc, char** argv) {
 #endif
 
 // Local Variables:
-// flycheck-clang-include-path: ("../_objects/rv32.v/")
+// flycheck-clang-include-path: ("../_objects/rv32i.v/")
 // flycheck-clang-language-standard: "c++17"
 // End:
