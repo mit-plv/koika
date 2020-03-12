@@ -13,10 +13,9 @@ Section RV32Helpers.
   Import ListNotations.
   Definition imm_type :=
     {| enum_name := "immType";
-       enum_bitsize := 3;
-       enum_members := vect_of_list ["ImmI"; "ImmS"; "ImmB"; "ImmU"; "ImmJ"];
-       enum_bitpatterns := vect_of_list [Bits.of_nat 3 0; Bits.of_nat 3 1; Bits.of_nat 3 2; Bits.of_nat 3 3; Bits.of_nat 3 4]
-    |}.
+       enum_members := ["ImmI"; "ImmS"; "ImmB"; "ImmU"; "ImmJ"];
+       enum_bitpatterns := vect_map (Bits.of_nat 3) [0; 1; 2; 3; 4]
+    |}%vect.
 
   Definition decoded_sig :=
     {| struct_name := "decodedInst";
@@ -47,7 +46,6 @@ Section RV32Helpers.
                           :: ("csr"    , bits_t 12)
                           :: nil
     |}.
-
 
   Definition getFields : UInternalFunction reg_t empty_ext_fn_t :=
     {{
@@ -397,7 +395,6 @@ Module RV32Core (RVP: RVParams).
   Definition execute_bookkeeping :=
     {| struct_name := "execute_bookkeeping";
        struct_fields := [("isUnsigned" , bits_t 1);
-                         ("isUARTWrite" , bits_t 1);
                          ("size", bits_t 2);
                          ("offset", bits_t 2);
                          ("newrd" , bits_t 32);
@@ -463,10 +460,6 @@ Module RV32Core (RVP: RVParams).
   | fromIMem (state: MemResp.reg_t)
   | toDMem (state: MemReq.reg_t)
   | fromDMem (state: MemResp.reg_t)
-  | toUART (state: UARTReq.reg_t)
-  | toUART_ack
-  | fromUART (state: UARTResp.reg_t)
-  | fromUART_req
   | f2d (state: fromFetch.reg_t)
   | f2dprim (state: waitFromFetch.reg_t)
   | d2e (state: fromDecode.reg_t)
@@ -486,10 +479,6 @@ Module RV32Core (RVP: RVParams).
     | fromIMem r => MemResp.R r
     | toDMem r => MemReq.R r
     | fromDMem r => MemResp.R r
-    | toUART r => UARTReq.R r
-    | toUART_ack => bits_t 1
-    | fromUART r => UARTResp.R r
-    | fromUART_req => bits_t 1
     | f2d r => fromFetch.R r
     | f2dprim r => waitFromFetch.R r
     | d2e r => fromDecode.R r
@@ -511,10 +500,6 @@ Module RV32Core (RVP: RVParams).
     | fromIMem s => MemResp.r s
     | toDMem s => MemReq.r s
     | fromDMem s => MemResp.r s
-    | toUART s => UARTReq.r s
-    | toUART_ack => Bits.zero
-    | fromUART s => UARTResp.r s
-    | fromUART_req => Bits.zero
     | f2d s => fromFetch.r s
     | f2dprim s => waitFromFetch.r s
     | d2e s => fromDecode.r s
@@ -645,9 +630,6 @@ Module RV32Core (RVP: RVParams).
         mulState.(multiplier.step)()
     }}.
 
-  Definition UART_WRITE_ADDRESS :=
-    Ob~0~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0.
-
   Definition execute : uaction reg_t ext_fn_t :=
     {{
         let decoded_bookkeeping := d2e.(fromDecode.deq)() in
@@ -688,12 +670,8 @@ Module RV32Core (RVP: RVParams).
                set data := rs2_val << shift_amount;
                set addr := addr[|5`d2| :+ 30 ] ++ |2`d0|;
                set isUnsigned := funct3[|2`d2|];
-               if (addr == #UART_WRITE_ADDRESS) && is_write then
-                 set isUARTWrite := Ob~1;
-                 toUART.(UARTReq.enq)(data[|5`d0| :+ 8])
-               else
-                 toDMem.(MemReq.enq)(struct mem_req {|
-                   byte_en := byte_en; addr := addr; data := data |})
+               toDMem.(MemReq.enq)(struct mem_req {|
+                 byte_en := byte_en; addr := addr; data := data |})
              else if (isControlInst(dInst)) then
                set data := (pc + |32`d4|)     (* For jump and link *)
              else if (isMultiplyInst(dInst)) then
@@ -709,7 +687,6 @@ Module RV32Core (RVP: RVParams).
                pass;
              let execute_bookkeeping := struct execute_bookkeeping {|
                                                  isUnsigned := isUnsigned;
-                                                 isUARTWrite := isUARTWrite;
                                                  size := size;
                                                  offset := offset;
                                                  newrd := data;
@@ -729,22 +706,17 @@ Module RV32Core (RVP: RVParams).
         write0(instr_count, read0(instr_count)+|32`d1|);
         if isMemoryInst(dInst) then (* // write_val *)
           (* Byte enable shifting back *)
-          (if get(execute_bookkeeping, isUARTWrite) then
-             guard(read0(toUART_ack));
-             write0(toUART_ack, Ob~0);
-             set data := |32`d0|
-           else
-             let resp := fromDMem.(MemResp.deq)() in
-             let mem_data := get(resp,data) in
-             set mem_data := mem_data >> (get(execute_bookkeeping,offset) ++ Ob~0~0~0);
-             match (get(execute_bookkeeping,isUnsigned)++get(execute_bookkeeping,size)) with
-             | Ob~0~0~0 => set data := {signExtend 8  24}(mem_data[|5`d0|:+8])
-             | Ob~0~0~1 => set data := {signExtend 16 16}(mem_data[|5`d0|:+16])
-             | Ob~1~0~0 => set data := zeroExtend(mem_data[|5`d0|:+8],32)
-             | Ob~1~0~1 => set data := zeroExtend(mem_data[|5`d0|:+16],32)
-             | Ob~0~1~0 => set data := mem_data      (* Load Word *)
-             return default: fail                   (* Load Double or Signed Word *)
-             end)
+          let resp := fromDMem.(MemResp.deq)() in
+          let mem_data := get(resp,data) in
+          set mem_data := mem_data >> (get(execute_bookkeeping,offset) ++ Ob~0~0~0);
+          match (get(execute_bookkeeping,isUnsigned)++get(execute_bookkeeping,size)) with
+          | Ob~0~0~0 => set data := {signExtend 8  24}(mem_data[|5`d0|:+8])
+          | Ob~0~0~1 => set data := {signExtend 16 16}(mem_data[|5`d0|:+16])
+          | Ob~1~0~0 => set data := zeroExtend(mem_data[|5`d0|:+8],32)
+          | Ob~1~0~1 => set data := zeroExtend(mem_data[|5`d0|:+16],32)
+          | Ob~0~1~0 => set data := mem_data      (* Load Word *)
+          return default: fail                   (* Load Double or Signed Word *)
+          end
         else if isMultiplyInst(dInst) then
           set data := mulState.(multiplier.deq)()[|6`d0| :+ 32]
         else
@@ -759,6 +731,33 @@ Module RV32Core (RVP: RVParams).
           pass
     }}.
 
+  Definition MMIO_UART_ADDRESS := Ob~0~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0.
+
+  Definition memoryBus (m: memory) : UInternalFunction reg_t ext_fn_t :=
+    {{ fun memoryBus (get_valid: bits_t 1) (put_valid: bits_t 1) (put_request: struct_t mem_req) : struct_t mem_output =>
+         `match m with
+          | imem => {{ extcall (ext_mem m) (struct mem_input {|
+                        get_valid := get_valid; put_valid := put_valid; put_request := put_request |}) }}
+          | dmem => {{ let addr := get(put_request, addr) in
+                      let byte_en := get(put_request, byte_en) in
+                      let is_valid_write := put_valid && byte_en == Ob~1~1~1~1 in
+                      let uart_valid := is_valid_write && addr == #MMIO_UART_ADDRESS in
+                      let mem_valid := !uart_valid in
+                      if uart_valid then
+                        let ready :=
+                            extcall ext_uart_write (struct (Maybe (bits_t 8)) {|
+                              valid := uart_valid; data := get(put_request, data)[|5`d0| :+ 8] |}) in
+                        struct mem_output {| get_ready := ready; put_ready := ready;
+                                             get_response := struct mem_resp {|
+                                               byte_en := byte_en; addr := addr; data := |32`d0| |} |}
+                      else
+                        extcall (ext_mem m) (struct mem_input {|
+                          get_valid := get_valid && mem_valid;
+                          put_valid := put_valid && mem_valid;
+                          put_request := put_request |})
+                   }}
+          end` }}.
+
   Definition mem (m: memory) : uaction reg_t ext_fn_t :=
     let fromMem := match m with imem => fromIMem | dmem => fromDMem end in
     let toMem := match m with imem => toIMem | dmem => toDMem end in
@@ -767,24 +766,10 @@ Module RV32Core (RVP: RVParams).
         let put_request_opt := toMem.(MemReq.peek)() in
         let put_request := get(put_request_opt, data) in
         let put_valid := get(put_request_opt, valid) in
-        let mem_out := extcall (ext_mem m) (struct mem_input {|
-          get_valid := get_valid; put_valid := put_valid; put_request := put_request |}) in
+        let mem_out := {memoryBus m}(get_valid, put_valid, put_request) in
         (when (get_valid && get(mem_out, get_ready)) do fromMem.(MemResp.enq)(get(mem_out, get_response)));
         (when (put_valid && get(mem_out, put_ready)) do ignore(toMem.(MemReq.deq)()))
     }}.
-
-  Definition uart_write : uaction reg_t ext_fn_t :=
-    {{
-        let request_opt := toUART.(UARTReq.peek)() in
-        let valid := get(request_opt, valid) && !read1(toUART_ack) in
-        let uart_ready := extcall ext_uart_write (struct (Maybe (bits_t 8)) {|
-          valid := valid; data := get(request_opt, data) |}) in
-        (when (valid && uart_ready) do
-           ignore(toUART.(UARTReq.deq)());
-           write1(toUART_ack, Ob~1))
-    }}.
-
-  Definition tc_uart_write := tc_action R Sigma uart_write.
 
   Definition tick : uaction reg_t ext_fn_t :=
     {{
@@ -866,7 +851,6 @@ Inductive rv_rules_t :=
 | Imem
 | Dmem
 | StepMultiplier
-| UART_write
 | Tick.
 
 Definition rv_external (rl: rv_rules_t) := false.
@@ -912,7 +896,6 @@ Module RV32I <: Core.
     | WaitImem       => tc_wait_imem
     | Imem           => tc_imem
     | Dmem           => tc_dmem
-    | UART_write     => tc_uart_write
     | StepMultiplier => tc_step_multiplier
     | Tick           => tc_tick
     end.
@@ -950,7 +933,6 @@ Module RV32E <: Core.
     | WaitImem       => tc_wait_imem
     | Imem           => tc_imem
     | Dmem           => tc_dmem
-    | UART_write     => tc_uart_write
     | StepMultiplier => tc_step_multiplier
     | Tick           => tc_tick
     end.
