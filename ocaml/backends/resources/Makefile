@@ -67,7 +67,7 @@ sim_invoke_debug := ./$(cuttlesim_driver).debug $(CUTTLESIM_ARGS) $(NCYCLES)
 sim_invoke_perf := ./$(cuttlesim_driver).perf $(CUTTLESIM_ARGS) $(NCYCLES)
 sim_invoke_coverage := ./$(cuttlesim_driver).cov $(CUTTLESIM_ARGS) $(NCYCLES)
 
-cuttlesim.run: $(cuttlesim_driver).opt
+$(cuttlesim_driver).run: $(cuttlesim_driver).opt
 	time $(sim_invoke_opt)
 
 $(cuttlesim_driver).out: $(cuttlesim_driver).opt
