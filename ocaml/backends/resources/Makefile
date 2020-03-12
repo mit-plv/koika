@@ -243,16 +243,17 @@ FPGA_PCF ?= pins.pcf
 FPGA_YOSYS_FLAGS ?= -Q -T -v8
 FPGA_YOSYS_OPTS ?=
 FPGA_YOSYS_LIBDIRS ?= .
+FPGA_FREQUENCY ?= 48
 
 fpga_toplevel := $(basename $(notdir $(FPGA_TOP)))
 yosys_opts := $(FPGA_YOSYS_FLAGS) $(FPGA_YOSYS_OPTS)
 yosys_libdir_args := $(patsubst %,-libdir %,$(FPGA_YOSYS_LIBDIRS))
 
 $(fpga_toplevel).json: $(FPGA_TOP)
-	yosys $(yosys_opts) -l $(fpga_toplevel).json.log -p 'read_verilog $(FPGA_TOP); hierarchy $(yosys_libdir_args) -top $(fpga_toplevel); synth_ice40  -top $(fpga_toplevel) -json $@'
+	yosys $(yosys_opts) -l $(fpga_toplevel).json.log -p 'read_verilog $(FPGA_TOP); hierarchy $(yosys_libdir_args) -top $(fpga_toplevel); synth_ice40 -retime -top $(fpga_toplevel) -json $@'
 
 $(fpga_toplevel).asc: $(FPGA_PCF) $(fpga_toplevel).json
-	nextpnr-ice40 --$(FPGA_DEVICE) --package $(FPGA_ICE40_PACKAGE) --pcf $(FPGA_PCF) --seed 0 --asc $@ --json $(fpga_toplevel).json
+	nextpnr-ice40 --$(FPGA_DEVICE) --freq $(FPGA_FREQUENCY) --opt-timing --timing-allow-fail --package $(FPGA_ICE40_PACKAGE) --pcf $(FPGA_PCF) --seed 0 --asc $@ --json $(fpga_toplevel).json
 
 $(fpga_toplevel).bin: $(fpga_toplevel).asc
 	icepack $< $@
