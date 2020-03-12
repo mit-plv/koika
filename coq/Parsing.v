@@ -99,7 +99,7 @@ Notation "'guard' '(' a ')' " := (UIf a (USugar (UConstBits Ob)) (UFail (bits_t 
 Notation "'when' a 'do' t " := (UIf a t (USugar (UConstBits Ob))) (in custom koika at level 91, right associativity, format "'[v' 'when'  a '/' 'do'  t '/' ']'").
 
 Notation "a '&&' b" :=  (UBinop (UBits2 UAnd) a b) (in custom koika at level 80,  right associativity, format "a  '&&'  b").
-Notation "'!' a" := (UUnop (UBits1 UNot) a) (in custom koika at level 75, a custom koika at level 99, format "'!' a").
+Notation "'!' a" := (UUnop (UBits1 UNot) a) (in custom koika at level 75, format "'!' a").
 Notation "a '||' b" :=  (UBinop (UBits2 UOr) a b) (in custom koika at level 85, format "a  '||'  b").
 Notation "'zeroExtend(' a ',' b ')'" :=  (UUnop (UBits1 (UZExtL b)) a) (in custom koika, b constr at level 0, format "'zeroExtend(' a ',' b ')'").
 Notation "'sext(' a ',' b ')'" :=  (UUnop (UBits1 (USExt b)) a) (in custom koika, b constr at level 0, format "'sext(' a ',' b ')'").
@@ -237,6 +237,7 @@ Module Type Tests.
   Definition test_13 : uaction reg_t := {{ yoyo }}.
   Definition test_14 : uaction reg_t := {{ !yoyo && yoyo }}.
   Definition test_14' : uaction reg_t := {{ !(yoyo && yoyo) }}.
+  Goal test_14 <> test_14'. compute; congruence. Qed.
   Definition test_15 : uaction reg_t := {{ yoyo && read0(data0) }}.
   Definition test_16 : uaction reg_t := {{ !read0(data1) && !read0(data1) }}.
   Definition test_17 : uaction reg_t := {{ !read0(data1) && magic}}.
