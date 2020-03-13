@@ -966,6 +966,9 @@ Module Bits.
   Notation lsb := (@vect_hd_default bool _ false).
   Notation msb := (@vect_last_default bool _ false).
 
+  Definition size {sz} (bs: bits sz) :=
+    sz.
+
   Fixpoint rmul n m :=
     match n with
     | 0 => 0
@@ -1280,6 +1283,16 @@ Module Bits.
       forall bs, cons (single bs) nil = bs.
     Proof.
       destruct bs as [ ? [ ] ]; reflexivity.
+    Qed.
+
+    Lemma single_to_bits :
+      forall bs b,
+        single bs = b ->
+        bs = cons b nil.
+    Proof.
+      intros.
+      rewrite <-(single_cons bs).
+      congruence.
     Qed.
 
     Lemma cons_inj :
