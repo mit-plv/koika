@@ -1051,6 +1051,8 @@ Module Bits.
       | S n => fun bs => ((if hd bs then 1 else 0) + 2 * to_N (tl bs))%N
       end bs.
 
+    Global Arguments to_N sz / !bs.
+
     Definition to_nat {sz: nat} (bs: bits sz) : nat :=
       N.to_nat (to_N bs).
 
