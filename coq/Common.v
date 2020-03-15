@@ -76,6 +76,21 @@ Ltac rewrite_hypotheses_in_match :=
            rewrite H in H2
          end.
 
+(* Fails if x is equal to v. Can work for hypotheses *)
+Ltac assert_neq x v :=
+  tryif (let _ := (constr:(eq_refl x : x = v)) in idtac) then fail else idtac.
+
+(* Rewrite using setoid_rewrite the hypothesis in all
+   other hypotheses, as well as in the goal. *)
+Ltac setoid_rewrite_in_all Hx :=
+  repeat match goal with
+         | _ =>
+           progress (setoid_rewrite Hx)
+         | [ H: _ |- _ ] =>
+           assert_neq Hx H;
+           progress (setoid_rewrite Hx in H)
+         end.
+
 Ltac set_fixes :=
   repeat match goal with
          | [  |- context[?x] ] => is_fix x; set x in *
