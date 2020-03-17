@@ -508,6 +508,17 @@ Section LatestWrites.
     log_existsb l idx is_write1 = false ->
     latest_write1 l idx = None.
   Proof. latest_write_t. Qed.
+
+  Lemma latest_write_None_latest_write0 (l: Log) idx :
+    latest_write l idx = None ->
+    latest_write0 l idx = None.
+  Proof. latest_write_t. Qed.
+
+  Lemma latest_write_None_latest_write1 (l: Log) idx :
+    latest_write l idx = None ->
+    latest_write1 l idx = None.
+  Proof. latest_write_t. Qed.
+
 End LatestWrites.
 
 Section CommitUpdates.
