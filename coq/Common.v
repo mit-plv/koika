@@ -91,6 +91,15 @@ Ltac setoid_rewrite_in_all Hx :=
            progress (setoid_rewrite Hx in H)
          end.
 
+Ltac setoid_rewrite_left_in_all Hx :=
+  repeat match goal with
+         | _ =>
+           progress (setoid_rewrite <-Hx)
+         | [ H: _ |- _ ] =>
+           assert_neq Hx H;
+           progress (setoid_rewrite <-Hx in H)
+         end.
+
 Ltac set_fixes :=
   repeat match goal with
          | [  |- context[?x] ] => is_fix x; set x in *
@@ -128,6 +137,16 @@ Tactic Notation "pose_once" constr(thm) constr(arg) constr(arg') :=
 Tactic Notation "pose_once" constr(thm) constr(arg) constr(arg') constr(arg'') :=
   progress (let witness := constr:(AlreadyPosed4 thm arg arg' arg'') in
             _pose_once witness (thm arg arg' arg'')).
+
+Ltac remember_once x :=
+  match goal with
+  | [ H: ?v = x |- _ ] =>
+    is_var v
+  | _ =>
+    let Hx := fresh "H" in
+    remember x eqn:Hx;
+    setoid_rewrite_left_in_all Hx
+  end.
 
 Ltac constr_hd c :=
       match c with
