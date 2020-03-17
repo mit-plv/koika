@@ -781,6 +781,7 @@ The following list shows the current state of the repo:
          - |examples/rv/etc/rvcore.pyverilator.py|_: Python driver for C++ simulation with Verilator
          - |examples/rv/etc/rvcore.verilator.cpp|_: C++ driver for rv32 simulation with Verilator
 
+      - |examples/rv/Multiplier.v|_: Implementation of a multiplier module
       - |examples/rv/RVCore.v|_: Implementation of our RISC-V core
       - |examples/rv/RVEncoding.v|_: Encoding-related constants
       - |examples/rv/Scoreboard.v|_: Implementation of a scoreboard
@@ -966,6 +967,8 @@ The following list shows the current state of the repo:
 .. _examples/method_call.v: examples/method_call.v
 .. |examples/pipeline.v| replace:: ``pipeline.v``
 .. _examples/pipeline.v: examples/pipeline.v
+.. |examples/rv/Multiplier.v| replace:: ``Multiplier.v``
+.. _examples/rv/Multiplier.v: examples/rv/Multiplier.v
 .. |examples/rv/RVCore.v| replace:: ``RVCore.v``
 .. _examples/rv/RVCore.v: examples/rv/RVCore.v
 .. |examples/rv/RVEncoding.v| replace:: ``RVEncoding.v``
