@@ -588,3 +588,27 @@ Ltac cleanup_log_step :=
   | [ H: may_write _ _ _ _ = _ |- _ ] => unfold may_write in H
   | _ => progress autorewrite with log_cleanup in *
   end.
+
+(* Interpret an action until a branch *)
+Ltac interp_action_t :=
+  repeat match goal with
+         | [ H: interp_action _ _ _ _ _ ?action = Some _ |- _] =>
+           unfold action in H;
+           simpl (projT2 _) in H;
+           unfold interp_action, opt_bind, no_latest_writes in *;
+           repeat cleanup_log_step
+         | _ => progress (simpl cassoc in *; simpl ctl in *; simpl chd in * )
+         | [ H: match ?x with | Some(_) => _ | None => None end = Some (_) |- _ ] =>
+           destruct x eqn:?; [ | solve [inversion H] ]
+         | [ H: (if ?x then _ else None) = Some _ |- _ ] =>
+           destruct x eqn:?; [ | solve [inversion H] ]
+         | _ => progress cleanup_log_step
+         end.
+
+(* Interpret all possible branches of an action *)
+Ltac interp_action_all_t :=
+  repeat match goal with
+         | _ => progress interp_action_t
+         | [ H: (if ?c then _ else _) = Some (_, _, _) |- _ ] =>
+           destruct c eqn:?
+         end.

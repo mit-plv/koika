@@ -109,28 +109,6 @@ Module MultiplierProofs.
   Notation all_regs :=
     [valid; operand1; operand2; result; n_step; finished].
 
-  Ltac interp_action_t :=
-    repeat match goal with
-           | [ H: interp_action _ _ _ _ _ ?action = Some _ |- _] =>
-             unfold action in H;
-             simpl (projT2 _) in H;
-             unfold interp_action, opt_bind, no_latest_writes in *;
-             repeat cleanup_log_step
-           | _ => progress (simpl cassoc in *; simpl ctl in *; simpl chd in *)
-           | [ H: match ?x with | Some(_) => _ | None => None end = Some (_) |- _ ] =>
-             destruct x eqn:?; [ | solve [inversion H] ]
-           | [ H: (if ?x then _ else None) = Some _ |- _ ] =>
-             destruct x eqn:?; [ | solve [inversion H] ]
-           | _ => progress cleanup_log_step
-           end.
-
-  Ltac interp_action_all_t :=
-    repeat match goal with
-           | _ => progress interp_action_t
-           | [ H: (if ?c then _ else _) = Some (_, _, _) |- _ ] =>
-             destruct c eqn:?
-           end.
-
   Definition partial_mul (a b n_step: N) :=
     (a * (b mod (2 ^ n_step)))%N.
 
@@ -196,8 +174,9 @@ Module MultiplierProofs.
     - intros.
       match goal with
       | [ H1: ?x = ?y, H2: _ -> ?x = ?z |- _ ] =>
-        rewrite H2 in H1; [ discriminate | auto ]
+        rewrite H2 in H1 by auto
       end.
+      discriminate.
   Qed.
 
   Lemma deq_preserves_invariant :
@@ -271,14 +250,14 @@ Module MultiplierProofs.
       setoid_rewrite H; try assumption
     end; cbn in *.
     - rewrite Bits.to_N_of_N.
-      + rewrite Bits.to_N_of_N; [ | lia_bits ].
+      + rewrite Bits.to_N_of_N by lia_bits.
         cbn. rewrite_all_hypotheses. cbn.
         rewrite partial_mul_step.
         rewrite_all_hypotheses.
         f_equal. cbn [N.b2n].
         admit.
       + admit.
-    - rewrite Bits.to_N_of_N; [ | lia_bits ].
+    - rewrite Bits.to_N_of_N by lia_bits.
       rewrite partial_mul_step.
       rewrite_all_hypotheses. cbn.
       rewrite N.mul_0_r. rewrite N.add_0_r.
@@ -321,8 +300,8 @@ Module MultiplierProofs.
     cbn in *.
     - rewrite_all_hypotheses.
       rewrite Bits.to_N_of_N.
-      + rewrite N.mod_small; [ | lia_bits ].
-        rewrite (mul_to_partial_mul (N.of_nat Sig32.n) (Bits.to_N _) (Bits.to_N _)); [ | lia_bits ].
+      + rewrite N.mod_small by lia_bits.
+        rewrite (mul_to_partial_mul (N.of_nat Sig32.n) (Bits.to_N _) (Bits.to_N _)) by lia_bits.
         cbn.
         assert (32 = 31 + 1)%N as H32S by reflexivity.
         rewrite H32S.
@@ -336,7 +315,7 @@ Module MultiplierProofs.
         reflexivity.
       + admit.
     - rewrite_all_hypotheses.
-      rewrite (mul_to_partial_mul (N.of_nat Sig32.n)); [ | lia_bits ].
+      rewrite (mul_to_partial_mul (N.of_nat Sig32.n)) by lia_bits.
       cbn.
       assert (32 = 31 + 1)%N as H32S by reflexivity.
       rewrite H32S.
