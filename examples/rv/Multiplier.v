@@ -2,7 +2,6 @@
 Require Import Coq.Lists.List.
 
 Require Import Koika.Frontend Koika.Std Koika.SemanticProperties Koika.PrimitiveProperties Koika.Common.
-Require Import Lia.
 
 Module Type Multiplier_sig.
   Parameter n: nat.
@@ -110,8 +109,13 @@ Module MultiplierProofs.
   Notation all_regs :=
     [valid; operand1; operand2; result; n_step; finished].
 
-  Ltac simpl_interp_hypothesis :=
+  Ltac interp_action_t :=
     repeat match goal with
+           | [ H: interp_action _ _ _ _ _ ?action = Some _ |- _] =>
+             unfold action in H;
+             simpl (projT2 _) in H;
+             unfold interp_action, opt_bind, no_latest_writes in *;
+             repeat cleanup_log_step
            | _ => progress (simpl cassoc in *; simpl ctl in *; simpl chd in *)
            | [ H: match ?x with | Some(_) => _ | None => None end = Some (_) |- _ ] =>
              destruct x eqn:?; [ | solve [inversion H] ]
@@ -120,45 +124,12 @@ Module MultiplierProofs.
            | _ => progress cleanup_log_step
            end.
 
-  Ltac simpl_interp_action :=
-    match goal with
-    | [ H: interp_action _ _ _ _ _ ?action = Some _ |- _] =>
-      unfold action in H;
-      simpl (projT2 _) in H;
-      unfold interp_action in H;
-      unfold opt_bind in H;
-      unfold no_latest_writes in *;
-      repeat cleanup_log_step
-    end.
-
-  Ltac simpl_interp_action_all :=
-    simpl_interp_action;
+  Ltac interp_action_all_t :=
     repeat match goal with
-           | _ => progress simpl_interp_hypothesis
+           | _ => progress interp_action_t
            | [ H: (if ?c then _ else _) = Some (_, _, _) |- _ ] =>
              destruct c eqn:?
            end.
-
-  Ltac remember_bits_to_N :=
-    repeat match goal with
-           | [ |- context[Bits.to_N ?bs] ] =>
-             remember_once (Bits.to_N bs)
-           | [ H: context[Bits.to_N ?bs] |- _ ] =>
-             remember_once (Bits.to_N bs)
-           end.
-
-  Ltac pose_bits_bound_proofs :=
-    repeat match goal with
-           | [ H: context[Bits.to_N ?bs] |- _ ] =>
-             let sz := eval hnf in (Bits.size bs) in
-             pose_once Bits.to_N_bounded sz bs
-           | [ |- context[Bits.to_N ?bs] ] =>
-             let sz := eval hnf in (Bits.size bs) in
-             pose_once Bits.to_N_bounded sz bs
-           end.
-
-  Ltac lia_bits :=
-    cbn in *; pose_bits_bound_proofs; remember_bits_to_N; cbn in *; lia.
 
   Definition partial_mul (a b n_step: N) :=
     (a * (b mod (2 ^ n_step)))%N.
@@ -214,7 +185,7 @@ Module MultiplierProofs.
     intros.
     unfold invariant, step_invariant, finished_invariant,
            result_invariant, result_finished_invariant in *.
-    simpl_interp_action_all.
+    interp_action_all_t.
     Bits_to_N_t.
     repeat (split).
     - discriminate.
@@ -239,7 +210,7 @@ Module MultiplierProofs.
   Proof.
     intros.
     unfold invariant, step_invariant, finished_invariant, result_invariant in *.
-    simpl_interp_action_all.
+    interp_action_all_t.
     Bits_to_N_t.
     repeat (split); auto || discriminate.
   Qed.
@@ -254,7 +225,7 @@ Module MultiplierProofs.
   Proof.
     intros.
     unfold invariant, step_invariant, finished_invariant, result_invariant in *.
-    simpl_interp_action_all;
+    interp_action_all_t;
     Bits_to_N_t;
     intros;
     match goal with
@@ -272,7 +243,7 @@ Module MultiplierProofs.
   Proof.
     intros.
     unfold invariant, step_invariant, finished_invariant, result_invariant in *.
-    simpl_interp_action_all;
+    interp_action_all_t;
     Bits_to_N_t; try (assumption);
     rewrite Bits.to_N_of_N;
     lia_bits.
@@ -290,7 +261,7 @@ Module MultiplierProofs.
   Proof.
     intros.
     unfold invariant, step_invariant, finished_invariant, result_invariant in *.
-    simpl_interp_action_all;
+    interp_action_all_t;
     intros;
     Bits_to_N_t;
     unfold Sig32.n in *;
@@ -335,7 +306,7 @@ Module MultiplierProofs.
   Proof.
     intros.
     unfold invariant, step_invariant, finished_invariant, result_invariant, result_finished_invariant in *.
-    simpl_interp_action_all;
+    interp_action_all_t;
     intros;
     Bits_to_N_t;
     unfold Sig32.n in *;
@@ -389,7 +360,7 @@ Module MultiplierProofs.
       latest_write action_log_new operand2 = Some (chd (ctl Gamma)).
   Proof.
     intros.
-    simpl_interp_action_all.
+    interp_action_all_t.
     auto.
   Qed.
 
@@ -401,7 +372,7 @@ Module MultiplierProofs.
       no_latest_writes action_log_new [operand1; operand2].
   Proof.
     intros.
-    simpl_interp_action_all;
+    interp_action_all_t;
     auto.
   Qed.
 
@@ -418,7 +389,7 @@ Module MultiplierProofs.
   Proof.
     intros.
     unfold invariant, result_finished_invariant in *.
-    simpl_interp_action_all.
+    interp_action_all_t.
     Bits_to_N_t.
     auto.
   Qed.
