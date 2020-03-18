@@ -7,11 +7,12 @@ module top_ice40_usb(input CLK, inout USBP, inout USBN, output USBPU, output LED
    wire clk_locked;
    pll pll48(.clock_in(CLK), .clock_out(clk_48mhz), .locked(clk_locked));
 
-   reg [3:0] counter = 0;
-   wire RST_N = counter[3];
-   always @(posedge CLK)
+   reg [3:0] reset_counter = 4'b0;
+   wire reset = ~reset_counter[3];
+
+   always @(posedge clk_48mhz)
      if (clk_locked)
-       counter <= counter + {3'b0, ~RST_N};
+       reset_counter <= reset_counter + {3'b0, reset};
 
    wire uart_wr_valid;
    wire[7:0] uart_wr_data;
@@ -27,6 +28,8 @@ module top_ice40_usb(input CLK, inout USBP, inout USBN, output USBPU, output LED
    reg led = 1'b0;
    assign LED = led;
 
+   reg RST_N = 1'b0;
+
    rv32 core(.CLK(CLK), .RST_N(RST_N),
              .ext_uart_write_arg({uart_wr_valid, uart_wr_data}),
              .ext_uart_write_out(uart_wr_ready),
@@ -38,11 +41,14 @@ module top_ice40_usb(input CLK, inout USBP, inout USBN, output USBPU, output LED
              .ext_led_out(led));
 
    always @(posedge CLK)
+     RST_N <= ~reset;
+
+   always @(posedge CLK)
      if (led_wr_valid)
        led <= led_wr_data;
 
    usb_uart_i40 uart(.clk_48mhz(clk_48mhz),
-                     .reset(~RST_N),
+                     .reset(reset),
 
                      .pin_usb_p(USBP),
                      .pin_usb_n(USBN),
