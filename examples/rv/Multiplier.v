@@ -119,6 +119,16 @@ Module MultiplierProofs.
   Proof.
   Admitted.
 
+  Lemma mul_to_partial_mul :
+    forall n x y,
+      (y < 2 ^ n)%N ->
+      (x * y = partial_mul x y n)%N.
+  Proof.
+    intros.
+    unfold partial_mul.
+    rewrite N.mod_small; auto.
+  Qed.
+
   Definition step_invariant (reg: ContextEnv.(env_t) R) :=
     (Bits.to_N (ContextEnv.(getenv) reg n_step) < N.of_nat n)%N.
 
@@ -154,10 +164,10 @@ Module MultiplierProofs.
 
   Lemma enq_preserves_invariant :
     forall env Gamma sched_log action_log action_log_new v Gamma_new,
-      invariant (commit_update env sched_log) ->
-      no_latest_writes action_log all_regs ->
       interp_action env empty_sigma Gamma sched_log action_log typed_enq =
-      Some (action_log_new, v, Gamma_new) ->
+        Some (action_log_new, v, Gamma_new) ->
+      no_latest_writes action_log all_regs ->
+      invariant (commit_update env sched_log) ->
       invariant (commit_update env (log_app action_log_new sched_log)).
   Proof.
     intros.
@@ -181,10 +191,10 @@ Module MultiplierProofs.
 
   Lemma deq_preserves_invariant :
     forall env Gamma sched_log action_log action_log_new v Gamma_new,
-      invariant (commit_update env sched_log) ->
-      no_latest_writes action_log all_regs ->
       interp_action env empty_sigma Gamma sched_log action_log typed_deq =
-      Some (action_log_new, v, Gamma_new) ->
+        Some (action_log_new, v, Gamma_new) ->
+      no_latest_writes action_log all_regs ->
+      invariant (commit_update env sched_log) ->
       invariant (commit_update env (log_app action_log_new sched_log)).
   Proof.
     intros.
@@ -196,10 +206,10 @@ Module MultiplierProofs.
 
   Lemma step_preserves_finished_invariant :
     forall env Gamma sched_log action_log action_log_new v Gamma_new,
-      invariant (commit_update env sched_log) ->
-      no_latest_writes action_log all_regs ->
       interp_action env empty_sigma Gamma sched_log action_log typed_step =
-      Some (action_log_new, v, Gamma_new) ->
+        Some (action_log_new, v, Gamma_new) ->
+      no_latest_writes action_log all_regs ->
+      invariant (commit_update env sched_log) ->
       finished_invariant (commit_update env (log_app action_log_new sched_log)).
   Proof.
     intros.
@@ -214,10 +224,10 @@ Module MultiplierProofs.
 
   Lemma step_preserves_step_invariant :
     forall env Gamma sched_log action_log action_log_new v Gamma_new,
-      invariant (commit_update env sched_log) ->
-      no_latest_writes action_log all_regs ->
       interp_action env empty_sigma Gamma sched_log action_log typed_step =
-      Some (action_log_new, v, Gamma_new) ->
+        Some (action_log_new, v, Gamma_new) ->
+      no_latest_writes action_log all_regs ->
+      invariant (commit_update env sched_log) ->
       step_invariant (commit_update env (log_app action_log_new sched_log)).
   Proof.
     intros.
@@ -231,11 +241,11 @@ Module MultiplierProofs.
   (* The admitted subgoals should be handle by lia_bits *)
   Lemma step_preserves_result_invariant :
     forall env Gamma sched_log action_log action_log_new v Gamma_new,
-      invariant (commit_update env sched_log) ->
+      interp_action env empty_sigma Gamma sched_log action_log typed_step =
+        Some (action_log_new, v, Gamma_new) ->
       no_latest_writes action_log all_regs ->
       no_latest_writes sched_log all_regs ->
-      interp_action env empty_sigma Gamma sched_log action_log typed_step =
-      Some (action_log_new, v, Gamma_new) ->
+      invariant (commit_update env sched_log) ->
       result_invariant (commit_update env (log_app action_log_new sched_log)).
   Proof.
     intros.
@@ -264,23 +274,13 @@ Module MultiplierProofs.
       auto.
   Admitted.
 
-  Lemma mul_to_partial_mul :
-    forall n x y,
-      (y < 2 ^ n)%N ->
-      (x * y = partial_mul x y n)%N.
-  Proof.
-    intros.
-    unfold partial_mul.
-    rewrite N.mod_small; auto.
-  Qed.
-
   Lemma step_preserves_result_finished_invariant :
     forall env Gamma sched_log action_log action_log_new v Gamma_new,
-      invariant (commit_update env sched_log) ->
+      interp_action env empty_sigma Gamma sched_log action_log typed_step =
+        Some (action_log_new, v, Gamma_new) ->
       no_latest_writes action_log all_regs ->
       no_latest_writes sched_log all_regs ->
-      interp_action env empty_sigma Gamma sched_log action_log typed_step =
-      Some (action_log_new, v, Gamma_new) ->
+      invariant (commit_update env sched_log) ->
       result_finished_invariant (commit_update env (log_app action_log_new sched_log)).
   Proof.
     intros.
@@ -330,11 +330,28 @@ Module MultiplierProofs.
       reflexivity.
     Admitted.
 
+  Lemma step_preserves_invariants :
+    forall env Gamma sched_log action_log action_log_new v Gamma_new,
+      interp_action env empty_sigma Gamma sched_log action_log typed_step =
+        Some (action_log_new, v, Gamma_new) ->
+      no_latest_writes action_log all_regs ->
+      no_latest_writes sched_log all_regs ->
+      invariant (commit_update env sched_log) ->
+      invariant (commit_update env (log_app action_log_new sched_log)).
+  Proof.
+    intros.
+    repeat split.
+    - eapply step_preserves_step_invariant; eassumption.
+    - eapply step_preserves_finished_invariant; eassumption.
+    - eapply step_preserves_result_invariant; eassumption.
+    - eapply step_preserves_result_finished_invariant; eassumption.
+  Qed.
+
   Lemma enq_set_operands :
     forall (env: ContextEnv.(env_t) R) Gamma sched_log action_log action_log_new v Gamma_new,
-      no_latest_writes action_log [operand1; operand2] ->
       interp_action env empty_sigma Gamma sched_log action_log typed_enq =
-      Some (action_log_new, v, Gamma_new) ->
+        Some (action_log_new, v, Gamma_new) ->
+      no_latest_writes action_log [operand1; operand2] ->
       latest_write action_log_new operand1 = Some (chd Gamma) /\
       latest_write action_log_new operand2 = Some (chd (ctl Gamma)).
   Proof.
@@ -345,9 +362,9 @@ Module MultiplierProofs.
 
   Lemma step_keep_operands :
     forall (env: ContextEnv.(env_t) R) Gamma sched_log action_log action_log_new v Gamma_new,
-      no_latest_writes action_log [operand1; operand2] ->
       interp_action env empty_sigma Gamma sched_log action_log typed_step =
-      Some (action_log_new, v, Gamma_new) ->
+        Some (action_log_new, v, Gamma_new) ->
+      no_latest_writes action_log [operand1; operand2] ->
       no_latest_writes action_log_new [operand1; operand2].
   Proof.
     intros.
@@ -357,11 +374,11 @@ Module MultiplierProofs.
 
   Lemma deq_result :
     forall env Gamma sched_log action_log action_log_new v Gamma_new,
-      invariant (commit_update env sched_log) ->
+      interp_action env empty_sigma Gamma sched_log action_log typed_deq =
+        Some (action_log_new, v, Gamma_new) ->
       no_latest_writes action_log all_regs ->
       no_latest_writes sched_log all_regs ->
-      interp_action env empty_sigma Gamma sched_log action_log typed_deq =
-      Some (action_log_new, v, Gamma_new) ->
+      invariant (commit_update env sched_log) ->
       let operand1_val := Bits.to_N (ContextEnv.(getenv) env operand1) in
       let operand2_val := Bits.to_N (ContextEnv.(getenv) env operand2) in
       (Bits.to_N v = operand1_val * operand2_val)%N.
