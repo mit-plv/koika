@@ -2,7 +2,6 @@
 Require Export Coq.omega.Omega.
 Require Export Coq.Lists.List Coq.Bool.Bool Coq.Strings.String.
 Require Export Koika.EqDec Koika.Vect Koika.FiniteType Koika.Show.
-Require Import Lia.
 
 Export EqNotations.
 Export ListNotations.
@@ -359,27 +358,5 @@ Section result_list_map.
                Success (b :: la)
     end.
 End result_list_map.
-
-Ltac remember_bits_to_N :=
-  repeat match goal with
-         | [ |- context[Bits.to_N ?bs] ] =>
-           remember_once (Bits.to_N bs)
-         | [ H: context[Bits.to_N ?bs] |- _ ] =>
-           remember_once (Bits.to_N bs)
-         end.
-
-Ltac pose_bits_bound_proofs :=
-  repeat match goal with
-         | [ H: context[Bits.to_N ?bs] |- _ ] =>
-           let sz := eval hnf in (Bits.size bs) in
-               pose_once Bits.to_N_bounded sz bs
-         | [ |- context[Bits.to_N ?bs] ] =>
-           let sz := eval hnf in (Bits.size bs) in
-               pose_once Bits.to_N_bounded sz bs
-         end.
-
-(* Lia with some support for the Bits.to_N function *)
-Ltac lia_bits :=
-  cbn in *; pose_bits_bound_proofs; remember_bits_to_N; cbn in *; lia.
 
 Global Set Nested Proofs Allowed.

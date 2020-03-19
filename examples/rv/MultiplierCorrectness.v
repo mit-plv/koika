@@ -1,6 +1,6 @@
 (*! Proof of correctness of the multiplier module !*)
 
-Require Import Koika.Frontend Koika.Std Koika.SemanticProperties Koika.PrimitiveProperties Koika.Common.
+Require Import Koika.Frontend Koika.Std Koika.Common Koika.BitTactics.
 Require Export RV.Multiplier.
 
 Module MultiplierProofs.
