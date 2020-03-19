@@ -4,6 +4,10 @@ Require Import Lia.
 Require Export Koika.EqDec Koika.Vect Koika.Primitives Koika.PrimitiveProperties.
 Import BitFuns.
 
+(* This definition is useful for the next tactics *)
+Definition bits_get_size {sz} (bs: bits sz) :=
+  sz.
+
 Ltac Bits_to_N_t :=
   unfold PrimSpecs.sigma1, CircuitPrimSpecs.sigma1,
   PrimSpecs.sigma2, CircuitPrimSpecs.sigma2,
@@ -33,9 +37,9 @@ Ltac Bits_to_N_t :=
          | [ |- context[Bits.to_N (BitFuns.lsl ?x ?y)] ] =>
            rewrite to_N_lsl
          | [ H: context[Bits.to_N (Bits.extend_end ?bs ?sz' false)] |- _ ] =>
-           setoid_rewrite (to_N_extend_end_false (Bits.size bs) bs sz') in H
+           setoid_rewrite (to_N_extend_end_false (bits_get_size bs) bs sz') in H
          | [ |- context[Bits.to_N (Bits.extend_end ?bs ?sz' false)] ] =>
-           setoid_rewrite (to_N_extend_end_false (Bits.size bs) bs sz')
+           setoid_rewrite (to_N_extend_end_false (bits_get_size bs) bs sz')
          | [ H: _ = _ |- _ ] =>
            apply (f_equal Bits.to_N) in H
          | [ H: _ <> _ |- _ ] =>
@@ -53,10 +57,10 @@ Ltac remember_bits_to_N :=
 Ltac pose_bits_bound_proofs :=
   repeat match goal with
          | [ H: context[Bits.to_N ?bs] |- _ ] =>
-           let sz := eval hnf in (Bits.size bs) in
+           let sz := eval hnf in (bits_get_size bs) in
                pose_once Bits.to_N_bounded sz bs
          | [ |- context[Bits.to_N ?bs] ] =>
-           let sz := eval hnf in (Bits.size bs) in
+           let sz := eval hnf in (bits_get_size bs) in
                pose_once Bits.to_N_bounded sz bs
          end.
 
