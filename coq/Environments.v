@@ -421,6 +421,7 @@ Record Env {K: Type}  :=
         k <> k' -> getenv (putenv ev k v) k' = getenv ev k' }.
 Arguments Env: clear implicits.
 Arguments getenv K e V / !env.
+Arguments putenv K e V / !env.
 
 Definition equiv {K} (E: Env K) {V: esig K} (ev1 ev2: E.(env_t) V) :=
   forall k: K, E.(getenv) ev1 k = E.(getenv) ev2 k.
