@@ -43,41 +43,35 @@ Module Multiplier (s: Multiplier_sig).
 
   Definition enq : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun enq (op1 : bits_t n) (op2 : bits_t n): bits_t 0 =>
-         if (!read0(valid)) then
-           write0(valid, #Ob~1);
-           write0(operand1, op1);
-           write0(operand2, op2);
-           write0(result, |(n+n)`d0|);
-           write0(n_step, |(log2 n)`d0|)
-         else
-           fail
+         guard (!read0(valid));
+         write0(valid, #Ob~1);
+         write0(operand1, op1);
+         write0(operand2, op2);
+         write0(result, |(n+n)`d0|);
+         write0(n_step, |(log2 n)`d0|)
     }}.
 
   Definition deq : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun deq () : bits_t (n+n) =>
-         if (read1(valid) && read1(finished)) then
-           write1(finished, #Ob~0);
-           write1(valid, #Ob~0);
-           read1(result)
-         else
-           fail@(bits_t (n+n))
+         guard (read1(valid) && read1(finished));
+         write1(finished, #Ob~0);
+         write1(valid, #Ob~0);
+         read1(result)
     }}.
 
   Definition step : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun step () : bits_t 0 =>
-         if (read0(valid) && !read0(finished)) then
-           let n_step_val := read0(n_step) in
-           (if read0(operand2)[n_step_val] then
-             let partial_mul := zeroExtend(read0(operand1), n+n) << n_step_val in
-             write0(result, read0(result) + partial_mul)
-           else
-             pass);
-           if (n_step_val == #(Bits.of_nat (log2 n) (n-1))) then
-             write0(finished, #Ob~1)
-           else
-             write0(n_step, n_step_val + |(log2 n)`d1|)
+         guard (read0(valid) && !read0(finished));
+         let n_step_val := read0(n_step) in
+         (if read0(operand2)[n_step_val] then
+            let partial_mul := zeroExtend(read0(operand1), n+n) << n_step_val in
+            write0(result, read0(result) + partial_mul)
+          else
+            pass);
+         if (n_step_val == #(Bits.of_nat (log2 n) (n-1))) then
+           write0(finished, #Ob~1)
          else
-           fail
+           write0(n_step, n_step_val + |(log2 n)`d1|)
     }}.
 
   Instance FiniteType_reg_t : FiniteType reg_t := _.
