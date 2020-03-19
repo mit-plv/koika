@@ -80,7 +80,7 @@ Module MultiplierProofs.
     result_invariant reg /\
     result_finished_invariant reg.
 
-  (* Interpret all possible branches of an action *)
+  (** Interpret all possible branches of an action **)
   Lemma enq_preserves_invariant :
     forall env Gamma sched_log action_log action_log_new v Gamma_new,
       interp_action env empty_sigma Gamma sched_log action_log typed_enq =

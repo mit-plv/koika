@@ -48,7 +48,7 @@ Ltac destruct_match :=
     destruct x eqn:?
   end.
 
-(** find the head of the given expression *)
+(** find the head of the given expression **)
 Ltac head expr :=
   match expr with
     | ?f _ => head f
@@ -62,12 +62,12 @@ Ltac rewrite_all_hypotheses :=
          | [ H: ?x = ?y |- _ ] => rewrite H
          end.
 
-(* Fails if x is equal to v. Can work for hypotheses *)
+(** Fails if x is equal to v. Can work for hypotheses **)
 Ltac assert_neq x v :=
   tryif (let _ := (constr:(eq_refl x : x = v)) in idtac) then fail else idtac.
 
-(* Rewrite using setoid_rewrite the hypothesis in all
-   other hypotheses, as well as in the goal. *)
+(** Rewrite using setoid_rewrite the hypothesis in all
+    other hypotheses, as well as in the goal. **)
 Tactic Notation "setoid_rewrite_in_all" constr(Hx) :=
   repeat match goal with
          | _ =>

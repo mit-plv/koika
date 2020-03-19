@@ -3,8 +3,8 @@
 Require Import Koika.SemanticProperties.
 Require Export Koika.BitTactics Koika.Common.
 
-(* Rewrite all hypotheses that would change a term being matched in the context
- into a constructor *)
+(** Rewrite all hypotheses that would change a term being matched in the context
+ into a constructor **)
 Ltac rewrite_hypotheses_in_match :=
   repeat match goal with
          | [ H: ?x = ?y |- context[match ?x with | _ => _ end ] ] =>
@@ -45,7 +45,7 @@ Ltac log_cleanup_step :=
   | _ => progress autorewrite with log_cleanup in *
   end.
 
-(* Interpret an action until a branch *)
+(** Interpret an action until a branch **)
 Ltac interp_action_t :=
   repeat match goal with
          | [ H: interp_action _ _ _ _ _ ?action = Some _ |- _] =>
@@ -61,7 +61,7 @@ Ltac interp_action_t :=
          | _ => progress log_cleanup_step
          end.
 
-(* Interpret all possible branches of an action *)
+(** Interpret all possible branches of an action **)
 Ltac interp_action_all_t :=
   repeat match goal with
          | _ => progress interp_action_t

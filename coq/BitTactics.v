@@ -64,6 +64,6 @@ Ltac pose_bits_bound_proofs :=
                pose_once Bits.to_N_bounded sz bs
          end.
 
-(* Lia with some support for the Bits.to_N function *)
+(** Lia with some support for the Bits.to_N function **)
 Ltac lia_bits :=
   Bits_to_N_t; cbn in *; pose_bits_bound_proofs; remember_bits_to_N; cbn in *; lia.
