@@ -96,13 +96,9 @@ Notation ">>> x <<<" :=
              esource := ErrSrc (ErrorHere x) |}) : error_messages.
 Global Open Scope error_messages.
 
-Notation desugar_and_tc_action R Sigma uaction :=
+Notation desugar_and_tc_action R Sigma uaction args :=
   (let desugared := desugar_action dummy_pos uaction in
-   type_action R Sigma dummy_pos List.nil desugared).
-
-Notation desugar_and_tc_function R Sigma ufunction :=
-  (let desugared := desugar_action dummy_pos (int_body ufunction) in
-   type_action R Sigma dummy_pos (int_argspec ufunction) desugared).
+   type_action R Sigma dummy_pos args desugared).
 
 Definition is_success {S F} (r: result S F) :=
   match r with
@@ -119,13 +115,8 @@ Definition extract_success {S F} (r: result S F) (pr: is_success r = true) :=
 Notation _must_succeed r :=
   (extract_success r (@eq_refl bool true <: is_success r = true)).
 
-Ltac _tc_action_fast R Sigma uaction :=
-  let result := constr:(desugar_and_tc_action R Sigma uaction) in
-  let typed := constr:(projT2 (_must_succeed result)) in
-  exact typed.
-
-Ltac _tc_function_fast R Sigma ufunction :=
-  let result := constr:(desugar_and_tc_function R Sigma ufunction) in
+Ltac _tc_action_fast R Sigma uaction args :=
+  let result := constr:(desugar_and_tc_action R Sigma uaction args) in
   let typed := constr:(projT2 (_must_succeed result)) in
   exact typed.
 
@@ -176,30 +167,14 @@ Ltac _report_typechecking_errors uaction tc_result :=
     fail "Unexpected typechecker output:" tc_result
   end.
 
-Ltac _tc_illtyped_action R Sigma uaction :=
+Ltac _tc_illtyped_action R Sigma uaction args :=
   let annotated := constr:(reposition PThis uaction) in
-  let result := constr:(desugar_and_tc_action R Sigma annotated) in
+  let result := constr:(desugar_and_tc_action R Sigma annotated args) in
   _report_typechecking_errors uaction result.
 
-Ltac _tc_illtyped_function R Sigma ufunction :=
-  let annotated := constr:(reposition PThis (int_body ufunction)) in
-  let annotated_function := constr:({| int_name := int_name ufunction;
-                                       int_argspec := int_argspec ufunction;
-                                       int_retSig := int_retSig ufunction;
-                                       int_body := annotated
-                                     |}) in
-  let result := constr:(desugar_and_tc_function R Sigma annotated_function) in
-  _report_typechecking_errors ufunction result.
-
-
-Ltac _tc_action R Sigma uaction :=
-  (_tc_action_fast R Sigma uaction ||
-   _tc_illtyped_action R Sigma uaction).
-
-Ltac _tc_function R Sigma ufunction :=
-  (_tc_function_fast R Sigma ufunction ||
-   _tc_illtyped_function R Sigma ufunction).
-
+Ltac _tc_action R Sigma uaction args :=
+  (_tc_action_fast R Sigma uaction args ||
+   _tc_illtyped_action R Sigma uaction args).
 
 Definition annotate_uaction_type {reg_t ext_fn_t}
            (R: reg_t -> type) (Sigma: ext_fn_t -> Sig 1)
@@ -215,11 +190,10 @@ Ltac _arg_type R :=
    With this users could write [tc_action R Sigma {{ skip }}] directly, without
    having to annotate the [{{ skip }}]. *)
 Notation tc_action R Sigma ua :=
-  (ltac:(_tc_action R Sigma ua)) (only parsing).
+  (ltac:(_tc_action R Sigma ua (@List.nil (var_t * type)))) (only parsing).
 
 Notation tc_function R Sigma uf :=
-  (ltac:(_tc_function R Sigma uf)) (only parsing).
-
+  (ltac:(_tc_action R Sigma (int_body uf) (int_argspec uf))) (only parsing).
 
 Ltac _tc_rules R Sigma uactions :=
   let rule_name_t := _arg_type uactions in
@@ -230,7 +204,7 @@ Ltac _tc_rules R Sigma uactions :=
                               (* FIXME: why does the ‘<:’ above need this hnf? *)
                               let ua := constr:(uactions rr) in
                               let ua := (eval hnf in ua) in
-                              _tc_action R Sigma ua
+                              _tc_action R Sigma ua (@List.nil (var_t * type))
                             end)) in
   exact res.
 
