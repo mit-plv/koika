@@ -574,7 +574,7 @@ Hint Rewrite @log_existsb_log_cons_neq @latest_write_cons_neq
      @latest_write0_cons_neq @latest_write1_cons_neq
      using discriminate : log_cleanup.
 
-Ltac cleanup_log_step :=
+Ltac log_cleanup_step :=
   match goal with
   | [ H: ?x = ?x |- _ ] => clear H
   | [ H: _ /\ _ |- _ ] => destruct H
@@ -596,13 +596,13 @@ Ltac interp_action_t :=
            unfold action in H;
            simpl (projT2 _) in H;
            unfold interp_action, opt_bind, no_latest_writes in *;
-           repeat cleanup_log_step
+           repeat log_cleanup_step
          | _ => progress (simpl cassoc in *; simpl ctl in *; simpl chd in * )
          | [ H: match ?x with | Some(_) => _ | None => None end = Some (_) |- _ ] =>
            destruct x eqn:?; [ | solve [inversion H] ]
          | [ H: (if ?x then _ else None) = Some _ |- _ ] =>
            destruct x eqn:?; [ | solve [inversion H] ]
-         | _ => progress cleanup_log_step
+         | _ => progress log_cleanup_step
          end.
 
 (* Interpret all possible branches of an action *)
