@@ -83,7 +83,7 @@ Ltac assert_neq x v :=
 
 (* Rewrite using setoid_rewrite the hypothesis in all
    other hypotheses, as well as in the goal. *)
-Ltac setoid_rewrite_in_all Hx :=
+Tactic Notation "setoid_rewrite_in_all" constr(Hx) :=
   repeat match goal with
          | _ =>
            progress (setoid_rewrite Hx)
@@ -92,7 +92,7 @@ Ltac setoid_rewrite_in_all Hx :=
            progress (setoid_rewrite Hx in H)
          end.
 
-Ltac setoid_rewrite_left_in_all Hx :=
+Tactic Notation "setoid_rewrite_in_all" "<-" constr(Hx) :=
   repeat match goal with
          | _ =>
            progress (setoid_rewrite <-Hx)
@@ -146,7 +146,7 @@ Ltac remember_once x :=
   | _ =>
     let Hx := fresh "H" in
     remember x eqn:Hx;
-    setoid_rewrite_left_in_all Hx
+    setoid_rewrite_in_all <- Hx
   end.
 
 Ltac constr_hd c :=
