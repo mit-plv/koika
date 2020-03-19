@@ -4,8 +4,8 @@
 # branch prediction micro benchmark
 # This benchmark stress tests return address stacks
 
-#include "../test_headers/riscv_test.h"
-#include "../test_headers/test_macros.h"
+#include "../riscv_test.h"
+#include "../test_macros.h"
 
 RVTEST_RV32U
 RVTEST_CODE_BEGIN
