@@ -359,9 +359,7 @@ Section LatestWrites.
 
   Lemma latest_write0_app :
     forall (sl sl': Log) (idx: reg_t),
-      (* COQ BUG: Why do I need a let binding? *)
-      let lw := latest_write0 (log_app sl sl') idx in
-      lw =
+      latest_write0 (log_app sl sl') idx =
       match latest_write0 sl idx with
       | Some e => Some e
       | None => latest_write0 sl' idx
@@ -400,8 +398,7 @@ Section LatestWrites.
 
   Lemma latest_write1_app :
     forall (sl sl': Log) idx,
-      let lw := latest_write1 (log_app sl sl') idx in
-      lw =
+      latest_write1 (log_app sl sl') idx =
       match latest_write1 sl idx with
       | Some e => Some e
       | None => latest_write1 sl' idx
@@ -440,8 +437,7 @@ Section LatestWrites.
 
   Lemma latest_write_app :
     forall (sl sl': Log) idx,
-      let lw := latest_write (log_app sl sl') idx in
-      lw =
+      latest_write (log_app sl sl') idx =
       match latest_write sl idx with
       | Some e => Some e
       | None => latest_write sl' idx
