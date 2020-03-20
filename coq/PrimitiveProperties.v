@@ -1,6 +1,7 @@
 (*! Equations showing how to implement functions on structures and arrays as bitfuns !*)
 Require Import Koika.Primitives.
 Import BitFuns.
+Require Import Lia.
 
 Ltac min_t :=
   repeat match goal with
@@ -293,12 +294,81 @@ Section Arithmetic.
   Proof.
   Admitted.
 
+  (* The next lemmas simplify 2 * x *)
+  Arguments N.mul / !n !m.
+
+  Lemma to_N_vect_unsnoc :
+    forall sz (x: bits (S sz)),
+      (Bits.to_N (snd (vect_unsnoc x)) = Bits.to_N x mod (2 ^ N.of_nat sz))%N.
+  Proof.
+    intros.
+    induction sz.
+    - simpl.
+      destruct x. destruct vtl. cbn.
+      destruct_match; reflexivity.
+    - destruct x.
+      rewrite Nat2N.inj_succ, N.pow_succ_r'. cbn.
+      specialize (IHsz vtl).
+      destruct (vect_unsnoc vtl) eqn:H_unsnoc_vtl.
+      cbn in *. rewrite IHsz.
+      rewrite N.add_mod; [ | destruct sz; discriminate ].
+      rewrite (N.mod_small (if vhd then 1 else 0)).
+      + rewrite (N.mod_small _ (2 * 2 ^ N.of_nat sz)).
+        * f_equal.
+          rewrite N.mul_mod_distr_l by (destruct sz; cbn; lia).
+          reflexivity.
+        * destruct vhd.
+          -- rewrite N.mul_mod_distr_l by (destruct sz; cbn; lia).
+             apply N.mul_2_mono_l.
+             apply N.mod_lt. destruct sz; cbn; lia.
+          -- apply N.mod_lt. destruct sz; cbn; lia.
+      + destruct vhd.
+        * apply N.lt_1_mul_pos. lia.
+          destruct sz; cbn; lia.
+        * destruct sz; cbn; lia.
+  Qed.
+
+  Lemma to_N_lsl1 :
+    forall sz (x: bits sz),
+      (Bits.to_N (Bits.lsl1 x) =
+       (Bits.to_N x * 2) mod (2 ^ N.of_nat sz))%N.
+  Proof.
+    destruct sz.
+    - intros.
+      destruct x.
+      reflexivity.
+    - intros.
+      rewrite Nat2N.inj_succ, N.pow_succ_r'.
+      cbn. rewrite (N.mul_comm _ 2).
+      rewrite N.mul_mod_distr_l by (destruct sz; cbn; lia).
+      f_equal.
+      apply to_N_vect_unsnoc.
+  Qed.
+
+  Lemma to_N_dotimes_lsl :
+    forall sz n (x: bits sz),
+      (Bits.to_N (vect_dotimes Bits.lsl1 n x) = (Bits.to_N x * 2 ^ N.of_nat n) mod 2 ^ N.of_nat sz)%N.
+  Proof.
+    induction n as [| n IHn]; intros.
+    - cbn.
+      rewrite N.mul_1_r, N.mod_small by apply Bits.to_N_bounded.
+      reflexivity.
+    - rewrite Nat2N.inj_succ, N.pow_succ_r'.
+      cbn.
+      rewrite IHn, to_N_lsl1.
+      rewrite N.mul_mod_idemp_l by (destruct sz; cbn; lia).
+      f_equal. ring.
+  Qed.
+
   Lemma to_N_lsl :
     forall sz1 sz2 (x: bits sz1) (y: bits sz2),
       (Bits.to_N (BitFuns.lsl x y) =
        (Bits.to_N x * (2 ^ (Bits.to_N y))) mod (2 ^ N.of_nat sz1))%N.
   Proof.
-  Admitted.
+    intros. unfold lsl, Bits.lsl.
+    rewrite <-(N2Nat.id (Bits.to_N y)).
+    apply to_N_dotimes_lsl.
+  Qed.
 
   Lemma to_N_extend_end_false :
     forall sz (x: bits sz) sz', Bits.to_N (Bits.extend_end x sz' false) = Bits.to_N x.
