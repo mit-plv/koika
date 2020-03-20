@@ -41,14 +41,14 @@ cuttlesim: $(cuttlesim);
 
 cuttlesim-tests: binaries cuttlesim
 	@echo "-- Running tests with Cuttlesim --"
-	find $(tests_build)/rv32ui -name "*.rv32" -exec $(cuttlesim_runner) \;
-	find $(tests_build)/rv32um -name "*.rv32" -exec $(cuttlesim_runner) \;
+	find $(tests_build)/riscv_tests/rv32ui -name "*.rv32" -exec $(cuttlesim_runner) \;
+	find $(tests_build)/riscv_tests/rv32um -name "*.rv32" -exec $(cuttlesim_runner) \;
 	find $(tests_build)/integ -name "*.rv32" -exec $(cuttlesim_runner) \;
 
 verilator-tests: binaries verilator
 	@echo "-- Running tests with Verilator --"
-	find $(tests_build)/rv32ui -name "*.vmh" -exec $(verilator_runner) \;
-	find $(tests_build)/rv32um -name "*.vmh" -exec $(verilator_runner) \;
+	find $(tests_build)/riscv_tests/rv32ui -name "*.vmh" -exec $(verilator_runner) \;
+	find $(tests_build)/riscv_tests/rv32um -name "*.vmh" -exec $(verilator_runner) \;
 	find $(tests_build)/integ -name "*.vmh" -exec $(verilator_runner) \;
 
 pyverilator-tests: binaries core

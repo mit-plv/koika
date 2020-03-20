@@ -4,8 +4,8 @@ build := _build
 elf2hex := elf2hex/elf2hex
 
 integ_sources := $(wildcard integ/*.c)
-rv32ui_sources := $(wildcard rv32ui/*.S)
-rv32um_sources := $(wildcard rv32um/*.S)
+rv32ui_sources := $(wildcard riscv_tests/rv32ui/*.S)
+rv32um_sources := $(wildcard riscv_tests/rv32um/*.S)
 integ_objects := $(patsubst %.c,$(build)/%.o,$(integ_sources))
 rv32ui_objects := $(patsubst %.S,$(build)/%.o,$(rv32ui_sources))
 rv32um_objects := $(patsubst %.S,$(build)/%.o,$(rv32um_sources))
@@ -20,7 +20,7 @@ cc := $(RISCVCC32) $(RISCVCC32_ARGS)
 
 all: $(rv32_targets) $(vmh_targets);
 
-$(build) $(build)/integ/ $(build)/rv32ui/ $(build)/rv32um/:
+$(build) $(build)/integ/ $(build)/riscv_tests/rv32ui/ $(build)/riscv_tests/rv32um/:
 	mkdir -p $@
 
 $(elf2hex):
@@ -35,10 +35,10 @@ $(build)/mmio32.o: mmio.c | $(build)
 $(build)/integ/%.o: integ/%.c | $(build)/integ/
 	$(cc) -c $< -o $@
 
-$(build)/rv32ui/%.rv32: rv32ui/%.S | $(build)/rv32ui/
+$(build)/riscv_tests/rv32ui/%.rv32: riscv_tests/rv32ui/%.S | $(build)/riscv_tests/rv32ui/
 	$(cc) -I rv32ui -Tmmio.ld $< -o $@
 
-$(build)/rv32um/%.rv32: rv32um/%.S | $(build)/rv32um/
+$(build)/riscv_tests/rv32um/%.rv32: riscv_tests/rv32um/%.S | $(build)/riscv_tests/rv32um/
 	$(cc) -I rv32um -Tmmio.ld $< -o $@
 
 $(build)/integ/%.rv32: $(build)/integ/%.o $(build)/init32.o $(build)/mmio32.o mmio.ld
