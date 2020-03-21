@@ -287,15 +287,51 @@ Proof.
 Qed.
 
 Section Arithmetic.
+
+  (* The next lemmas simplify 2 * x *)
+  Arguments N.mul / !n !m.
+
   (* This might require another hypothesis to be correct *)
   Lemma sel_spec :
     forall (sz: nat) (bs: bits sz) idx,
       BitFuns.sel bs idx = Ob~(N.testbit (Bits.to_N bs) (Bits.to_N idx)).
   Proof.
-  Admitted.
-
-  (* The next lemmas simplify 2 * x *)
-  Arguments N.mul / !n !m.
+    intros.
+    unfold BitFuns.sel.
+    f_equal.
+    unfold Bits.to_index.
+    destruct (index_of_nat sz (Bits.to_nat idx)) eqn:Hindex.
+    - rewrite <-(N2Nat.id (Bits.to_N idx)).
+      fold (Bits.to_nat idx).
+      remember (Bits.to_nat idx) as n_idx eqn:Hn_idx.
+      clear Hn_idx idx.
+      generalize dependent sz.
+      induction n_idx as [| idx IH].
+      + intros sz bs i Hindex. cbn.
+        destruct sz; [destruct i | ].
+        inversion Hindex. repeat cleanup_step.
+        destruct bs. repeat cleanup_step.
+        rewrite N.add_comm. fold (N.b2n vhd).
+        rewrite N.testbit_0_r.
+        reflexivity.
+      + intros sz bs i Hindex. rewrite Nat2N.inj_succ.
+        destruct sz; [destruct i | ].
+        cbn in Hindex.
+        destruct (index_of_nat sz idx) eqn:Hi; repeat cleanup_step.
+        destruct bs. repeat cleanup_step.
+        rewrite N.add_comm. fold (N.b2n vhd).
+        rewrite N.testbit_succ_r.
+        apply IH; auto.
+    - apply index_of_nat_none_ge in Hindex.
+      unfold Bits.to_nat in Hindex.
+      assert (Bits.to_N idx >= N.of_nat sz)%N as Hle by lia.
+      pose proof (Bits.to_N_bounded _ bs).
+      destruct (Bits.to_N bs); [ reflexivity | ].
+      symmetry. apply N.bits_above_log2.
+      apply N.ge_le in Hle.
+      eapply N.lt_le_trans; [ | exact Hle].
+      apply N.log2_lt_pow2; lia.
+  Qed.
 
   Lemma to_N_vect_unsnoc :
     forall sz (x: bits (S sz)),
