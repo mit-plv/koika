@@ -409,6 +409,10 @@ Section Arithmetic.
   Lemma to_N_extend_end_false :
     forall sz (x: bits sz) sz', Bits.to_N (Bits.extend_end x sz' false) = Bits.to_N x.
   Proof.
-  Admitted.
+    intros.
+    unfold Bits.extend_end.
+    rewrite Bits.to_N_rew, Bits.to_N_app, Bits.to_N_zeroes, N.mul_0_l, N.add_0_l.
+    reflexivity.
+  Qed.
 
 End Arithmetic.
