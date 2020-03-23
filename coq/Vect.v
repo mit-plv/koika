@@ -37,7 +37,7 @@ Fixpoint index_to_nat {sz} (idx: index sz) {struct sz} : nat :=
   end idx.
 
 Definition index_cast n n' (eq: n = n') (idx: index n) : index n' :=
-  ltac:(subst; assumption).
+  rew eq in idx.
 
 Lemma index_to_nat_injective {n: nat}:
   forall x y : index n,
@@ -193,7 +193,7 @@ Proof. destruct n; cbn; auto. Defined.
 Lemma vect_app_nil :
   forall {T sz} (v: vect T sz) (v0: vect T 0),
     vect_app v v0 =
-    ltac:(rewrite <- vect_app_nil_cast; exact v).
+    rew (vect_app_nil_cast _) in v.
 Proof.
   destruct v0.
   induction sz; destruct v; cbn.
@@ -410,7 +410,7 @@ Proof. destruct n; cbn; auto. Defined.
 
 Fixpoint vect_skipn {T sz} (n: nat) (v: vect T sz) : vect T (sz - n) :=
   match n with
-  | 0 => ltac:(rewrite <- (vect_skipn_cast sz); exact v)
+  | 0 => rew (vect_skipn_cast sz) in v
   | S n' => match sz return vect T sz -> vect T (sz - S n') with
            | 0 => fun v => v
            | S sz' => fun v => vect_skipn n' (vect_tl v)
@@ -433,7 +433,7 @@ Proof. destruct sz; cbn; auto. Defined.
 Lemma vect_firstn_id :
   forall {T sz} (v: vect T sz),
     vect_firstn sz v =
-    ltac:(rewrite (vect_firstn_id_cast sz); exact v).
+    rew <- (vect_firstn_id_cast sz) in v.
 Proof.
   induction sz; destruct v.
   - reflexivity.
@@ -448,7 +448,8 @@ Fixpoint vect_firstn_plus_cast sz n:
 Proof. destruct n; cbn; eauto. Defined.
 
 Definition vect_firstn_plus {T sz} (n: nat) (v: vect T (n + sz)) : vect T n :=
-  ltac:(rewrite <- (vect_firstn_plus_cast sz n); exact (vect_firstn n v)).
+  rew (vect_firstn_plus_cast sz n) in
+    (vect_firstn n v).
 
 Lemma vect_firstn_plus_eqn {T sz sz'}:
   forall hd (v: vect T (sz + sz')),
@@ -474,7 +475,8 @@ Fixpoint vect_skipn_plus_cast sz n:
 Proof. destruct n, sz; cbn; auto. Defined.
 
 Definition vect_skipn_plus {T sz} (n: nat) (v: vect T (n + sz)) : vect T sz :=
-  ltac:(rewrite <- (vect_skipn_plus_cast sz n); exact (vect_skipn n v)).
+  rew (vect_skipn_plus_cast sz n) in
+    (vect_skipn n v).
 
 Lemma vect_skipn_plus_eqn {T sz sz'}:
   forall hd (v: vect T (sz + sz')),
@@ -498,7 +500,7 @@ Qed.
 Lemma vect_skipn_skipn_plus :
   forall {T sz} (n: nat) (v: vect T (n + sz)),
     vect_skipn n v =
-    ltac:(rewrite (vect_skipn_plus_cast sz n); exact (vect_skipn_plus n v)).
+    rew <- (vect_skipn_plus_cast sz n) in (vect_skipn_plus n v).
 Proof. unfold vect_skipn_plus; intros; destruct vect_skipn_plus_cast; reflexivity. Qed.
 
 Lemma vect_split_firstn_skipn :
@@ -516,7 +518,7 @@ Qed.
 
 Fixpoint vect_extend_beginning_cast' x y:
   x + S y = S (x + y).
-Proof. destruct x; cbn; auto. Defined.
+Proof. destruct x; cbn; rewrite ?vect_extend_beginning_cast'; reflexivity. Defined.
 
 Fixpoint vect_extend_beginning_cast sz sz':
   sz' - sz + sz = Nat.max sz sz'.
@@ -526,27 +528,30 @@ Proof.
 Defined.
 
 Definition vect_extend_beginning {T sz} (v: vect T sz) (sz': nat) (t: T) : vect T (Nat.max sz sz') :=
-  ltac:(rewrite <- (vect_extend_beginning_cast sz sz'); exact (vect_app (vect_const (sz' - sz) t) v)).
+  rew (vect_extend_beginning_cast sz sz') in
+    (vect_app (vect_const (sz' - sz) t) v).
 
 Fixpoint vect_extend_end_cast sz sz':
   sz + (sz' - sz) = Nat.max sz sz'.
 Proof. destruct sz, sz'; cbn; auto. Defined.
 
 Definition vect_extend_end {T sz} (v: vect T sz) (sz': nat) (t: T) : vect T (Nat.max sz sz') :=
-  ltac:(rewrite <- (vect_extend_end_cast sz sz'); exact (vect_app v (vect_const (sz' - sz) t))).
+  rew (vect_extend_end_cast sz sz') in
+    (vect_app v (vect_const (sz' - sz) t)).
 
 Fixpoint vect_extend_end_firstn_cast sz sz':
   Nat.max (Nat.min sz sz') sz = sz.
 Proof. destruct sz, sz'; cbn; auto. Defined.
 
 Definition vect_extend_end_firstn {T sz sz'} (v: vect T (Nat.min sz sz')) (t: T) : vect T sz :=
-  ltac:(rewrite <- (vect_extend_end_firstn_cast sz sz'); exact (vect_extend_end v sz t)).
+  rew (vect_extend_end_firstn_cast sz sz') in
+    (vect_extend_end v sz t).
 
 Lemma vect_extend_end_firstn_simpl :
   forall {T sz} (v: vect T sz) n b,
   forall (eqn: Nat.min n sz = n),
     vect_extend_end_firstn (vect_firstn n v) b =
-    ltac:(rewrite <- eqn; exact (vect_firstn n v)).
+    rew eqn in (vect_firstn n v).
 Proof.
   unfold vect_extend_end_firstn, vect_extend_end; intros.
   rewrite <- eq_trans_rew_distr.
@@ -1095,9 +1100,24 @@ Module Bits.
         end
       end.
 
+    Lemma to_N_rew :
+      forall {sz sz'} (bs: bits sz) (eqn: sz = sz'),
+        to_N (rew eqn in bs) = to_N bs.
+    Proof. destruct eqn; reflexivity. Qed.
+
     Lemma to_N_zeroes :
       forall sz, to_N (zeroes sz) = 0%N.
     Proof. induction sz; simpl; try rewrite IHsz; reflexivity. Qed.
+
+    Lemma to_N_app :
+      forall {sz sz'} (bs: bits sz) (bs': bits sz'),
+        to_N (app bs bs') = (to_N bs * 2 ^ (N.of_nat sz') + to_N bs')%N.
+    Proof.
+      induction sz'; destruct bs'.
+      - cbn; rewrite N.mul_1_r, N.add_0_r; reflexivity.
+      - rewrite Nat2N.inj_succ, N.pow_succ_r'; cbn -[N.mul].
+        rewrite IHsz'; lia.
+    Qed.
 
     Lemma to_N_of_N :
       forall n sz,
@@ -1165,6 +1185,11 @@ Module Bits.
       unfold N.lt. rewrite <- Nat2N.inj_compare, <- nat_compare_lt.
       rewrite pow2_correct in H; eassumption.
     Qed.
+
+    Lemma to_nat_rew :
+      forall {sz sz'} (bs: bits sz) (eqn: sz = sz'),
+        to_nat (rew eqn in bs) = to_nat bs.
+    Proof. destruct eqn; reflexivity. Qed.
 
     Lemma to_nat_of_nat :
       forall sz n,
