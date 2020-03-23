@@ -62,6 +62,11 @@ Ltac rewrite_all_hypotheses :=
          | [ H: ?x = ?y |- _ ] => rewrite H
          end.
 
+Ltac setoid_rewrite_all_hypotheses :=
+  repeat match goal with
+         | [ H: ?x = ?y |- _ ] => setoid_rewrite H
+         end.
+
 (** Fails if x is equal to v. Can work for hypotheses **)
 Ltac assert_neq x v :=
   tryif (let _ := (constr:(eq_refl x : x = v)) in idtac) then fail else idtac.
