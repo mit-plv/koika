@@ -2,6 +2,7 @@
 
 Require Import Koika.Frontend Koika.Std Koika.ProgramTactics.
 Require Export RV.Multiplier.
+Require Import Lia.
 
 Module MultiplierProofs.
   Module Sig32 <: Multiplier_sig.
@@ -30,12 +31,41 @@ Module MultiplierProofs.
   Definition partial_mul (a b n_step: N) :=
     (a * (b mod (2 ^ n_step)))%N.
 
+  Lemma mod_succ_add (a n: N) :
+    (a mod (2 ^ N.succ n) = a mod 2 ^ n + (N.b2n (N.testbit a n)) * 2 ^ n)%N.
+  Proof.
+    rewrite N.pow_succ_r'.
+    rewrite (N.div_mod' a (2 ^ n)) at 1.
+    rewrite N.testbit_spec'.
+    rewrite N.add_mod by (destruct n; cbn; lia).
+    rewrite (N.mul_comm 2 (2 ^ n)).
+    rewrite N.mul_mod_distr_l by (destruct n; cbn; lia).
+    rewrite (N.mod_small (a mod 2 ^ n)).
+    - rewrite N.mod_small; [ ring | ].
+      eapply N.le_lt_trans.
+      + apply N.add_le_mono.
+        * apply N.mul_le_mono_l, N.lt_le_pred.
+          apply N.mod_upper_bound. lia.
+        * apply N.lt_le_pred, N.mod_lt. destruct n; cbn; lia.
+      + cbn. rewrite N.mul_1_r. rewrite N.pred_sub.
+        enough (2 ^ n > 0)%N by lia.
+        destruct n; cbn; lia.
+    - eapply N.lt_trans.
+      + apply N.mod_lt.
+        destruct n; discriminate.
+      + rewrite <-(N.mul_1_r (2 ^ n)) at 1.
+        apply N.mul_lt_mono_pos_l; destruct n; cbn; lia.
+  Qed.
+
   Lemma partial_mul_step (a b n_step: N) :
-    partial_mul a b (n_step + 1) =
+    partial_mul a b (N.succ n_step) =
     ((partial_mul a b n_step) +
      a * (N.b2n (N.testbit b n_step) * (2 ^ n_step)))%N.
   Proof.
-  Admitted.
+    unfold partial_mul.
+    rewrite mod_succ_add.
+    ring.
+  Qed.
 
   Lemma mul_to_partial_mul :
     forall n x y,
@@ -181,14 +211,16 @@ Module MultiplierProofs.
     - rewrite Bits.to_N_of_N.
       + rewrite Bits.to_N_of_N by lia_bits.
         cbn. rewrite_all_hypotheses. cbn.
+        rewrite N.add_1_r.
         rewrite partial_mul_step.
         rewrite_all_hypotheses.
         f_equal. cbn [N.b2n].
         admit.
       + admit.
     - rewrite Bits.to_N_of_N by lia_bits.
+      cbn. rewrite N.add_1_r.
       rewrite partial_mul_step.
-      rewrite_all_hypotheses. cbn.
+      setoid_rewrite_all_hypotheses. cbn.
       rewrite N.mul_0_r. rewrite N.add_0_r.
       auto.
   Admitted.
@@ -224,7 +256,7 @@ Module MultiplierProofs.
         cbn.
         assert (32 = 31 + 1)%N as H32S by reflexivity.
         rewrite H32S.
-        rewrite partial_mul_step.
+        rewrite N.add_1_r, partial_mul_step.
         repeat (f_equal; []).
         match goal with
         | [ H1: ?x = ?y, H2: context[N.testbit _ _] |- _ ] =>
@@ -238,7 +270,7 @@ Module MultiplierProofs.
       cbn.
       assert (32 = 31 + 1)%N as H32S by reflexivity.
       rewrite H32S.
-      rewrite partial_mul_step.
+      rewrite N.add_1_r, partial_mul_step.
       repeat (f_equal; []).
       match goal with
       | [ H1: ?x = ?y, H2: context[N.testbit _ _] |- _ ] =>
