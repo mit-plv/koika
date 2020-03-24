@@ -23,8 +23,9 @@ RISCVOBJDUMP32_ARGS := --disassemble --source --full-contents
 
 cc := $(RISCVCC32) $(RISCVCC32_ARGS)
 objdump := $(RISCVOBJDUMP32) $(RISCVOBJDUMP32_ARGS)
-cc32i := $(cc) -march=rv32im -mabi=ilp32 -T$(build)/rv32i/link.ld
-cc32e := $(cc) -march=rv32e -mabi=ilp32e -T$(build)/rv32e/link.ld -DRV32E
+iarch = $(if $(findstring riscv_tests/rv32ui,$1),rv32i,rv32im)
+cc32i = $(cc) -T$(build)/rv32i/link.ld -mabi=ilp32
+cc32e = $(cc) -T$(build)/rv32e/link.ld -DRV32E -mabi=ilp32e -march=rv32e
 
 all: $(rv32_targets) $(vmh_targets) $(dump_targets);
 
@@ -49,10 +50,10 @@ $(build)/rv32e/%.rv32: %.c init.S init.S mmio.c $(build)/rv32e/link.ld | dirs
 	$(cc32e) init.S mmio.c $< -o $@
 
 $(build)/rv32i/%.rv32: %.S $(build)/rv32i/link.ld | dirs
-	$(cc32i) $< -o $@
+	$(cc32i) -march=$(call iarch,$<) $< -o $@
 
 $(build)/rv32i/%.rv32: %.c init.S mmio.c $(build)/rv32i/link.ld | dirs
-	$(cc32i) init.S mmio.c $< -o $@
+	$(cc32i) -march=$(call iarch,$<) init.S mmio.c $< -o $@
 
 $(build)/%.dump: $(build)/%.rv32
 	$(objdump) $< > $@
