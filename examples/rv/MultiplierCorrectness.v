@@ -12,8 +12,6 @@ Module MultiplierProofs.
   Import mul32.
   Import Sig32.
 
-  Notation n := 32.
-
   Definition default := ContextEnv.(create) r.
 
   Definition typed_enq :=
@@ -201,7 +199,7 @@ Module MultiplierProofs.
     interp_action_all_t;
     intros;
     Bits_to_N_t;
-    unfold Sig32.n in *;
+    unfold n in *;
     try discriminate.
     match goal with
     | [ H: context[_ = partial_mul _ _ _] |- _ ] =>
@@ -231,7 +229,10 @@ Module MultiplierProofs.
         * apply N.mul_lt_mono.
           -- lia_bits.
           -- eapply N.lt_le_trans.
-             ++ apply N.mod_lt. destruct n1; discriminate.
+             ++ apply N.mod_lt.
+               match goal with
+               | [ |- context[(2 ^ ?x)%N] ] => destruct x; discriminate
+               end.
              ++ apply N.pow_le_mono_r; lia_bits.
         * eapply N.le_trans.
           -- apply N.mod_le. discriminate.
@@ -260,7 +261,7 @@ Module MultiplierProofs.
     interp_action_all_t;
     intros;
     Bits_to_N_t;
-    unfold Sig32.n in *;
+    unfold n in *;
     try match goal with
         | [ H1: ?x = ?y, H2: ?x = ?z |- _ ] =>
           rewrite H1 in H2; discriminate H2
@@ -273,7 +274,7 @@ Module MultiplierProofs.
     - rewrite_all_hypotheses.
       rewrite Bits.to_N_of_N.
       + rewrite N.mod_small by lia_bits.
-        rewrite (mul_to_partial_mul (N.of_nat Sig32.n) (Bits.to_N _) (Bits.to_N _)) by lia_bits.
+        rewrite (mul_to_partial_mul (N.of_nat n) (Bits.to_N _) (Bits.to_N _)) by lia_bits.
         cbn.
         assert (32 = 31 + 1)%N as H32S by reflexivity.
         rewrite H32S.
@@ -296,7 +297,7 @@ Module MultiplierProofs.
         * eapply N.le_trans; [ apply N.mod_le; discriminate | ].
           apply N.mul_le_mono; lia_bits.
     - rewrite_all_hypotheses.
-      rewrite (mul_to_partial_mul (N.of_nat Sig32.n)) by lia_bits.
+      rewrite (mul_to_partial_mul (N.of_nat n)) by lia_bits.
       cbn.
       assert (32 = 31 + 1)%N as H32S by reflexivity.
       rewrite H32S.
