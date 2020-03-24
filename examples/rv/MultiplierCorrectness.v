@@ -187,7 +187,6 @@ Module MultiplierProofs.
     lia_bits.
   Qed.
 
-  (* The admitted subgoals should be handle by lia_bits *)
   Lemma step_preserves_result_invariant :
     forall env Gamma sched_log action_log action_log_new v Gamma_new,
       interp_action env empty_sigma Gamma sched_log action_log typed_step =
@@ -215,15 +214,37 @@ Module MultiplierProofs.
         rewrite partial_mul_step.
         rewrite_all_hypotheses.
         f_equal. cbn [N.b2n].
-        admit.
-      + admit.
+        rewrite N.mod_small. ring.
+        assert (2 ^ 32 * 2 ^ 32 = 18446744073709551616)%N as Hdouble32 by reflexivity.
+        rewrite <-Hdouble32.
+        apply N.mul_lt_mono.
+        * lia_bits.
+        * apply N.pow_lt_mono_r; lia_bits.
+      + unfold partial_mul.
+        assert (2 ^ 63 + 2 ^ 63 = 18446744073709551616)%N as Hdouble63 by reflexivity.
+        cbn. rewrite <-Hdouble63 at -1.
+        assert (2 ^ 32 * 2 ^ 31 = 2 ^ 63)%N as H2pow3231 by reflexivity.
+        rewrite <-H2pow3231.
+        pose_bits_bound_proofs.
+        remember_bits_to_N.
+        apply N.add_lt_le_mono.
+        * apply N.mul_lt_mono.
+          -- lia_bits.
+          -- eapply N.lt_le_trans.
+             ++ apply N.mod_lt. destruct n1; discriminate.
+             ++ apply N.pow_le_mono_r; lia_bits.
+        * eapply N.le_trans.
+          -- apply N.mod_le. discriminate.
+          -- apply N.mul_le_mono.
+             ++ lia_bits.
+             ++ apply N.pow_le_mono_r; lia_bits.
     - rewrite Bits.to_N_of_N by lia_bits.
       cbn. rewrite N.add_1_r.
       rewrite partial_mul_step.
       setoid_rewrite_all_hypotheses. cbn.
       rewrite N.mul_0_r. rewrite N.add_0_r.
       auto.
-  Admitted.
+  Qed.
 
   Lemma step_preserves_result_finished_invariant :
     forall env Gamma sched_log action_log action_log_new v Gamma_new,
@@ -264,7 +285,16 @@ Module MultiplierProofs.
         end.
         rewrite_all_hypotheses.
         reflexivity.
-      + admit.
+      + unfold partial_mul.
+        assert (2 ^ 63 + 2 ^ 63 = 18446744073709551616)%N as Hdouble63 by reflexivity.
+        cbn. rewrite <-Hdouble63 at -1.
+        assert (2 ^ 32 * 2 ^ 31 = 2 ^ 63)%N as H2pow3231 by reflexivity.
+        rewrite <-H2pow3231.
+        apply N.add_lt_le_mono.
+        * apply N.mul_lt_mono; [lia_bits | ].
+          apply N.mod_lt. discriminate.
+        * eapply N.le_trans; [ apply N.mod_le; discriminate | ].
+          apply N.mul_le_mono; lia_bits.
     - rewrite_all_hypotheses.
       rewrite (mul_to_partial_mul (N.of_nat Sig32.n)) by lia_bits.
       cbn.
@@ -279,7 +309,7 @@ Module MultiplierProofs.
       rewrite_all_hypotheses. cbn.
       rewrite N.mul_0_r. rewrite N.add_0_r.
       reflexivity.
-    Admitted.
+  Qed.
 
   Lemma step_preserves_invariants :
     forall env Gamma sched_log action_log action_log_new v Gamma_new,
