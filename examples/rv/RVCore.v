@@ -818,9 +818,6 @@ Module RV32Core (RVP: RVParams).
         write0(cycle_count, read0(cycle_count) + |32`d1|)
     }}.
 
-  Definition tc_tick :=
-    tc_action R Sigma tick.
-
   Definition rv_register_name {n} (v: Vect.index n) :=
     match index_to_nat v with
     | 0  => "x00_zero" (* hardwired zero *)
@@ -915,22 +912,26 @@ Module RV32IParams <: RVParams.
   Definition NREGS := 32.
 End RV32IParams.
 
+(* TC_native adds overhead but makes typechecking large rules faster *)
+Ltac _tc_strategy ::= exact TC_native.
+
 Module RV32I <: Core.
   Include (RV32Core RV32IParams).
 
   Definition _reg_t := reg_t.
   Definition _ext_fn_t := ext_fn_t.
 
-  Definition tc_fetch := tc_action R Sigma fetch.
-  Definition tc_wait_imem := tc_action R Sigma wait_imem.
-  Definition tc_decode := tc_action R Sigma decode.
-  Definition tc_execute := tc_action R Sigma execute.
-  Definition tc_writeback := tc_action R Sigma writeback.
-  Definition tc_step_multiplier := tc_action R Sigma step_multiplier.
-  Definition tc_imem := tc_action R Sigma (mem imem).
-  Definition tc_dmem := tc_action R Sigma (mem dmem).
+  Definition tc_fetch := tc_rule R Sigma fetch.
+  Definition tc_wait_imem := tc_rule R Sigma wait_imem.
+  Definition tc_decode := tc_rule R Sigma decode.
+  Definition tc_execute := tc_rule R Sigma execute.
+  Definition tc_writeback := tc_rule R Sigma writeback.
+  Definition tc_step_multiplier := tc_rule R Sigma step_multiplier.
+  Definition tc_imem := tc_rule R Sigma (mem imem).
+  Definition tc_dmem := tc_rule R Sigma (mem dmem).
+  Definition tc_tick := tc_rule R Sigma tick.
 
-  Definition rv_rules (rl:rv_rules_t) : rule R Sigma :=
+  Definition rv_rules (rl: rv_rules_t) : rule R Sigma :=
     match rl with
     | Fetch          => tc_fetch
     | Decode         => tc_decode
@@ -958,16 +959,17 @@ Module RV32E <: Core.
   Definition _reg_t := reg_t.
   Definition _ext_fn_t := ext_fn_t.
 
-  Definition tc_fetch := tc_action R Sigma fetch.
-  Definition tc_wait_imem := tc_action R Sigma wait_imem.
-  Definition tc_decode := tc_action R Sigma decode.
-  Definition tc_execute := tc_action R Sigma execute.
-  Definition tc_writeback := tc_action R Sigma writeback.
-  Definition tc_step_multiplier := tc_action R Sigma step_multiplier.
-  Definition tc_imem := tc_action R Sigma (mem imem).
-  Definition tc_dmem := tc_action R Sigma (mem dmem).
+  Definition tc_fetch := tc_rule R Sigma fetch <: rule R Sigma.
+  Definition tc_wait_imem := tc_rule R Sigma wait_imem <: rule R Sigma.
+  Definition tc_decode := tc_rule R Sigma decode <: rule R Sigma.
+  Definition tc_execute := tc_rule R Sigma execute <: rule R Sigma.
+  Definition tc_writeback := tc_rule R Sigma writeback <: rule R Sigma.
+  Definition tc_step_multiplier := tc_rule R Sigma step_multiplier <: rule R Sigma.
+  Definition tc_imem := tc_rule R Sigma (mem imem) <: rule R Sigma.
+  Definition tc_dmem := tc_rule R Sigma (mem dmem) <: rule R Sigma.
+  Definition tc_tick := tc_rule R Sigma tick.
 
-  Definition rv_rules (rl:rv_rules_t) : rule R Sigma :=
+  Definition rv_rules (rl: rv_rules_t) : rule R Sigma :=
     match rl with
     | Fetch          => tc_fetch
     | Decode         => tc_decode

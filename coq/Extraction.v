@@ -20,7 +20,7 @@ Extraction "extracted.ml"
            Vect.vect_to_list Vect.vect_of_list Vect.Bits.to_nat Vect.index_to_nat Vect.vect_zip
            Syntax.scheduler
            Desugaring.desugar_action
-           TypeInference.type_action TypeInference.type_rule
+           TypeInference.tc_rule
            TypedSyntaxFunctions.unannot
            TypedSyntaxFunctions.scheduler_rules
            TypedSyntaxFunctions.action_mentions_var

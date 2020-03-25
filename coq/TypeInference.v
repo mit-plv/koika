@@ -74,9 +74,6 @@ Section TypeInference.
     Definition cast_action pos {sig tau1} tau2 (e: action sig tau1) :=
       cast_action' pos tau2 e (BasicError (TypeMismatch tau1 tau2)).
 
-    Definition cast_rule (pos: pos_t) {tau} (e: action [] tau) :=
-      cast_action' pos (bits_t 0) e (IncorrectRuleType tau).
-
     Notation EX Px := (existT _ _ Px).
 
     Fixpoint actpos {reg_t ext_fn_t} pos (e: uaction reg_t ext_fn_t) :=
@@ -180,8 +177,13 @@ Section TypeInference.
         Success (EX (APos pos ``e))
       end.
 
-    Definition type_rule (pos: pos_t) (e: uaction reg_t ext_fn_t) : result rule :=
-      let/res rl := type_action pos [] e in
-      cast_rule pos (``rl).
+    Definition tc_action (pos: pos_t)
+               (sig: tsig var_t) (expected_tau: type)
+               (e: uaction reg_t ext_fn_t) : result (action sig expected_tau) :=
+      let/res a := type_action pos sig e in
+      cast_action pos expected_tau (``a).
+
+    Definition tc_rule (pos: pos_t) (e: uaction reg_t ext_fn_t) : result rule :=
+      tc_action pos [] unit_t e.
   End Action.
 End TypeInference.

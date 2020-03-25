@@ -95,9 +95,13 @@ Notation ">>> x <<<" :=
              esource := ErrSrc (ErrorHere x) |}) : error_messages.
 Global Open Scope error_messages.
 
-Notation desugar_and_tc_action R Sigma uaction args :=
+Notation desugar_and_tc_action R Sigma tau sig uaction :=
   (let desugared := desugar_action dummy_pos uaction in
-   type_action R Sigma dummy_pos args desugared).
+   tc_action R Sigma dummy_pos tau sig desugared).
+
+Notation desugar_and_tc_rule R Sigma uaction :=
+  (let desugared := desugar_action dummy_pos uaction in
+   tc_rule R Sigma dummy_pos desugared).
 
 Definition is_success {S F} (r: result S F) :=
   match r with
@@ -111,13 +115,29 @@ Definition extract_success {S F} (r: result S F) (pr: is_success r = true) :=
   | Failure f => fun pr => match Bool.diff_false_true pr with end
   end pr.
 
-Notation _must_succeed r :=
+Notation _must_succeed_conv r :=
+  (extract_success r (@eq_refl bool true : is_success r = true)).
+Notation _must_succeed_vm r :=
   (extract_success r (@eq_refl bool true <: is_success r = true)).
+Notation _must_succeed_native r :=
+  (extract_success r (@eq_refl bool true <<: is_success r = true)).
 
-Ltac _tc_action_fast R Sigma uaction args :=
-  let result := constr:(desugar_and_tc_action R Sigma uaction args) in
-  let typed := constr:(projT2 (_must_succeed result)) in
-  exact typed.
+Inductive TC_Strategy := TC_conv | TC_vm | TC_native.
+Ltac _tc_strategy := exact TC_vm.
+
+Ltac _extract_success r :=
+  let strategy := constr:(ltac:(_tc_strategy)) in
+  let eq_pr :=
+      match strategy with
+      | TC_conv => constr:(@eq_refl bool true : is_success r = true)
+      | TC_vm => constr:(@eq_refl bool true <: is_success r = true)
+      | TC_native => constr:(@eq_refl bool true <<: is_success r = true)
+      end in
+  exact (extract_success r eq_pr).
+
+Ltac _tc_action_fast R Sigma sig tau uaction :=
+  let result := constr:(desugar_and_tc_action R Sigma sig tau uaction) in
+  _extract_success result.
 
 Arguments place_error_beacon {var_t fn_name_t reg_t ext_fn_t} / rev_target current_path a : assert.
 
@@ -166,33 +186,31 @@ Ltac _report_typechecking_errors uaction tc_result :=
     fail "Unexpected typechecker output:" tc_result
   end.
 
-Ltac _tc_illtyped_action R Sigma uaction args :=
+Ltac _tc_illtyped_action R Sigma sig tau uaction :=
   let annotated := constr:(reposition PThis uaction) in
-  let result := constr:(desugar_and_tc_action R Sigma annotated args) in
+  let result := constr:(desugar_and_tc_action R Sigma sig tau annotated) in
   _report_typechecking_errors uaction result.
 
-Ltac _tc_action R Sigma uaction args :=
-  (_tc_action_fast R Sigma uaction args ||
-   _tc_illtyped_action R Sigma uaction args).
+Ltac _tc_action R Sigma sig tau uaction :=
+  (_tc_action_fast R Sigma sig tau uaction ||
+   _tc_illtyped_action R Sigma sig tau uaction).
 
-Definition annotate_uaction_type {reg_t ext_fn_t}
-           (R: reg_t -> type) (Sigma: ext_fn_t -> Sig 1)
-           (ua: uaction reg_t ext_fn_t) :=
-  ua : uaction reg_t ext_fn_t.
+(* FIXME: Find a way to propagate reg_t and ext_fn_t from R and Sigma to ua.
+   With this users could write [tc_action R Sigma {{ skip }}] directly, without
+   having to annotate the [{{ skip }}]. *)
+Notation tc_action R Sigma sig tau ua :=
+  (ltac:(_tc_action R Sigma sig tau ua)) (only parsing).
+
+Notation tc_rule R Sigma ua :=
+  (tc_action R Sigma (@List.nil (var_t * type)) unit_t ua) (only parsing).
+
+Notation tc_function R Sigma uf :=
+  (tc_action R Sigma (int_argspec uf) (int_retSig uf) (int_body uf)) (only parsing).
 
 Ltac _arg_type R :=
   match type of R with
   | ?t -> _ => t
   end.
-
-(* FIXME: Find a way to propagate reg_t and ext_fn_t from R and Sigma to ua.
-   With this users could write [tc_action R Sigma {{ skip }}] directly, without
-   having to annotate the [{{ skip }}]. *)
-Notation tc_action R Sigma ua :=
-  (ltac:(_tc_action R Sigma ua (@List.nil (var_t * type)))) (only parsing).
-
-Notation tc_function R Sigma uf :=
-  (ltac:(_tc_action R Sigma (int_body uf) (int_argspec uf))) (only parsing).
 
 Ltac _tc_rules R Sigma uactions :=
   let rule_name_t := _arg_type uactions in
@@ -203,7 +221,7 @@ Ltac _tc_rules R Sigma uactions :=
                               (* FIXME: why does the ‘<:’ above need this hnf? *)
                               let ua := constr:(uactions rr) in
                               let ua := (eval hnf in ua) in
-                              _tc_action R Sigma ua (@List.nil (var_t * type))
+                              _tc_action R Sigma (@List.nil (var_t * type)) constr:(unit_t) ua
                             end)) in
   exact res.
 

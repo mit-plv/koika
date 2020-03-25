@@ -15,7 +15,6 @@ Section TypeErrors.
   | SugaredConstructorInAst
   | UnboundVariable (var: var_t)
   | UnboundEnumMember (f: string) (sig: enum_sig)
-  | IncorrectRuleType (tau: type)
   | BasicError (msg: basic_error_message)
   | TooManyArguments (fn_name: fn_name_t) (nexpected: nat) (nextra: nat)
   | TooFewArguments (fn_name: fn_name_t) (nexpected: nat) (nmissing: nat).

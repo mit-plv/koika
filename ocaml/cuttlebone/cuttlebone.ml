@@ -142,7 +142,6 @@ module Util = struct
     | OutOfBounds of { pos: int; sg: array_sig }
     | UnboundField of { field: string; sg: struct_sig }
     | UnboundEnumMember of { name: string; sg: enum_sig }
-    | IncorrectRuleType of { actual: typ }
     | TooManyArguments of { name: string; actual: int; expected: int }
     | TooFewArguments of { name: string; actual: int; expected: int }
     | TypeMismatch of { expected: typ; actual: typ }
@@ -158,8 +157,6 @@ module Util = struct
     | Extr.UnboundEnumMember (name, sg) ->
        UnboundEnumMember { name = string_of_coq_string name;
                            sg = enum_sig_of_extr_enum_sig sg }
-    | Extr.IncorrectRuleType tau ->
-       IncorrectRuleType { actual = typ_of_extr_type tau }
     | Extr.TooManyArguments (name, expected, nextras) ->
        TooManyArguments { name; expected; actual = expected + nextras }
     | Extr.TooFewArguments (name, expected, nmissing) ->
@@ -358,7 +355,7 @@ module Compilation = struct
 
   let typecheck_rule pos (ast: 'f extr_uaction) : ('f extr_action, ('f * _)) result =
     let desugared = Extr.desugar_action pos ast in
-    let typed = Extr.type_rule Util.string_eq_dec _R _Sigma pos desugared in
+    let typed = Extr.tc_rule Util.string_eq_dec _R _Sigma pos desugared in
     result_of_type_result typed
 
   let rec extr_circuit_equivb sz max_depth (c1: _ extr_circuit) (c2: _ extr_circuit) =
