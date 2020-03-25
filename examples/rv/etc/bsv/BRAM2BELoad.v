@@ -1,3 +1,4 @@
+// -*- verilog -*-
 // Copyright (c) 2000-2011 Bluespec, Inc.
 
 // Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -94,9 +95,15 @@ module BRAM2BELoad(CLKA,
       end
    end
 `else
+ `ifndef MEM_FILENAME
+   // We use a macro instead of a parameter because Yosys instantiates the
+   // module with its default parameters when it first reads it (See
+   // https://www.reddit.com/r/yosys/comments/f92bke/)
+  `define MEM_FILENAME "MEM_FILENAME_UNSET"
+ `endif
    initial
      begin : init_rom_block
-        $readmemh("mem.vmh", RAM, 0, MEMSIZE-1);
+        $readmemh(`MEM_FILENAME, RAM, 0);
      end
 `endif
 
