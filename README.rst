@@ -767,8 +767,10 @@ The following list shows the current state of the repo:
       - |coq/Show.v|_: Show typeclass (α → string)
       - |coq/Vect.v|_: Vectors and bitvector library
 
+   - |coq/BitTactics.v|_: Tactics for proofs about bit vectors
    - |coq/Correctness.v|_: End-to-end correctness theorem
    - |coq/PrimitiveProperties.v|_: Equations showing how to implement functions on structures and arrays as bitfuns
+   - |coq/ProgramTactics.v|_: Tactics for proving user-defined circuits
 
 ``examples/``
    ``rv/``
@@ -782,6 +784,7 @@ The following list shows the current state of the repo:
          - |examples/rv/etc/rvcore.verilator.cpp|_: C++ driver for rv32 simulation with Verilator
 
       - |examples/rv/Multiplier.v|_: Implementation of a multiplier module
+      - |examples/rv/MultiplierCorrectness.v|_: Proof of correctness of the multiplier module
       - |examples/rv/RVCore.v|_: Implementation of our RISC-V core
       - |examples/rv/RVEncoding.v|_: Encoding-related constants
       - |examples/rv/Scoreboard.v|_: Implementation of a scoreboard
@@ -855,6 +858,8 @@ The following list shows the current state of the repo:
    - |tests/unpack.v|_: Structure unpacking
 
 
+.. |coq/BitTactics.v| replace:: ``BitTactics.v``
+.. _coq/BitTactics.v: coq/BitTactics.v
 .. |coq/CircuitCorrectness.v| replace:: ``CircuitCorrectness.v``
 .. _coq/CircuitCorrectness.v: coq/CircuitCorrectness.v
 .. |coq/CircuitGeneration.v| replace:: ``CircuitGeneration.v``
@@ -921,6 +926,8 @@ The following list shows the current state of the repo:
 .. _coq/PrimitiveProperties.v: coq/PrimitiveProperties.v
 .. |coq/Primitives.v| replace:: ``Primitives.v``
 .. _coq/Primitives.v: coq/Primitives.v
+.. |coq/ProgramTactics.v| replace:: ``ProgramTactics.v``
+.. _coq/ProgramTactics.v: coq/ProgramTactics.v
 .. |coq/SemanticProperties.v| replace:: ``SemanticProperties.v``
 .. _coq/SemanticProperties.v: coq/SemanticProperties.v
 .. |coq/Show.v| replace:: ``Show.v``
@@ -969,6 +976,8 @@ The following list shows the current state of the repo:
 .. _examples/pipeline.v: examples/pipeline.v
 .. |examples/rv/Multiplier.v| replace:: ``Multiplier.v``
 .. _examples/rv/Multiplier.v: examples/rv/Multiplier.v
+.. |examples/rv/MultiplierCorrectness.v| replace:: ``MultiplierCorrectness.v``
+.. _examples/rv/MultiplierCorrectness.v: examples/rv/MultiplierCorrectness.v
 .. |examples/rv/RVCore.v| replace:: ``RVCore.v``
 .. _examples/rv/RVCore.v: examples/rv/RVCore.v
 .. |examples/rv/RVEncoding.v| replace:: ``RVEncoding.v``

@@ -1,5 +1,4 @@
-(*! Tactics for proofs about bits !*)
-
+(*! Tactics for proofs about bit vectors !*)
 Require Import Lia.
 Require Export Koika.EqDec Koika.Vect Koika.Primitives Koika.PrimitiveProperties.
 Import BitFuns.

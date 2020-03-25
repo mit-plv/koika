@@ -1,5 +1,4 @@
-(*! Useful tactics for proving user-defined circuits !*)
-
+(*! Tactics for proving user-defined circuits !*)
 Require Import Koika.SemanticProperties.
 Require Export Koika.BitTactics Koika.Common.
 
