@@ -29,30 +29,31 @@ cc32e = $(cc) -T$(build)/rv32e/link.ld -DRV32E -mabi=ilp32e -march=rv32e
 
 all: $(rv32_targets) $(vmh_targets) $(dump_targets);
 
-dirs:
-	mkdir -p $(build)
-	mkdir -p $(build)/rv32i/ $(build)/rv32i/riscv_tests/rv32ui/ $(build)/rv32i/riscv_tests/rv32um/ $(build)/rv32i/unit/ $(build)/rv32i/integ/
-	mkdir -p $(build)/rv32e/ $(build)/rv32e/unit/ $(build)/rv32e/integ/
+dirpatterns := %/rv32i/ %/rv32i/riscv_tests/rv32ui/ %/rv32i/riscv_tests/rv32um/ %/rv32i/unit/ %/rv32i/integ/ %/rv32e/ %/rv32e/unit/ %/rv32e/integ/
+dirs := $(patsubst \%%,$(build)%,$(dirpatterns))
+
+$(dirpatterns):
+	mkdir -p $(dirs)
 
 $(elf2hex):
 	$(MAKE) -C elf2hex
 
-$(build)/rv32e/link.ld: link.ld | dirs
+$(build)/rv32e/link.ld: link.ld | $(dirs)
 	$(cc) -DRV32E -E -x c $< | grep -v '^#' > $@
 
-$(build)/rv32i/link.ld: link.ld | dirs
+$(build)/rv32i/link.ld: link.ld | $(dirs)
 	$(cc) -E -x c $< | grep -v '^#' > $@
 
-$(build)/rv32e/%.rv32: %.S $(build)/rv32e/link.ld | dirs
+$(build)/rv32e/%.rv32: %.S $(build)/rv32e/link.ld | $(dirs)
 	$(cc32e) -I rv32ui $< -o $@
 
-$(build)/rv32e/%.rv32: %.c init.S init.S mmio.c $(build)/rv32e/link.ld | dirs
+$(build)/rv32e/%.rv32: %.c init.S init.S mmio.c $(build)/rv32e/link.ld | $(dirs)
 	$(cc32e) init.S mmio.c $< -o $@
 
-$(build)/rv32i/%.rv32: %.S $(build)/rv32i/link.ld | dirs
+$(build)/rv32i/%.rv32: %.S $(build)/rv32i/link.ld | $(dirs)
 	$(cc32i) -march=$(call iarch,$<) $< -o $@
 
-$(build)/rv32i/%.rv32: %.c init.S mmio.c $(build)/rv32i/link.ld | dirs
+$(build)/rv32i/%.rv32: %.c init.S mmio.c $(build)/rv32i/link.ld | $(dirs)
 	$(cc32i) -march=$(call iarch,$<) init.S mmio.c $< -o $@
 
 $(build)/%.dump: $(build)/%.rv32
