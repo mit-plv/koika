@@ -857,8 +857,8 @@ Module RV32Core (RVP: RVParams).
 
   Definition rv_ext_fn_specs (fn: ext_fn_t) :=
     match fn with
-    | ext_mem imem => {| ef_name := "ext_mem_imem"; ef_internal := true |}
-    | ext_mem dmem => {| ef_name := "ext_mem_dmem"; ef_internal := true |}
+    | ext_mem imem => {| ef_name := "ext_mem_imem"; ef_internal := false |}
+    | ext_mem dmem => {| ef_name := "ext_mem_dmem"; ef_internal := false |}
     | ext_uart_write => {| ef_name := "ext_uart_write"; ef_internal := false |}
     | ext_uart_read => {| ef_name := "ext_uart_read"; ef_internal := false |}
     | ext_led => {| ef_name := "ext_led"; ef_internal := false |}

@@ -1,3 +1,4 @@
+DEFAULT_TEST ?=
 include etc/Makefile.conf
 
 .DEFAULT_GOAL := all
