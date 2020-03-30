@@ -6,10 +6,23 @@ Module Type Multiplier_sig.
   Parameter n: nat.
 End Multiplier_sig.
 
-Module Multiplier (s: Multiplier_sig).
+Module Type MultiplierInterface.
+  Axiom reg_t : Type.
+  Axiom R : reg_t -> type.
+  Axiom r : forall idx: reg_t, R idx.
+  Axiom enq : UInternalFunction reg_t empty_ext_fn_t.
+  Axiom deq : UInternalFunction reg_t empty_ext_fn_t.
+  Axiom step : UInternalFunction reg_t empty_ext_fn_t.
+  Axiom enabled : UInternalFunction reg_t empty_ext_fn_t.
+  Axiom FiniteType_reg_t : FiniteType reg_t.
+  Axiom Show_reg_t : Show reg_t.
+End MultiplierInterface.
+
+Module ShiftAddMultiplier (s: Multiplier_sig) <: MultiplierInterface.
   Import s.
 
-  Inductive reg_t := valid | operand1 | operand2 | result | n_step | finished.
+  Inductive _reg_t := valid | operand1 | operand2 | result | n_step | finished.
+  Definition reg_t := _reg_t.
 
   Definition R r :=
     match r with
@@ -31,18 +44,8 @@ Module Multiplier (s: Multiplier_sig).
     | finished => Bits.zero
     end.
 
-  Definition name_reg r :=
-    match r with
-    | valid => "valid"
-    | operand1 => "operand1"
-    | operand2 => "operand2"
-    | result => "result"
-    | n_step => "n_step"
-    | finished => "finished"
-    end.
-
   Definition enq : UInternalFunction reg_t empty_ext_fn_t :=
-    {{ fun enq (op1 : bits_t n) (op2 : bits_t n): bits_t 0 =>
+    {{ fun enq (op1 : bits_t n) (op2 : bits_t n): unit_t =>
          guard (!read0(valid));
          write0(valid, #Ob~1);
          write0(operand1, op1);
@@ -60,7 +63,7 @@ Module Multiplier (s: Multiplier_sig).
     }}.
 
   Definition step : UInternalFunction reg_t empty_ext_fn_t :=
-    {{ fun step () : bits_t 0 =>
+    {{ fun step () : unit_t =>
          guard (read0(valid) && !read0(finished));
          let n_step_val := read0(n_step) in
          (if read0(operand2)[n_step_val] then
@@ -74,6 +77,34 @@ Module Multiplier (s: Multiplier_sig).
            write0(n_step, n_step_val + |(log2 n)`d1|)
     }}.
 
-  Instance FiniteType_reg_t : FiniteType reg_t := _.
+  Definition enabled : UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun enabled () : bits_t 1 => Ob~1 }}.
 
-End Multiplier.
+  Instance FiniteType_reg_t : FiniteType reg_t := _.
+  Instance Show_reg_t : Show reg_t := _.
+End ShiftAddMultiplier.
+
+Module DummyMultiplier (s: Multiplier_sig) <: MultiplierInterface.
+  Import s.
+
+  Inductive _reg_t :=.
+  Definition reg_t := _reg_t.
+
+  Definition R (idx: reg_t) : type := match idx with end.
+  Definition r idx : R idx := match idx with end.
+
+  Definition enq : UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun enq (op1 : bits_t n) (op2 : bits_t n): unit_t => pass }}.
+
+  Definition deq : UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun deq () : bits_t (n+n) => |(n + n)`d0| }}.
+
+  Definition step : UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun step () : unit_t => pass }}.
+
+  Definition enabled : UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun enabled () : bits_t 1 => Ob~0 }}.
+
+  Instance FiniteType_reg_t : FiniteType reg_t := _.
+  Instance Show_reg_t : Show reg_t := _.
+End DummyMultiplier.

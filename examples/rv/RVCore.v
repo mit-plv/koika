@@ -364,7 +364,7 @@ Module Type RVParams.
   Parameter NREGS : nat.
 End RVParams.
 
-Module RV32Core (RVP: RVParams).
+Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
   Import ListNotations.
   Import RVP.
 
@@ -449,11 +449,6 @@ Module RV32Core (RVP: RVParams).
   End ScoreboardParams.
   Module Scoreboard := Scoreboard ScoreboardParams.
 
-  Module Multiplier_32bits <: Multiplier_sig.
-    Definition n := 32.
-  End Multiplier_32bits.
-  Module multiplier := Multiplier Multiplier_32bits.
-
   (* Declare state *)
   Inductive reg_t :=
   | toIMem (state: MemReq.reg_t)
@@ -465,7 +460,7 @@ Module RV32Core (RVP: RVParams).
   | d2e (state: fromDecode.reg_t)
   | e2w (state: fromExecute.reg_t)
   | rf (state: Rf.reg_t)
-  | mulState (state: multiplier.reg_t)
+  | mulState (state: Multiplier.reg_t)
   | scoreboard (state: Scoreboard.reg_t)
   | cycle_count
   | instr_count
@@ -485,7 +480,7 @@ Module RV32Core (RVP: RVParams).
     | e2w r => fromExecute.R r
     | rf r => Rf.R r
     | scoreboard r => Scoreboard.R r
-    | mulState r => multiplier.R r
+    | mulState r => Multiplier.R r
     | pc => bits_t 32
     | cycle_count => bits_t 32
     | instr_count => bits_t 32
@@ -505,7 +500,7 @@ Module RV32Core (RVP: RVParams).
     | d2e s => fromDecode.r s
     | e2w s => fromExecute.r s
     | scoreboard s => Scoreboard.r s
-    | mulState s => multiplier.r s
+    | mulState s => Multiplier.r s
     | pc => Bits.zero
     | cycle_count => Bits.zero
     | instr_count => Bits.zero
@@ -619,6 +614,7 @@ Module RV32Core (RVP: RVParams).
   Definition isMultiplyInst : UInternalFunction reg_t empty_ext_fn_t :=
     {{
         fun isMultiplyInst (dInst: struct_t decoded_sig) : bits_t 1 =>
+          mulState.(Multiplier.enabled)() &&
           let fields := getFields(get(dInst, inst)) in
           (get(fields, funct7) == #funct7_MUL) &&
           (get(fields, funct3) == #funct3_MUL) &&
@@ -633,7 +629,7 @@ Module RV32Core (RVP: RVParams).
 
   Definition step_multiplier : uaction reg_t ext_fn_t :=
     {{
-        mulState.(multiplier.step)()
+        mulState.(Multiplier.step)()
     }}.
 
   Definition execute : uaction reg_t ext_fn_t :=
@@ -680,7 +676,7 @@ Module RV32Core (RVP: RVParams).
              else if (isControlInst(dInst)) then
                set data := (pc + |32`d4|)     (* For jump and link *)
              else if (isMultiplyInst(dInst)) then
-               mulState.(multiplier.enq)(rs1_val, rs2_val)
+               mulState.(Multiplier.enq)(rs1_val, rs2_val)
              else
                pass;
              let controlResult := execControl32(fInst, rs1_val, rs2_val, imm, pc) in
@@ -723,7 +719,7 @@ Module RV32Core (RVP: RVParams).
           return default: fail                   (* Load Double or Signed Word *)
           end
         else if isMultiplyInst(dInst) then
-          set data := mulState.(multiplier.deq)()[|6`d0| :+ 32]
+          set data := mulState.(Multiplier.deq)()[|6`d0| :+ 32]
         else
           pass;
         if get(dInst,valid_rd) then
@@ -878,6 +874,7 @@ Module RV32Core (RVP: RVParams).
   Instance Show_scoreboard : Show (Scoreboard.reg_t) :=
     {| show '(Scoreboard.Scores (Scoreboard.Rf.rData v)) := rv_register_name v |}.
 
+  Existing Instance Multiplier.Show_reg_t.
   Instance Show_reg_t : Show reg_t := _.
   Instance Show_ext_fn_t : Show ext_fn_t := _.
 End RV32Core.
@@ -915,8 +912,13 @@ End RV32IParams.
 (* TC_native adds overhead but makes typechecking large rules faster *)
 Ltac _tc_strategy ::= exact TC_native.
 
+Module Mul32Params <: Multiplier_sig.
+  Definition n := 32.
+End Mul32Params.
+
 Module RV32I <: Core.
-  Include (RV32Core RV32IParams).
+  Module Multiplier := ShiftAddMultiplier Mul32Params.
+  Include (RV32Core RV32IParams Multiplier).
 
   Definition _reg_t := reg_t.
   Definition _ext_fn_t := ext_fn_t.
@@ -955,7 +957,9 @@ Module RV32EParams <: RVParams.
 End RV32EParams.
 
 Module RV32E <: Core.
-  Include (RV32Core RV32EParams).
+  Module Multiplier := DummyMultiplier Mul32Params.
+  Include (RV32Core RV32EParams Multiplier).
+
   Definition _reg_t := reg_t.
   Definition _ext_fn_t := ext_fn_t.
 

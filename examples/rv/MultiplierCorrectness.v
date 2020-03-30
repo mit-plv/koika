@@ -8,7 +8,7 @@ Module MultiplierProofs.
   Module Sig32 <: Multiplier_sig.
     Definition n := 32.
   End Sig32.
-  Module mul32 := Multiplier Sig32.
+  Module mul32 := ShiftAddMultiplier Sig32.
   Import mul32.
   Import Sig32.
 
