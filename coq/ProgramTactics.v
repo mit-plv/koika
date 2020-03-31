@@ -1,5 +1,5 @@
 (*! Tactics for proving user-defined circuits !*)
-Require Import Koika.SemanticProperties.
+Require Import Koika.SemanticProperties Koika.Frontend.
 Require Export Koika.BitTactics Koika.Common.
 
 (** Rewrite all hypotheses that would change a term being matched in the context
@@ -49,7 +49,7 @@ Ltac interp_action_t :=
   repeat match goal with
          | [ H: interp_action _ _ _ _ _ ?action = Some _ |- _] =>
            unfold action in H;
-           simpl (projT2 _) in H;
+           simpl (extract_success _ _) in H;
            unfold interp_action, opt_bind, no_latest_writes in *;
            repeat log_cleanup_step
          | _ => progress (simpl cassoc in *; simpl ctl in *; simpl chd in * )
