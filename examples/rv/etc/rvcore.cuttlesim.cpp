@@ -108,9 +108,7 @@ struct extfuns_t {
   extfuns_t() : dmem{}, imem{}, led{false} {}
 };
 
-using simulator = module_rv32<extfuns_t>;
-
-class rv_core : public simulator {
+class rv_core final : public module_rv32<extfuns_t> {
   void strobe(std::uint_fast64_t _unused ncycles) const {
 #if defined(SIM_STROBE) && !defined(SIM_MINIMAL)
     std::cout << "# " << ncycles << std::endl;
@@ -179,7 +177,7 @@ class rv_core : public simulator {
   }
 
 public:
-  explicit rv_core(const std::string& elf_fpath) : simulator{} {
+  explicit rv_core(const std::string& elf_fpath) : module_rv32{} {
     extfuns.imem.read_elf(elf_fpath);
     extfuns.dmem.read_elf(elf_fpath);
   }
