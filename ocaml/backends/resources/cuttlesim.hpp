@@ -273,7 +273,7 @@ namespace prims {
     friend std::ostream& operator<<<0>(std::ostream& os, const bits<0>& bs);
 
     /// Constructors
-    template<typename T> static constexpr bits<0> mk(T arg) { return {}; }
+    template<typename T> static constexpr bits<0> mk(T /*arg*/) { return {}; }
   };
 
   using unit = bits<0>;
