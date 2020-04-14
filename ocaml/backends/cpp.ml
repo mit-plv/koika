@@ -995,9 +995,10 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
         | Array2 (_, idx) ->
            PureExpr (sprintf "prims::replace<%d>(%s, %s)" idx a1 a2) in
 
-      let assert_no_shadowing sg v tau v_to_string m =
+      let assert_no_shadowing sg (v: var_t) (tau: Extr.type0) v_to_string m =
         if Extr.member_mentions_shadowed_binding Cuttlebone.Util.any_eq_dec sg v tau m then
-          failwith (sprintf "Variable %s is shadowed by a later binding, but the program references the original binding." (v_to_string v)) in
+          let vars = String.concat ", " @@ List.map (v_to_string << fst) sg in
+          failwith (sprintf "Variable %s is shadowed by a later binding, but the program references the original binding (full signature: %s)." (v_to_string v) vars) in
 
       let assert_no_duplicates ~(descr: string) (elements: string list) =
         List.fold_left (fun elems e ->
@@ -1201,7 +1202,11 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
       let p_rule_body () =
         p_special_fn "RULE" (fun () ->
             if use_dynamic_log then (p "dynamic_log_t<%d> dlog{};" rule_max_log_size; nl ());
+          (try
             p_assign_and_ignore NoTarget (p_action true Pos.Unknown NoTarget rule.rl_body);
+           with Failure msg ->
+             let msg = sprintf "In %s: %s" rule_name_unprefixed msg in
+             Printexc.raise_with_backtrace (Failure msg) (Printexc.get_raw_backtrace ()));
             nl ();
             p "%s();" commit) in
 
