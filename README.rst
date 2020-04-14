@@ -855,6 +855,7 @@ The following list shows the current state of the repo:
    - |tests/errors.1.lv|_: Syntax and typing errors in LV
    - |tests/errors.v|_: Syntax and typing errors in Coq
    - |tests/extcall.v|_: External functions
+   - |tests/internal_functions.v|_: Intfun tests
    - |tests/large_trace.lv|_: Make sure that snapshots in large traces don't copy data
    - |tests/large_writeset.v|_: Make sure that the large writeset heuristics in the scheduler don't break things
    - |tests/mul.lv|_: Computations involving multiplication
@@ -1086,6 +1087,8 @@ The following list shows the current state of the repo:
 .. _tests/errors.v: tests/errors.v
 .. |tests/extcall.v| replace:: ``extcall.v``
 .. _tests/extcall.v: tests/extcall.v
+.. |tests/internal_functions.v| replace:: ``internal_functions.v``
+.. _tests/internal_functions.v: tests/internal_functions.v
 .. |tests/large_trace.lv| replace:: ``large_trace.lv``
 .. _tests/large_trace.lv: tests/large_trace.lv
 .. |tests/large_writeset.v| replace:: ``large_writeset.v``
