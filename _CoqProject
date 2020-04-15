@@ -2,3 +2,4 @@
 -Q _build/default/tests/ tests
 -Q _build/default/examples/ examples
 -R _build/default/examples/rv rv
+-R _build/default/examples/dynamic_isolation dynamicIsolation

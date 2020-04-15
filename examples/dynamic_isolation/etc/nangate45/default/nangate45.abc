@@ -1,0 +1,17 @@
+echo + strash
+strash
+echo + ifraig
+ifraig
+echo + map -D 1 -B 0.1
+map -D 1 -B 0.1
+echo + cleanup
+cleanup
+echo + buffer
+buffer
+echo + upsize -D 1
+upsize -D 1
+echo + dnsize -D 1
+dnsize -D 1
+echo + stime -p
+stime -p
+echo + 

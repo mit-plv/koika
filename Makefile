@@ -90,7 +90,7 @@ $(dirpath) $(dirpath)/: $(1) ocaml | configure
 endef
 
 TESTS := $(wildcard tests/*.lv) $(wildcard tests/*.v)
-EXAMPLES := $(wildcard examples/*.lv) $(wildcard examples/*.v) examples/rv/rv32i.v examples/rv/rv32e.v
+EXAMPLES := $(wildcard examples/*.lv) $(wildcard examples/*.v) examples/rv/rv32i.v examples/rv/rv32e.v examples/dynamic_isolation/rv32i.v examples/dynamic_isolation/rv32e.v
 
 configure:
 	etc/configure $(filter %.v,${TESTS} ${EXAMPLES})
