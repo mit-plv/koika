@@ -7,6 +7,9 @@ Require Import DynamicIsolation.RVEncoding.
 Require Import DynamicIsolation.Scoreboard.
 Require Import DynamicIsolation.Multiplier.
 
+Require Import DynamicIsolation.Tactics.
+Require Import DynamicIsolation.Interfaces.
+
 Section RV32Helpers.
   Context {reg_t: Type}.
 
