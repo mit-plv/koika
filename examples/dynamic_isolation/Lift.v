@@ -16,6 +16,13 @@ Ltac mk_rlift lift :=
       destruct r1; destruct r2; simpl; destruct_all_matches
  end.
 
+Ltac mk_rlift_id :=
+  exists id; now auto.
+
+Create HintDb lift.
+
+Hint Extern 1 (RLift _ _ _ _ _ ) => mk_rlift_id : lift.
+
 Section ScheduleLift.
   Context {pos_t : Type} {rule_name_t : Type} {rule_name_t' : Type}.
   Context (lift: rule_name_t -> rule_name_t').
@@ -42,14 +49,13 @@ End ScheduleLift.
 Section LiftAction.
   Context {reg_t reg_t' : Type}.
   Context {R: reg_t -> type} {R' : reg_t' -> type}.
-  Context {Rlift: RLift type reg_t reg_t' R R'}.
+  Context (Rlift: RLift type reg_t reg_t' R R').
 
-  Context {fn_name_t fn_name_t' ext_fn_t ext_fn_t': Type}.
+  Context {fn_name_t ext_fn_t ext_fn_t': Type}.
 
   Context {Sigma: ext_fn_t -> ExternalSignature}.
   Context {Sigma': ext_fn_t' -> ExternalSignature}.
-  Context {Fnlift : RLift ExternalSignature ext_fn_t ext_fn_t' Sigma Sigma'}.
-  Context {lift_fn_name : fn_name_t -> fn_name_t'}.
+  Context (Fnlift : RLift ExternalSignature ext_fn_t ext_fn_t' Sigma Sigma').
 
   Definition lift := Rlift.(rlift).
 
@@ -57,13 +63,13 @@ Section LiftAction.
     Context (lift_action:
                forall {sig: tsig var_t} {ret_ty: type},
                  @TypedSyntax.action pos_t var_t fn_name_t reg_t ext_fn_t R Sigma sig ret_ty ->
-                 (@TypedSyntax.action pos_t var_t fn_name_t' reg_t' ext_fn_t' R' Sigma' sig ret_ty)).
+                 (@TypedSyntax.action pos_t var_t fn_name_t reg_t' ext_fn_t' R' Sigma' sig ret_ty)).
     Fixpoint lift_args
       {sig: tsig var_t}
       {argspec: tsig var_t}
       (args: context (fun k_tau => @TypedSyntax.action pos_t var_t fn_name_t reg_t ext_fn_t R Sigma sig (snd k_tau))
                      argspec)
-      : context (fun k_tau => @TypedSyntax.action pos_t var_t fn_name_t' reg_t' ext_fn_t' R' Sigma' sig (snd k_tau)) argspec :=
+      : context (fun k_tau => @TypedSyntax.action pos_t var_t fn_name_t reg_t' ext_fn_t' R' Sigma' sig (snd k_tau)) argspec :=
       (match args with
        | CtxEmpty => CtxEmpty
        | @CtxCons _ _ argspec k_tau arg args =>
@@ -74,7 +80,7 @@ Section LiftAction.
   Fixpoint lift_action {sig: tsig var_t}
                        {ret_ty: type}
                        (action: @TypedSyntax.action pos_t var_t fn_name_t reg_t ext_fn_t R Sigma sig ret_ty)
-                       : (@TypedSyntax.action pos_t var_t fn_name_t' reg_t' ext_fn_t' R' Sigma' sig ret_ty) :=
+                       : (@TypedSyntax.action pos_t var_t fn_name_t reg_t' ext_fn_t' R' Sigma' sig ret_ty) :=
     match action in TypedSyntax.action _ _ _ _ _ sig ret_ty
           return TypedSyntax.action _ _ _ _ _ sig ret_ty with
     | Fail tau => Fail tau
@@ -87,31 +93,31 @@ Section LiftAction.
                                    (lift_action tbranch)
                                    (lift_action fbranch)
     | @Read _ _ _ _ _ _ _ sig0 port idx =>
-       rew [fun t : type => TypedSyntax.action pos_t var_t fn_name_t' R' Sigma' sig0 t] (Rlift.(pf_R_equal) idx) in
+       rew [fun t : type => TypedSyntax.action pos_t var_t fn_name_t R' Sigma' sig0 t] (Rlift.(pf_R_equal) idx) in
            (Read port (lift idx))
     | @Write _ _ _ _ _ _ _ sig0 port idx value =>
         Write port (lift idx)
-              (rew<-[fun t: type => TypedSyntax.action pos_t var_t fn_name_t' R' Sigma' sig0 t]
+              (rew<-[fun t: type => TypedSyntax.action pos_t var_t fn_name_t R' Sigma' sig0 t]
                     (Rlift.(pf_R_equal) idx) in (lift_action value))
     | Unop fn arg1 => Unop fn (lift_action arg1)
     | Binop fn arg1 arg2 => Binop fn (lift_action arg1) (lift_action arg2)
     | @ExternalCall _ _ _ _ _ _ _ sig0 fn arg =>
-        rew [fun e : ExternalSignature => TypedSyntax.action pos_t var_t fn_name_t' R' Sigma' sig0 (retSig e)]
+        rew [fun e : ExternalSignature => TypedSyntax.action pos_t var_t fn_name_t R' Sigma' sig0 (retSig e)]
             pf_R_equal Fnlift fn in
         ExternalCall (rlift Fnlift fn)
-          (rew <- [fun t : ExternalSignature => TypedSyntax.action pos_t var_t fn_name_t' R' Sigma' sig0 (arg1Sig t)]
+          (rew <- [fun t : ExternalSignature => TypedSyntax.action pos_t var_t fn_name_t R' Sigma' sig0 (arg1Sig t)]
                pf_R_equal Fnlift fn in lift_action arg)
 
     | InternalCall fn args body =>
-        InternalCall (lift_fn_name fn) (lift_args (@lift_action) args) (lift_action body)
+        InternalCall fn (lift_args (@lift_action) args) (lift_action body)
     | APos pos a => APos pos (lift_action a)
     end.
 
     Definition lift_rule (rl: @TypedSyntax.rule pos_t var_t fn_name_t reg_t ext_fn_t R Sigma)
-                         : @TypedSyntax.rule pos_t var_t fn_name_t' reg_t' ext_fn_t' R' Sigma' :=
+                         : @TypedSyntax.rule pos_t var_t fn_name_t reg_t' ext_fn_t' R' Sigma' :=
       lift_action rl.
 
 End LiftAction.
 
-Arguments lift_action : clear implicits.
-Arguments lift_rule : clear implicits.
+Ltac lift_auto := auto with lift.
+

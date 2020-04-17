@@ -365,7 +365,9 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
     | Mem_internal st => Memory.R_internal_reg st
     end.
 
+  Definition ext_fn_t := External.ext_fn_t.
   Definition Sigma := External.Sigma.
+  Print rule.
   Definition rule : Type := rule R Sigma.
 
   (* TODO: 40s *)
@@ -381,6 +383,7 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
   | MemRule  (r: Memory.rule_name_t)
   .
 
+
   Section Core0_Lift.
     Definition core0_lift (reg: Core0.reg_t) : reg_t :=
       match reg with
@@ -393,6 +396,7 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
       end.
 
     Definition Lift_core0 : RLift _ Core0.reg_t reg_t Core0.R R := ltac:(mk_rlift core0_lift).
+    Definition FnLift_core0 : RLift _ Core0.ext_fn_t ext_fn_t Core0.Sigma Sigma := ltac:(lift_auto).
 
   End Core0_Lift.
 
@@ -408,6 +412,7 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
       end.
 
     Definition Lift_core1 : RLift _ Core1.reg_t reg_t Core1.R R := ltac:(mk_rlift core1_lift).
+    Definition FnLift_core1 : RLift _ Core1.ext_fn_t ext_fn_t Core1.Sigma Sigma := ltac:(lift_auto).
 
   End Core1_Lift.
 
@@ -437,6 +442,7 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
       end.
 
     Definition Lift_sm : RLift _ SM.reg_t reg_t SM.R R := ltac:(mk_rlift sm_lift).
+    Definition FnLift_sm : RLift _ SM.ext_fn_t ext_fn_t SM.Sigma Sigma := ltac:(lift_auto).
 
   End SM_Lift.
 
@@ -455,9 +461,10 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
       end.
 
     Definition Lift_mem : RLift _ Memory.reg_t reg_t Memory.R R := ltac:(mk_rlift mem_lift).
+    Definition FnLift_mem : RLift _ Memory.ext_fn_t ext_fn_t Memory.Sigma Sigma := ltac:(lift_auto).
 
   End Mem_Lift.
-  
+
   Section Rules.
     Definition core0_rule_name_lift (rl: Core0.rule_name_t) : rule_name_t :=
       Core0Rule rl.
@@ -467,6 +474,23 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
       SmRule rl.
     Definition mem_rule_name_lift (rl: Memory.rule_name_t) : rule_name_t :=
       MemRule rl.
+
+    Definition core0_rules (rl: Core0.rule_name_t) : rule :=
+      lift_rule Lift_core0 FnLift_core0 (Core0.rules rl).
+    Definition core1_rules (rl: Core1.rule_name_t) : rule :=
+      lift_rule Lift_core1 FnLift_core1 (Core1.rules rl).
+    Definition sm_rules (rl: SM.rule_name_t) : rule :=
+      lift_rule Lift_sm FnLift_sm (SM.rules rl).
+    Definition mem_rules (rl: Memory.rule_name_t) : rule :=
+      lift_rule Lift_mem FnLift_mem (Memory.rules rl).
+
+    Definition rules (rl: rule_name_t) : rule :=
+      match rl with
+      | Core0Rule r => core0_rules r
+      | Core1Rule r => core1_rules r
+      | SmRule r => sm_rules r
+      | MemRule r => mem_rules r
+      end.
 
   End Rules.
 
