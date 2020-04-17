@@ -1,9 +1,9 @@
-(*! Implementation of our RISC-V core !*)
 Require Import Koika.Frontend.
 Require Import Coq.Lists.List.
 
 Require Import Koika.Std.
 
+Require Import DynamicIsolation.Lift.
 Require Import DynamicIsolation.Tactics.
 Require Import DynamicIsolation.Scoreboard.
 
@@ -117,39 +117,6 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
   Definition state := env_t ContextEnv (fun idx : reg_t => R idx).
 
 End Core_sig.
-
-Module ModuleLift.
-  Record RLift {reg_t reg_t': Type} {R: reg_t -> type} {R': reg_t' -> type} := mk_RLift
-    { lift: reg_t -> reg_t'
-    ; pf_R_equal: forall (reg: reg_t), R' (lift reg) = R reg
-    ; pf_inj_lift: forall (r1 r2: reg_t), lift r1 = lift r2 -> r1 = r2
-    }.
-  Arguments RLift : clear implicits.
-
-  Ltac mk_rlift lift :=
-    exists lift;
-    match goal with
-    | [ |- forall r, _ (lift r) = _ r ] =>  destruct r; auto
-    | [ |- forall r1 r2, lift r1 = lift r2 -> r1 = r2] =>
-        destruct r1; destruct r2; simpl; destruct_all_matches
-   end.
-
-  Section ScheduleLift.
-    Context {pos_t : Type} {rule_name_t : Type} {rule_name_t' : Type}.
-    Context (lift: rule_name_t -> rule_name_t').
-
-    Fixpoint lift_scheduler (sched: Syntax.scheduler pos_t rule_name_t)
-                             : Syntax.scheduler pos_t rule_name_t' :=
-      match sched with
-      | Done => Done
-      | Cons r s => Cons (lift r) (lift_scheduler s)
-      | Try r s1 s2 => Try (lift r) (lift_scheduler s1) (lift_scheduler s2)
-      | SPos pos s => SPos pos (lift_scheduler s)
-      end.
-
-  End ScheduleLift.
-
-End ModuleLift.
 
 Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
   Inductive internal_reg_t := .
@@ -414,8 +381,6 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
   | MemRule  (r: Memory.rule_name_t)
   .
 
-  Import ModuleLift.
-
   Section Core0_Lift.
     Definition core0_lift (reg: Core0.reg_t) : reg_t :=
       match reg with
@@ -427,10 +392,7 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
       | Core0.internal s => Core0_internal s
       end.
 
-    Definition Lift_core0 : RLift Core0.reg_t reg_t Core0.R R := ltac:(mk_rlift core0_lift).
-
-    Definition core0_rule_name_lift (rl: Core0.rule_name_t) : rule_name_t :=
-      Core0Rule rl.
+    Definition Lift_core0 : RLift _ Core0.reg_t reg_t Core0.R R := ltac:(mk_rlift core0_lift).
 
   End Core0_Lift.
 
@@ -445,10 +407,7 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
       | Core1.internal s => Core1_internal s
       end.
 
-    Definition Lift_core1 : RLift Core1.reg_t reg_t Core1.R R := ltac:(mk_rlift core1_lift).
-
-    Definition core1_rule_name_lift (rl: Core1.rule_name_t) : rule_name_t :=
-      Core1Rule rl.
+    Definition Lift_core1 : RLift _ Core1.reg_t reg_t Core1.R R := ltac:(mk_rlift core1_lift).
 
   End Core1_Lift.
 
@@ -477,10 +436,7 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
       | SM.internal st => SM_internal st
       end.
 
-    Definition Lift_sm : RLift SM.reg_t reg_t SM.R R := ltac:(mk_rlift sm_lift).
-
-    Definition sm_rule_name_lift (rl: SM.rule_name_t) : rule_name_t :=
-      SmRule rl.
+    Definition Lift_sm : RLift _ SM.reg_t reg_t SM.R R := ltac:(mk_rlift sm_lift).
 
   End SM_Lift.
 
@@ -498,11 +454,31 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
       | Memory.internal st => Mem_internal st
       end.
 
-    Definition Lift_mem : RLift Memory.reg_t reg_t Memory.R R := ltac:(mk_rlift mem_lift).
+    Definition Lift_mem : RLift _ Memory.reg_t reg_t Memory.R R := ltac:(mk_rlift mem_lift).
 
+  End Mem_Lift.
+  
+  Section Rules.
+    Definition core0_rule_name_lift (rl: Core0.rule_name_t) : rule_name_t :=
+      Core0Rule rl.
+    Definition core1_rule_name_lift (rl: Core1.rule_name_t) : rule_name_t :=
+      Core1Rule rl.
+    Definition sm_rule_name_lift (rl: SM.rule_name_t) : rule_name_t :=
+      SmRule rl.
     Definition mem_rule_name_lift (rl: Memory.rule_name_t) : rule_name_t :=
       MemRule rl.
 
-  End Mem_Lift.
+  End Rules.
+
+  Section Schedule.
+    Definition core0_schedule := lift_scheduler core0_rule_name_lift Core0.schedule.
+    Definition core1_schedule := lift_scheduler core1_rule_name_lift Core1.schedule.
+    Definition sm_schedule := lift_scheduler sm_rule_name_lift SM.schedule.
+    Definition mem_schedule := lift_scheduler mem_rule_name_lift Memory.schedule.
+
+    Definition schedule :=
+      schedule_app (schedule_app (schedule_app core0_schedule core1_schedule) sm_schedule) mem_schedule.
+
+  End Schedule.
 
 End Machine.
