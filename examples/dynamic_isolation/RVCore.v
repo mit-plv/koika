@@ -3,12 +3,13 @@ Require Import Koika.Frontend.
 Require Import Coq.Lists.List.
 
 Require Import Koika.Std.
+
+Require Import DynamicIsolation.External.
+Require Import DynamicIsolation.Interfaces.
+Require Import DynamicIsolation.Multiplier.
 Require Import DynamicIsolation.RVEncoding.
 Require Import DynamicIsolation.Scoreboard.
-Require Import DynamicIsolation.Multiplier.
-
 Require Import DynamicIsolation.Tactics.
-Require Import DynamicIsolation.Interfaces.
 
 Section RV32Helpers.
   Context {reg_t: Type}.
@@ -367,18 +368,12 @@ Module Type RVParams.
   Parameter NREGS : nat.
 End RVParams.
 
-Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
+
+Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
+                (EnclaveParams: EnclaveParameters) (CoreParams: CoreParameters).
   Import ListNotations.
   Import RVP.
-
-  Definition mem_req :=
-    {| struct_name := "mem_req";
-       struct_fields := [("byte_en" , bits_t 4);
-                         ("addr"     , bits_t 32);
-                         ("data"     , bits_t 32)] |}.
-  Definition mem_resp :=
-    {| struct_name := "mem_resp";
-       struct_fields := [("byte_en", bits_t 4); ("addr", bits_t 32); ("data", bits_t 32)] |}.
+  Import Common.
 
   Definition fetch_bookkeeping :=
     {| struct_name := "fetch_bookkeeping";
@@ -405,21 +400,13 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
 
 
   (* Specialize interfaces *)
-  Module FifoMemReq <: Fifo.
-    Definition T:= struct_t mem_req.
-  End FifoMemReq.
-  Module MemReq := Fifo1Bypass FifoMemReq.
-
-  Module FifoMemResp <: Fifo.
-    Definition T:= struct_t mem_resp.
-  End FifoMemResp.
-  Module MemResp := Fifo1 FifoMemResp.
-
+  (*
   Module FifoUART <: Fifo.
     Definition T:= bits_t 8.
   End FifoUART.
   Module UARTReq := Fifo1Bypass FifoUART.
   Module UARTResp := Fifo1 FifoUART.
+  *)
 
   Module FifoFetch <: Fifo.
     Definition T:= struct_t fetch_bookkeeping.
@@ -437,6 +424,12 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
   End FifoExecute.
   Module fromExecute := Fifo1 FifoExecute.
 
+  Module ScoreboardParams <: Scoreboard_sig.
+    Definition idx_sz := log2 NREGS.
+    Definition maxScore := 3.
+  End ScoreboardParams.
+  Module Scoreboard := Scoreboard ScoreboardParams.
+
   Module RfParams <: RfPow2_sig.
     Definition idx_sz := log2 NREGS.
     Definition T := bits_t 32.
@@ -446,18 +439,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
   End RfParams.
   Module Rf := RfPow2 RfParams.
 
-  Module ScoreboardParams <: Scoreboard_sig.
-    Definition idx_sz := log2 NREGS.
-    Definition maxScore := 3.
-  End ScoreboardParams.
-  Module Scoreboard := Scoreboard ScoreboardParams.
-
-  (* Declare state *)
-  Inductive reg_t :=
-  | toIMem (state: MemReq.reg_t)
-  | fromIMem (state: MemResp.reg_t)
-  | toDMem (state: MemReq.reg_t)
-  | fromDMem (state: MemResp.reg_t)
+  Inductive internal_reg_t' : Type :=
   | f2d (state: fromFetch.reg_t)
   | f2dprim (state: waitFromFetch.reg_t)
   | d2e (state: fromDecode.reg_t)
@@ -467,16 +449,13 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
   | scoreboard (state: Scoreboard.reg_t)
   | cycle_count
   | instr_count
-  | pc
-  | epoch.
+  | epoch
+  .
 
-  (* State type *)
-  Definition R idx :=
+  Definition internal_reg_t := internal_reg_t'.
+
+  Definition R_internal (idx: internal_reg_t) : type :=
     match idx with
-    | toIMem r => MemReq.R r
-    | fromIMem r => MemResp.R r
-    | toDMem r => MemReq.R r
-    | fromDMem r => MemResp.R r
     | f2d r => fromFetch.R r
     | f2dprim r => waitFromFetch.R r
     | d2e r => fromDecode.R r
@@ -484,65 +463,70 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
     | rf r => Rf.R r
     | scoreboard r => Scoreboard.R r
     | mulState r => Multiplier.R r
-    | pc => bits_t 32
     | cycle_count => bits_t 32
     | instr_count => bits_t 32
     | epoch => bits_t 1
     end.
 
-  (* Initial values *)
-  Definition r idx : R idx :=
+  Definition r_internal (idx: internal_reg_t) : R_internal idx :=
     match idx with
-    | rf s => Rf.r s
-    | toIMem s => MemReq.r s
-    | fromIMem s => MemResp.r s
-    | toDMem s => MemReq.r s
-    | fromDMem s => MemResp.r s
     | f2d s => fromFetch.r s
     | f2dprim s => waitFromFetch.r s
     | d2e s => fromDecode.r s
     | e2w s => fromExecute.r s
+    | rf s => Rf.r s
     | scoreboard s => Scoreboard.r s
     | mulState s => Multiplier.r s
-    | pc => Bits.zero
     | cycle_count => Bits.zero
     | instr_count => Bits.zero
     | epoch => Bits.zero
     end.
 
-  (* External functions, used to model memory *)
+  (* Declare state *)
+  Inductive reg_t :=
+  | core_id
+  | pc
+  | toIMem (state: MemReq.reg_t)
+  | toDMem (state: MemReq.reg_t)
+  | fromIMem (state: MemResp.reg_t)
+  | fromDMem (state: MemResp.reg_t)
+  | internal (r: internal_reg_t)
+  .
 
-  Inductive memory := imem | dmem.
-  Inductive ext_fn_t :=
-  | ext_mem (m: memory)
-  | ext_uart_read
-  | ext_uart_write
-  | ext_led.
-
-  Definition mem_input :=
-    {| struct_name := "mem_input";
-       struct_fields := [("get_ready", bits_t 1);
-                        ("put_valid", bits_t 1);
-                        ("put_request", struct_t mem_req)] |}.
-
-  Definition mem_output :=
-    {| struct_name := "mem_output";
-       struct_fields := [("get_valid", bits_t 1);
-                        ("put_ready", bits_t 1);
-                        ("get_response", struct_t mem_resp)] |}.
-
-
-  Definition led_input := maybe (bits_t 1).
-  Definition uart_input := maybe (bits_t 8).
-  Definition uart_output := maybe (bits_t 8).
-
-  Definition Sigma (fn: ext_fn_t) :=
-    match fn with
-    | ext_mem _ => {$ struct_t mem_input ~> struct_t mem_output $}
-    | ext_uart_read => {$ bits_t 1 ~> uart_output $}
-    | ext_uart_write => {$ uart_input ~> bits_t 1 $}
-    | ext_led => {$ led_input ~> bits_t 1 $}
+  (* State type *)
+  Definition R idx :=
+    match idx with
+    | core_id => bits_t 1
+    | pc => bits_t 32
+    | toIMem r => MemReq.R r
+    | fromIMem r => MemResp.R r
+    | toDMem r => MemReq.R r
+    | fromDMem r => MemResp.R r
+    | internal r => R_internal r
     end.
+
+  (* Initial values *)
+  Definition r idx : R idx :=
+    match idx with
+    | core_id => CoreParams.core_id
+    | pc => Bits.zero
+    | toIMem s => MemReq.r s
+    | fromIMem s => MemResp.r s
+    | toDMem s => MemReq.r s
+    | fromDMem s => MemResp.r s
+    | internal s => r_internal s
+    end.
+
+  Definition ext_fn_t := External.ext_fn_t.
+  Definition Sigma := External.Sigma.
+  Definition rule := rule R Sigma.
+  Definition sigma := External.sigma.
+
+  Notation "'__internal__' instance " :=
+    (fun reg => internal ((instance) reg)) (in custom koika at level 1, instance constr at level 99).
+  Notation "'(' instance ').(' method ')' args" :=
+    (USugar (UCallModule instance _ method args))
+      (in custom koika at level 1, method constr, args custom koika_args at level 99).
 
   Definition fetch : uaction reg_t ext_fn_t :=
     {{
@@ -554,17 +538,17 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
         let fetch_bookkeeping := struct fetch_bookkeeping {|
                                           pc := pc;
                                           ppc := pc + |32`d4|;
-                                          epoch := read1(epoch)
+                                          epoch := read1(internal epoch)
                                         |} in
         toIMem.(MemReq.enq)(req);
         write1(pc, pc + |32`d4|);
-        f2d.(fromFetch.enq)(fetch_bookkeeping)
+        (__internal__ f2d).(fromFetch.enq)(fetch_bookkeeping)
     }}.
 
   Definition wait_imem : uaction reg_t ext_fn_t :=
     {{
-        let fetched_bookkeeping := f2d.(fromFetch.deq)() in
-        f2dprim.(waitFromFetch.enq)(fetched_bookkeeping)
+        let fetched_bookkeeping := (__internal__ f2d).(fromFetch.deq)() in
+        (__internal__ f2dprim).(waitFromFetch.enq)(fetched_bookkeeping)
     }}.
 
   Definition sliceReg : UInternalFunction reg_t empty_ext_fn_t :=
@@ -581,19 +565,19 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
     {{
         let instr := fromIMem.(MemResp.deq)() in
         let instr := get(instr,data) in
-        let fetched_bookkeeping := f2dprim.(waitFromFetch.deq)() in
+        let fetched_bookkeeping := (__internal__ f2dprim).(waitFromFetch.deq)() in
         let decodedInst := decode_fun(instr) in
-        when (get(fetched_bookkeeping, epoch) == read1(epoch)) do
+        when (get(fetched_bookkeeping, epoch) == read1(internal epoch)) do
              (let rs1_idx := get(getFields(instr), rs1) in
              let rs2_idx := get(getFields(instr), rs2) in
-             let score1 := scoreboard.(Scoreboard.search)(sliceReg(rs1_idx)) in
-             let score2 := scoreboard.(Scoreboard.search)(sliceReg(rs2_idx)) in
+             let score1 := (__internal__ scoreboard).(Scoreboard.search)(sliceReg(rs1_idx)) in
+             let score2 := (__internal__ scoreboard).(Scoreboard.search)(sliceReg(rs2_idx)) in
              guard (score1 == Ob~0~0 && score2 == Ob~0~0);
              (when (get(decodedInst, valid_rd)) do
                   let rd_idx := get(getFields(instr), rd) in
-                  scoreboard.(Scoreboard.insert)(sliceReg(rd_idx)));
-             let rs1 := rf.(Rf.read_1)(sliceReg(rs1_idx)) in
-             let rs2 := rf.(Rf.read_1)(sliceReg(rs2_idx)) in
+                  (__internal__ scoreboard).(Scoreboard.insert)(sliceReg(rd_idx)));
+             let rs1 := (__internal__ rf).(Rf.read_1)(sliceReg(rs1_idx)) in
+             let rs2 := (__internal__ rf).(Rf.read_1)(sliceReg(rs2_idx)) in
              let decode_bookkeeping := struct decode_bookkeeping {|
                                                 pc    := get(fetched_bookkeeping, pc);
                                                 ppc   := get(fetched_bookkeeping, ppc);
@@ -602,7 +586,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
                                                 rval1 := rs1;
                                                 rval2 := rs2
                                               |} in
-             d2e.(fromDecode.enq)(decode_bookkeeping))
+             (__internal__ d2e).(fromDecode.enq)(decode_bookkeeping))
     }}.
 
   (* Useful for debugging *)
@@ -617,7 +601,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
   Definition isMultiplyInst : UInternalFunction reg_t empty_ext_fn_t :=
     {{
         fun isMultiplyInst (dInst: struct_t decoded_sig) : bits_t 1 =>
-          mulState.(Multiplier.enabled)() &&
+          (__internal__ mulState).(Multiplier.enabled)() &&
           let fields := getFields(get(dInst, inst)) in
           (get(fields, funct7) == #funct7_MUL) &&
           (get(fields, funct3) == #funct3_MUL) &&
@@ -632,19 +616,19 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
 
   Definition step_multiplier : uaction reg_t ext_fn_t :=
     {{
-        mulState.(Multiplier.step)()
+        (__internal__ mulState).(Multiplier.step)()
     }}.
 
   Definition execute : uaction reg_t ext_fn_t :=
     {{
-        let decoded_bookkeeping := d2e.(fromDecode.deq)() in
-        if get(decoded_bookkeeping, epoch) == read0(epoch) then
+        let decoded_bookkeeping := (__internal__ d2e).(fromDecode.deq)() in
+        if get(decoded_bookkeeping, epoch) == read0(internal epoch) then
           (* By then we guarantee that this instruction is correct-path *)
           let dInst := get(decoded_bookkeeping, dInst) in
           if get(dInst, legal) == Ob~0 then
             (* Always say that we had a misprediction in this case for
             simplicity *)
-            write0(epoch, read0(epoch)+Ob~1);
+            write0(internal epoch, read0(internal epoch)+Ob~1);
             write0(pc, |32`d0|)
           else
             (let fInst := get(dInst, inst) in
@@ -679,13 +663,13 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
              else if (isControlInst(dInst)) then
                set data := (pc + |32`d4|)     (* For jump and link *)
              else if (isMultiplyInst(dInst)) then
-               mulState.(Multiplier.enq)(rs1_val, rs2_val)
+               (__internal__ mulState).(Multiplier.enq)(rs1_val, rs2_val)
              else
                pass;
              let controlResult := execControl32(fInst, rs1_val, rs2_val, imm, pc) in
              let nextPc := get(controlResult,nextPC) in
              if nextPc != get(decoded_bookkeeping, ppc) then
-               write0(epoch, read0(epoch)+Ob~1);
+               write0(internal epoch, read0(internal epoch)+Ob~1);
                write0(pc, nextPc)
              else
                pass;
@@ -696,18 +680,18 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
                                                  newrd := data;
                                                  dInst := get(decoded_bookkeeping, dInst)
                                                |} in
-             e2w.(fromExecute.enq)(execute_bookkeeping))
+             (__internal__ e2w).(fromExecute.enq)(execute_bookkeeping))
         else
           pass
     }}.
 
   Definition writeback : uaction reg_t ext_fn_t :=
     {{
-        let execute_bookkeeping := e2w.(fromExecute.deq)() in
+        let execute_bookkeeping := (__internal__ e2w).(fromExecute.deq)() in
         let dInst := get(execute_bookkeeping, dInst) in
         let data := get(execute_bookkeeping, newrd) in
         let fields := getFields(get(dInst, inst)) in
-        write0(instr_count, read0(instr_count)+|32`d1|);
+        write0(internal instr_count, read0(internal instr_count)+|32`d1|);
         if isMemoryInst(dInst) then (* // write_val *)
           (* Byte enable shifting back *)
           let resp := fromDMem.(MemResp.deq)() in
@@ -722,99 +706,23 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
           return default: fail                   (* Load Double or Signed Word *)
           end
         else if isMultiplyInst(dInst) then
-          set data := mulState.(Multiplier.deq)()[|6`d0| :+ 32]
+          set data := (__internal__ mulState).(Multiplier.deq)()[|6`d0| :+ 32]
         else
           pass;
         if get(dInst,valid_rd) then
           let rd_idx := get(fields,rd) in
-          scoreboard.(Scoreboard.remove)(sliceReg(rd_idx));
+          (__internal__ scoreboard).(Scoreboard.remove)(sliceReg(rd_idx));
           if (rd_idx == |5`d0|)
           then pass
-          else rf.(Rf.write_0)(sliceReg(rd_idx),data)
+          else (__internal__ rf).(Rf.write_0)(sliceReg(rd_idx),data)
         else
           pass
     }}.
 
-  Definition MMIO_UART_ADDRESS := Ob~0~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0.
-  Definition MMIO_LED_ADDRESS  := Ob~0~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1~0~0.
-
-  Definition memoryBus (m: memory) : UInternalFunction reg_t ext_fn_t :=
-    {{ fun memoryBus (get_ready: bits_t 1) (put_valid: bits_t 1) (put_request: struct_t mem_req) : struct_t mem_output =>
-         `match m with
-          | imem => {{ extcall (ext_mem m) (struct mem_input {|
-                        get_ready := get_ready;
-                        put_valid := put_valid;
-                        put_request := put_request |}) }}
-          | dmem => {{ let addr := get(put_request, addr) in
-                      let byte_en := get(put_request, byte_en) in
-                      let is_write := byte_en == Ob~1~1~1~1 in
-
-                      let is_uart := addr == #MMIO_UART_ADDRESS in
-                      let is_uart_read := is_uart && !is_write in
-                      let is_uart_write := is_uart && is_write in
-
-                      let is_led := addr == #MMIO_LED_ADDRESS in
-                      let is_led_write := is_led && is_write in
-
-                      let is_mem := !is_uart && !is_led in
-
-                      if is_uart_write then
-                        let char := get(put_request, data)[|5`d0| :+ 8] in
-                        let may_run := get_ready && put_valid && is_uart_write in
-                        let ready := extcall ext_uart_write (struct (Maybe (bits_t 8)) {|
-                          valid := may_run; data := char |}) in
-                        struct mem_output {| get_valid := may_run && ready;
-                                             put_ready := may_run && ready;
-                                             get_response := struct mem_resp {|
-                                               byte_en := byte_en; addr := addr;
-                                               data := |32`d0| |} |}
-
-                      else if is_uart_read then
-                        let may_run := get_ready && put_valid && is_uart_read in
-                        let opt_char := extcall ext_uart_read (may_run) in
-                        let ready := get(opt_char, valid) in
-                        struct mem_output {| get_valid := may_run && ready;
-                                             put_ready := may_run && ready;
-                                             get_response := struct mem_resp {|
-                                               byte_en := byte_en; addr := addr;
-                                               data := zeroExtend(get(opt_char, data), 32) |} |}
-
-                      else if is_led then
-                        let on := get(put_request, data)[|5`d0|] in
-                        let may_run := get_ready && put_valid && is_led_write in
-                        let current := extcall ext_led (struct (Maybe (bits_t 1)) {|
-                          valid := may_run; data := on |}) in
-                        let ready := Ob~1 in
-                        struct mem_output {| get_valid := may_run && ready;
-                                             put_ready := may_run && ready;
-                                             get_response := struct mem_resp {|
-                                               byte_en := byte_en; addr := addr;
-                                               data := zeroExtend(current, 32) |} |}
-
-                      else
-                        extcall (ext_mem m) (struct mem_input {|
-                          get_ready := get_ready && is_mem;
-                          put_valid := put_valid && is_mem;
-                          put_request := put_request |})
-                   }}
-          end` }}.
-
-  Definition mem (m: memory) : uaction reg_t ext_fn_t :=
-    let fromMem := match m with imem => fromIMem | dmem => fromDMem end in
-    let toMem := match m with imem => toIMem | dmem => toDMem end in
-    {{
-        let get_ready := fromMem.(MemResp.can_enq)() in
-        let put_request_opt := toMem.(MemReq.peek)() in
-        let put_request := get(put_request_opt, data) in
-        let put_valid := get(put_request_opt, valid) in
-        let mem_out := {memoryBus m}(get_ready, put_valid, put_request) in
-        (when (get_ready && get(mem_out, get_valid)) do fromMem.(MemResp.enq)(get(mem_out, get_response)));
-        (when (put_valid && get(mem_out, put_ready)) do ignore(toMem.(MemReq.deq)()))
-    }}.
 
   Definition tick : uaction reg_t ext_fn_t :=
     {{
-        write0(cycle_count, read0(cycle_count) + |32`d1|)
+        write0(internal cycle_count, read0(internal cycle_count) + |32`d1|)
     }}.
 
   Definition rv_register_name {n} (v: Vect.index n) :=
@@ -854,14 +762,20 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
     | _ => ""
     end.
 
-  Definition rv_ext_fn_specs (fn: ext_fn_t) :=
-    match fn with
-    | ext_mem imem => {| ef_name := "ext_mem_imem"; ef_internal := false |}
-    | ext_mem dmem => {| ef_name := "ext_mem_dmem"; ef_internal := false |}
-    | ext_uart_write => {| ef_name := "ext_uart_write"; ef_internal := false |}
-    | ext_uart_read => {| ef_name := "ext_uart_read"; ef_internal := false |}
-    | ext_led => {| ef_name := "ext_led"; ef_internal := false |}
-    end.
+  Inductive rule_name_t' :=
+  | Fetch
+  | Decode
+  | Execute
+  | Writeback
+  | WaitImem
+  (*
+  | Imem
+  | Dmem
+  *)
+  | StepMultiplier
+  | Tick.
+
+  Definition rule_name_t := rule_name_t'.
 
   Instance FiniteType_toIMem : FiniteType MemReq.reg_t := _.
   Instance FiniteType_fromIMem : FiniteType MemResp.reg_t := _.
@@ -870,6 +784,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
   Instance FiniteType_f2d : FiniteType fromFetch.reg_t := _.
   Instance FiniteType_d2e : FiniteType fromDecode.reg_t := _.
   Instance FiniteType_e2w : FiniteType fromExecute.reg_t := _.
+
 
   Instance Show_rf : Show (Rf.reg_t) :=
     {| show '(Rf.rData v) := rv_register_name v |}.
@@ -882,31 +797,21 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
   Instance Show_ext_fn_t : Show ext_fn_t := _.
 End RV32Core.
 
-Inductive rv_rules_t :=
-| Fetch
-| Decode
-| Execute
-| Writeback
-| WaitImem
-| Imem
-| Dmem
-| StepMultiplier
-| Tick.
+(* Definition rv_external (rl: rv_rules_t) := false. *)
 
-Definition rv_external (rl: rv_rules_t) := false.
-
-Module Type Core.
+Module Type Machine_t.
   Parameter _reg_t : Type.
   Parameter _ext_fn_t : Type.
   Parameter R : _reg_t -> type.
   Parameter Sigma : _ext_fn_t -> ExternalSignature.
   Parameter r : forall reg, R reg.
-  Parameter rv_rules : rv_rules_t -> rule R Sigma.
-  Parameter rv_ext_fn_specs : _ext_fn_t -> ext_fn_spec.
+  Parameter rule_name_t : Type.
+  Parameter rules : rule_name_t -> rule R Sigma.
+  Parameter ext_fn_specs : _ext_fn_t -> ext_fn_spec.
   Parameter FiniteType_reg_t : FiniteType _reg_t.
   Parameter Show_reg_t : Show _reg_t.
   Parameter Show_ext_fn_t : Show _ext_fn_t.
-End Core.
+End Machine_t.
 
 Module RV32IParams <: RVParams.
   Definition NREGS := 32.
@@ -919,12 +824,14 @@ Module Mul32Params <: Multiplier_sig.
   Definition n := 32.
 End Mul32Params.
 
-Module RV32I <: Core.
+Module RV32I (EnclaveParams: EnclaveParameters) (CoreParams: CoreParameters)
+             <: Core_sig External EnclaveParams CoreParams.
   Module Multiplier := ShiftAddMultiplier Mul32Params.
-  Include (RV32Core RV32IParams Multiplier).
+  Include (RV32Core RV32IParams Multiplier EnclaveParams CoreParams).
 
-  Definition _reg_t := reg_t.
-  Definition _ext_fn_t := ext_fn_t.
+  (* TODO: needed for type checking *)
+  Import External.
+  Import Common.
 
   Definition tc_fetch := tc_rule R Sigma fetch.
   Definition tc_wait_imem := tc_rule R Sigma wait_imem.
@@ -932,65 +839,66 @@ Module RV32I <: Core.
   Definition tc_execute := tc_rule R Sigma execute.
   Definition tc_writeback := tc_rule R Sigma writeback.
   Definition tc_step_multiplier := tc_rule R Sigma step_multiplier.
-  Definition tc_imem := tc_rule R Sigma (mem imem).
-  Definition tc_dmem := tc_rule R Sigma (mem dmem).
   Definition tc_tick := tc_rule R Sigma tick.
 
-  Definition rv_rules (rl: rv_rules_t) : rule R Sigma :=
+  Definition rules (rl: rule_name_t) : rule :=
     match rl with
     | Fetch          => tc_fetch
     | Decode         => tc_decode
     | Execute        => tc_execute
     | Writeback      => tc_writeback
     | WaitImem       => tc_wait_imem
-    | Imem           => tc_imem
-    | Dmem           => tc_dmem
     | StepMultiplier => tc_step_multiplier
     | Tick           => tc_tick
     end.
 
+  Definition schedule : scheduler :=
+    Writeback |> Execute |> StepMultiplier |> Decode |> WaitImem |> Fetch |> Tick |> done.
+
   Instance FiniteType_rf : FiniteType Rf.reg_t := _.
   Instance FiniteType_scoreboard_rf : FiniteType Scoreboard.Rf.reg_t := _.
   Instance FiniteType_scoreboard : FiniteType Scoreboard.reg_t := _.
+  Instance FiniteType_internal_reg_t : FiniteType internal_reg_t := _.
   Instance FiniteType_reg_t : FiniteType reg_t := _.
+
 End RV32I.
 
 Module RV32EParams <: RVParams.
   Definition NREGS := 16.
 End RV32EParams.
 
-Module RV32E <: Core.
+Module RV32E (EnclaveParams: EnclaveParameters) (CoreParams: CoreParameters)
+             <: Core_sig External EnclaveParams CoreParams.
   Module Multiplier := DummyMultiplier Mul32Params.
-  Include (RV32Core RV32EParams Multiplier).
+  Include (RV32Core RV32EParams Multiplier EnclaveParams CoreParams).
+  Import External.
+  Import Common.
 
-  Definition _reg_t := reg_t.
-  Definition _ext_fn_t := ext_fn_t.
-
-  Definition tc_fetch := tc_rule R Sigma fetch <: rule R Sigma.
-  Definition tc_wait_imem := tc_rule R Sigma wait_imem <: rule R Sigma.
-  Definition tc_decode := tc_rule R Sigma decode <: rule R Sigma.
-  Definition tc_execute := tc_rule R Sigma execute <: rule R Sigma.
-  Definition tc_writeback := tc_rule R Sigma writeback <: rule R Sigma.
-  Definition tc_step_multiplier := tc_rule R Sigma step_multiplier <: rule R Sigma.
-  Definition tc_imem := tc_rule R Sigma (mem imem) <: rule R Sigma.
-  Definition tc_dmem := tc_rule R Sigma (mem dmem) <: rule R Sigma.
+  Definition tc_fetch := tc_rule R Sigma fetch <: rule.
+  Definition tc_wait_imem := tc_rule R Sigma wait_imem <: rule.
+  Definition tc_decode := tc_rule R Sigma decode <: rule.
+  Definition tc_execute := tc_rule R Sigma execute <: rule.
+  Definition tc_writeback := tc_rule R Sigma writeback <: rule.
+  Definition tc_step_multiplier := tc_rule R Sigma step_multiplier <: rule.
   Definition tc_tick := tc_rule R Sigma tick.
 
-  Definition rv_rules (rl: rv_rules_t) : rule R Sigma :=
+  Definition rules (rl: rule_name_t) : rule :=
     match rl with
     | Fetch          => tc_fetch
     | Decode         => tc_decode
     | Execute        => tc_execute
     | Writeback      => tc_writeback
     | WaitImem       => tc_wait_imem
-    | Imem           => tc_imem
-    | Dmem           => tc_dmem
     | StepMultiplier => tc_step_multiplier
     | Tick           => tc_tick
     end.
 
+  Definition schedule : scheduler :=
+    Writeback |> Execute |> StepMultiplier |> Decode |> WaitImem |> Fetch |> Tick |> done.
+
   Instance FiniteType_rf : FiniteType Rf.reg_t := _.
   Instance FiniteType_scoreboard_rf : FiniteType Scoreboard.Rf.reg_t := _.
   Instance FiniteType_scoreboard : FiniteType Scoreboard.reg_t := _.
+  Instance FiniteType_internal_reg_t : FiniteType internal_reg_t := _.
   Instance FiniteType_reg_t : FiniteType reg_t := _.
 End RV32E.

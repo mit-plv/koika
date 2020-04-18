@@ -36,18 +36,8 @@ Module Common.
   End FifoMemResp.
   Module MemResp := Fifo1 FifoMemResp.
 
-  Module RfParams <: RfPow2_sig.
-    Definition idx_sz := log2 32.
-    Definition T := bits_t 32.
-    Definition init := Bits.zeroes 32.
-    Definition read_style := Scoreboard.read_style 32.
-    Definition write_style := Scoreboard.write_style.
-  End RfParams.
-  Module Rf := RfPow2 RfParams.
-
   Instance FiniteType_MemReq : FiniteType MemReq.reg_t := _.
   Instance FiniteType_MemResp : FiniteType MemResp.reg_t := _.
-  Instance FiniteType_Rf : FiniteType Rf.reg_t := _.
 
   Definition addr_t := bits_t 32.
   Definition data_t := bits_t 32.
@@ -56,6 +46,18 @@ Module Common.
   Definition addr_index_t := bits_t 30.
 
   Definition initial_mem_t := addr_index_t -> data_t.
+
+  Definition mem_input :=
+    {| struct_name := "mem_input";
+       struct_fields := [("get_ready", bits_t 1);
+                        ("put_valid", bits_t 1);
+                        ("put_request", struct_t mem_req)] |}.
+
+  Definition mem_output :=
+    {| struct_name := "mem_output";
+       struct_fields := [("get_valid", bits_t 1);
+                        ("put_ready", bits_t 1);
+                        ("get_response", struct_t mem_resp)] |}.
 
 End Common.
 
@@ -71,36 +73,49 @@ Module Type External_sig.
   Parameter ext_fn_t : Type.
   Parameter Sigma : ext_fn_t -> ExternalSignature.
   Parameter sigma : (forall fn: ext_fn_t, Sig_denote (Sigma fn)).
-
-  Parameter reg_t : Type.
+  Parameter ext_fn_specs : ext_fn_t -> ext_fn_spec.
 
 End External_sig.
 
 Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreParams: CoreParameters).
   Import Common.
   Parameter internal_reg_t : Type.
-  Parameter R_internal_reg : internal_reg_t -> type.
-  Parameter r_internal_reg : forall (idx: internal_reg_t), R_internal_reg idx.
+  Parameter R_internal : internal_reg_t -> type.
+  Parameter r_internal : forall (idx: internal_reg_t), R_internal idx.
   Declare Instance FiniteType_internal_reg_t : FiniteType internal_reg_t.
 
   Inductive reg_t :=
   | core_id
-  | ToIMem (state: MemReq.reg_t)
-  | ToDMem (state: MemReq.reg_t)
-  | FromIMem (state: MemResp.reg_t)
-  | FromDMem (state: MemResp.reg_t)
+  | pc
+  | toIMem (state: MemReq.reg_t)
+  | toDMem (state: MemReq.reg_t)
+  | fromIMem (state: MemResp.reg_t)
+  | fromDMem (state: MemResp.reg_t)
   | internal (r: internal_reg_t)
   .
 
   Definition R (idx: reg_t) : type :=
    match idx with
    | core_id => bits_t 1
-   | ToIMem r => MemReq.R r
-   | ToDMem r => MemReq.R r
-   | FromIMem  r => MemResp.R r
-   | FromDMem  r => MemResp.R r
-   | internal r => R_internal_reg r
+   | pc => addr_t
+   | toIMem r => MemReq.R r
+   | toDMem r => MemReq.R r
+   | fromIMem  r => MemResp.R r
+   | fromDMem  r => MemResp.R r
+   | internal r => R_internal r
    end.
+
+  Definition r idx : R idx :=
+    match idx with
+    | core_id => CoreParams.core_id
+    | pc => Bits.zero
+    | toIMem s => MemReq.r s
+    | fromIMem s => MemResp.r s
+    | toDMem s => MemReq.r s
+    | fromDMem s => MemResp.r s
+    | internal s => r_internal s
+    end.
+
 
   Declare Instance FiniteType_reg_t : FiniteType reg_t.
 
@@ -114,16 +129,14 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
 
   Axiom schedule : Syntax.scheduler pos_t rule_name_t.
 
-  Definition state := env_t ContextEnv (fun idx : reg_t => R idx).
-
 End Core_sig.
 
 Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
   Inductive internal_reg_t := .
-  Definition R_internal_reg (idx: internal_reg_t) : type :=
+  Definition R_internal (idx: internal_reg_t) : type :=
     match idx with end.
 
-  Definition r_internal_reg (idx: internal_reg_t) : R_internal_reg idx :=
+  Definition r_internal (idx: internal_reg_t) : R_internal idx :=
     match idx with end.
 
   Instance FiniteType_internal_reg_t : FiniteType internal_reg_t := _.
@@ -131,48 +144,48 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
   Import Common.
 
   Inductive reg_t : Type :=
-  | FromCore0_IMem (state: MemReq.reg_t)
-  | FromCore0_DMem (state: MemReq.reg_t)
-  | ToCore0_IMem (state: MemResp.reg_t)
-  | ToCore0_DMem (state: MemResp.reg_t)
+  | fromCore0_IMem (state: MemReq.reg_t)
+  | fromCore0_DMem (state: MemReq.reg_t)
+  | toCore0_IMem (state: MemResp.reg_t)
+  | toCore0_DMem (state: MemResp.reg_t)
   (* Core1 <-> SM *)
-  | FromCore1_IMem (state: MemReq.reg_t)
-  | FromCore1_DMem (state: MemReq.reg_t)
-  | ToCore1_IMem (state: MemResp.reg_t)
-  | ToCore1_DMem (state: MemResp.reg_t)
+  | fromCore1_IMem (state: MemReq.reg_t)
+  | fromCore1_DMem (state: MemReq.reg_t)
+  | toCore1_IMem (state: MemResp.reg_t)
+  | toCore1_DMem (state: MemResp.reg_t)
   (* SM <-> Mem *)
-  | ToMem0_IMem (state: MemReq.reg_t)
-  | ToMem0_DMem (state: MemReq.reg_t)
-  | ToMem1_IMem (state: MemReq.reg_t)
-  | ToMem1_DMem (state: MemReq.reg_t)
-  | FromMem0_IMem (state: MemResp.reg_t)
-  | FromMem0_DMem (state: MemResp.reg_t)
-  | FromMem1_IMem (state: MemResp.reg_t)
-  | FromMem1_DMem (state: MemResp.reg_t)
+  | toMem0_IMem (state: MemReq.reg_t)
+  | toMem0_DMem (state: MemReq.reg_t)
+  | toMem1_IMem (state: MemReq.reg_t)
+  | toMem1_DMem (state: MemReq.reg_t)
+  | fromMem0_IMem (state: MemResp.reg_t)
+  | fromMem0_DMem (state: MemResp.reg_t)
+  | fromMem1_IMem (state: MemResp.reg_t)
+  | fromMem1_DMem (state: MemResp.reg_t)
   | internal (idx: internal_reg_t)
   .
 
   Definition R (idx: reg_t) :=
     match idx with
-    | FromCore0_IMem st => MemReq.R st
-    | FromCore0_DMem st => MemReq.R st
-    | ToCore0_IMem st => MemResp.R st
-    | ToCore0_DMem st => MemResp.R st
+    | fromCore0_IMem st => MemReq.R st
+    | fromCore0_DMem st => MemReq.R st
+    | toCore0_IMem st => MemResp.R st
+    | toCore0_DMem st => MemResp.R st
     (* Core1 <-> SM *)
-    | FromCore1_IMem st => MemReq.R st
-    | FromCore1_DMem st => MemReq.R st
-    | ToCore1_IMem st => MemResp.R st
-    | ToCore1_DMem st => MemResp.R st
+    | fromCore1_IMem st => MemReq.R st
+    | fromCore1_DMem st => MemReq.R st
+    | toCore1_IMem st => MemResp.R st
+    | toCore1_DMem st => MemResp.R st
     (* SM <-> Mem *)
-    | ToMem0_IMem st => MemReq.R st
-    | ToMem0_DMem st => MemReq.R st
-    | ToMem1_IMem st => MemReq.R st
-    | ToMem1_DMem st => MemReq.R st
-    | FromMem0_IMem st => MemResp.R st
-    | FromMem0_DMem st => MemResp.R st
-    | FromMem1_IMem st => MemResp.R st
-    | FromMem1_DMem st => MemResp.R st
-    | internal st => R_internal_reg st
+    | toMem0_IMem st => MemReq.R st
+    | toMem0_DMem st => MemReq.R st
+    | toMem1_IMem st => MemReq.R st
+    | toMem1_DMem st => MemReq.R st
+    | fromMem0_IMem st => MemResp.R st
+    | fromMem0_DMem st => MemResp.R st
+    | fromMem1_IMem st => MemResp.R st
+    | fromMem1_DMem st => MemResp.R st
+    | internal st => R_internal st
     end.
 
   Instance FiniteType_reg_t : FiniteType reg_t := _.
@@ -183,45 +196,45 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
 
   (* Placeholder rule; do nothing *)
   Definition forward : uaction reg_t ext_fn_t :=
-    {{ (when (FromCore0_IMem.(MemReq.can_deq)() &&
-              ToMem0_IMem.(MemReq.can_enq)()) do
-         let req := FromCore0_IMem.(MemReq.deq)() in
-         ToMem0_IMem.(MemReq.enq)(req)
+    {{ (when (fromCore0_IMem.(MemReq.can_deq)() &&
+              toMem0_IMem.(MemReq.can_enq)()) do
+         let req := fromCore0_IMem.(MemReq.deq)() in
+         toMem0_IMem.(MemReq.enq)(req)
        );
-       (when (FromCore1_IMem.(MemReq.can_deq)() &&
-              ToMem1_IMem.(MemReq.can_enq)()) do
-         let req := FromCore1_IMem.(MemReq.deq)() in
-         ToMem1_IMem.(MemReq.enq)(req)
+       (when (fromCore1_IMem.(MemReq.can_deq)() &&
+              toMem1_IMem.(MemReq.can_enq)()) do
+         let req := fromCore1_IMem.(MemReq.deq)() in
+         toMem1_IMem.(MemReq.enq)(req)
        );
-       (when (FromCore0_DMem.(MemReq.can_deq)() &&
-              ToMem0_DMem.(MemReq.can_enq)()) do
-         let req := FromCore0_DMem.(MemReq.deq)() in
-         ToMem0_DMem.(MemReq.enq)(req)
+       (when (fromCore0_DMem.(MemReq.can_deq)() &&
+              toMem0_DMem.(MemReq.can_enq)()) do
+         let req := fromCore0_DMem.(MemReq.deq)() in
+         toMem0_DMem.(MemReq.enq)(req)
        );
-       (when (FromCore1_DMem.(MemReq.can_deq)() &&
-              ToMem1_DMem.(MemReq.can_enq)()) do
-         let req := FromCore1_DMem.(MemReq.deq)() in
-         ToMem1_DMem.(MemReq.enq)(req)
+       (when (fromCore1_DMem.(MemReq.can_deq)() &&
+              toMem1_DMem.(MemReq.can_enq)()) do
+         let req := fromCore1_DMem.(MemReq.deq)() in
+         toMem1_DMem.(MemReq.enq)(req)
        );
-       (when (FromMem0_IMem.(MemResp.can_deq)() &&
-              ToCore0_IMem.(MemResp.can_enq)()) do
-         let req := FromMem0_IMem.(MemResp.deq)() in
-         ToCore0_IMem.(MemResp.enq)(req)
+       (when (fromMem0_IMem.(MemResp.can_deq)() &&
+              toCore0_IMem.(MemResp.can_enq)()) do
+         let req := fromMem0_IMem.(MemResp.deq)() in
+         toCore0_IMem.(MemResp.enq)(req)
        );
-       (when (FromMem1_IMem.(MemResp.can_deq)() &&
-              ToCore1_IMem.(MemResp.can_enq)()) do
-         let req := FromMem1_IMem.(MemResp.deq)() in
-         ToCore1_IMem.(MemResp.enq)(req)
+       (when (fromMem1_IMem.(MemResp.can_deq)() &&
+              toCore1_IMem.(MemResp.can_enq)()) do
+         let req := fromMem1_IMem.(MemResp.deq)() in
+         toCore1_IMem.(MemResp.enq)(req)
        );
-       (when (FromMem0_DMem.(MemResp.can_deq)() &&
-              ToCore0_DMem.(MemResp.can_enq)()) do
-         let req := FromMem0_DMem.(MemResp.deq)() in
-         ToCore0_DMem.(MemResp.enq)(req)
+       (when (fromMem0_DMem.(MemResp.can_deq)() &&
+              toCore0_DMem.(MemResp.can_enq)()) do
+         let req := fromMem0_DMem.(MemResp.deq)() in
+         toCore0_DMem.(MemResp.enq)(req)
        );
-       (when (FromMem1_DMem.(MemResp.can_deq)() &&
-              ToCore1_DMem.(MemResp.can_enq)()) do
-         let req := FromMem1_DMem.(MemResp.deq)() in
-         ToCore1_DMem.(MemResp.enq)(req)
+       (when (fromMem1_DMem.(MemResp.can_deq)() &&
+              toCore1_DMem.(MemResp.can_enq)()) do
+         let req := fromMem1_DMem.(MemResp.deq)() in
+         toCore1_DMem.(MemResp.enq)(req)
        )
     }}.
 
@@ -241,36 +254,36 @@ End SecurityMonitor.
 
 Module Type Memory_sig (External: External_sig).
   Parameter internal_reg_t : Type.
-  Parameter R_internal_reg : internal_reg_t -> type.
-  Parameter r_internal_reg : (forall (idx: internal_reg_t), R_internal_reg idx).
+  Parameter R_internal : internal_reg_t -> type.
+  Parameter r_internal : (forall (idx: internal_reg_t), R_internal idx).
 
   Import Common.
 
   Declare Instance FiniteType_internal_reg_t : FiniteType internal_reg_t.
 
   Inductive reg_t :=
-  | ToIMem0 (state: MemReq.reg_t)
-  | ToIMem1 (state: MemReq.reg_t)
-  | ToDMem0 (state: MemReq.reg_t)
-  | ToDMem1 (state: MemReq.reg_t)
-  | FromIMem0 (state: MemResp.reg_t)
-  | FromIMem1 (state: MemResp.reg_t)
-  | FromDMem0 (state: MemResp.reg_t)
-  | FromDMem1 (state: MemResp.reg_t)
+  | toIMem0 (state: MemReq.reg_t)
+  | toIMem1 (state: MemReq.reg_t)
+  | toDMem0 (state: MemReq.reg_t)
+  | toDMem1 (state: MemReq.reg_t)
+  | fromIMem0 (state: MemResp.reg_t)
+  | fromIMem1 (state: MemResp.reg_t)
+  | fromDMem0 (state: MemResp.reg_t)
+  | fromDMem1 (state: MemResp.reg_t)
   | internal (r: internal_reg_t)
   .
 
   Definition R (idx: reg_t) :=
     match idx with
-    | ToIMem0 st => MemReq.R st
-    | ToIMem1 st => MemReq.R st
-    | ToDMem0 st => MemReq.R st
-    | ToDMem1 st => MemReq.R st
-    | FromIMem0 st => MemResp.R st
-    | FromIMem1 st => MemResp.R st
-    | FromDMem0 st => MemResp.R st
-    | FromDMem1 st => MemResp.R st
-    | internal st => R_internal_reg st
+    | toIMem0 st => MemReq.R st
+    | toIMem1 st => MemReq.R st
+    | toDMem0 st => MemReq.R st
+    | toDMem1 st => MemReq.R st
+    | fromIMem0 st => MemResp.R st
+    | fromIMem1 st => MemResp.R st
+    | fromDMem0 st => MemResp.R st
+    | fromDMem1 st => MemResp.R st
+    | internal st => R_internal st
     end.
 
   Declare Instance FiniteType_reg_t : FiniteType reg_t.
@@ -285,22 +298,32 @@ Module Type Memory_sig (External: External_sig).
 
   Axiom schedule : Syntax.scheduler pos_t rule_name_t.
 
-  Definition state := env_t ContextEnv (fun idx : reg_t => R idx).
-
 End Memory_sig.
+
+Module Type Machine_sig.
+  Parameter reg_t : Type.
+  Parameter ext_fn_t : Type.
+  Parameter R : reg_t -> type.
+  Parameter Sigma : ext_fn_t -> ExternalSignature.
+  Parameter r : forall reg, R reg.
+  Parameter rule_name_t : Type.
+  Parameter rules : rule_name_t -> rule R Sigma.
+  Parameter ext_fn_specs : ext_fn_t -> ext_fn_spec.
+  Parameter FiniteType_reg_t : FiniteType reg_t.
+  Parameter schedule : Syntax.scheduler pos_t rule_name_t.
+End Machine_sig.
 
 Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
                (Params0: CoreParameters) (Params1: CoreParameters)
-               (Core: Core_sig External EnclaveParams) (Memory: Memory_sig External).
-
-  Module Core0 := Core Params0.
-  Module Core1 := Core Params1.
+               (Core0: Core_sig External EnclaveParams Params0)
+               (Core1: Core_sig External EnclaveParams Params1)
+               (Memory: Memory_sig External) <: Machine_sig.
 
   Module SM := SecurityMonitor External EnclaveParams.
 
   Include Common.
 
-  Inductive reg_t : Type :=
+  Inductive reg_t' : Type :=
   | core_id0
   | core_id1
   | pc0
@@ -332,6 +355,8 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
   | Mem_internal (state: Memory.internal_reg_t)
   .
 
+  Definition reg_t := reg_t'.
+
   Definition R (idx: reg_t) : type :=
     match idx with
     | core_id0 => bits_t 1
@@ -359,15 +384,48 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
     | MemToSM1_IMem st => MemResp.R st
     | MemToSM1_DMem st => MemResp.R st
     (* Internal registers *)
-    | Core0_internal st => Core0.R_internal_reg st
-    | Core1_internal st => Core1.R_internal_reg st
-    | SM_internal st => SM.R_internal_reg st
-    | Mem_internal st => Memory.R_internal_reg st
+    | Core0_internal st => Core0.R_internal st
+    | Core1_internal st => Core1.R_internal st
+    | SM_internal st => SM.R_internal st
+    | Mem_internal st => Memory.R_internal st
+    end.
+
+  Definition r (idx: reg_t) : R idx :=
+    match idx with
+    | core_id0 => Params0.core_id
+    | core_id1 => Params1.core_id
+    | pc0 => Bits.zero
+    | pc1 => Bits.zero
+    (* TODO: reset memory *)
+    (* Core0 <-> SM *)
+    | Core0ToSM_IMem st => MemReq.r st
+    | Core0ToSM_DMem st => MemReq.r st
+    | SMToCore0_IMem st => MemResp.r st
+    | SMToCore0_DMem st => MemResp.r st
+    (* Core1 <-> SM *)
+    | Core1ToSM_IMem st => MemReq.r st
+    | Core1ToSM_DMem st => MemReq.r st
+    | SMToCore1_IMem st => MemResp.r st
+    | SMToCore1_DMem st => MemResp.r st
+    (* SM <-> Mem *)
+    | SMToMem0_IMem st => MemReq.r st
+    | SMToMem0_DMem st => MemReq.r st
+    | SMToMem1_IMem st => MemReq.r st
+    | SMToMem1_DMem st => MemReq.r st
+    | MemToSM0_IMem st => MemResp.r st
+    | MemToSM0_DMem st => MemResp.r st
+    | MemToSM1_IMem st => MemResp.r st
+    | MemToSM1_DMem st => MemResp.r st
+    (* Internal registers *)
+    | Core0_internal st => Core0.r_internal st
+    | Core1_internal st => Core1.r_internal st
+    | SM_internal st => SM.r_internal st
+    | Mem_internal st => Memory.r_internal st
     end.
 
   Definition ext_fn_t := External.ext_fn_t.
   Definition Sigma := External.Sigma.
-  Print rule.
+  Definition ext_fn_specs := External.ext_fn_specs.
   Definition rule : Type := rule R Sigma.
 
   (* TODO: 40s *)
@@ -376,22 +434,24 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
 
   Instance EqDec_reg_t : EqDec reg_t := _.
 
-  Inductive rule_name_t :=
+  Inductive rule_name_t' :=
   | Core0Rule (r: Core0.rule_name_t)
   | Core1Rule (r: Core1.rule_name_t)
   | SmRule   (r: SM.rule_name_t)
   | MemRule  (r: Memory.rule_name_t)
   .
 
+  Definition rule_name_t := rule_name_t'.
 
   Section Core0_Lift.
     Definition core0_lift (reg: Core0.reg_t) : reg_t :=
       match reg with
       | Core0.core_id => core_id0
-      | Core0.ToIMem s => Core0ToSM_IMem s
-      | Core0.ToDMem s => Core0ToSM_DMem s
-      | Core0.FromIMem s => SMToCore0_IMem s
-      | Core0.FromDMem s => SMToCore0_DMem s
+      | Core0.pc => pc0
+      | Core0.toIMem s => Core0ToSM_IMem s
+      | Core0.toDMem s => Core0ToSM_DMem s
+      | Core0.fromIMem s => SMToCore0_IMem s
+      | Core0.fromDMem s => SMToCore0_DMem s
       | Core0.internal s => Core0_internal s
       end.
 
@@ -404,10 +464,11 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
     Definition core1_lift (reg: Core1.reg_t) : reg_t :=
       match reg with
       | Core1.core_id => core_id1
-      | Core1.ToIMem s => Core1ToSM_IMem s
-      | Core1.ToDMem s => Core1ToSM_DMem s
-      | Core1.FromIMem s => SMToCore1_IMem s
-      | Core1.FromDMem s => SMToCore1_DMem s
+      | Core1.pc => pc1
+      | Core1.toIMem s => Core1ToSM_IMem s
+      | Core1.toDMem s => Core1ToSM_DMem s
+      | Core1.fromIMem s => SMToCore1_IMem s
+      | Core1.fromDMem s => SMToCore1_DMem s
       | Core1.internal s => Core1_internal s
       end.
 
@@ -420,24 +481,24 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
 
     Definition sm_lift (reg: SM.reg_t) : reg_t :=
       match reg with
-      | SM.FromCore0_IMem st => Core0ToSM_IMem st
-      | SM.FromCore0_DMem st => Core0ToSM_DMem st
-      | SM.ToCore0_IMem st => SMToCore0_IMem st
-      | SM.ToCore0_DMem st => SMToCore0_DMem st
+      | SM.fromCore0_IMem st => Core0ToSM_IMem st
+      | SM.fromCore0_DMem st => Core0ToSM_DMem st
+      | SM.toCore0_IMem st => SMToCore0_IMem st
+      | SM.toCore0_DMem st => SMToCore0_DMem st
       (* Core1 <-> SM *)
-      | SM.FromCore1_IMem st => Core1ToSM_IMem st
-      | SM.FromCore1_DMem st => Core1ToSM_DMem st
-      | SM.ToCore1_IMem st => SMToCore1_IMem st
-      | SM.ToCore1_DMem st => SMToCore1_DMem st
+      | SM.fromCore1_IMem st => Core1ToSM_IMem st
+      | SM.fromCore1_DMem st => Core1ToSM_DMem st
+      | SM.toCore1_IMem st => SMToCore1_IMem st
+      | SM.toCore1_DMem st => SMToCore1_DMem st
       (* SM <-> Mem *)
-      | SM.ToMem0_IMem st => SMToMem0_IMem st
-      | SM.ToMem0_DMem st => SMToMem0_DMem st
-      | SM.ToMem1_IMem st => SMToMem1_IMem st
-      | SM.ToMem1_DMem st => SMToMem1_DMem st
-      | SM.FromMem0_IMem st => MemToSM0_IMem st
-      | SM.FromMem0_DMem st => MemToSM0_DMem st
-      | SM.FromMem1_IMem st => MemToSM1_IMem st
-      | SM.FromMem1_DMem st => MemToSM1_DMem st
+      | SM.toMem0_IMem st => SMToMem0_IMem st
+      | SM.toMem0_DMem st => SMToMem0_DMem st
+      | SM.toMem1_IMem st => SMToMem1_IMem st
+      | SM.toMem1_DMem st => SMToMem1_DMem st
+      | SM.fromMem0_IMem st => MemToSM0_IMem st
+      | SM.fromMem0_DMem st => MemToSM0_DMem st
+      | SM.fromMem1_IMem st => MemToSM1_IMem st
+      | SM.fromMem1_DMem st => MemToSM1_DMem st
       | SM.internal st => SM_internal st
       end.
 
@@ -449,14 +510,14 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
   Section Mem_Lift.
     Definition mem_lift (reg: Memory.reg_t) : reg_t :=
       match reg with
-      | Memory.ToIMem0 st => SMToMem0_IMem st
-      | Memory.ToIMem1 st => SMToMem1_IMem st
-      | Memory.ToDMem0 st => SMToMem0_DMem st
-      | Memory.ToDMem1 st => SMToMem1_DMem st
-      | Memory.FromIMem0 st => MemToSM0_IMem st
-      | Memory.FromIMem1 st => MemToSM1_IMem st
-      | Memory.FromDMem0 st => MemToSM0_DMem st
-      | Memory.FromDMem1 st => MemToSM1_DMem st
+      | Memory.toIMem0 st => SMToMem0_IMem st
+      | Memory.toIMem1 st => SMToMem1_IMem st
+      | Memory.toDMem0 st => SMToMem0_DMem st
+      | Memory.toDMem1 st => SMToMem1_DMem st
+      | Memory.fromIMem0 st => MemToSM0_IMem st
+      | Memory.fromIMem1 st => MemToSM1_IMem st
+      | Memory.fromDMem0 st => MemToSM0_DMem st
+      | Memory.fromDMem1 st => MemToSM1_DMem st
       | Memory.internal st => Mem_internal st
       end.
 
