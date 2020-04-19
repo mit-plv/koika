@@ -4,22 +4,27 @@ Require Import Koika.Std.
 Require Import DynamicIsolation.External.
 Require Import DynamicIsolation.Interfaces.
 
-
-Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParams: CoreParameters) 
+Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParams: CoreParameters)
                  <: Core_sig External Params CoreParams.
   Import Common.
 
-  Inductive internal_reg_t' : Type := .
+  Inductive internal_reg_t' : Type :=
+  | Foo | Bar.
+
   Definition internal_reg_t := internal_reg_t'.
+
   Definition R_internal (idx: internal_reg_t) : type :=
-    match idx with end.
+    match idx with
+    | _ => bits_t 1
+    end.
 
   Definition r_internal (idx: internal_reg_t) : R_internal idx :=
-    match idx with end.
+    match idx with
+    | _ => Bits.zero
+    end.
 
   Inductive reg_t :=
   | core_id
-  | pc
   | toIMem (state: MemReq.reg_t)
   | toDMem (state: MemReq.reg_t)
   | fromIMem (state: MemResp.reg_t)
@@ -30,7 +35,6 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
   Definition R (idx: reg_t) : type :=
    match idx with
    | core_id => bits_t 1
-   | pc => addr_t
    | toIMem r => MemReq.R r
    | toDMem r => MemReq.R r
    | fromIMem  r => MemResp.R r
@@ -41,7 +45,6 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
   Definition r idx : R idx :=
     match idx with
     | core_id => CoreParams.core_id
-    | pc => Bits.zero
     | toIMem s => MemReq.r s
     | fromIMem s => MemResp.r s
     | toDMem s => MemReq.r s
@@ -52,13 +55,19 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
   Definition ext_fn_t := External.ext_fn_t.
   Definition Sigma := External.Sigma.
   Definition rule := rule R Sigma.
-  Definition sigma := External.sigma.
+  (* Definition sigma := External.sigma. *)
 
-  Inductive rule_name_t' : Type := .
+  Inductive rule_name_t' : Type := DoNothing | StillDoNothing.
   Definition rule_name_t := rule_name_t'.
 
+  (* TOOD: Silly workaround due to extraction issues: https://github.com/coq/coq/issues/12124 *)
+  Definition do_nothing : uaction reg_t ext_fn_t :=
+    {{ pass  }}.
+
   Definition rules (rl: rule_name_t) : rule :=
-    match rl with end.
+    match rl with
+    | _ => tc_rule R Sigma do_nothing
+    end.
 
   Definition schedule : Syntax.scheduler pos_t rule_name_t := done.
 

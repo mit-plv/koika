@@ -26,8 +26,6 @@ Module External <: External_sig.
     | ext_led => {$ led_input ~> bits_t 1 $}
     end.
 
-  Definition sigma (fn: ext_fn_t) : Sig_denote (Sigma fn). Admitted.
-
   Definition ext_fn_specs (fn: ext_fn_t) :=
     match fn with
     | ext_mem imem => {| ef_name := "ext_mem_imem"; ef_internal := false |}

@@ -72,7 +72,8 @@ End CoreParameters.
 Module Type External_sig.
   Parameter ext_fn_t : Type.
   Parameter Sigma : ext_fn_t -> ExternalSignature.
-  Parameter sigma : (forall fn: ext_fn_t, Sig_denote (Sigma fn)).
+  (* TODO: for later *)
+  (* Parameter sigma : (forall fn: ext_fn_t, Sig_denote (Sigma fn)). *)
   Parameter ext_fn_specs : ext_fn_t -> ext_fn_spec.
 
 End External_sig.
@@ -86,7 +87,6 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
 
   Inductive reg_t :=
   | core_id
-  | pc
   | toIMem (state: MemReq.reg_t)
   | toDMem (state: MemReq.reg_t)
   | fromIMem (state: MemResp.reg_t)
@@ -97,7 +97,6 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
   Definition R (idx: reg_t) : type :=
    match idx with
    | core_id => bits_t 1
-   | pc => addr_t
    | toIMem r => MemReq.R r
    | toDMem r => MemReq.R r
    | fromIMem  r => MemResp.R r
@@ -108,7 +107,6 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
   Definition r idx : R idx :=
     match idx with
     | core_id => CoreParams.core_id
-    | pc => Bits.zero
     | toIMem s => MemReq.r s
     | fromIMem s => MemResp.r s
     | toDMem s => MemReq.r s
@@ -122,7 +120,7 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
   Definition ext_fn_t := External.ext_fn_t.
   Definition Sigma := External.Sigma.
   Definition rule := rule R Sigma.
-  Definition sigma := External.sigma.
+  (* Definition sigma := External.sigma. *)
 
   Parameter rule_name_t : Type.
   Parameter rules  : rule_name_t -> rule.
@@ -132,18 +130,26 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
 End Core_sig.
 
 Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
-  Inductive internal_reg_t := .
+  (* TOOD: Silly workaround due to extraction issues: https://github.com/coq/coq/issues/12124 *)
+  Inductive internal_reg_t' :=
+  | Foo | Bar.
+  Definition internal_reg_t := internal_reg_t'.
+
   Definition R_internal (idx: internal_reg_t) : type :=
-    match idx with end.
+    match idx with
+    | _ => bits_t 0
+    end.
 
   Definition r_internal (idx: internal_reg_t) : R_internal idx :=
-    match idx with end.
+    match idx with
+    | _ => Bits.zero
+    end.
 
   Instance FiniteType_internal_reg_t : FiniteType internal_reg_t := _.
 
   Import Common.
 
-  Inductive reg_t : Type :=
+  Inductive reg_t' : Type :=
   | fromCore0_IMem (state: MemReq.reg_t)
   | fromCore0_DMem (state: MemReq.reg_t)
   | toCore0_IMem (state: MemResp.reg_t)
@@ -164,6 +170,8 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
   | fromMem1_DMem (state: MemResp.reg_t)
   | internal (idx: internal_reg_t)
   .
+
+  Definition reg_t : Type := reg_t'.
 
   Definition R (idx: reg_t) :=
     match idx with
@@ -186,6 +194,29 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
     | fromMem1_IMem st => MemResp.R st
     | fromMem1_DMem st => MemResp.R st
     | internal st => R_internal st
+    end.
+
+  Definition r (idx: reg_t) : R idx :=
+    match idx with
+    | fromCore0_IMem st => MemReq.r st
+    | fromCore0_DMem st => MemReq.r st
+    | toCore0_IMem st => MemResp.r st
+    | toCore0_DMem st => MemResp.r st
+    (* Core1 <-> SM *)
+    | fromCore1_IMem st => MemReq.r st
+    | fromCore1_DMem st => MemReq.r st
+    | toCore1_IMem st => MemResp.r st
+    | toCore1_DMem st => MemResp.r st
+    (* SM <-> Mem *)
+    | toMem0_IMem st => MemReq.r st
+    | toMem0_DMem st => MemReq.r st
+    | toMem1_IMem st => MemReq.r st
+    | toMem1_DMem st => MemReq.r st
+    | fromMem0_IMem st => MemResp.r st
+    | fromMem0_DMem st => MemResp.r st
+    | fromMem1_IMem st => MemResp.r st
+    | fromMem1_DMem st => MemResp.r st
+    | internal st => r_internal st
     end.
 
   Instance FiniteType_reg_t : FiniteType reg_t := _.
@@ -240,7 +271,8 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
 
   Definition tc_forward := tc_rule R Sigma forward <: rule R Sigma.
 
-  Inductive rule_name_t := | Forward.
+  Inductive rule_name_t' := | Forward.
+  Definition rule_name_t := rule_name_t'.
 
   Definition rules (rl : rule_name_t) : rule R Sigma :=
     match rl with
@@ -251,6 +283,19 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
     Forward |> done.
 
 End SecurityMonitor.
+
+Module Type Machine_sig.
+  Parameter reg_t : Type.
+  Parameter ext_fn_t : Type.
+  Parameter R : reg_t -> type.
+  Parameter Sigma : ext_fn_t -> ExternalSignature.
+  Parameter r : forall reg, R reg.
+  Parameter rule_name_t : Type.
+  Parameter rules : rule_name_t -> rule R Sigma.
+  Parameter FiniteType_reg_t : FiniteType reg_t.
+  Parameter schedule : Syntax.scheduler pos_t rule_name_t.
+  Parameter ext_fn_specs : ext_fn_t -> ext_fn_spec.
+End Machine_sig.
 
 Module Type Memory_sig (External: External_sig).
   Parameter internal_reg_t : Type.
@@ -286,12 +331,26 @@ Module Type Memory_sig (External: External_sig).
     | internal st => R_internal st
     end.
 
+  Definition r (idx: reg_t) : R idx :=
+    match idx with
+    | toIMem0 st => MemReq.r st
+    | toIMem1 st => MemReq.r st
+    | toDMem0 st => MemReq.r st
+    | toDMem1 st => MemReq.r st
+    | fromIMem0 st => MemResp.r st
+    | fromIMem1 st => MemResp.r st
+    | fromDMem0 st => MemResp.r st
+    | fromDMem1 st => MemResp.r st
+    | internal st => r_internal st
+    end.
+
+
   Declare Instance FiniteType_reg_t : FiniteType reg_t.
 
   Definition ext_fn_t := External.ext_fn_t.
   Definition Sigma := External.Sigma.
   Definition rule := rule R Sigma.
-  Definition sigma := External.sigma.
+  (* Definition sigma := External.sigma. *)
 
   Parameter rule_name_t : Type.
   Parameter rules  : rule_name_t -> rule.
@@ -300,18 +359,6 @@ Module Type Memory_sig (External: External_sig).
 
 End Memory_sig.
 
-Module Type Machine_sig.
-  Parameter reg_t : Type.
-  Parameter ext_fn_t : Type.
-  Parameter R : reg_t -> type.
-  Parameter Sigma : ext_fn_t -> ExternalSignature.
-  Parameter r : forall reg, R reg.
-  Parameter rule_name_t : Type.
-  Parameter rules : rule_name_t -> rule R Sigma.
-  Parameter ext_fn_specs : ext_fn_t -> ext_fn_spec.
-  Parameter FiniteType_reg_t : FiniteType reg_t.
-  Parameter schedule : Syntax.scheduler pos_t rule_name_t.
-End Machine_sig.
 
 Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
                (Params0: CoreParameters) (Params1: CoreParameters)
@@ -326,8 +373,6 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
   Inductive reg_t' : Type :=
   | core_id0
   | core_id1
-  | pc0
-  | pc1
   (* TODO: reset memory *)
   (* Core0 <-> SM *)
   | Core0ToSM_IMem (state: MemReq.reg_t)
@@ -361,8 +406,6 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
     match idx with
     | core_id0 => bits_t 1
     | core_id1 => bits_t 1
-    | pc0 => bits_t 32
-    | pc1 => bits_t 32
     (* TODO: reset memory *)
     (* Core0 <-> SM *)
     | Core0ToSM_IMem st => MemReq.R st
@@ -394,8 +437,6 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
     match idx with
     | core_id0 => Params0.core_id
     | core_id1 => Params1.core_id
-    | pc0 => Bits.zero
-    | pc1 => Bits.zero
     (* TODO: reset memory *)
     (* Core0 <-> SM *)
     | Core0ToSM_IMem st => MemReq.r st
@@ -429,8 +470,8 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
   Definition rule : Type := rule R Sigma.
 
   (* TODO: 40s *)
-  (* Instance FiniteType_reg_t : FiniteType reg_t := _. *)
-  Declare Instance FiniteType_reg_t : FiniteType reg_t.
+  Instance FiniteType_reg_t : FiniteType reg_t := _.
+  (* Declare Instance FiniteType_reg_t : FiniteType reg_t.  *)
 
   Instance EqDec_reg_t : EqDec reg_t := _.
 
@@ -447,7 +488,6 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
     Definition core0_lift (reg: Core0.reg_t) : reg_t :=
       match reg with
       | Core0.core_id => core_id0
-      | Core0.pc => pc0
       | Core0.toIMem s => Core0ToSM_IMem s
       | Core0.toDMem s => Core0ToSM_DMem s
       | Core0.fromIMem s => SMToCore0_IMem s
@@ -464,7 +504,6 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
     Definition core1_lift (reg: Core1.reg_t) : reg_t :=
       match reg with
       | Core1.core_id => core_id1
-      | Core1.pc => pc1
       | Core1.toIMem s => Core1ToSM_IMem s
       | Core1.toDMem s => Core1ToSM_DMem s
       | Core1.fromIMem s => SMToCore1_IMem s

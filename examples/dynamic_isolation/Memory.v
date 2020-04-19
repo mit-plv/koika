@@ -13,13 +13,23 @@ Require Import DynamicIsolation.Interfaces.
 Module Memory <: Memory_sig External.
   Import Common.
 
-  Inductive internal_reg_t' : Type := .
+  (* TOOD: Silly workaround due to extraction issues: https://github.com/coq/coq/issues/12124 *)
+  Inductive internal_reg_t' : Type :=
+  | Foo | Bar .
+
   Definition internal_reg_t := internal_reg_t'.
+
   Definition R_internal (idx: internal_reg_t) : type :=
-    match idx with end.
+    match idx with
+    | Foo => bits_t 1
+    | Bar => bits_t 1
+    end.
 
   Definition r_internal (idx: internal_reg_t) : R_internal idx :=
-    match idx with end.
+    match idx with
+    | Foo => Bits.zero
+    | Bar => Bits.zero
+    end.
 
   Inductive reg_t :=
   | toIMem0 (state: MemReq.reg_t)
@@ -46,10 +56,23 @@ Module Memory <: Memory_sig External.
     | internal st => R_internal st
     end.
 
+  Definition r idx : R idx :=
+    match idx with
+    | toIMem0 st => MemReq.r st
+    | toIMem1 st => MemReq.r st
+    | toDMem0 st => MemReq.r st
+    | toDMem1 st => MemReq.r st
+    | fromIMem0 st => MemResp.r st
+    | fromIMem1 st => MemResp.r st
+    | fromDMem0 st => MemResp.r st
+    | fromDMem1 st => MemResp.r st
+    | internal st => r_internal st
+    end.
+
   Definition ext_fn_t := External.ext_fn_t.
   Definition Sigma := External.Sigma.
   Definition rule := rule R Sigma.
-  Definition sigma := External.sigma.
+  (* Definition sigma := External.sigma. *)
 
 
   Definition MMIO_UART_ADDRESS := Ob~0~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0.

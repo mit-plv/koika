@@ -107,7 +107,6 @@ Section LiftAction.
         ExternalCall (rlift Fnlift fn)
           (rew <- [fun t : ExternalSignature => TypedSyntax.action pos_t var_t fn_name_t R' Sigma' sig0 (arg1Sig t)]
                pf_R_equal Fnlift fn in lift_action arg)
-
     | InternalCall fn args body =>
         InternalCall fn (lift_args (@lift_action) args) (lift_action body)
     | APos pos a => APos pos (lift_action a)

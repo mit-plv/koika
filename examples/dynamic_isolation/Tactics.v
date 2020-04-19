@@ -483,41 +483,35 @@ Module FiniteTypeHelpers.
         | [ H: In ?V (map _ ?elems) |- _ ] =>
           eapply In_lt with (v := V); [ | eapply H];
           intros; omega
-        | [ H: In _ _ |- _] =>
-            repeat rewrite map_app in H;
-            repeat apply in_app_or in H;
-            repeat rewrite map_map in H;
-            simpl in *;
-            split_cases
-        | [ H: In _ _ |- _ ] =>
-            idtac H
-        end;
-        repeat (rewrite map_app; try rewrite map_map; simpl);
-        repeat (apply no_dup_increasing_app; simpl; try NoDup_increasing);
-        repeat (apply NoDup_map_plus  ||  apply NoDup_map_succ); try apply finite_injective;
-        repeat match goal with
-        | |- exists _, _ =>
+        | [ |- context[_ + 0] ] =>
+          repeat rewrite Nat.add_0_r
+        | [ |- exists _, _ ] =>
           eexists; try split_cases; intros
-        | H: In ?x (map _ _) |- _ =>
+        | [ H: In ?x (map _ _) |- _ ] =>
           eapply in_map_iff in H; propositional; subst
-        | H: In ?x0 (@finite_elements _ _) |- _ =>
+        | [ H: In ?x0 (@finite_elements _ _) |- _ ] =>
           pose proof (finite_index_lt_length x0);
-          repeat eapply lt_n_S; solve[eauto]
-        | H: In ?x0 (@finite_elements _ _) |- _ =>
+          repeat eapply lt_n_S; solve[eauto; lia]
+        | [ H: In ?x0 (@finite_elements _ _) |- _ ] =>
           pose proof (finite_index_lt_length x0);
           repeat eapply lt_n_S;
           match goal with
           | H: @finite_index ?t1 ?t2 ?x0 < ?v |- ?a + (@finite_index ?t1 ?t2 ?x0) < _ =>
               instantiate (1 := a + v); omega
           end
-        | H: In _ (_ ++ _) |- _ =>
-            repeat eapply in_app_or in H; split_cases; try omega;
-              simpl in H
-        end; try omega;
-        rewrite map_map;
-        repeat (apply NoDup_map_plus  ||  apply NoDup_map_succ); try apply finite_injective
-      ]
-    end.
+        | [ H: In _ _ |- _] =>
+            progress (repeat rewrite map_app in H;
+                      repeat apply in_app_or in H;
+                      repeat rewrite map_map in H;
+                      simpl in *;
+                      split_cases)
+        | [ |- _ ] =>
+          try lia;
+          progress (repeat (try rewrite map_app; try rewrite map_map; simpl);
+                    repeat (apply no_dup_increasing_app; simpl; try NoDup_increasing);
+                    repeat (apply NoDup_map_plus  ||  apply NoDup_map_succ); try apply finite_injective)
+        end]
+     end; try lia.
 
   Hint Extern 1 (FiniteType _) => FiniteType_t' : typeclass_instances.
 

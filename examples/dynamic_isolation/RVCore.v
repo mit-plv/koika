@@ -450,6 +450,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
   | cycle_count
   | instr_count
   | epoch
+  | pc
   .
 
   Definition internal_reg_t := internal_reg_t'.
@@ -466,6 +467,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
     | cycle_count => bits_t 32
     | instr_count => bits_t 32
     | epoch => bits_t 1
+    | pc => bits_t 32
     end.
 
   Definition r_internal (idx: internal_reg_t) : R_internal idx :=
@@ -480,12 +482,12 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
     | cycle_count => Bits.zero
     | instr_count => Bits.zero
     | epoch => Bits.zero
+    | pc => Bits.zero
     end.
 
   (* Declare state *)
   Inductive reg_t :=
   | core_id
-  | pc
   | toIMem (state: MemReq.reg_t)
   | toDMem (state: MemReq.reg_t)
   | fromIMem (state: MemResp.reg_t)
@@ -497,7 +499,6 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
   Definition R idx :=
     match idx with
     | core_id => bits_t 1
-    | pc => bits_t 32
     | toIMem r => MemReq.R r
     | fromIMem r => MemResp.R r
     | toDMem r => MemReq.R r
@@ -509,7 +510,6 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
   Definition r idx : R idx :=
     match idx with
     | core_id => CoreParams.core_id
-    | pc => Bits.zero
     | toIMem s => MemReq.r s
     | fromIMem s => MemResp.r s
     | toDMem s => MemReq.r s
@@ -520,7 +520,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
   Definition ext_fn_t := External.ext_fn_t.
   Definition Sigma := External.Sigma.
   Definition rule := rule R Sigma.
-  Definition sigma := External.sigma.
+  (* Definition sigma := External.sigma. *)
 
   Notation "'__internal__' instance " :=
     (fun reg => internal ((instance) reg)) (in custom koika at level 1, instance constr at level 99).
@@ -530,7 +530,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
 
   Definition fetch : uaction reg_t ext_fn_t :=
     {{
-        let pc := read1(pc) in
+        let pc := read1(internal pc) in
         let req := struct mem_req {|
                               byte_en := |4`d0|; (* Load *)
                               addr := pc;
@@ -541,7 +541,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
                                           epoch := read1(internal epoch)
                                         |} in
         toIMem.(MemReq.enq)(req);
-        write1(pc, pc + |32`d4|);
+        write1(internal pc, pc + |32`d4|);
         (__internal__ f2d).(fromFetch.enq)(fetch_bookkeeping)
     }}.
 
@@ -629,7 +629,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
             (* Always say that we had a misprediction in this case for
             simplicity *)
             write0(internal epoch, read0(internal epoch)+Ob~1);
-            write0(pc, |32`d0|)
+            write0(internal pc, |32`d0|)
           else
             (let fInst := get(dInst, inst) in
              let funct3 := get(getFields(fInst), funct3) in
@@ -670,7 +670,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
              let nextPc := get(controlResult,nextPC) in
              if nextPc != get(decoded_bookkeeping, ppc) then
                write0(internal epoch, read0(internal epoch)+Ob~1);
-               write0(pc, nextPc)
+               write0(internal pc, nextPc)
              else
                pass;
              let execute_bookkeeping := struct execute_bookkeeping {|
