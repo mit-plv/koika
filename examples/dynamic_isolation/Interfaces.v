@@ -41,6 +41,7 @@ Module Common.
 
   Definition addr_t := bits_t 32.
   Definition data_t := bits_t 32.
+  Definition core_id_t := bits_t 1.
 
   (* Alignment *)
   Definition addr_index_t := bits_t 30.
@@ -66,7 +67,7 @@ Module Type EnclaveParameters.
 End EnclaveParameters.
 
 Module Type CoreParameters.
-  Parameter core_id : bits_t 1.
+  Parameter core_id : Common.core_id_t.
 End CoreParameters.
 
 Module Type External_sig.
@@ -96,7 +97,7 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
 
   Definition R (idx: reg_t) : type :=
    match idx with
-   | core_id => bits_t 1
+   | core_id => core_id_t
    | toIMem r => MemReq.R r
    | toDMem r => MemReq.R r
    | fromIMem  r => MemResp.R r

@@ -498,7 +498,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
   (* State type *)
   Definition R idx :=
     match idx with
-    | core_id => bits_t 1
+    | core_id => core_id_t
     | toIMem r => MemReq.R r
     | fromIMem r => MemResp.R r
     | toDMem r => MemReq.R r
