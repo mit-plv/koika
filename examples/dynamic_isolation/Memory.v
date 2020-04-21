@@ -153,6 +153,242 @@ Module MessageFifo1.
   (* TODO: Test this. *)
 End MessageFifo1.
 
+Module MessageRouter.
+  Inductive internal_reg_t :=
+  | routerTieBreaker (* To implement round robin fairness *)
+  .
+
+  Definition R_internal (idx: internal_reg_t) : type :=
+    match idx with
+    | routerTieBreaker => bits_t 2
+    end.
+
+  Definition r_internal (idx: internal_reg_t) : R_internal idx :=
+    match idx with
+    | routerTieBreaker => Bits.zero
+    end.
+
+  Inductive reg_t : Type :=
+  | FromCore0I (state: MessageFifo1.reg_t)
+  | FromCore0D (state: MessageFifo1.reg_t)
+  | FromCore1I (state: MessageFifo1.reg_t)
+  | FromCore1D (state: MessageFifo1.reg_t)
+  | ToCore0I (state: MessageFifo1.reg_t)
+  | ToCore0D (state: MessageFifo1.reg_t)
+  | ToCore1I (state: MessageFifo1.reg_t)
+  | ToCore1D (state: MessageFifo1.reg_t)
+  | ToProto (state: MessageFifo1.reg_t)
+  | FromProto (state: MessageFifo1.reg_t)
+  | internal (state: internal_reg_t)
+  .
+
+  Definition R (idx: reg_t) : type :=
+    match idx with
+    | FromCore0I st => MessageFifo1.R st
+    | FromCore0D st => MessageFifo1.R st
+    | FromCore1I st => MessageFifo1.R st
+    | FromCore1D st => MessageFifo1.R st
+    | ToCore0I st => MessageFifo1.R st
+    | ToCore0D st => MessageFifo1.R st
+    | ToCore1I st => MessageFifo1.R st
+    | ToCore1D st => MessageFifo1.R st
+    | ToProto st => MessageFifo1.R st
+    | FromProto st => MessageFifo1.R st
+    | internal st => R_internal st
+    end.
+
+  Notation "'__internal__' instance " :=
+    (fun reg => internal ((instance) reg)) (in custom koika at level 1, instance constr at level 99).
+  Notation "'(' instance ').(' method ')' args" :=
+    (USugar (UCallModule instance _ method args))
+      (in custom koika at level 1, method constr, args custom koika_args at level 99).
+
+  Import CacheTypes.
+
+  (* ===================== Message routing rules ============================== *)
+  Definition memToCore : uaction reg_t empty_ext_fn_t :=
+    {{ let msg := FromProto.(MessageFifo1.deq)() in
+       if (get(msg, type) == enum cache_mem_msg_tag {| Req |}) then
+         let req := get(msg, req) in
+         if (get(req, core_id) == Ob~0) then
+           if (get(req, cache_type) == enum cache_type {| imem |}) then
+             ToCore0I.(MessageFifo1.enq_req)(req)
+           else
+             ToCore0D.(MessageFifo1.enq_req)(req)
+         else
+           if (get(req, cache_type) == enum cache_type {| imem |}) then
+             ToCore1I.(MessageFifo1.enq_req)(req)
+           else
+             ToCore1D.(MessageFifo1.enq_req)(req)
+       else (* Resp *)
+         let resp := get(msg, resp) in
+         if (get(resp, core_id) == Ob~0) then
+           if (get(req, cache_type) == enum cache_type {| imem |}) then
+             ToCore0I.(MessageFifo1.enq_resp)(resp)
+           else
+             ToCore0D.(MessageFifo1.enq_resp)(resp)
+         else
+           if (get(resp, cache_type) == enum cache_type {| imem |}) then
+             ToCore1I.(MessageFifo1.enq_resp)(resp)
+           else
+             ToCore1D.(MessageFifo1.enq_resp)(resp)
+    }}.
+
+  Definition getResp : UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun getResp (tiebreaker : bits_t 2) : maybe (struct_t cache_mem_msg) =>
+           match tiebreaker with
+           | Ob~0~0 =>
+               if (FromCore0I.(MessageFifo1.has_resp)()) then
+                 {valid (struct_t cache_mem_msg)}(FromCore0I.(MessageFifo1.deq)())
+               else
+                 {invalid (struct_t cache_mem_msg)}()
+           | Ob~0~1 =>
+               if (FromCore0D.(MessageFifo1.has_resp)()) then
+                 {valid (struct_t cache_mem_msg)}(FromCore0D.(MessageFifo1.deq)())
+               else
+                 {invalid (struct_t cache_mem_msg)}()
+           | Ob~1~0 =>
+               if (FromCore1I.(MessageFifo1.has_resp)()) then
+                 {valid (struct_t cache_mem_msg)}(FromCore1I.(MessageFifo1.deq)())
+               else
+                 {invalid (struct_t cache_mem_msg)}()
+           | Ob~1~1 =>
+               if (FromCore1D.(MessageFifo1.has_resp)()) then
+                 {valid (struct_t cache_mem_msg)}(FromCore1D.(MessageFifo1.deq)())
+               else
+                 {invalid (struct_t cache_mem_msg)}()
+           return default : {invalid (struct_t cache_mem_msg)}()
+           end
+    }}.
+
+  Definition getReq : UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun getReq (tiebreaker : bits_t 2) : maybe (struct_t cache_mem_msg) =>
+           match tiebreaker with
+           | Ob~0~0 =>
+               if (!FromCore0I.(MessageFifo1.has_resp)() &&
+                    FromCore0I.(MessageFifo1.has_req)()) then
+                 {valid (struct_t cache_mem_msg)}(FromCore0I.(MessageFifo1.deq)())
+               else
+                 {invalid (struct_t cache_mem_msg)}()
+           | Ob~0~1 =>
+               if (!FromCore0D.(MessageFifo1.has_resp)() &&
+                    FromCore0D.(MessageFifo1.has_req)()) then
+                 {valid (struct_t cache_mem_msg)}(FromCore0D.(MessageFifo1.deq)())
+               else
+                 {invalid (struct_t cache_mem_msg)}()
+           | Ob~1~0 =>
+               if (!FromCore1I.(MessageFifo1.has_resp)() &&
+                    FromCore1I.(MessageFifo1.has_req)()) then
+                 {valid (struct_t cache_mem_msg)}(FromCore1I.(MessageFifo1.deq)())
+               else
+                 {invalid (struct_t cache_mem_msg)}()
+           | Ob~1~1 =>
+               if (!FromCore1D.(MessageFifo1.has_resp)() &&
+                    FromCore1D.(MessageFifo1.has_req)()) then
+                 {valid (struct_t cache_mem_msg)}(FromCore1D.(MessageFifo1.deq)())
+               else
+                 {invalid (struct_t cache_mem_msg)}()
+           return default : {invalid (struct_t cache_mem_msg)}()
+           end
+    }}.
+
+  (* TODO: very ugly... *)
+  (* ======= Search for responses, starting with tiebreaker ====== *)
+  Definition searchResponses : UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun searchResponses (tiebreaker : bits_t 2) : maybe (struct_t cache_mem_msg) =>
+         let foundMsg := Ob~0 in
+         let msg := {invalid (struct_t cache_mem_msg)}() in
+         when (!foundMsg) do (
+           let curResp := getResp (tiebreaker) in
+            when (get(curResp, valid)) do (
+              set foundMsg := Ob~1;
+              set msg := get(curResp, data);
+              write0(internal routerTieBreaker, tieBreaker + |2`d1|)
+            )
+          );
+         when (!foundMsg) do (
+           let curResp := getResp (tieBreaker+|2`d1|) in
+           when (get(curResp, valid)) do (
+             set foundMsg := Ob~1;
+             set msg := get(curResp, data);
+             write0(internal routerTieBreaker, tieBreaker + |2`d2|)
+           )
+         );
+         when (!foundMsg) do (
+           let curResp := getResp (tieBreaker+|2`d2|) in
+           when (get(curResp, valid)) do (
+             set foundMsg := Ob~1;
+             set msg := get(curResp, data);
+             write0(internal routerTieBreaker, tieBreaker + |2`d3|)
+           )
+         );
+         when (!foundMsg) do (
+           let curResp := getResp (tieBreaker+|2`d3|) in
+           when (get(curResp, valid)) do (
+             set foundMsg := Ob~1;
+             set msg := get(curResp, data);
+             write0(internal routerTieBreaker, tieBreaker + |2`d4|)
+           )
+         )
+     }}.
+
+  (* ======= Search for responses, starting with tieBreaker ====== *)
+  Definition searchRequests : UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun searchRequests (tieBreaker : bits_t 2) : maybe (struct_t cache_mem_msg) =>
+         let foundMsg := Ob~0 in
+         let msg := {invalid (struct_t cache_mem_msg)}() in
+         when (!foundMsg) do (
+           let curReq := getReq (tieBreaker) in
+            when (get(curReq, valid)) do (
+              set foundMsg := Ob~1;
+              set msg := get(curReq, data);
+              write0(internal routerTieBreaker, tieBreaker + |2`d1|)
+            )
+          );
+         when (!foundMsg) do (
+           let curReq := getReq (tieBreaker+|2`d1|) in
+           when (get(curReq, valid)) do (
+             set foundMsg := Ob~1;
+             set msg := get(curReq, data);
+             write0(internal routerTieBreaker, tieBreaker + |2`d2|)
+           )
+         );
+         when (!foundMsg) do (
+           let curReq := getReq (tieBreaker+|2`d2|) in
+           when (get(curReq, valid)) do (
+             set foundMsg := Ob~1;
+             set msg := get(curReq, data);
+             write0(internal routerTieBreaker, tieBreaker + |2`d3|)
+           )
+         );
+         when (!foundMsg) do (
+           let curReq := getReq (tieBreaker+|2`d3|) in
+           when (get(curReq, valid)) do (
+             set foundMsg := Ob~1;
+             set msg := get(curReq, data);
+             write0(internal routerTieBreaker, tieBreaker + |2`d4|)
+           )
+         )
+     }}.
+
+  Definition coreToMem : uaction reg_t empty_ext_fn_t :=
+    {{ let tieBreaker := read0(internal routerTieBreaker) in
+       (* Search for requests, starting with tieBreaker *)
+       let msg := searchResponses (tieBreaker) in
+       if (get(msg, valid)) then
+         (* enqueue *)
+         ToProto.(MessageFifo1.enq_resp)(get(msg,resp))
+       else
+       (* Search for responses, starting with tieBreaker *)
+         let msg := searchRequests (tieBreaker) in
+         if (get(msg,valid)) then
+           ToProto.(MessageFifo1.enq_req)(get(msg,req))
+         else
+           write0(internal routerTieBreaker, tieBreaker + |2`d1|)
+    }}.
+
+End MessageRouter.
+
 Module WIPMemory <: Memory_sig External.
   Import Common.
 
@@ -173,7 +409,7 @@ Module WIPMemory <: Memory_sig External.
   | RouterToCore1D (state: MessageFifo1.reg_t)
   | RouterToProto (state: MessageFifo1.reg_t)
   | ProtoToRouter (state: MessageFifo1.reg_t)
-  | routerTiebreaker (* To implement round-robin fairness *)
+  | Router_internal (state: MessageRouter.internal_reg_t)
   .
 
   Definition internal_reg_t := internal_reg_t'.
@@ -190,7 +426,7 @@ Module WIPMemory <: Memory_sig External.
     | RouterToCore1D st => MessageFifo1.R st
     | RouterToProto st => MessageFifo1.R st
     | ProtoToRouter st => MessageFifo1.R st
-    | routerTiebreaker => bits_t 2
+    | Router_internal st => MessageRouter.R_internal st
     end.
 
   Definition r_internal (idx: internal_reg_t) : R_internal idx :=
@@ -205,7 +441,7 @@ Module WIPMemory <: Memory_sig External.
     | RouterToCore1D st => MessageFifo1.r st
     | RouterToProto st => MessageFifo1.r st
     | ProtoToRouter st => MessageFifo1.r st
-    | routerTiebreaker => Bits.zero
+    | Router_internal st => MessageRouter.r_internal st
     end.
 
   Instance FiniteType_internal_reg_t : FiniteType internal_reg_t := _.
@@ -264,189 +500,6 @@ Module WIPMemory <: Memory_sig External.
       (in custom koika at level 1, method constr, args custom koika_args at level 99).
 
   Import External.
-  Import CacheTypes.
-
-  (* ===================== Message routing rules ============================== *)
-  Definition router_memToCore : uaction reg_t ext_fn_t :=
-    {{ let msg := (__internal__ ProtoToRouter).(MessageFifo1.deq)() in
-       if (get(msg, type) == enum cache_mem_msg_tag {| Req |}) then
-         let req := get(msg, req) in
-         if (get(req, core_id) == Ob~0) then
-           if (get(req, cache_type) == enum cache_type {| imem |}) then
-             (__internal__ RouterToCore0I).(MessageFifo1.enq_req)(req)
-           else
-             (__internal__ RouterToCore0D).(MessageFifo1.enq_req)(req)
-         else
-           if (get(req, cache_type) == enum cache_type {| imem |}) then
-             (__internal__ RouterToCore1I).(MessageFifo1.enq_req)(req)
-           else
-             (__internal__ RouterToCore1D).(MessageFifo1.enq_req)(req)
-       else (* Resp *)
-         let resp := get(msg, resp) in
-         if (get(resp, core_id) == Ob~0) then
-           if (get(req, cache_type) == enum cache_type {| imem |}) then
-             (__internal__ RouterToCore0I).(MessageFifo1.enq_resp)(resp)
-           else
-             (__internal__ RouterToCore0D).(MessageFifo1.enq_resp)(resp)
-         else
-           if (get(resp, cache_type) == enum cache_type {| imem |}) then
-             (__internal__ RouterToCore1I).(MessageFifo1.enq_resp)(resp)
-           else
-             (__internal__ RouterToCore1D).(MessageFifo1.enq_resp)(resp)
-    }}.
-
-  Definition router_getResp : UInternalFunction reg_t empty_ext_fn_t :=
-    {{ fun router_getResp (tiebreaker : bits_t 2) : maybe (struct_t cache_mem_msg) =>
-           match tiebreaker with
-           | Ob~0~0 =>
-               if ((__internal__ core0IToRouter).(MessageFifo1.has_resp)()) then
-                 {valid (struct_t cache_mem_msg)}((__internal__ core0IToRouter).(MessageFifo1.deq)())
-               else
-                 {invalid (struct_t cache_mem_msg)}()
-           | Ob~0~1 =>
-               if ((__internal__ core0DToRouter).(MessageFifo1.has_resp)()) then
-                 {valid (struct_t cache_mem_msg)}((__internal__ core0DToRouter).(MessageFifo1.deq)())
-               else
-                 {invalid (struct_t cache_mem_msg)}()
-           | Ob~1~0 =>
-               if ((__internal__ core1IToRouter).(MessageFifo1.has_resp)()) then
-                 {valid (struct_t cache_mem_msg)}((__internal__ core1IToRouter).(MessageFifo1.deq)())
-               else
-                 {invalid (struct_t cache_mem_msg)}()
-           | Ob~1~1 =>
-               if ((__internal__ core1DToRouter).(MessageFifo1.has_resp)()) then
-                 {valid (struct_t cache_mem_msg)}((__internal__ core1DToRouter).(MessageFifo1.deq)())
-               else
-                 {invalid (struct_t cache_mem_msg)}()
-           return default : {invalid (struct_t cache_mem_msg)}()
-           end
-    }}.
-
-  Definition router_getReq : UInternalFunction reg_t empty_ext_fn_t :=
-    {{ fun router_getReq (tiebreaker : bits_t 2) : maybe (struct_t cache_mem_msg) =>
-           match tiebreaker with
-           | Ob~0~0 =>
-               if (!(__internal__ core0IToRouter).(MessageFifo1.has_resp)() &&
-                    (__internal__ core0IToRouter).(MessageFifo1.has_req)()) then
-                 {valid (struct_t cache_mem_msg)}((__internal__ core0IToRouter).(MessageFifo1.deq)())
-               else
-                 {invalid (struct_t cache_mem_msg)}()
-           | Ob~0~1 =>
-               if (!(__internal__ core0DToRouter).(MessageFifo1.has_resp)() &&
-                    (__internal__ core0DToRouter).(MessageFifo1.has_req)()) then
-                 {valid (struct_t cache_mem_msg)}((__internal__ core0DToRouter).(MessageFifo1.deq)())
-               else
-                 {invalid (struct_t cache_mem_msg)}()
-           | Ob~1~0 =>
-               if (!(__internal__ core1IToRouter).(MessageFifo1.has_resp)() &&
-                    (__internal__ core1IToRouter).(MessageFifo1.has_req)()) then
-                 {valid (struct_t cache_mem_msg)}((__internal__ core1IToRouter).(MessageFifo1.deq)())
-               else
-                 {invalid (struct_t cache_mem_msg)}()
-           | Ob~1~1 =>
-               if (!(__internal__ core1DToRouter).(MessageFifo1.has_resp)() &&
-                    (__internal__ core1DToRouter).(MessageFifo1.has_req)()) then
-                 {valid (struct_t cache_mem_msg)}((__internal__ core1DToRouter).(MessageFifo1.deq)())
-               else
-                 {invalid (struct_t cache_mem_msg)}()
-           return default : {invalid (struct_t cache_mem_msg)}()
-           end
-    }}.
-
-  (* TODO: very ugly... *)
-  (* ======= Search for responses, starting with tiebreaker ====== *)
-  Definition router_searchResponses : UInternalFunction reg_t empty_ext_fn_t :=
-    {{ fun router_searchResponses (tiebreaker : bits_t 2) : maybe (struct_t cache_mem_msg) =>
-         let foundMsg := Ob~0 in
-         let msg := {invalid (struct_t cache_mem_msg)}() in
-         when (!foundMsg) do (
-           let curResp := router_getResp (tiebreaker) in
-            when (get(curResp, valid)) do (
-              set foundMsg := Ob~1;
-              set msg := get(curResp, data);
-              write0(internal routerTiebreaker, tiebreaker + |2`d1|)
-            )
-          );
-         when (!foundMsg) do (
-           let curResp := router_getResp (tiebreaker+|2`d1|) in
-           when (get(curResp, valid)) do (
-             set foundMsg := Ob~1;
-             set msg := get(curResp, data);
-             write0(internal routerTiebreaker, tiebreaker + |2`d2|)
-           )
-         );
-         when (!foundMsg) do (
-           let curResp := router_getResp (tiebreaker+|2`d2|) in
-           when (get(curResp, valid)) do (
-             set foundMsg := Ob~1;
-             set msg := get(curResp, data);
-             write0(internal routerTiebreaker, tiebreaker + |2`d3|)
-           )
-         );
-         when (!foundMsg) do (
-           let curResp := router_getResp (tiebreaker+|2`d3|) in
-           when (get(curResp, valid)) do (
-             set foundMsg := Ob~1;
-             set msg := get(curResp, data);
-             write0(internal routerTiebreaker, tiebreaker + |2`d4|)
-           )
-         )
-     }}.
-
-  (* ======= Search for responses, starting with tiebreaker ====== *)
-  Definition router_searchRequests : UInternalFunction reg_t empty_ext_fn_t :=
-    {{ fun router_searchRequests (tiebreaker : bits_t 2) : maybe (struct_t cache_mem_msg) =>
-         let foundMsg := Ob~0 in
-         let msg := {invalid (struct_t cache_mem_msg)}() in
-         when (!foundMsg) do (
-           let curReq := router_getReq (tiebreaker) in
-            when (get(curReq, valid)) do (
-              set foundMsg := Ob~1;
-              set msg := get(curReq, data);
-              write0(internal routerTiebreaker, tiebreaker + |2`d1|)
-            )
-          );
-         when (!foundMsg) do (
-           let curReq := router_getReq (tiebreaker+|2`d1|) in
-           when (get(curReq, valid)) do (
-             set foundMsg := Ob~1;
-             set msg := get(curReq, data);
-             write0(internal routerTiebreaker, tiebreaker + |2`d2|)
-           )
-         );
-         when (!foundMsg) do (
-           let curReq := router_getReq (tiebreaker+|2`d2|) in
-           when (get(curReq, valid)) do (
-             set foundMsg := Ob~1;
-             set msg := get(curReq, data);
-             write0(internal routerTiebreaker, tiebreaker + |2`d3|)
-           )
-         );
-         when (!foundMsg) do (
-           let curReq := router_getReq (tiebreaker+|2`d3|) in
-           when (get(curReq, valid)) do (
-             set foundMsg := Ob~1;
-             set msg := get(curReq, data);
-             write0(internal routerTiebreaker, tiebreaker + |2`d4|)
-           )
-         )
-     }}.
-
-  Definition router_coreToMem : uaction reg_t ext_fn_t :=
-    {{ let tiebreaker := read0(internal routerTiebreaker) in
-       (* Search for requests, starting with tiebreaker *)
-       let msg := router_searchResponses (tiebreaker) in
-       if (get(msg, valid)) then
-         (* enqueue *)
-         (__internal__ RouterToProto).(MessageFifo1.enq_resp)(get(msg,resp))
-       else
-       (* Search for responses, starting with tiebreaker *)
-         let msg := router_searchRequests (tiebreaker) in
-         if (get(msg,valid)) then
-           (__internal__ RouterToProto).(MessageFifo1.enq_req)(get(msg,req))
-         else
-           write0(internal routerTiebreaker, tiebreaker + |2`d1|)
-    }}.
 
   Definition memoryBus (m: memory) : UInternalFunction reg_t ext_fn_t :=
     {{ fun memoryBus (get_ready: bits_t 1) (put_valid: bits_t 1) (put_request: struct_t mem_req) : struct_t mem_output =>
