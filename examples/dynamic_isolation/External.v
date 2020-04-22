@@ -5,7 +5,7 @@ Require Import DynamicIsolation.Interfaces.
 
 Module External <: External_sig.
   Import Common.
-  Inductive memory := imem | dmem.
+  Inductive memory := imem | dmem | mainmem.
 
   Inductive ext_fn_t' :=
   | ext_mem (m: memory)
@@ -30,6 +30,7 @@ Module External <: External_sig.
     match fn with
     | ext_mem imem => {| ef_name := "ext_mem_imem"; ef_internal := false |}
     | ext_mem dmem => {| ef_name := "ext_mem_dmem"; ef_internal := false |}
+    | ext_mem main_mem => {| ef_name := "ext_mem_mainmem"; ef_internal := false |}
     | ext_uart_write => {| ef_name := "ext_uart_write"; ef_internal := false |}
     | ext_uart_read => {| ef_name := "ext_uart_read"; ef_internal := false |}
     | ext_led => {| ef_name := "ext_led"; ef_internal := false |}

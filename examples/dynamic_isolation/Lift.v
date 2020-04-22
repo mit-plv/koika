@@ -19,9 +19,14 @@ Ltac mk_rlift lift :=
 Ltac mk_rlift_id :=
   exists id; now auto.
 
+Ltac mk_rlift_trivial :=
+  exists (fun a : empty_ext_fn_t => match a with end);
+    let a := fresh in intros a; destruct a; auto.
+
 Create HintDb lift.
 
 Hint Extern 1 (RLift _ _ _ _ _ ) => mk_rlift_id : lift.
+Hint Extern 1 (RLift _ _ _ _ _ ) => mk_rlift_trivial : lift.
 
 Section ScheduleLift.
   Context {pos_t : Type} {rule_name_t : Type} {rule_name_t' : Type}.
