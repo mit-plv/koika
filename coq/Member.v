@@ -152,13 +152,41 @@ Qed.
 
 Fixpoint mem {K} `{EqDec K} (k: K) sig {struct sig} : member k sig + (member k sig -> False).
   destruct sig.
-  - right; inversion 1.
+  - right; intro m; destruct (mdestruct m).
   - destruct (eq_dec k k0) as [Heq | Hneq].
     + subst. left. apply MemberHd.
     + destruct (mem _ _ k sig) as [m | ].
       * left. apply MemberTl. exact m.
-      * right. inversion 1; congruence.
+      * right. intros m.
+        destruct (mdestruct m) as [(eqn & Heq) | (m' & Heq)]; congruence.
 Defined.
+
+Fixpoint mem_opt {K} `{EqDec K} (k: K) sig {struct sig} : option (member k sig) :=
+  match sig with
+  | [] => None
+  | k' :: sig =>
+    match eq_dec k k' return option (member k (k' :: sig)) with
+    | left eqn => Some (rew <-[fun k => member k (k' :: sig)] eqn in MemberHd k' sig)
+    | right _ =>
+      match mem_opt k sig with
+      | Some m => Some (MemberTl k k' sig m)
+      | None => None
+      end
+    end
+  end.
+
+Lemma mem_opt_correct  {K} `{EqDec K} (k: K) (sig: list K) :
+  mem_opt k sig = match mem k sig with
+                  | inl m => Some m
+                  | inr _ => None
+                  end.
+Proof.
+  induction sig as [| k0 sig0 IHsig]; cbn.
+  - reflexivity.
+  - destruct (eq_dec k k0) as [Heq | Hneq].
+    + destruct Heq; reflexivity.
+    + rewrite IHsig; destruct mem; reflexivity.
+Qed.
 
 Fixpoint find {K} (fn: K -> bool) sig {struct sig} : option { k: K & member k sig }.
   destruct sig.
