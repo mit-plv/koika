@@ -1158,13 +1158,12 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
       and p_switch pos target tau var default branches =
         let rec loop = function
           | [] ->
-             p "default:";
-             let res = p_assign_expr target (p_action false pos target default) in
+             let res = p_scoped "default:" (fun () -> p_assign_expr target (p_action true pos target default)) in
              p "break;"; (* Ensure that we don't print an empty ‘default:’ case *)
              res
           | (const, action) :: branches ->
-             p "case %s:" (sp_value ~immediate:true const);
-             p_assign_and_ignore target (p_action false pos target action);
+             p_scoped (sprintf "case %s:" (sp_value ~immediate:true const))
+                      (fun () -> p_assign_and_ignore target (p_action true pos target action));
              p "break;";
              loop branches in
         let varname = hpp.cpp_var_names var in

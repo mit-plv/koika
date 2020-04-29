@@ -6,7 +6,7 @@ Definition idxsz := 5.
 Definition datasz := 64.
 
 Inductive reg_t := clock | index | data (idx: Vect.index (pow2 idxsz)) | output.
-Inductive rule_name_t := sequential_copy | tree_copy | comb_copy | manual_switch | tick.
+Inductive rule_name_t := sequential_copy | tree_copy | comb_copy | function_switch | manual_switch | tick.
 
 Definition R r :=
   match r with
@@ -31,11 +31,30 @@ Definition rule clock_condition style : uaction reg_t empty_ext_fn_t :=
       write0(output, `UCompleteSwitch style idxsz "idx" (fun idx => {{ read0(data idx) }})`)
   }}.
 
+Definition another_fn : UInternalFunction reg_t empty_ext_fn_t :=
+  {{ fun another_fn (x: bits_t 1) : bits_t 1 => x }}.
+
+(* Regression test *)
+Definition simple_match_fn : UInternalFunction reg_t empty_ext_fn_t :=
+  {{ fun simple_match_fn (x: bits_t 1) : bits_t 1 =>
+       match x with
+       | #Ob~0 =>
+           if (another_fn(Ob~0))
+           then Ob~0
+           else Ob~1
+       | #Ob~1 =>
+           Ob~1
+       return default: (Ob~0)
+       end
+   }}.
+
+
 Definition urules rl : uaction reg_t empty_ext_fn_t :=
   match rl with
   | sequential_copy => rule {{ |clocksz`d0| }} (SequentialSwitch (bits_t datasz) "tmp")
   | tree_copy => rule {{ |clocksz`d1| }} TreeSwitch
   | comb_copy => rule {{ |clocksz`d2| }} NestedSwitch
+  | function_switch => {{ ignore(simple_match_fn (Ob~0)) }}
   | manual_switch => {{ match read0(clock) with
                        | #Ob~0~0 => pass
                        | #Ob~0~1 => pass
@@ -52,7 +71,7 @@ Definition rules :=
   tc_rules R empty_Sigma urules.
 
 Definition sched : scheduler :=
-  sequential_copy |> tree_copy |> comb_copy |> manual_switch |> tick |> done.
+  sequential_copy |> tree_copy |> comb_copy |> manual_switch |> function_switch |> tick |> done.
 
 Definition package :=
   {| ip_koika := {| koika_reg_types := R;
