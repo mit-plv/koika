@@ -521,4 +521,29 @@ Section TypedSyntaxFunctions.
     | InternalCall fn args body => None
     | APos pos a => interp_arithmetic a
     end.
+
+  Fixpoint action_size {sig tau}
+           (a: TypedSyntax.action pos_t var_t fn_name_t R Sigma sig tau) :=
+    (1 + match a with
+         | Assign v ex =>
+           action_size ex
+         | Seq a1 a2 =>
+           action_size a1 + action_size a2
+         | Bind v ex body =>
+           action_size ex + action_size body
+         | If cond tbranch fbranch =>
+           action_size cond + action_size tbranch + action_size fbranch
+         | Write port idx value =>
+           action_size value
+         | Unop ufn1 arg1 =>
+           action_size arg1
+         | Binop ufn2 arg1 arg2 =>
+           action_size arg1 + action_size arg2
+         | ExternalCall ufn arg =>
+           action_size arg
+         | InternalCall fn argspec body =>
+           cfoldl (fun _ arg acc => acc + action_size arg) argspec (action_size body)
+         | APos p e => action_size e
+         | _ => 0
+         end)%N.
 End TypedSyntaxFunctions.

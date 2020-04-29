@@ -991,3 +991,25 @@ Module RV32E <: Core.
   Instance FiniteType_scoreboard : FiniteType Scoreboard.reg_t := _.
   Instance FiniteType_reg_t : FiniteType reg_t := _.
 End RV32E.
+
+(** A quick way to measure term sizes:
+
+    Compute (uaction_size RV32I.fetch).
+    Compute (uaction_size RV32I.decode).
+    Compute (uaction_size RV32I.execute).
+    Compute (uaction_size RV32I.writeback).
+    Compute (uaction_size RV32I.wait_imem).
+    Compute (uaction_size (RV32I.mem RV32I.imem)).
+    Compute (uaction_size (RV32I.mem RV32I.dmem)).
+    Compute (uaction_size RV32I.step_multiplier).
+    Compute (uaction_size RV32I.tick).
+
+    Compute (action_size RV32I.tc_fetch).
+    Compute (action_size RV32I.tc_decode).
+    Compute (action_size RV32I.tc_execute).
+    Compute (action_size RV32I.tc_writeback).
+    Compute (action_size RV32I.tc_wait_imem).
+    Compute (action_size RV32I.tc_imem).
+    Compute (action_size RV32I.tc_dmem).
+    Compute (action_size RV32I.tc_step_multiplier).
+    Compute (action_size RV32I.tc_tick). **)

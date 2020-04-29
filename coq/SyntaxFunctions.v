@@ -240,4 +240,69 @@ Section SyntaxFunctions.
               (fbody ++ fargs, UCallModule fR fSigma ufn args)
            end.
   End CoqErrorReporting.
+
+  Section TermSize.
+    Context {pos_t var_t fn_name_t reg_t ext_fn_t: Type}.
+
+    Fixpoint uaction_size
+             {reg_t ext_fn_t}
+             (ua: Syntax.uaction pos_t var_t fn_name_t reg_t ext_fn_t) :=
+      (1 + match ua with
+           | UAssign v ex =>
+             uaction_size ex
+           | USeq a1 a2 =>
+             uaction_size a1 + uaction_size a2
+           | UBind v ex body =>
+             uaction_size ex + uaction_size body
+           | UIf cond tbranch fbranch =>
+             uaction_size cond + uaction_size tbranch + uaction_size fbranch
+           | UWrite port idx value =>
+             uaction_size value
+           | UUnop ufn1 arg1 =>
+             uaction_size arg1
+           | UBinop ufn2 arg1 arg2 =>
+             uaction_size arg1 + uaction_size arg2
+           | UExternalCall ufn arg =>
+             uaction_size arg
+           | UInternalCall ufn args =>
+             List.fold_left
+               (fun acc arg => acc + uaction_size arg)
+               args (uaction_size ufn.(int_body))
+           | UAPos p e => uaction_size e
+           | USugar s => usugar_size s
+           | _ => 0
+           end)%N
+    with usugar_size
+           {reg_t ext_fn_t}
+           (us: usugar pos_t var_t fn_name_t reg_t ext_fn_t) :=
+           (1 + match us with
+                | UProgn aa =>
+                  List.fold_left
+                    (fun acc arg => acc + uaction_size arg)
+                    aa 0
+                | ULet bindings body =>
+                  List.fold_left
+                    (fun acc '(_, value) => acc + uaction_size value)
+                    bindings (uaction_size body)
+                | UWhen cond body =>
+                  uaction_size cond + uaction_size body
+                | USwitch var default branches =>
+                  List.fold_left
+                    (fun acc '(_, body) => acc + uaction_size body)
+                    branches (uaction_size default)
+                | UStructInit sig fields =>
+                  List.fold_left
+                    (fun acc '(_, value) => acc + uaction_size value)
+                    fields 0
+                | UArrayInit tau elements =>
+                  List.fold_left
+                    (fun acc elem => acc + uaction_size elem)
+                    elements 0
+                | UCallModule fR fSigma fn args =>
+                  List.fold_left
+                    (fun acc arg => acc + uaction_size arg)
+                    args (uaction_size fn.(int_body))
+                | _ => 0
+                end)%N.
+  End TermSize.
 End SyntaxFunctions.
