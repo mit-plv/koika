@@ -273,22 +273,22 @@ Module MessageRouter.
   Definition getResp : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun getResp (tiebreaker : bits_t 2) : maybe (struct_t cache_mem_msg) =>
            match tiebreaker with
-           | Ob~0~0 =>
+           | #Ob~0~0 =>
                if (FromCore0I.(MessageFifo1.has_resp)()) then
                  {valid (struct_t cache_mem_msg)}(FromCore0I.(MessageFifo1.deq)())
                else
                  {invalid (struct_t cache_mem_msg)}()
-           | Ob~0~1 =>
+           | #Ob~0~1 =>
                if (FromCore0D.(MessageFifo1.has_resp)()) then
                  {valid (struct_t cache_mem_msg)}(FromCore0D.(MessageFifo1.deq)())
                else
                  {invalid (struct_t cache_mem_msg)}()
-           | Ob~1~0 =>
+           | #Ob~1~0 =>
                if (FromCore1I.(MessageFifo1.has_resp)()) then
                  {valid (struct_t cache_mem_msg)}(FromCore1I.(MessageFifo1.deq)())
                else
                  {invalid (struct_t cache_mem_msg)}()
-           | Ob~1~1 =>
+           | #Ob~1~1 =>
                if (FromCore1D.(MessageFifo1.has_resp)()) then
                  {valid (struct_t cache_mem_msg)}(FromCore1D.(MessageFifo1.deq)())
                else
@@ -300,25 +300,25 @@ Module MessageRouter.
   Definition getReq : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun getReq (tiebreaker : bits_t 2) : maybe (struct_t cache_mem_msg) =>
            match tiebreaker with
-           | Ob~0~0 =>
+           | #Ob~0~0 =>
                if (!FromCore0I.(MessageFifo1.has_resp)() &&
                     FromCore0I.(MessageFifo1.has_req)()) then
                  {valid (struct_t cache_mem_msg)}(FromCore0I.(MessageFifo1.deq)())
                else
                  {invalid (struct_t cache_mem_msg)}()
-           | Ob~0~1 =>
+           | #Ob~0~1 =>
                if (!FromCore0D.(MessageFifo1.has_resp)() &&
                     FromCore0D.(MessageFifo1.has_req)()) then
                  {valid (struct_t cache_mem_msg)}(FromCore0D.(MessageFifo1.deq)())
                else
                  {invalid (struct_t cache_mem_msg)}()
-           | Ob~1~0 =>
+           | #Ob~1~0 =>
                if (!FromCore1I.(MessageFifo1.has_resp)() &&
                     FromCore1I.(MessageFifo1.has_req)()) then
                  {valid (struct_t cache_mem_msg)}(FromCore1I.(MessageFifo1.deq)())
                else
                  {invalid (struct_t cache_mem_msg)}()
-           | Ob~1~1 =>
+           | #Ob~1~1 =>
                if (!FromCore1D.(MessageFifo1.has_resp)() &&
                     FromCore1D.(MessageFifo1.has_req)()) then
                  {valid (struct_t cache_mem_msg)}(FromCore1D.(MessageFifo1.deq)())
@@ -553,7 +553,6 @@ Module Cache (Params: CacheParams).
 
   Definition core_id := Params.core_id.
   Definition cache_type := Params.cache_type.
-  Definition fake : struct_t cache_mem_req. Admitted.
 
   Definition dummy_SendFillReq : uaction reg_t empty_ext_fn_t :=
     {{  
@@ -885,7 +884,6 @@ Module WIPMemory <: Memory_sig External.
   Module Core1IMem := Cache Params_Core1IMem.
   Module Core1DMem := Cache Params_Core0DMem.
 
-
   (* TODO: In theory we would do this in a more modular way, but we simplify for now.
    *)
   Inductive internal_reg_t' : Type :=
@@ -1082,12 +1080,62 @@ Module WIPMemory <: Memory_sig External.
   End MainMemLift.
 
   (* TODO: slow *)
-  (* Instance FiniteType_reg_t : FiniteType reg_t := _. *)
-  Declare Instance FiniteType_reg_t : FiniteType reg_t.  
+  Instance FiniteType_reg_t : FiniteType reg_t := _. 
+  (* Declare Instance FiniteType_reg_t : FiniteType reg_t.   *)
   Instance EqDec_reg_t : EqDec reg_t := _.
+
+  Section SystemRules.
+    Definition forwardToCore0I : uaction reg_t ext_fn_t :=
+      {{ let req := toIMem0.(MemReq.deq)() in
+         (`core0_imem_lift`).(Core0IMem.req)(req) 
+      }}.
+
+    Definition tc_forwardToCore0I := tc_rule R Sigma forwardToCore0I <: rule.
+
+    Definition forwardToCore0D : uaction reg_t ext_fn_t :=
+      {{ let req := toDMem0.(MemReq.deq)() in
+         (`core0_dmem_lift`).(Core0DMem.req)(req)
+      }}.
+
+    Definition tc_forwardToCore0D := tc_rule R Sigma forwardToCore0D <: rule.
+
+    Definition forwardFromCore0I : uaction reg_t ext_fn_t :=
+      {{ let resp := (`core0_imem_lift`).(Core0IMem.resp)() in
+         fromIMem0.(MemResp.enq)(resp)
+      }}.
+
+    Definition tc_forwardFromCore0I := tc_rule R Sigma forwardFromCore0I <: rule.
+
+    Definition forwardFromCore0D : uaction reg_t ext_fn_t :=
+      {{ let resp := (`core0_dmem_lift`).(Core0DMem.resp)() in
+         fromDMem0.(MemResp.enq)(resp)
+      }}.
+
+    Definition tc_forwardFromCore0D := tc_rule R Sigma forwardFromCore0D <: rule.
+
+    Inductive SystemRule :=
+    | SysRl_ForwardToCore0I
+    | SysRl_ForwardToCore0D
+    | SysRl_ForwardFromCore0I
+    | SysRl_ForwardFromCore0D
+    .
+
+    Definition system_rules (rl: SystemRule) : rule :=
+      match rl with
+      | SysRl_ForwardToCore0I => tc_forwardToCore0I
+      | SysRl_ForwardToCore0D => tc_forwardToCore0D
+      | SysRl_ForwardFromCore0I => tc_forwardFromCore0I
+      | SysRl_ForwardFromCore0D => tc_forwardFromCore0D
+      end.
+
+    Definition internal_system_schedule : Syntax.scheduler pos_t SystemRule :=
+      SysRl_ForwardToCore0I |> SysRl_ForwardToCore0D |> SysRl_ForwardFromCore0I |> SysRl_ForwardFromCore0D |> done.
+
+  End SystemRules.
 
   Section Rules.
     Inductive rule_name_t' :=
+    | Rl_System (r: SystemRule)
     | Rl_Core0IMem (r: Core0IMem.rule_name_t)
     | Rl_Core0DMem (r: Core0DMem.rule_name_t)
     | Rl_Proto (r: ProtocolProcessor.rule_name_t)
@@ -1125,6 +1173,7 @@ Module WIPMemory <: Memory_sig External.
 
     Definition rules (rl: rule_name_t) : rule :=
       match rl with
+      | Rl_System r => system_rules r
       | Rl_Core0IMem r => core0I_rules r
       | Rl_Core0DMem r => core0D_rules r
       | Rl_Proto r => proto_rules r
@@ -1135,19 +1184,16 @@ Module WIPMemory <: Memory_sig External.
   End Rules.
 
   Section Schedule.
-    Definition core0I_schedule := lift_scheduler core0I_rule_name_lift Core0IMem.schedule.
-    Definition core0D_schedule := lift_scheduler core0D_rule_name_lift Core0DMem.schedule.
-    Definition proto_schedule := lift_scheduler proto_rule_name_lift ProtocolProcessor.schedule.
-    Definition router_schedule := lift_scheduler router_rule_name_lift MessageRouter.schedule.
-    Definition main_mem_schedule := lift_scheduler main_mem_name_lift MainMem.schedule.
-
-    (* TODO: move this *)
-    Notation "r '||>' s" :=
-      (schedule_app r s)
-        (at level 99, s at level 99, right associativity).
+    Definition system_schedule := lift_scheduler Rl_System internal_system_schedule.
+    Definition core0I_schedule := lift_scheduler Rl_Core0IMem Core0IMem.schedule.
+    Definition core0D_schedule := lift_scheduler Rl_Core0DMem  Core0DMem.schedule.
+    Definition proto_schedule := lift_scheduler Rl_Proto ProtocolProcessor.schedule.
+    Definition router_schedule := lift_scheduler Rl_Router MessageRouter.schedule.
+    Definition main_mem_schedule := lift_scheduler Rl_MainMem MainMem.schedule.
 
     Definition schedule :=
-      core0I_schedule ||> core0D_schedule ||> router_schedule ||> proto_schedule ||> main_mem_schedule.
+      system_schedule ||> core0I_schedule ||> core0D_schedule ||> router_schedule 
+                      ||> proto_schedule ||> main_mem_schedule.
 
   End Schedule.
 

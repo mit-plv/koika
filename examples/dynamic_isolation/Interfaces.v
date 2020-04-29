@@ -602,7 +602,7 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
     Definition mem_schedule := lift_scheduler mem_rule_name_lift Memory.schedule.
 
     Definition schedule :=
-      schedule_app (schedule_app (schedule_app core0_schedule core1_schedule) sm_schedule) mem_schedule.
+      core0_schedule ||> core1_schedule ||> sm_schedule ||> mem_schedule.
 
   End Schedule.
 

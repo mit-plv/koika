@@ -8,11 +8,6 @@
 
 #define DMEM_SIZE (static_cast<std::size_t>(1) << 25)
 
-struct dram {
-  std::unique_ptr<bits<32>[]> mem;
-  std::optional<struct_mem_req> last;
-}
-
 struct bram {
   std::unique_ptr<bits<32>[]> mem;
   std::optional<struct_mem_req> last;
@@ -40,6 +35,28 @@ struct bram {
         ((dEn[2'0_d] ? data : current) & 0x32'000000ff_x) |
         ((dEn[2'1_d] ? data : current) & 0x32'0000ff00_x) |
         ((dEn[2'2_d] ? data : current) & 0x32'00ff0000_x) |
+        ((dEn[2'3_d] ? data : current) & 0x32'ff000000_x);
+    }
+
+    last.reset();
+    return std::optional<struct_mem_resp>{{
+        .byte_en = dEn, .addr = addr, .data = current
+      }};
+  }
+
+  bool put(std::optional<struct_mem_req> req) {
+    if (!req.has_value() || last.has_value())
+      return false;
+
+    last = *req;
+    return true;
+  }
+
+  struct_mem_output getput(struct_mem_input req) {
+    std::optional<struct_mem_resp> get_response = get(bool(req.get_ready));
+    bool put_ready = put(req.put_valid ? std::optional<struct_mem_req>{req.put_request} : std::nullopt);
+    return struct_mem_output{
+      .get_valid = bits<1>{get_response.has_value()},
       .put_ready = bits<1>{put_ready},
       .get_response = get_response.value_or(struct_mem_resp{})
     };
@@ -54,7 +71,7 @@ struct bram {
 };
 
 struct extfuns_t {
-  bram dmem, imem;
+  bram dmem, imem, mainmem;
   bits<1> led;
 
   struct_mem_output ext_mem_dmem(struct_mem_input req) {
@@ -64,6 +81,11 @@ struct extfuns_t {
   struct_mem_output ext_mem_imem(struct_mem_input req) {
     return imem.getput(req);
   }
+
+  struct_mem_output ext_mem_mainmem(struct_mem_input req) {
+    return mainmem.getput(req);
+  }
+
 
   bits<1> ext_uart_write(struct_maybe_bits_8 req) {
     if (req.valid) {
@@ -163,6 +185,7 @@ public:
   explicit rv_core(const std::string& elf_fpath) : module_rv32{} {
     extfuns.imem.read_elf(elf_fpath);
     extfuns.dmem.read_elf(elf_fpath);
+    extfuns.mainmem.read_elf(elf_fpath);
   }
 };
 

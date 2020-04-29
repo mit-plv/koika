@@ -51,6 +51,10 @@ Section ScheduleLift.
 
 End ScheduleLift.
 
+Notation "r '||>' s" :=
+  (schedule_app r s)
+    (at level 99, s at level 99, right associativity).
+
 Section LiftAction.
   Context {reg_t reg_t' : Type}.
   Context {R: reg_t -> type} {R' : reg_t' -> type}.
