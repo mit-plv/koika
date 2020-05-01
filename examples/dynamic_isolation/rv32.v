@@ -71,7 +71,7 @@ Module Package_rv32e.
   Definition package :=
     {| ip_koika := koika_package;
        ip_sim := {| sp_ext_fn_names fn := show fn;
-                   sp_extfuns := None |};
+                    sp_extfuns := None |};
        ip_verilog := {| vp_ext_fn_specs := ext_fn_specs |} |}.
 
 End Package_rv32e.

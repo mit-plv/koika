@@ -110,7 +110,7 @@ struct extfuns_t {
     return current;
   }
 
-  extfuns_t() : dmem{}, imem{}, led{false} {}
+  extfuns_t() : dmem{}, imem{}, mainmem{}, led{false} {}
 };
 
 class rv_core final : public module_rv32<extfuns_t> {

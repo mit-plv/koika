@@ -97,6 +97,9 @@ Module CacheTypes.
          addr[|5`d2|:+12]
     }}.
 
+  Definition dummy_mem_req : struct_t mem_req := value_of_bits (Bits.zero).
+  Definition dummy_mem_resp : struct_t mem_resp := value_of_bits (Bits.zero).
+
 End CacheTypes.
 
 Module MessageFifo1.
@@ -169,14 +172,14 @@ Module MessageFifo1.
     {{ fun deq () : struct_t cache_mem_msg =>
        guard (not_empty());
        if has_resp() then
-           let resp_opt := respQueue.(CacheMemResp.peek)() in
+           let resp_opt := respQueue.(CacheMemResp.deq)() in
            struct cache_mem_msg {| type := enum cache_mem_msg_tag {| Resp |};
-                                   resp := get(resp_opt, data)
+                                   resp := resp_opt
                                 |}
        else
-           let req_opt := reqQueue.(CacheMemReq.peek)() in
+           let req_opt := reqQueue.(CacheMemReq.deq)() in
            struct cache_mem_msg {| type := enum cache_mem_msg_tag {| Req |};
-                                   req := get(req_opt, data)
+                                   req := req_opt
                                 |}
    }}.
 
@@ -528,9 +531,6 @@ Module Cache (Params: CacheParams).
 
   (* Definition downgrade : uaction reg_t empty_ext_fn_t. Admitted. *)
 
-  Definition dummy_mem_req : struct_t mem_req := value_of_bits (Bits.zero).
-  Definition dummy_mem_resp : struct_t mem_resp := value_of_bits (Bits.zero).
-
   (* TOOD: for now, just assume miss and skip cache and forward to memory *)
   Definition dummy_process_request : uaction reg_t empty_ext_fn_t :=
     {{ 
@@ -598,7 +598,11 @@ Module Cache (Params: CacheParams).
                                 byte_en := get(req, byte_en)
                              |})
          else (* TODO: commit data *)
-           pass
+           (__internal__ responsesQ).(MemResp.enq)(
+             struct mem_resp {| addr := get(req, addr);
+                                data := |32`d0|;
+                                byte_en := get(req, byte_en)
+                             |})
          ;
          new_state
     }}.
@@ -660,12 +664,38 @@ Module ProtocolProcessor.
   Import Common.
   Import CacheTypes.
 
+  Definition USHR_state :=
+    {| enum_name := "USHR_state";
+       enum_members := vect_of_list ["Ready"; "Downgrading"; "Confirming"];
+       enum_bitpatterns := vect_of_list [Ob~0~0; Ob~0~1; Ob~1~0]
+    |}.
+
+  Definition USHR :=
+    {| struct_name := "USHR";
+       struct_fields := [("state", enum_t USHR_state);
+                         ("req", struct_t cache_mem_req)]
+    |}.
+
+  Inductive internal_reg_t :=
+  | ushr.
+
+  Definition R_internal (reg: internal_reg_t) : type :=
+    match reg with
+    | ushr => struct_t USHR
+    end.
+
+  Definition r_internal (reg: internal_reg_t) : R_internal reg :=
+    match reg with
+    | ushr => value_of_bits (Bits.zero)
+    end.
+
   (* TODO: Should be a DDR3_Req or similar, and should parameterise based on DDR3AddrSize/DataSize *)
   Inductive reg_t :=
   | FromRouter (state: MessageFifo1.reg_t)
   | ToRouter (state: MessageFifo1.reg_t)
   | ToMem (state: MemReq.reg_t)
   | FromMem (state: MemResp.reg_t)
+  | internal (state: internal_reg_t)
   . 
 
   Definition R (idx: reg_t) : type := 
@@ -674,6 +704,7 @@ Module ProtocolProcessor.
     | ToRouter st => MessageFifo1.R st
     | ToMem st => MemReq.R st
     | FromMem st => MemResp.R st
+    | internal st => R_internal st
     end.
 
   Definition Sigma := empty_Sigma.
@@ -683,17 +714,34 @@ Module ProtocolProcessor.
 
   Definition forward_req : uaction reg_t empty_ext_fn_t :=
     {{ 
+        let ushr := read0(internal ushr) in
         guard (!FromRouter.(MessageFifo1.has_resp)() &&
-                FromRouter.(MessageFifo1.has_req)()
+                FromRouter.(MessageFifo1.has_req)() &&
+                (get(ushr, state) == enum USHR_state {| Ready |})
               );
         let req := get(FromRouter.(MessageFifo1.deq)(),req) in
         (* Tmp: just forward *)
-        ToMem.(MemReq.enq)(get(req, tmp_req))
+        ToMem.(MemReq.enq)(get(req, tmp_req));
+        write0(internal ushr, struct USHR {| state := enum USHR_state {| Confirming |};
+                                             req := req |})
     }}.
 
+  Definition dummy_cache_mem_req : struct_t cache_mem_req := value_of_bits (Bits.zero).
+
   Definition forward_resp_from_mem : uaction reg_t empty_ext_fn_t :=
-    {{ let resp := FromMem.(MemResp.deq)() in
-       FromMem.(MemResp.enq)(resp)
+    {{ let ushr := read0(internal ushr) in
+       guard(get(ushr, state) == enum USHR_state {| Confirming |});
+       let resp := FromMem.(MemResp.deq)() in
+       let req_info := get(ushr, req) in
+       ToRouter.(MessageFifo1.enq_resp)(
+                    struct cache_mem_resp {| core_id := get(req_info, core_id);
+                                             cache_type := get(req_info, cache_type);
+                                             addr := get(resp, addr);
+                                             MSI_state := get(req_info, MSI_state);
+                                             data := {valid data_t} (get(resp, data))
+                                          |});
+       write0(internal ushr, struct USHR {| state := enum USHR_state {| Ready |};
+                                            req := `UConst dummy_cache_mem_req` |})
     }}.
 
   Inductive rule_name_t :=
@@ -900,6 +948,7 @@ Module WIPMemory <: Memory_sig External.
   | ProtoToMem (state: MemReq.reg_t)
   | MemToProto (state: MemResp.reg_t)
   | Router_internal (state: MessageRouter.internal_reg_t)
+  | Proto_internal (state: ProtocolProcessor.internal_reg_t)
   | Core0I_internal (state: Core0IMem.internal_reg_t)
   | Core0D_internal (state: Core0DMem.internal_reg_t)
   | Core1I_internal (state: Core1IMem.internal_reg_t)
@@ -923,6 +972,7 @@ Module WIPMemory <: Memory_sig External.
     | ProtoToMem st => MemReq.R st
     | MemToProto st => MemResp.R st
     | Router_internal st => MessageRouter.R_internal st
+    | Proto_internal st => ProtocolProcessor.R_internal st
     | Core0I_internal st => Core0IMem.R_internal st
     | Core0D_internal st => Core0DMem.R_internal st
     | Core1I_internal st => Core1IMem.R_internal st
@@ -944,6 +994,7 @@ Module WIPMemory <: Memory_sig External.
     | ProtoToMem st => MemReq.r st
     | MemToProto st => MemResp.r st
     | Router_internal st => MessageRouter.r_internal st
+    | Proto_internal st => ProtocolProcessor.r_internal st
     | Core0I_internal st => Core0IMem.r_internal st
     | Core0D_internal st => Core0DMem.r_internal st
     | Core1I_internal st => Core1IMem.r_internal st
@@ -1061,6 +1112,7 @@ Module WIPMemory <: Memory_sig External.
     | ProtocolProcessor.ToRouter st => (internal (ProtoToRouter st ))
     | ProtocolProcessor.ToMem st => (internal (ProtoToMem st))
     | ProtocolProcessor.FromMem st => (internal (MemToProto st))
+    | ProtocolProcessor.internal st => (internal (Proto_internal st))
     end.
 
     Definition Lift_proto : RLift _ ProtocolProcessor.reg_t reg_t ProtocolProcessor.R R := ltac:(mk_rlift proto_lift).

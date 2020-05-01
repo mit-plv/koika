@@ -138,7 +138,7 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
 
   Definition R_internal (idx: internal_reg_t) : type :=
     match idx with
-    | _ => bits_t 0
+    | _ => bits_t 1
     end.
 
   Definition r_internal (idx: internal_reg_t) : R_internal idx :=
