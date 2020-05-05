@@ -39,6 +39,11 @@ Module Common.
   Instance FiniteType_MemReq : FiniteType MemReq.reg_t := _.
   Instance FiniteType_MemResp : FiniteType MemResp.reg_t := _.
 
+  Inductive ind_core_id :=
+  | CoreId0
+  | CoreId1
+  .
+
   Definition addr_t := bits_t 32.
   Definition data_t := bits_t 32.
   Definition core_id_t := bits_t 1.

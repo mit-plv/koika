@@ -20,11 +20,12 @@ Definition fn_name_t := string.
 
 Module CacheTypes.
   Import Common.
+  Import External.
 
-  Definition MSI :=
-    {| enum_name := "MSI";
-       enum_members := vect_of_list ["M"; "S"; "I"];
-       enum_bitpatterns := vect_of_list [Ob~0~0; Ob~0~1; Ob~1~0] |}.
+  Inductive ind_cache_type :=
+  | CacheType_Imem
+  | CacheType_Dmem
+  .
 
   Definition cache_type :=
     {| enum_name := "cache_type";
@@ -39,7 +40,7 @@ Module CacheTypes.
                          ("addr"    , addr_t);
                          ("MSI_state"   , enum_t MSI);
                          ("tmp_req", struct_t mem_req)
-                        ] 
+                        ]
     |}.
 
   Definition cache_mem_resp :=
@@ -74,18 +75,6 @@ Module CacheTypes.
                          ("resp" , struct_t cache_mem_resp)
                         ] |}.
 
-  (* TODO: We simplify:  *)
-
-
-  Definition log_num_sets := 12.
-  Definition log_tag_size := 18. (* 32 - 2 - 12 *)
-
-  Definition cache_tag_t := bits_t log_tag_size. (* TODO  *)
-  Definition cache_index_t := bits_t log_num_sets.
-  (* TODO: avoiding Koika arrays for now. This should be an array based on the block size *)
-  Definition cache_line_t := bits_t 32. 
-
-
   (* TODO: figure out syntax to write as a function of log size *)
   Definition getTag {reg_t}: UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun getTag (addr: bits_t 32) : cache_tag_t =>
@@ -93,7 +82,7 @@ Module CacheTypes.
     }}.
 
   Definition getIndex {reg_t}: UInternalFunction reg_t empty_ext_fn_t :=
-    {{ fun getIndex (addr: bits_t 32) : cache_tag_t =>
+    {{ fun getIndex (addr: bits_t 32) : cache_index_t =>
          addr[|5`d2|:+12]
     }}.
 
@@ -338,7 +327,7 @@ Module MessageRouter.
          let foundMsg := Ob~0 in
          let msg := {invalid (struct_t cache_mem_msg)}() in
          (when (!foundMsg) do (
-           let curResp := getResp (tiebreaker) in 
+           let curResp := getResp (tiebreaker) in
             when (get(curResp, valid)) do (
               set foundMsg := Ob~1;
               set msg := {valid (struct_t cache_mem_msg)} (get(curResp, data));
@@ -450,36 +439,55 @@ Module MessageRouter.
 End MessageRouter.
 
 Module Type CacheParams.
-  Parameter core_id : Common.core_id_t.
-  Parameter cache_type : enum_t CacheTypes.cache_type.
+  Parameter _core_id : Common.ind_core_id.
+  Parameter _cache_type : CacheTypes.ind_cache_type.
 End CacheParams.
 
 Module Cache (Params: CacheParams).
   Import CacheTypes.
   Import Common.
+  Import External.
+
+  Definition core_id : core_id_t :=
+    match Params._core_id with
+    | CoreId0 => Ob~0
+    | CoreId1 => Ob~1
+    end.
+
+  Definition cache_type : enum_t cache_type :=
+    match Params._cache_type with
+    | CacheType_Imem => Ob~0
+    | CacheType_Dmem => Ob~1
+    end.
+
+  Definition external_memory : External.memory :=
+    match Params._cache_type with
+    | CacheType_Imem => External.imem
+    | CacheType_Dmem => External.dmem
+    end.
 
   (* Hard-coded for now: direct-mapped cache: #sets = #blocks; word-addressable *)
-  
-  Definition cache_row := 
-    {| struct_name := "cache_row";
-       struct_fields := [("tag", cache_tag_t);
-                         ("data", cache_line_t);
-                         ("flag", enum_t MSI)] |}.
 
   Definition mshr_tag :=
     {| enum_name := "mshr_tag";
        enum_members := vect_of_list ["Ready"; "SendFillReq"; "WaitFillResp"];
-       enum_bitpatterns := vect_of_list [Ob~0~0; Ob~0~1; Ob~1~0] 
+       enum_bitpatterns := vect_of_list [Ob~0~0; Ob~0~1; Ob~1~0]
     |}.
 
   (* TODO *)
   Definition MSHR_t :=
-    {| struct_name := "MSHR"; 
+    {| struct_name := "MSHR";
        struct_fields := [("mshr_tag", enum_t mshr_tag);
                          ("req", struct_t mem_req)
                         ] |}.
-  
+
+  Definition downgrade_status_t :=
+    {| struct_name := "downgrade_status";
+       struct_fields := [("busy", bits_t 1);
+                         ("toSend", struct_t ext_cache_mem_req)] |}.
+
   Inductive internal_reg_t :=
+  | downgradeState
   | requestsQ (state: MemReq.reg_t)
   | responsesQ (state: MemResp.reg_t)
   | MSHR
@@ -489,6 +497,7 @@ Module Cache (Params: CacheParams).
 
   Definition R_internal (idx: internal_reg_t) : type :=
     match idx with
+    | downgradeState => struct_t downgrade_status_t
     | requestsQ st => MemReq.R st
     | responsesQ st => MemResp.R st
     | mshr => struct_t MSHR_t
@@ -496,6 +505,7 @@ Module Cache (Params: CacheParams).
 
   Definition r_internal (idx: internal_reg_t) : R_internal idx :=
     match idx with
+    | downgradeState => value_of_bits Bits.zero
     | requestsQ st => MemReq.r st
     | responsesQ st => MemResp.r st
     | mshr => value_of_bits (Bits.zero)
@@ -507,7 +517,7 @@ Module Cache (Params: CacheParams).
   | toMem (state: MessageFifo1.reg_t)
   | internal (state: internal_reg_t)
   .
-  
+
   Definition R (idx: reg_t) : type :=
     match idx with
     | fromMem st => MessageFifo1.R st
@@ -521,8 +531,8 @@ Module Cache (Params: CacheParams).
     (USugar (UCallModule instance _ method args))
       (in custom koika at level 1, method constr, args custom koika_args at level 99).
 
-  Definition Sigma := empty_Sigma.
-  Definition ext_fn_t := empty_ext_fn_t.
+  Definition Sigma := External.Sigma.
+  Definition ext_fn_t := External.ext_fn_t.
 
   (* Ready -> SendFillReq;
      SendFillReq -> WaitFillResp;
@@ -531,60 +541,17 @@ Module Cache (Params: CacheParams).
 
   (* Definition downgrade : uaction reg_t empty_ext_fn_t. Admitted. *)
 
-  (* TOOD: for now, just assume miss and skip cache and forward to memory *)
-  Definition dummy_process_request : uaction reg_t empty_ext_fn_t :=
-    {{ 
-        let mshr := read0(internal MSHR) in
-        guard(get(mshr,mshr_tag) == enum mshr_tag {| Ready |});
-        let req := (__internal__ requestsQ).(MemReq.deq)() in
-        write0(internal MSHR, struct MSHR_t {| mshr_tag := enum mshr_tag {| SendFillReq |};
-                                               req := req
-                                            |})
-                                               
-    }}.
-
-  Definition byte_en_to_msi_state : UInternalFunction reg_t empty_ext_fn_t := 
-    {{ fun byte_en_to_msi_state (byte_en: bits_t 4) : enum_t MSI => 
-         match byte_en with
-         | Ob~0~0~0~0 => enum MSI {| S |}
-         return default : enum MSI {| M |}
-         end
-    }}.
-
-  Definition core_id := Params.core_id.
-  Definition cache_type := Params.cache_type.
-
-  Definition dummy_SendFillReq : uaction reg_t empty_ext_fn_t :=
-    {{  
-        let mshr := read0(internal MSHR) in
-        guard(get(mshr,mshr_tag) == enum mshr_tag {| SendFillReq |});
-        let mshr_req := get(mshr,req) in
-        toMem.(MessageFifo1.enq_req)(
-                  struct cache_mem_req {| core_id := (#core_id);
-                                          cache_type := (`UConst (cache_type)`);
-                                          addr := get(mshr_req, addr);
-                                          MSI_state := (match get(mshr_req,byte_en) with
-                                                        | Ob~0~0~0~0 => enum MSI {| S |}
-                                                        return default : enum MSI {| M |}
-                                                        end);
-                                          tmp_req := mshr_req
-                                       |});
-        write0(internal MSHR, struct MSHR_t {| mshr_tag := enum mshr_tag {| WaitFillResp |};
-                                               req := mshr_req
-                                            |})
-    }}.
- 
   (* TODO: move to Std *)
   Section Maybe.
     Context (tau: type).
 
-    Definition fromMaybe {reg_t fn}: UInternalFunction reg_t fn := 
+    Definition fromMaybe {reg_t fn}: UInternalFunction reg_t fn :=
       {{ fun fromMaybe (default: tau) (val: maybe tau) : tau =>
            if get(val, valid) then get(val, data)
-           else default 
-      }}. 
+           else default
+      }}.
   End Maybe.
-             
+
 
   (* If Store: do nothing in response *)
   (* If Load: send response *)
@@ -607,10 +574,150 @@ Module Cache (Params: CacheParams).
          new_state
     }}.
 
-  Definition dummy_WaitFillResp : uaction reg_t empty_ext_fn_t :=
-    {{  
+  Definition dummy_ext_cache_mem_req : struct_t ext_cache_mem_req := value_of_bits (Bits.zero).
+
+  Definition downgrade (mem: External.memory): uaction reg_t ext_fn_t :=
+    {{
+        let downgrade_state := read0(internal downgradeState) in
+        if (get(downgrade_state, busy)) then
+          ignore(extcall (ext_mem mem)
+                         (struct cache_mem_input {| get_ready := Ob~1;
+                                                    put_valid := Ob~1;
+                                                    put_request := get(downgrade_state, toSend)|}));
+          write0(internal downgradeState, struct downgrade_status_t {| busy := Ob~0;
+                                                                       toSend := `UConst (dummy_ext_cache_mem_req)` |})
+        else if (fromMem.(MessageFifo1.not_empty)() &&
+                 !fromMem.(MessageFifo1.has_resp)()) then
+          let req := get(fromMem.(MessageFifo1.deq)(), req) in
+          let index := getIndex(get(req,addr)) in
+          let tag := getTag(get(req,addr)) in
+          let cache_req := struct ext_cache_mem_req {| byte_en := Ob~0~0~0~0;
+                                                       tag := |18`d0|;
+                                                       index := index;
+                                                       data := |32`d0|;
+                                                       MSI := {invalid (enum_t MSI)}() |} in
+          let cache_output := extcall (ext_mem mem)
+                            (struct cache_mem_input {| get_ready := Ob~1;
+                                                       put_valid := Ob~1;
+                                                       put_request := cache_req |}) in
+          guard ((get(cache_output, get_valid)));
+          let row := get(get(cache_output, get_response),row) in
+          if (get(row,tag) == tag &&
+              ((get(req, MSI_state) == enum MSI {| I |} && get(row, flag) != enum MSI {| I |}) ||
+               (get(req, MSI_state) == enum MSI {| S |} && get(row, flag) == enum MSI {| M |}))) then
+            let data_opt := (if get(row,flag) == enum MSI {| M |}
+                             then {valid data_t}(get(row,data))
+                             else {invalid data_t}()) in
+            toMem.(MessageFifo1.enq_resp)(struct cache_mem_resp {| core_id := (#core_id);
+                                                                   cache_type := (`UConst (cache_type)`);
+                                                                   addr := tag ++ index ++ (Ob~0~0);
+                                                                   MSI_state := get(req, MSI_state);
+                                                                   data := data_opt
+                                                                |});
+            let cache_req := struct ext_cache_mem_req {| byte_en := |4`d0|;
+                                                         tag := tag;
+                                                         index := index;
+                                                         data := |32`d0|;
+                                                         MSI := {valid (enum_t MSI)}(get(req, MSI_state))
+                                                      |} in
+            write0(internal downgradeState, struct downgrade_status_t {| busy := Ob~1;
+                                                                         toSend := cache_req |})
+          else pass
+        else pass
+    }}.
+
+
+  (* TOOD: for now, just assume miss and skip cache and forward to memory *)
+  Definition process_request (mem: memory): uaction reg_t ext_fn_t :=
+    {{
         let mshr := read0(internal MSHR) in
+        let downgrade_state := read0(internal downgradeState) in
+        guard(get(mshr,mshr_tag) == enum mshr_tag {| Ready |} &&
+              !get(downgrade_state, busy));
+        let req := (__internal__ requestsQ).(MemReq.deq)() in
+        let addr := get(req,addr) in
+        let tag := getTag(addr) in
+        let index := getIndex(addr) in
+        (* No offset because single element cache oops *)
+        let cache_req := struct ext_cache_mem_req {| byte_en := get(req, byte_en);
+                                                     tag := tag;
+                                                     index := index;
+                                                     data := get(req,data);
+                                                     MSI := {invalid (enum_t MSI)}() |} in
+        let cache_output := extcall (ext_mem mem)
+                            (struct cache_mem_input {| get_ready := Ob~1;
+                                                       put_valid := Ob~1;
+                                                       put_request := cache_req |}) in
+        guard ((get(cache_output, get_valid)));
+        let row := get(get(cache_output, get_response), row) in
+        let inCache := ((get(row,tag) == tag) && (get(row,flag) != enum MSI {| I |} )) in
+
+        if (inCache) then
+          let newMSHR := hit(req, row) in
+          write0(internal MSHR, struct MSHR_t {| mshr_tag := newMSHR;
+                                                 req := req
+                                              |})
+          (* miss *)
+        else
+          when (get(row,flag) != enum MSI {| I |}) do ((* tags unequal; need to downgrade *)
+            let data_opt := (if get(row,flag) == enum MSI {| M |}
+                             then {valid data_t}(get(row,data))
+                             else {invalid data_t}()) in
+            toMem.(MessageFifo1.enq_resp)(struct cache_mem_resp {| core_id := (#core_id);
+                                                                   cache_type := (`UConst (cache_type)`);
+                                                                   addr := addr; (* CHECK *)
+                                                                   MSI_state := enum MSI {| I |};
+                                                                   data := data_opt |});
+            let cache_req := struct ext_cache_mem_req {| byte_en := |4`d0|;
+                                                         tag := |18`d0|;
+                                                         index := index;
+                                                         data := |32`d0|;
+                                                         MSI := {valid (enum_t MSI)}(enum MSI {| I |}) |} in
+            write0(internal downgradeState, struct downgrade_status_t {| busy := Ob~1;
+                                                                         toSend := cache_req |})
+          );
+          write0(internal MSHR, struct MSHR_t {| mshr_tag := enum mshr_tag {| SendFillReq |};
+                                                 req := req
+                                              |})
+    }}.
+
+
+  Definition byte_en_to_msi_state : UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun byte_en_to_msi_state (byte_en: bits_t 4) : enum_t MSI =>
+         match byte_en with
+         | Ob~0~0~0~0 => enum MSI {| S |}
+         return default : enum MSI {| M |}
+         end
+    }}.
+
+  Definition SendFillReq : uaction reg_t ext_fn_t :=
+    {{
+        let mshr := read0(internal MSHR) in
+        let downgrade_state := read0(internal downgradeState) in
+        guard(get(mshr,mshr_tag) == enum mshr_tag {| SendFillReq |} &&
+              !get(downgrade_state, busy));
+        let mshr_req := get(mshr,req) in
+        toMem.(MessageFifo1.enq_req)(
+                  struct cache_mem_req {| core_id := (#core_id);
+                                          cache_type := (`UConst (cache_type)`);
+                                          addr := get(mshr_req, addr);
+                                          MSI_state := (match get(mshr_req,byte_en) with
+                                                        | Ob~0~0~0~0 => enum MSI {| S |}
+                                                        return default : enum MSI {| M |}
+                                                        end);
+                                          tmp_req := mshr_req
+                                       |});
+        write0(internal MSHR, struct MSHR_t {| mshr_tag := enum mshr_tag {| WaitFillResp |};
+                                               req := mshr_req
+                                            |})
+    }}.
+
+  Definition WaitFillResp : uaction reg_t ext_fn_t :=
+    {{
+        let mshr := read0(internal MSHR) in
+        let downgrade_state := read0(internal downgradeState) in
         guard(get(mshr,mshr_tag) == enum mshr_tag {| WaitFillResp |} &&
+              !get(downgrade_state, busy) &&
               fromMem.(MessageFifo1.has_resp)());
         let resp := get(fromMem.(MessageFifo1.deq)(),resp) in
 
@@ -618,12 +725,12 @@ Module Cache (Params: CacheParams).
         let row := struct cache_row {| tag := getTag(get(req, addr));
                                        data := {fromMaybe data_t}(|32`d0|, get(resp,data))
                                     |} in
-        ignore(hit(req, row)); 
+        ignore(hit(req, row));
         write0(internal MSHR, struct MSHR_t {| mshr_tag := enum mshr_tag {| Ready |};
                                                req := (`UConst dummy_mem_req`)
                                             |})
     }}.
-        
+
   Definition req: UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun req (r: struct_t mem_req) : bits_t 0 =>
          let mshr := read0(internal MSHR) in
@@ -637,6 +744,7 @@ Module Cache (Params: CacheParams).
     }}.
 
   Inductive rule_name_t :=
+  | Rl_Downgrade
   | Rl_ProcessRequest
   | Rl_SendFillReq
   | Rl_WaitFillResp
@@ -644,20 +752,34 @@ Module Cache (Params: CacheParams).
 
   Definition rule := rule R Sigma.
 
-  Definition tc_processRequest := tc_rule R Sigma (dummy_process_request) <: rule.
-  Definition tc_sendFillReq := tc_rule R Sigma (dummy_SendFillReq) <: rule.
-  Definition tc_waitFillResp := tc_rule R Sigma (dummy_WaitFillResp) <: rule.
+  (* NOTE: type-checking with unbound memory doesn't fail fast *)
+  Definition tc_downgrade_imem := tc_rule R Sigma (downgrade External.imem) <: rule.
+  Definition tc_downgrade_dmem := tc_rule R Sigma (downgrade External.dmem) <: rule.
+
+  Definition tc_processRequest_imem := tc_rule R Sigma (process_request External.imem) <: rule.
+  Definition tc_processRequest_dmem := tc_rule R Sigma (process_request External.dmem) <: rule.
+  Definition tc_sendFillReq := tc_rule R Sigma (SendFillReq) <: rule.
+  Definition tc_waitFillResp := tc_rule R Sigma (WaitFillResp) <: rule.
 
   Definition rules (rl: rule_name_t) : rule :=
     match rl with
-    | Rl_ProcessRequest => tc_processRequest
+    | Rl_Downgrade =>
+        match Params._cache_type with
+        | CacheType_Imem => tc_downgrade_imem
+        | CacheType_Dmem => tc_downgrade_dmem
+        end
+    | Rl_ProcessRequest =>
+        match Params._cache_type with
+        | CacheType_Imem => tc_processRequest_imem
+        | CacheType_Dmem => tc_processRequest_dmem
+        end
     | Rl_SendFillReq => tc_sendFillReq
     | Rl_WaitFillResp => tc_waitFillResp
     end.
 
   Definition schedule : Syntax.scheduler pos_t rule_name_t :=
-    Rl_ProcessRequest |> Rl_SendFillReq |> Rl_WaitFillResp |> done.
-                   
+    Rl_Downgrade |> Rl_ProcessRequest |> Rl_SendFillReq |> Rl_WaitFillResp |> done.
+
 End Cache.
 
 Module ProtocolProcessor.
@@ -696,9 +818,9 @@ Module ProtocolProcessor.
   | ToMem (state: MemReq.reg_t)
   | FromMem (state: MemResp.reg_t)
   | internal (state: internal_reg_t)
-  . 
+  .
 
-  Definition R (idx: reg_t) : type := 
+  Definition R (idx: reg_t) : type :=
     match idx with
     | FromRouter st => MessageFifo1.R st
     | ToRouter st => MessageFifo1.R st
@@ -711,16 +833,41 @@ Module ProtocolProcessor.
   Definition ext_fn_t := empty_ext_fn_t.
 
   (* For now: we assume everything is always invalid because the caches don't actually exist.  *)
+  Definition receive_responses : uaction reg_t empty_ext_fn_t :=
+    {{
+        guard(FromRouter.(MessageFifo1.has_resp)());
+        let respFromCore := get(FromRouter.(MessageFifo1.deq)(), resp) in
+        let data_opt := get(respFromCore, data) in
+        if (get(data_opt,valid)) then
+          ToMem.(MemReq.enq)(struct mem_req {| byte_en := Ob~1~1~1~1;
+                                               addr := get(respFromCore, addr);
+                                               data := get(data_opt, data)
+                                            |})
+          (* TODO: bypass? *)
+            (*
+          let ushr := read0(internal ushr) in
+          if (get(ushr,state) == enum USHR_state {| Confirming |} ||
+              get(ushr,state) == enum USHR_state {| Downgrading|}) then
+            let req := get(ushr,req) in
+            *)
+        else pass
+        (* TODO: update bookkeeping row/directory *)
+    }}.
 
-  Definition forward_req : uaction reg_t empty_ext_fn_t :=
-    {{ 
+  Definition forward_req: uaction reg_t empty_ext_fn_t :=
+    {{
         let ushr := read0(internal ushr) in
         guard (!FromRouter.(MessageFifo1.has_resp)() &&
                 FromRouter.(MessageFifo1.has_req)() &&
                 (get(ushr, state) == enum USHR_state {| Ready |})
               );
         let req := get(FromRouter.(MessageFifo1.deq)(),req) in
-        (* Tmp: just forward *)
+        (* TODO: need logic something along the lines of:
+         * - if core is trying to load and other has state M, issue downgrade request to S and grab line from them
+         * - if core is trying to load and no one has state M, issue memory request
+         * - if core is trying to store, forall with M/S issue downgrade... etc
+         *)
+        (* For now, just forward *)
         ToMem.(MemReq.enq)(get(req, tmp_req));
         write0(internal ushr, struct USHR {| state := enum USHR_state {| Confirming |};
                                              req := req |})
@@ -745,27 +892,30 @@ Module ProtocolProcessor.
     }}.
 
   Inductive rule_name_t :=
+  | Rl_ReceiveResp
   | Rl_ForwardReq
   | Rl_ForwardResp
   .
 
   Definition rule := rule R Sigma.
 
+  Definition tc_receiveResp := tc_rule R Sigma (receive_responses) <: rule.
   Definition tc_forwardReq := tc_rule R Sigma (forward_req) <: rule.
   Definition tc_forwardResp := tc_rule R Sigma (forward_resp_from_mem) <: rule.
 
   Definition rules (rl: rule_name_t) : rule :=
     match rl with
+    | Rl_ReceiveResp => tc_receiveResp
     | Rl_ForwardReq => tc_forwardReq
     | Rl_ForwardResp => tc_forwardResp
     end.
 
   Definition schedule : Syntax.scheduler pos_t rule_name_t :=
-    Rl_ForwardReq |> Rl_ForwardResp |> done.
-                   
+    Rl_ReceiveResp |> Rl_ForwardReq |> Rl_ForwardResp |> done.
+
      (*
   Definition forward_resp : uaction reg_t empty_ext_fn_t :=
-    {{ 
+    {{
         guard (FromRouter.(MessageFifo1.has_resp)());
         let resp := FromRouter.(MessageFifo1.deq)() in
         let cid := get(resp, core_id) in
@@ -780,7 +930,6 @@ Module ProtocolProcessor.
         else pass
     }}.
     *)
-
 
 End ProtocolProcessor.
 
@@ -907,24 +1056,23 @@ Module WIPMemory <: Memory_sig External.
   Import CacheTypes.
 
   Module Params_Core0IMem <: CacheParams.
-    Definition core_id := Ob~0.
-    Definition cache_type : enum_t cache_type := Ob~0. (* imem *)
+    Definition _core_id := CoreId0.
+    Definition _cache_type := CacheType_Imem.
   End Params_Core0IMem.
 
   Module Params_Core0DMem <: CacheParams.
-    Definition core_id := Ob~0.
-    Definition cache_type : enum_t cache_type := Ob~1. (* dmem *)
+    Definition _core_id := CoreId0.
+    Definition _cache_type := CacheType_Dmem. (* dmem *)
   End Params_Core0DMem.
 
   Module Params_Core1IMem <: CacheParams.
-    Definition core_id := Ob~1.
-    Definition cache_type : enum_t cache_type := Ob~0. (* imem *)
+    Definition _core_id := CoreId1.
+    Definition _cache_type := CacheType_Imem. (* imem *)
   End Params_Core1IMem.
 
-
   Module Params_Core1DMem <: CacheParams.
-    Definition core_id := Ob~1.
-    Definition cache_type : enum_t cache_type := Ob~1. (* dmem *)
+    Definition _core_id := CoreId1.
+    Definition _cache_type := CacheType_Dmem.
   End Params_Core1DMem.
 
   Module Core0IMem := Cache Params_Core0IMem.
@@ -1084,7 +1232,7 @@ Module WIPMemory <: Memory_sig External.
 
   (* TODO: Core1 *)
   Section MessageRouterLift.
-    Definition router_lift (reg: MessageRouter.reg_t) : reg_t := 
+    Definition router_lift (reg: MessageRouter.reg_t) : reg_t :=
     match reg with
     | MessageRouter.FromCore0I st => (internal (core0IToRouter st))
     | MessageRouter.FromCore0D st => (internal (core0DToRouter st))
@@ -1101,13 +1249,13 @@ Module WIPMemory <: Memory_sig External.
 
     Definition Lift_router : RLift _ MessageRouter.reg_t reg_t MessageRouter.R R := ltac:(mk_rlift router_lift).
     Definition FnLift_router : RLift _ MessageRouter.ext_fn_t ext_fn_t MessageRouter.Sigma Sigma := ltac:(lift_auto).
-    
+
   End MessageRouterLift.
 
   Section ProtocolProcessorLift.
 
     Definition proto_lift (reg: ProtocolProcessor.reg_t) : reg_t :=
-    match reg with 
+    match reg with
     | ProtocolProcessor.FromRouter st => (internal (RouterToProto st))
     | ProtocolProcessor.ToRouter st => (internal (ProtoToRouter st ))
     | ProtocolProcessor.ToMem st => (internal (ProtoToMem st))
@@ -1121,7 +1269,7 @@ Module WIPMemory <: Memory_sig External.
   End ProtocolProcessorLift.
 
   Section MainMemLift.
-    Definition main_mem_lift (reg: MainMem.reg_t) : reg_t := 
+    Definition main_mem_lift (reg: MainMem.reg_t) : reg_t :=
       match reg with
       | MainMem.FromProto st => internal (ProtoToMem st)
       | MainMem.ToProto st => internal (MemToProto st)
@@ -1132,14 +1280,14 @@ Module WIPMemory <: Memory_sig External.
   End MainMemLift.
 
   (* TODO: slow *)
-  Instance FiniteType_reg_t : FiniteType reg_t := _. 
+  Instance FiniteType_reg_t : FiniteType reg_t := _.
   (* Declare Instance FiniteType_reg_t : FiniteType reg_t.   *)
   Instance EqDec_reg_t : EqDec reg_t := _.
 
   Section SystemRules.
     Definition forwardToCore0I : uaction reg_t ext_fn_t :=
       {{ let req := toIMem0.(MemReq.deq)() in
-         (`core0_imem_lift`).(Core0IMem.req)(req) 
+         (`core0_imem_lift`).(Core0IMem.req)(req)
       }}.
 
     Definition tc_forwardToCore0I := tc_rule R Sigma forwardToCore0I <: rule.
@@ -1211,7 +1359,7 @@ Module WIPMemory <: Memory_sig External.
 
     Definition main_mem_name_lift (rl: MainMem.rule_name_t) : rule_name_t :=
       Rl_MainMem rl.
-    
+
     Definition core0I_rules (rl: Core0IMem.rule_name_t) : rule :=
       lift_rule Lift_core0_imem FnLift_core0_imem (Core0IMem.rules rl).
     Definition core0D_rules (rl: Core0DMem.rule_name_t) : rule :=
@@ -1244,15 +1392,15 @@ Module WIPMemory <: Memory_sig External.
     Definition main_mem_schedule := lift_scheduler Rl_MainMem MainMem.schedule.
 
     Definition schedule :=
-      system_schedule ||> core0I_schedule ||> core0D_schedule ||> router_schedule 
+      system_schedule ||> core0I_schedule ||> core0D_schedule ||> router_schedule
                       ||> proto_schedule ||> main_mem_schedule.
 
   End Schedule.
 
 End WIPMemory.
 
-
-Module SimpleMemory <: Memory_sig External.
+(*
+Module SimpleMemory <: Memory_sig OriginalExternal.
   Import Common.
 
   (* TOOD: Silly workaround due to extraction issues: https://github.com/coq/coq/issues/12124 *)
@@ -1311,8 +1459,8 @@ Module SimpleMemory <: Memory_sig External.
     | internal st => r_internal st
     end.
 
-  Definition ext_fn_t := External.ext_fn_t.
-  Definition Sigma := External.Sigma.
+  Definition ext_fn_t := OriginalExternal.ext_fn_t.
+  Definition Sigma := OriginalExternal.Sigma.
   Definition rule := rule R Sigma.
   (* Definition sigma := External.sigma. *)
 
@@ -1320,21 +1468,16 @@ Module SimpleMemory <: Memory_sig External.
   Definition MMIO_UART_ADDRESS := Ob~0~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0.
   Definition MMIO_LED_ADDRESS  := Ob~0~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1~0~0.
 
-  Import External.
+  Import OriginalExternal.
 
-  Inductive simple_memory :=
-  | imem0
-  | dmem0
-  .
-
-  Definition memoryBus (m: simple_memory) : UInternalFunction reg_t ext_fn_t :=
+  Definition memoryBus (m: memory) : UInternalFunction reg_t ext_fn_t :=
     {{ fun memoryBus (get_ready: bits_t 1) (put_valid: bits_t 1) (put_request: struct_t mem_req) : struct_t mem_output =>
          `match m with
-          | imem0 => {{ extcall (ext_mem imem) (struct mem_input {|
+          | imem =>  {{ extcall (ext_mem imem) (struct mem_input {|
                          get_ready := get_ready;
                          put_valid := put_valid;
                          put_request := put_request |}) }}
-          | dmem0 => {{ let addr := get(put_request, addr) in
+          | dmem =>  {{ let addr := get(put_request, addr) in
                        let byte_en := get(put_request, byte_en) in
                        let is_write := byte_en == Ob~1~1~1~1 in
 
@@ -1389,7 +1532,7 @@ Module SimpleMemory <: Memory_sig External.
           end` }}.
 
   (* TODO: not defined for main_mem *)
-  Definition mem (m: simple_memory) : uaction reg_t ext_fn_t :=
+  Definition mem (m: memory) : uaction reg_t ext_fn_t :=
     let fromMem := match m with imem0 => fromIMem0 | dmem0 => fromDMem0 end in
     let toMem := match m with imem0 => toIMem0 | dmem0 => toDMem0 end in
     {{
@@ -1402,8 +1545,8 @@ Module SimpleMemory <: Memory_sig External.
         (when (put_valid && get(mem_out, put_ready)) do ignore(toMem.(MemReq.deq)()))
     }}.
 
-  Definition tc_imem := tc_rule R Sigma (mem imem0) <: rule.
-  Definition tc_dmem := tc_rule R Sigma (mem dmem0) <: rule.
+  Definition tc_imem := tc_rule R Sigma (mem imem) <: rule.
+  Definition tc_dmem := tc_rule R Sigma (mem dmem) <: rule.
 
   Inductive rule_name_t' :=
   | Imem
@@ -1424,3 +1567,4 @@ Module SimpleMemory <: Memory_sig External.
   Instance FiniteType_internal_reg_t : FiniteType internal_reg_t := _.
   Instance FiniteType_reg_t : FiniteType reg_t := _.
 End SimpleMemory.
+*)

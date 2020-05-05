@@ -8,6 +8,82 @@
 
 #define DMEM_SIZE (static_cast<std::size_t>(1) << 25)
 
+#define SRAM_SIZE (static_cast<std::size_t>(1) << 12)
+
+struct sram {
+  std::unique_ptr<struct_cache_row[]> mem;
+  std::optional<struct_ext_cache_mem_req> last;
+
+  std::optional<struct_ext_cache_mem_resp> get(bool enable) {
+    if (!enable || !last.has_value())
+      return std::nullopt;
+    auto data = last->data;
+    auto tag = last->tag;
+    auto index = last->index;
+    auto newFlag = last->MSI;
+    //auto addr = last->addr;
+    auto dEn = last->byte_en;
+    bits<32> addr = (prims::widen<32>(tag) << 14) | (prims::widen<32>(index) << 2);
+
+    struct_cache_row current;
+
+    if (addr.v == 0x40001000 && dEn.v == 0xf) {
+      int exitcode = last->data.v;
+      if (exitcode == 0) {
+        printf("  [0;32mPASS[0m\n");
+      } else {
+        printf("  [0;31mFAIL[0m (%d)", exitcode);
+      }
+      std::exit(exitcode);
+    } else {
+      current = mem[addr.v >> 2];
+
+      bits<32> new_data = bits<32>{
+        ((dEn[2'0_d] ? data : current.data) & 0x32'000000ff_x) |
+        ((dEn[2'1_d] ? data : current.data) & 0x32'0000ff00_x) |
+        ((dEn[2'2_d] ? data : current.data) & 0x32'00ff0000_x) |
+        ((dEn[2'3_d] ? data : current.data) & 0x32'ff000000_x)
+      };
+
+      mem[addr.v >> 2].tag = tag;
+      mem[addr.v >> 2].data = new_data;
+      mem[addr.v >> 2].flag = newFlag.valid ? newFlag.data : current.flag;
+    }
+
+    last.reset();
+
+    return std::optional<struct_ext_cache_mem_resp>{
+        struct_ext_cache_mem_resp{.row = current}
+      };
+  }
+
+  bool put(std::optional<struct_ext_cache_mem_req> req) {
+    if (!req.has_value() || last.has_value())
+      return false;
+
+    last = *req;
+    return true;
+  }
+
+  struct_cache_mem_output getput(struct_cache_mem_input req) {
+    bool put_ready = put(req.put_valid ? std::optional<struct_ext_cache_mem_req>{req.put_request} : std::nullopt);
+    std::optional<struct_ext_cache_mem_resp> get_response = get(bool(req.get_ready));
+    return struct_cache_mem_output{
+      .get_valid = bits<1>{get_response.has_value()},
+      .put_ready = bits<1>{put_ready},
+      .get_response = get_response.value_or(struct_ext_cache_mem_resp{})
+    };
+  }
+
+  void read_elf(const std::string& elf_fpath) {
+    elf_load(reinterpret_cast<uint32_t*>(mem.get()), elf_fpath.c_str());
+  }
+
+  // Use new … instead of make_unique to avoid 0-initialization
+  sram() : mem{new struct_cache_row[DMEM_SIZE]}, last{} {}
+
+};
+
 struct bram {
   std::unique_ptr<bits<32>[]> mem;
   std::optional<struct_mem_req> last;
@@ -71,14 +147,15 @@ struct bram {
 };
 
 struct extfuns_t {
-  bram dmem, imem, mainmem;
+  sram dmem, imem;
+  bram mainmem;
   bits<1> led;
 
-  struct_mem_output ext_mem_dmem(struct_mem_input req) {
+  struct_cache_mem_output ext_mem_dmem(struct_cache_mem_input req) {
     return dmem.getput(req);
   }
 
-  struct_mem_output ext_mem_imem(struct_mem_input req) {
+  struct_cache_mem_output ext_mem_imem(struct_cache_mem_input req) {
     return imem.getput(req);
   }
 
