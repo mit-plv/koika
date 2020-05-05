@@ -68,7 +68,7 @@ Module External <: External_sig.
 
   Definition MSI :=
     {| enum_name := "MSI";
-       enum_members := vect_of_list ["M"; "S"; "I"];
+       enum_members := vect_of_list ["I"; "S"; "M"];
        enum_bitpatterns := vect_of_list [Ob~0~0; Ob~0~1; Ob~1~0] |}.
 
   Definition ext_cache_mem_req :=

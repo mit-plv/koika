@@ -27,6 +27,7 @@ struct sram {
 
     struct_cache_row current;
 
+    printf("Req: dEn 0x%x; data 0x%x; tag: 0x%x; index: 0x%x; addr:0x%x\n", dEn.v, data.v, tag.v, index.v, addr.v);
     if (addr.v == 0x40001000 && dEn.v == 0xf) {
       int exitcode = last->data.v;
       if (exitcode == 0) {
@@ -36,21 +37,27 @@ struct sram {
       }
       std::exit(exitcode);
     } else {
-      current = mem[addr.v >> 2];
+      current = mem[index.v];
 
-      bits<32> new_data = bits<32>{
-        ((dEn[2'0_d] ? data : current.data) & 0x32'000000ff_x) |
-        ((dEn[2'1_d] ? data : current.data) & 0x32'0000ff00_x) |
-        ((dEn[2'2_d] ? data : current.data) & 0x32'00ff0000_x) |
-        ((dEn[2'3_d] ? data : current.data) & 0x32'ff000000_x)
-      };
+      if (dEn.v != 0x0) { /* store */
+        bits<32> new_data = bits<32>{
+          ((dEn[2'0_d] ? data : current.data) & 0x32'000000ff_x) |
+          ((dEn[2'1_d] ? data : current.data) & 0x32'0000ff00_x) |
+          ((dEn[2'2_d] ? data : current.data) & 0x32'00ff0000_x) |
+          ((dEn[2'3_d] ? data : current.data) & 0x32'ff000000_x)
+        };
 
-      mem[addr.v >> 2].tag = tag;
-      mem[addr.v >> 2].data = new_data;
-      mem[addr.v >> 2].flag = newFlag.valid ? newFlag.data : current.flag;
+        mem[index.v].tag = tag;
+        mem[index.v].data = new_data;
+      }
+
+      mem[index.v].flag = newFlag.valid ? newFlag.data : current.flag;
+
     }
 
     last.reset();
+
+    printf("Resp: tag: 0x%x; data: 0x%x; MSI_state: %d\n", current.tag.v, current.data.v, current.flag);
 
     return std::optional<struct_ext_cache_mem_resp>{
         struct_ext_cache_mem_resp{.row = current}
@@ -80,7 +87,7 @@ struct sram {
   }
 
   // Use new … instead of make_unique to avoid 0-initialization
-  sram() : mem{new struct_cache_row[DMEM_SIZE]}, last{} {}
+  sram() : mem{std::make_unique<struct_cache_row[]>(SRAM_SIZE)}, last{} {}
 
 };
 
@@ -97,6 +104,9 @@ struct bram {
     auto dEn = last->byte_en;
     bits<32> current = bits<32>{0};
 
+
+    printf("MainReq: dEn 0x%x; data 0x%x; addr:0x%x\n", dEn.v, data.v, addr.v);
+
     if (addr.v == 0x40001000 && dEn.v == 0xf) {
       int exitcode = last->data.v;
       if (exitcode == 0) {
@@ -105,6 +115,8 @@ struct bram {
         printf("  [0;31mFAIL[0m (%d)", exitcode);
       }
       std::exit(exitcode);
+    } else if (addr.v == 0x40001000) {
+      // pass
     } else {
       current = mem[addr.v >> 2];
       mem[addr.v >> 2] =
@@ -115,6 +127,8 @@ struct bram {
     }
 
     last.reset();
+
+    printf("MainResp: byte_en: 0x%x; addr: 0x%x; data: 0x%x\n", dEn.v, addr.v, current.v);
     return std::optional<struct_mem_resp>{{
         .byte_en = dEn, .addr = addr, .data = current
       }};
@@ -260,8 +274,8 @@ class rv_core final : public module_rv32<extfuns_t> {
 
 public:
   explicit rv_core(const std::string& elf_fpath) : module_rv32{} {
-    extfuns.imem.read_elf(elf_fpath);
-    extfuns.dmem.read_elf(elf_fpath);
+    //extfuns.imem.read_elf(elf_fpath);
+    //extfuns.dmem.read_elf(elf_fpath);
     extfuns.mainmem.read_elf(elf_fpath);
   }
 };
