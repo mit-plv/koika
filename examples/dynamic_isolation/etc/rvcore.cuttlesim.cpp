@@ -27,7 +27,7 @@ struct sram {
 
     struct_cache_row current;
 
-    printf("Req: dEn 0x%x; data 0x%x; tag: 0x%x; index: 0x%x; addr:0x%x\n", dEn.v, data.v, tag.v, index.v, addr.v);
+    //printf("Req: dEn 0x%x; data 0x%x; tag: 0x%x; index: 0x%x; addr:0x%x; flag_valid: %d; flag: %d\n", dEn.v, data.v, tag.v, index.v, addr.v, newFlag.valid, newFlag.data);
     if (addr.v == 0x40001000 && dEn.v == 0xf) {
       int exitcode = last->data.v;
       if (exitcode == 0) {
@@ -57,7 +57,7 @@ struct sram {
 
     last.reset();
 
-    printf("Resp: tag: 0x%x; data: 0x%x; MSI_state: %d\n", current.tag.v, current.data.v, current.flag);
+    //printf("Resp: tag: 0x%x; data: 0x%x; MSI_state: %d\n", current.tag.v, current.data.v, current.flag);
 
     return std::optional<struct_ext_cache_mem_resp>{
         struct_ext_cache_mem_resp{.row = current}
@@ -105,7 +105,7 @@ struct bram {
     bits<32> current = bits<32>{0};
 
 
-    printf("MainReq: dEn 0x%x; data 0x%x; addr:0x%x\n", dEn.v, data.v, addr.v);
+    //printf("MainReq: dEn 0x%x; data 0x%x; addr:0x%x\n", dEn.v, data.v, addr.v);
 
     if (addr.v == 0x40001000 && dEn.v == 0xf) {
       int exitcode = last->data.v;
@@ -124,14 +124,22 @@ struct bram {
         ((dEn[2'1_d] ? data : current) & 0x32'0000ff00_x) |
         ((dEn[2'2_d] ? data : current) & 0x32'00ff0000_x) |
         ((dEn[2'3_d] ? data : current) & 0x32'ff000000_x);
+
+      // If store, return nothing
     }
 
     last.reset();
 
-    printf("MainResp: byte_en: 0x%x; addr: 0x%x; data: 0x%x\n", dEn.v, addr.v, current.v);
-    return std::optional<struct_mem_resp>{{
+    if (dEn.v == 0x0) {
+     // printf("MainResp: byte_en: 0x%x; addr: 0x%x; data: 0x%x\n", dEn.v, addr.v, current.v);
+      return std::optional<struct_mem_resp>{{
         .byte_en = dEn, .addr = addr, .data = current
       }};
+    }
+
+    printf("MainStore: return nothing\n");
+    return std::optional<struct_mem_resp>{std::nullopt};
+
   }
 
   bool put(std::optional<struct_mem_req> req) {

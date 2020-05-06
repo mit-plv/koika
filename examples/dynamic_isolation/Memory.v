@@ -360,6 +360,8 @@ Module MessageRouter.
      }}.
 
   (* ======= Search for responses, starting with tiebreaker ====== *)
+
+  (* TODO: This is not isolation friendly right now; should do it round robin style *)
   Definition searchRequests : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun searchRequests (tiebreaker : bits_t 2) : maybe (struct_t cache_mem_msg) =>
          let foundMsg := Ob~0 in
@@ -545,6 +547,26 @@ Module Cache (Params: CacheParams).
       }}.
   End Maybe.
 
+  Definition MMIO_UART_ADDRESS := Ob~0~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0.
+  Definition MMIO_LED_ADDRESS  := Ob~0~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1~0~0.
+
+  Definition memoryBus (m: memory) : UInternalFunction reg_t ext_fn_t :=
+    {{ fun memoryBus (get_ready: bits_t 1) (put_valid: bits_t 1) (put_request: struct_t ext_cache_mem_req)
+         : struct_t cache_mem_output =>
+         `match m with
+          | imem => {{ extcall (ext_mem imem) (struct cache_mem_input {|
+                        get_ready := get_ready;
+                        put_valid := put_valid;
+                        put_request := put_request |}) }}
+          | dmem    =>
+                   {{ extcall (ext_mem dmem) (struct cache_mem_input {|
+                        get_ready := get_ready;
+                        put_valid := put_valid;
+                        put_request := put_request |}) }}
+          | _ => {{ fail }}
+          end
+         `
+   }}.
 
   (* If Store: do nothing in response *)
   (* If Load: send response *)
@@ -563,13 +585,10 @@ Module Cache (Params: CacheParams).
                                       {| byte_en := Ob~1~1~1~1;
                                          tag := getTag(get(req,addr));
                                          index := getIndex(get(req,addr));
-                                         data := get(req,data);
+                                         data := get(row,data);
                                          MSI := {valid (enum_t MSI)}(get(row,flag))
                                       |} in
-               ignore(extcall (ext_mem mem)
-                           (struct cache_mem_input {| get_ready := Ob~1;
-                                                      put_valid := Ob~1;
-                                                      put_request := cache_req |}))
+               ignore({memoryBus mem}(Ob~1, Ob~1, cache_req))
              else pass
          else (* TODO: commit data *)
            if (get(row,flag) == enum MSI {| M |}) then
@@ -578,12 +597,9 @@ Module Cache (Params: CacheParams).
                                        tag := getTag(get(req,addr));
                                        index := getIndex(get(req,addr));
                                        data := get(req,data);
-                                       MSI := {invalid (enum_t MSI)}()
+                                       MSI := {valid (enum_t MSI)}(enum MSI {| M |})
                                     |} in
-             ignore(extcall (ext_mem mem)
-                         (struct cache_mem_input {| get_ready := Ob~1;
-                                                    put_valid := Ob~1;
-                                                    put_request := cache_req |}));
+             ignore({memoryBus mem}(Ob~1, Ob~1, cache_req));
              (__internal__ responsesQ).(MemResp.enq)(
                struct mem_resp {| addr := get(req, addr);
                                   data := |32`d0|;
@@ -611,10 +627,7 @@ Module Cache (Params: CacheParams).
                                                        data := |32`d0|;
                                                        MSI := {invalid (enum_t MSI)}() |} in
           guard (!toMem.(MessageFifo1.has_resp)());
-          let cache_output := extcall (ext_mem mem)
-                            (struct cache_mem_input {| get_ready := Ob~1;
-                                                       put_valid := Ob~1;
-                                                       put_request := cache_req |}) in
+          let cache_output := {memoryBus mem}(Ob~1, Ob~1, cache_req) in
           guard ((get(cache_output, get_valid)));
           let row := get(get(cache_output, get_response),row) in
           if (get(row,tag) == tag &&
@@ -635,10 +648,7 @@ Module Cache (Params: CacheParams).
                                                          data := |32`d0|;
                                                          MSI := {valid (enum_t MSI)}(get(req, MSI_state))
                                                       |} in
-           ignore(extcall (ext_mem mem)
-                            (struct cache_mem_input {| get_ready := Ob~1;
-                                                       put_valid := Ob~1;
-                                                       put_request := cache_req |}))
+           ignore({memoryBus mem}(Ob~1, Ob~1, cache_req))
           else pass
         else
           write0(internal downgradeState, Ob~0)
@@ -664,10 +674,7 @@ Module Cache (Params: CacheParams).
                                                   |} in
         guard((__internal__ responsesQ).(MemResp.can_enq)());
         guard(!toMem.(MessageFifo1.has_resp)());
-        let cache_output := extcall (ext_mem mem)
-                            (struct cache_mem_input {| get_ready := Ob~1;
-                                                       put_valid := Ob~1;
-                                                       put_request := cache_req |}) in
+        let cache_output := {memoryBus mem}(Ob~1, Ob~1, cache_req) in
         guard ((get(cache_output, get_valid)));
         let row := get(get(cache_output, get_response), row) in
         let inCache := ((get(row,tag) == tag) && (get(row,flag) != enum MSI {| I |} )) in
@@ -692,10 +699,7 @@ Module Cache (Params: CacheParams).
                                                          index := index;
                                                          data := |32`d0|;
                                                          MSI := {valid (enum_t MSI)}(enum MSI {| I |}) |} in
-            ignore(extcall (ext_mem mem)
-                            (struct cache_mem_input {| get_ready := Ob~1;
-                                                       put_valid := Ob~1;
-                                                       put_request := cache_req |}))
+            ignore({memoryBus mem}(Ob~1, Ob~1, cache_req))
           ));
           write0(internal MSHR, struct MSHR_t {| mshr_tag := enum mshr_tag {| SendFillReq |};
                                                  req := req
@@ -723,7 +727,7 @@ Module Cache (Params: CacheParams).
                                           cache_type := (`UConst (cache_type)`);
                                           addr := get(mshr_req, addr);
                                           MSI_state := (match get(mshr_req,byte_en) with
-                                                        | Ob~0~0~0~0 => enum MSI {| S |}
+                                                        | #Ob~0~0~0~0 => enum MSI {| S |}
                                                         return default : enum MSI {| M |}
                                                         end)
                                        |});
@@ -753,11 +757,23 @@ Module Cache (Params: CacheParams).
                                             |})
     }}.
 
+  Definition can_send_req : UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun can_send_req () : bits_t 1 =>
+         let mshr := read0(internal MSHR) in
+         get(mshr,mshr_tag) == enum mshr_tag {| Ready |} &&
+         (__internal__ requestsQ).(MemReq.can_enq)()
+    }}.
+
   Definition req: UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun req (r: struct_t mem_req) : bits_t 0 =>
          let mshr := read0(internal MSHR) in
          guard(get(mshr,mshr_tag) == enum mshr_tag {| Ready |});
          (__internal__ requestsQ).(MemReq.enq)(r)
+    }}.
+
+  Definition can_recv_resp: UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun can_recv_resp () : bits_t 1 =>
+         (__internal__ responsesQ).(MemResp.can_deq)()
     }}.
 
   Definition resp: UInternalFunction reg_t empty_ext_fn_t :=
@@ -942,24 +958,6 @@ Module ProtocolProcessor.
   Definition schedule : Syntax.scheduler pos_t rule_name_t :=
     Rl_ReceiveResp |> Rl_ForwardReq |> Rl_ForwardResp |> done.
 
-     (*
-  Definition forward_resp : uaction reg_t empty_ext_fn_t :=
-    {{
-        guard (FromRouter.(MessageFifo1.has_resp)());
-        let resp := FromRouter.(MessageFifo1.deq)() in
-        let cid := get(resp, core_id) in
-        let idx := getIndex (get(resp, addr)) in
-        let resp_data := get(resp,data) in
-        if (get(resp_data, valid)) then
-          let req := struct mem_req {| addr := get(resp, addr);
-                                       data := get(resp_data, data);
-                                       byte_en := get(resp, byte_en)
-                                    |} in
-          ToMem.(MemReq.enq)(req)
-        else pass
-    }}.
-    *)
-
 End ProtocolProcessor.
 
 Module MainMem.
@@ -984,67 +982,14 @@ Module MainMem.
   Definition MMIO_UART_ADDRESS := Ob~0~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0.
   Definition MMIO_LED_ADDRESS  := Ob~0~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1~0~0.
 
-  Definition memoryBus (m: memory) : UInternalFunction reg_t ext_fn_t :=
-    {{ fun memoryBus (get_ready: bits_t 1) (put_valid: bits_t 1) (put_request: struct_t mem_req) : struct_t mem_output =>
-         `match m with
-          | imem => {{ extcall (ext_mem imem) (struct mem_input {|
-                        get_ready := get_ready;
-                        put_valid := put_valid;
-                        put_request := put_request |}) }}
-          | _    => {{
-                      let addr := get(put_request, addr) in
-                      let byte_en := get(put_request, byte_en) in
-                      let is_write := byte_en == Ob~1~1~1~1 in
-
-                      let is_uart := addr == #MMIO_UART_ADDRESS in
-                      let is_uart_read := is_uart && !is_write in
-                      let is_uart_write := is_uart && is_write in
-
-                      let is_led := addr == #MMIO_LED_ADDRESS in
-                      let is_led_write := is_led && is_write in
-
-                      let is_mem := !is_uart && !is_led in
-
-                      if is_uart_write then
-                        let char := get(put_request, data)[|5`d0| :+ 8] in
-                        let may_run := get_ready && put_valid && is_uart_write in
-                        let ready := extcall ext_uart_write (struct (Maybe (bits_t 8)) {|
-                          valid := may_run; data := char |}) in
-                        struct mem_output {| get_valid := may_run && ready;
-                                             put_ready := may_run && ready;
-                                             get_response := struct mem_resp {|
-                                               byte_en := byte_en; addr := addr;
-                                               data := |32`d0| |} |}
-
-                      else if is_uart_read then
-                        let may_run := get_ready && put_valid && is_uart_read in
-                        let opt_char := extcall ext_uart_read (may_run) in
-                        let ready := get(opt_char, valid) in
-                        struct mem_output {| get_valid := may_run && ready;
-                                             put_ready := may_run && ready;
-                                             get_response := struct mem_resp {|
-                                               byte_en := byte_en; addr := addr;
-                                               data := zeroExtend(get(opt_char, data), 32) |} |}
-
-                      else if is_led then
-                        let on := get(put_request, data)[|5`d0|] in
-                        let may_run := get_ready && put_valid && is_led_write in
-                        let current := extcall ext_led (struct (Maybe (bits_t 1)) {|
-                          valid := may_run; data := on |}) in
-                        let ready := Ob~1 in
-                        struct mem_output {| get_valid := may_run && ready;
-                                             put_ready := may_run && ready;
-                                             get_response := struct mem_resp {|
-                                               byte_en := byte_en; addr := addr;
-                                               data := zeroExtend(current, 32) |} |}
-
-                      else
-                        extcall (ext_mem m) (struct mem_input {|
-                          get_ready := get_ready && is_mem;
-                          put_valid := put_valid && is_mem;
+  Definition mainMemoryBus : UInternalFunction reg_t ext_fn_t :=
+    {{ fun memoryBus (get_ready: bits_t 1) (put_valid: bits_t 1) (put_request: struct_t mem_req) : struct_t mem_output=>
+       extcall (ext_mem mainmem)
+               (struct mem_input {|
+                          get_ready := get_ready;
+                          put_valid := put_valid;
                           put_request := put_request |})
-                   }}
-          end` }} .
+    }}.
 
   Definition mem : uaction reg_t ext_fn_t :=
     let fromMem := ToProto in
@@ -1054,7 +999,7 @@ Module MainMem.
         let put_request_opt := toMem.(MemReq.peek)() in
         let put_request := get(put_request_opt, data) in
         let put_valid := get(put_request_opt, valid) in
-        let mem_out := {memoryBus mainmem}(get_ready, put_valid, put_request) in
+        let mem_out := mainMemoryBus(get_ready, put_valid, put_request) in
         (when (get_ready && get(mem_out, get_valid)) do fromMem.(MemResp.enq)(get(mem_out, get_response)));
         (when (put_valid && get(mem_out, put_ready)) do ignore(toMem.(MemReq.deq)()))
     }}.
@@ -1313,52 +1258,141 @@ Module WIPMemory <: Memory_sig External.
   (* Declare Instance FiniteType_reg_t : FiniteType reg_t.   *)
   Instance EqDec_reg_t : EqDec reg_t := _.
 
+  Definition MMIO_UART_ADDRESS := Ob~0~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0.
+  Definition MMIO_LED_ADDRESS  := Ob~0~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1~0~0.
+
+  Definition memoryBus (m: memory) : UInternalFunction reg_t ext_fn_t :=
+    {{ fun memoryBus (get_ready: bits_t 1) (put_valid: bits_t 1) (put_request: struct_t mem_req)
+         : maybe (struct_t mem_output) =>
+         `match m with
+          | imem => {{ {invalid (struct_t mem_output) }() }}
+          | _    => {{
+                      let addr := get(put_request, addr) in
+                      let byte_en := get(put_request, byte_en) in
+                      let is_write := byte_en == Ob~1~1~1~1 in
+
+                      let is_uart := addr == #MMIO_UART_ADDRESS in
+                      let is_uart_read := is_uart && !is_write in
+                      let is_uart_write := is_uart && is_write in
+
+                      let is_led := addr == #MMIO_LED_ADDRESS in
+                      let is_led_write := is_led && is_write in
+
+                      let is_mem := !is_uart && !is_led in
+
+                      if is_uart_write then
+                        let char := get(put_request, data)[|5`d0| :+ 8] in
+                        let may_run := get_ready && put_valid && is_uart_write in
+                        let ready := extcall ext_uart_write (struct (Maybe (bits_t 8)) {|
+                          valid := may_run; data := char |}) in
+                        {valid (struct_t mem_output)}(
+                          struct mem_output {| get_valid := may_run && ready;
+                                               put_ready := may_run && ready;
+                                               get_response := struct mem_resp {|
+                                                 byte_en := byte_en; addr := addr;
+                                                 data := |32`d0| |} |})
+
+                      else if is_uart_read then
+                        let may_run := get_ready && put_valid && is_uart_read in
+                        let opt_char := extcall ext_uart_read (may_run) in
+                        let ready := get(opt_char, valid) in
+                        {valid (struct_t mem_output)}(
+                          struct mem_output {| get_valid := may_run && ready;
+                                               put_ready := may_run && ready;
+                                               get_response := struct mem_resp {|
+                                                 byte_en := byte_en; addr := addr;
+                                                 data := zeroExtend(get(opt_char, data), 32) |} |})
+
+                      else if is_led then
+                        let on := get(put_request, data)[|5`d0|] in
+                        let may_run := get_ready && put_valid && is_led_write in
+                        let current := extcall ext_led (struct (Maybe (bits_t 1)) {|
+                          valid := may_run; data := on |}) in
+                        let ready := Ob~1 in
+                        {valid (struct_t mem_output)}(
+                          struct mem_output {| get_valid := may_run && ready;
+                                               put_ready := may_run && ready;
+                                               get_response := struct mem_resp {|
+                                                 byte_en := byte_en; addr := addr;
+                                                 data := zeroExtend(current, 32) |} |})
+
+                      else
+                        {invalid (struct_t mem_output)}()
+                   }}
+          end` }} .
+
   Section SystemRules.
-    Definition forwardToCore0I : uaction reg_t ext_fn_t :=
-      {{ let req := toIMem0.(MemReq.deq)() in
-         (`core0_imem_lift`).(Core0IMem.req)(req)
+    Definition memCore0I : uaction reg_t ext_fn_t :=
+      let fromMem := fromIMem0 in
+      let toMem := toIMem0 in
+      {{
+          let get_ready := fromMem.(MemResp.can_enq)() in
+          let put_request_opt := toMem.(MemReq.peek)() in
+          let put_request := get(put_request_opt, data) in
+          let put_valid := get(put_request_opt, valid) in
+
+          let mem_out_opt := {memoryBus mainmem}(get_ready, put_valid, put_request) in
+          if (get(mem_out_opt,valid)) then
+            (* valid output *)
+            let mem_out := get(mem_out_opt,data) in
+            (when (get_ready && get(mem_out, get_valid)) do fromMem.(MemResp.enq)(get(mem_out, get_response)));
+            (when (put_valid && get(mem_out, put_ready)) do ignore(toMem.(MemReq.deq)()))
+          else
+            (* TODO: these rules can fail *)
+            (when (put_valid && (`core0_imem_lift`).(Core0IMem.can_send_req)()) do (
+              ignore(toMem.(MemReq.deq)());
+              (`core0_imem_lift`).(Core0IMem.req)(put_request)
+            ));
+            (when (get_ready && (`core0_imem_lift`).(Core0IMem.can_recv_resp)()) do (
+              let resp := (`core0_imem_lift`).(Core0IMem.resp)() in
+              fromMem.(MemResp.enq)(resp))
+            )
       }}.
 
-    Definition tc_forwardToCore0I := tc_rule R Sigma forwardToCore0I <: rule.
+    Definition tc_memCore0I := tc_rule R Sigma memCore0I <: rule.
 
-    Definition forwardToCore0D : uaction reg_t ext_fn_t :=
-      {{ let req := toDMem0.(MemReq.deq)() in
-         (`core0_dmem_lift`).(Core0DMem.req)(req)
+    Definition memCore0D : uaction reg_t ext_fn_t :=
+      let fromMem := fromDMem0 in
+      let toMem := toDMem0 in
+      {{
+          let get_ready := fromMem.(MemResp.can_enq)() in
+          let put_request_opt := toMem.(MemReq.peek)() in
+          let put_request := get(put_request_opt, data) in
+          let put_valid := get(put_request_opt, valid) in
+
+          let mem_out_opt := {memoryBus mainmem}(get_ready, put_valid, put_request) in
+          if (get(mem_out_opt,valid)) then
+            (* valid output *)
+            let mem_out := get(mem_out_opt,data) in
+            (when (get_ready && get(mem_out, get_valid)) do fromMem.(MemResp.enq)(get(mem_out, get_response)));
+            (when (put_valid && get(mem_out, put_ready)) do ignore(toMem.(MemReq.deq)()))
+          else
+            (* TODO: these rules can fail *)
+            (when (put_valid && (`core0_dmem_lift`).(Core0DMem.can_send_req)()) do (
+              ignore(toMem.(MemReq.deq)());
+              (`core0_dmem_lift`).(Core0DMem.req)(put_request)
+            ));
+            (when (get_ready && (`core0_dmem_lift`).(Core0DMem.can_recv_resp)()) do (
+              let resp := (`core0_dmem_lift`).(Core0DMem.resp)() in
+              fromMem.(MemResp.enq)(resp))
+            )
       }}.
 
-    Definition tc_forwardToCore0D := tc_rule R Sigma forwardToCore0D <: rule.
-
-    Definition forwardFromCore0I : uaction reg_t ext_fn_t :=
-      {{ let resp := (`core0_imem_lift`).(Core0IMem.resp)() in
-         fromIMem0.(MemResp.enq)(resp)
-      }}.
-
-    Definition tc_forwardFromCore0I := tc_rule R Sigma forwardFromCore0I <: rule.
-
-    Definition forwardFromCore0D : uaction reg_t ext_fn_t :=
-      {{ let resp := (`core0_dmem_lift`).(Core0DMem.resp)() in
-         fromDMem0.(MemResp.enq)(resp)
-      }}.
-
-    Definition tc_forwardFromCore0D := tc_rule R Sigma forwardFromCore0D <: rule.
+    Definition tc_memCore0D := tc_rule R Sigma memCore0D <: rule.
 
     Inductive SystemRule :=
-    | SysRl_ForwardToCore0I
-    | SysRl_ForwardToCore0D
-    | SysRl_ForwardFromCore0I
-    | SysRl_ForwardFromCore0D
+    | SysRl_MemCore0I
+    | SysRl_MemCore0D
     .
 
     Definition system_rules (rl: SystemRule) : rule :=
       match rl with
-      | SysRl_ForwardToCore0I => tc_forwardToCore0I
-      | SysRl_ForwardToCore0D => tc_forwardToCore0D
-      | SysRl_ForwardFromCore0I => tc_forwardFromCore0I
-      | SysRl_ForwardFromCore0D => tc_forwardFromCore0D
+      | SysRl_MemCore0I => tc_memCore0I
+      | SysRl_MemCore0D => tc_memCore0D
       end.
 
     Definition internal_system_schedule : Syntax.scheduler pos_t SystemRule :=
-      SysRl_ForwardToCore0I |> SysRl_ForwardToCore0D |> SysRl_ForwardFromCore0I |> SysRl_ForwardFromCore0D |> done.
+      SysRl_MemCore0I |> SysRl_MemCore0D |> done.
 
   End SystemRules.
 
