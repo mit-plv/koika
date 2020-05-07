@@ -47,3 +47,14 @@ Proof.
   destruct pr1; cbn; intros.
   apply Eqdep_dec.eq_rect_eq_dec, eq_dec.
 Qed.
+
+Lemma eq_dec_refl {A} {EQ: EqDec A}:
+  forall a, eq_dec a a = left eq_refl.
+Proof.
+  intros.
+  destruct eq_dec.
+  - generalize e; apply Eqdep_dec.K_dec_type.
+    + apply eq_dec.
+    + reflexivity.
+  - congruence.
+Qed.
