@@ -6,9 +6,48 @@
 #include "elf.hpp"
 #include "cuttlesim.hpp"
 
+#define LOG_NUM_SETS 12
+#define LOG_TAG_SZ 18
+
 #define DMEM_SIZE (static_cast<std::size_t>(1) << 25)
 
-#define SRAM_SIZE (static_cast<std::size_t>(1) << 12)
+#define SRAM_SIZE (static_cast<std::size_t>(1) << LOG_NUM_SETS)
+
+struct bookkeeping {
+  std::array<std::array<struct_Bookkeeping_row, 4>, LOG_NUM_SETS> container;
+
+  int encode_cache (bits<1> core_id, enum_cache_type cache_type) {
+	return (2 * core_id.v + (cache_type == enum_cache_type::dmem ? 1 : 0));
+  }
+
+  struct_Bookkeeping_row get(bits<1> core_id, enum_cache_type cache_type, bits<12> idx) {
+	return container[idx.v][encode_cache(core_id, cache_type)];
+  }
+
+  void set(bits<1> core_id, enum_cache_type cache_type, bits<12> idx, struct_Bookkeeping_row row) {
+	container[idx.v][encode_cache(core_id,cache_type)] = row;
+  }
+
+  struct_maybe_Bookkeeping_row getset(struct_bookkeeping_input input) {
+	if (input.book.valid) {
+	  set(input.core_id, input.cache_type, input.idx, input.book.data);
+	  return struct_maybe_Bookkeeping_row {
+	    .valid = bits<1>{false},
+        .data =	struct_Bookkeeping_row {
+				  .state = enum_MSI::I,
+                  .tag = bits<18>{0}
+                }
+      };
+    } else {
+	  return struct_maybe_Bookkeeping_row {
+	    .valid = bits<1>{true},
+        .data =	get(input.core_id, input.cache_type, input.idx)
+      };
+    }
+  }
+
+  bookkeeping() : container{} {}
+};
 
 struct sram {
   std::unique_ptr<struct_cache_row[]> mem;
@@ -172,16 +211,17 @@ struct extfuns_t {
   sram dmem, imem;
   bram mainmem;
   bits<1> led;
+  bookkeeping ppp_bookkeeping;
 
-  struct_cache_mem_output ext_mem_dmem(struct_cache_mem_input req) {
+  struct_cache_mem_output ext_cache_dmem(struct_cache_mem_input req) {
     return dmem.getput(req);
   }
 
-  struct_cache_mem_output ext_mem_imem(struct_cache_mem_input req) {
+  struct_cache_mem_output ext_cache_imem(struct_cache_mem_input req) {
     return imem.getput(req);
   }
 
-  struct_mem_output ext_mem_mainmem(struct_mem_input req) {
+  struct_mem_output ext_mainmem(struct_mem_input req) {
     return mainmem.getput(req);
   }
 
@@ -209,7 +249,11 @@ struct extfuns_t {
     return current;
   }
 
-  extfuns_t() : dmem{}, imem{}, mainmem{}, led{false} {}
+  struct_maybe_Bookkeeping_row ext_ppp_bookkeeping(struct_bookkeeping_input req) {
+	return ppp_bookkeeping.getset(req);
+  }
+
+  extfuns_t() : dmem{}, imem{}, mainmem{}, led{false}, ppp_bookkeeping{} {}
 };
 
 class rv_core final : public module_rv32<extfuns_t> {
