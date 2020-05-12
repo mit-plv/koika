@@ -9,12 +9,14 @@
 #define LOG_NUM_SETS 12
 #define LOG_TAG_SZ 18
 
+#define NUM_SETS (static_cast<std::size_t>(1) << LOG_NUM_SETS)
+
 #define DMEM_SIZE (static_cast<std::size_t>(1) << 25)
 
 #define SRAM_SIZE (static_cast<std::size_t>(1) << LOG_NUM_SETS)
 
 struct bookkeeping {
-  std::array<std::array<struct_Bookkeeping_row, 4>, LOG_NUM_SETS> container;
+  std::array<std::array<struct_Bookkeeping_row, 4>, NUM_SETS> container;
 
   int encode_cache (bits<1> core_id, enum_cache_type cache_type) {
 	return (2 * core_id.v + (cache_type == enum_cache_type::dmem ? 1 : 0));
@@ -25,6 +27,7 @@ struct bookkeeping {
   }
 
   void set(bits<1> core_id, enum_cache_type cache_type, bits<12> idx, struct_Bookkeeping_row row) {
+	//printf("Set core %d, cache %d, idx 0x%x, tag 0x%x, state %d\n", core_id.v, cache_type, idx.v, row.tag.v, row.state);
 	container[idx.v][encode_cache(core_id,cache_type)] = row;
   }
 
@@ -170,13 +173,13 @@ struct bram {
     last.reset();
 
     if (dEn.v == 0x0) {
-     // printf("MainResp: byte_en: 0x%x; addr: 0x%x; data: 0x%x\n", dEn.v, addr.v, current.v);
+      //printf("MainResp: byte_en: 0x%x; addr: 0x%x; data: 0x%x\n", dEn.v, addr.v, current.v);
       return std::optional<struct_mem_resp>{{
         .byte_en = dEn, .addr = addr, .data = current
       }};
     }
 
-    printf("MainStore: return nothing\n");
+    //printf("MainStore: return nothing\n");
     return std::optional<struct_mem_resp>{std::nullopt};
 
   }

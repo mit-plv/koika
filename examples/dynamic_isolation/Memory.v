@@ -884,7 +884,6 @@ Module ProtocolProcessor.
   Definition Sigma := Sigma.
   Definition ext_fn_t := ext_fn_t.
 
-  (* For now: we assume everything is always invalid because the caches don't actually exist.  *)
   Definition receive_responses : uaction reg_t ext_fn_t :=
     {{
         guard(FromRouter.(MessageFifo1.has_resp)());
@@ -1048,7 +1047,9 @@ Module ProtocolProcessor.
                                                  data := |32`d0| |})
         (* Store *)
         else if (get(req,MSI_state) == enum MSI {| M |}) then
-          (when (!other_core_has_line) do (* TODO: core doesn't have the line *)
+          (when (!other_core_has_line &&
+                  (get_state(core_id, get(req,cache_type), index, tag) == enum MSI {| I |})
+                ) do
             (* Request line from main memory *)
             ToMem.(MemReq.enq)(struct mem_req {| byte_en := Ob~0~0~0~0;
                                                  addr := addr;
