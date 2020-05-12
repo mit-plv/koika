@@ -65,6 +65,11 @@ Module Common.
                         ("put_ready", bits_t 1);
                         ("get_response", struct_t mem_resp)] |}.
 
+  Definition purge_state :=
+    {| enum_name := "purge_state";
+       enum_members := vect_of_list ["Ready"; "Purging"; "Purged"];
+       enum_bitpatterns := vect_of_list [Ob~0~0; Ob~0~1; Ob~1~0] |}.
+
 End Common.
 
 Module Type EnclaveParameters.
@@ -97,6 +102,7 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
   | toDMem (state: MemReq.reg_t)
   | fromIMem (state: MemResp.reg_t)
   | fromDMem (state: MemResp.reg_t)
+  | purge
   | internal (r: internal_reg_t)
   .
 
@@ -107,6 +113,7 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
    | toDMem r => MemReq.R r
    | fromIMem  r => MemResp.R r
    | fromDMem  r => MemResp.R r
+   | purge => enum_t purge_state
    | internal r => R_internal r
    end.
 
@@ -117,9 +124,9 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
     | fromIMem s => MemResp.r s
     | toDMem s => MemReq.r s
     | fromDMem s => MemResp.r s
+    | purge => value_of_bits (Bits.zero)
     | internal s => r_internal s
     end.
-
 
   Declare Instance FiniteType_reg_t : FiniteType reg_t.
 
@@ -174,6 +181,9 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
   | fromMem0_DMem (state: MemResp.reg_t)
   | fromMem1_IMem (state: MemResp.reg_t)
   | fromMem1_DMem (state: MemResp.reg_t)
+  | purge_core0
+  | purge_core1
+  | purge_mem
   | internal (idx: internal_reg_t)
   .
 
@@ -199,6 +209,9 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
     | fromMem0_DMem st => MemResp.R st
     | fromMem1_IMem st => MemResp.R st
     | fromMem1_DMem st => MemResp.R st
+    | purge_core0 => enum_t purge_state
+    | purge_core1 => enum_t purge_state
+    | purge_mem => enum_t purge_state
     | internal st => R_internal st
     end.
 
@@ -222,6 +235,9 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
     | fromMem0_DMem st => MemResp.r st
     | fromMem1_IMem st => MemResp.r st
     | fromMem1_DMem st => MemResp.r st
+    | purge_core0 => value_of_bits (Bits.zero)
+    | purge_core1 => value_of_bits (Bits.zero)
+    | purge_mem => value_of_bits (Bits.zero)
     | internal st => r_internal st
     end.
 
@@ -321,6 +337,7 @@ Module Type Memory_sig (External: External_sig).
   | fromIMem1 (state: MemResp.reg_t)
   | fromDMem0 (state: MemResp.reg_t)
   | fromDMem1 (state: MemResp.reg_t)
+  | purge
   | internal (r: internal_reg_t)
   .
 
@@ -334,6 +351,7 @@ Module Type Memory_sig (External: External_sig).
     | fromIMem1 st => MemResp.R st
     | fromDMem0 st => MemResp.R st
     | fromDMem1 st => MemResp.R st
+    | purge => enum_t purge_state
     | internal st => R_internal st
     end.
 
@@ -347,6 +365,7 @@ Module Type Memory_sig (External: External_sig).
     | fromIMem1 st => MemResp.r st
     | fromDMem0 st => MemResp.r st
     | fromDMem1 st => MemResp.r st
+    | purge => value_of_bits (Bits.zero)
     | internal st => r_internal st
     end.
 
@@ -379,7 +398,10 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
   Inductive reg_t' : Type :=
   | core_id0
   | core_id1
-  (* TODO: reset memory *)
+  (* State purging *)
+  | purge_core0
+  | purge_core1
+  | purge_mem
   (* Core0 <-> SM *)
   | Core0ToSM_IMem (state: MemReq.reg_t)
   | Core0ToSM_DMem (state: MemReq.reg_t)
@@ -412,7 +434,10 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
     match idx with
     | core_id0 => bits_t 1
     | core_id1 => bits_t 1
-    (* TODO: reset memory *)
+    (* State purging*)
+    | purge_core0 => enum_t purge_state
+    | purge_core1 => enum_t purge_state
+    | purge_mem => enum_t purge_state
     (* Core0 <-> SM *)
     | Core0ToSM_IMem st => MemReq.R st
     | Core0ToSM_DMem st => MemReq.R st
@@ -443,7 +468,10 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
     match idx with
     | core_id0 => Params0.core_id
     | core_id1 => Params1.core_id
-    (* TODO: reset memory *)
+    (* Purge state *)
+    | purge_core0 => value_of_bits (Bits.zero)
+    | purge_core1 => value_of_bits (Bits.zero)
+    | purge_mem => value_of_bits (Bits.zero)
     (* Core0 <-> SM *)
     | Core0ToSM_IMem st => MemReq.r st
     | Core0ToSM_DMem st => MemReq.r st
@@ -498,6 +526,7 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
       | Core0.toDMem s => Core0ToSM_DMem s
       | Core0.fromIMem s => SMToCore0_IMem s
       | Core0.fromDMem s => SMToCore0_DMem s
+      | Core0.purge => purge_core0
       | Core0.internal s => Core0_internal s
       end.
 
@@ -514,6 +543,7 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
       | Core1.toDMem s => Core1ToSM_DMem s
       | Core1.fromIMem s => SMToCore1_IMem s
       | Core1.fromDMem s => SMToCore1_DMem s
+      | Core1.purge => purge_core1
       | Core1.internal s => Core1_internal s
       end.
 
@@ -544,6 +574,10 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
       | SM.fromMem0_DMem st => MemToSM0_DMem st
       | SM.fromMem1_IMem st => MemToSM1_IMem st
       | SM.fromMem1_DMem st => MemToSM1_DMem st
+      (* purge *)
+      | SM.purge_core0 => purge_core0
+      | SM.purge_core1 => purge_core1
+      | SM.purge_mem => purge_mem
       | SM.internal st => SM_internal st
       end.
 
@@ -563,6 +597,7 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
       | Memory.fromIMem1 st => MemToSM1_IMem st
       | Memory.fromDMem0 st => MemToSM0_DMem st
       | Memory.fromDMem1 st => MemToSM1_DMem st
+      | Memory.purge => purge_mem
       | Memory.internal st => Mem_internal st
       end.
 

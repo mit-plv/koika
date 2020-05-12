@@ -29,6 +29,7 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
   | toDMem (state: MemReq.reg_t)
   | fromIMem (state: MemResp.reg_t)
   | fromDMem (state: MemResp.reg_t)
+  | purge
   | internal (r: internal_reg_t)
   .
 
@@ -39,6 +40,7 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
    | toDMem r => MemReq.R r
    | fromIMem  r => MemResp.R r
    | fromDMem  r => MemResp.R r
+   | purge => enum_t purge_state
    | internal r => R_internal r
    end.
 
@@ -49,6 +51,7 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
     | fromIMem s => MemResp.r s
     | toDMem s => MemReq.r s
     | fromDMem s => MemResp.r s
+    | purge => value_of_bits (Bits.zero)
     | internal s => r_internal s
     end.
 

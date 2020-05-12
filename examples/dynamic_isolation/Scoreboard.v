@@ -78,4 +78,12 @@ Module Scoreboard (s:Scoreboard_sig).
         fun search (idx: bits_t sz) : bits_t logScore =>
           Scores.(Rf.read_1)(idx)
     }}.
+
+  Definition reset_at_idx : UInternalFunction reg_t empty_ext_fn_t :=
+    {{
+        fun reset_at_idx (idx: bits_t sz) : bits_t 0 =>
+          Scores.(Rf.write_0)(idx, `UConst (tau := bits_t logScore) (Bits.zeroes logScore)`)
+    }}.
+
+
 End Scoreboard.

@@ -398,16 +398,6 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
                          ("newrd" , bits_t 32);
                          ("dInst"    , struct_t decoded_sig)]|}.
 
-
-  (* Specialize interfaces *)
-  (*
-  Module FifoUART <: Fifo.
-    Definition T:= bits_t 8.
-  End FifoUART.
-  Module UARTReq := Fifo1Bypass FifoUART.
-  Module UARTResp := Fifo1 FifoUART.
-  *)
-
   Module FifoFetch <: Fifo.
     Definition T:= struct_t fetch_bookkeeping.
   End FifoFetch.
@@ -492,6 +482,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
   | toDMem (state: MemReq.reg_t)
   | fromIMem (state: MemResp.reg_t)
   | fromDMem (state: MemResp.reg_t)
+  | purge
   | internal (r: internal_reg_t)
   .
 
@@ -503,6 +494,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
     | fromIMem r => MemResp.R r
     | toDMem r => MemReq.R r
     | fromDMem r => MemResp.R r
+    | purge => enum_t purge_state
     | internal r => R_internal r
     end.
 
@@ -514,6 +506,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
     | fromIMem s => MemResp.r s
     | toDMem s => MemReq.r s
     | fromDMem s => MemResp.r s
+    | purge => value_of_bits (Bits.zero)
     | internal s => r_internal s
     end.
 
@@ -530,6 +523,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
 
   Definition fetch : uaction reg_t ext_fn_t :=
     {{
+        guard(read0(purge) == enum purge_state {| Ready |});
         let pc := read1(internal pc) in
         let req := struct mem_req {|
                               byte_en := |4`d0|; (* Load *)
@@ -547,6 +541,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
 
   Definition wait_imem : uaction reg_t ext_fn_t :=
     {{
+        guard(read0(purge) == enum purge_state {| Ready |});
         let fetched_bookkeeping := (__internal__ f2d).(fromFetch.deq)() in
         (__internal__ f2dprim).(waitFromFetch.enq)(fetched_bookkeeping)
     }}.
@@ -563,6 +558,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
   (* muxing on the input, TODO check if it changes anything *)
   Definition decode : uaction reg_t ext_fn_t :=
     {{
+        guard(read0(purge) == enum purge_state {| Ready |});
         let instr := fromIMem.(MemResp.deq)() in
         let instr := get(instr,data) in
         let fetched_bookkeeping := (__internal__ f2dprim).(waitFromFetch.deq)() in
@@ -616,11 +612,13 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
 
   Definition step_multiplier : uaction reg_t ext_fn_t :=
     {{
+        guard(read0(purge) == enum purge_state {| Ready |});
         (__internal__ mulState).(Multiplier.step)()
     }}.
 
   Definition execute : uaction reg_t ext_fn_t :=
     {{
+        guard(read0(purge) == enum purge_state {| Ready |});
         let decoded_bookkeeping := (__internal__ d2e).(fromDecode.deq)() in
         if get(decoded_bookkeeping, epoch) == read0(internal epoch) then
           (* By then we guarantee that this instruction is correct-path *)
@@ -687,6 +685,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
 
   Definition writeback : uaction reg_t ext_fn_t :=
     {{
+        guard(read0(purge) == enum purge_state {| Ready |});
         let execute_bookkeeping := (__internal__ e2w).(fromExecute.deq)() in
         let dInst := get(execute_bookkeeping, dInst) in
         let data := get(execute_bookkeeping, newrd) in
@@ -722,6 +721,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
 
   Definition tick : uaction reg_t ext_fn_t :=
     {{
+        guard(read0(purge) == enum purge_state {| Ready |});
         write0(internal cycle_count, read0(internal cycle_count) + |32`d1|)
     }}.
 
@@ -768,12 +768,9 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
   | Execute
   | Writeback
   | WaitImem
-  (*
-  | Imem
-  | Dmem
-  *)
   | StepMultiplier
-  | Tick.
+  | Tick
+  | Purge.
 
   Definition rule_name_t := rule_name_t'.
 
@@ -833,6 +830,68 @@ Module RV32I (EnclaveParams: EnclaveParameters) (CoreParams: CoreParameters)
   Import External.
   Import Common.
 
+  Definition reset_scoreboard : UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun reset_scoreboard () : bits_t 0 =>
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d0|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d1|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d2|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d3|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d4|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d5|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d6|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d7|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d8|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d9|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d10|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d11|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d12|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d13|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d14|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d15|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d16|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d17|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d18|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d19|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d20|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d21|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d22|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d23|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d24|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d25|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d26|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d27|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d28|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d29|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d30|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d31|)
+    }}.
+
+  (* TODO: generalize reset for scoreboard *)
+  Definition do_internal_purge: uaction reg_t ext_fn_t :=
+    {{
+       guard(read0(purge) == enum purge_state {| Purging |});
+       (* f2d *)
+       (__internal__ f2d).(fromFetch.reset)();
+       (* f2dprim *)
+       (__internal__ f2dprim).(waitFromFetch.reset)();
+       (* d2e *)
+       (__internal__ d2e).(fromDecode.reset)();
+       (* e2w *)
+       (__internal__ e2w).(fromExecute.reset)();
+       (* mulState *)
+       (__internal__ mulState).(Multiplier.reset)();
+       (* scoreboard *)
+       reset_scoreboard();
+       (* cycle_count *)
+       write0(internal cycle_count, |32`d0|);
+       (* instr_count *)
+       write0(internal instr_count, |32`d0|);
+       (* epoch *)
+       write0(internal epoch, Ob~0);
+       (* pc *)
+       write0(internal pc, |32`d0|)
+    }}.
+
   Definition tc_fetch := tc_rule R Sigma fetch.
   Definition tc_wait_imem := tc_rule R Sigma wait_imem.
   Definition tc_decode := tc_rule R Sigma decode.
@@ -840,6 +899,7 @@ Module RV32I (EnclaveParams: EnclaveParameters) (CoreParams: CoreParameters)
   Definition tc_writeback := tc_rule R Sigma writeback.
   Definition tc_step_multiplier := tc_rule R Sigma step_multiplier.
   Definition tc_tick := tc_rule R Sigma tick.
+  Definition tc_purge := tc_rule R Sigma do_internal_purge <: rule.
 
   Definition rules (rl: rule_name_t) : rule :=
     match rl with
@@ -850,10 +910,11 @@ Module RV32I (EnclaveParams: EnclaveParameters) (CoreParams: CoreParameters)
     | WaitImem       => tc_wait_imem
     | StepMultiplier => tc_step_multiplier
     | Tick           => tc_tick
+    | Purge          => tc_purge
     end.
 
   Definition schedule : scheduler :=
-    Writeback |> Execute |> StepMultiplier |> Decode |> WaitImem |> Fetch |> Tick |> done.
+    Writeback |> Execute |> StepMultiplier |> Decode |> WaitImem |> Fetch |> Tick |> Purge |> done.
 
   Instance FiniteType_rf : FiniteType Rf.reg_t := _.
   Instance FiniteType_scoreboard_rf : FiniteType Scoreboard.Rf.reg_t := _.
@@ -874,6 +935,53 @@ Module RV32E (EnclaveParams: EnclaveParameters) (CoreParams: CoreParameters)
   Import External.
   Import Common.
 
+  Definition reset_scoreboard : UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun reset_scoreboard () : bits_t 0 =>
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|4`d0|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|4`d1|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|4`d2|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|4`d3|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|4`d4|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|4`d5|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|4`d6|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|4`d7|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|4`d8|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|4`d9|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|4`d10|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|4`d11|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|4`d12|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|4`d13|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|4`d14|);
+         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|4`d15|)
+    }}.
+
+  (* TODO: generalize reset for scoreboard *)
+  Definition do_internal_purge: uaction reg_t ext_fn_t :=
+    {{
+       guard(read0(purge) == enum purge_state {| Purging |});
+       (* f2d *)
+       (__internal__ f2d).(fromFetch.reset)();
+       (* f2dprim *)
+       (__internal__ f2dprim).(waitFromFetch.reset)();
+       (* d2e *)
+       (__internal__ d2e).(fromDecode.reset)();
+       (* e2w *)
+       (__internal__ e2w).(fromExecute.reset)();
+       (* mulState *)
+       (__internal__ mulState).(Multiplier.reset)();
+       (* scoreboard *)
+       reset_scoreboard();
+       (* cycle_count *)
+       write0(internal cycle_count, |32`d0|);
+       (* instr_count *)
+       write0(internal instr_count, |32`d0|);
+       (* epoch *)
+       write0(internal epoch, Ob~0);
+       (* pc *)
+       write0(internal pc, |32`d0|)
+    }}.
+
+
   Definition tc_fetch := tc_rule R Sigma fetch <: rule.
   Definition tc_wait_imem := tc_rule R Sigma wait_imem <: rule.
   Definition tc_decode := tc_rule R Sigma decode <: rule.
@@ -881,6 +989,7 @@ Module RV32E (EnclaveParams: EnclaveParameters) (CoreParams: CoreParameters)
   Definition tc_writeback := tc_rule R Sigma writeback <: rule.
   Definition tc_step_multiplier := tc_rule R Sigma step_multiplier <: rule.
   Definition tc_tick := tc_rule R Sigma tick.
+  Definition tc_purge := tc_rule R Sigma do_internal_purge <: rule.
 
   Definition rules (rl: rule_name_t) : rule :=
     match rl with
@@ -891,10 +1000,11 @@ Module RV32E (EnclaveParams: EnclaveParameters) (CoreParams: CoreParameters)
     | WaitImem       => tc_wait_imem
     | StepMultiplier => tc_step_multiplier
     | Tick           => tc_tick
+    | Purge          => tc_purge
     end.
 
   Definition schedule : scheduler :=
-    Writeback |> Execute |> StepMultiplier |> Decode |> WaitImem |> Fetch |> Tick |> done.
+    Writeback |> Execute |> StepMultiplier |> Decode |> WaitImem |> Fetch |> Tick |> Purge |> done.
 
   Instance FiniteType_rf : FiniteType Rf.reg_t := _.
   Instance FiniteType_scoreboard_rf : FiniteType Scoreboard.Rf.reg_t := _.

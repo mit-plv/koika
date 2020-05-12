@@ -14,6 +14,7 @@ Module Type MultiplierInterface.
   Axiom deq : UInternalFunction reg_t empty_ext_fn_t.
   Axiom step : UInternalFunction reg_t empty_ext_fn_t.
   Axiom enabled : UInternalFunction reg_t empty_ext_fn_t.
+  Axiom reset : UInternalFunction reg_t empty_ext_fn_t.
   Axiom FiniteType_reg_t : FiniteType reg_t.
   Axiom Show_reg_t : Show reg_t.
 End MultiplierInterface.
@@ -80,6 +81,16 @@ Module ShiftAddMultiplier (s: Multiplier_sig) <: MultiplierInterface.
   Definition enabled : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun enabled () : bits_t 1 => Ob~1 }}.
 
+  Definition reset : UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun reset () : bits_t 0 =>
+         write0(valid, Ob~0);
+         write0(operand1, `UConst (tau := bits_t n) Bits.zero`);
+         write0(operand2, `UConst (tau := bits_t n) Bits.zero`);
+         write0(result, `UConst (tau := bits_t (n+n)) Bits.zero`);
+         write0(n_step, `UConst (tau := bits_t (log2 n)) Bits.zero`);
+         write0(finished, Ob~0)
+    }}.
+
   Instance FiniteType_reg_t : FiniteType reg_t := _.
   Instance Show_reg_t : Show reg_t := _.
 End ShiftAddMultiplier.
@@ -104,6 +115,9 @@ Module DummyMultiplier (s: Multiplier_sig) <: MultiplierInterface.
 
   Definition enabled : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun enabled () : bits_t 1 => Ob~0 }}.
+
+  Definition reset : UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun reset () : bits_t 0 => pass }}.
 
   Instance FiniteType_reg_t : FiniteType reg_t := _.
   Instance Show_reg_t : Show reg_t := _.

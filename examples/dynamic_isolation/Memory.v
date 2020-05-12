@@ -1369,6 +1369,7 @@ Module WIPMemory <: Memory_sig External.
   | fromIMem1 (state: MemResp.reg_t)
   | fromDMem0 (state: MemResp.reg_t)
   | fromDMem1 (state: MemResp.reg_t)
+  | purge
   | internal (r: internal_reg_t)
   .
 
@@ -1382,6 +1383,7 @@ Module WIPMemory <: Memory_sig External.
     | fromIMem1 st => MemResp.R st
     | fromDMem0 st => MemResp.R st
     | fromDMem1 st => MemResp.R st
+    | purge => enum_t purge_state
     | internal st => R_internal st
     end.
 
@@ -1395,6 +1397,7 @@ Module WIPMemory <: Memory_sig External.
     | fromIMem1 st => MemResp.r st
     | fromDMem0 st => MemResp.r st
     | fromDMem1 st => MemResp.r st
+    | purge => value_of_bits (Bits.zero)
     | internal st => r_internal st
     end.
 

@@ -68,6 +68,12 @@ Module Fifo1 (f: Fifo).
         write0(valid0, Ob~0);
         read0(data0) }}.
 
+  Definition reset: UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun reset () : bits_t 0 =>
+        write0(valid0, Ob~0);
+        write0(data0, `UConst (tau := T) (value_of_bits (Bits.zero))`)
+    }}.
+
   Instance FiniteType_reg_t : FiniteType reg_t := _.
 End Fifo1.
 
@@ -115,6 +121,12 @@ Module Fifo1Bypass (f: Fifo).
        guard (can_deq ());
        write1(valid0, Ob~0);
        read1(data0) }}.
+
+  Definition reset: UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun reset () : T =>
+        write1(valid0, Ob~0);
+        write1(data0, `UConst (tau := T) (value_of_bits (Bits.zero))`)
+    }}.
 
   Instance FiniteType_reg_t : FiniteType reg_t := _.
 End Fifo1Bypass.
@@ -165,6 +177,7 @@ Module RfPow2 (s: RfPow2_sig).
     {{ fun write_1 (idx : bits_t s.idx_sz) (val: s.T) : unit_t =>
          `UCompleteSwitch s.write_style s.idx_sz "idx"
               (fun idx => {{ write1(rData idx, val) }})` }}.
+
 End RfPow2.
 
 Module Type Rf_sig.
