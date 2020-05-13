@@ -70,6 +70,17 @@ Module Common.
        enum_members := vect_of_list ["Ready"; "Purging"; "Purged"];
        enum_bitpatterns := vect_of_list [Ob~0~0; Ob~0~1; Ob~1~0] |}.
 
+  Module RfParams <: RfPow2_sig.
+    Definition idx_sz := log2 32.
+    Definition T := bits_t 32.
+    Definition init := Bits.zeroes 32.
+    Definition read_style := Scoreboard.read_style 32.
+    Definition write_style := Scoreboard.write_style.
+  End RfParams.
+  Module Rf := RfPow2 RfParams.
+
+  Instance FiniteType_rf : FiniteType Rf.reg_t := _.
+   
 End Common.
 
 Module Type EnclaveParameters.
@@ -78,6 +89,7 @@ End EnclaveParameters.
 
 Module Type CoreParameters.
   Parameter core_id : Common.core_id_t.
+  Parameter NREGS : nat.
 End CoreParameters.
 
 Module Type External_sig.
@@ -102,6 +114,7 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
   | toDMem (state: MemReq.reg_t)
   | fromIMem (state: MemResp.reg_t)
   | fromDMem (state: MemResp.reg_t)
+  | rf (state: Rf.reg_t)
   | purge
   | internal (r: internal_reg_t)
   .
@@ -113,6 +126,7 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
    | toDMem r => MemReq.R r
    | fromIMem  r => MemResp.R r
    | fromDMem  r => MemResp.R r
+   | rf r => Rf.R r 
    | purge => enum_t purge_state
    | internal r => R_internal r
    end.
@@ -124,6 +138,7 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
     | fromIMem s => MemResp.r s
     | toDMem s => MemReq.r s
     | fromDMem s => MemResp.r s
+    | rf r => Rf.r r 
     | purge => value_of_bits (Bits.zero)
     | internal s => r_internal s
     end.
@@ -402,6 +417,9 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
   | purge_core0
   | purge_core1
   | purge_mem
+  (* Register files *)
+  | core0_rf (state: Rf.reg_t)
+  | core1_rf (state: Rf.reg_t) 
   (* Core0 <-> SM *)
   | Core0ToSM_IMem (state: MemReq.reg_t)
   | Core0ToSM_DMem (state: MemReq.reg_t)
@@ -438,6 +456,9 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
     | purge_core0 => enum_t purge_state
     | purge_core1 => enum_t purge_state
     | purge_mem => enum_t purge_state
+    (* Register files *)
+    | core0_rf st => Rf.R st
+    | core1_rf st => Rf.R st
     (* Core0 <-> SM *)
     | Core0ToSM_IMem st => MemReq.R st
     | Core0ToSM_DMem st => MemReq.R st
@@ -472,6 +493,9 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
     | purge_core0 => value_of_bits (Bits.zero)
     | purge_core1 => value_of_bits (Bits.zero)
     | purge_mem => value_of_bits (Bits.zero)
+    (* Register files *)
+    | core0_rf st => Rf.r st
+    | core1_rf st => Rf.r st
     (* Core0 <-> SM *)
     | Core0ToSM_IMem st => MemReq.r st
     | Core0ToSM_DMem st => MemReq.r st
@@ -504,8 +528,8 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
   Definition rule : Type := rule R Sigma.
 
   (* TODO: 40s *)
-  Instance FiniteType_reg_t : FiniteType reg_t := _.
-  (* Declare Instance FiniteType_reg_t : FiniteType reg_t.  *)
+  (* Instance FiniteType_reg_t : FiniteType reg_t. *)
+  Declare Instance FiniteType_reg_t : FiniteType reg_t.  
 
   Instance EqDec_reg_t : EqDec reg_t := _.
 
@@ -526,6 +550,7 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
       | Core0.toDMem s => Core0ToSM_DMem s
       | Core0.fromIMem s => SMToCore0_IMem s
       | Core0.fromDMem s => SMToCore0_DMem s
+      | Core0.rf s => core0_rf s
       | Core0.purge => purge_core0
       | Core0.internal s => Core0_internal s
       end.
@@ -543,6 +568,7 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
       | Core1.toDMem s => Core1ToSM_DMem s
       | Core1.fromIMem s => SMToCore1_IMem s
       | Core1.fromDMem s => SMToCore1_DMem s
+      | Core1.rf s => core1_rf s
       | Core1.purge => purge_core1
       | Core1.internal s => Core1_internal s
       end.

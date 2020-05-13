@@ -476,6 +476,8 @@ Module FiniteTypeHelpers.
         rewrite List.app_nil_r;
         simpl;
         repeat match goal with
+        | [ |- NoDup [] ] =>
+            constructor
         | [ |- NoDup (_ :: _) ] =>
             apply NoDup_cons
         | [ |- not _ ] =>

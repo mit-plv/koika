@@ -23,8 +23,10 @@ Module Mem := WIPMemory.
 
 Module Machine_rv32i := Machine External EnclaveParams Params0 Params1
                         Core0_rv32i Core1 Mem.
+(*
 Module Machine_rv32e := Machine External EnclaveParams Params0 Params1
                         Core0_rv32e Core1 Mem.
+*)
 
 Module Package_rv32i.
   Include Machine_rv32i.
@@ -50,6 +52,7 @@ Module Package_rv32i.
 
 End Package_rv32i.
 
+(*
 Module Package_rv32e.
   Include Machine_rv32e.
   Instance Show_reg_t : Show reg_t := _.
@@ -75,3 +78,4 @@ Module Package_rv32e.
        ip_verilog := {| vp_ext_fn_specs := ext_fn_specs |} |}.
 
 End Package_rv32e.
+*)
