@@ -3,7 +3,7 @@ Require Import Koika.Frontend.
 
 Inductive reg_t := input (_: Vect.index 8) | output.
 Definition ext_fn_t := empty_ext_fn_t.
-Inductive rule_name_t := rl.
+Inductive rule_name_t := rl1 | rl2.
 
 Definition a :=
   {| struct_name := "a";
@@ -36,7 +36,7 @@ Definition idx_of_nat (sz: nat) (n: nat) :=
 
 Extraction Inline idx_of_nat.
 
-Definition _rl : uaction reg_t ext_fn_t :=
+Definition _rl1 : uaction reg_t ext_fn_t :=
   {{
       write0(output, struct a {| a0 := read0(input (idx_of_nat 8 0));
                                  a1 := read0(input (idx_of_nat 8 1));
@@ -48,14 +48,18 @@ Definition _rl : uaction reg_t ext_fn_t :=
                                  a7 := read0(input (idx_of_nat 8 7)) |})
   }}.
 
+Definition _rl2 : uaction reg_t ext_fn_t :=
+  {{ write0(output, `UConst (tau := struct_t a) (value_of_bits Bits.zero)`) }}.
+
 Definition rules :=
   tc_rules R empty_Sigma
            (fun r => match r with
-                   | rl => _rl
+                   | rl1 => _rl1
+                   | rl2 => _rl2
                   end).
 
 Definition sched : scheduler :=
-  rl |> done.
+  rl1 |> rl2 |> done.
 
 Definition package :=
   {| ip_koika := {| koika_reg_types := R;
