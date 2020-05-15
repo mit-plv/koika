@@ -1238,24 +1238,28 @@ namespace cuttlesim {
 #define DEF_RESET(rl) RULE_DECL(void, reset, rl)
 #define DEF_COMMIT(rl) RULE_DECL(void, commit, rl)
 
+// Using __VA_ARGS__ in WRITE* macros below ensures that we can parse things
+// like WRITE0(reg, struct_xyz{a, b}).
+// See https://stackoverflow.com/questions/29578902/.
+
 #define FAIL() \
   { PASTE_EXPANDED_2(reset, RULE_NAME)(); return false; }
 #define FAIL_UNLESS(can_fire) \
   { if (!(can_fire)) { FAIL(); }  }
-#define READ(reg, source, read_fn) \
+#define READ(read_fn, reg, source) \
   ({ decltype(source.reg) tmp; \
      FAIL_UNLESS(read_fn(&tmp, source.reg, log.rwset.reg, Log.rwset.reg)); \
      tmp; })
-#define WRITE(reg, val, write_fn) \
+#define WRITE(write_fn, reg, val) \
   FAIL_UNLESS(write_fn(log.state.reg, (val), log.rwset.reg))
 #define READ0(reg) \
-  READ(reg, Log.state, read0)
+  READ(read0, reg, Log.state)
 #define READ1(reg) \
-  READ(reg, log.state, read1)
-#define WRITE0(reg, val) \
-  WRITE(reg, val, write0)
-#define WRITE1(reg, val) \
-  WRITE(reg, val, write1)
+  READ(read1, reg, log.state)
+#define WRITE0(reg, ...) \
+  WRITE(write0, reg, (__VA_ARGS__))
+#define WRITE1(reg, ...) \
+  WRITE(write1, reg, (__VA_ARGS__))
 #define FN_RETURN(val) \
   { (*__fn_ret) = val; return true; }
 #define CALL_FN(fname, ...) \
@@ -1280,22 +1284,22 @@ namespace cuttlesim {
   { dlog.apply(log, Log); return false; }
 #define FAIL_UNLESS_DL(can_fire) \
   { if (!(can_fire)) { FAIL_DL(); } }
-#define READ_DL(reg, source, read_fn) \
+#define READ_DL(read_fn, reg, source) \
   ({ dlog.push(reg_name_t::reg); \
      decltype(source.reg) tmp; \
      FAIL_UNLESS_DL(read_fn(&tmp, source.reg, log.rwset.reg, Log.rwset.reg)); \
      tmp; })
-#define WRITE_DL(reg, write_fn) \
+#define WRITE_DL(write_fn, reg) \
   { dlog.push(reg_name_t::reg); \
     FAIL_UNLESS_DL(write_fn(log.state.reg, (val), log.rwset.reg)) }
 #define READ0_DL(reg) \
-  READ_DL(reg, Log.state, read0)
+  READ_DL(read0, reg, Log.state)
 #define READ1_DL(reg) \
-  READ_DL(reg, log.state, read1)
-#define WRITE0_DL(reg, val) \
-  WRITE_DL(reg, val, write0)
-#define WRITE1_DL(reg, val) \
-  WRITE_DL(reg, val, write1)
+  READ_DL(read1, reg, log.state)
+#define WRITE0_DL(reg, ...) \
+  WRITE_DL(write0, reg, (__VA_ARGS__))
+#define WRITE1_DL(reg, ...) \
+  WRITE_DL(write1, reg, (__VA_ARGS__))
 #define COMMIT_DL() \
   { dlog.apply(Log, log); return true; }
 
@@ -1307,22 +1311,22 @@ namespace cuttlesim {
   dlog.push({ \
       offsetof(struct state_t, reg), sizeof(state_t::reg), \
       offsetof(struct rwset_t, reg), sizeof(rwset_t::reg), })
-#define READ_DOL(reg, source, read_fn) \
+#define READ_DOL(read_fn, reg, source) \
   ({ PUSH_DOL(reg); \
      decltype(source.reg) tmp; \
      FAIL_UNLESS_DOL(read_fn(&tmp, source.reg, log.rwset.reg, Log.rwset.reg)); \
      tmp; })
-#define WRITE_DOL(reg, val, write_fn) \
+#define WRITE_DOL(write_fn, reg, val) \
   { PUSH_DOL(reg); \
     FAIL_UNLESS_DOL(write_fn(log.state.reg, (val), log.rwset.reg)) }
 #define READ0_DOL(reg) \
-  READ_DOL(reg, Log.state, read0)
+  READ_DOL(read0, reg, Log.state)
 #define READ1_DOL(reg) \
-  READ_DOL(reg, log.state, read1)
-#define WRITE0_DOL(reg, val) \
-  WRITE_DOL(reg, val, write0)
-#define WRITE1_DOL(reg, val) \
-  WRITE_DOL(reg, val, write1)
+  READ_DOL(read1, reg, log.state)
+#define WRITE0_DOL(reg, ...) \
+  WRITE_DOL(write0, reg, (__VA_ARGS__))
+#define WRITE1_DOL(reg, ...) \
+  WRITE_DOL(write1, reg, (__VA_ARGS__))
 #define COMMIT_DOL() \
   { dlog.apply(Log, log); return true; }
 
