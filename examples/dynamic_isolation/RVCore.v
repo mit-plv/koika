@@ -431,6 +431,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
   | instr_count
   | epoch
   | pc
+  | rf (state: Rf.reg_t)
   .
 
   Definition internal_reg_t := internal_reg_t'.
@@ -447,6 +448,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
     | instr_count => bits_t 32
     | epoch => bits_t 1
     | pc => bits_t 32
+    | rf r => Rf.R r
     end.
 
   Definition r_internal (idx: internal_reg_t) : R_internal idx :=
@@ -461,6 +463,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
     | instr_count => Bits.zero
     | epoch => Bits.zero
     | pc => Bits.zero
+    | rf s => Rf.r s
     end.
 
   (* Declare state *)
@@ -470,7 +473,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
   | toDMem (state: MemReq.reg_t)
   | fromIMem (state: MemResp.reg_t)
   | fromDMem (state: MemResp.reg_t)
-  | rf (state: Rf.reg_t)
+  (* | rf (state: Rf.reg_t) *)
   | purge
   | internal (r: internal_reg_t)
   .
@@ -483,7 +486,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
     | fromIMem r => MemResp.R r
     | toDMem r => MemReq.R r
     | fromDMem r => MemResp.R r
-    | rf r => Rf.R r
+    (* | rf r => Rf.R r *)
     | purge => enum_t purge_state
     | internal r => R_internal r
     end.
@@ -496,7 +499,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
     | fromIMem s => MemResp.r s
     | toDMem s => MemReq.r s
     | fromDMem s => MemResp.r s
-    | rf s => Rf.r s
+    (* | rf s => Rf.r s *)
     | purge => value_of_bits (Bits.zero)
     | internal s => r_internal s
     end.
@@ -563,8 +566,8 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
              (when (get(decodedInst, valid_rd)) do
                   let rd_idx := get(getFields(instr), rd) in
                   (__internal__ scoreboard).(Scoreboard.insert)(sliceReg(rd_idx)));
-             let rs1 := rf.(Rf.read_1)(sliceReg(rs1_idx)) in
-             let rs2 := rf.(Rf.read_1)(sliceReg(rs2_idx)) in
+             let rs1 := (__internal__ rf).(Rf.read_1)(sliceReg(rs1_idx)) in
+             let rs2 := (__internal__ rf).(Rf.read_1)(sliceReg(rs2_idx)) in
              let decode_bookkeeping := struct decode_bookkeeping {|
                                                 pc    := get(fetched_bookkeeping, pc);
                                                 ppc   := get(fetched_bookkeeping, ppc);
@@ -704,7 +707,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
           (__internal__ scoreboard).(Scoreboard.remove)(sliceReg(rd_idx));
           if (rd_idx == |5`d0|)
           then pass
-          else rf.(Rf.write_0)(sliceReg(rd_idx),data)
+          else (__internal__ rf).(Rf.write_0)(sliceReg(rd_idx),data)
         else
           pass
     }}.
@@ -907,7 +910,7 @@ Module RV32I (EnclaveParams: EnclaveParameters) (CoreParams: CoreParameters)
   Definition schedule : scheduler :=
     Writeback |> Execute |> StepMultiplier |> Decode |> WaitImem |> Fetch |> Tick |> Purge |> done.
 
-  (*Instance FiniteType_rf : FiniteType Rf.reg_t := _.*)
+  Instance FiniteType_rf : FiniteType Rf.reg_t := _.
   Instance FiniteType_scoreboard_rf : FiniteType Scoreboard.Rf.reg_t := _.
   Instance FiniteType_scoreboard : FiniteType Scoreboard.reg_t := _.
   Instance FiniteType_internal_reg_t : FiniteType internal_reg_t := _.

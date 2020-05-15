@@ -515,7 +515,7 @@ Module FiniteTypeHelpers.
         end]
      end; try lia.
 
-  Hint Extern 1 (FiniteType _) => FiniteType_t' : typeclass_instances.
+  Hint Extern 5 (FiniteType _) => FiniteType_t' : typeclass_instances.
 
 End FiniteTypeHelpers.
 

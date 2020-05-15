@@ -15,7 +15,7 @@ Module Params1 <: CoreParameters.
 End Params1.
 
 Module Core0_rv32i := RV32I EnclaveParams Params0.
-Module Core0_rv32e := RV32E EnclaveParams Params0.
+(* Module Core0_rv32e := RV32E EnclaveParams Params0. *)
 Module Core1 := EmptyCore External EnclaveParams Params1.
 Module Mem := WIPMemory.
 

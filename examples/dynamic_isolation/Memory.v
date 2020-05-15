@@ -477,11 +477,23 @@ Module Cache (Params: CacheParams).
                          ("req", struct_t mem_req)
                         ] |}.
 
+  Definition flush_status :=
+    {| enum_name := "flush_status";
+       enum_members := vect_of_list ["Ready"; "Flushing"; "Flushed"];
+       enum_bitpatterns := vect_of_list [Ob~0~0; Ob~0~1; Ob~1~0] |}.
+
+  Definition flush_state_t :=
+    {| struct_name := "flush_state";
+       struct_fields := [("status", enum_t flush_status);
+                         ("curIndex", cache_index_t)]
+    |}.
+
   Inductive internal_reg_t :=
   | downgradeState
   | requestsQ (state: MemReq.reg_t)
   | responsesQ (state: MemResp.reg_t)
   | MSHR
+  | flushState
   .
 
   Instance FiniteType_internal_reg_t : FiniteType internal_reg_t := _.
@@ -491,7 +503,8 @@ Module Cache (Params: CacheParams).
     | downgradeState => bits_t 1
     | requestsQ st => MemReq.R st
     | responsesQ st => MemResp.R st
-    | mshr => struct_t MSHR_t
+    | MSHR => struct_t MSHR_t
+    | flushState => struct_t flush_state_t
     end.
 
   Definition r_internal (idx: internal_reg_t) : R_internal idx :=
@@ -499,9 +512,9 @@ Module Cache (Params: CacheParams).
     | downgradeState => Ob~0
     | requestsQ st => MemReq.r st
     | responsesQ st => MemResp.r st
-    | mshr => value_of_bits (Bits.zero)
+    | MSHR => value_of_bits (Bits.zero)
+    | flushState => value_of_bits (Bits.zero)
     end.
-
 
   Inductive reg_t :=
   | fromMem (state: MessageFifo1.reg_t)
@@ -689,6 +702,7 @@ Module Cache (Params: CacheParams).
                                                                    addr := addr; (* CHECK *)
                                                                    MSI_state := enum MSI {| I |};
                                                                    data := data_opt |});
+              (* TODO: should this be a write *)
             let cache_req := struct ext_cache_mem_req {| byte_en := |4`d0|;
                                                          tag := |18`d0|;
                                                          index := index;
@@ -752,6 +766,49 @@ Module Cache (Params: CacheParams).
                                             |})
     }}.
 
+  (*
+  Definition Flush (mem: External.cache): uaction reg_t ext_fn_t :=
+    {{
+        let mshr := read0(internal MSHR) in
+        let flush_st := read0(internal flushState) in
+        guard(get(mshr,mshr_tag) == enum mshr_tag {| Ready |} &&
+              get(flush_st, flush_status) == enum flush_status {| Flushing |});
+        let index := get(flush_st, curIndex) in
+        let cache_req := struct ext_cache_mem_req {| byte_en := Ob~1~1~1~1;
+                                                     tag := |18`d0|;
+                                                     index := index;
+                                                     data := |32`d0|;
+                                                     MSI := {valid(enum_t MSI)}(enum MSI {| I |})
+                                                  |} in
+        let cache_output := {memoryBus mem}(Ob~1, Ob~1, cache_req) in
+        let row := get(get(cache_output, get_response), row) in
+        let tag := get(row,tag) in
+        let index := get(row,index) in
+        let addr := tag ++ index ++ Ob~0~0 in
+        
+        (if (get(row,flag) != enum MSI {| I |}) then
+          (* Invalidate in MSI *)
+          toMem.(MessageFifo1.enq_resp)(struct cache_mem_resp {| core_id := (#core_id);
+                                                                 cache_type := (`UConst (cache_type)`);
+                                                                 addr := addr;
+                                                                 MSI_state := enum MSI {| I |};
+                                                                 data := {valid data_t}(get(row,data)) |})
+        else pass);
+        let cache_req := struct ext_cache_mem_req {| byte_en := Ob~1~1~1~1;
+                                                     tag := |18`d0|;
+                                                     index := index;
+                                                     data := |32`d0|;
+                                                     MSI := {valid (enum_t MSI)}(enum MSI {| I |}) |} in
+        ignore({memoryBus mem}(Ob~1, Ob~1, cache_req));
+        if (index == |12`d4095|) then
+          write0(internal flushState, struct flush_state_t {| status := enum flush_status {| Flushed |};
+                                                              curIndex := |12`d0| |})
+        else
+          write0(internal flushState, struct flush_state_t {| status := enum flush_status {| Flushing |};
+                                                              curIndex := index + |12`d1| |})
+    }}.
+    *)
+
   Definition can_send_req : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun can_send_req () : bits_t 1 =>
          let mshr := read0(internal MSHR) in
@@ -775,6 +832,20 @@ Module Cache (Params: CacheParams).
     {{ fun resp () : struct_t mem_resp =>
          (__internal__ responsesQ).(MemResp.deq)()
     }}.
+
+  (*
+  Definition do_flush: UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun do_flush () : bits_t 1 =>
+         let st := read0(internal flushState) in
+         if (get(st,status) == enum flush_status {| Flushed |}) then
+           Ob~1
+         else if (get(st,status) == enum flush_status {| Ready |}) then
+           write0(internal flushState, struct flush_state_t {| status := enum flush_status {| Flushing |};
+                                                               curIndex := |12`d0| |});
+           Ob~0
+         else Ob~0
+    }}.
+    *)
 
   Inductive rule_name_t :=
   | Rl_Downgrade
@@ -1358,7 +1429,8 @@ Module WIPMemory <: Memory_sig External.
     | Core1D_internal st => Core1DMem.r_internal st
     end.
 
-  Instance FiniteType_internal_reg_t : FiniteType internal_reg_t := _.
+  (* Declare Instance FiniteType_internal_reg_t : FiniteType internal_reg_t. *)
+  Instance FiniteType_internal_reg_t : FiniteType internal_reg_t := _. 
 
   Inductive reg_t :=
   | toIMem0 (state: MemReq.reg_t)
@@ -1369,7 +1441,8 @@ Module WIPMemory <: Memory_sig External.
   | fromIMem1 (state: MemResp.reg_t)
   | fromDMem0 (state: MemResp.reg_t)
   | fromDMem1 (state: MemResp.reg_t)
-  | purge
+  | purge0
+  | purge1
   | internal (r: internal_reg_t)
   .
 
@@ -1383,7 +1456,8 @@ Module WIPMemory <: Memory_sig External.
     | fromIMem1 st => MemResp.R st
     | fromDMem0 st => MemResp.R st
     | fromDMem1 st => MemResp.R st
-    | purge => enum_t purge_state
+    | purge0 => enum_t purge_state
+    | purge1 => enum_t purge_state
     | internal st => R_internal st
     end.
 
@@ -1397,7 +1471,8 @@ Module WIPMemory <: Memory_sig External.
     | fromIMem1 st => MemResp.r st
     | fromDMem0 st => MemResp.r st
     | fromDMem1 st => MemResp.r st
-    | purge => value_of_bits (Bits.zero)
+    | purge0 => value_of_bits (Bits.zero)
+    | purge1 => value_of_bits (Bits.zero)
     | internal st => r_internal st
     end.
 
@@ -1492,7 +1567,7 @@ Module WIPMemory <: Memory_sig External.
   End MainMemLift.
 
   (* TODO: slow *)
-  Instance FiniteType_reg_t : FiniteType reg_t := _.
+  Instance FiniteType_reg_t : FiniteType reg_t := _. 
   (* Declare Instance FiniteType_reg_t : FiniteType reg_t.   *)
   Instance EqDec_reg_t : EqDec reg_t := _.
 
@@ -1564,6 +1639,7 @@ Module WIPMemory <: Memory_sig External.
       let fromMem := fromIMem0 in
       let toMem := toIMem0 in
       {{
+          guard(read0(purge0) == enum purge_state {| Ready |});
           let get_ready := fromMem.(MemResp.can_enq)() in
           let put_request_opt := toMem.(MemReq.peek)() in
           let put_request := get(put_request_opt, data) in
@@ -1593,6 +1669,7 @@ Module WIPMemory <: Memory_sig External.
       let fromMem := fromDMem0 in
       let toMem := toDMem0 in
       {{
+          guard(read0(purge0) == enum purge_state {| Ready |});
           let get_ready := fromMem.(MemResp.can_enq)() in
           let put_request_opt := toMem.(MemReq.peek)() in
           let put_request := get(put_request_opt, data) in
@@ -1617,6 +1694,19 @@ Module WIPMemory <: Memory_sig External.
       }}.
 
     Definition tc_memCore0D := tc_rule R Sigma memCore0D <: rule.
+    
+    (*
+    Definition do_purge0 : uaction reg_t ext_fn_t :=
+      {{
+          guard(read0(purge0) == enum purge_state {| Purging |});
+          let imem_done_flush := (`core0_imem_lift`).(Core0IMem.do_flush)() in
+          let dmem_done_flush := (`core0_dmem_lift`).(Core0DMem.do_flush)() in
+          if (imem_done_flush && dmem_done_flush) then
+            write0(purge0, enum purge_state {| Purged |})
+          else
+            pass
+      }}.
+      *)
 
     Inductive SystemRule :=
     | SysRl_MemCore0I
