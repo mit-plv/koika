@@ -8,6 +8,8 @@ export DUT ?= rv32i
 objects_dir := _objects/$(DUT).v
 tests_build := tests/_build/$(DUT)
 
+multicore_build := tests/_build/multicore
+
 cuttlesim := $(objects_dir)/$(basename $(CUTTLESIM_DRIVER)).opt
 verilator := $(objects_dir)/obj_dir.opt/V$(basename $(VERILATOR_TOP))
 pyverilator := $(objects_dir)/rvcore.pyverilator.py
@@ -38,17 +40,25 @@ core:
 $(tests_build): .FORCE
 	$(MAKE) -C tests
 
-$(objects_dir)/%: core .FORCE
+$(multicore_build): .FORCE
+	$(MAKE) -C tests
+
+$(objects_dir)/%: core #.FORCE
 	$(MAKE) -C $(objects_dir) $*
 
 binaries: $(tests_build);
 verilator: $(verilator);
 cuttlesim: $(cuttlesim);
+multicore_binaries: $(multicore_build);
 
 .FORCE:
 
 # Unit tests are not run every time, because they are verbose (they are mostly
 # useful for debugging, esp. on FPGA)
+
+multicore-tests: multicore_binaries cuttlesim
+	@echo "-- Running tests with Cuttlesim --"
+	find $(multicore_build)/ -not -path "*/unit/*" -name "*.rv32" -exec $(cuttlesim_runner) \;
 
 cuttlesim-tests: binaries cuttlesim
 	@echo "-- Running tests with Cuttlesim --"

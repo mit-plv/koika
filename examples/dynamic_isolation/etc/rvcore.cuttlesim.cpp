@@ -27,7 +27,11 @@ struct bookkeeping {
   }
 
   void set(bits<1> core_id, enum_cache_type cache_type, bits<12> idx, struct_Bookkeeping_row row) {
-	//printf("Set core %d, cache %d, idx 0x%x, tag 0x%x, state %d\n", core_id.v, cache_type, idx.v, row.tag.v, row.state);
+
+#ifdef MEM_DEBUG
+	printf("Set core %d, cache %d, idx 0x%x, tag 0x%x, state %d\n", core_id.v, cache_type, idx.v, row.tag.v, row.state);
+
+#endif // MEM_DEBUG
 	container[idx.v][encode_cache(core_id,cache_type)] = row;
   }
 
@@ -69,7 +73,9 @@ struct sram {
 
     struct_cache_row current;
 
-    //printf("Req: dEn 0x%x; data 0x%x; tag: 0x%x; index: 0x%x; addr:0x%x; flag_valid: %d; flag: %d\n", dEn.v, data.v, tag.v, index.v, addr.v, newFlag.valid, newFlag.data);
+#ifdef MEM_DEBUG
+    printf("Req: dEn 0x%x; data 0x%x; tag: 0x%x; index: 0x%x; addr:0x%x; flag_valid: %d; flag: %d\n", dEn.v, data.v, tag.v, index.v, addr.v, newFlag.valid, newFlag.data);
+#endif // MEM_DEBUG
     if (addr.v == 0x40001000 && dEn.v == 0xf) {
       int exitcode = last->data.v;
       if (exitcode == 0) {
@@ -99,7 +105,9 @@ struct sram {
 
     last.reset();
 
-    //printf("Resp: tag: 0x%x; data: 0x%x; MSI_state: %d\n", current.tag.v, current.data.v, current.flag);
+#ifdef MEM_DEBUG
+    printf("Resp: tag: 0x%x; data: 0x%x; MSI_state: %d\n", current.tag.v, current.data.v, current.flag);
+#endif // MEM_DEBUG
 
     return std::optional<struct_ext_cache_mem_resp>{
         struct_ext_cache_mem_resp{.row = current}
@@ -146,8 +154,9 @@ struct bram {
     auto dEn = last->byte_en;
     bits<32> current = bits<32>{0};
 
-
-    //printf("MainReq: dEn 0x%x; data 0x%x; addr:0x%x\n", dEn.v, data.v, addr.v);
+#ifdef MEM_DEBUG
+    printf("MainReq: dEn 0x%x; data 0x%x; addr:0x%x\n", dEn.v, data.v, addr.v);
+#endif // MEM_DEBUG
 
     if (addr.v == 0x40001000 && dEn.v == 0xf) {
       int exitcode = last->data.v;
@@ -173,13 +182,16 @@ struct bram {
     last.reset();
 
     if (dEn.v == 0x0) {
-      //printf("MainResp: byte_en: 0x%x; addr: 0x%x; data: 0x%x\n", dEn.v, addr.v, current.v);
+#ifdef MEM_DEBUG
+      printf("MainResp: byte_en: 0x%x; addr: 0x%x; data: 0x%x\n", dEn.v, addr.v, current.v);
+#endif // MEM_DEBUG
+
       return std::optional<struct_mem_resp>{{
         .byte_en = dEn, .addr = addr, .data = current
       }};
     }
 
-    //printf("MainStore: return nothing\n");
+    printf("MainStore: return nothing\n");
     return std::optional<struct_mem_resp>{std::nullopt};
 
   }
