@@ -623,14 +623,17 @@ module Graphs = struct
         Str.string_match (Str.regexp needle) haystack 0 in
       matches nm "scoreboard_Scores_rData_[0-8]$" in
     let interesting_register _ = true in
-    let graph_roots = List.map (fun reg ->
-                          let c = pkg.di_circuits reg in
-                          let r = pkg.di_reg_sigs reg in
-                          { root_reg = r;
-                            root_circuit =
-                              if interesting_register reg then dedup c
-                              else hashcons (CConst (Util.bits_of_value r.reg_init)) })
-                        pkg.di_regs in
+    let graph_roots =
+      Perf.with_timer "graph:dedup" (fun () ->
+          List.map (fun reg ->
+              let c = pkg.di_circuits reg in
+              let r = pkg.di_reg_sigs reg in
+              { root_reg = r;
+                root_circuit =
+                  (* Perf.with_timer (Printf.sprintf "graph:dedup:%s" r.reg_name) (fun () -> *)
+                  if interesting_register reg then dedup c
+                  else hashcons (CConst (Util.bits_of_value r.reg_init)) })
+            pkg.di_regs) in
     let graph_nodes = list_of_hashcons deduplicated_circuits in
     let cmp (x: circuit) (y: circuit) = compare x.tag y.tag in
     let graph_nodes = List.stable_sort cmp graph_nodes in
@@ -639,13 +642,15 @@ module Graphs = struct
   let graph_of_compile_unit (cu: 'f Compilation.compile_unit)
       : circuit_graph =
     let externalp rln = fst (List.assoc rln cu.c_rules) = `ExternalRule in
+    let circuits = Perf.with_timer "graph:compile_unit" (fun () ->
+                       Compilation.compile cu) in
     dedup_circuit
       { di_regs = cu.c_registers;
         di_reg_sigs = (fun r -> r);
         di_fn_specs = (fun fn -> (fn, `Internal));
         di_rule_names = (fun rln -> rln);
         di_rule_external = externalp;
-        di_circuits = Compilation.compile cu;
+        di_circuits = circuits;
         di_strip_annotations = strip_annotations }
 
   let graph_of_verilog_package (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
@@ -655,7 +660,9 @@ module Graphs = struct
     let di_regs =
       kp.koika_reg_finite.finite_elements in
     let di_circuits =
-      let cp = Extr.compile_koika_package kp (Compilation.opt kp.koika_reg_types kp.koika_ext_fn_types) in
+      let cp = Perf.with_timer "graph:compile_koika_package" (fun () ->
+                   Extr.compile_koika_package kp
+                     (Compilation.opt kp.koika_reg_types kp.koika_ext_fn_types)) in
       fun r -> Extr.getenv cp.cp_reg_Env cp.cp_circuits r in
     let di_fn_specs f =
       let fn_spec = vp.vp_ext_fn_specs f in

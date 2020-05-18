@@ -24,6 +24,11 @@ let backends : (backend * (string * string)) list =
    (`Verilog, ("verilog", "_verilog.v"));
    (`Verilator, ("verilator", "verilator.cpp"))]
 
+let name_of_backend backend =
+  match backend with
+  | `Makefile -> "makefile"
+  | _ -> fst (List.assoc backend backends)
+
 let suffix_of_backend backend =
   snd (List.assoc backend backends)
 
@@ -106,7 +111,8 @@ let abort fmt =
   Printf.kfprintf (fun out -> fprintf out "\n"; exit false) stderr fmt
 
 let run_backend backend cnf pkg =
-  try run_backend' backend cnf pkg
+  try Perf.with_timer (sprintf "backend:%s" (name_of_backend backend)) (fun () ->
+          run_backend' backend cnf pkg)
   with UnsupportedOutput msg -> abort "%s" msg
      | Common.CompilationError cmd -> abort "Compilation failed: %s" cmd
 

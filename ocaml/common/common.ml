@@ -14,6 +14,20 @@ module StringMap = struct
   let of_list s = of_seq (List.to_seq s)
 end
 
+module Perf = struct
+  let debug_perf = false
+
+  let with_timer ?(verbose=false) ?(elapsed=false) label f =
+    let time = Unix.gettimeofday () in
+    let elapsed = elapsed || debug_perf in
+    let verbose = verbose || debug_perf in
+    if verbose then Printf.eprintf ">> [%s]\n%!" label;
+    let result = Sys.opaque_identity (f ()) in
+    if verbose && elapsed then Printf.eprintf "<< [%s] %.3fs\n%!"
+                                label (Unix.gettimeofday () -. time);
+    result
+end
+
 module Pos = struct
   open Printf
 
@@ -253,9 +267,7 @@ let command ?(verbose=false) ?(elapsed=false) exe args =
   (* FIXME use Unix.open_process_args instead of Filename.quote (OCaml 4.08) *)
   let qargs = List.map quote_arg (exe :: args) in
   let cmd = String.concat " " qargs in
-  let time = Unix.gettimeofday () in
-  if verbose then Printf.eprintf ">> %s\n%!" cmd;
-  if Sys.command cmd <> 0 then raise (CompilationError cmd);
-  if verbose && elapsed then Printf.eprintf "   (%.2f s)\n%!" (Unix.gettimeofday () -. time)
+  Perf.with_timer ~verbose ~elapsed (Printf.sprintf "command:%s" cmd) (fun () ->
+      if Sys.command cmd <> 0 then raise (CompilationError cmd))
 
 let (<<) f g x = f (g x)
