@@ -1,6 +1,6 @@
 static int* const UART_ADDR = (int*)0x40000000;
 static int* const LED_ADDR  = (int*)0x40000004;
-static int* const STOP_ADDR = (int*)0x40001000;
+static int* const STOP_ADDR = (int*)0x80001000;
 
 int getchar1() {
   return 0;

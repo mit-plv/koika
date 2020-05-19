@@ -1080,7 +1080,7 @@ Module ProtocolProcessor.
                                                                     MSI_state := enum MSI {| I |}
                                                                  |});
             tracker[|2`d2|:+2] ++ Ob~0~0
-          else if (tracker[|2`d1|]) then
+          else if (tracker[|2`d2|]) then
             ToRouter.(MessageFifo1.enq_req)(struct cache_mem_req {| core_id := Ob~1;
                                                                     cache_type := enum cache_type {| imem |};
                                                                     addr := addr;
@@ -1088,7 +1088,7 @@ Module ProtocolProcessor.
                                                                  |});
 
             tracker[|2`d3|] ++ Ob~0~0~0
-          else if (tracker[|2`d1|]) then
+          else if (tracker[|2`d3|]) then
             ToRouter.(MessageFifo1.enq_req)(struct cache_mem_req {| core_id := Ob~1;
                                                                     cache_type := enum cache_type {| dmem |};
                                                                     addr := addr;
@@ -1382,7 +1382,7 @@ Module WIPMemory <: Memory_sig External.
   Module Core0IMem := Cache Params_Core0IMem.
   Module Core0DMem := Cache Params_Core0DMem.
   Module Core1IMem := Cache Params_Core1IMem.
-  Module Core1DMem := Cache Params_Core0DMem.
+  Module Core1DMem := Cache Params_Core1DMem.
 
   (* TODO: In theory we would do this in a more modular way, but we simplify for now.
    *)
@@ -1835,7 +1835,7 @@ Module WIPMemory <: Memory_sig External.
       end.
 
     Definition internal_system_schedule : Syntax.scheduler pos_t SystemRule :=
-      SysRl_MemCore0I |> SysRl_MemCore0D |> SysRl_MemCore0I |> SysRl_MemCore0D |> done.
+      SysRl_MemCore0I |> SysRl_MemCore0D |> SysRl_MemCore1I |> SysRl_MemCore1D |> done.
 
   End SystemRules.
 

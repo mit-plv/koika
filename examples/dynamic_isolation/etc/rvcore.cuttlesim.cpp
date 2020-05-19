@@ -15,6 +15,8 @@
 
 #define SRAM_SIZE (static_cast<std::size_t>(1) << LOG_NUM_SETS)
 
+#define MEM_DEBUG 0
+
 bool core0_done = false;
 bool core1_done = false;
 
@@ -34,16 +36,16 @@ struct bookkeeping {
   std::array<std::array<struct_Bookkeeping_row, 4>, NUM_SETS> container;
 
   int encode_cache (bits<1> core_id, enum_cache_type cache_type) {
-	return (2 * core_id.v + (cache_type == enum_cache_type::dmem ? 1 : 0));
+	  return (2 * core_id.v + (cache_type == enum_cache_type::dmem ? 1 : 0));
   }
 
   struct_Bookkeeping_row get(bits<1> core_id, enum_cache_type cache_type, bits<12> idx) {
-	return container[idx.v][encode_cache(core_id, cache_type)];
+	  return container[idx.v][encode_cache(core_id, cache_type)];
   }
 
   void set(bits<1> core_id, enum_cache_type cache_type, bits<12> idx, struct_Bookkeeping_row row) {
 
-#ifdef MEM_DEBUG
+#if MEM_DEBUG
 	printf("Set core %d, cache %d, idx 0x%x, tag 0x%x, state %d\n", core_id.v, cache_type, idx.v, row.tag.v, row.state);
 
 #endif // MEM_DEBUG
@@ -89,10 +91,10 @@ struct sram {
 
     struct_cache_row current;
 
-#ifdef MEM_DEBUG
-    printf("Req: dEn 0x%x; data 0x%x; tag: 0x%x; index: 0x%x; addr:0x%x; flag_valid: %d; flag: %d\n", dEn.v, data.v, tag.v, index.v, addr.v, newFlag.valid, newFlag.data);
+#if MEM_DEBUG
+    printf("Core %d; Req: dEn 0x%x; data 0x%x; tag: 0x%x; index: 0x%x; addr:0x%x; flag_valid: %d; flag: %d\n", core_id, dEn.v, data.v, tag.v, index.v, addr.v, newFlag.valid, newFlag.data);
 #endif // MEM_DEBUG
-    if (addr.v == 0x40001000 && dEn.v == 0xf) {
+    if ((addr.v == 0x40001000 || addr.v == 0x80001000) && dEn.v == 0xf) {
       int exitcode = last->data.v;
       if (exitcode == 0) {
         printf("  [0;32mPASS[0m\n");
@@ -100,6 +102,7 @@ struct sram {
         printf("  [0;31mFAIL[0m (%d)", exitcode);
       }
       set_core_done(core_id);
+      printf("Core %d done\n", core_id);
 
       if (core0_done && core1_done) {
         std::exit(exitcode);
@@ -127,8 +130,8 @@ struct sram {
 
     last.reset();
 
-#ifdef MEM_DEBUG
-    printf("Resp: tag: 0x%x; data: 0x%x; MSI_state: %d\n", current.tag.v, current.data.v, current.flag);
+#if MEM_DEBUG
+    printf("Core %d; Resp: tag: 0x%x; data: 0x%x; MSI_state: %d\n", core_id, current.tag.v, current.data.v, current.flag);
 #endif // MEM_DEBUG
 
     return std::optional<struct_ext_cache_mem_resp>{
@@ -176,11 +179,11 @@ struct bram {
     auto dEn = last->byte_en;
     bits<32> current = bits<32>{0};
 
-#ifdef MEM_DEBUG
+#if MEM_DEBUG
     printf("MainReq: dEn 0x%x; data 0x%x; addr:0x%x\n", dEn.v, data.v, addr.v);
 #endif // MEM_DEBUG
 
-    if (addr.v == 0x40001000 && dEn.v == 0xf) {
+    if ((addr.v == 0x40001000 || addr.v == 0x80001000) && dEn.v == 0xf) {
       int exitcode = last->data.v;
       if (exitcode == 0) {
         printf("  [0;32mPASS[0m\n");
@@ -188,8 +191,8 @@ struct bram {
         printf("  [0;31mFAIL[0m (%d)", exitcode);
       }
       std::exit(exitcode);
-    } else if (addr.v == 0x40001000) {
-      // pass
+    } else if (addr.v == 0x40001000 || addr.v == 0x80001000) {
+
     } else {
       current = mem[addr.v >> 2];
       mem[addr.v >> 2] =
@@ -204,7 +207,7 @@ struct bram {
     last.reset();
 
     if (dEn.v == 0x0) {
-#ifdef MEM_DEBUG
+#if MEM_DEBUG
       printf("MainResp: byte_en: 0x%x; addr: 0x%x; data: 0x%x\n", dEn.v, addr.v, current.v);
 #endif // MEM_DEBUG
 
@@ -245,7 +248,7 @@ struct bram {
 };
 
 struct extfuns_t {
-  sram dmem0(0), dmem1(1), imem0(0), imem1(1);
+  sram dmem0, dmem1, imem0, imem1;
   bram mainmem;
   bits<1> led;
   bookkeeping ppp_bookkeeping;
@@ -297,7 +300,8 @@ struct extfuns_t {
 	return ppp_bookkeeping.getset(req);
   }
 
-  extfuns_t() : dmem{}, imem{}, mainmem{}, led{false}, ppp_bookkeeping{} {}
+  extfuns_t() : dmem0{sram(0)}, dmem1{sram(1)}, imem0{sram(0)}, imem1{sram(1)},
+                mainmem{}, led{false}, ppp_bookkeeping{} {}
 };
 
 class rv_core final : public module_rv32<extfuns_t> {
