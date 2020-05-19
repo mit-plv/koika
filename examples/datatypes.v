@@ -70,7 +70,7 @@ Definition _decr_icmp_ttl : uaction _ empty_ext_fn_t :=
       let hdr := unpack(struct_t ipv4_header, read0(input)) in
       let valid := Ob~1 in
       match get(hdr, protocol) with
-      | enum proto {| ICMP |} =>
+      | enum proto { ICMP } =>
         let t := get(hdr, ttl) in
         if t == |8`d0| then
           set valid := Ob~0
@@ -78,8 +78,8 @@ Definition _decr_icmp_ttl : uaction _ empty_ext_fn_t :=
           set hdr := subst(hdr, ttl, t - |8`d1|) (* ← same as [put(hdr, ttl, t - 1)] *)
       return default: pass
       end;
-      set hdr := subst(hdr, reserved, enum flag {| unset |}); (* reset the [reserved] field, just in case *)
-      write0(output, pack(struct response {| valid := valid; value := hdr |}))
+      set hdr := subst(hdr, reserved, enum flag { unset }); (* reset the [reserved] field, just in case *)
+      write0(output, pack(struct response { valid := valid; value := hdr }))
   }}.
 
 Definition _clear_checksum : uaction reg_t empty_ext_fn_t :=

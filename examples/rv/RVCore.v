@@ -51,8 +51,7 @@ Section RV32Helpers.
     {{
         fun getFields (inst : bits_t 32) : struct_t inst_field =>
           let res := struct inst_field
-                            {|
-                              opcode := inst[|5`d0| :+ 7];
+                            { opcode := inst[|5`d0| :+ 7];
                               funct3 := inst[|5`d12| :+ 3];
                               funct7 := inst[|5`d25| :+ 7];
                               funct5 := inst[|5`d27| :+ 5];
@@ -76,7 +75,7 @@ Section RV32Helpers.
                                                                ++ inst[|5`d20|]
                                                                ++ inst[|5`d21|:+10]
                                                                ++ |1`d0|);
-                              csr    := (inst[|5`d20| :+ 12]) |} in
+                              csr    := (inst[|5`d20| :+ 12]) } in
           res
         }}.
 
@@ -169,14 +168,14 @@ Section RV32Helpers.
     {{
         fun getImmediateType (inst : bits_t 32) : maybe (enum_t imm_type) =>
           match (inst[|5`d2|:+5]) with
-          | #opcode_LOAD[|3`d2|:+5]      => {valid (enum_t imm_type)}(enum imm_type {| ImmI |})
-          | #opcode_OP_IMM[|3`d2|:+5]    => {valid (enum_t imm_type)}(enum imm_type {| ImmI |})
-          | #opcode_JALR[|3`d2|:+5]      => {valid (enum_t imm_type)}(enum imm_type {| ImmI |})
-          | #opcode_AUIPC[|3`d2|:+5]     => {valid (enum_t imm_type)}(enum imm_type {| ImmU |})
-          | #opcode_LUI[|3`d2|:+5]       => {valid (enum_t imm_type)}(enum imm_type {| ImmU |})
-          | #opcode_STORE[|3`d2|:+5]     => {valid (enum_t imm_type)}(enum imm_type {| ImmS |})
-          | #opcode_BRANCH[|3`d2|:+5]    => {valid (enum_t imm_type)}(enum imm_type {| ImmB |})
-          | #opcode_JAL[|3`d2|:+5]       => {valid (enum_t imm_type)}(enum imm_type {| ImmJ |})
+          | #opcode_LOAD[|3`d2|:+5]      => {valid (enum_t imm_type)}(enum imm_type { ImmI })
+          | #opcode_OP_IMM[|3`d2|:+5]    => {valid (enum_t imm_type)}(enum imm_type { ImmI })
+          | #opcode_JALR[|3`d2|:+5]      => {valid (enum_t imm_type)}(enum imm_type { ImmI })
+          | #opcode_AUIPC[|3`d2|:+5]     => {valid (enum_t imm_type)}(enum imm_type { ImmU })
+          | #opcode_LUI[|3`d2|:+5]       => {valid (enum_t imm_type)}(enum imm_type { ImmU })
+          | #opcode_STORE[|3`d2|:+5]     => {valid (enum_t imm_type)}(enum imm_type { ImmS })
+          | #opcode_BRANCH[|3`d2|:+5]    => {valid (enum_t imm_type)}(enum imm_type { ImmB })
+          | #opcode_JAL[|3`d2|:+5]       => {valid (enum_t imm_type)}(enum imm_type { ImmJ })
           return default: {invalid (enum_t imm_type)}()
           end
     }}.
@@ -226,14 +225,14 @@ Section RV32Helpers.
   Definition decode_fun : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun decode_fun (arg_inst : bits_t 32) : struct_t decoded_sig
  =>
-           struct decoded_sig {|
+           struct decoded_sig {
                     valid_rs1     := usesRS1 (arg_inst);
                     valid_rs2     := usesRS2 (arg_inst);
                     valid_rd      := usesRD (arg_inst);
                     legal         := isLegalInstruction (arg_inst);
                     inst          := arg_inst;
                     immediateType := getImmediateType(arg_inst)
-                  |}
+                  }
     }}.
 
   Definition getImmediate : UInternalFunction reg_t empty_ext_fn_t :=
@@ -243,11 +242,11 @@ Section RV32Helpers.
           if (get(imm_type_v, valid) == Ob~1) then
             let fields := getFields (get(dInst,inst)) in
             match (get(imm_type_v, data)) with
-            | (enum imm_type {| ImmI |}) => get(fields, immI)
-            | (enum imm_type {| ImmS |}) => get(fields, immS)
-            | (enum imm_type {| ImmB |}) => get(fields, immB)
-            | (enum imm_type {| ImmU |}) => get(fields, immU)
-            | (enum imm_type {| ImmJ |}) => get(fields, immJ)
+            | (enum imm_type { ImmI }) => get(fields, immI)
+            | (enum imm_type { ImmS }) => get(fields, immS)
+            | (enum imm_type { ImmB }) => get(fields, immB)
+            | (enum imm_type { ImmU }) => get(fields, immU)
+            | (enum imm_type { ImmJ }) => get(fields, immJ)
             return default: |32`d0|
             end
           else
@@ -355,8 +354,8 @@ Section RV32Helpers.
                    set nextPC := (pc + imm_val)
                  else
                    set nextPC := incPC);
-        struct control_result {| taken  := taken;
-                                 nextPC := nextPC |}
+        struct control_result { taken  := taken;
+                                nextPC := nextPC }
     }}.
 End RV32Helpers.
 
@@ -544,15 +543,15 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
   Definition fetch : uaction reg_t ext_fn_t :=
     {{
         let pc := read1(pc) in
-        let req := struct mem_req {|
+        let req := struct mem_req {
                               byte_en := |4`d0|; (* Load *)
                               addr := pc;
-                              data := |32`d0| |} in
-        let fetch_bookkeeping := struct fetch_bookkeeping {|
+                              data := |32`d0| } in
+        let fetch_bookkeeping := struct fetch_bookkeeping {
                                           pc := pc;
                                           ppc := pc + |32`d4|;
                                           epoch := read1(epoch)
-                                        |} in
+                                        } in
         toIMem.(MemReq.enq)(req);
         write1(pc, pc + |32`d4|);
         f2d.(fromFetch.enq)(fetch_bookkeeping)
@@ -591,14 +590,14 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
                   scoreboard.(Scoreboard.insert)(sliceReg(rd_idx)));
              let rs1 := rf.(Rf.read_1)(sliceReg(rs1_idx)) in
              let rs2 := rf.(Rf.read_1)(sliceReg(rs2_idx)) in
-             let decode_bookkeeping := struct decode_bookkeeping {|
+             let decode_bookkeeping := struct decode_bookkeeping {
                                                 pc    := get(fetched_bookkeeping, pc);
                                                 ppc   := get(fetched_bookkeeping, ppc);
                                                 epoch := get(fetched_bookkeeping, epoch);
                                                 dInst := decodedInst;
                                                 rval1 := rs1;
                                                 rval2 := rs2
-                                              |} in
+                                              } in
              d2e.(fromDecode.enq)(decode_bookkeeping))
     }}.
 
@@ -671,8 +670,8 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
                set data := rs2_val << shift_amount;
                set addr := addr[|5`d2| :+ 30 ] ++ |2`d0|;
                set isUnsigned := funct3[|2`d2|];
-               toDMem.(MemReq.enq)(struct mem_req {|
-                 byte_en := byte_en; addr := addr; data := data |})
+               toDMem.(MemReq.enq)(struct mem_req {
+                 byte_en := byte_en; addr := addr; data := data })
              else if (isControlInst(dInst)) then
                set data := (pc + |32`d4|)     (* For jump and link *)
              else if (isMultiplyInst(dInst)) then
@@ -686,13 +685,13 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
                write0(pc, nextPc)
              else
                pass;
-             let execute_bookkeeping := struct execute_bookkeeping {|
+             let execute_bookkeeping := struct execute_bookkeeping {
                                                  isUnsigned := isUnsigned;
                                                  size := size;
                                                  offset := offset;
                                                  newrd := data;
                                                  dInst := get(decoded_bookkeeping, dInst)
-                                               |} in
+                                               } in
              e2w.(fromExecute.enq)(execute_bookkeeping))
         else
           pass
@@ -738,10 +737,10 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
   Definition memoryBus (m: memory) : UInternalFunction reg_t ext_fn_t :=
     {{ fun memoryBus (get_ready: bits_t 1) (put_valid: bits_t 1) (put_request: struct_t mem_req) : struct_t mem_output =>
          `match m with
-          | imem => {{ extcall (ext_mem m) (struct mem_input {|
+          | imem => {{ extcall (ext_mem m) (struct mem_input {
                         get_ready := get_ready;
                         put_valid := put_valid;
-                        put_request := put_request |}) }}
+                        put_request := put_request }) }}
           | dmem => {{ let addr := get(put_request, addr) in
                       let byte_en := get(put_request, byte_en) in
                       let is_write := byte_en == Ob~1~1~1~1 in
@@ -758,42 +757,41 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
                       if is_uart_write then
                         let char := get(put_request, data)[|5`d0| :+ 8] in
                         let may_run := get_ready && put_valid && is_uart_write in
-                        let ready := extcall ext_uart_write (struct (Maybe (bits_t 8)) {|
-                          valid := may_run; data := char |}) in
-                        struct mem_output {| get_valid := may_run && ready;
-                                             put_ready := may_run && ready;
-                                             get_response := struct mem_resp {|
+                        let ready := extcall ext_uart_write (struct (Maybe (bits_t 8)) {
+                          valid := may_run; data := char }) in
+                        struct mem_output { get_valid := may_run && ready;
+                                            put_ready := may_run && ready;
+                                            get_response := struct mem_resp {
                                                byte_en := byte_en; addr := addr;
-                                               data := |32`d0| |} |}
+                                               data := |32`d0| } }
 
                       else if is_uart_read then
                         let may_run := get_ready && put_valid && is_uart_read in
                         let opt_char := extcall ext_uart_read (may_run) in
                         let ready := get(opt_char, valid) in
-                        struct mem_output {| get_valid := may_run && ready;
-                                             put_ready := may_run && ready;
-                                             get_response := struct mem_resp {|
+                        struct mem_output { get_valid := may_run && ready;
+                                            put_ready := may_run && ready;
+                                            get_response := struct mem_resp {
                                                byte_en := byte_en; addr := addr;
-                                               data := zeroExtend(get(opt_char, data), 32) |} |}
+                                               data := zeroExtend(get(opt_char, data), 32) } }
 
                       else if is_led then
                         let on := get(put_request, data)[|5`d0|] in
                         let may_run := get_ready && put_valid && is_led_write in
-                        let current := extcall ext_led (struct (Maybe (bits_t 1)) {|
-                          valid := may_run; data := on |}) in
+                        let current := extcall ext_led (struct (Maybe (bits_t 1)) {
+                          valid := may_run; data := on }) in
                         let ready := Ob~1 in
-                        struct mem_output {| get_valid := may_run && ready;
-                                             put_ready := may_run && ready;
-                                             get_response := struct mem_resp {|
-                                               byte_en := byte_en; addr := addr;
-                                               data := zeroExtend(current, 32) |} |}
+                        struct mem_output { get_valid := may_run && ready;
+                                            put_ready := may_run && ready;
+                                            get_response := struct mem_resp {
+                                              byte_en := byte_en; addr := addr;
+                                              data := zeroExtend(current, 32) } }
 
                       else
-                        extcall (ext_mem m) (struct mem_input {|
+                        extcall (ext_mem m) (struct mem_input {
                           get_ready := get_ready && is_mem;
                           put_valid := put_valid && is_mem;
-                          put_request := put_request |})
-                   }}
+                          put_request := put_request }) }}
           end` }}.
 
   Definition mem (m: memory) : uaction reg_t ext_fn_t :=

@@ -10,11 +10,11 @@ Section Maybe.
 
   Definition valid {reg_t fn} : UInternalFunction reg_t fn :=
     {{ fun valid (x: tau) : struct_t Maybe =>
-         struct Maybe {| valid := Ob~1; data := x |} }}.
+         struct Maybe { valid := Ob~1; data := x } }}.
 
   Definition invalid {reg_t fn} : UInternalFunction reg_t fn :=
     {{ fun invalid () : struct_t Maybe =>
-         struct Maybe {| valid := Ob~0 |} }}.
+         struct Maybe { valid := Ob~0 } }}.
 End Maybe.
 
 Notation maybe tau := (struct_t (Maybe tau)).

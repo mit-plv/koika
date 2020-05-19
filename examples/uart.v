@@ -53,11 +53,11 @@ Module UART.
 
   Definition _read_input : uaction reg_t ext_fn_t :=
     {{
-        let ready := read1(state) == enum tx_state {| idle |} in
+        let ready := read1(state) == enum tx_state { idle } in
         let opt_byte := extcall ext_read_byte(ready) in
         (when ready && get(opt_byte, valid) do
            write1(in_byte, get(opt_byte, data));
-           write1(state, enum tx_state {| start |}))
+           write1(state, enum tx_state { start }))
     }}.
 
   Definition _transmit : uaction reg_t ext_fn_t :=
@@ -66,10 +66,10 @@ Module UART.
         let state := read0(state) in
         (if read0(delay) == |CLOCK_DELAY_BITS`d0| then
           match state with
-          | enum tx_state {| start |} =>
+          | enum tx_state { start } =>
             (set bit := Ob~0;
-             set state := enum tx_state {| tx |})
-          | enum tx_state {| tx |} =>
+             set state := enum tx_state { tx })
+          | enum tx_state { tx } =>
             let bits := read0(in_byte) in
             let offset := read0(in_byte_offset) in
             let last_char := offset == Ob~1~1~1 in
@@ -77,10 +77,10 @@ Module UART.
             write0(in_byte, bits >> Ob~1);
             write0(in_byte_offset, offset + Ob~0~0~1);
             (when last_char do
-               set state := enum tx_state {| finish |})
-          | enum tx_state {| finish |} =>
+               set state := enum tx_state { finish })
+          | enum tx_state { finish } =>
             (set bit := Ob~1;
-             set state := enum tx_state {| idle |})
+             set state := enum tx_state { idle })
           return default: pass
           end;
           write0(delay, #CLOCK_DELAY)

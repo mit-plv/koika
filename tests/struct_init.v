@@ -38,14 +38,14 @@ Extraction Inline idx_of_nat.
 
 Definition _rl1 : uaction reg_t ext_fn_t :=
   {{
-      write0(output, struct a {| a0 := read0(input (idx_of_nat 8 0));
-                                 a1 := read0(input (idx_of_nat 8 1));
-                                 a2 := read0(input (idx_of_nat 8 2));
-                                 a3 := read0(input (idx_of_nat 8 3));
-                                 a4 := read0(input (idx_of_nat 8 4));
-                                 a5 := read0(input (idx_of_nat 8 5));
-                                 a6 := read0(input (idx_of_nat 8 6));
-                                 a7 := read0(input (idx_of_nat 8 7)) |})
+      write0(output, struct a { a0 := read0(input (idx_of_nat 8 0));
+                                  a1 := read0(input (idx_of_nat 8 1));
+                                  a2 := read0(input (idx_of_nat 8 2));
+                                  a3 := read0(input (idx_of_nat 8 3));
+                                  a4 := read0(input (idx_of_nat 8 4));
+                                  a5 := read0(input (idx_of_nat 8 5));
+                                  a6 := read0(input (idx_of_nat 8 6));
+                                  a7 := read0(input (idx_of_nat 8 7)) })
   }}.
 
 Definition _rl2 : uaction reg_t ext_fn_t :=

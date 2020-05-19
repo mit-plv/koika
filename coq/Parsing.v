@@ -180,16 +180,16 @@ Declare Custom Entry koika_structs_init.
 
 Notation "f ':=' expr" := (cons (f,expr) nil) (in custom koika_structs_init at level 20, f custom koika_var at level 0, expr custom koika at level 88).
 Notation "a ';' b" := (app a b) (in custom koika_structs_init at level 91, a custom koika_structs_init).
-Notation "'struct' structtype '{|' fields '|}'" :=
+Notation "'struct' structtype '{' fields '}'" :=
   (USugar (UStructInit structtype fields)) (in custom koika, structtype constr at level 0, fields custom koika_structs_init at level 92).
-Notation "'struct' structtype '{|' '|}'" :=
+Notation "'struct' structtype '{' '}'" :=
   (USugar (UStructInit structtype [])) (in custom koika, structtype constr at level 0).
 
   Definition mem_req :=
     {| struct_name := "mem_req";
        struct_fields := cons ("type", bits_t 1) nil |}.
 
-Notation "'enum' enum_type '{|' f '|}'" :=
+Notation "'enum' enum_type '{' f '}'" :=
   (USugar (UConstEnum enum_type f))
     (in custom koika at level 1, enum_type constr at level 1, f custom koika_var at level 1).
 
@@ -278,7 +278,8 @@ Module Type Tests.
 
   Definition test_30'' : uaction reg_t :=
     {{
-        struct mem_req {| foo := upu[#(Bits.of_nat 3 0) :+ 2] ; bar := |32`d98| |}
+      struct mem_req { foo := upu[#(Bits.of_nat 3 0) :+ 2] ;
+                       bar := |32`d98| }
     }}.
 
   Definition test_31'' : uaction reg_t :=
@@ -288,7 +289,8 @@ Module Type Tests.
 
   Definition test_31' : uaction reg_t :=
     {{
-        let a := struct mem_req {| foo := upu[#(Bits.of_nat 3 0) :+ 2] ; bar := |32`d98| |} in
+      let a := struct mem_req { foo := upu[#(Bits.of_nat 3 0) :+ 2] ;
+                               bar := |32`d98| } in
         unpack(struct_t mem_req, pack(a))
     }}.
 End Tests.

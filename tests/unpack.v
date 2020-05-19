@@ -31,9 +31,9 @@ Definition r idx : R idx :=
 Definition _unpack_manual : uaction reg_t ext_fn_t :=
   {{
       let packed := read0(Rpacked) in
-      let unpacked := struct instr {| imm := getbits(instr, packed, imm);
-                                     src := getbits(instr, packed, src);
-                                     dst := getbits(instr, packed, dst) |} in
+      let unpacked := struct instr { imm := getbits(instr, packed, imm);
+                                    src := getbits(instr, packed, src);
+                                    dst := getbits(instr, packed, dst) } in
       write0(Runpacked_manual, unpacked)
   }}.
 

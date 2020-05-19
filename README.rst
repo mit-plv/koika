@@ -349,9 +349,9 @@ The main part of your program is rules.  You have access to the following syntax
   Call an external function (combinational IP)
 ``Ob~1~0~1~0``, ``|4`d10|``
   Bitset constants (here, the number 10 on 4 bits)
-``struct name {| field_n := val_n;… |}``
+``struct name { field_n := val_n;… }``
   Struct constants
-``enum name {| member |}``
+``enum name { member }``
   Enum constants
 ``#val``
   Lift a Coq value (for example a Coq definition)
@@ -364,13 +364,13 @@ For example, the following rule decreases the ``ttl`` field of an ICMP packet:
      let hdr := unpack(struct_t ipv4_header, read0(input)) in
      let valid := Ob~1 in
      match get(hdr, protocol) with
-     | enum proto {| ICMP |} =>
+     | enum proto { ICMP } =>
        let t := get(hdr, ttl) in
        if t == |8`d0| then set valid := Ob~0
        else set hdr := subst(hdr, ttl, t - |8`d1|)
      return default: fail
      end;
-     write0(output, pack(struct response {| valid := valid; value := hdr |}))
+     write0(output, pack(struct response { valid := valid; value := hdr }))
    }}.
 
 This rule fetches the next instruction in our RV32I core:
@@ -380,16 +380,16 @@ This rule fetches the next instruction in our RV32I core:
    Definition fetch := {{
      let pc := read1(pc) in
      write1(pc, pc + |32`d4|);
-     toIMem.(MemReq.enq)(struct mem_req {|
+     toIMem.(MemReq.enq)(struct mem_req {
           byte_en := |4`d0|; (* Load *)
           addr := pc;
           data := |32`d0|
-        |});
-     f2d.(fromFetch.enq)(struct fetch_bookkeeping {|
+        });
+     f2d.(fromFetch.enq)(struct fetch_bookkeeping {
           pc := pc;
           ppc := pc + |32`d4|;
           epoch := read1(epoch)
-       |})
+       })
    }}.
 
 Rules are written in an untyped surface language; to typecheck a rule, use ``tc_action R Sigma rule_body``, or use ``tc_rules`` as shown below.
