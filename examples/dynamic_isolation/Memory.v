@@ -456,10 +456,12 @@ Module Cache (Params: CacheParams).
     | CacheType_Dmem => Ob~1
     end.
 
-  Definition external_memory : External.cache:=
-    match Params._cache_type with
-    | CacheType_Imem => External.imem
-    | CacheType_Dmem => External.dmem
+  Definition external_memory : External.cache :=
+    match Params._cache_type, Params._core_id with
+    | CacheType_Imem, CoreId0 => External.imem0
+    | CacheType_Imem, CoreId1 => External.imem1
+    | CacheType_Dmem, CoreId0 => External.dmem0
+    | CacheType_Dmem, CoreId1 => External.dmem1
     end.
 
   (* Hard-coded for now: direct-mapped cache: #sets = #blocks; word-addressable *)
@@ -563,12 +565,21 @@ Module Cache (Params: CacheParams).
     {{ fun memoryBus (get_ready: bits_t 1) (put_valid: bits_t 1) (put_request: struct_t ext_cache_mem_req)
          : struct_t cache_mem_output =>
          `match m with
-          | imem => {{ extcall (ext_cache imem) (struct cache_mem_input {|
+          | imem0 => {{ extcall (ext_cache imem0) (struct cache_mem_input {|
                         get_ready := get_ready;
                         put_valid := put_valid;
                         put_request := put_request |}) }}
-          | dmem    =>
-                   {{ extcall (ext_cache dmem) (struct cache_mem_input {|
+          | imem1 => {{ extcall (ext_cache imem1) (struct cache_mem_input {|
+                        get_ready := get_ready;
+                        put_valid := put_valid;
+                        put_request := put_request |}) }}
+          | dmem0    =>
+                   {{ extcall (ext_cache dmem0) (struct cache_mem_input {|
+                        get_ready := get_ready;
+                        put_valid := put_valid;
+                        put_request := put_request |}) }}
+          | dmem1    =>
+                   {{ extcall (ext_cache dmem1) (struct cache_mem_input {|
                         get_ready := get_ready;
                         put_valid := put_valid;
                         put_request := put_request |}) }}
@@ -857,32 +868,45 @@ Module Cache (Params: CacheParams).
   Definition rule := rule R Sigma.
 
   (* NOTE: type-checking with unbound memory doesn't fail fast *)
-  Definition tc_downgrade_imem := tc_rule R Sigma (downgrade External.imem) <: rule.
-  Definition tc_downgrade_dmem := tc_rule R Sigma (downgrade External.dmem) <: rule.
+  Definition tc_downgrade_imem0 := tc_rule R Sigma (downgrade External.imem0) <: rule.
+  Definition tc_downgrade_dmem0 := tc_rule R Sigma (downgrade External.dmem0) <: rule.
+  Definition tc_downgrade_imem1 := tc_rule R Sigma (downgrade External.imem1) <: rule.
+  Definition tc_downgrade_dmem1 := tc_rule R Sigma (downgrade External.dmem1) <: rule.
 
-  Definition tc_processRequest_imem := tc_rule R Sigma (process_request External.imem) <: rule.
-  Definition tc_processRequest_dmem := tc_rule R Sigma (process_request External.dmem) <: rule.
+  Definition tc_processRequest_imem0 := tc_rule R Sigma (process_request External.imem0) <: rule.
+  Definition tc_processRequest_dmem0 := tc_rule R Sigma (process_request External.dmem0) <: rule.
+  Definition tc_processRequest_imem1 := tc_rule R Sigma (process_request External.imem1) <: rule.
+  Definition tc_processRequest_dmem1 := tc_rule R Sigma (process_request External.dmem1) <: rule.
+
   Definition tc_sendFillReq := tc_rule R Sigma (SendFillReq) <: rule.
-  Definition tc_waitFillResp_imem := tc_rule R Sigma (WaitFillResp External.imem) <: rule.
-  Definition tc_waitFillResp_dmem := tc_rule R Sigma (WaitFillResp External.dmem) <: rule.
+  Definition tc_waitFillResp_imem0 := tc_rule R Sigma (WaitFillResp External.imem0) <: rule.
+  Definition tc_waitFillResp_dmem0 := tc_rule R Sigma (WaitFillResp External.dmem0) <: rule.
+  Definition tc_waitFillResp_imem1 := tc_rule R Sigma (WaitFillResp External.imem1) <: rule.
+  Definition tc_waitFillResp_dmem1 := tc_rule R Sigma (WaitFillResp External.dmem1) <: rule.
 
   Definition rules (rl: rule_name_t) : rule :=
     match rl with
     | Rl_Downgrade =>
-        match Params._cache_type with
-        | CacheType_Imem => tc_downgrade_imem
-        | CacheType_Dmem => tc_downgrade_dmem
+        match Params._cache_type, Params._core_id with
+        | CacheType_Imem,CoreId0 => tc_downgrade_imem0
+        | CacheType_Imem,CoreId1 => tc_downgrade_imem1
+        | CacheType_Dmem,CoreId0 => tc_downgrade_dmem0
+        | CacheType_Dmem,CoreId1 => tc_downgrade_dmem1
         end
     | Rl_ProcessRequest =>
-        match Params._cache_type with
-        | CacheType_Imem => tc_processRequest_imem
-        | CacheType_Dmem => tc_processRequest_dmem
+        match Params._cache_type, Params._core_id with
+        | CacheType_Imem,CoreId0 => tc_processRequest_imem0
+        | CacheType_Imem,CoreId1 => tc_processRequest_imem1
+        | CacheType_Dmem,CoreId0 => tc_processRequest_dmem0
+        | CacheType_Dmem,CoreId1 => tc_processRequest_dmem1
         end
     | Rl_SendFillReq => tc_sendFillReq
     | Rl_WaitFillResp =>
-        match Params._cache_type with
-        | CacheType_Imem => tc_waitFillResp_imem
-        | CacheType_Dmem => tc_waitFillResp_dmem
+        match Params._cache_type, Params._core_id with
+        | CacheType_Imem,CoreId0 => tc_waitFillResp_imem0
+        | CacheType_Imem,CoreId1 => tc_waitFillResp_imem1
+        | CacheType_Dmem,CoreId0 => tc_waitFillResp_dmem0
+        | CacheType_Dmem,CoreId1 => tc_waitFillResp_dmem1
         end
     end.
 
@@ -1342,12 +1366,12 @@ Module WIPMemory <: Memory_sig External.
 
   Module Params_Core0DMem <: CacheParams.
     Definition _core_id := CoreId0.
-    Definition _cache_type := CacheType_Dmem. (* dmem *)
+    Definition _cache_type := CacheType_Dmem.
   End Params_Core0DMem.
 
   Module Params_Core1IMem <: CacheParams.
     Definition _core_id := CoreId1.
-    Definition _cache_type := CacheType_Imem. (* imem *)
+    Definition _cache_type := CacheType_Imem.
   End Params_Core1IMem.
 
   Module Params_Core1DMem <: CacheParams.
@@ -1517,6 +1541,32 @@ Module WIPMemory <: Memory_sig External.
 
   End Core0_DMemLift.
 
+  Section Core1_IMemLift.
+    Definition core1_imem_lift (reg: Core1IMem.reg_t) : reg_t :=
+      match reg with
+      | Core1IMem.fromMem st => (internal (RouterToCore1I st))
+      | Core1IMem.toMem st => (internal (core1IToRouter st))
+      | Core1IMem.internal st => (internal (Core1I_internal st))
+      end.
+
+    Definition Lift_core1_imem : RLift _ Core1IMem.reg_t reg_t Core1IMem.R R := ltac:(mk_rlift core1_imem_lift).
+    Definition FnLift_core1_imem : RLift _ Core1IMem.ext_fn_t ext_fn_t Core1IMem.Sigma Sigma := ltac:(lift_auto).
+
+  End Core1_IMemLift.
+
+  Section Core1_DMemLift.
+    Definition core1_dmem_lift (reg: Core1DMem.reg_t) : reg_t :=
+      match reg with
+      | Core1DMem.fromMem st => (internal (RouterToCore1D st))
+      | Core1DMem.toMem st => (internal (core1DToRouter st))
+      | Core1DMem.internal st => (internal (Core1D_internal st))
+      end.
+
+    Definition Lift_core1_dmem : RLift _ Core1DMem.reg_t reg_t Core1DMem.R R := ltac:(mk_rlift core1_dmem_lift).
+    Definition FnLift_core1_dmem : RLift _ Core1DMem.ext_fn_t ext_fn_t Core1DMem.Sigma Sigma := ltac:(lift_auto).
+
+  End Core1_DMemLift.
+
   (* TODO: Core1 *)
   Section MessageRouterLift.
     Definition router_lift (reg: MessageRouter.reg_t) : reg_t :=
@@ -1578,8 +1628,8 @@ Module WIPMemory <: Memory_sig External.
     {{ fun memoryBus (get_ready: bits_t 1) (put_valid: bits_t 1) (put_request: struct_t mem_req)
          : maybe (struct_t mem_output) =>
          `match m with
-          | imem => {{ {invalid (struct_t mem_output) }() }}
-          | dmem    => {{
+          | (imem0 | imem1) => {{ {invalid (struct_t mem_output) }() }}
+          | (dmem0 | dmem1) => {{
                       let addr := get(put_request, addr) in
                       let byte_en := get(put_request, byte_en) in
                       let is_write := byte_en == Ob~1~1~1~1 in
@@ -1645,7 +1695,7 @@ Module WIPMemory <: Memory_sig External.
           let put_request := get(put_request_opt, data) in
           let put_valid := get(put_request_opt, valid) in
 
-          let mem_out_opt := {memoryBus imem}(get_ready, put_valid, put_request) in
+          let mem_out_opt := {memoryBus imem0}(get_ready, put_valid, put_request) in
           if (get(mem_out_opt,valid)) then
             (* valid output *)
             let mem_out := get(mem_out_opt,data) in
@@ -1675,7 +1725,7 @@ Module WIPMemory <: Memory_sig External.
           let put_request := get(put_request_opt, data) in
           let put_valid := get(put_request_opt, valid) in
 
-          let mem_out_opt := {memoryBus dmem}(get_ready, put_valid, put_request) in
+          let mem_out_opt := {memoryBus dmem0}(get_ready, put_valid, put_request) in
           if (get(mem_out_opt,valid)) then
             (* valid output *)
             let mem_out := get(mem_out_opt,data) in
@@ -1694,6 +1744,67 @@ Module WIPMemory <: Memory_sig External.
       }}.
 
     Definition tc_memCore0D := tc_rule R Sigma memCore0D <: rule.
+
+    Definition memCore1I : uaction reg_t ext_fn_t :=
+      let fromMem := fromIMem1 in
+      let toMem := toIMem1 in
+      {{
+          guard(read1(purge1) == enum purge_state {| Ready |});
+          let get_ready := fromMem.(MemResp.can_enq)() in
+          let put_request_opt := toMem.(MemReq.peek)() in
+          let put_request := get(put_request_opt, data) in
+          let put_valid := get(put_request_opt, valid) in
+
+          let mem_out_opt := {memoryBus imem1}(get_ready, put_valid, put_request) in
+          if (get(mem_out_opt,valid)) then
+            (* valid output *)
+            let mem_out := get(mem_out_opt,data) in
+            (when (get_ready && get(mem_out, get_valid)) do fromMem.(MemResp.enq)(get(mem_out, get_response)));
+            (when (put_valid && get(mem_out, put_ready)) do ignore(toMem.(MemReq.deq)()))
+          else
+            (* TODO: these rules can fail *)
+            (when (put_valid && (`core1_imem_lift`).(Core1IMem.can_send_req)()) do (
+              ignore(toMem.(MemReq.deq)());
+              (`core1_imem_lift`).(Core1IMem.req)(put_request)
+            ));
+            (when (get_ready && (`core1_imem_lift`).(Core1IMem.can_recv_resp)()) do (
+              let resp := (`core1_imem_lift`).(Core1IMem.resp)() in
+              fromMem.(MemResp.enq)(resp))
+            )
+      }}.
+
+    Definition tc_memCore1I := tc_rule R Sigma memCore1I <: rule.
+
+    Definition memCore1D : uaction reg_t ext_fn_t :=
+      let fromMem := fromDMem1 in
+      let toMem := toDMem1 in
+      {{
+          guard(read1(purge1) == enum purge_state {| Ready |});
+          let get_ready := fromMem.(MemResp.can_enq)() in
+          let put_request_opt := toMem.(MemReq.peek)() in
+          let put_request := get(put_request_opt, data) in
+          let put_valid := get(put_request_opt, valid) in
+
+          let mem_out_opt := {memoryBus dmem1}(get_ready, put_valid, put_request) in
+          if (get(mem_out_opt,valid)) then
+            (* valid output *)
+            let mem_out := get(mem_out_opt,data) in
+            (when (get_ready && get(mem_out, get_valid)) do fromMem.(MemResp.enq)(get(mem_out, get_response)));
+            (when (put_valid && get(mem_out, put_ready)) do ignore(toMem.(MemReq.deq)()))
+          else
+            (* TODO: these rules can fail *)
+            (when (put_valid && (`core1_dmem_lift`).(Core1DMem.can_send_req)()) do (
+              ignore(toMem.(MemReq.deq)());
+              (`core1_dmem_lift`).(Core1DMem.req)(put_request)
+            ));
+            (when (get_ready && (`core1_dmem_lift`).(Core1DMem.can_recv_resp)()) do (
+              let resp := (`core1_dmem_lift`).(Core1DMem.resp)() in
+              fromMem.(MemResp.enq)(resp))
+            )
+      }}.
+
+    Definition tc_memCore1D := tc_rule R Sigma memCore1D <: rule.
+
     
     (*
     Definition do_purge0 : uaction reg_t ext_fn_t :=
@@ -1711,16 +1822,20 @@ Module WIPMemory <: Memory_sig External.
     Inductive SystemRule :=
     | SysRl_MemCore0I
     | SysRl_MemCore0D
+    | SysRl_MemCore1I
+    | SysRl_MemCore1D
     .
 
     Definition system_rules (rl: SystemRule) : rule :=
       match rl with
       | SysRl_MemCore0I => tc_memCore0I
       | SysRl_MemCore0D => tc_memCore0D
+      | SysRl_MemCore1I => tc_memCore1I
+      | SysRl_MemCore1D => tc_memCore1D
       end.
 
     Definition internal_system_schedule : Syntax.scheduler pos_t SystemRule :=
-      SysRl_MemCore0I |> SysRl_MemCore0D |> done.
+      SysRl_MemCore0I |> SysRl_MemCore0D |> SysRl_MemCore0I |> SysRl_MemCore0D |> done.
 
   End SystemRules.
 
@@ -1729,6 +1844,8 @@ Module WIPMemory <: Memory_sig External.
     | Rl_System (r: SystemRule)
     | Rl_Core0IMem (r: Core0IMem.rule_name_t)
     | Rl_Core0DMem (r: Core0DMem.rule_name_t)
+    | Rl_Core1IMem (r: Core1IMem.rule_name_t)
+    | Rl_Core1DMem (r: Core1DMem.rule_name_t)
     | Rl_Proto (r: ProtocolProcessor.rule_name_t)
     | Rl_Router (r: MessageRouter.rule_name_t)
     | Rl_MainMem (r: MainMem.rule_name_t)
@@ -1741,6 +1858,12 @@ Module WIPMemory <: Memory_sig External.
 
     Definition core0D_rule_name_lift (rl: Core0DMem.rule_name_t) : rule_name_t :=
       Rl_Core0DMem rl.
+
+    Definition core1I_rule_name_lift (rl: Core1IMem.rule_name_t) : rule_name_t :=
+      Rl_Core1IMem rl.
+
+    Definition core1D_rule_name_lift (rl: Core1DMem.rule_name_t) : rule_name_t :=
+      Rl_Core1DMem rl.
 
     Definition proto_rule_name_lift (rl: ProtocolProcessor.rule_name_t) : rule_name_t :=
       Rl_Proto rl.
@@ -1755,6 +1878,10 @@ Module WIPMemory <: Memory_sig External.
       lift_rule Lift_core0_imem FnLift_core0_imem (Core0IMem.rules rl).
     Definition core0D_rules (rl: Core0DMem.rule_name_t) : rule :=
       lift_rule Lift_core0_dmem FnLift_core0_dmem (Core0DMem.rules rl).
+    Definition core1I_rules (rl: Core1IMem.rule_name_t) : rule :=
+      lift_rule Lift_core1_imem FnLift_core1_imem (Core1IMem.rules rl).
+    Definition core1D_rules (rl: Core1DMem.rule_name_t) : rule :=
+      lift_rule Lift_core1_dmem FnLift_core1_dmem (Core1DMem.rules rl).
     Definition proto_rules (rl: ProtocolProcessor.rule_name_t) : rule :=
       lift_rule Lift_proto FnLift_proto (ProtocolProcessor.rules rl).
     Definition router_rules (rl: MessageRouter.rule_name_t) : rule :=
@@ -1767,6 +1894,8 @@ Module WIPMemory <: Memory_sig External.
       | Rl_System r => system_rules r
       | Rl_Core0IMem r => core0I_rules r
       | Rl_Core0DMem r => core0D_rules r
+      | Rl_Core1IMem r => core1I_rules r
+      | Rl_Core1DMem r => core1D_rules r
       | Rl_Proto r => proto_rules r
       | Rl_Router r => router_rules r
       | Rl_MainMem r => main_mem_rules r
@@ -1778,12 +1907,16 @@ Module WIPMemory <: Memory_sig External.
     Definition system_schedule := lift_scheduler Rl_System internal_system_schedule.
     Definition core0I_schedule := lift_scheduler Rl_Core0IMem Core0IMem.schedule.
     Definition core0D_schedule := lift_scheduler Rl_Core0DMem  Core0DMem.schedule.
+    Definition core1I_schedule := lift_scheduler Rl_Core1IMem Core1IMem.schedule.
+    Definition core1D_schedule := lift_scheduler Rl_Core1DMem  Core1DMem.schedule.
     Definition proto_schedule := lift_scheduler Rl_Proto ProtocolProcessor.schedule.
     Definition router_schedule := lift_scheduler Rl_Router MessageRouter.schedule.
     Definition main_mem_schedule := lift_scheduler Rl_MainMem MainMem.schedule.
 
     Definition schedule :=
-      system_schedule ||> core0I_schedule ||> core0D_schedule ||> router_schedule
+      system_schedule ||> core0I_schedule ||> core0D_schedule
+                      ||> core1I_schedule ||> core1D_schedule
+                      ||> router_schedule
                       ||> proto_schedule ||> main_mem_schedule.
 
   End Schedule.

@@ -44,7 +44,7 @@ End OriginalExternal.
 Module External <: External_sig.
   Import Common.
 
-  Inductive cache := imem | dmem.
+  Inductive cache := imem0 | dmem0 | imem1 | dmem1.
 
   Inductive ext_fn_t' :=
   | ext_cache (c: cache)
@@ -135,8 +135,10 @@ Module External <: External_sig.
 
   Definition ext_fn_specs (fn: ext_fn_t) :=
     match fn with
-    | ext_cache imem => {| ef_name := "ext_cache_imem"; ef_internal := false |}
-    | ext_cache dmem => {| ef_name := "ext_cache_dmem"; ef_internal := false |}
+    | ext_cache imem0 => {| ef_name := "ext_cache_imem0"; ef_internal := false |}
+    | ext_cache dmem0 => {| ef_name := "ext_cache_dmem0"; ef_internal := false |}
+    | ext_cache imem1 => {| ef_name := "ext_cache_imem1"; ef_internal := false |}
+    | ext_cache dmem1 => {| ef_name := "ext_cache_dmem1"; ef_internal := false |}
     | ext_mainmem => {| ef_name := "ext_mainmem"; ef_internal := false |}
     | ext_uart_write => {| ef_name := "ext_uart_write"; ef_internal := false |}
     | ext_uart_read => {| ef_name := "ext_uart_read"; ef_internal := false |}

@@ -462,7 +462,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
     | cycle_count => Bits.zero
     | instr_count => Bits.zero
     | epoch => Bits.zero
-    | pc => Bits.zero
+    | pc => CoreParams.initial_pc
     | rf s => Rf.r s
     end.
 

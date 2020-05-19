@@ -89,6 +89,7 @@ End EnclaveParameters.
 
 Module Type CoreParameters.
   Parameter core_id : Common.core_id_t.
+  Parameter initial_pc : Common.addr_t.
 End CoreParameters.
 
 Module Type External_sig.

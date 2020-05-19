@@ -15,6 +15,21 @@
 
 #define SRAM_SIZE (static_cast<std::size_t>(1) << LOG_NUM_SETS)
 
+bool core0_done = false;
+bool core1_done = false;
+
+bool get_core_done(int core_id) {
+  return (core_id ? core1_done : core0_done);
+}
+
+void set_core_done(int core_id) {
+  if (core_id) {
+    core1_done = true;
+  } else {
+    core0_done = true;
+  }
+}
+
 struct bookkeeping {
   std::array<std::array<struct_Bookkeeping_row, 4>, NUM_SETS> container;
 
@@ -59,9 +74,10 @@ struct bookkeeping {
 struct sram {
   std::unique_ptr<struct_cache_row[]> mem;
   std::optional<struct_ext_cache_mem_req> last;
+  int core_id;
 
   std::optional<struct_ext_cache_mem_resp> get(bool enable) {
-    if (!enable || !last.has_value())
+    if (!enable || !last.has_value() || get_core_done (core_id))
       return std::nullopt;
     auto data = last->data;
     auto tag = last->tag;
@@ -83,7 +99,13 @@ struct sram {
       } else {
         printf("  [0;31mFAIL[0m (%d)", exitcode);
       }
-      std::exit(exitcode);
+      set_core_done(core_id);
+
+      if (core0_done && core1_done) {
+        std::exit(exitcode);
+      } else {
+        return std::nullopt;
+      }
     } else {
       current = mem[index.v];
 
@@ -137,7 +159,7 @@ struct sram {
   }
 
   // Use new … instead of make_unique to avoid 0-initialization
-  sram() : mem{std::make_unique<struct_cache_row[]>(SRAM_SIZE)}, last{} {}
+  sram(int id) : mem{std::make_unique<struct_cache_row[]>(SRAM_SIZE)}, last{}, core_id{id} {}
 
 };
 
@@ -223,23 +245,30 @@ struct bram {
 };
 
 struct extfuns_t {
-  sram dmem, imem;
+  sram dmem0(0), dmem1(1), imem0(0), imem1(1);
   bram mainmem;
   bits<1> led;
   bookkeeping ppp_bookkeeping;
 
-  struct_cache_mem_output ext_cache_dmem(struct_cache_mem_input req) {
-    return dmem.getput(req);
+  struct_cache_mem_output ext_cache_dmem0(struct_cache_mem_input req) {
+    return dmem0.getput(req);
   }
 
-  struct_cache_mem_output ext_cache_imem(struct_cache_mem_input req) {
-    return imem.getput(req);
+  struct_cache_mem_output ext_cache_dmem1(struct_cache_mem_input req) {
+    return dmem1.getput(req);
+  }
+
+  struct_cache_mem_output ext_cache_imem0(struct_cache_mem_input req) {
+    return imem0.getput(req);
+  }
+
+  struct_cache_mem_output ext_cache_imem1(struct_cache_mem_input req) {
+    return imem1.getput(req);
   }
 
   struct_mem_output ext_mainmem(struct_mem_input req) {
     return mainmem.getput(req);
   }
-
 
   bits<1> ext_uart_write(struct_maybe_bits_8 req) {
     if (req.valid) {

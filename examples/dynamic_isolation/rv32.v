@@ -8,21 +8,25 @@ Require Import DynamicIsolation.TrivialCore.
 
 Module Params0 <: CoreParameters.
   Definition core_id := Ob~0.
+  Definition initial_pc := Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0.
 End Params0.
 
 Module Params1 <: CoreParameters.
   Definition core_id := Ob~1.
+  Definition initial_pc := Ob~0~0~0~0~0~0~0~0~0~0~0~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0.
 End Params1.
 
-Module Core0_rv32i := RV32I EnclaveParams Params0.
+Module Core0:= RV32I EnclaveParams Params0.
 (* Module Core0_rv32e := RV32E EnclaveParams Params0. *)
-Module Core1 := EmptyCore External EnclaveParams Params1.
+(* Module Core1 := EmptyCore External EnclaveParams Params1. *)
+
+Module Core1:= RV32I EnclaveParams Params1.
 Module Mem := WIPMemory.
 
 (* TODO: modularize *)
 
 Module Machine_rv32i := Machine External EnclaveParams Params0 Params1
-                        Core0_rv32i Core1 Mem.
+                        Core0 Core1 Mem.
 (*
 Module Machine_rv32e := Machine External EnclaveParams Params0 Params1
                         Core0_rv32e Core1 Mem.

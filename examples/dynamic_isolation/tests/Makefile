@@ -106,8 +106,7 @@ $(build)/multicore/multicore_mmio1.o: multicore_mmio1.c | $(multicore_dirs)
 #	$(cc32m) -march=$(call iarch,$<) multicore_init.S multicore_mmio.c $< -o $@
 
 $(build)/multicore/basic.rv32: $(build)/multicore/basic_core0.o $(build)/multicore/basic_core1.o $(build)/multicore/multicore_init.o $(build)/multicore/multicore_mmio0.o $(build)/multicore/multicore_mmio1.o $(build)/multicore/multicore_link.ld | $(multicore_dirs)
-	cd $(build)/multicore;
-	$(cc) -Tmulticore_link.ld -mabi=ilp32 -march=rv32i multicore_init.o multicore_mmio0.o multicore_mmio1.o basic_core0.o basic_core1.o -o basic.rv32
+	cd $(build)/multicore; $(cc) -Tmulticore_link.ld -mabi=ilp32 -march=rv32i multicore_init.o multicore_mmio0.o multicore_mmio1.o basic_core0.o basic_core1.o -o basic.rv32
 
 #$(build)/multicore/multicore/basic.rv32: multicore/basic_core0.c multicore/basic_core1.c multicore_init.S multicore_mmio.c $(build)/multicore/multicore_link.ld 
 #	$(cc32m) -march=$(call iarch,$<) multicore_init.S multicore_mmio.c multicore/basic_core0.c multicore/basic_core1.c -o $@
