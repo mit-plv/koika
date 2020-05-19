@@ -2,7 +2,9 @@
  (name cuttlebone)
  (public_name koika.cuttlebone)
  (libraries common hashcons)
- (flags (:standard -w -39)))
+ ;; -w -3 removes deprecation warnings; it should be changed to -alert
+ ;; -deprecated when we drop support for OCaml 4.07.
+ (flags (:standard -w -39 -w -3)))
 
 ;; (rule
 ;;  (targets "coq.ml" "coq.mli")

@@ -2,15 +2,22 @@
 let ensure_koikalib () =
   Common.command "ocamlfind" ["query"; "-qe"; "-qo"; "koika"]
 
+let alert_settings =
+  (* Disable alerts in OCaml >= 4.09 *)
+  (* FIXME: use ["-alert"; "-deprecated"] once we drop 4.07 *)
+  ["-w"; "-3"]
+  (* if Str.string_match (Str.regexp "4.07") Sys.ocaml_version 0 then []
+   * else ["-alert"; "-deprecated"] *)
+
 let run_ocamlopt incl mli ml pkg =
   Common.command "ocamlfind"
-    ["ocamlopt"; "-package"; "koika.registry"; "-I"; incl;
-     mli; ml; "-shared"; "-o"; pkg]
+    (["ocamlopt"; "-package"; "koika.registry"; "-I"; incl;
+      mli; ml; "-shared"; "-o"; pkg] @ alert_settings)
 
 let run_ocamlc incl mli ml pkg =
   Common.command "ocamlfind"
-    ["ocamlc"; "-package"; "koika.registry"; "-I"; incl;
-     mli; ml; "-c"];
+    (["ocamlc"; "-package"; "koika.registry"; "-I"; incl;
+      mli; ml; "-c"] @ alert_settings);
   (* ocamlc can't produce an arbitrarily named output file *)
   Common.command ~verbose:true "mv"
     [Filename.chop_suffix ml ".ml" ^ ".cmo"; pkg]

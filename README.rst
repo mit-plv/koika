@@ -20,7 +20,7 @@ Getting started
 Installing dependencies and building from source
 ------------------------------------------------
 
-* OCaml 4.07, `opam <https://opam.ocaml.org/doc/Install.html>`_ 2.0 or later, and GNU make.
+* OCaml 4.07 through 4.09, `opam <https://opam.ocaml.org/doc/Install.html>`_ 2.0 or later, and GNU make.
 
 * Coq 8.9 or 8.10 (but not 8.11, where notations are broken)::
 
