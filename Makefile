@@ -136,15 +136,17 @@ readme:
 package:
 	etc/package.sh
 
-all: coq ocaml examples tests readme
+dune-all: coq ocaml
 	@printf "\n== Completing full build ==\n"
 	dune build @all
+
+all: coq ocaml examples tests dune-all readme
 
 clean: clean-tests clean-examples
 	dune clean
 	rm -f koika-*.tar.gz
 
-.PHONY: readme package all clean
+.PHONY: readme package dune-all all clean
 
 .SUFFIXES:
 
