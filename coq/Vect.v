@@ -1372,10 +1372,10 @@ Hint Rewrite
 
 Declare Scope bits.
 Notation bits n := (Bits.bits n).
-Notation "'Ob'" := Bits.nil (at level 7) : bits.
 Notation "bs '~' b" := (Bits.cons b bs) (at level 7, left associativity, format "bs '~' b") : bits.
 Notation "bs '~' 0" := (Bits.cons false bs) (at level 7, left associativity, format "bs '~' 0") : bits.
 Notation "bs '~' 1" := (Bits.cons true bs) (at level 7, left associativity, format "bs '~' 1") : bits.
+Notation "'Ob'" := Bits.nil (at level 7) : bits. (* https://github.com/coq/coq/issues/12370 *)
 Global Open Scope bits.
 
 Fixpoint z_range start len :=
