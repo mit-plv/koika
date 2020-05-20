@@ -17,7 +17,7 @@ default: all
 coq:
 	@printf "\n== Building Coq library ==\n"
 	@rm -f ${COQ_BUILD_DIR}/Extraction.vo
-	dune build coq/Extraction.vo coq/Std.vo
+	dune build coq/Extraction.vo coq/Frontend.vo coq/Std.vo
 	@cp ${COQ_BUILD_DIR}/extracted.ml ocaml/cuttlebone/extr.ml
 	@cp ${COQ_BUILD_DIR}/extracted.mli ocaml/cuttlebone/extr.mli
 

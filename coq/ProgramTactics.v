@@ -1,6 +1,6 @@
 (*! Tactics for proving user-defined circuits !*)
-Require Import Koika.SemanticProperties Koika.Frontend.
-Require Export Koika.BitTactics Koika.Common.
+Require Import Koika.Common Koika.SemanticProperties.
+Require Export Koika.BitTactics.
 
 (** Rewrite all hypotheses that would change a term being matched in the context
  into a constructor **)

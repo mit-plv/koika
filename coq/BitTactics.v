@@ -1,5 +1,5 @@
 (*! Tactics for proofs about bit vectors !*)
-Require Import Lia.
+Require Import Coq.micromega.Lia.
 Require Export Koika.EqDec Koika.Vect Koika.Primitives Koika.PrimitiveProperties.
 Import BitFuns.
 

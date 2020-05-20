@@ -350,4 +350,16 @@ Section result_list_map.
     end.
 End result_list_map.
 
+Definition is_success {S F} (r: result S F) :=
+  match r with
+  | Success s => true
+  | Failure f => false
+  end.
+
+Definition extract_success {S F} (r: result S F) (pr: is_success r = true) :=
+  match r return is_success r = true -> S with
+  | Success s => fun _ => s
+  | Failure f => fun pr => match Bool.diff_false_true pr with end
+  end pr.
+
 Global Set Nested Proofs Allowed.

@@ -13,6 +13,8 @@ Require Export
         Koika.Compiler
         Koika.Parsing
         Koika.DeriveShow
+        Koika.BitTactics
+        Koika.ProgramTactics
         Koika.ExtractionSetup.
 
 Notation compile_scheduler :=
@@ -102,18 +104,6 @@ Notation desugar_and_tc_action R Sigma tau sig uaction :=
 Notation desugar_and_tc_rule R Sigma uaction :=
   (let desugared := desugar_action dummy_pos uaction in
    tc_rule R Sigma dummy_pos desugared).
-
-Definition is_success {S F} (r: result S F) :=
-  match r with
-  | Success s => true
-  | Failure f => false
-  end.
-
-Definition extract_success {S F} (r: result S F) (pr: is_success r = true) :=
-  match r return is_success r = true -> S with
-  | Success s => fun _ => s
-  | Failure f => fun pr => match Bool.diff_false_true pr with end
-  end pr.
 
 Notation _must_succeed_conv r :=
   (extract_success r (@eq_refl bool true : is_success r = true)).
