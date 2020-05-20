@@ -26,6 +26,17 @@ Module Common.
     {| struct_name := "mem_resp";
        struct_fields := [("byte_en", bits_t 4); ("addr", bits_t 32); ("data", bits_t 32)] |}.
 
+  Inductive enclave_id :=
+  | Enclave0
+  | Enclave1
+  | Enclave2
+  | Enclave3.
+
+  Definition enclave_req :=
+    {| struct_name := "enclave_req";
+       struct_fields := [("eid", bits_t 32)]
+    |}.
+
   Module FifoMemReq <: Fifo.
     Definition T:= struct_t mem_req.
   End FifoMemReq.
@@ -36,12 +47,23 @@ Module Common.
   End FifoMemResp.
   Module MemResp := Fifo1 FifoMemResp.
 
+  Module FifoEnclaveReq <: Fifo.
+    Definition T := struct_t enclave_req.
+  End FifoEnclaveReq.
+  Module EnclaveReq := Fifo1Bypass FifoEnclaveReq.
+
   Instance FiniteType_MemReq : FiniteType MemReq.reg_t := _.
   Instance FiniteType_MemResp : FiniteType MemResp.reg_t := _.
+  Instance FiniteType_FifoEnclaveReq : FiniteType EnclaveReq.reg_t := _.
 
   Inductive ind_core_id :=
   | CoreId0
   | CoreId1
+  .
+
+  Inductive ind_cache_type :=
+  | CacheType_Imem
+  | CacheType_Dmem
   .
 
   Definition addr_t := bits_t 32.
@@ -67,8 +89,8 @@ Module Common.
 
   Definition purge_state :=
     {| enum_name := "purge_state";
-       enum_members := vect_of_list ["Ready"; "Purging"; "Purged"];
-       enum_bitpatterns := vect_of_list [Ob~0~0; Ob~0~1; Ob~1~0] |}.
+       enum_members := vect_of_list ["Ready"; "Purging"; "Purged"; "Restart"];
+       enum_bitpatterns := vect_of_list [Ob~0~0; Ob~0~1; Ob~1~0; Ob~1~1] |}.
 
   Module RfParams <: RfPow2_sig.
     Definition idx_sz := log2 32.
@@ -79,12 +101,14 @@ Module Common.
   End RfParams.
   Module Rf := RfPow2 RfParams.
 
-  (* Instance FiniteType_rf : FiniteType Rf.reg_t := _. *)
+  Instance FiniteType_rf : FiniteType Rf.reg_t := _.
    
 End Common.
 
 Module Type EnclaveParameters.
-
+  Parameter enclave_base : Common.enclave_id -> Common.addr_t.
+  Parameter enclave_size : Common.enclave_id -> bits_t 32.
+  Parameter enclave_bootloader_addr : Common.enclave_id -> Common.addr_t.
 End EnclaveParameters.
 
 Module Type CoreParameters.
@@ -114,7 +138,9 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
   | toDMem (state: MemReq.reg_t)
   | fromIMem (state: MemResp.reg_t)
   | fromDMem (state: MemResp.reg_t)
+  | toSMEnc (state: EnclaveReq.reg_t)
   (* | rf (state: Rf.reg_t) *)
+  | pc
   | purge
   | internal (r: internal_reg_t)
   .
@@ -126,7 +152,9 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
    | toDMem r => MemReq.R r
    | fromIMem  r => MemResp.R r
    | fromDMem  r => MemResp.R r
+   | toSMEnc r => EnclaveReq.R r
    (* | rf r => Rf.R r  *)
+   | pc => bits_t 32
    | purge => enum_t purge_state
    | internal r => R_internal r
    end.
@@ -138,7 +166,9 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
     | fromIMem s => MemResp.r s
     | toDMem s => MemReq.r s
     | fromDMem s => MemResp.r s
+    | toSMEnc s => EnclaveReq.r s
     (* | rf r => Rf.r r  *)
+    | pc => CoreParams.initial_pc
     | purge => value_of_bits (Bits.zero)
     | internal s => r_internal s
     end.
@@ -158,33 +188,58 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
 End Core_sig.
 
 Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
-  (* TOOD: Silly workaround due to extraction issues: https://github.com/coq/coq/issues/12124 *)
+  Import Common.
+
+  Definition enclave_data :=
+    {| struct_name := "enclave_data";
+       struct_fields := [("eid", bits_t 32);
+                         ("addr_min", bits_t 32);
+                         ("size", bits_t 32)]
+    |}.
+
   Inductive internal_reg_t' :=
-  | Foo | Bar.
+  | limbo0
+  | limbo1
+  | enc_data0
+  | enc_data1
+  .
+
   Definition internal_reg_t := internal_reg_t'.
 
   Definition R_internal (idx: internal_reg_t) : type :=
     match idx with
-    | _ => bits_t 1
+    | limbo0 => bits_t 1
+    | limbo1 => bits_t 1
+    | enc_data0 => struct_t enclave_data
+    | enc_data1 => struct_t enclave_data
     end.
 
   Definition r_internal (idx: internal_reg_t) : R_internal idx :=
     match idx with
-    | _ => Bits.zero
+    | limbo0 => Bits.zero
+    | limbo1 => Bits.zero
+    | enc_data0 => let eid := Bits.zero in
+                  let addr_min := Params.enclave_base Enclave0 in
+                  let size := Params.enclave_size Enclave0 in
+                  ((eid, (addr_min, (size, tt))))
+    | einc_data1 => let eid := Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1 in
+                   let addr_min := Params.enclave_base Enclave2 in
+                   let size := Params.enclave_size Enclave2 in
+                   ((eid, (addr_min, (size, tt))))
     end.
 
   Instance FiniteType_internal_reg_t : FiniteType internal_reg_t := _.
 
-  Import Common.
-
   Inductive reg_t' : Type :=
   | fromCore0_IMem (state: MemReq.reg_t)
   | fromCore0_DMem (state: MemReq.reg_t)
+  | fromCore0_Enc (state: EnclaveReq.reg_t)
   | toCore0_IMem (state: MemResp.reg_t)
   | toCore0_DMem (state: MemResp.reg_t)
   (* Core1 <-> SM *)
   | fromCore1_IMem (state: MemReq.reg_t)
   | fromCore1_DMem (state: MemReq.reg_t)
+  | fromCore1_Enc (state: EnclaveReq.reg_t)
   | toCore1_IMem (state: MemResp.reg_t)
   | toCore1_DMem (state: MemResp.reg_t)
   (* SM <-> Mem *)
@@ -196,6 +251,8 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
   | fromMem0_DMem (state: MemResp.reg_t)
   | fromMem1_IMem (state: MemResp.reg_t)
   | fromMem1_DMem (state: MemResp.reg_t)
+  | pc_core0
+  | pc_core1
   | purge_core0
   | purge_core1
   | purge_mem0
@@ -209,11 +266,13 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
     match idx with
     | fromCore0_IMem st => MemReq.R st
     | fromCore0_DMem st => MemReq.R st
+    | fromCore0_Enc st => EnclaveReq.R st
     | toCore0_IMem st => MemResp.R st
     | toCore0_DMem st => MemResp.R st
     (* Core1 <-> SM *)
     | fromCore1_IMem st => MemReq.R st
     | fromCore1_DMem st => MemReq.R st
+    | fromCore1_Enc st => EnclaveReq.R st
     | toCore1_IMem st => MemResp.R st
     | toCore1_DMem st => MemResp.R st
     (* SM <-> Mem *)
@@ -225,6 +284,8 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
     | fromMem0_DMem st => MemResp.R st
     | fromMem1_IMem st => MemResp.R st
     | fromMem1_DMem st => MemResp.R st
+    | pc_core0 => bits_t 32
+    | pc_core1 => bits_t 32
     | purge_core0 => enum_t purge_state
     | purge_core1 => enum_t purge_state
     | purge_mem0 => enum_t purge_state
@@ -236,11 +297,13 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
     match idx with
     | fromCore0_IMem st => MemReq.r st
     | fromCore0_DMem st => MemReq.r st
+    | fromCore0_Enc st => EnclaveReq.r st
     | toCore0_IMem st => MemResp.r st
     | toCore0_DMem st => MemResp.r st
     (* Core1 <-> SM *)
     | fromCore1_IMem st => MemReq.r st
     | fromCore1_DMem st => MemReq.r st
+    | fromCore1_Enc st => EnclaveReq.r st
     | toCore1_IMem st => MemResp.r st
     | toCore1_DMem st => MemResp.r st
     (* SM <-> Mem *)
@@ -252,6 +315,8 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
     | fromMem0_DMem st => MemResp.r st
     | fromMem1_IMem st => MemResp.r st
     | fromMem1_DMem st => MemResp.r st
+    | pc_core0 => Bits.zero
+    | pc_core1 => Bits.zero
     | purge_core0 => value_of_bits (Bits.zero)
     | purge_core1 => value_of_bits (Bits.zero)
     | purge_mem0 => value_of_bits (Bits.zero)
@@ -265,6 +330,176 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
   Definition ext_fn_t := External.ext_fn_t.
   Definition state := env_t ContextEnv (fun idx : reg_t => R idx).
 
+  Definition eid_to_enc_data : UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun eid_to_enc_data (eid: bits_t 32) : struct_t enclave_data =>
+         match eid with
+         | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0 =>
+             struct enclave_data {| eid := eid;
+                                    addr_min := (#(Params.enclave_base Enclave0));
+                                    size := (#(Params.enclave_size Enclave0))
+                                 |}
+         | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1 =>
+             struct enclave_data {| eid := eid;
+                                    addr_min := (#(Params.enclave_base Enclave1));
+                                    size := (#(Params.enclave_size Enclave1))
+                                 |}
+         | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1~0 =>
+             struct enclave_data {| eid := eid;
+                                    addr_min := (#(Params.enclave_base Enclave2));
+                                    size := (#(Params.enclave_size Enclave2))
+                                 |}
+         | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1~1 =>
+             struct enclave_data {| eid := eid;
+                                    addr_min := (#(Params.enclave_base Enclave3));
+                                    size := (#(Params.enclave_size Enclave3))
+                                 |}
+         return default : `UConst (tau := struct_t enclave_data) (value_of_bits (Bits.zero))`
+         end
+    }}.
+
+  Definition lookup_reg_limbo (core: ind_core_id) : reg_t :=
+    match core with
+    | CoreId0 => internal limbo0
+    | CoreId1 => internal limbo1
+    end.
+
+  Definition lookup_reg_enc_data (core: ind_core_id) : reg_t :=
+    match core with
+    | CoreId0 => internal enc_data0
+    | CoreId1 => internal enc_data1
+    end.
+
+  Definition lookup_reg_proc_reset (core: ind_core_id) : reg_t :=
+    match core with
+    | CoreId0 => purge_core0
+    | CoreId1 => purge_core1
+    end.
+
+  Definition lookup_reg_mem_reset (core: ind_core_id) : reg_t :=
+    match core with
+    | CoreId0 => purge_mem0
+    | CoreId1 => purge_mem1
+    end.
+
+  Definition lookup_reg_pc (core: ind_core_id) : reg_t :=
+    match core with
+    | CoreId0 => pc_core0
+    | CoreId1 => pc_core1
+    end.
+
+
+  (* TODO: currently another core can switch into the same enclave *)
+  Definition sm_update_enclave (core: ind_core_id) : uaction reg_t ext_fn_t :=
+    let reg_limbo := lookup_reg_limbo core in
+    let reg_enc := lookup_reg_enc_data core in
+    let fromCore :=
+        match core with
+        | CoreId0 => fromCore0_Enc
+        | CoreId1 => fromCore1_Enc
+        end in
+    {{ when (!read0(reg_limbo)) do (
+         let max_eid := |32`d3| in
+         let enclaveRequest := fromCore.(EnclaveReq.deq)() in
+         let eid := get(enclaveRequest, eid) in
+         if (eid <= max_eid) then
+           write0(reg_enc, eid_to_enc_data(eid));
+           write0(reg_limbo, Ob~1)
+         else (* drop it *)
+           pass
+       )
+    }}.
+
+  Definition sm_filter_reqs (core: ind_core_id) (cache: ind_cache_type) : uaction reg_t ext_fn_t :=
+    let reg_limbo := lookup_reg_limbo core in
+    let reg_enc := lookup_reg_enc_data core in
+    let '(fromCore, toMem) :=
+        match core, cache with
+        | CoreId0, CacheType_Imem => (fromCore0_IMem, toMem0_IMem)
+        | CoreId0, CacheType_Dmem => (fromCore0_DMem, toMem0_DMem)
+        | CoreId1, CacheType_Imem => (fromCore1_IMem, toMem1_IMem)
+        | CoreId1, CacheType_Dmem => (fromCore1_DMem, toMem1_DMem)
+        end in
+    {{ when (!read0(reg_limbo)) do
+         let request := fromCore.(MemReq.deq)() in
+         let address := get(request, addr) in
+         let enc_data := read0(reg_enc) in
+         let addr_min := get(enc_data, addr_min) in
+         let addr_max := get(enc_data, size) + addr_min in
+         if addr_min <= address && address < addr_max then
+           toMem.(MemReq.enq)(request)
+         else pass
+    }}.
+
+  Definition sm_filter_resps (core: ind_core_id) (cache: ind_cache_type) : uaction reg_t ext_fn_t :=
+    let reg_limbo := lookup_reg_limbo core in
+    let reg_enc := lookup_reg_enc_data core in
+    let '(fromMem, toCore) :=
+        match core, cache with
+        | CoreId0, CacheType_Imem => (fromMem0_IMem, toCore0_IMem)
+        | CoreId0, CacheType_Dmem => (fromMem0_DMem, toCore0_DMem)
+        | CoreId1, CacheType_Imem => (fromMem1_IMem, toCore1_IMem)
+        | CoreId1, CacheType_Dmem => (fromMem1_DMem, toCore1_DMem)
+        end in
+    {{ when (!read0(reg_limbo)) do
+         let response:= fromMem.(MemResp.deq)() in
+         let address := get(response, addr) in
+         let enc_data := read0(reg_enc) in
+         let addr_min := get(enc_data, addr_min) in
+         let addr_max := get(enc_data, size) + addr_min in
+         if addr_min <= address && address < addr_max then
+           toCore.(MemResp.enq)(response)
+         else pass
+    }}.
+
+  Definition sm_reset_processor_and_memory (core: ind_core_id): uaction reg_t ext_fn_t :=
+    let reg_limbo := lookup_reg_limbo core in
+    let reg_proc_reset := lookup_reg_proc_reset core in
+    let reg_mem_reset := lookup_reg_mem_reset core in
+    {{ (if (read0(reg_limbo) && read0(reg_proc_reset) == enum purge_state {| Ready |}) then
+         write0(reg_proc_reset, enum purge_state {| Purging |})
+        else pass);
+       if (read0(reg_limbo) && read0(reg_mem_reset) == enum purge_state {| Ready |}) then
+         write0(reg_mem_reset, enum purge_state {| Purging |})
+       else pass
+    }}.
+
+  Definition eid_to_bootloader_addr : UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun eid_to_enc_data (eid: bits_t 32) : bits_t 32 =>
+         match eid with
+         | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0 =>
+             #(Params.enclave_bootloader_addr Enclave0)
+         | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1 =>
+             #(Params.enclave_bootloader_addr Enclave1)
+         | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1~0 =>
+             #(Params.enclave_bootloader_addr Enclave2)
+         | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1~1 =>
+             #(Params.enclave_bootloader_addr Enclave3)
+         return default : |32`d0|
+         end
+    }}.
+
+
+  Definition sm_restart_pipeline (core: ind_core_id) : uaction reg_t ext_fn_t :=
+    let reg_limbo := lookup_reg_limbo core in
+    let reg_enc := lookup_reg_enc_data core in
+    let reg_proc_reset := lookup_reg_proc_reset core in
+    let reg_mem_reset := lookup_reg_mem_reset core in
+    let reg_pc := lookup_reg_pc core in
+    {{ if (read0(reg_limbo) && read0(reg_proc_reset) == enum purge_state {| Purged |} &&
+           read0(reg_mem_reset) == enum purge_state {| Purged |}) then
+         write0(reg_limbo, Ob~0);
+         write0(reg_proc_reset, enum purge_state {| Restart |});
+         let enc_data := read0(reg_enc) in
+         let max_eid := |32`d3| in
+         let eid := get(enc_data,eid) in
+         if (eid <= max_eid) then
+           write0(reg_pc, eid_to_bootloader_addr(eid))
+         else
+           fail
+       else fail
+    }}.
+
+  (*
   (* Placeholder rule; do nothing *)
   Definition forward : uaction reg_t ext_fn_t :=
     {{ (when (fromCore0_IMem.(MemReq.can_deq)() &&
@@ -308,19 +543,72 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
          toCore1_DMem.(MemResp.enq)(req)
        )
     }}.
+    *)
+  Definition tc_update_enclave0 := tc_rule R Sigma (sm_update_enclave CoreId0) <: rule R Sigma.
+  Definition tc_update_enclave1 := tc_rule R Sigma (sm_update_enclave CoreId1) <: rule R Sigma.
 
-  Definition tc_forward := tc_rule R Sigma forward <: rule R Sigma.
+  Definition tc_filter_reqs_imem0 := tc_rule R Sigma (sm_filter_reqs CoreId0 CacheType_Imem) <: rule R Sigma.
+  Definition tc_filter_reqs_dmem0 := tc_rule R Sigma (sm_filter_reqs CoreId0 CacheType_Dmem) <: rule R Sigma.
+  Definition tc_filter_reqs_imem1 := tc_rule R Sigma (sm_filter_reqs CoreId1 CacheType_Imem) <: rule R Sigma.
+  Definition tc_filter_reqs_dmem1 := tc_rule R Sigma (sm_filter_reqs CoreId1 CacheType_Dmem) <: rule R Sigma.
 
-  Inductive rule_name_t' := | Forward.
+  Definition tc_filter_resps_imem0 := tc_rule R Sigma (sm_filter_resps CoreId0 CacheType_Imem) <: rule R Sigma.
+  Definition tc_filter_resps_dmem0 := tc_rule R Sigma (sm_filter_resps CoreId0 CacheType_Dmem) <: rule R Sigma.
+  Definition tc_filter_resps_imem1 := tc_rule R Sigma (sm_filter_resps CoreId1 CacheType_Imem) <: rule R Sigma.
+  Definition tc_filter_resps_dmem1 := tc_rule R Sigma (sm_filter_resps CoreId1 CacheType_Dmem) <: rule R Sigma.
+
+  Definition tc_reset_proc_and_mem0 := tc_rule R Sigma (sm_reset_processor_and_memory CoreId0) <: rule R Sigma.
+  Definition tc_reset_proc_and_mem1 := tc_rule R Sigma (sm_reset_processor_and_memory CoreId1) <: rule R Sigma.
+
+  Definition tc_restart_pipeline0 := tc_rule R Sigma (sm_restart_pipeline CoreId0) <: rule R Sigma.
+  Definition tc_restart_pipeline1 := tc_rule R Sigma (sm_restart_pipeline CoreId1) <: rule R Sigma.
+
+  (* Definition tc_forward := tc_rule R Sigma forward <: rule R Sigma. *)
+
+  Inductive rule_name_t' :=
+  | UpdateEnclave0
+  | UpdateEnclave1
+  | FilterReqsIMem0
+  | FilterReqsDMem0
+  | FilterReqsIMem1
+  | FilterReqsDMem1
+  | FilterRespsIMem0
+  | FilterRespsDMem0
+  | FilterRespsIMem1
+  | FilterRespsDMem1
+  | ResetProcAndMem0
+  | ResetProcAndMem1
+  | RestartPipeline0
+  | RestartPipeline1
+  .
+
   Definition rule_name_t := rule_name_t'.
 
   Definition rules (rl : rule_name_t) : rule R Sigma :=
     match rl with
-    | Forward => tc_forward
+    | UpdateEnclave0 => tc_update_enclave0
+    | UpdateEnclave1 => tc_update_enclave1
+    | FilterReqsIMem0 => tc_filter_reqs_imem0
+    | FilterReqsDMem0 => tc_filter_reqs_dmem0
+    | FilterReqsIMem1 => tc_filter_reqs_imem1
+    | FilterReqsDMem1 => tc_filter_reqs_dmem1
+    | FilterRespsIMem0 => tc_filter_resps_imem0
+    | FilterRespsDMem0 => tc_filter_resps_dmem0
+    | FilterRespsIMem1 => tc_filter_resps_imem1
+    | FilterRespsDMem1 => tc_filter_resps_dmem1
+    | ResetProcAndMem0 => tc_reset_proc_and_mem0
+    | ResetProcAndMem1 => tc_reset_proc_and_mem1
+    | RestartPipeline0 => tc_restart_pipeline0
+    | RestartPipeline1 => tc_restart_pipeline1
     end.
 
   Definition schedule : Syntax.scheduler pos_t rule_name_t :=
-    Forward |> done.
+    UpdateEnclave0 |> UpdateEnclave1
+                   |> FilterReqsIMem0 |> FilterReqsDMem0 |> FilterReqsIMem1 |> FilterReqsDMem1
+                   |> FilterRespsIMem0 |> FilterRespsDMem0 |> FilterRespsIMem1 |> FilterRespsDMem1
+                   |> ResetProcAndMem0 |> ResetProcAndMem1
+                   |> RestartPipeline0 |> RestartPipeline1
+                   |> done.
 
 End SecurityMonitor.
 
@@ -424,6 +712,9 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
   | purge_core1
   | purge_mem0
   | purge_mem1
+  (* Program counter? Doesn't /need/ to be here, but let's us avoid reasoning about Core code *)
+  | pc0
+  | pc1
   (* Register files *)
       (*
   | core0_rf (state: Rf.reg_t)
@@ -432,11 +723,13 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
   (* Core0 <-> SM *)
   | Core0ToSM_IMem (state: MemReq.reg_t)
   | Core0ToSM_DMem (state: MemReq.reg_t)
+  | Core0ToSM_Enc (state: EnclaveReq.reg_t)
   | SMToCore0_IMem (state: MemResp.reg_t)
   | SMToCore0_DMem (state: MemResp.reg_t)
   (* Core1 <-> SM *)
   | Core1ToSM_IMem (state: MemReq.reg_t)
   | Core1ToSM_DMem (state: MemReq.reg_t)
+  | Core1ToSM_Enc (state: EnclaveReq.reg_t)
   | SMToCore1_IMem (state: MemResp.reg_t)
   | SMToCore1_DMem (state: MemResp.reg_t)
   (* SM <-> Mem *)
@@ -466,6 +759,8 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
     | purge_core1 => enum_t purge_state
     | purge_mem0 => enum_t purge_state
     | purge_mem1 => enum_t purge_state
+    | pc0 => bits_t 32
+    | pc1 => bits_t 32
     (* Register files *)
     (*
     | core0_rf st => Rf.R st
@@ -474,11 +769,13 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
     (* Core0 <-> SM *)
     | Core0ToSM_IMem st => MemReq.R st
     | Core0ToSM_DMem st => MemReq.R st
+    | Core0ToSM_Enc st => EnclaveReq.R st
     | SMToCore0_IMem st => MemResp.R st
     | SMToCore0_DMem st => MemResp.R st
     (* Core1 <-> SM *)
     | Core1ToSM_IMem st => MemReq.R st
     | Core1ToSM_DMem st => MemReq.R st
+    | Core1ToSM_Enc st => EnclaveReq.R st
     | SMToCore1_IMem st => MemResp.R st
     | SMToCore1_DMem st => MemResp.R st
     (* SM <-> Mem *)
@@ -506,6 +803,8 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
     | purge_core1 => value_of_bits (Bits.zero)
     | purge_mem0 => value_of_bits (Bits.zero)
     | purge_mem1 => value_of_bits (Bits.zero)
+    | pc0 => Bits.zero
+    | pc1 => Bits.zero
     (* Register files *)
     (*
     | core0_rf st => Rf.r st
@@ -514,11 +813,13 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
     (* Core0 <-> SM *)
     | Core0ToSM_IMem st => MemReq.r st
     | Core0ToSM_DMem st => MemReq.r st
+    | Core0ToSM_Enc st => EnclaveReq.r st
     | SMToCore0_IMem st => MemResp.r st
     | SMToCore0_DMem st => MemResp.r st
     (* Core1 <-> SM *)
     | Core1ToSM_IMem st => MemReq.r st
     | Core1ToSM_DMem st => MemReq.r st
+    | Core1ToSM_Enc st => EnclaveReq.r st
     | SMToCore1_IMem st => MemResp.r st
     | SMToCore1_DMem st => MemResp.r st
     (* SM <-> Mem *)
@@ -563,9 +864,11 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
       | Core0.core_id => core_id0
       | Core0.toIMem s => Core0ToSM_IMem s
       | Core0.toDMem s => Core0ToSM_DMem s
+      | Core0.toSMEnc s => Core0ToSM_Enc s
       | Core0.fromIMem s => SMToCore0_IMem s
       | Core0.fromDMem s => SMToCore0_DMem s
       (* | Core0.rf s => core0_rf s *)
+      | Core0.pc => pc0
       | Core0.purge => purge_core0
       | Core0.internal s => Core0_internal s
       end.
@@ -581,9 +884,11 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
       | Core1.core_id => core_id1
       | Core1.toIMem s => Core1ToSM_IMem s
       | Core1.toDMem s => Core1ToSM_DMem s
+      | Core1.toSMEnc s => Core1ToSM_Enc s
       | Core1.fromIMem s => SMToCore1_IMem s
       | Core1.fromDMem s => SMToCore1_DMem s
       (* | Core1.rf s => core1_rf s *)
+      | Core1.pc => pc1
       | Core1.purge => purge_core1
       | Core1.internal s => Core1_internal s
       end.
@@ -599,11 +904,13 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
       match reg with
       | SM.fromCore0_IMem st => Core0ToSM_IMem st
       | SM.fromCore0_DMem st => Core0ToSM_DMem st
+      | SM.fromCore0_Enc st => Core0ToSM_Enc st
       | SM.toCore0_IMem st => SMToCore0_IMem st
       | SM.toCore0_DMem st => SMToCore0_DMem st
       (* Core1 <-> SM *)
       | SM.fromCore1_IMem st => Core1ToSM_IMem st
       | SM.fromCore1_DMem st => Core1ToSM_DMem st
+      | SM.fromCore1_Enc st => Core1ToSM_Enc st
       | SM.toCore1_IMem st => SMToCore1_IMem st
       | SM.toCore1_DMem st => SMToCore1_DMem st
       (* SM <-> Mem *)
@@ -615,6 +922,9 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
       | SM.fromMem0_DMem st => MemToSM0_DMem st
       | SM.fromMem1_IMem st => MemToSM1_IMem st
       | SM.fromMem1_DMem st => MemToSM1_DMem st
+      (* pc *)
+      | SM.pc_core0 => pc0
+      | SM.pc_core1 => pc1
       (* purge *)
       | SM.purge_core0 => purge_core0
       | SM.purge_core1 => purge_core1

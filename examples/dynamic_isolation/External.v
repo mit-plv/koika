@@ -151,5 +151,19 @@ Module External <: External_sig.
 End External.
 
 Module EnclaveParams <: EnclaveParameters.
+  Import Common.
+  Definition enclave_base (eid: enclave_id) : addr_t :=
+    match eid with
+    | Enclave0 => Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0
+    | Enclave1 => Ob~0~0~0~0~0~0~0~0~0~0~0~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0
+    | Enclave2 => Ob~0~0~0~0~0~0~0~0~0~0~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0
+    | Enclave3 => Ob~0~0~0~0~0~0~0~0~0~0~1~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0
+    end.
+
+  Definition enclave_size (eid: enclave_id) : bits_t 32 :=
+    Ob~0~0~0~0~0~0~0~0~0~0~0~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0.
+
+  Definition enclave_bootloader_addr (eid: enclave_id) : addr_t :=
+    enclave_base eid.
 
 End EnclaveParams.

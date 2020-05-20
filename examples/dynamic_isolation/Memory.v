@@ -22,11 +22,6 @@ Module CacheTypes.
   Import Common.
   Import External.
 
-  Inductive ind_cache_type :=
-  | CacheType_Imem
-  | CacheType_Dmem
-  .
-
   Definition cache_mem_req :=
     {| struct_name := "cache_mem_req";
        struct_fields := [("core_id" , bits_t 1);
@@ -436,7 +431,7 @@ End MessageRouter.
 
 Module Type CacheParams.
   Parameter _core_id : Common.ind_core_id.
-  Parameter _cache_type : CacheTypes.ind_cache_type.
+  Parameter _cache_type : Common.ind_cache_type.
 End CacheParams.
 
 Module Cache (Params: CacheParams).
@@ -1685,6 +1680,7 @@ Module WIPMemory <: Memory_sig External.
           end` }} .
 
   Section SystemRules.
+    (* TODO: stop duplicating *)
     Definition memCore0I : uaction reg_t ext_fn_t :=
       let fromMem := fromIMem0 in
       let toMem := toIMem0 in
@@ -1749,7 +1745,7 @@ Module WIPMemory <: Memory_sig External.
       let fromMem := fromIMem1 in
       let toMem := toIMem1 in
       {{
-          guard(read1(purge1) == enum purge_state {| Ready |});
+          guard(read0(purge1) == enum purge_state {| Ready |});
           let get_ready := fromMem.(MemResp.can_enq)() in
           let put_request_opt := toMem.(MemReq.peek)() in
           let put_request := get(put_request_opt, data) in
@@ -1779,7 +1775,7 @@ Module WIPMemory <: Memory_sig External.
       let fromMem := fromDMem1 in
       let toMem := toDMem1 in
       {{
-          guard(read1(purge1) == enum purge_state {| Ready |});
+          guard(read0(purge1) == enum purge_state {| Ready |});
           let get_ready := fromMem.(MemResp.can_enq)() in
           let put_request_opt := toMem.(MemReq.peek)() in
           let put_request := get(put_request_opt, data) in
@@ -1805,7 +1801,21 @@ Module WIPMemory <: Memory_sig External.
 
     Definition tc_memCore1D := tc_rule R Sigma memCore1D <: rule.
 
-    
+    (* TODO *)
+    Definition purge_placeholder (core: ind_core_id) : uaction reg_t ext_fn_t :=
+      let purge_reg := match core with | CoreId0 => purge0 | CoreId1 => purge1 end in
+      {{
+          let purge := read0(purge_reg) in
+          if (purge == enum purge_state {| Purging |}) then
+            write0(purge_reg, enum purge_state {| Purged |})
+          else if (purge == enum purge_state {| Restart |}) then
+            write0(purge_reg, enum purge_state {| Ready |})
+          else fail
+      }}.
+
+    Definition tc_purge0 := tc_rule R Sigma (purge_placeholder CoreId0) <: rule.
+    Definition tc_purge1 := tc_rule R Sigma (purge_placeholder CoreId1) <: rule.
+
     (*
     Definition do_purge0 : uaction reg_t ext_fn_t :=
       {{
@@ -1824,6 +1834,8 @@ Module WIPMemory <: Memory_sig External.
     | SysRl_MemCore0D
     | SysRl_MemCore1I
     | SysRl_MemCore1D
+    | SysRl_Purge0
+    | SysRl_Purge1
     .
 
     Definition system_rules (rl: SystemRule) : rule :=
@@ -1832,10 +1844,13 @@ Module WIPMemory <: Memory_sig External.
       | SysRl_MemCore0D => tc_memCore0D
       | SysRl_MemCore1I => tc_memCore1I
       | SysRl_MemCore1D => tc_memCore1D
+      | SysRl_Purge0 => tc_purge0
+      | SysRl_Purge1 => tc_purge1
       end.
 
     Definition internal_system_schedule : Syntax.scheduler pos_t SystemRule :=
-      SysRl_MemCore0I |> SysRl_MemCore0D |> SysRl_MemCore1I |> SysRl_MemCore1D |> done.
+      SysRl_MemCore0I |> SysRl_MemCore0D |> SysRl_MemCore1I |> SysRl_MemCore1D |>
+                         SysRl_Purge0 |> SysRl_Purge1 |> done.
 
   End SystemRules.
 
