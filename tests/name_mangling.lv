@@ -22,7 +22,7 @@
   ::_renamed_ 2'0
   ::_renamed__renamed_ 2'1)
 
-(module mangling
+(module name_mangling
   (register this 10'0)
 
   (rule __)

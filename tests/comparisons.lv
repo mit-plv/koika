@@ -1,6 +1,6 @@
 ;;; Unit tests for comparison operators
 
-(module test
+(module comparisons
   (register rlt 1'b0)
   (register rle 1'b0)
   (register rgt 1'b0)
