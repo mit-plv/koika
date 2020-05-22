@@ -1,6 +1,6 @@
 (*! Definition of a pipelined schedule !*)
 Require Import Koika.Frontend.
-Require Import RV.RVCore.
+Require Import rv.RVCore.
 
 Definition rv_schedule : scheduler :=
   Writeback |> Execute |> StepMultiplier |> Decode |> WaitImem |> Fetch |> Imem |> Dmem |> Tick |> done.

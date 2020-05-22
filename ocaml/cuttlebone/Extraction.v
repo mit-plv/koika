@@ -11,7 +11,7 @@ Require Koika.Common
         Koika.Interop.
 
 (* Unset Extraction SafeImplicits. *)
-Extraction "extracted.ml"
+Extraction "extr.ml"
            EqDec.EqDec
            FiniteType.FiniteType Member.mem Member.mmap
            PeanoNat.Nat.log2_up

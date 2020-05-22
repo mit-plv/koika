@@ -1,7 +1,9 @@
 (coq.theory
- (name Examples)
+ (name examples)
  (modules :standard)
- (flags -R ../coq/ Koika))
+ (theories Koika))
+
+(dirs :standard _objects)
 
 (env
  (dev (flags (:standard -w -39))))

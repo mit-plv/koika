@@ -1,7 +1,7 @@
 (*! Proof of correctness of the multiplier module !*)
 
 Require Import Koika.Frontend Koika.Std Koika.ProgramTactics.
-Require Export RV.Multiplier.
+Require Export rv.Multiplier.
 Require Import Lia.
 
 Module MultiplierProofs.

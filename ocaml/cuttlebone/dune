@@ -6,10 +6,7 @@
  ;; -deprecated when we drop support for OCaml 4.07.
  (flags (:standard -w -39 -w -3)))
 
-;; (rule
-;;  (targets "coq.ml" "coq.mli")
-;;  (deps "../../coq/Extraction.vo")
-;;  (action
-;;   (progn
-;;    (run cp "../../coq/extracted.ml" "./extr.ml")
-;;    (run cp "../../coq/extracted.mli" "./extr.mli"))))
+(coq.extraction
+ (prelude Extraction)
+ (extracted_modules extr)
+ (theories Koika))

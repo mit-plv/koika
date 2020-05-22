@@ -12,20 +12,15 @@ default: all
 # Coq #
 #######
 
-# FIXME: These ‘cp’ calls shouldn't be needed; see
-# https://discuss.ocaml.org/t/4462/
 coq:
 	@printf "\n== Building Coq library ==\n"
-	@rm -f ${COQ_BUILD_DIR}/Extraction.vo
-	dune build coq/Extraction.vo coq/Frontend.vo coq/Std.vo
-	@cp ${COQ_BUILD_DIR}/extracted.ml ocaml/cuttlebone/extr.ml
-	@cp ${COQ_BUILD_DIR}/extracted.mli ocaml/cuttlebone/extr.mli
+	dune build @@coq/all
 
 coq-all:
 	@printf "\n== Building Coq proofs ==\n"
 	dune build @coq/all
 
-CHECKED_MODULES ?= OneRuleAtATime Correctness
+CHECKED_MODULES ?= OneRuleAtATime CompilerCorrectness/Correctness
 checked_paths := $(patsubst %,$(COQ_BUILD_DIR)/%.vo,$(CHECKED_MODULES))
 
 coq-check: coq-all
@@ -37,24 +32,15 @@ coq-check: coq-all
 # OCaml #
 #########
 
-# FIXME: The ‘coq’ dependency is because dune doesn't track the dependency on
-# Extraction.vo at the moment.  See https://github.com/ocaml/dune/issues/2178.
-ocaml: coq
+ocaml:
 	@printf "\n== Building OCaml library and executables ==\n"
-	dune build ocaml/cuttlec.exe ocaml/cuttlec.bc @install
+	dune build @ocaml/install
 
 .PHONY: ocaml
 
 ####################
 # Examples & tests #
 ####################
-
-# Dune can't track multi-library Coq dependencies, so the dependency from
-# ‘examples/*.v’ on ‘coq/’ isn't captured.  The setup below replaces ‘coqdep’
-# with a custom script ‘etc/coqdep’ to work around this problem.
-export COQDEP := $(shell which coqdep)
-export COQDEP_BUILD_DIR := $(shell pwd)/$(COQ_BUILD_DIR)
-export PATH := $(realpath etc):$(PATH)
 
 # The setup below generates one Makefile rule per target.  It uses canned rules
 # and eval because patterns like ‘%1/_objects/%2.v/: %1/%2.v’ aren't supported.
@@ -140,7 +126,7 @@ dune-all: coq ocaml
 	@printf "\n== Completing full build ==\n"
 	dune build @all
 
-all: coq ocaml examples tests dune-all readme
+all: coq ocaml examples tests dune-all readme;
 
 clean: clean-tests clean-examples
 	dune clean

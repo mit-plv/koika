@@ -3,9 +3,9 @@ Require Import Koika.Frontend.
 Require Import Coq.Lists.List.
 
 Require Import Koika.Std.
-Require Import RV.RVEncoding.
-Require Import RV.Scoreboard.
-Require Import RV.Multiplier.
+Require Import rv.RVEncoding.
+Require Import rv.Scoreboard.
+Require Import rv.Multiplier.
 
 Section RV32Helpers.
   Context {reg_t: Type}.

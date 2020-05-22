@@ -1,4 +1,5 @@
 (coq.theory
- (name rv)
+ (package koika)
+ (name Koika.CompilerCorrectness)
  (modules :standard)
  (theories Koika))

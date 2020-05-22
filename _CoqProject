@@ -1,4 +1,4 @@
 -R _build/default/coq/ Koika
--Q _build/default/tests/ Tests
--Q _build/default/examples/ Examples
--R _build/default/examples/rv RV
+-Q _build/default/tests/ tests
+-Q _build/default/examples/ examples
+-R _build/default/examples/rv rv

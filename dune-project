@@ -1,5 +1,5 @@
-(lang dune 1.10)
-(using coq 0.1)
+(lang dune 2.5)
+(using coq 0.2)
 
 (generate_opam_files true)
 (allow_approximate_merlin)

@@ -1,5 +1,5 @@
 (*! End-to-end correctness theorem !*)
-Require Import Koika.CircuitCorrectness Koika.LoweringCorrectness.
+Require Import Koika.CompilerCorrectness.CircuitCorrectness Koika.CompilerCorrectness.LoweringCorrectness.
 Require Import Koika.Common Koika.Types Koika.Environments Koika.Logs.
 Require Import Koika.Lowering Koika.CircuitGeneration Koika.CircuitOptimization Koika.Compiler.
 
