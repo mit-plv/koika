@@ -1,0 +1,66 @@
+;; -*- dune -*-
+
+;; Dune doesn't have full support for directory targets yet; when it does, we'll
+;; likely want to use it to call cuttlec, and then we'll use something like a
+;; simplified version of the rules below
+
+;; -*- dune -*-
+(subdir "_objects/{module_name}.v"
+ (rule
+ (mode (promote (until-clean)))
+ (deps
+  (:ml {module_name}.ml)
+  (:mli {module_name}.mli))
+ (targets
+  {module_name}.kpkg
+  {module_name}.cpp
+  {module_name}.hpp
+  {module_name}.verilator.cpp
+  {module_name}.v
+  {module_name}.dot
+  cuttlesim.hpp
+  verilator.hpp
+  Makefile)
+ (action
+  (chdir %{{workspace_root}}
+   (run cuttlec %{{ml}} -T all -o {objdir}))))
+
+;; -*- dune -*-
+(subdir "_objects/{module_name}.lv"
+ (rule
+ (mode (promote (until-clean)))
+ (deps
+  (:lv ../../{module_name}.lv))
+ (targets
+  {module_name}.cpp
+  {module_name}.hpp
+  {module_name}.verilator.cpp
+  {module_name}.v
+  {module_name}.dot
+  {module_name}_coq.v
+  cuttlesim.hpp
+  verilator.hpp
+  Makefile)
+ (action
+  (chdir %{{workspace_root}}
+   (progn
+    (run cuttlec %{{lv}} -T all -o {objdir})))))
+
+;; Having just a directory as output doesn't work, because promoting a directory doesn't work
+;; Making all files in etc into targets doesn't work, since targets must be in the current directory
+;; Making a hierarchy of subdirs doesn't work, because the subdirs need to be created beforehand
+;; Just make configure copy the etc dirs as it creates the _object dirs?  Dune wouldn't touch them and they wouldn't need to be in the dune file
+;; Use hardlinks for that.  The problem is that now generated code will overwrite handwritten code that was copied from etc/, and worse, the hardlinking means that the overwriting will also change the original file.
+
+;; FIXME: the form below should work, but directory targets can't be promoted
+;; at the moment (https://github.com/ocaml/dune/pull/3504).
+;; (subdir "_objects/"
+;;  (rule
+;;  (mode (promote (until-clean)))
+;;  (deps ../{module_name}.lv)
+;;  (targets {module_name}.lv)
+;;  (action
+;;   (chdir %{{workspace_root}}
+;;    (run cuttlec %{{deps}} -T all -o %{{targets}})))))
+
+;; To make this work we'd also need to make sure that ‘dune exec -- ocamlfind query -qe -qo koika’ doesn't fail when called by Dune (it currently does, because it doesn't run @install first.

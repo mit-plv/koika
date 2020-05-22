@@ -3,8 +3,8 @@ BUILD_DIR := _build/default
 COQ_BUILD_DIR := ${BUILD_DIR}/coq
 OCAML_BUILD_DIR := ${BUILD_DIR}/ocaml
 
-VERBOSE ?=
-verbose := $(if $(VERBOSE),,@)
+V ?=
+verbose := $(if $(V),,@)
 
 default: all
 
@@ -17,7 +17,7 @@ coq:
 	dune build @@coq/all
 
 coq-all:
-	@printf "\n== Building Coq proofs ==\n"
+	@printf "\n== Building Coq library and proofs ==\n"
 	dune build @coq/all
 
 CHECKED_MODULES ?= OneRuleAtATime CompilerCorrectness/Correctness
@@ -34,7 +34,7 @@ coq-check: coq-all
 
 ocaml:
 	@printf "\n== Building OCaml library and executables ==\n"
-	dune build @ocaml/install
+	dune build ocaml/cuttlec.exe @install
 
 .PHONY: ocaml
 
@@ -50,16 +50,14 @@ ocaml:
 target_directory = $(dir $(1))_objects/$(notdir $(1))
 target_directories = $(foreach fname,$(1),$(call target_directory,$(fname)))
 
-# Create output directory
 define cuttlec_recipe_prelude =
 	@printf "\n-- Compiling %s --\n" "$<"
-	@mkdir -p "$@"
 endef
 
-# Copy additional example-specific files and execute follow-ups if any
+# Execute follow-ups if any
 define cuttlec_recipe_coda =
-	$(verbose)if [ -d $<.etc ]; then cp -r $<.etc/* "$@"; fi
-	$(verbose)if [ -d $(dir $<)etc ]; then cp -r $(dir $<)etc/* "$@"; fi
+	$(verbose)if [ -d $<.etc ]; then cp -rf $<.etc/. -t "$@"; fi
+	$(verbose)if [ -d $(dir $<)etc ]; then cp -rf $(dir $<)etc/. -t "$@"; fi
 	$(verbose)if [ -f "$@/Makefile" ]; then $(MAKE) -C "$@"; fi
 endef
 
@@ -71,14 +69,13 @@ endef
 
 # Compile a .v file
 define cuttlec_v_recipe_body =
-	@rm -f "${BUILD_DIR}/$(<:.v=.vo)"
-	dune build "$(<:.v=.vo)"
-	dune exec -- cuttlec "${BUILD_DIR}/$(<:.v=.ml)" -T all -o "$@"
+	dune build "$@/$(notdir $(<:.v=.ml))"
+	dune exec -- cuttlec "${BUILD_DIR}/$@/$(notdir $(<:.v=.ml))" -T all -o "$@"
 endef
 
 define cuttlec_lv_template =
 $(eval dirpath := $(call target_directory,$(1)))
-$(dirpath) $(dirpath)/: $(1) ocaml
+$(dirpath) $(dirpath)/: $(1) ocaml | configure
 	$(value cuttlec_recipe_prelude)
 	$(value cuttlec_lv_recipe_body)
 	$(value cuttlec_recipe_coda)
@@ -86,7 +83,7 @@ endef
 
 define cuttlec_v_template =
 $(eval dirpath := $(call target_directory,$(1)))
-$(dirpath) $(dirpath)/: $(1) ocaml
+$(dirpath) $(dirpath)/: $(1) ocaml | configure
 	$(value cuttlec_recipe_prelude)
 	$(value cuttlec_v_recipe_body)
 	$(value cuttlec_recipe_coda)
@@ -95,6 +92,9 @@ endef
 TESTS := $(wildcard tests/*.lv) $(wildcard tests/*.v)
 EXAMPLES := $(wildcard examples/*.lv) $(wildcard examples/*.v) examples/rv/rv32i.v examples/rv/rv32e.v
 
+configure:
+	etc/configure $(filter %.v,${TESTS} ${EXAMPLES})
+
 $(foreach fname,$(filter %.lv, $(EXAMPLES) $(TESTS)),\
 	$(eval $(call cuttlec_lv_template,$(fname))))
 $(foreach fname,$(filter %.v, $(EXAMPLES) $(TESTS)),\
@@ -102,15 +102,15 @@ $(foreach fname,$(filter %.v, $(EXAMPLES) $(TESTS)),\
 
 examples: $(call target_directories,$(EXAMPLES));
 clean-examples:
-	find examples/ -type d -name _objects -exec rm -r {} +
+	find examples/ -type d -name _objects -exec rm -rf {} +
 	rm -rf ${BUILD_DIR}/examples
 
 tests: $(call target_directories,$(TESTS));
 clean-tests:
-	find tests/ -type d -name _objects -exec rm -r {} +
+	find tests/ -type d -name _objects -exec rm -rf {} +
 	rm -rf ${BUILD_DIR}/tests
 
-.PHONY: examples clean-examples tests clean-tests
+.PHONY: configure examples clean-examples tests clean-tests
 
 #################
 # Whole project #

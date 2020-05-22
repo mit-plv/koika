@@ -91,4 +91,3 @@ Module Collatz.
 End Collatz.
 
 Definition prog := Interop.Backends.register Collatz.package.
-Extraction "collatz.ml" prog.

@@ -230,6 +230,7 @@ let run_cli expect_errors src_fpath dst_dpath output_specs =
   let _, frontend = frontend_of_path src_fpath in
   let backends = Base.List.concat_map ~f:(parse_output_spec frontend) output_specs in
   let dst_dpath = Base.Option.value dst_dpath ~default:(Filename.dirname src_fpath) in
+  Unix.mkdir dst_dpath 0o775;
   run frontend backends { cnf_src_fpath = src_fpath;
                           cnf_dst_dpath = dst_dpath };
   exit true

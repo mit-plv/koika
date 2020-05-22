@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+## Generate dune files for examples/ and tests/
+
+import sys
+from os import path, makedirs
+from subprocess import check_call
+
+SCRIPT_DIR = path.dirname(path.realpath(__file__))
+SEPARATOR = "\n;; --- DO NOT EDIT BELOW THIS LINE (use ‘make configure’) ---\n"
+
+# def hardlink(src, dst):
+#     src, dst = path.join(path.normpath(src), "."), path.normpath(dst)
+#     if path.isdir(src):
+#         print("{} → {}".format(src, dst))
+#         check_call(["cp", "--force", "--recursive", src, "-t", dst])
+
+# def prepare_assets(dirpath, fname, objdir):
+#     makedirs(objdir, exist_ok=True)
+#     hardlink(path.join(dirpath, "etc"), objdir)
+#     hardlink(path.join(dirpath, fname + ".etc"), objdir)
+
+def gen_subdirs(dirpath, theory, templates, fnames):
+    """Format a single dune ``subdir`` stanza for a given `file`."""
+    for fname in fnames:
+        objdir = path.join(dirpath, "_objects", fname)
+        module_name, fext = path.splitext(fname)
+        # prepare_assets(dirpath, fname, objdir)
+        makedirs(objdir, exist_ok=True)
+        yield templates[fext].format_map({
+            "objdir": objdir,
+            "module_name": module_name,
+            "theory": theory })
+
+def dune_contents(dune_path):
+    try:
+        with open(dune_path) as f:
+            contents = f.read()
+        endpos = contents.find(SEPARATOR)
+        return contents[:endpos] if endpos >= 0 else contents
+    except FileNotFoundError:
+        return ""
+
+# Included files cannot contain ‘subdir’ forms, so modify ‘dune’ in place
+def gen_dune(templates, dirpath, fnames):
+    """Create a ``dune.inc`` file in `dirpath` covering all `fnames`."""
+    theory = path.basename(dirpath)
+    forms = gen_subdirs(dirpath, theory, templates, fnames)
+    dune = path.join(dirpath, "dune")
+    contents = dune_contents(dune)
+    with open(dune, mode="w") as dunefile:
+        dunefile.write(contents)
+        dunefile.write(SEPARATOR)
+        dunefile.write("(dirs :standard _objects)\n")
+        for form in forms:
+            dunefile.write("\n\n" + form)
+
+def fread(fname):
+    with open(path.join(SCRIPT_DIR, fname)) as fl:
+        return fl.read()
+
+def gen_objdirs(files):
+    """Generate ``dune.inc`` files for all files in `files`."""
+    templates = {}
+    for ext in (".v", ".lv"):
+        templates[ext] = fread("dune{}.template".format(ext))
+
+    by_directory = {}
+    for fpath in files:
+        dirpath, fname = path.split(fpath)
+        by_directory.setdefault(dirpath, []).append(fname)
+
+    for dirpath, fnames in by_directory.items():
+        gen_dune(templates, dirpath, fnames)
+
+if __name__ == '__main__':
+    gen_objdirs(sys.argv[1:])

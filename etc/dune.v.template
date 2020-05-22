@@ -1,0 +1,10 @@
+;; -*- dune -*-
+(subdir "_objects/{module_name}.v"
+ (rule (write-file "{module_name}_extr.v"
+                   "Require Coq.extraction.Extraction {theory}.{module_name}.
+Extraction \"{module_name}.ml\" {module_name}.prog."))
+ (coq.extraction
+  (prelude {module_name}_extr)
+  (extracted_modules {module_name})
+  (theories Koika {theory})
+  (flags "-w" "-overriding-logical-loadpath")))
