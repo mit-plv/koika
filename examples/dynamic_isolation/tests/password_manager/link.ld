@@ -9,9 +9,11 @@ _ORIGIN1 = 0x00100000;
 _ORIGIN2 = 0x00200000;
 _ORIGIN3 = 0x00300000;
 
-_fstack0 = _MEMSIZE - 4;
-_fstack1 = _ORIGIN1 + (_MEMSIZE - 4);
-_fstack2 = _ORIGIN2 + (_MEMSIZE - 4);
+_fstack0 = _MEMSIZE - 16;
+_fstack1 = _ORIGIN1 + (_MEMSIZE - 16);
+_fstack2 = _ORIGIN2 + (_MEMSIZE - 16);
+
+_glbl0 = _MEMSIZE - 12;
 
 
 MEMORY {
@@ -46,7 +48,7 @@ SECTIONS
   .text.enclave2.bootloader2 : { *(.text.enclave2.bootloader) } > mem2
   .text.enclave2 : { enclave2.o(.text .text.*) } > mem2
   .text.mmio2 : { multicore_mmio2.o(.text .text.*) } > mem2
-  .enc2 : { null.o } > mem2
+  .enclave2 : { enclave2.o } > mem2
   .mmio2 : { multicore_mmio2.o } > mem2
 
    .text : { *(.text .text.*) } > mem3

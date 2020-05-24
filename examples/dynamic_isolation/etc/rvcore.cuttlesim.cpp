@@ -216,7 +216,9 @@ struct bram {
       }};
     }
 
+#if MEM_DEBUG
     printf("MainStore: return nothing\n");
+#endif // MEM_DEBUG
     return std::optional<struct_mem_resp>{std::nullopt};
 
   }

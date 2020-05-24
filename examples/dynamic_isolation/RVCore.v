@@ -164,6 +164,12 @@ Section RV32Helpers.
                     end)
             return default: Ob~0
             end
+          | #opcode_CUSTOM0 =>
+            match get(fields, funct3) with
+            | #funct3_SET_ENCLAVE =>
+              ((get(fields, funct7) ++ get(fields, rs2)) == Ob~0~0~0~0~0~0~0~0~0~0~0~0)
+            return default: Ob~0
+            end
           return default: Ob~0
           end
     }}.
@@ -636,7 +642,8 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
 
   Definition execute : uaction reg_t ext_fn_t :=
     {{
-        guard(read0(purge) == enum purge_state {| Ready |});
+        guard(read0(purge) == enum purge_state {| Ready |} &&
+              !read0(internal freeze_fetch));
         let decoded_bookkeeping := (__internal__ d2e).(fromDecode.deq)() in
         if get(decoded_bookkeeping, epoch) == read0(internal epoch) then
           (* By then we guarantee that this instruction is correct-path *)
@@ -698,7 +705,8 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
                                                  size := size;
                                                  offset := offset;
                                                  newrd := data;
-                                                 dInst := get(decoded_bookkeeping, dInst)
+                                                 dInst := get(decoded_bookkeeping, dInst);
+                                                 eid := eid
                                                |} in
              (__internal__ e2w).(fromExecute.enq)(execute_bookkeeping))
         else
@@ -915,6 +923,7 @@ Module RV32I (EnclaveParams: EnclaveParameters) (CoreParams: CoreParameters)
            write0(internal instr_count, |32`d0|);
            (* epoch *)
            write0(internal epoch, Ob~0);
+           write0(internal freeze_fetch, Ob~0);
            write0(purge, enum purge_state {| Purged |})
          else if (purge_st == enum purge_state {| Restart |}) then
            write0(purge, enum purge_state {| Ready |})

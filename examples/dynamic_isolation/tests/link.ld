@@ -17,10 +17,10 @@ MEMORY {
 
 SECTIONS
 {
-  . = 0x00000000;
   .text.init : { *(.text.init) } > bram
   .text : { *(.text) } > bram
   .data : { *(.data) } > bram
   .bss : { *(.bss) } > bram
+
   _end = .;
 }

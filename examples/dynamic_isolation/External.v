@@ -164,6 +164,11 @@ Module EnclaveParams <: EnclaveParameters.
     Ob~0~0~0~0~0~0~0~0~0~0~0~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0.
 
   Definition enclave_bootloader_addr (eid: enclave_id) : addr_t :=
-    enclave_base eid.
+    match eid with
+    | Enclave0 => Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1~0~0~0~0~0~0~0~0~0~0~0~0
+    | Enclave1 => Ob~0~0~0~0~0~0~0~0~0~0~0~1~0~0~0~0~0~0~0~1~0~0~0~0~0~0~0~0~0~0~0~0
+    | Enclave2 => Ob~0~0~0~0~0~0~0~0~0~0~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0
+    | Enclave3 => Ob~0~0~0~0~0~0~0~0~0~0~1~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0
+    end.
 
 End EnclaveParams.

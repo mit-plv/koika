@@ -705,7 +705,7 @@ Module Cache (Params: CacheParams).
                              else {invalid data_t}()) in
             toMem.(MessageFifo1.enq_resp)(struct cache_mem_resp {| core_id := (#core_id);
                                                                    cache_type := (`UConst (cache_type)`);
-                                                                   addr := addr; (* CHECK *)
+                                                                   addr := get(row,tag) ++ index ++ Ob~0~0;
                                                                    MSI_state := enum MSI {| I |};
                                                                    data := data_opt |});
               (* TODO: should this be a write *)
@@ -814,7 +814,6 @@ Module Cache (Params: CacheParams).
                                                               curIndex := index + |12`d1| |})
     }}.
     *)
-
   Definition can_send_req : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun can_send_req () : bits_t 1 =>
          let mshr := read0(internal MSHR) in
@@ -837,6 +836,12 @@ Module Cache (Params: CacheParams).
   Definition resp: UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun resp () : struct_t mem_resp =>
          (__internal__ responsesQ).(MemResp.deq)()
+    }}.
+
+  Definition is_ready: UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun is_ready () : bits_t 1 =>
+         let mshr := read0(internal MSHR) in
+         get(mshr, mshr_tag) == enum mshr_tag {| Ready |}
     }}.
 
   (*
@@ -1802,19 +1807,51 @@ Module WIPMemory <: Memory_sig External.
     Definition tc_memCore1D := tc_rule R Sigma memCore1D <: rule.
 
     (* TODO *)
-    Definition purge_placeholder (core: ind_core_id) : uaction reg_t ext_fn_t :=
-      let purge_reg := match core with | CoreId0 => purge0 | CoreId1 => purge1 end in
+    Definition purge_placeholder0 : uaction reg_t ext_fn_t :=
+      let purge_reg := purge0 in
       {{
           let purge := read0(purge_reg) in
           if (purge == enum purge_state {| Purging |}) then
-            write0(purge_reg, enum purge_state {| Purged |})
+            (if (`core0_imem_lift`).(Core0IMem.can_recv_resp)() then
+              ignore((`core0_imem_lift`).(Core0IMem.resp)())
+             else pass);
+            (if (`core0_dmem_lift`).(Core0DMem.can_recv_resp)() then
+              ignore((`core0_dmem_lift`).(Core0DMem.resp)())
+             else pass);
+            (* TODO: placeholder until purge is actually implemented *)
+            if (`core0_imem_lift`).(Core0IMem.is_ready)() &&
+               (`core0_dmem_lift`).(Core0DMem.is_ready)() then
+              write0(purge_reg, enum purge_state {| Purged |})
+            else pass
           else if (purge == enum purge_state {| Restart |}) then
             write0(purge_reg, enum purge_state {| Ready |})
           else fail
       }}.
 
-    Definition tc_purge0 := tc_rule R Sigma (purge_placeholder CoreId0) <: rule.
-    Definition tc_purge1 := tc_rule R Sigma (purge_placeholder CoreId1) <: rule.
+    Definition tc_purge0 := tc_rule R Sigma (purge_placeholder0) <: rule.
+
+    Definition purge_placeholder1 : uaction reg_t ext_fn_t :=
+      let purge_reg := purge1 in
+      {{
+          let purge := read0(purge_reg) in
+          if (purge == enum purge_state {| Purging |}) then
+            (if (`core1_imem_lift`).(Core1IMem.can_recv_resp)() then
+              ignore((`core1_imem_lift`).(Core1IMem.resp)())
+             else pass);
+            (if (`core1_dmem_lift`).(Core1DMem.can_recv_resp)() then
+              ignore((`core1_dmem_lift`).(Core1DMem.resp)())
+             else pass);
+            (* TODO: placeholder until purge is actually implemented *)
+            if (`core1_imem_lift`).(Core1IMem.is_ready)() &&
+               (`core1_dmem_lift`).(Core1DMem.is_ready)() then
+              write0(purge_reg, enum purge_state {| Purged |})
+            else pass
+          else if (purge == enum purge_state {| Restart |}) then
+            write0(purge_reg, enum purge_state {| Ready |})
+          else fail
+      }}.
+
+    Definition tc_purge1 := tc_rule R Sigma (purge_placeholder1) <: rule.
 
     (*
     Definition do_purge0 : uaction reg_t ext_fn_t :=

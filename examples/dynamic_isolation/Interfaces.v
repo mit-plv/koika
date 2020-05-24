@@ -223,8 +223,8 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
                   let size := Params.enclave_size Enclave0 in
                   ((eid, (addr_min, (size, tt))))
     | einc_data1 => let eid := Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1 in
-                   let addr_min := Params.enclave_base Enclave2 in
-                   let size := Params.enclave_size Enclave2 in
+                   let addr_min := Params.enclave_base Enclave1 in
+                   let size := Params.enclave_size Enclave1 in
                    ((eid, (addr_min, (size, tt))))
     end.
 
@@ -293,6 +293,7 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
     | internal st => R_internal st
     end.
 
+  (*
   Definition r (idx: reg_t) : R idx :=
     match idx with
     | fromCore0_IMem st => MemReq.r st
@@ -315,14 +316,15 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
     | fromMem0_DMem st => MemResp.r st
     | fromMem1_IMem st => MemResp.r st
     | fromMem1_DMem st => MemResp.r st
-    | pc_core0 => Bits.zero
-    | pc_core1 => Bits.zero
+    | pc_core0 => Params0.initial_pc
+    | pc_core1 => Params1.initial_pc
     | purge_core0 => value_of_bits (Bits.zero)
     | purge_core1 => value_of_bits (Bits.zero)
     | purge_mem0 => value_of_bits (Bits.zero)
     | purge_mem1 => value_of_bits (Bits.zero)
     | internal st => r_internal st
     end.
+    *)
 
   Instance FiniteType_reg_t : FiniteType reg_t := _.
 
@@ -387,6 +389,14 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
     | CoreId1 => pc_core1
     end.
 
+  Definition canSwitchToEnc (core: ind_core_id) : UInternalFunction reg_t empty_ext_fn_t :=
+    let other_core := match core with CoreId0 => CoreId1 | CoreId1 => CoreId0 end in
+    let reg_other_enc := lookup_reg_enc_data other_core in
+    {{ fun canSwitchToEnc (eid: bits_t 32) : bits_t 1 =>
+         let other_enc_data := read0(reg_other_enc) in
+         get(other_enc_data, eid) != eid
+    }}.
+
 
   (* TODO: currently another core can switch into the same enclave *)
   Definition sm_update_enclave (core: ind_core_id) : uaction reg_t ext_fn_t :=
@@ -401,13 +411,16 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
          let max_eid := |32`d3| in
          let enclaveRequest := fromCore.(EnclaveReq.deq)() in
          let eid := get(enclaveRequest, eid) in
-         if (eid <= max_eid) then
+         let can_switch_to_eid := {canSwitchToEnc core}(eid) in
+         if (eid <= max_eid && can_switch_to_eid ) then
            write0(reg_enc, eid_to_enc_data(eid));
            write0(reg_limbo, Ob~1)
          else (* drop it *)
            pass
        )
     }}.
+
+  Definition MMIO_UART_ADDRESS := Ob~0~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0.
 
   Definition sm_filter_reqs (core: ind_core_id) (cache: ind_cache_type) : uaction reg_t ext_fn_t :=
     let reg_limbo := lookup_reg_limbo core in
@@ -425,7 +438,8 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
          let enc_data := read0(reg_enc) in
          let addr_min := get(enc_data, addr_min) in
          let addr_max := get(enc_data, size) + addr_min in
-         if addr_min <= address && address < addr_max then
+         let TODO_temp_bypass := address >= #(MMIO_UART_ADDRESS) in
+         if ((addr_min <= address && address < addr_max) ||  TODO_temp_bypass) then
            toMem.(MemReq.enq)(request)
          else pass
     }}.
@@ -446,7 +460,8 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
          let enc_data := read0(reg_enc) in
          let addr_min := get(enc_data, addr_min) in
          let addr_max := get(enc_data, size) + addr_min in
-         if addr_min <= address && address < addr_max then
+         let TODO_temp_bypass := address >= #(MMIO_UART_ADDRESS) in
+         if (addr_min <= address && address < addr_max) || TODO_temp_bypass then
            toCore.(MemResp.enq)(response)
          else pass
     }}.
@@ -464,7 +479,7 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
     }}.
 
   Definition eid_to_bootloader_addr : UInternalFunction reg_t empty_ext_fn_t :=
-    {{ fun eid_to_enc_data (eid: bits_t 32) : bits_t 32 =>
+    {{ fun eid_to_bootloader_addr (eid: bits_t 32) : bits_t 32 =>
          match eid with
          | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0 =>
              #(Params.enclave_bootloader_addr Enclave0)
@@ -477,6 +492,27 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
          return default : |32`d0|
          end
     }}.
+  Definition reset_fifos : UInternalFunction reg_t ext_fn_t :=
+    {{ fun reset_fifos () : bits_t 0 =>
+         fromCore0_IMem.(MemReq.reset)();
+         fromCore0_DMem.(MemReq.reset)();
+         fromCore0_Enc.(EnclaveReq.reset)();
+         toCore0_IMem.(MemResp.reset)();
+         toCore0_DMem.(MemResp.reset)();
+         fromCore1_IMem.(MemReq.reset)();
+         fromCore1_DMem.(MemReq.reset)();
+         fromCore1_Enc.(EnclaveReq.reset)();
+         toCore1_IMem.(MemResp.reset)();
+         toCore1_DMem.(MemResp.reset)();
+         toMem0_IMem.(MemReq.reset)();
+         toMem0_DMem.(MemReq.reset)();
+         toMem1_IMem.(MemReq.reset)();
+         toMem1_DMem.(MemReq.reset)();
+         fromMem0_IMem.(MemResp.reset)();
+         fromMem0_DMem.(MemResp.reset)();
+         fromMem1_IMem.(MemResp.reset)();
+         fromMem1_DMem.(MemResp.reset)()
+    }}.
 
 
   Definition sm_restart_pipeline (core: ind_core_id) : uaction reg_t ext_fn_t :=
@@ -487,8 +523,12 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
     let reg_pc := lookup_reg_pc core in
     {{ if (read0(reg_limbo) && read0(reg_proc_reset) == enum purge_state {| Purged |} &&
            read0(reg_mem_reset) == enum purge_state {| Purged |}) then
+         (* Do resets *)
+         reset_fifos();
+         (* Restart *)
          write0(reg_limbo, Ob~0);
          write0(reg_proc_reset, enum purge_state {| Restart |});
+         write0(reg_mem_reset, enum purge_state {| Restart |});
          let enc_data := read0(reg_enc) in
          let max_eid := |32`d3| in
          let eid := get(enc_data,eid) in
@@ -803,8 +843,8 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
     | purge_core1 => value_of_bits (Bits.zero)
     | purge_mem0 => value_of_bits (Bits.zero)
     | purge_mem1 => value_of_bits (Bits.zero)
-    | pc0 => Bits.zero
-    | pc1 => Bits.zero
+    | pc0 => Params0.initial_pc
+    | pc1 => Params1.initial_pc
     (* Register files *)
     (*
     | core0_rf st => Rf.r st

@@ -228,3 +228,7 @@ Definition rs2_FCVT_W_S := Ob~0~0~0~0~0.
 Definition rs2_FCVT_WU_S := Ob~0~0~0~0~1.
 Definition rs2_FCVT_L_S := Ob~0~0~0~1~0.
 Definition rs2_FCVT_LU_S := Ob~0~0~0~1~1.
+
+(* Custom enclave instructions *)
+Definition opcode_CUSTOM0 := Ob~0~0~0~1~0~1~1.
+Definition funct3_SET_ENCLAVE := Ob~0~0~0.

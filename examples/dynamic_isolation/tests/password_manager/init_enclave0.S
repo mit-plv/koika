@@ -56,7 +56,7 @@ spin:
 #  .text
 #  .align 6
 bootloader:
-  li t0,0x01000000
+  la t0,_glbl0
   lw sp,0(t0) #load t1 in stack
   lw x6,0(sp)
   addi sp,sp,4
@@ -78,11 +78,10 @@ call_main:
 save_enclave_state:
   addi sp,sp,-4
   sw   a0,0(sp) # save next pc
-  li   t0,0x01000000 #sp address
+  la   t0,_glbl0 #sp address
   sw   sp, 0(t0)
   ret
 
-  .globl set_enclave
   .p2align 2
   .type    set_enclave,%function
 
@@ -109,7 +108,7 @@ _lookup:
   addi sp,sp,-4
   sw ra,0(sp)
   mv a2,a0
-  li a0,1
+  li a0,2
   li a1,0
   call set_enclave
   lw ra,0(sp)
@@ -123,7 +122,7 @@ _add_password:
   sw ra,0(sp)
   mv a2,a0
   mv a3,a1
-  li a0,1
+  li a0,2
   li a1,1
   call set_enclave
   lw ra,0(sp)
