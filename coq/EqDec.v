@@ -39,13 +39,22 @@ Proof. econstructor; intros; eapply Vector.eq_dec; apply beq_dec_iff. Defined.
 Instance EqDec_eq_true {A} (f: A -> bool) (a: A) : EqDec (f a = true).
 Proof. constructor; left; apply Eqdep_dec.UIP_dec, eq_dec. Qed.
 
-Lemma eq_rect_eqdec_irrel {A} {EQ: EqDec A} (x: A) (P: A -> Type):
-  forall (px: P x) (y: A) (pr1 pr2: x = y),
+Import EqNotations.
+
+Lemma eq_dec_rew_type_family {T} {EQ: EqDec T} (family: T -> Type):
+  forall (t: T) (Heq: t = t) (a: family t),
+    rew Heq in a = a.
+Proof.
+  intros. apply eq_sym, Eqdep_dec.eq_rect_eq_dec, eq_dec.
+Qed.
+
+Lemma eq_rect_eqdec_irrel {A} {EQ: EqDec A} (x: A) {P: A -> Type} {px: P x} {y: A}:
+  forall (pr2 pr1: x = y),
     eq_rect x P px y pr1 =
     eq_rect x P px y pr2.
 Proof.
   destruct pr1; cbn; intros.
-  apply Eqdep_dec.eq_rect_eq_dec, eq_dec.
+  symmetry; apply eq_dec_rew_type_family.
 Qed.
 
 Lemma eq_dec_refl {A} {EQ: EqDec A}:
