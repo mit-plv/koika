@@ -171,4 +171,8 @@ Module EnclaveParams <: EnclaveParameters.
     | Enclave3 => Ob~0~0~0~0~0~0~0~0~0~0~1~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0
     end.
 
+  Definition shared_mem_base : addr_t := Ob~0~0~0~0~0~0~0~0~0~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0.
+
+  Definition shared_mem_size : bits_t 32 := Ob~0~0~0~0~0~0~0~0~0~0~0~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0.
+
 End EnclaveParams.

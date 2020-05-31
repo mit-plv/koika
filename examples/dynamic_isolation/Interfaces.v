@@ -105,6 +105,7 @@ Module Common.
    
 End Common.
 
+(* TODO: need a well-formed predicate *)
 Module Type EnclaveParameters.
   Parameter enclave_base : Common.enclave_id -> Common.addr_t.
   Parameter enclave_size : Common.enclave_id -> bits_t 32.
@@ -183,7 +184,26 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
   Parameter rule_name_t : Type.
   Parameter rules  : rule_name_t -> rule.
 
-  Axiom schedule : Syntax.scheduler pos_t rule_name_t.
+  Parameter schedule : Syntax.scheduler pos_t rule_name_t.
+
+  Section CoreAxioms.
+
+    Definition state := env_t ContextEnv (fun idx : reg_t => R idx).
+    Definition empty_log : Log R ContextEnv := log_empty.
+
+    Definition update_function (st: state) (log: Log R ContextEnv): Log R ContextEnv :=
+      interp_scheduler' st ? rules log scheduler.
+
+    Definition valid_reset_state (st: state) : Prop :=
+
+
+  End CoreAxioms.
+
+  (* core_id is unchanged *)
+
+  (* Axioms:
+   * - when !in "Ready" state,
+  *)
 
 End Core_sig.
 
@@ -389,6 +409,7 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
     | CoreId1 => pc_core1
     end.
 
+  (* TODO: This is wrong. While in a limbo state, other core can't switch into old enclave until done reset *)
   Definition canSwitchToEnc (core: ind_core_id) : UInternalFunction reg_t empty_ext_fn_t :=
     let other_core := match core with CoreId0 => CoreId1 | CoreId1 => CoreId0 end in
     let reg_other_enc := lookup_reg_enc_data other_core in
@@ -399,6 +420,8 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
 
 
   (* TODO: currently another core can switch into the same enclave *)
+  (* TODO: as written, order matters and there's interference.
+     We should combine the rule so that order doesn't matter *)
   Definition sm_update_enclave (core: ind_core_id) : uaction reg_t ext_fn_t :=
     let reg_limbo := lookup_reg_limbo core in
     let reg_enc := lookup_reg_enc_data core in
@@ -539,51 +562,6 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
        else fail
     }}.
 
-  (*
-  (* Placeholder rule; do nothing *)
-  Definition forward : uaction reg_t ext_fn_t :=
-    {{ (when (fromCore0_IMem.(MemReq.can_deq)() &&
-              toMem0_IMem.(MemReq.can_enq)()) do
-         let req := fromCore0_IMem.(MemReq.deq)() in
-         toMem0_IMem.(MemReq.enq)(req)
-       );
-       (when (fromCore1_IMem.(MemReq.can_deq)() &&
-              toMem1_IMem.(MemReq.can_enq)()) do
-         let req := fromCore1_IMem.(MemReq.deq)() in
-         toMem1_IMem.(MemReq.enq)(req)
-       );
-       (when (fromCore0_DMem.(MemReq.can_deq)() &&
-              toMem0_DMem.(MemReq.can_enq)()) do
-         let req := fromCore0_DMem.(MemReq.deq)() in
-         toMem0_DMem.(MemReq.enq)(req)
-       );
-       (when (fromCore1_DMem.(MemReq.can_deq)() &&
-              toMem1_DMem.(MemReq.can_enq)()) do
-         let req := fromCore1_DMem.(MemReq.deq)() in
-         toMem1_DMem.(MemReq.enq)(req)
-       );
-       (when (fromMem0_IMem.(MemResp.can_deq)() &&
-              toCore0_IMem.(MemResp.can_enq)()) do
-         let req := fromMem0_IMem.(MemResp.deq)() in
-         toCore0_IMem.(MemResp.enq)(req)
-       );
-       (when (fromMem1_IMem.(MemResp.can_deq)() &&
-              toCore1_IMem.(MemResp.can_enq)()) do
-         let req := fromMem1_IMem.(MemResp.deq)() in
-         toCore1_IMem.(MemResp.enq)(req)
-       );
-       (when (fromMem0_DMem.(MemResp.can_deq)() &&
-              toCore0_DMem.(MemResp.can_enq)()) do
-         let req := fromMem0_DMem.(MemResp.deq)() in
-         toCore0_DMem.(MemResp.enq)(req)
-       );
-       (when (fromMem1_DMem.(MemResp.can_deq)() &&
-              toCore1_DMem.(MemResp.can_enq)()) do
-         let req := fromMem1_DMem.(MemResp.deq)() in
-         toCore1_DMem.(MemResp.enq)(req)
-       )
-    }}.
-    *)
   Definition tc_update_enclave0 := tc_rule R Sigma (sm_update_enclave CoreId0) <: rule R Sigma.
   Definition tc_update_enclave1 := tc_rule R Sigma (sm_update_enclave CoreId1) <: rule R Sigma.
 
@@ -663,6 +641,7 @@ Module Type Machine_sig.
   Parameter FiniteType_reg_t : FiniteType reg_t.
   Parameter schedule : Syntax.scheduler pos_t rule_name_t.
   Parameter ext_fn_specs : ext_fn_t -> ext_fn_spec.
+
 End Machine_sig.
 
 Module Type Memory_sig (External: External_sig).
@@ -884,7 +863,7 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
   Definition rule : Type := rule R Sigma.
 
   (* TODO: 40s *)
-  Instance FiniteType_reg_t : FiniteType reg_t := _. 
+  Instance FiniteType_reg_t : FiniteType reg_t := _.
   (* Declare Instance FiniteType_reg_t : FiniteType reg_t.   *)
 
   Instance EqDec_reg_t : EqDec reg_t := _.
@@ -1038,5 +1017,7 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
       core0_schedule ||> core1_schedule ||> sm_schedule ||> mem_schedule.
 
   End Schedule.
+
+  Definition reg_state : Type := env_t ContextEnv (fun idx: reg_t => R idx).
 
 End Machine.

@@ -6,6 +6,8 @@ Require Import DynamicIsolation.Memory.
 Require Import DynamicIsolation.RVCore.
 Require Import DynamicIsolation.TrivialCore.
 
+Require Import DynamicIsolation.Multicore.
+
 Module Params0 <: CoreParameters.
   Definition core_id := Ob~0.
   Definition initial_pc := EnclaveParams.enclave_base Common.Enclave0.

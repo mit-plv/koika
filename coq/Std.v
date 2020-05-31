@@ -123,7 +123,7 @@ Module Fifo1Bypass (f: Fifo).
        read1(data0) }}.
 
   Definition reset: UInternalFunction reg_t empty_ext_fn_t :=
-    {{ fun reset () : T =>
+    {{ fun reset () : bits_t 0 =>
         write1(valid0, Ob~0);
         write1(data0, `UConst (tau := T) (value_of_bits (Bits.zero))`)
     }}.
