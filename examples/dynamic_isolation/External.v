@@ -3,6 +3,7 @@ Require Import Koika.Std.
 
 Require Import DynamicIsolation.Interfaces.
 
+(*
 Module OriginalExternal <: External_sig.
   Import Common.
   Inductive memory := imem | dmem.
@@ -39,7 +40,7 @@ Module OriginalExternal <: External_sig.
   Instance Show_ext_fn_t : Show ext_fn_t := _.
 
 End OriginalExternal.
-
+*)
 
 Module External <: External_sig.
   Import Common.
@@ -147,6 +148,19 @@ Module External <: External_sig.
     end.
 
   Instance Show_ext_fn_t : Show ext_fn_t := _.
+
+  (* TODO: temporary and wrong *)
+  (*
+  Definition sigma (fn: ext_fn_t) : Sig_denote (Sigma fn) :=
+    match fn with
+    | ext_cache _ => fun _ => value_of_bits Bits.zero
+    | ext_mainmem => _
+    | ext_uart_write => _
+    | ext_uart_read => _
+    | ext_led => _
+    | ext_ppp_bookkeeping => _
+    end.
+    *)
 
 End External.
 

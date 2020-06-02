@@ -87,10 +87,16 @@ Module Common.
                         ("put_ready", bits_t 1);
                         ("get_response", struct_t mem_resp)] |}.
 
+  Definition ENUM_purge_restart := Ob~0~0.
+  Definition ENUM_purge_ready := Ob~0~1.
+  Definition ENUM_purge_purging := Ob~1~0.
+  Definition ENUM_purge_purged := Ob~1~1.
+
   Definition purge_state :=
     {| enum_name := "purge_state";
-       enum_members := vect_of_list ["Ready"; "Purging"; "Purged"; "Restart"];
-       enum_bitpatterns := vect_of_list [Ob~0~0; Ob~0~1; Ob~1~0; Ob~1~1] |}.
+       enum_members := vect_of_list ["Restart"; "Ready"; "Purging"; "Purged"];
+       enum_bitpatterns := vect_of_list [ENUM_purge_restart; ENUM_purge_ready; 
+                                         ENUM_purge_purging; ENUM_purge_purged] |}.
 
   Module RfParams <: RfPow2_sig.
     Definition idx_sz := log2 32.
@@ -186,24 +192,126 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
 
   Parameter schedule : Syntax.scheduler pos_t rule_name_t.
 
-  Section CoreAxioms.
-
+  Section CycleSemantics.
     Definition state := env_t ContextEnv (fun idx : reg_t => R idx).
     Definition empty_log : Log R ContextEnv := log_empty.
 
-    Definition update_function (st: state) (log: Log R ContextEnv): Log R ContextEnv :=
-      interp_scheduler' st ? rules log scheduler.
+    Parameter update_function : state -> Log R ContextEnv -> Log R ContextEnv.
+      (* interp_scheduler' st ? rules log scheduler. *)
+
+  End CycleSemantics.
+
+  Section LogHelpers.
+    Definition update_no_writes_to_reg (st: state) (log: Log R ContextEnv) (reg: reg_t) : Prop :=
+      latest_write (update_function st log) reg = latest_write log reg.
+
+  End LogHelpers.
+
+
+  Section CoreAxioms.
+    (* TODO: rf *)
+    Definition internal_reg_reset (st: state) (reg: internal_reg_t) : Prop :=
+      ContextEnv.(getenv) st (internal reg) = r (internal reg).
+
+    Definition reg_reset (st: state) (reg: reg_t) : Prop :=
+      match reg with
+      | pc => True (* don't care *)
+      | purge => True (* don't care *)
+      | internal s => internal_reg_reset st s
+      | _ => ContextEnv.(getenv) st reg = r reg
+      end.
 
     Definition valid_reset_state (st: state) : Prop :=
+      forall reg, reg_reset st reg.
 
+    (* If in Ready/Purged state, not allowed to write to purge *)
+    Inductive purge_state_machine (st: state) (log: Log R ContextEnv): Prop :=
+    | PurgeRestart :
+        forall (purge_state_eq: ContextEnv.(getenv) st purge = ENUM_purge_restart)
+          (no_writes_or_write_ready: 
+             update_no_writes_to_reg st log purge \/
+             latest_write (update_function st log) purge = Some ENUM_purge_ready),
+          purge_state_machine st log
+    | PurgeReady :
+        forall (purge_state_eq: ContextEnv.(getenv) st purge = ENUM_purge_ready)
+          (no_writes: update_no_writes_to_reg st log purge),
+          purge_state_machine st log
+    | PurgePurging :
+        forall (purge_state_eq: ContextEnv.(getenv) st purge = ENUM_purge_purging)
+          (no_writes_or_write_purged: 
+             update_no_writes_to_reg st log purge \/
+             latest_write (update_function st log) purge = Some ENUM_purge_purged
+          ),
+          purge_state_machine st log
+    | PurgePurged :
+        forall (purge_state_eq: ContextEnv.(getenv) st purge = ENUM_purge_purged)
+          (no_writes_to_any_reg: forall reg, update_no_writes_to_reg st log reg),
+          purge_state_machine st log
+    .
+
+    Definition valid_core_id (st: state) : Prop :=
+      ContextEnv.(getenv) st core_id = r core_id.
+
+    Definition valid_state_by_purge (st: state) : Prop :=
+      ContextEnv.(getenv) st purge = ENUM_purge_restart \/
+      ContextEnv.(getenv) st purge = ENUM_purge_purged ->
+      valid_reset_state st.
+
+    Axiom valid_internal_state : state -> Prop.
+
+    Definition valid_input_log (log: Log R ContextEnv) :=
+      log = empty_log.
+
+    Definition valid_state (st: state) : Prop :=
+      valid_core_id st /\
+      valid_state_by_purge st /\
+      valid_internal_state st.
+
+    Axiom valid_state_preserved: 
+      forall (st: state) (log: Log R ContextEnv),
+      valid_state st ->
+      valid_input_log log ->
+      valid_state (commit_update st (update_function st log)).
+
+    (* TODO: and valid_state_preserved after external world effects on FIFO? *)
+
+    (* Core_id is unchanged *)
+    Axiom core_id_unchanged : 
+      forall (st: state) (log: Log R ContextEnv),
+      latest_write (update_function st log) core_id = latest_write log core_id.
+
+    Axiom valid_purge_state_machine :
+      forall (st: state) (log: Log R ContextEnv),
+        purge_state_machine st log.
+
+    (* If we are in a valid state and write Purging->Purged, then we promise to be in a reset state.
+     * This is a stronger statement that we ultimately need, but is easier to phrase/work with.
+     * I think with modules (/being written in a more modular way without register sharing) this will be easier.
+     *)
+    Axiom write_purged_impl_in_reset_state :
+      forall (st: state) (log: Log R ContextEnv),
+      latest_write (update_function st log) purge = Some ENUM_purge_purged ->
+      latest_write log purge <> Some ENUM_purge_purged ->
+      valid_reset_state (commit_update st (update_function st log)).
+
+    (*
+    | ValidSt_Restart :
+        forall (purge_state_eq: ContextEnv.(getenv) st purge = ENUM_purge_restart)
+          (reset_st: valid_reset_state st),
+        valid_state st
+    | ValidSt_Ready :
+        forall (purge_state_eq: ContextEnv.(getenv) st purge = ENUM_purge_ready),
+        valid_state st
+    | ValidSt_Purging :
+        forall (purge_state_eq: ContextEnv.(getenv) st purge = ENUM_purge_purging),
+        valid_state st
+    | ValidSt_Purged :
+        forall (purge_state_eq: ContextEnv.(getenv) st purge = ENUM_purge_purged)
+          (reset_st: valid_reset_state st),
+        valid_state st.
+    *)
 
   End CoreAxioms.
-
-  (* core_id is unchanged *)
-
-  (* Axioms:
-   * - when !in "Ready" state,
-  *)
 
 End Core_sig.
 
