@@ -22,11 +22,11 @@ Installing dependencies and building from source
 
 * OCaml 4.07 through 4.09, `opam <https://opam.ocaml.org/doc/Install.html>`_ 2.0 or later, and GNU make.
 
-* Coq 8.9 or 8.10 (but not 8.11, where notations are broken)::
+* Coq 8.9, 8.10, or 8.11::
 
     opam install coq=8.10.2
 
-* Coq's Ltac2 plugin::
+* Coq's Ltac2 plugin, if using Coq < 8.9 or 8.10 (newer versions have it built-in)::
 
     opam repo add coq-released https://coq.inria.fr/opam/released
     opam install coq-ltac2
@@ -48,7 +48,7 @@ Each directory in ``_objects`` contains `a Makefile <makefile_>`_ to ease furthe
 
 For reproducibility, here is one set of versions known to work:
 
-- OCaml 4.07 with ``opam install base=v0.12.2 coq=8.10.2 coq-ltac2=0.3 core=v0.12.4 dune=1.11.4 hashcons=1.3 parsexp=v0.12.0 stdio=v0.12.0 zarith=1.9.1``
+- OCaml 4.09 with ``opam install base=v0.13.1 coq=8.11.1 core=v0.13.0 dune=2.5.1 hashcons=1.3 parsexp=v0.13.0 stdio=v0.13.0 zarith=1.9.1``
 
 Browsing examples
 -----------------
@@ -71,6 +71,8 @@ Our compiler (``cuttlec``) supports multiple targets:
 - ``verilator`` (a simple C++ driver to simulate the Verilog using Verilator)
 - ``makefile`` (an auto-generated Makefile including convenient targets to debug, profile, trace, or visualize the outputs of your design)
 - ``dot`` (a basic representation of the RTL generated from your design)
+
+For quick experimentation, you can just drop your files in ``examples/`` or ``tests/`` and run ``make examples/_objects/<your-file.v>/``.
 
 Programs written in the Coq EDSL
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -707,14 +709,19 @@ The following list shows the current state of the repo:
 .. begin repo architecture
 
 ``coq/``
+   ``CompilerCorrectness/``
+      (Circuits)
+         - |coq/CompilerCorrectness/CircuitCorrectness.v|_: Compiler correctness proof
+         - |coq/CompilerCorrectness/LoweringCorrectness.v|_: Proof of correctness for the lowering phase
+
+      - |coq/CompilerCorrectness/Correctness.v|_: End-to-end correctness theorem
+
    (Circuits)
-      - |coq/CircuitCorrectness.v|_: Compiler correctness proof
       - |coq/CircuitGeneration.v|_: Compilation of lowered ASTs into RTL circuits
       - |coq/CircuitOptimization.v|_: Local optimization of circuits
       - |coq/CircuitProperties.v|_: Lemmas used in the compiler-correctness proof
       - |coq/CircuitSemantics.v|_: Interpretation of circuits
       - |coq/CircuitSyntax.v|_: Syntax of circuits (RTL)
-      - |coq/LoweringCorrectness.v|_: Proof of correctness for the lowering phase
 
    (Frontend)
       - |coq/Desugaring.v|_: Desugaring of untyped actions
@@ -729,7 +736,6 @@ The following list shows the current state of the repo:
 
    (Interop)
       - |coq/Compiler.v|_: Top-level compilation function and helpers
-      - |coq/Extraction.v|_: Extraction to OCaml (compiler and utilities)
       - |coq/ExtractionSetup.v|_: Custom extraction settings (also used by external |koika| programs
       - |coq/Interop.v|_: Exporting |koika| programs for use with the cuttlec command-line tool
 
@@ -768,9 +774,11 @@ The following list shows the current state of the repo:
       - |coq/Vect.v|_: Vectors and bitvector library
 
    - |coq/BitTactics.v|_: Tactics for proofs about bit vectors
-   - |coq/Correctness.v|_: End-to-end correctness theorem
    - |coq/PrimitiveProperties.v|_: Equations showing how to implement functions on structures and arrays as bitfuns
    - |coq/ProgramTactics.v|_: Tactics for proving user-defined circuits
+
+``etc/``
+   - |etc/configure|_: Generate dune files for examples/ and tests/
 
 ``examples/``
    ``rv/``
@@ -835,6 +843,9 @@ The following list shows the current state of the repo:
       - |ocaml/common/common.ml|_: Shared utilities
 
    ``cuttlebone/``
+      (Interop)
+         - |ocaml/cuttlebone/Extraction.v|_: Extraction to OCaml (compiler and utilities)
+
       - |ocaml/cuttlebone/cuttlebone.ml|_: OCaml wrappers around functionality provided by the library extracted from Coq
 
    ``frontends/``
@@ -873,8 +884,6 @@ The following list shows the current state of the repo:
 
 .. |coq/BitTactics.v| replace:: ``BitTactics.v``
 .. _coq/BitTactics.v: coq/BitTactics.v
-.. |coq/CircuitCorrectness.v| replace:: ``CircuitCorrectness.v``
-.. _coq/CircuitCorrectness.v: coq/CircuitCorrectness.v
 .. |coq/CircuitGeneration.v| replace:: ``CircuitGeneration.v``
 .. _coq/CircuitGeneration.v: coq/CircuitGeneration.v
 .. |coq/CircuitOptimization.v| replace:: ``CircuitOptimization.v``
@@ -889,8 +898,12 @@ The following list shows the current state of the repo:
 .. _coq/Common.v: coq/Common.v
 .. |coq/Compiler.v| replace:: ``Compiler.v``
 .. _coq/Compiler.v: coq/Compiler.v
-.. |coq/Correctness.v| replace:: ``Correctness.v``
-.. _coq/Correctness.v: coq/Correctness.v
+.. |coq/CompilerCorrectness/CircuitCorrectness.v| replace:: ``CircuitCorrectness.v``
+.. _coq/CompilerCorrectness/CircuitCorrectness.v: coq/CompilerCorrectness/CircuitCorrectness.v
+.. |coq/CompilerCorrectness/Correctness.v| replace:: ``Correctness.v``
+.. _coq/CompilerCorrectness/Correctness.v: coq/CompilerCorrectness/Correctness.v
+.. |coq/CompilerCorrectness/LoweringCorrectness.v| replace:: ``LoweringCorrectness.v``
+.. _coq/CompilerCorrectness/LoweringCorrectness.v: coq/CompilerCorrectness/LoweringCorrectness.v
 .. |coq/DeriveShow.v| replace:: ``DeriveShow.v``
 .. _coq/DeriveShow.v: coq/DeriveShow.v
 .. |coq/Desugaring.v| replace:: ``Desugaring.v``
@@ -901,8 +914,6 @@ The following list shows the current state of the repo:
 .. _coq/EqDec.v: coq/EqDec.v
 .. |coq/ErrorReporting.v| replace:: ``ErrorReporting.v``
 .. _coq/ErrorReporting.v: coq/ErrorReporting.v
-.. |coq/Extraction.v| replace:: ``Extraction.v``
-.. _coq/Extraction.v: coq/Extraction.v
 .. |coq/ExtractionSetup.v| replace:: ``ExtractionSetup.v``
 .. _coq/ExtractionSetup.v: coq/ExtractionSetup.v
 .. |coq/FiniteType.v| replace:: ``FiniteType.v``
@@ -925,8 +936,6 @@ The following list shows the current state of the repo:
 .. _coq/LoweredSyntaxFunctions.v: coq/LoweredSyntaxFunctions.v
 .. |coq/Lowering.v| replace:: ``Lowering.v``
 .. _coq/Lowering.v: coq/Lowering.v
-.. |coq/LoweringCorrectness.v| replace:: ``LoweringCorrectness.v``
-.. _coq/LoweringCorrectness.v: coq/LoweringCorrectness.v
 .. |coq/Magic.v| replace:: ``Magic.v``
 .. _coq/Magic.v: coq/Magic.v
 .. |coq/Member.v| replace:: ``Member.v``
@@ -967,6 +976,8 @@ The following list shows the current state of the repo:
 .. _coq/Types.v: coq/Types.v
 .. |coq/Vect.v| replace:: ``Vect.v``
 .. _coq/Vect.v: coq/Vect.v
+.. |etc/configure| replace:: ``configure``
+.. _etc/configure: etc/configure
 .. |examples/collatz.lv| replace:: ``collatz.lv``
 .. _examples/collatz.lv: examples/collatz.lv
 .. |examples/collatz.v| replace:: ``collatz.v``
@@ -1057,6 +1068,8 @@ The following list shows the current state of the repo:
 .. _ocaml/backends/verilog.ml: ocaml/backends/verilog.ml
 .. |ocaml/common/common.ml| replace:: ``common.ml``
 .. _ocaml/common/common.ml: ocaml/common/common.ml
+.. |ocaml/cuttlebone/Extraction.v| replace:: ``Extraction.v``
+.. _ocaml/cuttlebone/Extraction.v: ocaml/cuttlebone/Extraction.v
 .. |ocaml/cuttlebone/cuttlebone.ml| replace:: ``cuttlebone.ml``
 .. _ocaml/cuttlebone/cuttlebone.ml: ocaml/cuttlebone/cuttlebone.ml
 .. |ocaml/cuttlec.ml| replace:: ``cuttlec.ml``
