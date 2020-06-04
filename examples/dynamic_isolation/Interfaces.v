@@ -315,15 +315,49 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
 
 End Core_sig.
 
-Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
+Module EnclaveInterface.
   Import Common.
 
   Definition enclave_data :=
     {| struct_name := "enclave_data";
        struct_fields := [("eid", bits_t 32);
                          ("addr_min", bits_t 32);
-                         ("size", bits_t 32)]
+                         ("size", bits_t 32);
+                         ("valid", bits_t 1)
+                        ]
     |}.
+
+  Record struct_enclave_data :=
+    { enclave_data_eid : bits_t 32;
+      enclave_data_addr_min : bits_t 32;
+      enclave_data_size : bits_t 32;
+      enclave_data_valid : bits_t 1;
+    }.
+
+  (* TODO: generalize this. *)
+  Definition extract_enclave_data (data: struct_t enclave_data) : struct_enclave_data :=
+      let '(eid, (addr_min, (size, (valid, _)))) := data in
+      {| enclave_data_eid := eid;
+         enclave_data_addr_min := addr_min;
+         enclave_data_size := size;
+         enclave_data_valid := valid;
+      |}.
+
+  Definition bits_id_to_ind_id (eid: bits_t 32) : option enclave_id :=
+    match Bits.to_nat eid with
+    | 0 => Some Enclave0
+    | 1 => Some Enclave1
+    | 2 => Some Enclave2
+    | 3 => Some Enclave3
+    | _ => None
+    end.
+
+
+End EnclaveInterface.
+
+Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
+  Import Common.
+  Import EnclaveInterface.
 
   Inductive internal_reg_t' :=
   | limbo0
@@ -349,11 +383,13 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
     | enc_data0 => let eid := Bits.zero in
                   let addr_min := Params.enclave_base Enclave0 in
                   let size := Params.enclave_size Enclave0 in
-                  ((eid, (addr_min, (size, tt))))
+                  let valid := Ob~1 in
+                  ((eid, (addr_min, (size, (valid, tt)))))
     | einc_data1 => let eid := Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1 in
                    let addr_min := Params.enclave_base Enclave1 in
                    let size := Params.enclave_size Enclave1 in
-                   ((eid, (addr_min, (size, tt))))
+                   let valid := Ob~1 in
+                   ((eid, (addr_min, (size, (valid, tt)))))
     end.
 
   Instance FiniteType_internal_reg_t : FiniteType internal_reg_t := _.
@@ -421,7 +457,6 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
     | internal st => R_internal st
     end.
 
-  (*
   Definition r (idx: reg_t) : R idx :=
     match idx with
     | fromCore0_IMem st => MemReq.r st
@@ -444,15 +479,14 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
     | fromMem0_DMem st => MemResp.r st
     | fromMem1_IMem st => MemResp.r st
     | fromMem1_DMem st => MemResp.r st
-    | pc_core0 => Params0.initial_pc
-    | pc_core1 => Params1.initial_pc
+    | pc_core0 => Bits.zero
+    | pc_core1 => Bits.zero
     | purge_core0 => value_of_bits (Bits.zero)
     | purge_core1 => value_of_bits (Bits.zero)
     | purge_mem0 => value_of_bits (Bits.zero)
     | purge_mem1 => value_of_bits (Bits.zero)
     | internal st => r_internal st
     end.
-    *)
 
   Instance FiniteType_reg_t : FiniteType reg_t := _.
 
@@ -466,22 +500,26 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
          | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0 =>
              struct enclave_data {| eid := eid;
                                     addr_min := (#(Params.enclave_base Enclave0));
-                                    size := (#(Params.enclave_size Enclave0))
+                                    size := (#(Params.enclave_size Enclave0));
+                                    valid := Ob~1
                                  |}
          | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1 =>
              struct enclave_data {| eid := eid;
                                     addr_min := (#(Params.enclave_base Enclave1));
-                                    size := (#(Params.enclave_size Enclave1))
+                                    size := (#(Params.enclave_size Enclave1));
+                                    valid := Ob~1
                                  |}
          | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1~0 =>
              struct enclave_data {| eid := eid;
                                     addr_min := (#(Params.enclave_base Enclave2));
-                                    size := (#(Params.enclave_size Enclave2))
+                                    size := (#(Params.enclave_size Enclave2));
+                                    valid := Ob~1
                                  |}
          | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1~1 =>
              struct enclave_data {| eid := eid;
                                     addr_min := (#(Params.enclave_base Enclave3));
-                                    size := (#(Params.enclave_size Enclave3))
+                                    size := (#(Params.enclave_size Enclave3));
+                                    valid := Ob~1
                                  |}
          return default : `UConst (tau := struct_t enclave_data) (value_of_bits (Bits.zero))`
          end
@@ -735,6 +773,194 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
                    |> ResetProcAndMem0 |> ResetProcAndMem1
                    |> RestartPipeline0 |> RestartPipeline1
                    |> done.
+
+  Section Semantics.
+    Definition empty_log : Log R ContextEnv := log_empty.
+    Parameter update_function : state -> Log R ContextEnv -> Log R ContextEnv.
+      (* interp_scheduler' st ? rules log scheduler. *)
+
+  End Semantics.
+
+  Section LogHelpers.
+    Definition update_no_writes_to_reg (st: state) (log: Log R ContextEnv) (reg: reg_t) : Prop :=
+      latest_write (update_function st log) reg = latest_write log reg.
+
+  End LogHelpers.
+
+  Section ValidInput.
+    Definition valid_input_log (log: Log R ContextEnv) : Prop. Admitted.
+    Definition valid_input_state (st: state) : Prop. Admitted.
+
+    Definition internal_reg_to_taint (reg: internal_reg_t) : option ind_core_id :=
+      match reg with
+      | limbo0 => Some CoreId0
+      | limbo1 => Some CoreId1
+      | enc_data0 => Some CoreId0 
+      | enc_data1 => Some CoreId1
+      end.
+
+    Definition reg_to_taint (reg: reg_t) : option ind_core_id :=
+      match reg with
+      | fromCore0_IMem st => Some CoreId0
+      | fromCore0_DMem st => Some CoreId0
+      | fromCore0_Enc st => Some CoreId0 
+      | toCore0_IMem st => Some CoreId0
+      | toCore0_DMem st => Some CoreId0
+      (* Core1 <-> SM *)
+      | fromCore1_IMem st => Some CoreId1
+      | fromCore1_DMem st => Some CoreId1
+      | fromCore1_Enc st => Some CoreId1
+      | toCore1_IMem st => Some CoreId1
+      | toCore1_DMem st => Some CoreId1
+      (* SM <-> Mem *)
+      | toMem0_IMem st => Some CoreId0
+      | toMem0_DMem st => Some CoreId0
+      | toMem1_IMem st => Some CoreId1
+      | toMem1_DMem st => Some CoreId1
+      | fromMem0_IMem st => Some CoreId0
+      | fromMem0_DMem st => Some CoreId0
+      | fromMem1_IMem st => Some CoreId1
+      | fromMem1_DMem st => Some CoreId1
+      | pc_core0 => Some CoreId0
+      | pc_core1 => Some CoreId1
+      | purge_core0 => Some CoreId0
+      | purge_core1 => Some CoreId1
+      | purge_mem0 => Some CoreId0
+      | purge_mem1 => Some CoreId1
+      | internal st => internal_reg_to_taint st
+    end.
+ 
+  End ValidInput.
+
+  Section SMInternalAxioms.
+
+    Definition valid_enclave_data (data: struct_t enclave_data) : Prop :=
+      let enclave_data := extract_enclave_data data in
+      match bits_id_to_ind_id enclave_data.(enclave_data_eid) with
+      | Some id =>
+          enclave_data.(enclave_data_addr_min) = Params.enclave_base id /\
+          enclave_data.(enclave_data_size) = Params.enclave_size id
+      | None => False
+      end.
+
+    Definition valid_enclave_data_regs (st: state) : Prop :=
+      valid_enclave_data (ContextEnv.(getenv) st (internal enc_data0)) /\
+      valid_enclave_data (ContextEnv.(getenv) st (internal enc_data1)).
+
+    (* TODO: incomplete *)
+    Definition valid_internal_state (st: state) : Prop :=
+      valid_enclave_data_regs st.
+
+    (*
+    Definition axiom_limbo_implies_no_write0 :
+      forall (st: state) (log: log),
+      valid_input_state st ->
+      valid_input_log log ->
+      update_no_writes_to_reg st log 
+    *)
+
+    Definition limbo_eq (st: state) (core_id: ind_core_id) (v: bits_t 1): Prop :=
+      match core_id with
+      | CoreId0 => ContextEnv.(getenv) st (internal limbo0) = v
+      | CoreId1 => ContextEnv.(getenv) st (internal limbo1) = v
+      end.
+
+    (* Idea:
+     * - ghost state tracks when cores are done purging and when cores have restarted? 
+     * - or we explicitly add it to the observations! <-- This seems better, since it defines what we care about
+     *)
+
+    Definition equiv_log_at_core (core_id: ind_core_id) (log1: Log R ContextEnv) (log2: Log R ContextEnv) : Prop :=
+      forall r, reg_to_taint r = Some core_id ->
+           ContextEnv.(getenv) log1 r = ContextEnv.(getenv) log2 r.
+        
+    Definition equiv_log_at_shared (log1: Log R ContextEnv) (log2: Log R ContextEnv) : Prop :=
+      forall r, reg_to_taint r = None ->
+           ContextEnv.(getenv) log1 r = ContextEnv.(getenv) log2 r.
+
+    Definition equiv_log_for_core (core_id: ind_core_id) (log1: Log R ContextEnv) (log2: Log R ContextEnv) : Prop :=
+      equiv_log_at_core core_id log1 log2 /\ equiv_log_at_shared log1 log2.
+
+    Definition equiv_st_at_core (core_id: ind_core_id) (st1: state) (st2: state) : Prop :=
+      forall r, reg_to_taint r = Some core_id ->
+           ContextEnv.(getenv) st1 r = ContextEnv.(getenv) st2 r.
+        
+    Definition equiv_st_at_shared (st1: state) (st2: state) : Prop :=
+      forall r, reg_to_taint r = None ->
+           ContextEnv.(getenv) st1 r = ContextEnv.(getenv) st2 r.
+
+    Definition equiv_st_for_core (core_id: ind_core_id) (st1: state) (st2: state) : Prop :=
+      equiv_st_at_core core_id st1 st2 /\ equiv_st_at_shared st1 st2.
+
+    (* Assuming we are not initially in a limbo state, output is a function only of taint0 registers *)
+    Definition output_is_a_function_of_partitioned_registers:
+      forall (core_id: ind_core_id) (st0 st1: state) (log0 log1: Log R ContextEnv),
+      limbo_eq st0 core_id Ob~0 ->
+      valid_input_state st0 ->
+      valid_input_state st1 ->
+      valid_input_log log0 ->
+      valid_input_log log1 ->
+      equiv_st_for_core core_id st0 st1 ->
+      equiv_log_for_core core_id log0 log1 ->
+      equiv_log_for_core core_id (update_function st0 log0) (update_function st1 log1).
+    Admitted.
+   
+    (* TODO: figure out dependent types *)
+    Definition no_enq_to_output_reg (core_id: ind_core_id) (reg: reg_t) (log: Log R ContextEnv): Prop :=
+      match reg with
+      | toCore0_IMem MemResp.valid0 =>
+          core_id = CoreId0 /\
+          latest_write log (toCore0_IMem MemResp.valid0) <> Some Ob~1
+      | toCore0_DMem MemResp.valid0 =>
+          core_id = CoreId0 /\
+          latest_write log (toCore0_DMem MemResp.valid0) <> Some Ob~1
+      | toMem0_IMem MemReq.valid0 =>
+          core_id = CoreId0 /\
+          latest_write log (toMem0_IMem MemReq.valid0) <> Some Ob~1
+      | toMem0_DMem MemReq.valid0 =>
+          core_id = CoreId0 /\
+          latest_write log (toMem0_DMem MemReq.valid0) <> Some Ob~1
+      | toCore1_IMem MemResp.valid0 =>
+          core_id = CoreId1 /\
+          latest_write log (toCore1_IMem MemResp.valid0) <> Some Ob~1
+      | toCore1_DMem MemResp.valid0 =>
+          core_id = CoreId1 /\
+          latest_write log (toCore1_DMem MemResp.valid0) <> Some Ob~1
+      | toMem1_IMem MemReq.valid0 =>
+          core_id = CoreId1 /\
+          latest_write log (toMem1_IMem MemReq.valid0) <> Some Ob~1
+      |toMem1_DMem MemReq.valid0 =>
+          core_id = CoreId1 /\
+          latest_write log (toMem1_DMem MemReq.valid0) <> Some Ob~1
+      | _ => False
+      end.
+
+    (* TODO: rephrase this. This is annoying to work with *)
+    Definition no_external_enqs (core_id: ind_core_id) (st: state) (log: Log R ContextEnv) : Prop :=
+      forall reg, no_enq_to_output_reg core_id reg (update_function st log) \/
+             update_no_writes_to_reg st log reg.
+
+    (* If the core starts out in a limbo state, we say there are no valid writes to the outside world *)
+    Definition limbo_implies_no_external_enqs:
+      forall (core_id: ind_core_id) (st: state) (log log': Log R ContextEnv),
+      limbo_eq st0 core_id Ob~1 ->
+      valid_input_state st ->
+      valid_input_log log ->
+      log' = update_function st log ->
+      
+      
+
+  End SMInternalAxioms.
+
+  Section SMAxioms.
+    (* Basic idea:
+     * - From a reset state in 
+     *)
+
+    (* All writes are a function of enclave_data *)
+    Definition writes_function_of_eid0
+
+  End SMAxioms.
 
 End SecurityMonitor.
 
