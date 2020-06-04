@@ -1,5 +1,5 @@
 (coq.theory
- (package koika)
+ ;; (package koika) ;; Not packaged, to make dune build @install faster
  (name Koika.CompilerCorrectness)
  (modules :standard)
  (theories Koika))
