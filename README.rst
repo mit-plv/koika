@@ -12,7 +12,9 @@ Our distribution includes an `executable reference implementation of the languag
 
 Our largest example at the moment is a simple RISCV (RV32I) `4-stage pipelined core <examples/rv/RVCore.v>`_.
 
-|koika| is currently developed as a joint research effort at MIT, involving members of CSG (the Computation Structure Group) and PLV (the Programming Languages & Verification group).  Our `latest draft <koika-paper_>`_ is a good place to get details about the research that powers it.  The name “|koika|” (甲イカ) is Japanese for “`cuttlefish <https://en.wikipedia.org/wiki/Cuttlefish>`_”; we chose it because cuttlefishes have blue blood (a tribute to the name Bluespec), and because each of their eight arms are equipped with independent neurons that allow them operate semi-independently towards a shared purpose, much like rules in |koika| designs.
+|koika| is currently developed as a joint research effort at MIT, involving members of CSG (the Computation Structure Group) and PLV (the Programming Languages & Verification group).  Our `latest draft <koika-paper_>`_ is a good place to get details about the research that powers it.  The name “|koika|” (甲イカ) is Japanese for “`cuttlefish <https://en.wikipedia.org/wiki/Cuttlefish>`_”; we chose it because cuttlefishes have blue blood (a tribute to the name Bluespec), and because their eight arms are equipped with independent neurons that allow them operate semi-independently towards a shared purpose, much like rules in |koika| designs.
+
+This README provides practical information to get started with Kôika.  For details about Kôika's semantics, its compilation algorithm, and the work it draws inspiration from, please read our PLDI 2020 paper: `The Essence of Bluespec, A Core Language for Rule-Based Hardware Design <https://pit-claudel.fr/clement/papers/koika-PLDI20.pdf>`_.
 
 Getting started
 ===============
