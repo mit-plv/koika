@@ -102,12 +102,12 @@ $(foreach fname,$(filter %.v, $(EXAMPLES) $(TESTS)),\
 
 examples: $(call target_directories,$(EXAMPLES));
 clean-examples:
-	find examples/ -type d -name _objects -exec rm -rf {} +
+	find examples/ -type d \( -name _objects -or -name _build \) -exec rm -rf {} +
 	rm -rf ${BUILD_DIR}/examples
 
 tests: $(call target_directories,$(TESTS));
 clean-tests:
-	find tests/ -type d -name _objects -exec rm -rf {} +
+	find tests/ -type d  \( -name _objects -or -name _build \) -exec rm -rf {} +
 	rm -rf ${BUILD_DIR}/tests
 
 .PHONY: configure examples clean-examples tests clean-tests

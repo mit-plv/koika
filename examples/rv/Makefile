@@ -6,7 +6,8 @@ SHELL := bash
 
 export DUT ?= rv32i
 objects_dir := _objects/$(DUT).v
-tests_build := tests/_build/$(DUT)
+tests_build := tests/_build/
+tests_build_dut := tests_build/$(DUT)
 
 cuttlesim := $(objects_dir)/$(basename $(CUTTLESIM_DRIVER)).opt
 verilator := $(objects_dir)/obj_dir.opt/V$(basename $(VERILATOR_TOP))
@@ -35,13 +36,13 @@ core:
 	$(verbose)cp $(objects_dir)/$(DRIVER)/*.v $(objects_dir)/
 	$(verbose)cp $(objects_dir)/Makefile.$(DUT).conf $(objects_dir)/Makefile.platform.conf
 
-$(tests_build): .FORCE
+$(tests_build_dut): .FORCE
 	$(MAKE) -C tests
 
 $(objects_dir)/%: core .FORCE
 	$(MAKE) -C $(objects_dir) $*
 
-binaries: $(tests_build);
+binaries: $(tests_build_dut);
 verilator: $(verilator);
 cuttlesim: $(cuttlesim);
 
@@ -52,15 +53,15 @@ cuttlesim: $(cuttlesim);
 
 cuttlesim-tests: binaries cuttlesim
 	@echo "-- Running tests with Cuttlesim --"
-	find $(tests_build)/ -not -path "*/unit/*" -name "*.rv32" -exec $(cuttlesim_runner) \;
+	find $(tests_build_dut)/ -not -path "*/unit/*" -name "*.rv32" -exec $(cuttlesim_runner) \;
 
 verilator-tests: binaries verilator
 	@echo "-- Running tests with Verilator --"
-	find $(tests_build)/ -not -path "*/unit/*" -name "*.vmh" -exec $(verilator_runner) \;
+	find $(tests_build_dut)/ -not -path "*/unit/*" -name "*.vmh" -exec $(verilator_runner) \;
 
 pyverilator-tests: binaries core
 	@echo "-- Running tests with PyVerilator --"
-	find $(tests_build)/integ/ -name "*.vmh" -exec $(pyverilator_runner) \;
+	find $(tests_build_dut)/integ/ -name "*.vmh" -exec $(pyverilator_runner) \;
 
 nangate45-synthesis: core
 	cd $(objects_dir)/nangate45; SCRIPT_DIR=default ./synth.sh
