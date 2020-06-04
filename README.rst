@@ -108,7 +108,7 @@ Technical overview
 
 .. _koika-paper:
 
-Details about |koika|\ 's design and implementation can be found in our `research paper <https://pit-claudel.fr/clement/papers/koika.pdf>`_.
+Details about |koika|\ 's design and implementation can be found in our `research paper <https://pit-claudel.fr/clement/papers/koika-PLDI20.pdf>`_.
 
 Execution model
 ---------------
