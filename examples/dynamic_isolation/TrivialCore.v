@@ -1,8 +1,8 @@
 Require Import Koika.Frontend.
 Require Import Koika.Std.
 
-Require Import DynamicIsolation.External.
-Require Import DynamicIsolation.Interfaces.
+Require Import dynamic_isolation.External.
+Require Import dynamic_isolation.Interfaces.
 
 Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParams: CoreParameters)
                  <: Core_sig External Params CoreParams.

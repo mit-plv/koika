@@ -4,12 +4,12 @@ Require Import Coq.Lists.List.
 
 Require Import Koika.Std.
 
-Require Import DynamicIsolation.External.
-Require Import DynamicIsolation.Interfaces.
-Require Import DynamicIsolation.Multiplier.
-Require Import DynamicIsolation.RVEncoding.
-Require Import DynamicIsolation.Scoreboard.
-Require Import DynamicIsolation.Tactics.
+Require Import dynamic_isolation.External.
+Require Import dynamic_isolation.Interfaces.
+Require Import dynamic_isolation.Multiplier.
+Require Import dynamic_isolation.RVEncoding.
+Require Import dynamic_isolation.Scoreboard.
+Require Import dynamic_isolation.Tactics.
 
 Section RV32Helpers.
   Context {reg_t: Type}.
@@ -55,7 +55,7 @@ Section RV32Helpers.
     {{
         fun getFields (inst : bits_t 32) : struct_t inst_field =>
           let res := struct inst_field
-                            {|
+                            {
                               opcode := inst[|5`d0| :+ 7];
                               funct3 := inst[|5`d12| :+ 3];
                               funct7 := inst[|5`d25| :+ 7];
@@ -80,7 +80,7 @@ Section RV32Helpers.
                                                                ++ inst[|5`d20|]
                                                                ++ inst[|5`d21|:+10]
                                                                ++ |1`d0|);
-                              csr    := (inst[|5`d20| :+ 12]) |} in
+                              csr    := (inst[|5`d20| :+ 12]) } in
           res
         }}.
 
@@ -179,14 +179,14 @@ Section RV32Helpers.
     {{
         fun getImmediateType (inst : bits_t 32) : maybe (enum_t imm_type) =>
           match (inst[|5`d2|:+5]) with
-          | #opcode_LOAD[|3`d2|:+5]      => {valid (enum_t imm_type)}(enum imm_type {| ImmI |})
-          | #opcode_OP_IMM[|3`d2|:+5]    => {valid (enum_t imm_type)}(enum imm_type {| ImmI |})
-          | #opcode_JALR[|3`d2|:+5]      => {valid (enum_t imm_type)}(enum imm_type {| ImmI |})
-          | #opcode_AUIPC[|3`d2|:+5]     => {valid (enum_t imm_type)}(enum imm_type {| ImmU |})
-          | #opcode_LUI[|3`d2|:+5]       => {valid (enum_t imm_type)}(enum imm_type {| ImmU |})
-          | #opcode_STORE[|3`d2|:+5]     => {valid (enum_t imm_type)}(enum imm_type {| ImmS |})
-          | #opcode_BRANCH[|3`d2|:+5]    => {valid (enum_t imm_type)}(enum imm_type {| ImmB |})
-          | #opcode_JAL[|3`d2|:+5]       => {valid (enum_t imm_type)}(enum imm_type {| ImmJ |})
+          | #opcode_LOAD[|3`d2|:+5]      => {valid (enum_t imm_type)}(enum imm_type { ImmI })
+          | #opcode_OP_IMM[|3`d2|:+5]    => {valid (enum_t imm_type)}(enum imm_type { ImmI })
+          | #opcode_JALR[|3`d2|:+5]      => {valid (enum_t imm_type)}(enum imm_type { ImmI })
+          | #opcode_AUIPC[|3`d2|:+5]     => {valid (enum_t imm_type)}(enum imm_type { ImmU })
+          | #opcode_LUI[|3`d2|:+5]       => {valid (enum_t imm_type)}(enum imm_type { ImmU })
+          | #opcode_STORE[|3`d2|:+5]     => {valid (enum_t imm_type)}(enum imm_type { ImmS })
+          | #opcode_BRANCH[|3`d2|:+5]    => {valid (enum_t imm_type)}(enum imm_type { ImmB })
+          | #opcode_JAL[|3`d2|:+5]       => {valid (enum_t imm_type)}(enum imm_type { ImmJ })
           return default: {invalid (enum_t imm_type)}()
           end
     }}.
@@ -236,14 +236,14 @@ Section RV32Helpers.
   Definition decode_fun : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun decode_fun (arg_inst : bits_t 32) : struct_t decoded_sig
  =>
-           struct decoded_sig {|
+           struct decoded_sig {
                     valid_rs1     := usesRS1 (arg_inst);
                     valid_rs2     := usesRS2 (arg_inst);
                     valid_rd      := usesRD (arg_inst);
                     legal         := isLegalInstruction (arg_inst);
                     inst          := arg_inst;
                     immediateType := getImmediateType(arg_inst)
-                  |}
+                  }
     }}.
 
   Definition getImmediate : UInternalFunction reg_t empty_ext_fn_t :=
@@ -253,11 +253,11 @@ Section RV32Helpers.
           if (get(imm_type_v, valid) == Ob~1) then
             let fields := getFields (get(dInst,inst)) in
             match (get(imm_type_v, data)) with
-            | (enum imm_type {| ImmI |}) => get(fields, immI)
-            | (enum imm_type {| ImmS |}) => get(fields, immS)
-            | (enum imm_type {| ImmB |}) => get(fields, immB)
-            | (enum imm_type {| ImmU |}) => get(fields, immU)
-            | (enum imm_type {| ImmJ |}) => get(fields, immJ)
+            | (enum imm_type { ImmI }) => get(fields, immI)
+            | (enum imm_type { ImmS }) => get(fields, immS)
+            | (enum imm_type { ImmB }) => get(fields, immB)
+            | (enum imm_type { ImmU }) => get(fields, immU)
+            | (enum imm_type { ImmJ }) => get(fields, immJ)
             return default: |32`d0|
             end
           else
@@ -373,8 +373,8 @@ Section RV32Helpers.
                    set nextPC := (pc + imm_val)
                  else
                    set nextPC := incPC);
-        struct control_result {| taken  := taken;
-                                 nextPC := nextPC |}
+        struct control_result { taken  := taken;
+                                 nextPC := nextPC }
     }}.
 End RV32Helpers.
 
@@ -539,18 +539,18 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
 
   Definition fetch : uaction reg_t ext_fn_t :=
     {{
-        guard(read0(purge) == enum purge_state {| Ready |} &&
+        guard(read0(purge) == enum purge_state { Ready } &&
               !read0(internal freeze_fetch));
         let pc := read1(pc) in
-        let req := struct mem_req {|
+        let req := struct mem_req {
                               byte_en := |4`d0|; (* Load *)
                               addr := pc;
-                              data := |32`d0| |} in
-        let fetch_bookkeeping := struct fetch_bookkeeping {|
+                              data := |32`d0| } in
+        let fetch_bookkeeping := struct fetch_bookkeeping {
                                           pc := pc;
                                           ppc := pc + |32`d4|;
                                           epoch := read1(internal epoch)
-                                        |} in
+                                        } in
         toIMem.(MemReq.enq)(req);
         write1(pc, pc + |32`d4|);
         (__internal__ f2d).(fromFetch.enq)(fetch_bookkeeping)
@@ -558,7 +558,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
 
   Definition wait_imem : uaction reg_t ext_fn_t :=
     {{
-        guard(read0(purge) == enum purge_state {| Ready |} &&
+        guard(read0(purge) == enum purge_state { Ready } &&
                !read0(internal freeze_fetch));
         let fetched_bookkeeping := (__internal__ f2d).(fromFetch.deq)() in
         (__internal__ f2dprim).(waitFromFetch.enq)(fetched_bookkeeping)
@@ -576,7 +576,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
   (* muxing on the input, TODO check if it changes anything *)
   Definition decode : uaction reg_t ext_fn_t :=
     {{
-        guard(read0(purge) == enum purge_state {| Ready |} &&
+        guard(read0(purge) == enum purge_state { Ready } &&
               !read0(internal freeze_fetch));
         let instr := fromIMem.(MemResp.deq)() in
         let instr := get(instr,data) in
@@ -593,14 +593,14 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
                   (__internal__ scoreboard).(Scoreboard.insert)(sliceReg(rd_idx)));
              let rs1 := (__internal__ rf).(Rf.read_1)(sliceReg(rs1_idx)) in
              let rs2 := (__internal__ rf).(Rf.read_1)(sliceReg(rs2_idx)) in
-             let decode_bookkeeping := struct decode_bookkeeping {|
+             let decode_bookkeeping := struct decode_bookkeeping {
                                                 pc    := get(fetched_bookkeeping, pc);
                                                 ppc   := get(fetched_bookkeeping, ppc);
                                                 epoch := get(fetched_bookkeeping, epoch);
                                                 dInst := decodedInst;
                                                 rval1 := rs1;
                                                 rval2 := rs2
-                                              |} in
+                                              } in
              (__internal__ d2e).(fromDecode.enq)(decode_bookkeeping))
     }}.
 
@@ -636,13 +636,13 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
 
   Definition step_multiplier : uaction reg_t ext_fn_t :=
     {{
-        guard(read0(purge) == enum purge_state {| Ready |});
+        guard(read0(purge) == enum purge_state { Ready });
         (__internal__ mulState).(Multiplier.step)()
     }}.
 
   Definition execute : uaction reg_t ext_fn_t :=
     {{
-        guard(read0(purge) == enum purge_state {| Ready |} &&
+        guard(read0(purge) == enum purge_state { Ready } &&
               !read0(internal freeze_fetch));
         let decoded_bookkeeping := (__internal__ d2e).(fromDecode.deq)() in
         if get(decoded_bookkeeping, epoch) == read0(internal epoch) then
@@ -682,8 +682,8 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
                set data := rs2_val << shift_amount;
                set addr := addr[|5`d2| :+ 30 ] ++ |2`d0|;
                set isUnsigned := funct3[|2`d2|];
-               toDMem.(MemReq.enq)(struct mem_req {|
-                 byte_en := byte_en; addr := addr; data := data |})
+               toDMem.(MemReq.enq)(struct mem_req {
+                 byte_en := byte_en; addr := addr; data := data })
              else if (isControlInst(dInst)) then
                set data := (pc + |32`d4|)     (* For jump and link *)
              else if (isEnclaveInst(dInst)) then
@@ -700,14 +700,14 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
                write0(pc, nextPc)
              else
                pass;
-             let execute_bookkeeping := struct execute_bookkeeping {|
+             let execute_bookkeeping := struct execute_bookkeeping {
                                                  isUnsigned := isUnsigned;
                                                  size := size;
                                                  offset := offset;
                                                  newrd := data;
                                                  dInst := get(decoded_bookkeeping, dInst);
                                                  eid := eid
-                                               |} in
+                                               } in
              (__internal__ e2w).(fromExecute.enq)(execute_bookkeeping))
         else
           pass
@@ -715,7 +715,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
 
   Definition writeback : uaction reg_t ext_fn_t :=
     {{
-        guard(read0(purge) == enum purge_state {| Ready |});
+        guard(read0(purge) == enum purge_state { Ready });
         let execute_bookkeeping := (__internal__ e2w).(fromExecute.deq)() in
         let dInst := get(execute_bookkeeping, dInst) in
         let data := get(execute_bookkeeping, newrd) in
@@ -736,7 +736,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
           end
         else if isEnclaveInst(dInst) then
            let eid := get(execute_bookkeeping, eid) in
-           let req := struct enclave_req {| eid := eid|} in
+           let req := struct enclave_req { eid := eid} in
            toSMEnc.(EnclaveReq.enq)(req)
         else if isMultiplyInst(dInst) then
           set data := (__internal__ mulState).(Multiplier.deq)()[|6`d0| :+ 32]
@@ -755,7 +755,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
 
   Definition tick : uaction reg_t ext_fn_t :=
     {{
-        guard(read0(purge) == enum purge_state {| Ready |});
+        guard(read0(purge) == enum purge_state { Ready });
         write0(internal cycle_count, read0(internal cycle_count) + |32`d1|)
     }}.
 
@@ -818,10 +818,10 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
 
 
   Instance Show_rf : Show (Rf.reg_t) :=
-    {| show '(Rf.rData v) := rv_register_name v |}.
+    { show '(Rf.rData v) := rv_register_name v }.
 
   Instance Show_scoreboard : Show (Scoreboard.reg_t) :=
-    {| show '(Scoreboard.Scores (Scoreboard.Rf.rData v)) := rv_register_name v |}.
+    { show '(Scoreboard.Scores (Scoreboard.Rf.rData v)) := rv_register_name v }.
 
   Existing Instance Multiplier.Show_reg_t.
   Instance Show_reg_t : Show reg_t := _.
@@ -904,7 +904,7 @@ Module RV32I (EnclaveParams: EnclaveParameters) (CoreParams: CoreParameters)
   Definition do_internal_purge: uaction reg_t ext_fn_t :=
     {{
         let purge_st := read0(purge) in
-        if (purge_st == enum purge_state {| Purging |}) then
+        if (purge_st == enum purge_state { Purging }) then
            (* f2d *)
            (__internal__ f2d).(fromFetch.reset)();
            (* f2dprim *)
@@ -924,9 +924,9 @@ Module RV32I (EnclaveParams: EnclaveParameters) (CoreParams: CoreParameters)
            (* epoch *)
            write0(internal epoch, Ob~0);
            write0(internal freeze_fetch, Ob~0);
-           write0(purge, enum purge_state {| Purged |})
-         else if (purge_st == enum purge_state {| Restart |}) then
-           write0(purge, enum purge_state {| Ready |})
+           write0(purge, enum purge_state { Purged })
+         else if (purge_st == enum purge_state { Restart }) then
+           write0(purge, enum purge_state { Ready })
          else fail
     }}.
 
@@ -998,7 +998,7 @@ Module RV32E (EnclaveParams: EnclaveParameters) (CoreParams: CoreParameters)
   (* TODO: generalize reset for scoreboard *)
   Definition do_internal_purge: uaction reg_t ext_fn_t :=
     {{
-       guard(read0(purge) == enum purge_state {| Purging |});
+       guard(read0(purge) == enum purge_state { Purging });
        (* f2d *)
        (__internal__ f2d).(fromFetch.reset)();
        (* f2dprim *)

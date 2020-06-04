@@ -1,5 +1,5 @@
 Require Import Koika.Frontend.
-Require Import DynamicIsolation.Tactics.
+Require Import dynamic_isolation.Tactics.
 
 Record RLift {T} {A B: Type} {projA: A -> T} {projB: B -> T} := mk_RLift
   { rlift: A -> B

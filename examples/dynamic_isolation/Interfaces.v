@@ -3,9 +3,9 @@ Require Import Coq.Lists.List.
 
 Require Import Koika.Std.
 
-Require Import DynamicIsolation.Lift.
-Require Import DynamicIsolation.Tactics.
-Require Import DynamicIsolation.Scoreboard.
+Require Import dynamic_isolation.Lift.
+Require Import dynamic_isolation.Tactics.
+Require Import dynamic_isolation.Scoreboard.
 
 Definition post_t := unit.
 Definition var_t := string.
@@ -498,29 +498,29 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
     {{ fun eid_to_enc_data (eid: bits_t 32) : struct_t enclave_data =>
          match eid with
          | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0 =>
-             struct enclave_data {| eid := eid;
-                                    addr_min := (#(Params.enclave_base Enclave0));
-                                    size := (#(Params.enclave_size Enclave0));
-                                    valid := Ob~1
-                                 |}
+             struct enclave_data { eid := eid;
+                                   addr_min := (#(Params.enclave_base Enclave0));
+                                   size := (#(Params.enclave_size Enclave0));
+                                   valid := Ob~1
+                                 }
          | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1 =>
-             struct enclave_data {| eid := eid;
-                                    addr_min := (#(Params.enclave_base Enclave1));
-                                    size := (#(Params.enclave_size Enclave1));
-                                    valid := Ob~1
-                                 |}
+             struct enclave_data { eid := eid;
+                                   addr_min := (#(Params.enclave_base Enclave1));
+                                   size := (#(Params.enclave_size Enclave1));
+                                   valid := Ob~1
+                                 }
          | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1~0 =>
-             struct enclave_data {| eid := eid;
-                                    addr_min := (#(Params.enclave_base Enclave2));
-                                    size := (#(Params.enclave_size Enclave2));
-                                    valid := Ob~1
-                                 |}
+             struct enclave_data { eid := eid;
+                                   addr_min := (#(Params.enclave_base Enclave2));
+                                   size := (#(Params.enclave_size Enclave2));
+                                   valid := Ob~1
+                                 }
          | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1~1 =>
-             struct enclave_data {| eid := eid;
-                                    addr_min := (#(Params.enclave_base Enclave3));
-                                    size := (#(Params.enclave_size Enclave3));
-                                    valid := Ob~1
-                                 |}
+             struct enclave_data { eid := eid;
+                                   addr_min := (#(Params.enclave_base Enclave3));
+                                   size := (#(Params.enclave_size Enclave3));
+                                   valid := Ob~1
+                                 }
          return default : `UConst (tau := struct_t enclave_data) (value_of_bits (Bits.zero))`
          end
     }}.
@@ -639,11 +639,11 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
     let reg_limbo := lookup_reg_limbo core in
     let reg_proc_reset := lookup_reg_proc_reset core in
     let reg_mem_reset := lookup_reg_mem_reset core in
-    {{ (if (read0(reg_limbo) && read0(reg_proc_reset) == enum purge_state {| Ready |}) then
-         write0(reg_proc_reset, enum purge_state {| Purging |})
+    {{ (if (read0(reg_limbo) && read0(reg_proc_reset) == enum purge_state { Ready }) then
+         write0(reg_proc_reset, enum purge_state { Purging })
         else pass);
-       if (read0(reg_limbo) && read0(reg_mem_reset) == enum purge_state {| Ready |}) then
-         write0(reg_mem_reset, enum purge_state {| Purging |})
+       if (read0(reg_limbo) && read0(reg_mem_reset) == enum purge_state { Ready }) then
+         write0(reg_mem_reset, enum purge_state { Purging })
        else pass
     }}.
 
@@ -690,14 +690,14 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
     let reg_proc_reset := lookup_reg_proc_reset core in
     let reg_mem_reset := lookup_reg_mem_reset core in
     let reg_pc := lookup_reg_pc core in
-    {{ if (read0(reg_limbo) && read0(reg_proc_reset) == enum purge_state {| Purged |} &&
-           read0(reg_mem_reset) == enum purge_state {| Purged |}) then
+    {{ if (read0(reg_limbo) && read0(reg_proc_reset) == enum purge_state { Purged } &&
+           read0(reg_mem_reset) == enum purge_state { Purged }) then
          (* Do resets *)
          reset_fifos();
          (* Restart *)
          write0(reg_limbo, Ob~0);
-         write0(reg_proc_reset, enum purge_state {| Restart |});
-         write0(reg_mem_reset, enum purge_state {| Restart |});
+         write0(reg_proc_reset, enum purge_state { Restart });
+         write0(reg_mem_reset, enum purge_state { Restart });
          let enc_data := read0(reg_enc) in
          let max_eid := |32`d3| in
          let eid := get(enc_data,eid) in
@@ -941,12 +941,14 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
              update_no_writes_to_reg st log reg.
 
     (* If the core starts out in a limbo state, we say there are no valid writes to the outside world *)
+    (*
     Definition limbo_implies_no_external_enqs:
       forall (core_id: ind_core_id) (st: state) (log log': Log R ContextEnv),
       limbo_eq st0 core_id Ob~1 ->
       valid_input_state st ->
       valid_input_log log ->
       log' = update_function st log ->
+   *)
       
       
 
@@ -958,7 +960,6 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
      *)
 
     (* All writes are a function of enclave_data *)
-    Definition writes_function_of_eid0
 
   End SMAxioms.
 

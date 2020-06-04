@@ -3,9 +3,9 @@ Require Import Coq.Lists.List.
 
 Require Import Koika.Std.
 
-Require Import DynamicIsolation.Interfaces.
-Require Import DynamicIsolation.External.
-Require Import DynamicIsolation.Multicore.
+Require Import dynamic_isolation.Interfaces.
+Require Import dynamic_isolation.External.
+Require Import dynamic_isolation.Multicore.
 
 Module Pf (External: External_sig) (EnclaveParams: EnclaveParameters)
           (Params0: CoreParameters) (Params1: CoreParameters)

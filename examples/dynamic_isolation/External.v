@@ -1,7 +1,7 @@
 Require Import Koika.Frontend.
 Require Import Koika.Std.
 
-Require Import DynamicIsolation.Interfaces.
+Require Import dynamic_isolation.Interfaces.
 
 (*
 Module OriginalExternal <: External_sig.

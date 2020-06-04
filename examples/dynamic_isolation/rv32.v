@@ -1,12 +1,12 @@
 Require Import Koika.Frontend.
 
-Require Import DynamicIsolation.External.
-Require Import DynamicIsolation.Interfaces.
-Require Import DynamicIsolation.Memory.
-Require Import DynamicIsolation.RVCore.
-Require Import DynamicIsolation.TrivialCore.
+Require Import dynamic_isolation.External.
+Require Import dynamic_isolation.Interfaces.
+Require Import dynamic_isolation.Memory.
+Require Import dynamic_isolation.RVCore.
+Require Import dynamic_isolation.TrivialCore.
 
-Require Import DynamicIsolation.Multicore.
+Require Import dynamic_isolation.Multicore.
 
 Module Params0 <: CoreParameters.
   Definition core_id := Ob~0.
