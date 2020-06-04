@@ -126,7 +126,7 @@ dune-all: coq ocaml
 	@printf "\n== Completing full build ==\n"
 	dune build @all
 
-all: coq ocaml examples tests dune-all readme;
+all: coq ocaml examples tests readme;
 
 clean: clean-tests clean-examples
 	dune clean
