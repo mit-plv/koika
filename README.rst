@@ -22,7 +22,7 @@ Getting started
 Installing dependencies and building from source
 ------------------------------------------------
 
-* OCaml 4.07 through 4.09, `opam <https://opam.ocaml.org/doc/Install.html>`_ 2.0 or later, and GNU make.
+* OCaml 4.07 through 4.09, `opam <https://opam.ocaml.org/doc/Install.html>`_ 2.0 or later, GNU make.
 
 * Coq 8.9, 8.10, or 8.11::
 
@@ -33,9 +33,13 @@ Installing dependencies and building from source
     opam repo add coq-released https://coq.inria.fr/opam/released
     opam install coq-ltac2
 
+* Dune 2.5 or later::
+
+    opam upgrade dune
+
 * Some OCaml packages::
 
-    opam install dune base core stdio parsexp hashcons zarith
+    opam install base core stdio parsexp hashcons zarith
 
 * To run the tests of our RISCV core, a `RISCV compilation toolchain <https://github.com/xpack-dev-tools/riscv-none-embed-gcc-xpack/releases/>`_.
 
