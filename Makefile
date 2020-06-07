@@ -70,7 +70,8 @@ endef
 # Compile a .v file
 define cuttlec_v_recipe_body =
 	dune build "$@/$(notdir $(<:.v=.ml))"
-	dune exec -- cuttlec "${BUILD_DIR}/$@/$(notdir $(<:.v=.ml))" -T all -o "$@"
+	dune exec -- cuttlec "${BUILD_DIR}/$@/$(notdir $(<:.v=.ml))" -T cpp -o "$@"
+	dune exec -- cuttlec "${BUILD_DIR}/$@/$(notdir $(<:.v=.ml))" -T hpp -o "$@"
 endef
 
 define cuttlec_lv_template =

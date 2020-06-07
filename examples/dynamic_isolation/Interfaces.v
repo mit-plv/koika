@@ -22,6 +22,12 @@ Module Common.
        struct_fields := [("byte_en" , bits_t 4);
                          ("addr"     , bits_t 32);
                          ("data"     , bits_t 32)] |}.
+
+  Definition mem_req_get_addr (req: struct_t mem_req) : bits_t 32 :=
+    let '(_, (addr, (_, _))) := req in
+    addr.
+
+
   Definition mem_resp :=
     {| struct_name := "mem_resp";
        struct_fields := [("byte_en", bits_t 4); ("addr", bits_t 32); ("data", bits_t 32)] |}.
@@ -334,6 +340,10 @@ Module EnclaveInterface.
       enclave_data_valid : bits_t 1;
     }.
 
+  Definition mk_enclave_data (data: struct_enclave_data) : struct_t enclave_data :=
+    (data.(enclave_data_eid),
+     (data.(enclave_data_addr_min), (data.(enclave_data_size), (data.(enclave_data_valid), tt)))).
+
   (* TODO: generalize this. *)
   Definition extract_enclave_data (data: struct_t enclave_data) : struct_enclave_data :=
       let '(eid, (addr_min, (size, (valid, _)))) := data in
@@ -352,6 +362,13 @@ Module EnclaveInterface.
     | _ => None
     end.
 
+  Definition enclave_id_to_bits (eid: enclave_id) : bits_t 32 :=
+    match eid with
+    | Enclave0 => Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0
+    | Enclave1 => Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1
+    | Enclave2 => Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1~0
+    | Enclave3 => Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1~1
+    end.
 
 End EnclaveInterface.
 
@@ -494,6 +511,14 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
   Definition ext_fn_t := External.ext_fn_t.
   Definition state := env_t ContextEnv (fun idx : reg_t => R idx).
 
+  Definition eid_to_initial_enclave_data (eid: enclave_id) : struct_t enclave_data :=
+    mk_enclave_data {| enclave_data_eid := enclave_id_to_bits eid;
+                       enclave_data_addr_min := Params.enclave_base eid;
+                       enclave_data_size := Params.enclave_size eid;
+                       enclave_data_valid := Ob~1
+                    |}.
+
+  (* TODO: use the above here *)
   Definition eid_to_enc_data : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun eid_to_enc_data (eid: bits_t 32) : struct_t enclave_data =>
          match eid with
@@ -790,6 +815,7 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
   Section ValidInput.
     Definition valid_input_log (log: Log R ContextEnv) : Prop. Admitted.
     Definition valid_input_state (st: state) : Prop. Admitted.
+    Definition valid_feedback_log : state -> Log R ContextEnv -> Log R ContextEnv -> Prop. Admitted.
 
     Definition internal_reg_to_taint (reg: internal_reg_t) : option ind_core_id :=
       match reg with
@@ -832,6 +858,46 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
  
   End ValidInput.
 
+  Section Initialise.
+
+    Definition initialise_internal_with_eid
+               (eid0: option enclave_id) (eid1: option enclave_id) (idx: internal_reg_t) : R_internal idx :=
+      match idx with
+      | limbo0 => Ob~0
+      | limbo1 => Ob~0
+      | enc_data0 =>
+         match eid0 with
+         | Some id => eid_to_initial_enclave_data id
+         | None => value_of_bits (Bits.zero)
+         end
+      | enc_data1 =>
+         match eid1 with
+         | Some id => eid_to_initial_enclave_data id
+         | None => value_of_bits (Bits.zero)
+         end
+      end.
+
+    Definition initialise_with_eid (eid0: option enclave_id) (eid1: option enclave_id) (idx: reg_t) : R idx :=
+      match idx with
+      | internal s => initialise_internal_with_eid eid0 eid1 s
+      | s => r s
+      end.
+
+  End Initialise.
+
+  Section ValidResetState.
+
+    (* TODO: not quite complete. *)
+    Definition valid_reset_state (st: state) (core_id: ind_core_id) (eid: enclave_id): Prop :=
+      forall reg, reg_to_taint reg = Some core_id ->
+             (reg <> pc_core0 /\ reg <> pc_core1) ->
+             match core_id with
+             | CoreId0 => initialise_with_eid (Some eid) None reg = ContextEnv.(getenv) st reg
+             | CoreId1 => initialise_with_eid None (Some eid) reg = ContextEnv.(getenv) st reg
+             end.
+
+  End ValidResetState.
+
   Section SMInternalAxioms.
 
     Definition valid_enclave_data (data: struct_t enclave_data) : Prop :=
@@ -850,14 +916,6 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
     (* TODO: incomplete *)
     Definition valid_internal_state (st: state) : Prop :=
       valid_enclave_data_regs st.
-
-    (*
-    Definition axiom_limbo_implies_no_write0 :
-      forall (st: state) (log: log),
-      valid_input_state st ->
-      valid_input_log log ->
-      update_no_writes_to_reg st log 
-    *)
 
     Definition limbo_eq (st: state) (core_id: ind_core_id) (v: bits_t 1): Prop :=
       match core_id with
@@ -941,27 +999,157 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
              update_no_writes_to_reg st log reg.
 
     (* If the core starts out in a limbo state, we say there are no valid writes to the outside world *)
-    (*
     Definition limbo_implies_no_external_enqs:
-      forall (core_id: ind_core_id) (st: state) (log log': Log R ContextEnv),
-      limbo_eq st0 core_id Ob~1 ->
+      forall (core_id: ind_core_id) (st: state) (log: Log R ContextEnv),
+      limbo_eq st core_id Ob~1 ->
       valid_input_state st ->
       valid_input_log log ->
-      log' = update_function st log ->
-   *)
-      
-      
-
+      no_external_enqs core_id st log.
+    Proof.
+    Admitted.
   End SMInternalAxioms.
 
-  Section SMAxioms.
-    (* Basic idea:
-     * - From a reset state in 
+  (* TODO: this needs to be in a framework *)
+  Section CycleModel.
+    Variable input_fn : state -> Log R ContextEnv.
+    Variable pf_input_fn_generates_valid_log : forall (st: state), valid_input_log (input_fn st).
+    Variable feedback_fn : state -> Log R ContextEnv -> Log R ContextEnv.
+    Variable pf_feedback_fn_generates_valid_og
+      : forall (st: state) (log: Log R ContextEnv), valid_feedback_log st log (feedback_fn st log).
+
+    Definition do_step (st: state) : state :=
+      let input := input_fn st in
+      let update := update_function st input in
+      let final := feedback_fn st update in
+      commit_update st final.
+
+    (* Model cycle with input, schedule, post-schedule update
+     * Important points
+     * - From a reset state, requests to memory are a function only of inputs to relevant core,
+     *   until a context switch is requested
+     * - All requests to memory are within range of the enclave
+     * - When a context switch is requested, we have no more requests to memory
+     * - Need something about how the time it takes for memory/core to reset is independent...,
+     *   but that's not here
      *)
 
-    (* All writes are a function of enclave_data *)
+    Definition prop_holds_about_sm_step (st: state) (P: state -> Log R ContextEnv -> Log R ContextEnv -> Prop) : Prop :=
+      let input := input_fn st in
+      let update := update_function st input in
+      P st input update.
 
-  End SMAxioms.
+    Fixpoint prop_holds_for_n_sm_steps (n: nat) (st: state) (P: state -> Log R ContextEnv -> Log R ContextEnv -> Prop) : Prop :=
+      match n with
+      | 0 => True
+      | S n' =>
+        let state' := do_step st in
+        prop_holds_about_sm_step st P /\
+        prop_holds_for_n_sm_steps n' state' P
+      end.
+
+    Definition P_partition (core_id: ind_core_id)
+               (st: state) (input_log: Log R ContextEnv) (output_log: Log R ContextEnv) : Prop :=
+      forall st' log',
+      valid_input_state st' ->
+      valid_input_log log' ->
+      equiv_st_for_core core_id st st' ->
+      equiv_log_for_core core_id input_log log' ->
+      equiv_log_for_core core_id output_log (update_function st' log').
+
+    (* TODO: restructure *)
+    Definition observe_enclave_reqs (log: Log R ContextEnv) (core_id: ind_core_id) : option (struct_t enclave_req).
+    Admitted.
+
+    Definition valid_enclave_req (req: struct_t enclave_req) : Prop :=
+      let '(eid, _) := req in
+      Bits.to_nat eid < 4.
+
+    Definition P_no_enclave_req (core_id: ind_core_id): state -> Log R ContextEnv -> Log R ContextEnv -> Prop :=
+      fun st input_log output_log =>
+        match observe_enclave_reqs output_log core_id with
+        | None => True
+        | Some req => valid_enclave_req req
+        end.
+
+    (* TODO: stop duplicating code *)
+    Definition observe_imem_reqs_to_mem0 (log: Log R ContextEnv) : option (struct_t mem_req) :=
+      match latest_write0 log (toMem0_IMem MemReq.valid0) with
+      | Some b =>
+          if Bits.single b then (latest_write0 log (toMem0_IMem MemReq.data0)) else None
+      | None => None
+      end.
+
+    Definition observe_imem_reqs_to_mem1 (log: Log R ContextEnv) : option (struct_t mem_req) :=
+      match latest_write0 log (toMem1_IMem MemReq.valid0) with
+      | Some b =>
+          if Bits.single b then (latest_write0 log (toMem1_IMem MemReq.data0)) else None
+      | None => None
+      end.
+
+    Definition observe_imem_reqs_to_mem (log: Log R ContextEnv) (core_id: ind_core_id) : option (struct_t mem_req) :=
+      match core_id with
+      | CoreId0 => observe_imem_reqs_to_mem0 log
+      | CoreId1 => observe_imem_reqs_to_mem1 log
+      end.
+
+    Definition observe_dmem_reqs_to_mem0 (log: Log R ContextEnv) : option (struct_t mem_req) :=
+      match latest_write0 log (toMem0_DMem MemReq.valid0) with
+      | Some b =>
+          if Bits.single b then (latest_write0 log (toMem0_DMem MemReq.data0)) else None
+      | None => None
+      end.
+
+    Definition observe_dmem_reqs_to_mem1 (log: Log R ContextEnv) : option (struct_t mem_req) :=
+      match latest_write0 log (toMem1_DMem MemReq.valid0) with
+      | Some b =>
+          if Bits.single b then (latest_write0 log (toMem1_DMem MemReq.data0)) else None
+      | None => None
+      end.
+
+    Definition observe_dmem_reqs_to_mem (log: Log R ContextEnv) (core_id: ind_core_id) : option (struct_t mem_req) :=
+      match core_id with
+      | CoreId0 => observe_dmem_reqs_to_mem0 log
+      | CoreId1 => observe_dmem_reqs_to_mem1 log
+      end.
+
+    Definition P_mem_reqs_in_range (mem: ind_cache_type) (core_id: ind_core_id) (eid: enclave_id)
+                                   : state -> Log R ContextEnv -> Log R ContextEnv -> Prop :=
+      let addr_min := Params.enclave_base eid in
+      let addr_max := Bits.plus (Params.enclave_base eid) (Params.enclave_size eid) in
+      fun st input_log output_log =>
+        let req_opt := match mem with
+                       | CacheType_Imem => observe_imem_reqs_to_mem output_log core_id
+                       | CacheType_Dmem => observe_dmem_reqs_to_mem output_log core_id
+                       end in
+        match req_opt with
+        | None => True
+        | Some req =>
+            let addr := mem_req_get_addr req in
+            (Bits.unsigned_le addr_min addr = true) /\ (Bits.unsigned_lt addr addr_max = true)
+        end.
+
+    (* The proof itself is simpler, something like "output_is_a_function_of_partitioned_registers" *)
+    (* TODO: need to include mention of shared state *)
+    Theorem partitioned_when_in_reset_state:
+      forall (core_id: ind_core_id) (st: state) (eid: enclave_id),
+      valid_reset_state st core_id eid ->
+      forall (n: nat),
+      prop_holds_for_n_sm_steps n st (P_no_enclave_req core_id) ->
+      prop_holds_for_n_sm_steps n st (P_partition core_id).
+    Admitted.
+
+    Theorem reqs_to_enclave_memory_in_range:
+      forall (core_id: ind_core_id) (st: state) (eid: enclave_id),
+      valid_reset_state st core_id eid ->
+      forall (n: nat),
+      prop_holds_for_n_sm_steps n st (P_no_enclave_req core_id) ->
+      prop_holds_for_n_sm_steps n st (P_mem_reqs_in_range CacheType_Imem core_id eid) /\
+      prop_holds_for_n_sm_steps n st (P_mem_reqs_in_range CacheType_Dmem core_id eid).
+    Admitted.
+
+    (* TODO: For context switching, state that core output is a function also of the other core's enclave *)
+
+  End CycleModel.
 
 End SecurityMonitor.
 

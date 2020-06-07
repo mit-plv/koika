@@ -59,6 +59,7 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
   Admitted.
 
   (* Everything reset except for rf and eid *)
+  (* TODO! specify core id *)
   Definition spin_up_machine (rf: env_t ContextEnv Rf.R) (eid: enclave_id) (initial_dram: initial_dram_t)
                              : state.
   Admitted.

@@ -412,7 +412,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
                          ("newrd" , bits_t 32);
                          ("dInst"    , struct_t decoded_sig);
                          ("eid", bits_t 32)
-                        ]|}.
+                        ]}.
 
   Module FifoFetch <: Fifo.
     Definition T:= struct_t fetch_bookkeeping.
