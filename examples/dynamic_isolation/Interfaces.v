@@ -1014,7 +1014,7 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
     Variable input_fn : state -> Log R ContextEnv.
     Variable pf_input_fn_generates_valid_log : forall (st: state), valid_input_log (input_fn st).
     Variable feedback_fn : state -> Log R ContextEnv -> Log R ContextEnv.
-    Variable pf_feedback_fn_generates_valid_og
+    Variable pf_feedback_fn_generates_valid_log
       : forall (st: state) (log: Log R ContextEnv), valid_feedback_log st log (feedback_fn st log).
 
     Definition do_step (st: state) : state :=
@@ -1232,6 +1232,239 @@ Module Type Memory_sig (External: External_sig).
   Parameter rules  : rule_name_t -> rule.
 
   Axiom schedule : Syntax.scheduler pos_t rule_name_t.
+
+  Section Semantics.
+    Definition state := env_t ContextEnv (fun idx : reg_t => R idx).
+    Definition empty_log : Log R ContextEnv := log_empty.
+
+    Parameter update_function : state -> Log R ContextEnv -> Log R ContextEnv.
+      (* interp_scheduler' st ? rules log scheduler. *)
+  End Semantics.
+
+  Section Valid.
+    Definition valid_input_log (log: Log R ContextEnv) : Prop. Admitted.
+    Definition valid_input_state (st: state) : Prop. Admitted.
+    Definition valid_feedback_log : state -> Log R ContextEnv -> Log R ContextEnv -> Prop :=
+      fun st input_log output_log => input_log = output_log.
+
+    Definition reg_to_taint (reg: reg_t) : option ind_core_id. Admitted.
+
+    (* TODO *)
+    Definition valid_reset_state (st: state) (core_id: ind_core_id): Prop :=
+      forall reg, reg_to_taint reg = Some core_id ->
+             ContextEnv.(getenv) st reg = r reg.
+
+  End Valid.
+
+  Section CycleModel.
+    Variable input_fn : state -> Log R ContextEnv.
+    Variable pf_input_fn_generates_valid_log : forall (st: state), valid_input_log (input_fn st).
+    Variable feedback_fn : state -> Log R ContextEnv -> Log R ContextEnv.
+    Variable pf_feedback_fn_generates_valid_log
+      : forall (st: state) (log: Log R ContextEnv), valid_feedback_log st log (feedback_fn st log).
+
+    (* TODO! *)
+    Inductive mem_region :=
+    | MemRegion_Enclave (eid: enclave_id)
+    | MemRegion_Shared
+    | MemRegion_Other
+    .
+
+    Record ghost_state :=
+      { ghost_taint0 : mem_region -> bool;
+        ghost_taint1 : mem_region -> bool
+      }.
+
+    Definition initial_ghost_st : ghost_state :=
+      {| ghost_taint0 := fun _ => false;
+         ghost_taint1 := fun _ => false
+      |}.
+
+    Definition bits_eqb {sz} (v1: bits_t sz) (v2: bits_t sz) : bool :=
+      N.eqb (Bits.to_N v1) (Bits.to_N v2).
+
+    (* TODO: stop duplicating code *)
+    Definition observe_imem_reqs_to_mem0 (log: Log R ContextEnv) : option (struct_t mem_req) :=
+      match latest_write0 log (toIMem0 MemReq.valid0) with
+      | Some b =>
+          if Bits.single b then (latest_write0 log (toIMem0 MemReq.data0)) else None
+      | None => None
+      end.
+
+    Definition observe_imem_reqs_to_mem1 (log: Log R ContextEnv) : option (struct_t mem_req) :=
+      match latest_write0 log (toIMem1 MemReq.valid0) with
+      | Some b =>
+          if Bits.single b then (latest_write0 log (toIMem1 MemReq.data0)) else None
+      | None => None
+      end.
+
+    Definition observe_imem_reqs_to_mem (log: Log R ContextEnv) (core_id: ind_core_id) : option (struct_t mem_req) :=
+      match core_id with
+      | CoreId0 => observe_imem_reqs_to_mem0 log
+      | CoreId1 => observe_imem_reqs_to_mem1 log
+      end.
+
+    Definition observe_dmem_reqs_to_mem0 (log: Log R ContextEnv) : option (struct_t mem_req) :=
+      match latest_write0 log (toDMem0 MemReq.valid0) with
+      | Some b =>
+          if Bits.single b then (latest_write0 log (toDMem0 MemReq.data0)) else None
+      | None => None
+      end.
+
+    Definition observe_dmem_reqs_to_mem1 (log: Log R ContextEnv) : option (struct_t mem_req) :=
+      match latest_write0 log (toDMem1 MemReq.valid0) with
+      | Some b =>
+          if Bits.single b then (latest_write0 log (toDMem1 MemReq.data0)) else None
+      | None => None
+      end.
+
+    Definition observe_dmem_reqs_to_mem (log: Log R ContextEnv) (core_id: ind_core_id) : option (struct_t mem_req) :=
+      match core_id with
+      | CoreId0 => observe_dmem_reqs_to_mem0 log
+      | CoreId1 => observe_dmem_reqs_to_mem1 log
+      end.
+
+    Definition addr_to_mem_region (addr: bits_t 32) : mem_region. Admitted.
+
+    Scheme Equality for mem_region.
+
+    Definition update_taint_fn (core_id: ind_core_id) (input_log: Log R ContextEnv) (taint_fn : mem_region -> bool)
+                               : mem_region -> bool :=
+      let imem_reqs_opt := observe_imem_reqs_to_mem input_log core_id in
+      let dmem_reqs_opt := observe_dmem_reqs_to_mem input_log core_id in
+      let fn' := match imem_reqs_opt with
+                 | Some req => let req_region := addr_to_mem_region (mem_req_get_addr req) in
+                              (fun region => if mem_region_beq region req_region then true
+                                          else taint_fn region)
+                 | None => taint_fn
+                 end in
+      match dmem_reqs_opt with
+      | Some req => let req_region := addr_to_mem_region (mem_req_get_addr req) in
+                   (fun region => if mem_region_beq region req_region then true
+                               else fn' region)
+      | None => taint_fn
+      end.
+
+    (* Bits equality? *)
+    (* input log and output log? *)
+    Definition update_ghost_state (ghost: ghost_state) (st: state) (input: Log R ContextEnv)
+                                  (final: Log R ContextEnv) : ghost_state :=
+      let post_inputs := {| ghost_taint0 := update_taint_fn CoreId0 input ghost.(ghost_taint0);
+                            ghost_taint1 := update_taint_fn CoreId1 input ghost.(ghost_taint1)
+                         |} in
+      let do_resets := {| ghost_taint0 := match latest_write final purge0 with
+                                          | None => post_inputs.(ghost_taint0)
+                                          | Some v => if bits_eqb v ENUM_purge_purged
+                                                     then (fun _ => false)
+                                                     else post_inputs.(ghost_taint0)
+                                          end;
+                          ghost_taint1 := match latest_write final purge1 with
+                                          | None => post_inputs.(ghost_taint1)
+                                          | Some v => if bits_eqb v ENUM_purge_purged
+                                                     then (fun _ => false)
+                                                     else post_inputs.(ghost_taint1)
+                                          end |} in
+      ghost.
+
+    Definition do_step (st: state) : state :=
+      let input := input_fn st in
+      let update := update_function st input in
+      let final := feedback_fn st update in
+      commit_update st final.
+
+
+    Definition do_step_with_ghost (st: state) (ghost: ghost_state) : state * ghost_state :=
+      let input := input_fn st in
+      let update := update_function st input in
+      let final := feedback_fn st update in
+      (commit_update st final, update_ghost_state ghost st input final).
+
+    Definition prop_holds_about_step (st: state) (P: state -> Log R ContextEnv -> Log R ContextEnv -> Prop) : Prop :=
+      let input := input_fn st in
+      let update := update_function st input in
+      P st input update.
+
+    Definition ghost_prop_holds_about_step (st: state) (ghost: ghost_state)
+               (P: state -> ghost_state -> Log R ContextEnv -> Log R ContextEnv -> Prop) : Prop :=
+      let input := input_fn st in
+      let update := update_function st input in
+      P st ghost input update.
+
+    Fixpoint prop_holds_for_n_steps (n: nat) (st: state)
+             (P: state -> Log R ContextEnv -> Log R ContextEnv -> Prop) : Prop :=
+      match n with
+      | 0 => True
+      | S n' =>
+        let state' := do_step st in
+        prop_holds_about_step st P /\
+        prop_holds_for_n_steps n' state' P
+      end.
+
+    Fixpoint ghost_prop_holds_for_n_steps (n: nat) (st: state) (ghost: ghost_state)
+             (P: state -> ghost_state -> Log R ContextEnv -> Log R ContextEnv -> Prop) : Prop :=
+      match n with
+      | 0 => True
+      | S n' =>
+        let (state', ghost') := do_step_with_ghost st ghost in
+        ghost_prop_holds_about_step st ghost P /\
+        ghost_prop_holds_for_n_steps n' state' ghost' P
+      end.
+
+
+    (* Properties:
+     * - Reset model like in Core_sig
+     * - Property of both traces: compute taint per core. While memory requests are "disjoint"/not tainted,
+     *   output is ok.
+     * - Extending multicycle framework with state will help
+     *)
+
+    Definition disjoint_taints (ghost: ghost_state) : Prop :=
+      forall (region: mem_region), (ghost.(ghost_taint0) region && ghost.(ghost_taint1) region) = false.
+
+    (* TODO: this is tricky; equiv_st_for_core is too complex
+     *)
+    Definition equiv_st_for_core : ind_core_id -> state -> state -> Prop. Admitted.
+    (* TODO: separate input/output? But need to reason about intermediate states... *)
+    Definition equiv_log_for_core : ind_core_id -> Log R ContextEnv -> Log R ContextEnv -> Prop. Admitted.
+    Definition equiv_input_log_for_core : ind_core_id -> Log R ContextEnv -> Log R ContextEnv -> Prop. Admitted.
+    Definition equiv_output_log_for_core : ind_core_id -> Log R ContextEnv -> Log R ContextEnv -> Prop. Admitted.
+
+    (* TODO: assert validity? *)
+    (*
+    Definition P_disjoint_taint_implies_partition (core_id: ind_core_id)
+      : state -> ghost_state -> Log R ContextEnv -> Log R ContextEnv -> Prop :=
+      fun st ghost input_log output_log =>
+      disjoint_taints ghost ->
+      forall st' log',
+      equiv_st_for_core core_id st st' ->
+      equiv_input_log_for_core core_id input_log log' ->
+      equiv_output_log_for_core core_id output_log (update_function st' log').
+    *)
+    Definition P_partition (core_id: ind_core_id)
+      : state -> Log R ContextEnv -> Log R ContextEnv -> Prop :=
+      fun st input_log output_log =>
+      forall log',
+      equiv_input_log_for_core core_id input_log log' ->
+      equiv_output_log_for_core core_id output_log (update_function st log').
+
+    Definition P_disjoint_taints (core_id: ind_core_id)
+               : state -> ghost_state -> Log R ContextEnv -> Log R ContextEnv -> Prop :=
+      fun st ghost input_log output_log =>
+      disjoint_taints ghost.
+
+    (* TODO: external state? *)
+    Definition valid_initial_state (st: state) :=
+      forall reg, ContextEnv.(getenv) st reg = r reg.
+
+    Theorem partitioned_from_creation:
+      forall (core_id: ind_core_id) (st: state),
+      valid_initial_state st ->
+      forall (n: nat),
+      ghost_prop_holds_for_n_steps n st initial_ghost_st (P_disjoint_taints core_id) ->
+      prop_holds_for_n_steps n st (P_partition core_id).
+    Admitted.
+
+  End CycleModel.
 
 End Memory_sig.
 
