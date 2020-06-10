@@ -7,6 +7,7 @@ Require Import dynamic_isolation.Interfaces.
 Require Import dynamic_isolation.External.
 Require Import dynamic_isolation.Multicore.
 
+(*
 Module Pf (External: External_sig) (EnclaveParams: EnclaveParameters)
           (Params0: CoreParameters) (Params1: CoreParameters)
           (Core0: Core_sig External EnclaveParams Params0)
@@ -165,10 +166,9 @@ Module Pf (External: External_sig) (EnclaveParams: EnclaveParameters)
   End Initialised.
 
 End Pf.
+*)
 
-
-
-Module OldPf (External: External_sig) (EnclaveParams: EnclaveParameters)
+Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
           (Params0: CoreParameters) (Params1: CoreParameters)
           (Core0: Core_sig External EnclaveParams Params0)
           (Core1: Core_sig External EnclaveParams Params1)
@@ -185,10 +185,10 @@ Module OldPf (External: External_sig) (EnclaveParams: EnclaveParameters)
                           (impl_st: Impl.state) (impl_tr: trace)
                           (spec_st: Spec.state) (spec_tr: trace),
         Impl.step_n initial_dram n = (impl_st, impl_tr) ->
-        Spec.step_n  initial_dram n = (spec_st, spec_tr) ->
+        Spec.step_n initial_dram n = (spec_st, spec_tr) ->
         impl_tr = spec_tr.
      Admitted.
 
   End Initialised.
 
-End OldPf.
+End TradPf.

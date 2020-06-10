@@ -5,27 +5,56 @@ Require Import Koika.Std.
 
 Require Import dynamic_isolation.Interfaces.
 Require Import dynamic_isolation.External.
+Require Import dynamic_isolation.TrivialCore.
+Require Import dynamic_isolation.Tactics.
 
 Module Common.
   Import Interfaces.Common.
 
+  (* TODO: What's the realistic threat model? *)
   Record req_observations_t :=
     ReqObs { obs_imem_req : option (struct_t mem_req);
              obs_dmem_req : option (struct_t mem_req);
-             obs_enclave_req : option (struct_t enclave_req)
            }.
 
-  (* TODO: We want to talk about the moment when context switching ends *)
+  (* TODO: We want to talk about the moment when context switching ends, but defining context switching
+   *       is murky.
+   *)
   Record resp_observations_t :=
     RespObs { obs_imem_resp : option (struct_t mem_resp);
               obs_dmem_resp : option (struct_t mem_resp);
-              obs_enclave_resp : bool
             }.
+
+  Record enc_observations_t : Type :=
+    { obs_enclave_req : option (struct_t enclave_req);
+      obs_enclave_enter : bool;
+      obs_enclave_exit : bool 
+    }.
 
   Record observations_t :=
     Obs { obs_reqs : req_observations_t;
-          obs_resps : resp_observations_t
+          obs_resps : resp_observations_t;
+          obs_encs : enc_observations_t
         }.
+
+
+  Definition empty_obs_reqs : req_observations_t := {| obs_imem_req := None;
+                                                       obs_dmem_req := None;
+                                                    |}.
+  Definition empty_obs_resps : resp_observations_t := {| obs_imem_resp := None;
+                                                         obs_dmem_resp := None;
+                                                      |}.
+
+  Definition empty_obs_encs : enc_observations_t := {| obs_enclave_req := None;
+                                                       obs_enclave_enter := false;
+                                                       obs_enclave_exit := false 
+                                                    |}.
+
+  Definition empty_observations : observations_t :=
+    {|  obs_reqs := empty_obs_reqs;
+        obs_resps := empty_obs_resps;
+        obs_encs := empty_obs_encs
+    |}.
 
   Definition tau := ind_core_id -> observations_t.
   Definition local_trace := list observations_t.
@@ -34,6 +63,14 @@ Module Common.
   Definition initial_dram_t : Type := nat -> option data_t.
 
 End Common.
+
+Module EnclaveInterface.
+  Record enclave_config :=
+    { eid : Common.enclave_id;
+      shared_page : bool;
+    }.
+
+End EnclaveInterface.
 
 Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParameters)
                         (Params0: CoreParameters) (Params1: CoreParameters)
@@ -46,6 +83,7 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
                            Memory.
   Import System.
   Import Common.
+  Import EnclaveInterface.
 
   Definition koika_state : Type := env_t ContextEnv (fun idx : reg_t => R idx).
   Definition placeholder_external_state : Type. Admitted.
@@ -60,19 +98,21 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
 
   (* Everything reset except for rf and eid *)
   (* TODO! specify core id *)
-  Definition spin_up_machine (rf: env_t ContextEnv Rf.R) (eid: enclave_id) (initial_dram: initial_dram_t)
+  Definition spin_up_machine (rf: env_t ContextEnv Rf.R) 
+                             (config0: option enclave_config)
+                             (config1: option enclave_config)
+                             (initial_dram: initial_dram_t)
                              : state.
   Admitted.
 
   (* Replace enclave data *)
-  Definition update_state_with_enclave_data (st: state) (core_id: ind_core_id) (eid: enclave_id): state. Admitted.
+  Definition update_state_with_enclave_data (st: state) (core_id: ind_core_id) 
+                                            (config: enclave_config) : state. Admitted.
 
   Definition empty_log : Log R ContextEnv := log_empty.
 
-  Require Import Tactics.
-
   Section Observations.
-
+    (*
     (* TODO: generates code but requires dependent type rewrites *)
     Definition observe_imem_reqs' (core_id: ind_core_id) (log: Log R ContextEnv) : option (struct_t mem_req).
     Proof.
@@ -87,6 +127,7 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
       - destruct core_id; (inversion Heqregs; subst; case_eq (Bits.single t); intros; [ exact ret_value | exact None]).
       - exact None.
     Defined.
+    *)
 
     Definition observe_imem_reqs0 (log: Log R ContextEnv) : option (struct_t mem_req) :=
       match latest_write0 log (System.Core0ToSM_IMem MemReq.valid0) with
@@ -128,30 +169,9 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
       | CoreId1 => observe_dmem_reqs1 log
       end.
 
-    Definition observe_enclave_reqs0 (log: Log R ContextEnv) : option (struct_t enclave_req) :=
-      match latest_write0 log (System.Core0ToSM_Enc EnclaveReq.valid0) with
-      | Some b =>
-          if Bits.single b then (latest_write0 log (System.Core0ToSM_Enc EnclaveReq.data0)) else None
-      | None => None
-      end.
-
-    Definition observe_enclave_reqs1 (log: Log R ContextEnv) : option (struct_t enclave_req) :=
-      match latest_write0 log (System.Core1ToSM_Enc EnclaveReq.valid0) with
-      | Some b =>
-          if Bits.single b then (latest_write0 log (System.Core1ToSM_Enc EnclaveReq.data0)) else None
-      | None => None
-      end.
-
-    Definition observe_enclave_reqs (log: Log R ContextEnv) (core_id: ind_core_id) : option (struct_t enclave_req) :=
-      match core_id with
-      | CoreId0 => observe_enclave_reqs0 log
-      | CoreId1 => observe_enclave_reqs1 log
-      end.
-
     Definition observe_reqs (log: Log R ContextEnv) (core_id: ind_core_id) : req_observations_t :=
       {| obs_imem_req := observe_imem_reqs log core_id;
          obs_dmem_req := observe_dmem_reqs log core_id;
-         obs_enclave_req := observe_enclave_reqs log core_id
       |}.
 
     Definition observe_imem_resps0 (log: Log R ContextEnv) : option (struct_t mem_resp) :=
@@ -194,34 +214,89 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
       | CoreId1 => observe_dmem_resps1 log
       end.
 
-    (* TODO (slight hack): If write reg_proc_reset == Restart, treat as switching enclaves *)
-    Definition observe_enclave_resp0 (log: Log R ContextEnv) : bool :=
-      match latest_write log System.purge_core0 with
-      | Some v => (Nat.eqb (Bits.to_nat v) 3)
-      | None => false
+    Definition observe_enclave_reqs0 (log: Log R ContextEnv) : option (struct_t enclave_req) :=
+      match latest_write0 log (System.Core0ToSM_Enc EnclaveReq.valid0) with
+      | Some b =>
+          if Bits.single b then (latest_write0 log (System.Core0ToSM_Enc EnclaveReq.data0)) else None
+      | None => None
       end.
 
-    Definition observe_enclave_resp1 (log: Log R ContextEnv) : bool :=
-      match latest_write log System.purge_core1 with
-      | Some v => (Nat.eqb (Bits.to_nat v) 3)
-      | None => false
+    Definition observe_enclave_reqs1 (log: Log R ContextEnv) : option (struct_t enclave_req) :=
+      match latest_write0 log (System.Core1ToSM_Enc EnclaveReq.valid0) with
+      | Some b =>
+          if Bits.single b then (latest_write0 log (System.Core1ToSM_Enc EnclaveReq.data0)) else None
+      | None => None
       end.
 
-    Definition observe_enclave_resps (log: Log R ContextEnv) (core_id: ind_core_id) : bool :=
+    Definition observe_enclave_reqs (log: Log R ContextEnv) (core_id: ind_core_id) : option (struct_t enclave_req) :=
       match core_id with
-      | CoreId0 => observe_enclave_resp0 log
-      | CoreId1 => observe_enclave_resp1 log
+      | CoreId0 => observe_enclave_reqs0 log
+      | CoreId1 => observe_enclave_reqs1 log
       end.
+
+
+
+    Definition bits_eqb {sz} (v1: bits_t sz) (v2: bits_t sz) : bool :=
+      N.eqb (Bits.to_N v1) (Bits.to_N v2).
+
+    (* TODO (slight hack): If write reg_proc_reset == Restart, treat as switching enclaves *)
+    Definition observe_enclave_enter0 (log: Log R ContextEnv) : bool :=
+      match latest_write log System.purge_core0 with
+      | Some v => bits_eqb v ENUM_purge_restart 
+      | None => false
+      end.
+
+    Definition observe_enclave_enter1 (log: Log R ContextEnv) : bool :=
+      match latest_write log System.purge_core1 with
+      | Some v => bits_eqb v ENUM_purge_restart
+      | None => false
+      end.
+
+    Definition observe_enclave_enters (log: Log R ContextEnv) (core_id: ind_core_id) : bool :=
+      match core_id with
+      | CoreId0 => observe_enclave_enter0 log
+      | CoreId1 => observe_enclave_enter1 log
+      end.
+
+    Definition observe_enclave_exit0 (log: Log R ContextEnv) : bool :=
+      match latest_write log (System.SM_internal System.SM.enc_data0) with
+      | Some v => 
+          let data := EnclaveInterface.extract_enclave_data v in
+          bits_eqb (EnclaveInterface.enclave_data_valid data) Ob~0
+      | None => false
+      end.
+
+    Definition observe_enclave_exit1 (log: Log R ContextEnv) : bool :=
+      match latest_write log (System.SM_internal System.SM.enc_data1) with
+      | Some v => 
+          let data := EnclaveInterface.extract_enclave_data v in
+          bits_eqb (EnclaveInterface.enclave_data_valid data) Ob~0
+      | None => false
+      end.
+
+    Definition observe_enclave_exits (log: Log R ContextEnv) (core_id: ind_core_id) : bool :=
+      match core_id with
+      | CoreId0 => observe_enclave_exit0 log
+      | CoreId1 => observe_enclave_exit1 log
+      end.
+
 
     Definition observe_resps (log: Log R ContextEnv) (core_id: ind_core_id) : resp_observations_t :=
       {| obs_imem_resp := observe_imem_resps log core_id;
          obs_dmem_resp := observe_dmem_resps log core_id;
-         obs_enclave_resp := observe_enclave_resps log core_id
       |}.
+
+    Definition observe_enclaves (log: Log R ContextEnv) (core_id: ind_core_id) : enc_observations_t :=
+      {| obs_enclave_req := observe_enclave_reqs log core_id;
+         obs_enclave_enter := observe_enclave_enters log core_id;
+         obs_enclave_exit := observe_enclave_exits log core_id
+      |}.
+
 
     Definition do_observations (log: Log R ContextEnv) : ind_core_id -> observations_t :=
       fun core_id => {| obs_reqs := observe_reqs log core_id;
-                     obs_resps := observe_resps log core_id
+                     obs_resps := observe_resps log core_id;
+                     obs_encs := observe_enclaves log core_id
                   |}.
 
   End Observations.
@@ -260,90 +335,226 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
 
   (* A system consists of two single-core machines with separate memories. *)
   Import Interfaces.Common.
+  Import EnclaveInterface.
+  Import Common.
 
-  Record enclave_metadata :=
-    { meta_eid : enclave_id;
-      (*
-      addr_min : bits_t 32;
-      size : bits_t 32
-      *)
-    }.
-
-  Record core_config : Type :=
-    { enclave_data : enclave_metadata;
-      in_limbo: bool;
-      requested_enclave: option enclave_metadata
-    }.
-
-  Definition shared_enclave_config : Type := ind_core_id -> core_config.
-
+  (* TODO: core_id irrelevant *)
   Module VoidCoreParams : CoreParameters.
     Definition core_id : Common.core_id_t := Bits.zero.
     Definition initial_pc : Common.addr_t := Bits.zero.
   End VoidCoreParams.
-
-  Require Import dynamic_isolation.TrivialCore.
 
   Module VoidCore := EmptyCore External EnclaveParams VoidCoreParams.
 
   Module Machine0 := MachineSemantics External EnclaveParams Params0 VoidCoreParams Core0 VoidCore Memory.
   Module Machine1 := MachineSemantics External EnclaveParams VoidCoreParams Params1 VoidCore Core1 Memory.
 
-  (* TODO: rename *)
-  Definition initial_dram_t : Type := nat -> option data_t.
+  Inductive enclave_state_t :=
+  | EnclaveState_Running 
+  | EnclaveState_Switching (next_enclave: enclave_config)
+  .
+
+  Definition enclave_req_to_eid (enclave_req: struct_t enclave_req) : option enclave_id :=
+    let '(eid, _) := enclave_req in
+    EnclaveInterface.bits_id_to_ind_id eid.
 
 
-  Record state :=
-    { machine0_state : Machine0.state;
-      machine1_state : Machine1.state;
-      enclave_config: shared_enclave_config;
-      enclave_mem : enclave_id -> initial_dram_t;
-      (* shared_mem : (initial_dram_t)  *)
+  Definition check_for_context_switching (obs: observations_t) : option enclave_config :=
+    match obs.(obs_encs).(obs_enclave_req) with
+    | Some req => 
+      match enclave_req_to_eid req with
+      | Some eid => 
+          (* We have a valid enclave request, initiate context switching *)
+          Some {| eid := eid;
+                  shared_page := false; (* TODO *)
+               |} 
+      | None => None (* drop request *)
+      end
+    | None => None
+    end.
+
+
+  Record contextSwitchData :=
+    { contextSwitch_rf : env_t ContextEnv Rf.R;
+      contextSwitch_oldEnclave : enclave_config;
+      contextSwitch_dram: initial_dram_t
     }.
 
-  Import Common.
+  (* Partitioned. *)
+  Definition memory_map : Type := EnclaveInterface.mem_region -> initial_dram_t.
+
+  Definition get_dram : memory_map -> enclave_config -> initial_dram_t. Admitted.
+ 
+  (* Copy back relevant regions of dram *)
+  Definition update_regions (config: enclave_config) (dram: initial_dram_t)
+                            (regions: memory_map)
+                            : memory_map.
+  Admitted.
+
+  Scheme Equality for Common.enclave_id.
+
+  Definition can_enter_enclave (next_enclave: enclave_config) (other_core_enclave: option enclave_config) : bool :=
+    match other_core_enclave with
+    | None => true
+    | Some config =>
+        (* Other core hasn't claimed the requested memory regions *)
+        negb (enclave_id_beq next_enclave.(eid) config.(eid)) &&
+        negb (next_enclave.(shared_page) && config.(shared_page))
+    end.
+
+
+  Section LocalStateMachine.
+    Context {machine_state_t : Type}.
+    Context (step_fn : machine_state_t -> machine_state_t * observations_t).
+    Context (extract_rf : machine_state_t -> env_t ContextEnv Rf.R).
+    Context (extract_dram: machine_state_t -> initial_dram_t).
+    Context (spin_up_machine: env_t ContextEnv Rf.R -> enclave_config -> initial_dram_t -> machine_state_t).
+
+    Inductive core_state_machine :=
+    | CoreState_Enclave (machine_state: machine_state_t) (config: enclave_config) 
+                        (enclave_state: enclave_state_t)
+    | CoreState_Waiting (new: enclave_config) (next_rf: env_t ContextEnv Rf.R)
+    .
+
+    Inductive magic_state_machine :=
+    | MagicState_Continue (state: core_state_machine) (obs: observations_t)
+    | MagicState_Exit (waiting: enclave_config) (old_data: contextSwitchData) (obs: observations_t)
+    | MagicState_TryToEnter (next_enclave: enclave_config) (next_rf: env_t ContextEnv Rf.R)
+    .
+
+    Definition get_enclave_config (st: core_state_machine) : option enclave_config :=
+      match st with
+      | CoreState_Enclave _ config _ => Some config 
+      | _ => None
+      end.
+       
+
+    Definition do_magic_step (config: magic_state_machine)
+                             (mem_regions: memory_map)
+                             (other_cores_enclave: option enclave_config)
+                             : core_state_machine * observations_t * memory_map :=
+      match config with
+      | MagicState_Continue st obs => (st, obs, mem_regions) 
+      | MagicState_Exit next_enclave old_data obs =>
+          let new_regions := update_regions old_data.(contextSwitch_oldEnclave) 
+                                            old_data.(contextSwitch_dram)
+                                            mem_regions in            
+          let core_state := CoreState_Waiting next_enclave old_data.(contextSwitch_rf) in
+          let obs := {| obs_reqs := empty_obs_reqs;
+                        obs_resps := empty_obs_resps;
+                        obs_encs := {| obs_enclave_req := None;
+                                       obs_enclave_enter := false;
+                                       obs_enclave_exit := true
+                                    |}
+                     |} in
+          (core_state, obs, new_regions)
+      | MagicState_TryToEnter next_enclave next_rf =>
+          (* Can only peek at other core's enclave when context switching *)
+          if can_enter_enclave next_enclave other_cores_enclave then 
+            let machine := spin_up_machine next_rf next_enclave (get_dram mem_regions next_enclave) in
+            let core_state := CoreState_Enclave machine next_enclave EnclaveState_Running in
+            let obs := {| obs_reqs := empty_obs_reqs;
+                          obs_resps := empty_obs_resps;
+                          obs_encs := {| obs_enclave_req := None;
+                                         obs_enclave_enter := true;
+                                         obs_enclave_exit := true
+                                      |}
+                       |} in
+            (core_state, obs, mem_regions)
+          else (CoreState_Waiting next_enclave next_rf, empty_observations, mem_regions)
+      end.
+
+    Definition local_core_step (can_switch: bool)
+                               (config: core_state_machine)
+                               : magic_state_machine  :=
+      match config with
+      | CoreState_Enclave machine enclave enclave_state =>
+          (* Do a Koika step *)
+          let (machine', obs) := step_fn machine in
+          match enclave_state with
+          | EnclaveState_Running =>
+              (* Check if we want to initiate context switching *)
+              let enclave_state' :=
+                match check_for_context_switching obs with
+                | Some next_enclave =>  EnclaveState_Switching next_enclave
+                | None =>  EnclaveState_Running (* continue running the same enclave *)
+                end in
+              MagicState_Continue (CoreState_Enclave machine' enclave enclave_state') obs
+          | EnclaveState_Switching next_enclave =>
+              (* Check if we have purged all the state and can completely exit the enclave *)
+              if obs.(obs_encs).(obs_enclave_exit) then
+                  let context_switching_data :=
+                     {| contextSwitch_rf := extract_rf machine';
+                        contextSwitch_oldEnclave := enclave;
+                        contextSwitch_dram := extract_dram machine'
+                     |} in
+                  MagicState_Exit next_enclave context_switching_data obs
+              else MagicState_Continue (CoreState_Enclave machine' enclave enclave_state) obs (* Still switching *)
+          end
+      | CoreState_Waiting new_enclave next_rf =>
+          (* Here all we can do is try to enter the enclave if it's our turn *)
+          if can_switch 
+          then MagicState_TryToEnter new_enclave next_rf
+          else MagicState_Continue config empty_observations 
+      end.
+
+  End LocalStateMachine.
+
+  Record state :=
+    { machine0_state : @core_state_machine Machine0.state;
+      machine1_state : @core_state_machine Machine1.state;
+      regions : memory_map;
+      clk : bool
+    }.
 
   (* Basic idea:
    * - We're allowed to update the private enclave state whenever the other enclave context switches
    * - This is signaled by "enclave_resp = true"
    * - We can model whether an enclave request is accepted (it waits until it can switch to the enclave for now)
    * - Give Core0 priority
-   * - TODO: to prevent racing, we only allow one enclave resp at a time in the main system
+   * - TODO: to prevent racing, we only allow one enclave resp at a time in the main system; 
+   *         not absolutely necessary
    *)
-  (* TODO: extract values better *)
-  Definition enclave_req_to_eid (enclave_req: struct_t enclave_req) : option enclave_id :=
-    let '(eid, _) := enclave_req in
-    match Bits.to_nat eid with
-    | 0 => Some Enclave0
-    | 1 => Some Enclave1
-    | 2 => Some Enclave2
-    | 3 => Some Enclave3
-    | _ => None
-    end.
+  (* Discard Core1 observations *)
+  Definition machine_step0 : Machine0.state -> Machine0.state * observations_t :=
+    fun st => let '(st', tau) := Machine0.step st in (st', tau CoreId0).
+  Definition machine_step1 : Machine1.state -> Machine1.state * observations_t :=
+    fun st => let '(st', tau) := Machine1.step st in (st', tau CoreId1).
+  
+  (* Hmmm. contention with exit/enter? *)
 
-  Definition update_core_state (config: core_config) (obs: observations_t) : core_config :=
-    match obs.(obs_reqs).(obs_enclave_req), obs.(obs_resps).(obs_enclave_resp) with
-    | Some _, true => (* Should never happen *) config
-    | Some req, false => if config.(in_limbo) then (* drop request *)
-                          config
-                        else match enclave_req_to_eid req with
-                             | Some eid =>
-                               {| enclave_data := config.(enclave_data);
-                                  in_limbo := true;
-                                  requested_enclave := Some {| meta_eid := eid |}
-                               |}
-                             | None => config (* drop request *)
-                             end
-    | None, true => match config.(requested_enclave) with
-                   | None => (* Should never happen *) config
-                   | Some eid => {| enclave_data := eid;
-                                   in_limbo := false;
-                                   requested_enclave := None
-                                |}
-                   end
-    | None, false => config
-    end.
+  Definition spin_up_machine0 (rf: env_t ContextEnv Rf.R) (config: enclave_config) (dram: initial_dram_t) 
+                              : Machine0.state :=
+    Machine0.spin_up_machine rf (Some config) None dram.
 
+  Definition spin_up_machine1 (rf: env_t ContextEnv Rf.R) (config: enclave_config) (dram: initial_dram_t) 
+                              : Machine1.state :=
+    Machine1.spin_up_machine rf (Some config) None dram.
+
+  Definition step (st: state) : state * tau := 
+    (* Each core independently takes a step; 
+     * context switching is only allowed for core0 and core1 on even and odd cycles respectively 
+     *)
+    let magic0 := local_core_step machine_step0 Machine0.get_rf Machine0.get_dram (negb st.(clk)) st.(machine0_state) in
+    let magic1 := local_core_step machine_step1 Machine1.get_rf Machine1.get_dram st.(clk) st.(machine1_state) in
+    (* Now we allow the core to exit it's enclave region or enter a new one, if it is it's turn.
+     * We should have an invariant that no core is running the same memory region, so that 
+     * the order of doing the exit commutes.
+     * We also enforce that you can only observe the other core's state at the start of the "previous" cycle 
+     * (check security).
+     *)
+    let '(core0, obs0, regions') :=
+        do_magic_step spin_up_machine0 magic0 st.(regions) (get_enclave_config st.(machine1_state)) in
+    let '(core1, obs1, regions'') :=
+        do_magic_step spin_up_machine1 magic1 regions' (get_enclave_config st.(machine0_state)) in
+    let st' := {| machine0_state := core0;
+                  machine1_state := core1;
+                  regions := regions'';
+                  clk := negb st.(clk)
+               |} in
+    (st', fun id => match id with | CoreId0 => obs0 | CoreId1 => obs1 end).
+  
+  (*
   Record context_switch_data  :=
     { old_enclave: enclave_id;
       old_dram: initial_dram_t;
@@ -468,40 +679,48 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
       (state', fun id => match id with | CoreId0 => tau0 CoreId0 | CoreId1 => tau1 CoreId1 end).
 
   (* TODO: move to common *)
+  *)
 
   Definition enclave_base enc_id := Bits.to_nat (EnclaveParams.enclave_base enc_id).
   Definition enclave_max enc_id := Bits.to_nat (Bits.plus (EnclaveParams.enclave_base enc_id)
                                                           (EnclaveParams.enclave_size enc_id)).
 
-  Definition initial_enclave_config :=
-    fun core_id =>
-      match core_id with
-      | CoreId0 => {| enclave_data := {| meta_eid := Enclave0 |};
-                     in_limbo := false;
-                     requested_enclave := None
-                  |}
-      | CoreId1 => {| enclave_data := {| meta_eid := Enclave1 |};
-                     in_limbo := false;
-                     requested_enclave := None
-                  |}
-      end.
+  Definition initial_enclave_config0 : enclave_config :=
+    {| eid := Enclave0;
+       shared_page  := false
+    |}.
+  Definition initial_enclave_config1 : enclave_config :=
+    {| eid := Enclave1;
+       shared_page  := false
+    |}.
 
   Section Initialised.
 
     Variable initial_dram : initial_dram_t.
-
 
     Definition initial_enclave_dram enc_id :=
       fun addr => if ((enclave_base enc_id) <=? addr) && (addr <? (enclave_max enc_id))
                then initial_dram addr
                else None.
 
+    (* Same as above *)
+    Definition initial_enclave_shared : initial_dram_t. Admitted.
+    
+    Definition initial_regions : memory_map :=
+      fun region =>
+      match region with
+      | EnclaveInterface.MemRegion_Enclave eid => initial_enclave_dram eid
+      | EnclaveInterface.MemRegion_Shared => initial_enclave_shared
+      | EnclaveInterface.MemRegion_Other => fun _ => None
+      end.
+
     Definition initial_state : state :=
-      {| machine0_state := Machine0.initial_state (initial_enclave_dram Enclave0);
-         machine1_state := Machine1.initial_state (initial_enclave_dram Enclave1);
-         enclave_config := initial_enclave_config;
-         enclave_mem := fun eid => initial_enclave_dram eid
-         (* shared_mem := option (initial_dram_t); *)
+      let machine0 := Machine0.initial_state (initial_enclave_dram Enclave0) in
+      let machine1 := Machine1.initial_state (initial_enclave_dram Enclave1) in
+      {| machine0_state := CoreState_Enclave machine0 initial_enclave_config0 EnclaveState_Running;
+         machine1_state := CoreState_Enclave machine1 initial_enclave_config1 EnclaveState_Running;
+         regions := initial_regions;
+         clk := false
       |}.
 
     Fixpoint step_n (n: nat) : state * trace :=

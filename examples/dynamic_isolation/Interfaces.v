@@ -20,9 +20,10 @@ Module Common.
   Definition mem_req :=
     {| struct_name := "mem_req";
        struct_fields := [("byte_en" , bits_t 4);
-                         ("addr"     , bits_t 32);
-                         ("data"     , bits_t 32)] |}.
-
+                         ("addr"    , bits_t 32);
+                         ("data"    , bits_t 32)] |}.
+  
+  (* TODO *)
   Definition mem_req_get_addr (req: struct_t mem_req) : bits_t 32 :=
     let '(_, (addr, (_, _))) := req in
     addr.
@@ -198,6 +199,7 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
 
   Parameter schedule : Syntax.scheduler pos_t rule_name_t.
 
+  (*
   Section CycleSemantics.
     Definition state := env_t ContextEnv (fun idx : reg_t => R idx).
     Definition empty_log : Log R ContextEnv := log_empty.
@@ -318,6 +320,7 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
     *)
 
   End CoreAxioms.
+  *)
 
 End Core_sig.
 
@@ -329,6 +332,7 @@ Module EnclaveInterface.
        struct_fields := [("eid", bits_t 32);
                          ("addr_min", bits_t 32);
                          ("size", bits_t 32);
+                         ("shared_page", bits_t 1);
                          ("valid", bits_t 1)
                         ]
     |}.
@@ -337,19 +341,30 @@ Module EnclaveInterface.
     { enclave_data_eid : bits_t 32;
       enclave_data_addr_min : bits_t 32;
       enclave_data_size : bits_t 32;
+      enclave_data_shared_page : bits_t 1;
       enclave_data_valid : bits_t 1;
     }.
 
+  Inductive mem_region :=
+  | MemRegion_Enclave (eid: enclave_id)
+  | MemRegion_Shared
+  | MemRegion_Other
+  .
+
+  Scheme Equality for mem_region.
+
   Definition mk_enclave_data (data: struct_enclave_data) : struct_t enclave_data :=
     (data.(enclave_data_eid),
-     (data.(enclave_data_addr_min), (data.(enclave_data_size), (data.(enclave_data_valid), tt)))).
+     (data.(enclave_data_addr_min), (data.(enclave_data_size), 
+                                     (data.(enclave_data_shared_page), (data.(enclave_data_valid), tt))))).
 
   (* TODO: generalize this. *)
   Definition extract_enclave_data (data: struct_t enclave_data) : struct_enclave_data :=
-      let '(eid, (addr_min, (size, (valid, _)))) := data in
+      let '(eid, (addr_min, (size, (shared_page, (valid, _))))) := data in
       {| enclave_data_eid := eid;
          enclave_data_addr_min := addr_min;
          enclave_data_size := size;
+         enclave_data_shared_page := shared_page;
          enclave_data_valid := valid;
       |}.
 
@@ -372,6 +387,7 @@ Module EnclaveInterface.
 
 End EnclaveInterface.
 
+(* NOTE: in our model we say this is fixed, so we can talk about the internal registers. *)
 Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
   Import Common.
   Import EnclaveInterface.
@@ -393,20 +409,22 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
     | enc_data1 => struct_t enclave_data
     end.
 
+
+  Definition eid_to_initial_enclave_data (eid: enclave_id) : struct_t enclave_data :=
+    mk_enclave_data {| enclave_data_eid := enclave_id_to_bits eid;
+                       enclave_data_addr_min := Params.enclave_base eid;
+                       enclave_data_size := Params.enclave_size eid;
+                       enclave_data_shared_page := Ob~0;
+                       enclave_data_valid := Ob~1
+                    |}.
+
+
   Definition r_internal (idx: internal_reg_t) : R_internal idx :=
     match idx with
     | limbo0 => Bits.zero
     | limbo1 => Bits.zero
-    | enc_data0 => let eid := Bits.zero in
-                  let addr_min := Params.enclave_base Enclave0 in
-                  let size := Params.enclave_size Enclave0 in
-                  let valid := Ob~1 in
-                  ((eid, (addr_min, (size, (valid, tt)))))
-    | einc_data1 => let eid := Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1 in
-                   let addr_min := Params.enclave_base Enclave1 in
-                   let size := Params.enclave_size Enclave1 in
-                   let valid := Ob~1 in
-                   ((eid, (addr_min, (size, (valid, tt)))))
+    | enc_data0 => eid_to_initial_enclave_data Enclave0
+    | enc_data1 => eid_to_initial_enclave_data Enclave1
     end.
 
   Instance FiniteType_internal_reg_t : FiniteType internal_reg_t := _.
@@ -511,41 +529,17 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
   Definition ext_fn_t := External.ext_fn_t.
   Definition state := env_t ContextEnv (fun idx : reg_t => R idx).
 
-  Definition eid_to_initial_enclave_data (eid: enclave_id) : struct_t enclave_data :=
-    mk_enclave_data {| enclave_data_eid := enclave_id_to_bits eid;
-                       enclave_data_addr_min := Params.enclave_base eid;
-                       enclave_data_size := Params.enclave_size eid;
-                       enclave_data_valid := Ob~1
-                    |}.
-
-  (* TODO: use the above here *)
   Definition eid_to_enc_data : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun eid_to_enc_data (eid: bits_t 32) : struct_t enclave_data =>
          match eid with
          | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0 =>
-             struct enclave_data { eid := eid;
-                                   addr_min := (#(Params.enclave_base Enclave0));
-                                   size := (#(Params.enclave_size Enclave0));
-                                   valid := Ob~1
-                                 }
+             `UConst (tau := struct_t enclave_data) (eid_to_initial_enclave_data Enclave0)`
          | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1 =>
-             struct enclave_data { eid := eid;
-                                   addr_min := (#(Params.enclave_base Enclave1));
-                                   size := (#(Params.enclave_size Enclave1));
-                                   valid := Ob~1
-                                 }
+             `UConst (tau := struct_t enclave_data) (eid_to_initial_enclave_data Enclave1)`
          | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1~0 =>
-             struct enclave_data { eid := eid;
-                                   addr_min := (#(Params.enclave_base Enclave2));
-                                   size := (#(Params.enclave_size Enclave2));
-                                   valid := Ob~1
-                                 }
+             `UConst (tau := struct_t enclave_data) (eid_to_initial_enclave_data Enclave2)`
          | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1~1 =>
-             struct enclave_data { eid := eid;
-                                   addr_min := (#(Params.enclave_base Enclave3));
-                                   size := (#(Params.enclave_size Enclave3));
-                                   valid := Ob~1
-                                 }
+             `UConst (tau := struct_t enclave_data) (eid_to_initial_enclave_data Enclave3)`
          return default : `UConst (tau := struct_t enclave_data) (value_of_bits (Bits.zero))`
          end
     }}.
@@ -1233,6 +1227,8 @@ Module Type Memory_sig (External: External_sig).
 
   Axiom schedule : Syntax.scheduler pos_t rule_name_t.
 
+  (*
+
   Section Semantics.
     Definition state := env_t ContextEnv (fun idx : reg_t => R idx).
     Definition empty_log : Log R ContextEnv := log_empty.
@@ -1465,6 +1461,7 @@ Module Type Memory_sig (External: External_sig).
     Admitted.
 
   End CycleModel.
+  *)
 
 End Memory_sig.
 
