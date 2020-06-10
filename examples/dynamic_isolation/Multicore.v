@@ -130,6 +130,45 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
     Defined.
     *)
 
+    Section LogEvents.
+      Context {reg_t: Type}.
+      Context {R: reg_t -> type}.
+      Context {REnv: Env reg_t}.
+
+      Definition observe_enq0 {T} (valid_reg: reg_t) (pf_R_valid_reg: R valid_reg = bits_t 1)
+                                  (data_reg: reg_t) (pf_R_data_reg: R data_reg = T)
+                                  (log: Log R REnv) : option T :=
+          match latest_write0 log valid_reg with
+          | Some b => if Bits.single (rew [fun t : type => t] pf_R_valid_reg in b)
+                     then rew [fun t : type => option t] pf_R_data_reg in (latest_write0 log data_reg)
+                     else None
+          | None => None
+          end.
+
+      Definition observe_enq1 {T} (valid_reg: reg_t) (pf_R_valid_reg: R valid_reg = bits_t 1)
+                                  (data_reg: reg_t) (pf_R_data_reg: R data_reg = T)
+                                  (log: Log R REnv) : option T :=
+          match latest_write1 log valid_reg with
+          | Some b => if Bits.single (rew [fun t : type => t] pf_R_valid_reg in b)
+                     then rew [fun t : type => option t] pf_R_data_reg in (latest_write1 log data_reg)
+                     else None
+          | None => None
+          end.
+
+    End LogEvents.
+
+    Definition observe_imem_reqs0 (log: Log R ContextEnv) : option (struct_t mem_req) :=
+      (observe_enq0 (System.Core0ToSM_IMem MemReq.valid0) eq_refl
+                    (System.Core0ToSM_IMem MemReq.data0) eq_refl
+                    log).
+
+    Definition observe_imem_reqs1 (log: Log R ContextEnv) : option (struct_t mem_req) :=
+      (observe_enq0 (System.Core1ToSM_IMem MemReq.valid0) eq_refl
+                    (System.Core1ToSM_IMem MemReq.data0) eq_refl
+                    log).
+
+
+    (*
     Definition observe_imem_reqs0 (log: Log R ContextEnv) : option (struct_t mem_req) :=
       match latest_write0 log (System.Core0ToSM_IMem MemReq.valid0) with
       | Some b =>
@@ -143,6 +182,7 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
           if Bits.single b then (latest_write0 log (System.Core1ToSM_IMem MemReq.data0)) else None
       | None => None
       end.
+      *)
 
     Definition observe_imem_reqs (log: Log R ContextEnv) (core_id: ind_core_id) : option (struct_t mem_req) :=
       match core_id with
@@ -150,6 +190,17 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
       | CoreId1 => observe_imem_reqs1 log
       end.
 
+    Definition observe_dmem_reqs0 (log: Log R ContextEnv) : option (struct_t mem_req) :=
+      (observe_enq0 (System.Core0ToSM_DMem MemReq.valid0) eq_refl
+                    (System.Core0ToSM_DMem MemReq.data0) eq_refl
+                    log).
+    Definition observe_dmem_reqs1 (log: Log R ContextEnv) : option (struct_t mem_req) :=
+      (observe_enq0 (System.Core1ToSM_DMem MemReq.valid0) eq_refl
+                    (System.Core1ToSM_DMem MemReq.data0) eq_refl
+                    log).
+
+
+    (*
     Definition observe_dmem_reqs0 (log: Log R ContextEnv) : option (struct_t mem_req) :=
       match latest_write0 log (System.Core0ToSM_DMem MemReq.valid0) with
       | Some b =>
@@ -163,6 +214,7 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
           if Bits.single b then (latest_write1 log (System.Core1ToSM_DMem MemReq.data0)) else None
       | None => None
       end.
+    *)
 
     Definition observe_dmem_reqs (log: Log R ContextEnv) (core_id: ind_core_id) : option (struct_t mem_req) :=
       match core_id with
@@ -176,6 +228,17 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
       |}.
 
     Definition observe_imem_resps0 (log: Log R ContextEnv) : option (struct_t mem_resp) :=
+      observe_enq1 (System.SMToCore0_IMem MemResp.valid0) eq_refl
+                   (System.SMToCore0_IMem MemResp.data0) eq_refl
+                   log.
+
+    Definition observe_imem_resps1 (log: Log R ContextEnv) : option (struct_t mem_resp) :=
+      observe_enq1 (System.SMToCore1_IMem MemResp.valid0) eq_refl
+                   (System.SMToCore1_IMem MemResp.data0) eq_refl
+                   log.
+
+    (*
+    Definition observe_imem_resps0 (log: Log R ContextEnv) : option (struct_t mem_resp) :=
       match latest_write1 log (System.SMToCore0_IMem MemResp.valid0) with
       | Some b =>
           if Bits.single b then (latest_write1 log (System.SMToCore0_IMem MemResp.data0)) else None
@@ -188,6 +251,7 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
           if Bits.single b then (latest_write1 log (System.SMToCore1_IMem MemResp.data0)) else None
       | None => None
       end.
+      *)
 
     Definition observe_imem_resps (log: Log R ContextEnv) (core_id: ind_core_id) : option (struct_t mem_resp) :=
       match core_id with
@@ -195,6 +259,17 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
       | CoreId1 => observe_imem_resps1 log
       end.
 
+    Definition observe_dmem_resps0 (log: Log R ContextEnv) : option (struct_t mem_resp) :=
+      observe_enq1 (System.SMToCore0_DMem MemResp.valid0) eq_refl
+                   (System.SMToCore0_DMem MemResp.data0) eq_refl
+                   log.
+
+    Definition observe_dmem_resps1 (log: Log R ContextEnv) : option (struct_t mem_resp) :=
+      observe_enq1 (System.SMToCore1_DMem MemResp.valid0) eq_refl
+                   (System.SMToCore1_DMem MemResp.data0) eq_refl
+                   log.
+
+    (*
     Definition observe_dmem_resps0 (log: Log R ContextEnv) : option (struct_t mem_resp) :=
       match latest_write1 log (System.SMToCore0_DMem MemResp.valid0) with
       | Some b =>
@@ -208,6 +283,7 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
           if Bits.single b then (latest_write1 log (System.SMToCore1_DMem MemResp.data0)) else None
       | None => None
       end.
+      *)
 
     Definition observe_dmem_resps (log: Log R ContextEnv) (core_id: ind_core_id) : option (struct_t mem_resp) :=
       match core_id with
@@ -215,6 +291,18 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
       | CoreId1 => observe_dmem_resps1 log
       end.
 
+
+    Definition observe_enclave_reqs0 (log: Log R ContextEnv) : option (struct_t enclave_req) :=
+      observe_enq0 (System.Core0ToSM_Enc EnclaveReq.valid0) eq_refl
+                   (System.Core0ToSM_Enc EnclaveReq.data0) eq_refl
+                   log.
+
+    Definition observe_enclave_reqs1 (log: Log R ContextEnv) : option (struct_t enclave_req) :=
+      observe_enq1 (System.Core1ToSM_Enc EnclaveReq.valid0) eq_refl
+                   (System.Core1ToSM_Enc EnclaveReq.data0) eq_refl
+                   log.
+
+    (*
     Definition observe_enclave_reqs0 (log: Log R ContextEnv) : option (struct_t enclave_req) :=
       match latest_write0 log (System.Core0ToSM_Enc EnclaveReq.valid0) with
       | Some b =>
@@ -228,14 +316,13 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
           if Bits.single b then (latest_write0 log (System.Core1ToSM_Enc EnclaveReq.data0)) else None
       | None => None
       end.
+      *)
 
     Definition observe_enclave_reqs (log: Log R ContextEnv) (core_id: ind_core_id) : option (struct_t enclave_req) :=
       match core_id with
       | CoreId0 => observe_enclave_reqs0 log
       | CoreId1 => observe_enclave_reqs1 log
       end.
-
-
 
     Definition bits_eqb {sz} (v1: bits_t sz) (v2: bits_t sz) : bool :=
       N.eqb (Bits.to_N v1) (Bits.to_N v2).
