@@ -98,9 +98,10 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
 
   (* Everything reset except for rf and eid *)
   (* TODO! specify core id *)
-  Definition spin_up_machine (rf: env_t ContextEnv Rf.R) 
-                             (config0: option enclave_config)
-                             (config1: option enclave_config)
+  Definition spin_up_single_core_machine
+                             (core_id: ind_core_id)
+                             (rf: env_t ContextEnv Rf.R)
+                             (config: enclave_config)
                              (initial_dram: initial_dram_t)
                              : state.
   Admitted.
@@ -333,7 +334,6 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
                           (Core1: Core_sig External EnclaveParams Params1)
                           (Memory: Memory_sig External).
 
-  (* A system consists of two single-core machines with separate memories. *)
   Import Interfaces.Common.
   Import EnclaveInterface.
   Import Common.
@@ -382,14 +382,52 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
 
   (* Partitioned. *)
   Definition memory_map : Type := EnclaveInterface.mem_region -> initial_dram_t.
+  Import Interfaces.EnclaveInterface.
 
-  Definition get_dram : memory_map -> enclave_config -> initial_dram_t. Admitted.
- 
-  (* Copy back relevant regions of dram *)
-  Definition update_regions (config: enclave_config) (dram: initial_dram_t)
-                            (regions: memory_map)
-                            : memory_map.
-  Admitted.
+  Section Dram.
+    Definition enclave_base enc_id := Bits.to_nat (EnclaveParams.enclave_base enc_id).
+    Definition enclave_max enc_id := Bits.to_nat (Bits.plus (EnclaveParams.enclave_base enc_id)
+                                                            (EnclaveParams.enclave_size enc_id)).
+    Definition shared_base := Bits.to_nat EnclaveParams.shared_mem_base.
+    Definition shared_max := Bits.to_nat (Bits.plus EnclaveParams.shared_mem_base EnclaveParams.shared_mem_size).
+
+    Definition addr_in_region (region: mem_region) (addr: nat): bool :=
+      match region with
+      | MemRegion_Enclave eid =>
+          (enclave_base eid <=? addr) && (addr <? (enclave_max eid))
+      | MemRegion_Shared =>
+          (shared_base <=? addr) && (addr <? shared_max)
+      | MemRegion_Other => false
+      end.
+
+    Definition filter_dram : initial_dram_t -> mem_region -> initial_dram_t :=
+      fun dram region addr =>
+        if addr_in_region region addr then
+          dram addr
+        else None.
+
+    (* NOTE: the current representation of memory regions is probably non-ideal... *)
+    Definition get_dram : memory_map -> enclave_config -> initial_dram_t :=
+      fun mem_map enclave_config addr =>
+        let enclave_region := MemRegion_Enclave enclave_config.(eid) in
+        if addr_in_region enclave_region addr then
+          (mem_map enclave_region) addr
+        else if enclave_config.(shared_page) && (addr_in_region MemRegion_Shared addr) then
+          (mem_map MemRegion_Shared) addr
+        else None.
+
+    (* Copy back relevant regions of dram *)
+    Definition update_regions (config: enclave_config) (dram: initial_dram_t)
+                              (regions: memory_map)
+                              : memory_map :=
+      fun region =>
+        if mem_region_beq region MemRegion_Shared && config.(shared_page) then
+          filter_dram dram MemRegion_Shared
+        else if mem_region_beq region (MemRegion_Enclave config.(eid)) then
+          filter_dram dram region
+        else regions region.
+
+  End Dram.
 
   Scheme Equality for Common.enclave_id.
 
@@ -507,14 +545,6 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
       clk : bool
     }.
 
-  (* Basic idea:
-   * - We're allowed to update the private enclave state whenever the other enclave context switches
-   * - This is signaled by "enclave_resp = true"
-   * - We can model whether an enclave request is accepted (it waits until it can switch to the enclave for now)
-   * - Give Core0 priority
-   * - TODO: to prevent racing, we only allow one enclave resp at a time in the main system; 
-   *         not absolutely necessary
-   *)
   (* Discard Core1 observations *)
   Definition machine_step0 : Machine0.state -> Machine0.state * observations_t :=
     fun st => let '(st', tau) := Machine0.step st in (st', tau CoreId0).
@@ -525,11 +555,11 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
 
   Definition spin_up_machine0 (rf: env_t ContextEnv Rf.R) (config: enclave_config) (dram: initial_dram_t) 
                               : Machine0.state :=
-    Machine0.spin_up_machine rf (Some config) None dram.
+    Machine0.spin_up_single_core_machine CoreId0 rf config dram.
 
   Definition spin_up_machine1 (rf: env_t ContextEnv Rf.R) (config: enclave_config) (dram: initial_dram_t) 
                               : Machine1.state :=
-    Machine1.spin_up_machine rf (Some config) None dram.
+    Machine1.spin_up_single_core_machine CoreId1 rf config dram.
 
   Definition step (st: state) : state * tau := 
     (* Each core independently takes a step; 
@@ -681,9 +711,6 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
   (* TODO: move to common *)
   *)
 
-  Definition enclave_base enc_id := Bits.to_nat (EnclaveParams.enclave_base enc_id).
-  Definition enclave_max enc_id := Bits.to_nat (Bits.plus (EnclaveParams.enclave_base enc_id)
-                                                          (EnclaveParams.enclave_size enc_id)).
 
   Definition initial_enclave_config0 : enclave_config :=
     {| eid := Enclave0;
@@ -696,27 +723,14 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
 
   Section Initialised.
 
-    Variable initial_dram : initial_dram_t.
+    Context (initial_dram : initial_dram_t).
 
-    Definition initial_enclave_dram enc_id :=
-      fun addr => if ((enclave_base enc_id) <=? addr) && (addr <? (enclave_max enc_id))
-               then initial_dram addr
-               else None.
-
-    (* Same as above *)
-    Definition initial_enclave_shared : initial_dram_t. Admitted.
-    
     Definition initial_regions : memory_map :=
-      fun region =>
-      match region with
-      | EnclaveInterface.MemRegion_Enclave eid => initial_enclave_dram eid
-      | EnclaveInterface.MemRegion_Shared => initial_enclave_shared
-      | EnclaveInterface.MemRegion_Other => fun _ => None
-      end.
+      fun region => filter_dram initial_dram region.
 
     Definition initial_state : state :=
-      let machine0 := Machine0.initial_state (initial_enclave_dram Enclave0) in
-      let machine1 := Machine1.initial_state (initial_enclave_dram Enclave1) in
+      let machine0 := Machine0.initial_state (initial_regions (MemRegion_Enclave Enclave0)) in
+      let machine1 := Machine1.initial_state (initial_regions (MemRegion_Enclave Enclave1)) in
       {| machine0_state := CoreState_Enclave machine0 initial_enclave_config0 EnclaveState_Running;
          machine1_state := CoreState_Enclave machine1 initial_enclave_config1 EnclaveState_Running;
          regions := initial_regions;
