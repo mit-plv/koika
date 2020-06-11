@@ -5,6 +5,7 @@ Require Import Koika.Std.
 
 Require Import dynamic_isolation.Interfaces.
 Require Import dynamic_isolation.External.
+Require Import dynamic_isolation.LogHelpers.
 Require Import dynamic_isolation.TrivialCore.
 Require Import dynamic_isolation.Tactics.
 
@@ -60,7 +61,7 @@ Module Common.
   Definition local_trace := list observations_t.
   Definition trace := list tau.
 
-  Definition initial_dram_t : Type := nat -> option data_t.
+  Definition dram_t : Type := nat -> option data_t.
 
 End Common.
 
@@ -91,7 +92,7 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
   Definition TODO_external_sigma : (forall fn: ext_fn_t, Sig_denote (Sigma fn)). Admitted.
   Definition state : Type := koika_state * placeholder_external_state.
 
-  Definition get_dram : state -> initial_dram_t. Admitted.
+  Definition get_dram : state -> dram_t. Admitted.
   Definition get_rf : state -> env_t ContextEnv Rf.R. Admitted.
   Definition update_function (st: state) (log: Log R ContextEnv) : Log R ContextEnv * placeholder_external_state.
   Admitted.
@@ -100,9 +101,10 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
   (* TODO! specify core id *)
   Definition spin_up_single_core_machine
                              (core_id: ind_core_id)
+                             (clk: bits_t 1)
                              (rf: env_t ContextEnv Rf.R)
                              (config: enclave_config)
-                             (initial_dram: initial_dram_t)
+                             (initial_dram: dram_t)
                              : state.
   Admitted.
 
@@ -130,33 +132,6 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
     Defined.
     *)
 
-    Section LogEvents.
-      Context {reg_t: Type}.
-      Context {R: reg_t -> type}.
-      Context {REnv: Env reg_t}.
-
-      Definition observe_enq0 {T} (valid_reg: reg_t) (pf_R_valid_reg: R valid_reg = bits_t 1)
-                                  (data_reg: reg_t) (pf_R_data_reg: R data_reg = T)
-                                  (log: Log R REnv) : option T :=
-          match latest_write0 log valid_reg with
-          | Some b => if Bits.single (rew [fun t : type => t] pf_R_valid_reg in b)
-                     then rew [fun t : type => option t] pf_R_data_reg in (latest_write0 log data_reg)
-                     else None
-          | None => None
-          end.
-
-      Definition observe_enq1 {T} (valid_reg: reg_t) (pf_R_valid_reg: R valid_reg = bits_t 1)
-                                  (data_reg: reg_t) (pf_R_data_reg: R data_reg = T)
-                                  (log: Log R REnv) : option T :=
-          match latest_write1 log valid_reg with
-          | Some b => if Bits.single (rew [fun t : type => t] pf_R_valid_reg in b)
-                     then rew [fun t : type => option t] pf_R_data_reg in (latest_write1 log data_reg)
-                     else None
-          | None => None
-          end.
-
-    End LogEvents.
-
     Definition observe_imem_reqs0 (log: Log R ContextEnv) : option (struct_t mem_req) :=
       (observe_enq0 (System.Core0ToSM_IMem MemReq.valid0) eq_refl
                     (System.Core0ToSM_IMem MemReq.data0) eq_refl
@@ -166,7 +141,6 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
       (observe_enq0 (System.Core1ToSM_IMem MemReq.valid0) eq_refl
                     (System.Core1ToSM_IMem MemReq.data0) eq_refl
                     log).
-
 
     (*
     Definition observe_imem_reqs0 (log: Log R ContextEnv) : option (struct_t mem_req) :=
@@ -396,7 +370,7 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
     ((commit_update koika_st log, ext_st'), obs).
 
   Section Initialised.
-    Variable initial_dram : initial_dram_t.
+    Variable initial_dram : dram_t.
 
     Definition initial_external_state : placeholder_external_state. Admitted.
 
@@ -464,11 +438,11 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
   Record contextSwitchData :=
     { contextSwitch_rf : env_t ContextEnv Rf.R;
       contextSwitch_oldEnclave : enclave_config;
-      contextSwitch_dram: initial_dram_t
+      contextSwitch_dram: dram_t
     }.
 
   (* Partitioned. *)
-  Definition memory_map : Type := EnclaveInterface.mem_region -> initial_dram_t.
+  Definition memory_map : Type := EnclaveInterface.mem_region -> dram_t.
   Import Interfaces.EnclaveInterface.
 
   Section Dram.
@@ -487,14 +461,14 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
       | MemRegion_Other => false
       end.
 
-    Definition filter_dram : initial_dram_t -> mem_region -> initial_dram_t :=
+    Definition filter_dram : dram_t -> mem_region -> dram_t :=
       fun dram region addr =>
         if addr_in_region region addr then
           dram addr
         else None.
 
     (* NOTE: the current representation of memory regions is probably non-ideal... *)
-    Definition get_dram : memory_map -> enclave_config -> initial_dram_t :=
+    Definition get_dram : memory_map -> enclave_config -> dram_t :=
       fun mem_map enclave_config addr =>
         let enclave_region := MemRegion_Enclave enclave_config.(eid) in
         if addr_in_region enclave_region addr then
@@ -504,7 +478,7 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
         else None.
 
     (* Copy back relevant regions of dram *)
-    Definition update_regions (config: enclave_config) (dram: initial_dram_t)
+    Definition update_regions (config: enclave_config) (dram: dram_t)
                               (regions: memory_map)
                               : memory_map :=
       fun region =>
@@ -532,8 +506,8 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
     Context {machine_state_t : Type}.
     Context (step_fn : machine_state_t -> machine_state_t * observations_t).
     Context (extract_rf : machine_state_t -> env_t ContextEnv Rf.R).
-    Context (extract_dram: machine_state_t -> initial_dram_t).
-    Context (spin_up_machine: env_t ContextEnv Rf.R -> enclave_config -> initial_dram_t -> machine_state_t).
+    Context (extract_dram: machine_state_t -> dram_t).
+    Context (spin_up_machine: env_t ContextEnv Rf.R -> enclave_config -> dram_t -> machine_state_t).
 
     Inductive core_state_machine :=
     | CoreState_Enclave (machine_state: machine_state_t) (config: enclave_config) 
@@ -640,13 +614,13 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
   
   (* Hmmm. contention with exit/enter? *)
 
-  Definition spin_up_machine0 (rf: env_t ContextEnv Rf.R) (config: enclave_config) (dram: initial_dram_t) 
+  Definition spin_up_machine0 (rf: env_t ContextEnv Rf.R) (config: enclave_config) (dram: dram_t)
                               : Machine0.state :=
-    Machine0.spin_up_single_core_machine CoreId0 rf config dram.
+    Machine0.spin_up_single_core_machine CoreId0 Ob~1 rf config dram.
 
-  Definition spin_up_machine1 (rf: env_t ContextEnv Rf.R) (config: enclave_config) (dram: initial_dram_t) 
+  Definition spin_up_machine1 (rf: env_t ContextEnv Rf.R) (config: enclave_config) (dram: dram_t)
                               : Machine1.state :=
-    Machine1.spin_up_single_core_machine CoreId1 rf config dram.
+    Machine1.spin_up_single_core_machine CoreId1 Ob~0 rf config dram.
 
   Definition step (st: state) : state * tau := 
     (* Each core independently takes a step; 
@@ -674,11 +648,11 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
   (*
   Record context_switch_data  :=
     { old_enclave: enclave_id;
-      old_dram: initial_dram_t;
+      old_dram: dram_t;
       new_enclave: enclave_id
     }.
 
-  Definition do_context_switch (obs: observations_t) (old_config: core_config) (dram: initial_dram_t)
+  Definition do_context_switch (obs: observations_t) (old_config: core_config) (dram: dram_t)
                                : option context_switch_data :=
     if obs.(obs_resps).(obs_enclave_resp) then
       match old_config.(requested_enclave) with
@@ -705,11 +679,11 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
   (* Communication model: when in limbo state, we can communicate enclave information.
    * Define what it means to enter limbo state
    *)
-  Definition spin_up_machine0 (rf: env_t ContextEnv Rf.R) (eid: enclave_id) (initial_dram: initial_dram_t)
+  Definition spin_up_machine0 (rf: env_t ContextEnv Rf.R) (eid: enclave_id) (initial_dram: dram_t)
                               : Machine0.state :=
     Machine0.spin_up_machine rf eid initial_dram.
 
-  Definition spin_up_machine1 (rf: env_t ContextEnv Rf.R) (eid: enclave_id) (initial_dram: initial_dram_t)
+  Definition spin_up_machine1 (rf: env_t ContextEnv Rf.R) (eid: enclave_id) (initial_dram: dram_t)
                               : Machine1.state :=
     Machine1.spin_up_machine rf eid initial_dram.
 
@@ -732,8 +706,8 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
    * Depending on cycle, can only enter on either even or odd cycle.
    *)
 
-  Definition update_enclave_mem (enclave_mem: enclave_id -> initial_dram_t)
-                                (eid: enclave_id) (dram: initial_dram_t) : enclave_id -> initial_dram_t :=
+  Definition update_enclave_mem (enclave_mem: enclave_id -> dram_t)
+                                (eid: enclave_id) (dram: dram_t) : enclave_id -> dram_t :=
     fun eid' => match eid, eid' with
              | Enclave0, Enclave0 => dram
              | Enclave1, Enclave1 => dram
@@ -810,7 +784,7 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
 
   Section Initialised.
 
-    Context (initial_dram : initial_dram_t).
+    Context (initial_dram : dram_t).
 
     Definition initial_regions : memory_map :=
       fun region => filter_dram initial_dram region.
