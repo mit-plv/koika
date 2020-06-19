@@ -3,10 +3,12 @@ Require Import Coq.Lists.List.
 
 Require Import Koika.Std.
 
+Require Import dynamic_isolation.External.
+Require Import dynamic_isolation.Framework.
 Require Import dynamic_isolation.Interfaces.
 Require Import dynamic_isolation.LogHelpers.
-Require Import dynamic_isolation.External.
 Require Import dynamic_isolation.Multicore.
+Require Import dynamic_isolation.Tactics.
 
 (*
 Module Pf (External: External_sig) (EnclaveParams: EnclaveParameters)
@@ -193,12 +195,21 @@ Module SMProperties (External: External_sig) (Params: EnclaveParameters).
     Definition valid_input_state (st: state) : Prop. Admitted.
     Definition valid_feedback_log : state -> Log R ContextEnv -> Log R ContextEnv -> Prop. Admitted.
 
+    (* More generic framework:
+     * time partition based on contents of a register, which is deterministic.
+     * So function from time to taint.
+     * Idea is that equivalence holds as an independent function of time?;
+     * Note: SM is entirely spatially partitioned. Normally this would need to be a function of time too
+     *)
     Definition internal_reg_to_taint (reg: internal_reg_t) : option ind_core_id :=
       match reg with
-      | limbo0 => Some CoreId0
-      | limbo1 => Some CoreId1
+      | state0 => Some CoreId0
+      | state1 => Some CoreId1
       | enc_data0 => Some CoreId0
       | enc_data1 => Some CoreId1
+      | enc_req0 => Some CoreId0
+      | enc_req1 => Some CoreId1
+      | clk => None
       end.
 
     Definition reg_to_taint (reg: reg_t) : option ind_core_id :=
@@ -237,10 +248,11 @@ Module SMProperties (External: External_sig) (Params: EnclaveParameters).
   Section Initialise.
 
     Definition initialise_internal_with_eid
-               (eid0: option enclave_id) (eid1: option enclave_id) (idx: internal_reg_t) : R_internal idx :=
+               (eid0: option enclave_id) (eid1: option enclave_id) (clk: bits_t 1)
+               (idx: internal_reg_t) : R_internal idx :=
       match idx with
-      | limbo0 => Ob~0
-      | limbo1 => Ob~0
+      | state0 => value_of_bits Bits.zero
+      | state1 => value_of_bits Bits.zero
       | enc_data0 =>
          match eid0 with
          | Some id => eid_to_initial_enclave_data id
@@ -251,11 +263,14 @@ Module SMProperties (External: External_sig) (Params: EnclaveParameters).
          | Some id => eid_to_initial_enclave_data id
          | None => value_of_bits (Bits.zero)
          end
+      | enc_req0 => value_of_bits (Bits.zero)
+      | enc_req1 => value_of_bits (Bits.zero)
+      | clk => clk
       end.
 
-    Definition initialise_with_eid (eid0: option enclave_id) (eid1: option enclave_id) (idx: reg_t) : R idx :=
+    Definition initialise_with_eid (eid0: option enclave_id) (eid1: option enclave_id) (clk: bits_t 1) (idx: reg_t) : R idx :=
       match idx with
-      | internal s => initialise_internal_with_eid eid0 eid1 s
+      | internal s => initialise_internal_with_eid eid0 eid1 clk s
       | s => r s
       end.
 
@@ -268,8 +283,8 @@ Module SMProperties (External: External_sig) (Params: EnclaveParameters).
       forall reg, reg_to_taint reg = Some core_id ->
              (reg <> pc_core0 /\ reg <> pc_core1) ->
              match core_id with
-             | CoreId0 => initialise_with_eid (Some eid) None reg = ContextEnv.(getenv) st reg
-             | CoreId1 => initialise_with_eid None (Some eid) reg = ContextEnv.(getenv) st reg
+             | CoreId0 => initialise_with_eid (Some eid) None Ob~0 reg = ContextEnv.(getenv) st reg
+             | CoreId1 => initialise_with_eid None (Some eid) Ob~0 reg = ContextEnv.(getenv) st reg
              end.
 
   End ValidResetState.
@@ -293,10 +308,10 @@ Module SMProperties (External: External_sig) (Params: EnclaveParameters).
     Definition valid_internal_state (st: state) : Prop :=
       valid_enclave_data_regs st.
 
-    Definition limbo_eq (st: state) (core_id: ind_core_id) (v: bits_t 1): Prop :=
+    Definition state_eq (st: state) (core_id: ind_core_id) (v: enum_t core_state): Prop :=
       match core_id with
-      | CoreId0 => ContextEnv.(getenv) st (internal limbo0) = v
-      | CoreId1 => ContextEnv.(getenv) st (internal limbo1) = v
+      | CoreId0 => ContextEnv.(getenv) st (internal state0) = v
+      | CoreId1 => ContextEnv.(getenv) st (internal state1) = v
       end.
 
     (* Idea:
@@ -329,7 +344,7 @@ Module SMProperties (External: External_sig) (Params: EnclaveParameters).
     (* Assuming we are not initially in a limbo state, output is a function only of taint0 registers *)
     Definition output_is_a_function_of_partitioned_registers:
       forall (core_id: ind_core_id) (st0 st1: state) (log0 log1: Log R ContextEnv),
-      limbo_eq st0 core_id Ob~0 ->
+      state_eq st0 core_id (value_of_bits Bits.zero) ->
       valid_input_state st0 ->
       valid_input_state st1 ->
       valid_input_log log0 ->
@@ -377,7 +392,7 @@ Module SMProperties (External: External_sig) (Params: EnclaveParameters).
     (* If the core starts out in a limbo state, we say there are no valid writes to the outside world *)
     Definition limbo_implies_no_external_enqs:
       forall (core_id: ind_core_id) (st: state) (log: Log R ContextEnv),
-      limbo_eq st core_id Ob~1 ->
+      not (state_eq st core_id (value_of_bits Bits.zero)) ->
       valid_input_state st ->
       valid_input_log log ->
       no_external_enqs core_id st log.
@@ -528,6 +543,8 @@ Module SMProperties (External: External_sig) (Params: EnclaveParameters).
   End CycleModel.
 End SMProperties.
 
+(* TODO: move this *)
+
 Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
           (Params0: CoreParameters) (Params1: CoreParameters)
           (Core0: Core_sig External EnclaveParams Params0)
@@ -538,16 +555,144 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
 
   Import Common.
 
+  (* ================= TMP ====================== *)
+  Definition impl_log_t : Type := Impl.log_t.
+
+  (* ================= END_TMP ====================== *)
+
+  Section GhostState.
+
+    Definition impl_ghost_state : Type. Admitted.
+    Definition spec_ghost_state : Type. Admitted.
+
+    Definition initial_impl_ghost : impl_ghost_state. Admitted.
+    Definition initial_spec_ghost : spec_ghost_state. Admitted.
+
+    Definition impl_step_with_ghost (st: Impl.state * impl_ghost_state)
+                                    : (Impl.state * impl_ghost_state) * tau :=
+      let (impl_st, ghost_st) := st in
+      ((fst (Impl.step impl_st), ghost_st (* TODO *)), (snd (Impl.step impl_st))).
+
+    Definition spec_step_with_ghost (st: Spec.state * spec_ghost_state)
+                                    : (Spec.state * spec_ghost_state) * tau :=
+      let (spec_st, ghost_st) := st in
+      ((fst (Spec.step spec_st), ghost_st (* TODO *)), (snd (Spec.step spec_st))).
+
+    Section Initialised.
+      Context (initial_dram : dram_t).
+
+      Definition impl_step_n_with_ghost (n: nat) : (Impl.state * impl_ghost_state) * trace :=
+        step_n (Impl.initial_state initial_dram, initial_impl_ghost)
+               impl_step_with_ghost
+               n.
+
+      Definition spec_step_n_with_ghost (n: nat) : (Spec.state * spec_ghost_state) * trace :=
+        step_n (Spec.initial_state initial_dram, initial_spec_ghost)
+               spec_step_with_ghost
+               n.
+
+    End Initialised.
+Import Tactics.
+    Section Lemmas.
+
+      Lemma impl_drop_ghost :
+        forall (initial_dram: dram_t)
+          n st st' evs evs',
+          impl_step_n_with_ghost initial_dram n = (st, evs) ->
+          Impl.step_n initial_dram n = (st', evs') ->
+          st' = fst st /\ evs = evs'.
+      Proof.
+        intro. eapply proj_step_fn_eq.
+        - unfold is_proj; auto.
+        - unfold natural_step_fn. unfold impl_step_with_ghost, is_proj.
+          intros; destruct_all_matches.
+      Qed.
+
+      Lemma spec_drop_ghost :
+        forall (initial_dram: dram_t)
+          n st st' evs evs',
+          spec_step_n_with_ghost initial_dram n = (st, evs) ->
+          Spec.step_n initial_dram n = (st', evs') ->
+          st' = fst st /\ evs = evs'.
+      Proof.
+        intro. eapply proj_step_fn_eq.
+        - unfold is_proj; auto.
+        - unfold natural_step_fn. unfold spec_step_with_ghost, is_proj.
+          intros; destruct_all_matches.
+      Qed.
+
+
+    End Lemmas.
+
+  End GhostState.
+
+  Ltac destruct_pair :=
+    match goal with
+    | [ P : _ * _ |- _ ] =>
+      let p1 := fresh P in
+      let p2 := fresh P in
+      destruct P as [p1 p2]
+  end.
+
+  Definition impl_state_t : Type := Impl.state * impl_ghost_state.
+  Definition spec_state_t : Type := Spec.state * spec_ghost_state.
+
+  Definition Sim : impl_state_t -> spec_state_t -> Prop.
+  Admitted.
+
   Section Initialised.
     Variable initial_dram: dram_t.
 
-    Theorem simulation: forall (n: nat)
+    Theorem initial_state_sim :
+      Sim (Impl.initial_state initial_dram, initial_impl_ghost)
+          (Spec.initial_state initial_dram, initial_spec_ghost).
+    Admitted.
+
+    Theorem step_sim : forall (impl_st impl_st': impl_state_t) (spec_st spec_st': spec_state_t)
+                         (impl_tau spec_tau: tau),
+      Sim impl_st spec_st ->
+      impl_step_with_ghost impl_st = (impl_st', impl_tau) ->
+      spec_step_with_ghost spec_st = (spec_st', spec_tau) ->
+      Sim impl_st' spec_st' /\ impl_tau = spec_tau.
+    Admitted.
+
+    Theorem step_n_sim : forall (n: nat)
+                         (impl_st: Impl.state) (impl_tr: trace) (impl_ghost: impl_ghost_state)
+                         (spec_st: Spec.state) (spec_tr: trace) (spec_ghost: spec_ghost_state),
+        impl_step_n_with_ghost initial_dram n = ((impl_st, impl_ghost), impl_tr) ->
+        spec_step_n_with_ghost initial_dram n = ((spec_st, spec_ghost), spec_tr) ->
+        Sim (impl_st, impl_ghost) (spec_st, spec_ghost) /\ impl_tr = spec_tr.
+    Proof.
+      induction n.
+      - intros; simplify_all; split_cases; auto.
+        apply initial_state_sim.
+      - simpl; intros; destruct_all_matches; simplify_all.
+        repeat destruct_pair.
+        specialize IHn with (1 := eq_refl) (2 := eq_refl); propositional.
+        match goal with
+        | [ H0: Sim _ _,
+            H1: impl_step_with_ghost _ = _,
+            H2: spec_step_with_ghost _ = _ |- _ ] =>
+          specialize step_sim with (1 := H0) (2 := H1) (3 := H2)
+        end.
+        intuition.
+    Qed.
+
+    Theorem refinement: forall (n: nat)
                           (impl_st: Impl.state) (impl_tr: trace)
                           (spec_st: Spec.state) (spec_tr: trace),
         Impl.step_n initial_dram n = (impl_st, impl_tr) ->
         Spec.step_n initial_dram n = (spec_st, spec_tr) ->
         impl_tr = spec_tr.
-     Admitted.
+    Proof.
+      intros *; intros H_impl H_spec.
+      destruct (impl_step_n_with_ghost initial_dram n) as [[impl_st' impl_ghost] impl_tr'] eqn:Heq_impl.
+      destruct (spec_step_n_with_ghost initial_dram n) as [[spec_st' spec_ghost] spec_tr'] eqn:Heq_spec.
+      edestruct impl_drop_ghost with (1 := Heq_impl) (2 := H_impl).
+      edestruct spec_drop_ghost with (1 := Heq_spec) (2 := H_spec).
+      simplify_all.
+      eapply step_n_sim; eauto.
+    Qed.
 
   End Initialised.
 

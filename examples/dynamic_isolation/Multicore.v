@@ -5,6 +5,7 @@ Require Import Koika.Std.
 
 Require Import dynamic_isolation.Interfaces.
 Require Import dynamic_isolation.External.
+Require Import dynamic_isolation.Framework.
 Require Import dynamic_isolation.LogHelpers.
 Require Import dynamic_isolation.TrivialCore.
 Require Import dynamic_isolation.Tactics.
@@ -91,6 +92,7 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
 
   Definition TODO_external_sigma : (forall fn: ext_fn_t, Sig_denote (Sigma fn)). Admitted.
   Definition state : Type := koika_state * placeholder_external_state.
+  Definition log_t : Type := Log R ContextEnv.
 
   Definition get_dram : state -> dram_t. Admitted.
   Definition get_rf : state -> env_t ContextEnv Rf.R. Admitted.
@@ -376,14 +378,8 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
 
     Definition initial_state : state := (ContextEnv.(create) r, initial_external_state).
 
-    Fixpoint step_n (n: nat) : state * trace :=
-      match n with
-      | 0 => (initial_state, [])
-      | S n' =>
-          let (st, evs) := step_n n' in
-          let (st', ev) := step st in
-          (st', evs ++ [ev])
-      end.
+    Definition step_n (n: nat) : state * trace :=
+        Framework.step_n initial_state step n.
 
   End Initialised.
 
@@ -798,14 +794,8 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
          clk := false
       |}.
 
-    Fixpoint step_n (n: nat) : state * trace :=
-      match n with
-      | 0 => (initial_state, [])
-      | S n' =>
-          let (st, evs) := step_n n' in
-          let (st', ev) := step st in
-          (st', evs ++ [ev])
-      end.
+    Definition step_n (n: nat) : state * trace :=
+        Framework.step_n initial_state step n.
 
   End Initialised.
 

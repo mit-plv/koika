@@ -41,7 +41,8 @@ Module General.
     | context[match ?d with | _ => _ end] =>
         destruct_matches_in d
     | ?v =>
-        destruct v eqn:?; intros
+        let H1 := fresh H in
+        destruct v eqn:H1; intros
     end.
 
 
@@ -168,6 +169,9 @@ Module General.
     | [ H: (_,_) = (_,_) |- _ ] =>
       apply simple_tuple_inversion in H; destruct H
     end.
+
+  Ltac simplify_all :=
+    simpl in *; simplify_tuples; subst; auto.
 
   Definition is_some : forall {A}, option A -> Prop :=
     fun _ opt => exists v, opt = Some v.
