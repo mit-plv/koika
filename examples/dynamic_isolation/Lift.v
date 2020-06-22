@@ -55,6 +55,37 @@ Notation "r '||>' s" :=
   (schedule_app r s)
     (at level 99, s at level 99, right associativity).
 
+Section LiftEnv.
+  Context {reg_t reg_t' : Type}.
+  Context {R: reg_t -> type} {R' : reg_t' -> type}.
+  Context {REnv: Env reg_t} {REnv': Env reg_t'}.
+  Context (Rlift: RLift type reg_t reg_t' R R').
+
+  Definition proj_env (env': env_t REnv' R') : env_t REnv R.
+  Proof.
+    refine (REnv.(create) _).
+    intro reg. rewrite<-Rlift.(pf_R_equal).
+    exact (REnv'.(getenv) env' (Rlift.(rlift) reg)).
+  Defined.
+
+End LiftEnv.
+
+Section LiftLog.
+  Context {reg_t reg_t' : Type}.
+  Context {R: reg_t -> type} {R' : reg_t' -> type}.
+  Context {REnv: Env reg_t} {REnv': Env reg_t'}.
+  Context (Rlift: RLift type reg_t reg_t' R R').
+
+  Definition proj_log (log' : Log R' REnv')
+                      : Log R REnv.
+  Proof.
+    refine (REnv.(create) _).
+    intro reg. rewrite<-Rlift.(pf_R_equal).
+    exact (REnv'.(getenv) log' (lift reg)).
+  Defined.
+
+End LiftLog.
+
 Section LiftAction.
   Context {reg_t reg_t' : Type}.
   Context {R: reg_t -> type} {R' : reg_t' -> type}.
