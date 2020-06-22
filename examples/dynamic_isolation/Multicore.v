@@ -90,14 +90,22 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
   Definition koika_state : Type := env_t ContextEnv (fun idx : reg_t => R idx).
   Definition placeholder_external_state : Type. Admitted.
 
-  Definition TODO_external_sigma : (forall fn: ext_fn_t, Sig_denote (Sigma fn)). Admitted.
   Definition state : Type := koika_state * placeholder_external_state.
   Definition log_t : Type := Log R ContextEnv.
 
   Definition get_dram : state -> dram_t. Admitted.
   Definition get_rf : state -> env_t ContextEnv Rf.R. Admitted.
-  Definition update_function (st: state) (log: Log R ContextEnv) : Log R ContextEnv * placeholder_external_state.
-  Admitted.
+
+  Definition sigma_t : Type := (forall fn: ext_fn_t, Sig_denote (Sigma fn)).
+  Definition derive_sigma : placeholder_external_state -> sigma_t. Admitted.
+  Definition update_ext_st: state -> placeholder_external_state. Admitted.
+
+  Definition update_function (st: state) : Log R ContextEnv * placeholder_external_state :=
+    let (koika_st, ext_st) := st in
+    let sigma := derive_sigma ext_st in
+    let ext_st' := update_ext_st st in
+    (* TODO: really, interp_scheduler should update our external state at the same time *)
+    (interp_scheduler koika_st sigma System.rules System.schedule, ext_st').
 
   (* Everything reset except for rf and eid *)
   (* TODO! specify core id *)
@@ -367,7 +375,7 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
 
   Definition step (st: state) : state * tau :=
     let (koika_st, ext_st) := st in
-    let (log, ext_st') := update_function st log_empty in
+    let (log, ext_st') := update_function st in
     let obs := do_observations log in
     ((commit_update koika_st log, ext_st'), obs).
 

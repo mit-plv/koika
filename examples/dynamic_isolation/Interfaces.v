@@ -199,7 +199,6 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
 
   Parameter schedule : Syntax.scheduler pos_t rule_name_t.
 
-  (*
   Section CycleSemantics.
     Definition state := env_t ContextEnv (fun idx : reg_t => R idx).
     Definition empty_log : Log R ContextEnv := log_empty.
@@ -296,6 +295,7 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
      * This is a stronger statement that we ultimately need, but is easier to phrase/work with.
      * I think with modules (/being written in a more modular way without register sharing) this will be easier.
      *)
+    (* TODO: this is wrong right now b/c of FIFOs *)
     Axiom write_purged_impl_in_reset_state :
       forall (st: state) (log: Log R ContextEnv),
       latest_write (update_function st log) purge = Some ENUM_purge_purged ->
@@ -320,7 +320,6 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
     *)
 
   End CoreAxioms.
-  *)
 
 End Core_sig.
 
@@ -392,10 +391,14 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
   Import Common.
   Import EnclaveInterface.
 
+  Definition ENUM_CORESTATE_RUNNING := Ob~0~0.
+  Definition ENUM_CORESTATE_PURGING:= Ob~0~0.
+  Definition ENUM_CORESTATE_WAITING:= Ob~0~0.
+
   Definition core_state :=
     {| enum_name := "core_states";
        enum_members := vect_of_list ["Running"; "Purging"; "Waiting"];
-       enum_bitpatterns := vect_of_list [Ob~0~0; Ob~0~1; Ob~1~0]
+       enum_bitpatterns := vect_of_list [ENUM_CORESTATE_RUNNING; ENUM_CORESTATE_PURGING; ENUM_CORESTATE_WAITING]
     |}.
 
   (* Note: somewhat redundant registers *)
@@ -977,8 +980,6 @@ Module Type Memory_sig (External: External_sig).
 
   Axiom schedule : Syntax.scheduler pos_t rule_name_t.
 
-  (*
-
   Section Semantics.
     Definition state := env_t ContextEnv (fun idx : reg_t => R idx).
     Definition empty_log : Log R ContextEnv := log_empty.
@@ -1211,7 +1212,6 @@ Module Type Memory_sig (External: External_sig).
     Admitted.
 
   End CycleModel.
-  *)
 
 End Memory_sig.
 
