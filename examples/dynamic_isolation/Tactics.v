@@ -477,7 +477,7 @@ Module FiniteTypeHelpers.
       FiniteType_t_init;
       [ intros nm; destruct nm; FiniteType_t_compute_index' |
         instantiate (1 := []);
-        rewrite List.app_nil_r;
+        try rewrite List.app_nil_r;
         simpl;
         repeat match goal with
         | [ |- NoDup [] ] =>
