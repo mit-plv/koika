@@ -722,7 +722,7 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
 
   Instance FiniteType_internal_reg_t : FiniteType internal_reg_t := _.
 
-  Inductive reg_t' : Type :=
+  Inductive external_reg_t :=
   | fromCore0_IMem (state: MemReq.reg_t)
   | fromCore0_DMem (state: MemReq.reg_t)
   | fromCore0_Enc (state: EnclaveReq.reg_t)
@@ -749,12 +749,9 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
   | purge_core1
   | purge_mem0
   | purge_mem1
-  | internal (idx: internal_reg_t)
   .
 
-  Definition reg_t : Type := reg_t'.
-
-  Definition R (idx: reg_t) :=
+  Definition R_external (idx: external_reg_t) : type :=
     match idx with
     | fromCore0_IMem st => MemReq.R st
     | fromCore0_DMem st => MemReq.R st
@@ -782,10 +779,9 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
     | purge_core1 => enum_t purge_state
     | purge_mem0 => enum_t purge_state
     | purge_mem1 => enum_t purge_state
-    | internal st => R_internal st
     end.
 
-  Definition r (idx: reg_t) : R idx :=
+  Definition r_external (idx: external_reg_t) : R_external idx :=
     match idx with
     | fromCore0_IMem st => MemReq.r st
     | fromCore0_DMem st => MemReq.r st
@@ -813,9 +809,26 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
     | purge_core1 => value_of_bits (Bits.zero)
     | purge_mem0 => value_of_bits (Bits.zero)
     | purge_mem1 => value_of_bits (Bits.zero)
+    end.
+
+  Inductive reg_t : Type :=
+  | external (idx: external_reg_t)
+  | internal (idx: internal_reg_t)
+  .
+
+  Definition R (idx: reg_t) :=
+    match idx with
+    | external st => R_external st
+    | internal st => R_internal st
+    end.
+
+  Definition r (idx: reg_t) : R idx :=
+    match idx with
+    | external st => r_external st
     | internal st => r_internal st
     end.
 
+  Instance FiniteType_external_reg_t : FiniteType external_reg_t := _.
   Instance FiniteType_reg_t : FiniteType reg_t := _.
 
   Definition Sigma := External.Sigma.
@@ -857,20 +870,20 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
 
   Definition lookup_reg_proc_reset (core: ind_core_id) : reg_t :=
     match core with
-    | CoreId0 => purge_core0
-    | CoreId1 => purge_core1
+    | CoreId0 => external purge_core0
+    | CoreId1 => external purge_core1
     end.
 
   Definition lookup_reg_mem_reset (core: ind_core_id) : reg_t :=
     match core with
-    | CoreId0 => purge_mem0
-    | CoreId1 => purge_mem1
+    | CoreId0 => external purge_mem0
+    | CoreId1 => external purge_mem1
     end.
 
   Definition lookup_reg_pc (core: ind_core_id) : reg_t :=
     match core with
-    | CoreId0 => pc_core0
-    | CoreId1 => pc_core1
+    | CoreId0 => external pc_core0
+    | CoreId1 => external pc_core1
     end.
 
   (* TODO: This is wrong. While in a limbo state, other core can't switch into old enclave until done reset *)
@@ -881,6 +894,12 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
          let other_enc_data := read0(reg_other_enc) in
          get(other_enc_data, eid) != eid
     }}.
+
+  Notation "'__external__' instance " :=
+    (fun reg => external ((instance) reg)) (in custom koika at level 1, instance constr at level 99).
+  Notation "'(' instance ').(' method ')' args" :=
+    (USugar (UCallModule instance _ method args))
+      (in custom koika at level 1, method constr, args custom koika_args at level 99).
 
   (* TODO: shared page *)
   Definition sm_update_enclave (core: ind_core_id) : uaction reg_t ext_fn_t :=
@@ -895,7 +914,7 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
         end in
     {{ when (read0(reg_state) == enum core_state { Running }) do (
          let max_eid := |32`d3| in
-         let enclaveRequest := fromCore.(EnclaveReq.deq)() in
+         let enclaveRequest := (__external__ fromCore).(EnclaveReq.deq)() in
          let eid := get(enclaveRequest, eid) in
          if (eid <= max_eid) then
            write0(reg_state, enum core_state { Purging });
@@ -920,14 +939,14 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
         | CoreId1, CacheType_Dmem => (fromCore1_DMem, toMem1_DMem)
         end in
     {{ when (read0(reg_state) == enum core_state { Running }) do
-         let request := fromCore.(MemReq.deq)() in
+         let request := (__external__ fromCore).(MemReq.deq)() in
          let address := get(request, addr) in
          let enc_data := read0(reg_enc) in
          let addr_min := get(enc_data, addr_min) in
          let addr_max := get(enc_data, size) + addr_min in
          let TODO_temp_bypass := address >= #(MMIO_UART_ADDRESS) in
          if ((addr_min <= address && address < addr_max) ||  TODO_temp_bypass) then
-           toMem.(MemReq.enq)(request)
+           (__external__ toMem).(MemReq.enq)(request)
          else pass
     }}.
 
@@ -942,14 +961,14 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
         | CoreId1, CacheType_Dmem => (fromMem1_DMem, toCore1_DMem)
         end in
     {{ when (read0(reg_state) == enum core_state { Running }) do
-         let response:= fromMem.(MemResp.deq)() in
+         let response:= (__external__ fromMem).(MemResp.deq)() in
          let address := get(response, addr) in
          let enc_data := read0(reg_enc) in
          let addr_min := get(enc_data, addr_min) in
          let addr_max := get(enc_data, size) + addr_min in
          let TODO_temp_bypass := address >= #(MMIO_UART_ADDRESS) in
          if (addr_min <= address && address < addr_max) || TODO_temp_bypass then
-           toCore.(MemResp.enq)(response)
+           (__external__ toCore).(MemResp.enq)(response)
          else pass
     }}.
 
@@ -983,24 +1002,24 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
     }}.
   Definition reset_fifos : UInternalFunction reg_t ext_fn_t :=
     {{ fun reset_fifos () : bits_t 0 =>
-         fromCore0_IMem.(MemReq.reset)();
-         fromCore0_DMem.(MemReq.reset)();
-         fromCore0_Enc.(EnclaveReq.reset)();
-         toCore0_IMem.(MemResp.reset)();
-         toCore0_DMem.(MemResp.reset)();
-         fromCore1_IMem.(MemReq.reset)();
-         fromCore1_DMem.(MemReq.reset)();
-         fromCore1_Enc.(EnclaveReq.reset)();
-         toCore1_IMem.(MemResp.reset)();
-         toCore1_DMem.(MemResp.reset)();
-         toMem0_IMem.(MemReq.reset)();
-         toMem0_DMem.(MemReq.reset)();
-         toMem1_IMem.(MemReq.reset)();
-         toMem1_DMem.(MemReq.reset)();
-         fromMem0_IMem.(MemResp.reset)();
-         fromMem0_DMem.(MemResp.reset)();
-         fromMem1_IMem.(MemResp.reset)();
-         fromMem1_DMem.(MemResp.reset)()
+         (__external__ fromCore0_IMem).(MemReq.reset)();
+         (__external__ fromCore0_DMem).(MemReq.reset)();
+         (__external__ fromCore0_Enc).(EnclaveReq.reset)();
+         (__external__ toCore0_IMem).(MemResp.reset)();
+         (__external__ toCore0_DMem).(MemResp.reset)();
+         (__external__ fromCore1_IMem).(MemReq.reset)();
+         (__external__ fromCore1_DMem).(MemReq.reset)();
+         (__external__ fromCore1_Enc).(EnclaveReq.reset)();
+         (__external__ toCore1_IMem).(MemResp.reset)();
+         (__external__ toCore1_DMem).(MemResp.reset)();
+         (__external__ toMem0_IMem).(MemReq.reset)();
+         (__external__ toMem0_DMem).(MemReq.reset)();
+         (__external__ toMem1_IMem).(MemReq.reset)();
+         (__external__ toMem1_DMem).(MemReq.reset)();
+         (__external__ fromMem0_IMem).(MemResp.reset)();
+         (__external__ fromMem0_DMem).(MemResp.reset)();
+         (__external__ fromMem1_IMem).(MemResp.reset)();
+         (__external__ fromMem1_DMem).(MemResp.reset)()
     }}.
 
   Definition sm_exit_enclave (core: ind_core_id) : uaction reg_t ext_fn_t :=
@@ -1169,6 +1188,18 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
                    |> EnterEnclave0 |> EnterEnclave1
                    |> DoClk
                    |> done.
+
+  Section CycleSemantics.
+    Parameter update_function : state -> Log R ContextEnv -> Log R ContextEnv.
+
+    Record step_io :=
+      { step_input : Log R_external ContextEnv;
+        step_feedback : Log R_external ContextEnv
+      }.
+
+
+
+  End CycleSemantics.
 
 End SecurityMonitor.
 
