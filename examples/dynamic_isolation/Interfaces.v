@@ -323,12 +323,12 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
      * - Supposing that SM writes restart only when external state is cleared (apart from certain regs),
      * - Then simulation of resetting holds.
      *)
-    Inductive ghost_state :=
+    Inductive phase_state :=
     | SpecSt_Running
     | SpecSt_Waiting (rf: env_t ContextEnv Rf.R)
     .
 
-    Definition spec_state_t : Type := state * ghost_state.
+    Definition spec_state_t : Type := state * phase_state.
 
     Definition initial_spec_state : spec_state_t := (initial_state, SpecSt_Running).
 
@@ -351,10 +351,10 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
     (* TODO: should really be inductive probably or option type? But too much effort to specify everything. *)
     Definition do_step_trans__spec (spec_st: spec_state_t) (step: step_io)
                                  : spec_state_t * Log R_external ContextEnv :=
-      let '(st, ghost) := spec_st in
+      let '(st, phase) := spec_st in
       let '(st', output) := do_step__koika st step in
       let ext_output := proj_log__ext output in 
-      match ghost with
+      match phase with
       | SpecSt_Running =>
           let continue := ((st', SpecSt_Running), ext_output) in
           match latest_write output (external purge) with
@@ -383,11 +383,11 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
       forall r, latest_write log r = None.
 
     Definition valid_step_output__spec (spec_st: spec_state_t) (step: step_io) : Prop :=
-      let '(st, ghost) := spec_st in
+      let '(st, phase) := spec_st in
       let '(st', log) := do_step_trans__spec spec_st step in
       valid_output_log__common log /\
       valid_interface_log st log_empty log  /\
-        (match ghost with
+        (match phase with
         | SpecSt_Running => True
         | SpecSt_Waiting _ =>
             no_writes log
@@ -402,13 +402,13 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
              end.
 
     Definition valid_step_feedback__spec (spec_st: spec_state_t) (step: step_io) : Prop :=
-      let '(st, ghost) := spec_st in
+      let '(st, phase) := spec_st in
       let '(st', output) := do_step_trans__spec spec_st step in
       let feedback := step.(step_feedback) in
 
       valid_feedback_log__common step.(step_feedback) /\
       valid_interface_log st (log_app output step.(step_input)) feedback /\
-      match ghost with
+      match phase with
       | SpecSt_Running =>
           only_write_ext_purge feedback ENUM_purge_purging
       | SpecSt_Waiting _  =>
@@ -1188,18 +1188,334 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
                    |> EnterEnclave0 |> EnterEnclave1
                    |> DoClk
                    |> done.
+  Section Interface.
+    Definition lift_ext_log (log: Log R_external ContextEnv) : Log R ContextEnv :=
+      ContextEnv.(create) (fun reg => match reg return (RLog (R reg)) with
+                                   | external s => ContextEnv.(getenv) log s
+                                   | _ => []
+                                   end).
+  End Interface. 
 
   Section CycleSemantics.
     Parameter update_function : state -> Log R ContextEnv -> Log R ContextEnv.
+
+    Definition initial_state (eid0: option enclave_id) (eid1: option enclave_id) (clk: bits_t 1): state :=
+      ContextEnv.(create) (fun reg => match reg return R reg with
+                                   | internal enc_data0 =>
+                                       match eid0 with
+                                       | Some id => eid_to_initial_enclave_data id
+                                       | None => value_of_bits Bits.zero
+                                       end 
+                                   | internal enc_data1 =>
+                                       match eid1 with
+                                       | Some id => eid_to_initial_enclave_data id
+                                       | None => value_of_bits Bits.zero
+                                       end 
+                                   | internal clk => clk
+                                   | internal reg' => r_internal reg'
+                                   | external reg' => r_external reg'
+                                   end).
 
     Record step_io :=
       { step_input : Log R_external ContextEnv;
         step_feedback : Log R_external ContextEnv
       }.
 
+    Definition do_step__impl (st: state) (step: step_io) : state * Log R ContextEnv :=
+      let input := lift_ext_log step.(step_input) in
+      let output := update_function st input in
+      let final := log_app (lift_ext_log step.(step_feedback)) (log_app output input) in
+      (commit_update st final, output).
 
+    Definition do_steps__impl (steps: list step_io) 
+                             : state * list (Log R ContextEnv) :=
+      fold_left (fun '(st, evs) step =>
+                   let '(st', ev) := do_step__impl st step in
+                   (st', evs ++ [ev]))
+                steps (initial_state (Some Enclave0) (Some Enclave1) Ob~0, []).
 
   End CycleSemantics.
+
+  Section TODO_MOVE.
+
+    Definition AND (Ps: list Prop) : Prop :=
+      List.fold_left and Ps True.
+
+    Definition bits_eqb {sz} (v1: bits_t sz) (v2: bits_t sz) : bool :=
+      N.eqb (Bits.to_N v1) (Bits.to_N v2).
+
+    Record props_t :=
+      { P_input : Prop;
+        P_output : Prop;
+        P_feedback: Prop
+      }.
+
+    Definition valid_inputs (props: list props_t) :=
+      AND (List.map P_input props).
+    Definition valid_feedback (props: list props_t) :=
+      AND (List.map P_feedback props).
+    Definition valid_output (props: list props_t) :=
+      AND (List.map P_output props).
+
+    Definition trivial_props : props_t :=
+      {| P_input := True;
+         P_output := True;
+         P_feedback := True
+      |}.
+
+    Definition is_external_log (log: Log R ContextEnv) : Prop :=
+      forall reg, match reg with
+             | external r => True
+             | internal r => ContextEnv.(getenv) log reg = []
+             end.
+  End TODO_MOVE.
+
+  Section Taint.
+
+      Inductive taint_t :=
+      | TaintCore (core_id: ind_core_id)
+      | Bottom.
+
+      Definition internal_reg_to_taint (reg: internal_reg_t) : taint_t :=
+        match reg with
+        | state0 => TaintCore CoreId0
+        | state1 => TaintCore CoreId1
+        | enc_data0 => TaintCore CoreId0
+        | enc_data1 => TaintCore CoreId1
+        | enc_req0 => TaintCore CoreId0
+        | enc_req1 => TaintCore CoreId1
+        | clk => Bottom
+        end.
+
+      Definition external_reg_to_taint (reg: external_reg_t) : taint_t :=
+        match reg with
+        | fromCore0_IMem st => TaintCore CoreId0
+        | fromCore0_DMem st => TaintCore CoreId0
+        | fromCore0_Enc st => TaintCore CoreId0
+        | toCore0_IMem st => TaintCore CoreId0
+        | toCore0_DMem st => TaintCore CoreId0
+        (* Core1 <-> SM *)
+        | fromCore1_IMem st => TaintCore CoreId1
+        | fromCore1_DMem st => TaintCore CoreId1
+        | fromCore1_Enc st => TaintCore CoreId1
+        | toCore1_IMem st => TaintCore CoreId1
+        | toCore1_DMem st => TaintCore CoreId1
+        (* SM <-> Mem *)
+        | toMem0_IMem st => TaintCore CoreId0
+        | toMem0_DMem st => TaintCore CoreId0
+        | toMem1_IMem st => TaintCore CoreId1
+        | toMem1_DMem st => TaintCore CoreId1
+        | fromMem0_IMem st => TaintCore CoreId0
+        | fromMem0_DMem st => TaintCore CoreId0
+        | fromMem1_IMem st => TaintCore CoreId1
+        | fromMem1_DMem st => TaintCore CoreId1
+        | pc_core0 => TaintCore CoreId0
+        | pc_core1 => TaintCore CoreId1
+        | purge_core0 => TaintCore CoreId0
+        | purge_core1 => TaintCore CoreId1
+        | purge_mem0 => TaintCore CoreId0
+        | purge_mem1 => TaintCore CoreId1
+        end.
+
+      Definition reg_to_taint (reg: reg_t) : taint_t :=
+        match reg with
+        | external s => external_reg_to_taint s
+        | internal s => internal_reg_to_taint s
+        end.
+
+      Scheme Equality for taint_t.
+
+  End Taint.
+
+  Section Spec.
+      Inductive enclave_state_t :=
+      | EnclaveState_Running 
+      | EnclaveState_Switching (next_enclave: enclave_config)
+      .
+
+      Inductive sm_state_machine :=
+      | SmState_Enclave (machine_state: state) (config: enclave_config) 
+                        (enclave_state: enclave_state_t)
+      | SmState_Waiting (new: enclave_config).
+
+      Inductive sm_magic_state_machine :=
+      | SmMagicState_Continue (st: sm_state_machine) (ext: Log R ContextEnv) (config: option enclave_config)
+      | SmMagicState_Exit (waiting: enclave_config) (ext: Log R ContextEnv)
+      | SmMagicState_TryToEnter (next_enclave: enclave_config). 
+
+      Record iso_machine_t :=
+        { iso_sm0 : sm_state_machine;
+          iso_sm1 : sm_state_machine;
+          turn : bool
+        }.
+
+      Definition filter_external (log: Log R ContextEnv) (core: ind_core_id) : Log R ContextEnv :=
+        ContextEnv.(create) (fun r => match r with
+                                   | internal s => []
+                                   | reg => if (taint_t_beq (reg_to_taint reg) (TaintCore core))
+                                              || (taint_t_beq (reg_to_taint reg) Bottom) then
+                                              ContextEnv.(getenv) log reg
+                                           else []
+                                   end).
+
+
+      (* TODO: normal way of writing this? *)
+      Definition observe_enclave_exit (core_id: ind_core_id) (log: Log R ContextEnv) : bool.
+        refine(
+        let enc_data_reg := match core_id with
+                            | CoreId0 => internal enc_data0 
+                            | CoreId1 => internal enc_data1
+                            end in
+        match rew_latest_write log enc_data_reg _ with
+        | Some v =>
+            let data := EnclaveInterface.extract_enclave_data v in
+            bits_eqb (EnclaveInterface.enclave_data_valid data) Ob~0
+        | None => false
+        end).
+        - destruct core_id; reflexivity.
+      Defined.
+
+      Definition check_for_context_switching (core_id: ind_core_id) (input_log: Log R_external ContextEnv) 
+                                             : option EnclaveInterface.enclave_config.
+      Admitted.
+
+      Definition local_core_step (can_switch: bool) (core_id: ind_core_id)
+                                 (config: sm_state_machine) 
+                                 (step: step_io)
+                                 : sm_magic_state_machine :=
+        match config with
+        | SmState_Enclave machine enclave enclave_state =>
+            let (machine', output_log) := do_step__impl machine step in
+            match enclave_state with
+            | EnclaveState_Running =>
+                let enclave_state' :=
+                  match check_for_context_switching core_id step.(step_input) with
+                  | Some next_enclave => EnclaveState_Switching next_enclave
+                  | None => EnclaveState_Running
+                  end in
+                SmMagicState_Continue (SmState_Enclave machine' enclave enclave_state') output_log (Some enclave)
+            | EnclaveState_Switching next_enclave =>
+                if observe_enclave_exit core_id output_log 
+                then SmMagicState_Exit next_enclave output_log
+                else SmMagicState_Continue (SmState_Enclave machine' enclave enclave_state) output_log (Some enclave)
+            end 
+        | SmState_Waiting next_enclave =>
+            if can_switch
+            then SmMagicState_TryToEnter next_enclave
+            else SmMagicState_Continue config log_empty None
+        end.
+
+      Definition can_enter_enclave (next_enclave: enclave_config) (other_core_enclave: option enclave_config) : bool :=
+        match other_core_enclave with
+        | None => true
+        | Some config =>
+            (* Other core hasn't claimed the requested memory regions *)
+            negb (enclave_id_beq next_enclave.(eid) config.(eid)) &&
+            negb (next_enclave.(shared_page) && config.(shared_page))
+        end.
+
+      Definition enclave_config_to_enclave_data (config: enclave_config) : struct_t enclave_data :=
+        mk_enclave_data {| enclave_data_eid := enclave_id_to_bits config.(eid);
+                           enclave_data_addr_min := Params.enclave_base config.(eid);
+                           enclave_data_size := Params.enclave_size config.(eid);
+                           enclave_data_shared_page := if config.(shared_page) then Ob~1 else Ob~0;
+                           enclave_data_valid := Ob~1
+                        |}.
+
+      Definition TODO_spin_up_machine (core: ind_core_id) (next: enclave_config) (turn: bool) : state :=
+        match core with
+        | CoreId0 => initial_state (Some next.(eid)) None (if turn then Ob~1 else Ob~0)
+        | CoreId1 => initial_state None (Some next.(eid)) (if turn then Ob~1 else Ob~0)
+        end.
+
+      Definition do_magic_step (core: ind_core_id)
+                               (turn: bool)
+                               (config: sm_magic_state_machine)
+                               (other_cores_enclave: option enclave_config)
+                               : sm_state_machine * Log R ContextEnv * option enclave_config :=
+        match config with
+        | SmMagicState_Continue st obs cur_config => (st, obs, cur_config)
+        | SmMagicState_Exit next_enclave obs =>
+           (SmState_Waiting next_enclave, obs, None)
+        | SmMagicState_TryToEnter next_enclave =>
+            if can_enter_enclave next_enclave other_cores_enclave then
+              let machine := TODO_spin_up_machine core next_enclave turn in
+              let sm_state := SmState_Enclave machine next_enclave EnclaveState_Running in
+              let obs := log_empty in (* TODO *)
+              (sm_state, obs, Some next_enclave)
+             else (SmState_Waiting next_enclave, log_empty, None)
+        end.
+
+      Definition get_enclave_config (st: sm_state_machine) : option enclave_config :=
+        match st with
+        | SmState_Enclave _ config _ => Some config 
+        | _ => None
+        end.
+
+      Definition output_t : Type := Log R_external ContextEnv * option enclave_config.
+      Definition spec_output_t : Type := output_t * output_t.
+
+      (*
+      Definition iso_step (st: iso_machine_t) (input: Log R ContextEnv) (feedback: Log R ContextEnv) 
+                          : iso_machine_t * output_t :=
+        let magic0 := local_core_step (negb st.(turn)) CoreId0 st.(iso_sm0) 
+                                      (filter_external input CoreId0) (filter_external feedback CoreId0) in
+        let magic1 := local_core_step st.(turn) CoreId1 st.(iso_sm1) 
+                                      (filter_external input CoreId1) (filter_external feedback CoreId1) in
+        let '(iso0', log0) := do_magic_step CoreId0 (negb st.(turn)) magic0 (get_enclave_config st.(iso_sm1)) in
+        let '(iso1', log1) := do_magic_step CoreId1 (negb st.(turn)) magic1 (get_enclave_config st.(iso_sm0)) in
+        let st' := {| iso_sm0 := iso0';
+                      iso_sm1 := iso1';
+                      turn := negb st.(turn)
+                   |} in
+        (st', (log0, log1)). (* TODO: process log0 and log1 *)
+        *)
+
+    Definition spec_state_t := iso_machine_t.
+    Definition initial_spec_state : spec_state_t. Admitted.
+
+    Definition do_step__spec (spec_st: spec_state_t) (step: step_io)
+                           : spec_state_t * spec_output_t * props_t. Admitted.
+
+    Definition do_steps__spec (steps: list step_io)
+                            : spec_state_t * list spec_output_t * list props_t :=
+      fold_left (fun '(st, evs0, props) step =>
+                   let '(st', ev0, prop) := do_step__spec st step in
+                   (st', evs0 ++ [ev0], props ++ [prop]))
+                steps (initial_spec_state , [], []).
+
+  End Spec.
+
+  Section Correctness.
+    Definition trace_equivalent (koika_tr: list (Log R ContextEnv))
+                                (spec_tr: list spec_output_t) : Prop.
+    Admitted.
+
+    Theorem correctness :
+      forall (steps: list step_io)        
+        (spec_st: spec_state_t) (spec_tr: list spec_output_t) (props: list props_t)
+        (koika_st: state) (koika_tr: list (Log R ContextEnv)),
+      valid_inputs props ->
+      valid_feedback props ->
+      do_steps__spec steps = (spec_st, spec_tr, props) ->
+      do_steps__impl steps = (koika_st, koika_tr) ->
+      trace_equivalent koika_tr spec_tr.
+    Admitted.
+  End Correctness.
+
+  Section Compliance.
+
+    Theorem compliance:
+      forall (steps: list step_io)        
+        (spec_st: spec_state_t) (spec_tr: list spec_output_t) (props: list props_t)
+        (koika_st: state) (koika_tr: list (Log R ContextEnv)),
+      valid_inputs props ->
+      valid_feedback props ->
+      do_steps__spec steps = (spec_st, spec_tr, props) ->
+      do_steps__impl steps = (koika_st, koika_tr) ->
+      valid_output props.
+    Admitted.
+  End Compliance.
 
 End SecurityMonitor.
 
@@ -2403,7 +2719,7 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
                (Params0: CoreParameters) (Params1: CoreParameters)
                (Core0: Core_sig External EnclaveParams Params0)
                (Core1: Core_sig External EnclaveParams Params1)
-               (Memory: Memory_sig External) <: Machine_sig.
+               (Memory: Memory_sig External EnclaveParams) <: Machine_sig.
 
   Module SM := SecurityMonitor External EnclaveParams.
 
@@ -2421,10 +2737,8 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
   | pc0
   | pc1
   (* Register files *)
-      (*
   | core0_rf (state: Rf.reg_t)
   | core1_rf (state: Rf.reg_t) 
-  *)
   (* Core0 <-> SM *)
   | Core0ToSM_IMem (state: MemReq.reg_t)
   | Core0ToSM_DMem (state: MemReq.reg_t)
@@ -2467,10 +2781,8 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
     | pc0 => bits_t 32
     | pc1 => bits_t 32
     (* Register files *)
-    (*
     | core0_rf st => Rf.R st
     | core1_rf st => Rf.R st
-    *)
     (* Core0 <-> SM *)
     | Core0ToSM_IMem st => MemReq.R st
     | Core0ToSM_DMem st => MemReq.R st
@@ -2511,10 +2823,8 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
     | pc0 => Params0.initial_pc
     | pc1 => Params1.initial_pc
     (* Register files *)
-    (*
     | core0_rf st => Rf.r st
     | core1_rf st => Rf.r st
-    *)
     (* Core0 <-> SM *)
     | Core0ToSM_IMem st => MemReq.r st
     | Core0ToSM_DMem st => MemReq.r st
@@ -2548,9 +2858,9 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
   Definition ext_fn_specs := External.ext_fn_specs.
   Definition rule : Type := rule R Sigma.
 
-  (* TODO: 40s *)
-  Instance FiniteType_reg_t : FiniteType reg_t := _.
-  (* Declare Instance FiniteType_reg_t : FiniteType reg_t.   *)
+  (* TODO: very slow right now *)
+  (*Instance FiniteType_reg_t : FiniteType reg_t := FiniteTypeHelpers.FiniteType_t'.*)
+  Declare Instance FiniteType_reg_t : FiniteType reg_t.   
 
   Instance EqDec_reg_t : EqDec reg_t := _.
 
@@ -2564,7 +2874,7 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
   Definition rule_name_t := rule_name_t'.
 
   Section Core0_Lift.
-    Definition core0_lift (reg: Core0.reg_t) : reg_t :=
+    Definition core0_external_lift (reg: Core0.external_reg_t) : reg_t :=
       match reg with
       | Core0.core_id => core_id0
       | Core0.toIMem s => Core0ToSM_IMem s
@@ -2572,9 +2882,14 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
       | Core0.toSMEnc s => Core0ToSM_Enc s
       | Core0.fromIMem s => SMToCore0_IMem s
       | Core0.fromDMem s => SMToCore0_DMem s
-      (* | Core0.rf s => core0_rf s *)
+      | Core0.rf s => core0_rf s 
       | Core0.pc => pc0
       | Core0.purge => purge_core0
+      end.
+
+    Definition core0_lift (reg: Core0.reg_t) : reg_t :=
+      match reg with
+      | Core0.external s => core0_external_lift s
       | Core0.internal s => Core0_internal s
       end.
 
@@ -2584,7 +2899,7 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
   End Core0_Lift.
 
   Section Core1_Lift.
-    Definition core1_lift (reg: Core1.reg_t) : reg_t :=
+    Definition core1_external_lift (reg: Core1.external_reg_t) : reg_t :=
       match reg with
       | Core1.core_id => core_id1
       | Core1.toIMem s => Core1ToSM_IMem s
@@ -2592,9 +2907,14 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
       | Core1.toSMEnc s => Core1ToSM_Enc s
       | Core1.fromIMem s => SMToCore1_IMem s
       | Core1.fromDMem s => SMToCore1_DMem s
-      (* | Core1.rf s => core1_rf s *)
+      | Core1.rf s => core1_rf s 
       | Core1.pc => pc1
       | Core1.purge => purge_core1
+      end.
+
+    Definition core1_lift (reg: Core1.reg_t) : reg_t :=
+      match reg with
+      | Core1.external s => core1_external_lift s
       | Core1.internal s => Core1_internal s
       end.
 
@@ -2605,7 +2925,7 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
 
   Section SM_Lift.
 
-    Definition sm_lift (reg: SM.reg_t) : reg_t :=
+    Definition sm_external_lift (reg: SM.external_reg_t) : reg_t :=
       match reg with
       | SM.fromCore0_IMem st => Core0ToSM_IMem st
       | SM.fromCore0_DMem st => Core0ToSM_DMem st
@@ -2635,6 +2955,11 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
       | SM.purge_core1 => purge_core1
       | SM.purge_mem0 => purge_mem0
       | SM.purge_mem1 => purge_mem1
+      end.
+
+    Definition sm_lift (reg: SM.reg_t) : reg_t :=
+      match reg with
+      | SM.external st => sm_external_lift st
       | SM.internal st => SM_internal st
       end.
 
@@ -2644,7 +2969,7 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
   End SM_Lift.
 
   Section Mem_Lift.
-    Definition mem_lift (reg: Memory.reg_t) : reg_t :=
+    Definition mem_external_lift (reg: Memory.external_reg_t) : reg_t :=
       match reg with
       | Memory.toIMem0 st => SMToMem0_IMem st
       | Memory.toIMem1 st => SMToMem1_IMem st
@@ -2656,6 +2981,11 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
       | Memory.fromDMem1 st => MemToSM1_DMem st
       | Memory.purge0 => purge_mem0
       | Memory.purge1 => purge_mem1
+      end.
+
+    Definition mem_lift (reg: Memory.reg_t) : reg_t :=
+      match reg with
+      | Memory.external st => mem_external_lift st
       | Memory.internal st => Mem_internal st
       end.
 
