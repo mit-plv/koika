@@ -447,7 +447,6 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
   | instr_count
   | epoch
   | freeze_fetch
-  | rf (state: Rf.reg_t)
   .
 
   Definition internal_reg_t := internal_reg_t'.
@@ -464,7 +463,6 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
     | instr_count => bits_t 32
     | epoch => bits_t 1
     | freeze_fetch => bits_t 1
-    | rf r => Rf.R r
     end.
 
   Definition r_internal (idx: internal_reg_t) : R_internal idx :=
@@ -479,40 +477,34 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
     | instr_count => Bits.zero
     | epoch => Bits.zero
     | freeze_fetch => Bits.zero
-    | rf s => Rf.r s
     end.
 
-  (* Declare state *)
-  Inductive reg_t :=
+  Inductive external_reg_t :=
   | core_id
   | toIMem (state: MemReq.reg_t)
   | toDMem (state: MemReq.reg_t)
   | fromIMem (state: MemResp.reg_t)
   | fromDMem (state: MemResp.reg_t)
   | toSMEnc (state: EnclaveReq.reg_t)
-  (* | rf (state: Rf.reg_t) *)
+  | rf (state: Rf.reg_t) 
   | pc
   | purge
-  | internal (r: internal_reg_t)
   .
 
-  (* State type *)
-  Definition R idx :=
+  Definition R_external (idx: external_reg_t) : type :=
     match idx with
     | core_id => core_id_t
     | toIMem r => MemReq.R r
-    | fromIMem r => MemResp.R r
     | toDMem r => MemReq.R r
-    | fromDMem r => MemResp.R r
+    | fromIMem  r => MemResp.R r
+    | fromDMem  r => MemResp.R r
     | toSMEnc r => EnclaveReq.R r
-    (* | rf r => Rf.R r *)
+    | rf r => Rf.R r  
     | pc => bits_t 32
     | purge => enum_t purge_state
-    | internal r => R_internal r
-    end.
+    end.  
 
-  (* Initial values *)
-  Definition r idx : R idx :=
+  Definition r_external (idx: external_reg_t) : R_external idx :=
     match idx with
     | core_id => CoreParams.core_id
     | toIMem s => MemReq.r s
@@ -520,17 +512,36 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
     | toDMem s => MemReq.r s
     | fromDMem s => MemResp.r s
     | toSMEnc s => EnclaveReq.r s
-    (* | rf s => Rf.r s *)
+    | rf r => Rf.r r  
     | pc => CoreParams.initial_pc
     | purge => value_of_bits (Bits.zero)
-    | internal s => r_internal s
     end.
+
+  Inductive reg_t :=
+  | external (r: external_reg_t)
+  | internal (r: internal_reg_t)
+  .
+
+  Definition R (idx: reg_t) : type :=
+    match idx with
+    | external r => R_external r
+    | internal r => R_internal r
+    end.
+
+  Definition r idx : R idx :=
+    match idx with
+    | external s => r_external s
+    | internal s => r_internal s
+    end.                              
 
   Definition ext_fn_t := External.ext_fn_t.
   Definition Sigma := External.Sigma.
   Definition rule := rule R Sigma.
-  (* Definition sigma := External.sigma. *)
+  Definition sigma := External.sigma. 
 
+  (* TODO *)
+  Notation "'__external__' instance " :=
+    (fun reg => external ((instance) reg)) (in custom koika at level 1, instance constr at level 99).
   Notation "'__internal__' instance " :=
     (fun reg => internal ((instance) reg)) (in custom koika at level 1, instance constr at level 99).
   Notation "'(' instance ').(' method ')' args" :=
@@ -539,9 +550,9 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
 
   Definition fetch : uaction reg_t ext_fn_t :=
     {{
-        guard(read0(purge) == enum purge_state { Ready } &&
+        guard(read0(external purge) == enum purge_state { Ready } &&
               !read0(internal freeze_fetch));
-        let pc := read1(pc) in
+        let pc := read1(external pc) in
         let req := struct mem_req {
                               byte_en := |4`d0|; (* Load *)
                               addr := pc;
@@ -551,14 +562,14 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
                                           ppc := pc + |32`d4|;
                                           epoch := read1(internal epoch)
                                         } in
-        toIMem.(MemReq.enq)(req);
-        write1(pc, pc + |32`d4|);
+        (__external__ toIMem).(MemReq.enq)(req);
+        write1(external pc, pc + |32`d4|);
         (__internal__ f2d).(fromFetch.enq)(fetch_bookkeeping)
     }}.
 
   Definition wait_imem : uaction reg_t ext_fn_t :=
     {{
-        guard(read0(purge) == enum purge_state { Ready } &&
+        guard(read0(external purge) == enum purge_state { Ready } &&
                !read0(internal freeze_fetch));
         let fetched_bookkeeping := (__internal__ f2d).(fromFetch.deq)() in
         (__internal__ f2dprim).(waitFromFetch.enq)(fetched_bookkeeping)
@@ -576,9 +587,9 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
   (* muxing on the input, TODO check if it changes anything *)
   Definition decode : uaction reg_t ext_fn_t :=
     {{
-        guard(read0(purge) == enum purge_state { Ready } &&
+        guard(read0(external purge) == enum purge_state { Ready } &&
               !read0(internal freeze_fetch));
-        let instr := fromIMem.(MemResp.deq)() in
+        let instr := (__external__ fromIMem).(MemResp.deq)() in
         let instr := get(instr,data) in
         let fetched_bookkeeping := (__internal__ f2dprim).(waitFromFetch.deq)() in
         let decodedInst := decode_fun(instr) in
@@ -591,8 +602,8 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
              (when (get(decodedInst, valid_rd)) do
                   let rd_idx := get(getFields(instr), rd) in
                   (__internal__ scoreboard).(Scoreboard.insert)(sliceReg(rd_idx)));
-             let rs1 := (__internal__ rf).(Rf.read_1)(sliceReg(rs1_idx)) in
-             let rs2 := (__internal__ rf).(Rf.read_1)(sliceReg(rs2_idx)) in
+             let rs1 := (__external__ rf).(Rf.read_1)(sliceReg(rs1_idx)) in
+             let rs2 := (__external__ rf).(Rf.read_1)(sliceReg(rs2_idx)) in
              let decode_bookkeeping := struct decode_bookkeeping {
                                                 pc    := get(fetched_bookkeeping, pc);
                                                 ppc   := get(fetched_bookkeeping, ppc);
@@ -636,13 +647,13 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
 
   Definition step_multiplier : uaction reg_t ext_fn_t :=
     {{
-        guard(read0(purge) == enum purge_state { Ready });
+        guard(read0(external purge) == enum purge_state { Ready });
         (__internal__ mulState).(Multiplier.step)()
     }}.
 
   Definition execute : uaction reg_t ext_fn_t :=
     {{
-        guard(read0(purge) == enum purge_state { Ready } &&
+        guard(read0(external purge) == enum purge_state { Ready } &&
               !read0(internal freeze_fetch));
         let decoded_bookkeeping := (__internal__ d2e).(fromDecode.deq)() in
         if get(decoded_bookkeeping, epoch) == read0(internal epoch) then
@@ -652,7 +663,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
             (* Always say that we had a misprediction in this case for
             simplicity *)
             write0(internal epoch, read0(internal epoch)+Ob~1);
-            write0(pc, |32`d0|)
+            write0(external pc, |32`d0|)
           else
             (let fInst := get(dInst, inst) in
              let funct3 := get(getFields(fInst), funct3) in
@@ -682,7 +693,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
                set data := rs2_val << shift_amount;
                set addr := addr[|5`d2| :+ 30 ] ++ |2`d0|;
                set isUnsigned := funct3[|2`d2|];
-               toDMem.(MemReq.enq)(struct mem_req {
+               (__external__ toDMem).(MemReq.enq)(struct mem_req {
                  byte_en := byte_en; addr := addr; data := data })
              else if (isControlInst(dInst)) then
                set data := (pc + |32`d4|)     (* For jump and link *)
@@ -697,7 +708,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
              let nextPc := get(controlResult,nextPC) in
              if nextPc != get(decoded_bookkeeping, ppc) then
                write0(internal epoch, read0(internal epoch)+Ob~1);
-               write0(pc, nextPc)
+               write0(external pc, nextPc)
              else
                pass;
              let execute_bookkeeping := struct execute_bookkeeping {
@@ -715,7 +726,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
 
   Definition writeback : uaction reg_t ext_fn_t :=
     {{
-        guard(read0(purge) == enum purge_state { Ready });
+        guard(read0(external purge) == enum purge_state { Ready });
         let execute_bookkeeping := (__internal__ e2w).(fromExecute.deq)() in
         let dInst := get(execute_bookkeeping, dInst) in
         let data := get(execute_bookkeeping, newrd) in
@@ -723,7 +734,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
         write0(internal instr_count, read0(internal instr_count)+|32`d1|);
         if isMemoryInst(dInst) then (* // write_val *)
           (* Byte enable shifting back *)
-          let resp := fromDMem.(MemResp.deq)() in
+          let resp := (__external__ fromDMem).(MemResp.deq)() in
           let mem_data := get(resp,data) in
           set mem_data := mem_data >> (get(execute_bookkeeping,offset) ++ Ob~0~0~0);
           match (get(execute_bookkeeping,isUnsigned)++get(execute_bookkeeping,size)) with
@@ -737,7 +748,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
         else if isEnclaveInst(dInst) then
            let eid := get(execute_bookkeeping, eid) in
            let req := struct enclave_req { eid := eid} in
-           toSMEnc.(EnclaveReq.enq)(req)
+           (__external__ toSMEnc).(EnclaveReq.enq)(req)
         else if isMultiplyInst(dInst) then
           set data := (__internal__ mulState).(Multiplier.deq)()[|6`d0| :+ 32]
         else
@@ -747,7 +758,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
           (__internal__ scoreboard).(Scoreboard.remove)(sliceReg(rd_idx));
           if (rd_idx == |5`d0|)
           then pass
-          else (__internal__ rf).(Rf.write_0)(sliceReg(rd_idx),data)
+          else (__external__ rf).(Rf.write_0)(sliceReg(rd_idx),data)
         else
           pass
     }}.
@@ -755,7 +766,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
 
   Definition tick : uaction reg_t ext_fn_t :=
     {{
-        guard(read0(purge) == enum purge_state { Ready });
+        guard(read0(external purge) == enum purge_state { Ready });
         write0(internal cycle_count, read0(internal cycle_count) + |32`d1|)
     }}.
 
@@ -903,7 +914,7 @@ Module RV32I (EnclaveParams: EnclaveParameters) (CoreParams: CoreParameters)
   (* TODO: generalize reset for scoreboard *)
   Definition do_internal_purge: uaction reg_t ext_fn_t :=
     {{
-        let purge_st := read0(purge) in
+        let purge_st := read0(external purge) in
         if (purge_st == enum purge_state { Purging }) then
            (* f2d *)
            (__internal__ f2d).(fromFetch.reset)();
@@ -924,9 +935,9 @@ Module RV32I (EnclaveParams: EnclaveParameters) (CoreParams: CoreParameters)
            (* epoch *)
            write0(internal epoch, Ob~0);
            write0(internal freeze_fetch, Ob~0);
-           write0(purge, enum purge_state { Purged })
+           write0(external purge, enum purge_state { Purged })
          else if (purge_st == enum purge_state { Restart }) then
-           write0(purge, enum purge_state { Ready })
+           write0(external purge, enum purge_state { Ready })
          else fail
     }}.
 
@@ -959,7 +970,236 @@ Module RV32I (EnclaveParams: EnclaveParameters) (CoreParams: CoreParameters)
   Instance FiniteType_scoreboard_rf : FiniteType Scoreboard.Rf.reg_t := _.
   Instance FiniteType_scoreboard : FiniteType Scoreboard.reg_t := _.
   Instance FiniteType_internal_reg_t : FiniteType internal_reg_t := _.
+  Instance FiniteType_ext_reg_t : FiniteType external_reg_t := _.
   Instance FiniteType_reg_t : FiniteType reg_t := _.
+
+  Section CycleSemantics.
+    Definition state := env_t ContextEnv (fun idx : reg_t => R idx).
+    Definition empty_log : Log R ContextEnv := log_empty.
+
+    Definition initial_state := ContextEnv.(create) r.
+
+    Parameter update_function : state -> Log R ContextEnv -> Log R ContextEnv.
+      (* interp_scheduler' st ? rules log scheduler. *)
+
+    Record step_io :=
+      { step_input : Log R_external ContextEnv;
+        step_feedback: Log R_external ContextEnv
+      }.
+
+    Definition lift_ext_log (log: Log R_external ContextEnv) : Log R ContextEnv :=
+      ContextEnv.(create) (fun reg => match reg return (RLog (R reg)) with
+                                   | external s => ContextEnv.(getenv) log s
+                                   | _ => []
+                                   end).
+
+    Definition do_step__koika (st: state) (step: step_io)
+                            : state * Log R ContextEnv :=
+      let input := lift_ext_log step.(step_input) in
+      let output := update_function st input in
+      let final := log_app (lift_ext_log step.(step_feedback)) (log_app output input) in
+      (commit_update st final, output).
+
+    Definition do_steps__koika (steps: list step_io) 
+                             : state * list (Log R ContextEnv) :=
+      fold_left (fun '(st, evs) step =>
+                   let '(st', ev) := do_step__koika st step in
+                   (st', evs ++ [ev]))
+                steps (initial_state, []).
+
+  End CycleSemantics.
+
+  Section Interface.
+    Definition proj_log__ext (log: Log R ContextEnv) : Log R_external ContextEnv :=
+      ContextEnv.(create) (fun reg => ContextEnv.(getenv) log (external reg)).
+
+      Definition tau := Log R_external ContextEnv.
+      Definition trace := list tau.
+  End Interface.
+
+  Section Spec.
+
+    Definition is_external_log (log: Log R ContextEnv) : Prop :=
+      forall reg, match reg with
+             | external r => True
+             | internal r => ContextEnv.(getenv) log reg = []
+             end.
+
+    (* TODO: to simplify for now, we say that the Core executes first *)
+    Definition valid_input_log__common (input_log: Log R_external ContextEnv) : Prop :=
+      input_log = log_empty.
+
+    Definition valid_output_log__common (output_log: Log R_external ContextEnv) : Prop :=
+      True.
+    
+    Definition valid_feedback_log__common (log: Log R_external ContextEnv) : Prop :=
+      (* Writeback to external registers only *)
+      latest_write log core_id = None /\
+      (* TODO: Register file is really internal... we just wanted to be able to talk about it *)
+      (forall s, latest_write log (rf s) = None).
+    (*
+      (latest_write log (external (toIMem MemReq.valid0)) = None \/
+      latest_write log (external (toIMem MemReq.valid0)) = Some Ob~0).
+      *)
+    
+    (* - While running, SM only gets to write purging (which doesn't change anything)
+     * - Only Core writes purged, transitioning from running -> waiting
+     * - Here, Core promises to not change external state
+     * - Supposing that SM writes restart only when external state is cleared (apart from certain regs),
+     * - Then simulation of resetting holds.
+     *)
+    Inductive phase_state :=
+    | SpecSt_Running
+    | SpecSt_Waiting (rf: env_t ContextEnv Rf.R)
+    .
+
+    Definition spec_state_t : Type := state * phase_state.
+
+    Definition initial_spec_state : spec_state_t := (initial_state, SpecSt_Running).
+
+    Definition only_write_ext_purge (log: Log R_external ContextEnv) (v: bits_t 2) : Prop :=
+      latest_write log purge = Some v \/ latest_write log purge = None.
+
+    Definition only_write_purge (log: Log R ContextEnv) (v: bits_t 2) : Prop :=
+      latest_write log (external purge) = Some v \/ latest_write log (external purge) = None.
+
+    Definition extract_rf (st: state) : env_t ContextEnv Rf.R :=
+      ContextEnv.(create) (fun reg => ContextEnv.(getenv) st (external (rf reg))).
+    
+    Definition initialise_with_rf (initial_rf: env_t ContextEnv Rf.R) (initial_pc: bits_t 32) : state :=
+      ContextEnv.(create) (fun reg => match reg return R reg with
+                                   | external (rf s) => ContextEnv.(getenv) initial_rf s
+                                   | external pc => initial_pc
+                                   | s => r s
+                                   end).
+    
+    (* TODO: should really be inductive probably or option type? But too much effort to specify everything. *)
+    Definition do_step_trans__spec (spec_st: spec_state_t) (step: step_io)
+                                 : spec_state_t * Log R_external ContextEnv :=
+      let '(st, phase) := spec_st in
+      let '(st', output) := do_step__koika st step in
+      let ext_output := proj_log__ext output in 
+      match phase with
+      | SpecSt_Running =>
+          let continue := ((st', SpecSt_Running), ext_output) in
+          match latest_write output (external purge) with
+          | Some v => if bits_eqb v ENUM_purge_purged 
+                     then ((st', SpecSt_Waiting (extract_rf st')), ext_output)
+                     else continue
+          | None => continue
+          end
+      | SpecSt_Waiting _rf => 
+         let continue := ((st', SpecSt_Waiting _rf), ext_output) in
+         match latest_write step.(step_feedback) purge,
+               latest_write step.(step_feedback) pc with
+         | Some v, Some _pc => 
+             if bits_eqb v ENUM_purge_restart then
+               (((initialise_with_rf _rf _pc), SpecSt_Running), ext_output)
+             else (* don't care *) continue
+         | _, _ => continue
+         end
+      end.
+
+    (* Behaves nicely with enq/deqs *)
+    Definition valid_interface_log (st: state) (init_log: Log R_external ContextEnv) 
+                                   (log: Log R_external ContextEnv) : Prop. Admitted.
+
+    Definition no_writes (log: Log R_external ContextEnv) : Prop :=
+      forall r, latest_write log r = None.
+
+    Definition valid_step_output__spec (spec_st: spec_state_t) (step: step_io) : Prop :=
+      let '(st, phase) := spec_st in
+      let '(st', log) := do_step_trans__spec spec_st step in
+      valid_output_log__common log /\
+      valid_interface_log st log_empty log  /\
+        (match phase with
+        | SpecSt_Running => True
+        | SpecSt_Waiting _ =>
+            no_writes log
+        end).
+
+    Definition reset_external_state (st: state) : Prop :=
+      forall reg, match reg with
+             | rf _ => True
+             | pc => True
+             | purge => True
+             | s => ContextEnv.(getenv) st (external s) = r_external s
+             end.
+
+    Definition valid_step_feedback__spec (spec_st: spec_state_t) (step: step_io) : Prop :=
+      let '(st, phase) := spec_st in
+      let '(st', output) := do_step_trans__spec spec_st step in
+      let feedback := step.(step_feedback) in
+
+      valid_feedback_log__common step.(step_feedback) /\
+      valid_interface_log st (log_app output step.(step_input)) feedback /\
+      match phase with
+      | SpecSt_Running =>
+          only_write_ext_purge feedback ENUM_purge_purging
+      | SpecSt_Waiting _  =>
+          only_write_ext_purge feedback ENUM_purge_restart /\
+          (latest_write feedback purge = Some ENUM_purge_restart ->
+           latest_write feedback pc <> None /\
+           reset_external_state (fst st') (* TODO: whose responsibility to clear FIFOs? *)
+          )
+      end.
+
+    Definition do_step__spec (spec_st: spec_state_t) (step: step_io)
+                           : spec_state_t * Log R_external ContextEnv * props_t :=
+      let '(st', log) := do_step_trans__spec spec_st step in
+      let props' := {| P_input := valid_input_log__common step.(step_input);
+                       P_output := valid_step_output__spec spec_st step;
+                       P_feedback := valid_step_feedback__spec spec_st step
+                    |} in
+      (st', log, props').
+
+    Definition do_steps__spec (steps: list step_io) 
+                            : spec_state_t * list (Log R_external ContextEnv) * list props_t :=
+      fold_left (fun '(st, evs, props) step => 
+                   let '(st', ev, prop) := do_step__spec st step in
+                   (st', evs ++ [ev], props ++ [prop]))
+                steps (initial_spec_state, [], []).
+     
+  End Spec.
+
+  Section Correctness.
+
+    (* TODO: clean *)
+    Definition log_equivalent (koika_log: Log R ContextEnv) (spec_log: Log R_external ContextEnv) : Prop :=
+      forall (reg: external_reg_t), 
+        latest_write koika_log (external reg) = latest_write spec_log reg /\
+        (forall port, may_read koika_log port (external reg) = may_read spec_log port reg) /\
+        (forall port, may_write koika_log log_empty port (external reg) =
+                 may_write spec_log log_empty port reg).
+
+    Definition trace_equivalent (koika_tr: list (Log R ContextEnv)) 
+                                (spec_tr: list (Log R_external ContextEnv)) : Prop :=
+      Forall2 log_equivalent koika_tr spec_tr.
+
+    Axiom correctness :
+      forall (steps: list step_io) 
+        (spec_st: spec_state_t) (spec_tr: list (Log R_external ContextEnv)) (props: list props_t)
+        (koika_st: state) (koika_tr: list (Log R ContextEnv)),
+      valid_inputs props ->
+      valid_feedback props ->
+      do_steps__spec steps = (spec_st, spec_tr, props) ->
+      do_steps__koika steps = (koika_st, koika_tr) ->
+      trace_equivalent koika_tr spec_tr.
+
+  End Correctness.
+
+  Section Compliance.
+    Axiom compliance:
+      forall (steps: list step_io) 
+        (spec_st: spec_state_t) (spec_tr: list (Log R_external ContextEnv)) (props: list props_t)
+        (koika_st: state) (koika_tr: list (Log R ContextEnv)),
+      valid_inputs props ->
+      valid_feedback props ->
+      do_steps__spec steps = (spec_st, spec_tr, props) ->
+      do_steps__koika steps = (koika_st, koika_tr) ->
+      valid_output props.
+
+  End Compliance.
 
 End RV32I.
 

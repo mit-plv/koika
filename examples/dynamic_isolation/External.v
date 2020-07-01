@@ -150,17 +150,15 @@ Module External <: External_sig.
   Instance Show_ext_fn_t : Show ext_fn_t := _.
 
   (* TODO: temporary and wrong *)
-  (*
   Definition sigma (fn: ext_fn_t) : Sig_denote (Sigma fn) :=
     match fn with
     | ext_cache _ => fun _ => value_of_bits Bits.zero
-    | ext_mainmem => _
-    | ext_uart_write => _
-    | ext_uart_read => _
-    | ext_led => _
-    | ext_ppp_bookkeeping => _
+    | ext_mainmem => fun _ => value_of_bits Bits.zero
+    | ext_uart_write => fun _ => value_of_bits Bits.zero
+    | ext_uart_read => fun _ => value_of_bits Bits.zero
+    | ext_led => fun _ => value_of_bits Bits.zero
+    | ext_ppp_bookkeeping => fun _ => value_of_bits Bits.zero
     end.
-    *)
 
 End External.
 

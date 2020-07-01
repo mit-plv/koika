@@ -16,6 +16,34 @@ Definition fn_name_t := string.
  * We have a well-defined interface to each component.
  *)
 
+Section Util.
+  Definition AND (Ps: list Prop) : Prop :=
+    List.fold_left and Ps True.
+
+  Definition bits_eqb {sz} (v1: bits_t sz) (v2: bits_t sz) : bool :=
+    N.eqb (Bits.to_N v1) (Bits.to_N v2).
+
+  Record props_t :=
+    { P_input : Prop;
+      P_output : Prop;
+      P_feedback: Prop
+    }.
+
+  Definition valid_inputs (props: list props_t) :=
+    AND (List.map P_input props).
+  Definition valid_feedback (props: list props_t) :=
+    AND (List.map P_feedback props).
+  Definition valid_output (props: list props_t) :=
+    AND (List.map P_output props).
+
+  Definition trivial_props : props_t :=
+    {| P_input := True;
+       P_output := True;
+       P_feedback := True
+    |}.
+
+End Util.
+
 Module Common.
 
   Definition mem_req :=
@@ -69,10 +97,14 @@ Module Common.
   | CoreId1
   .
 
+  Scheme Equality for ind_core_id.
+
   Inductive ind_cache_type :=
   | CacheType_Imem
   | CacheType_Dmem
   .
+
+  Scheme Equality for ind_cache_type.
 
   Definition addr_t := bits_t 32.
   Definition data_t := bits_t 32.
@@ -137,7 +169,7 @@ Module Type External_sig.
   Parameter ext_fn_t : Type.
   Parameter Sigma : ext_fn_t -> ExternalSignature.
   (* TODO: for later *)
-  (* Parameter sigma : (forall fn: ext_fn_t, Sig_denote (Sigma fn)). *)
+  Parameter sigma : (forall fn: ext_fn_t, Sig_denote (Sigma fn)). 
   Parameter ext_fn_specs : ext_fn_t -> ext_fn_spec.
 
 End External_sig.
@@ -262,37 +294,7 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
       Definition trace := list tau.
   End Interface.
 
-  Section TODO_MOVE.
-
-    Definition AND (Ps: list Prop) : Prop :=
-      List.fold_left and Ps True.
-
-    Definition bits_eqb {sz} (v1: bits_t sz) (v2: bits_t sz) : bool :=
-      N.eqb (Bits.to_N v1) (Bits.to_N v2).
-
-
-  End TODO_MOVE.
-
   Section Spec.
-
-    Record props_t :=
-      { P_input : Prop;
-        P_output : Prop;
-        P_feedback: Prop
-      }.
-
-    Definition valid_inputs (props: list props_t) :=
-      AND (List.map P_input props).
-    Definition valid_feedback (props: list props_t) :=
-      AND (List.map P_feedback props).
-    Definition valid_output (props: list props_t) :=
-      AND (List.map P_output props).
-
-    Definition trivial_props : props_t :=
-      {| P_input := True;
-         P_output := True;
-         P_feedback := True
-      |}.
 
     Definition is_external_log (log: Log R ContextEnv) : Prop :=
       forall reg, match reg with
@@ -1237,32 +1239,6 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
   End CycleSemantics.
 
   Section TODO_MOVE.
-
-    Definition AND (Ps: list Prop) : Prop :=
-      List.fold_left and Ps True.
-
-    Definition bits_eqb {sz} (v1: bits_t sz) (v2: bits_t sz) : bool :=
-      N.eqb (Bits.to_N v1) (Bits.to_N v2).
-
-    Record props_t :=
-      { P_input : Prop;
-        P_output : Prop;
-        P_feedback: Prop
-      }.
-
-    Definition valid_inputs (props: list props_t) :=
-      AND (List.map P_input props).
-    Definition valid_feedback (props: list props_t) :=
-      AND (List.map P_feedback props).
-    Definition valid_output (props: list props_t) :=
-      AND (List.map P_output props).
-
-    Definition trivial_props : props_t :=
-      {| P_input := True;
-         P_output := True;
-         P_feedback := True
-      |}.
-
     Definition is_external_log (log: Log R ContextEnv) : Prop :=
       forall reg, match reg with
              | external r => True
@@ -1600,8 +1576,8 @@ Module Type Memory_sig (External: External_sig) (EnclaveParams: EnclaveParameter
     | internal s => r_internal s
     end.
 
-  Instance FiniteType_ext_reg_t : FiniteType external_reg_t := _.
-  Instance FiniteType_reg_t : FiniteType reg_t := _.
+  Declare Instance FiniteType_ext_reg_t : FiniteType external_reg_t.
+  Declare Instance FiniteType_reg_t : FiniteType reg_t.
 
   Definition ext_fn_t := External.ext_fn_t.
   Definition Sigma := External.Sigma.
@@ -1614,8 +1590,6 @@ Module Type Memory_sig (External: External_sig) (EnclaveParams: EnclaveParameter
   Axiom schedule : Syntax.scheduler pos_t rule_name_t.
 
   Import EnclaveInterface.
-
-  Scheme Equality for ind_core_id.
 
   Section Taint.
 
@@ -1685,16 +1659,16 @@ Module Type Memory_sig (External: External_sig) (EnclaveParams: EnclaveParameter
         step_feedback : Log R_external ContextEnv
       }.
 
-    Record ifc_io :=
-      { ifc_step : step_io;
-        ifc_input_config0 : option EnclaveInterface.enclave_config;
-        ifc_input_config1 : option EnclaveInterface.enclave_config;
+    Record ghost_io :=
+      { ghost_step : step_io;
+        ghost_input_config0 : option EnclaveInterface.enclave_config;
+        ghost_input_config1 : option EnclaveInterface.enclave_config;
       }.
 
-    Definition get_input_config (step: ifc_io) (core: ind_core_id) : option EnclaveInterface.enclave_config :=
+    Definition get_input_config (step: ghost_io) (core: ind_core_id) : option EnclaveInterface.enclave_config :=
       match core with
-      | CoreId0 => step.(ifc_input_config0)
-      | CoreId1 => step.(ifc_input_config1)
+      | CoreId0 => step.(ghost_input_config0)
+      | CoreId1 => step.(ghost_input_config1)
       end.
 
     Definition do_step__impl (st: state) (step: step_io) : state * Log R ContextEnv :=
@@ -1713,13 +1687,6 @@ Module Type Memory_sig (External: External_sig) (EnclaveParams: EnclaveParameter
   End CycleSemantics.
 
   Section TODO_MOVE.
-
-    Definition AND (Ps: list Prop) : Prop :=
-      List.fold_left and Ps True.
-
-    Definition bits_eqb {sz} (v1: bits_t sz) (v2: bits_t sz) : bool :=
-      N.eqb (Bits.to_N v1) (Bits.to_N v2).
-
     Definition initial_enclave_config0 : enclave_config :=
       {| eid := Enclave0;
          shared_page  := false
@@ -1780,25 +1747,6 @@ Module Type Memory_sig (External: External_sig) (EnclaveParams: EnclaveParameter
   End TODO_dram.
 
   Section Spec.
-
-    Record props_t :=
-      { P_input : Prop;
-        P_output : Prop;
-        P_feedback: Prop
-      }.
-    Definition valid_inputs (props: list props_t) :=
-      AND (List.map P_input props).
-    Definition valid_feedback (props: list props_t) :=
-      AND (List.map P_feedback props).
-    Definition valid_output (props: list props_t) :=
-      AND (List.map P_output props).
-
-    Definition trivial_props : props_t :=
-      {| P_input := True;
-         P_output := True;
-         P_feedback := True
-      |}.
-
 
     (* Interface properties *)
     Definition valid_input_log__common (input_log: Log R_external ContextEnv) : Prop.
@@ -1862,8 +1810,8 @@ Module Type Memory_sig (External: External_sig) (EnclaveParams: EnclaveParameter
          step_feedback := filter_ext_log (step_feedback step) core
       |}.
 
-    Definition proj_ifc_io (step: ifc_io) (core: ind_core_id) : step_io * option enclave_config :=
-      (filter_step step.(ifc_step) core, get_input_config step core).
+    Definition proj_ghost_io (step: ghost_io) (core: ind_core_id) : step_io * option enclave_config :=
+      (filter_step step.(ghost_step) core, get_input_config step core).
 
     Definition do_local_step_trans__spec (machine: local_spec_state_t)
                                        (core: ind_core_id)
@@ -1898,10 +1846,10 @@ Module Type Memory_sig (External: External_sig) (EnclaveParams: EnclaveParameter
           end
       end.
 
-    Definition do_step_trans__spec (spec_st: spec_state_t) (step: ifc_io)
+    Definition do_step_trans__spec (spec_st: spec_state_t) (step: ghost_io)
                                  : spec_state_t * output_t * output_t :=
-      let '(step0, config0) := proj_ifc_io step CoreId0 in
-      let '(step1, config1) := proj_ifc_io step CoreId1 in
+      let '(step0, config0) := proj_ghost_io step CoreId0 in
+      let '(step1, config1) := proj_ghost_io step CoreId1 in
       let '(machine0', output0, mem_map') :=
           do_local_step_trans__spec (machine0 spec_st) CoreId0 step0 config0 (regions spec_st) in
       let '(machine1', output1, mem_map'') :=
@@ -1952,9 +1900,9 @@ Module Type Memory_sig (External: External_sig) (EnclaveParams: EnclaveParameter
           )
       end.
 
-    Definition valid_step_input__spec (spec_st: spec_state_t) (step: ifc_io) : Prop :=
-      let '(step0, config0) := proj_ifc_io step CoreId0 in
-      let '(step1, config1) := proj_ifc_io step CoreId1 in
+    Definition valid_step_input__spec (spec_st: spec_state_t) (step: ghost_io) : Prop :=
+      let '(step0, config0) := proj_ghost_io step CoreId0 in
+      let '(step1, config1) := proj_ghost_io step CoreId1 in
       let '(_, _, mem_map') :=
           do_local_step_trans__spec (machine0 spec_st) CoreId0 step0 config0 (regions spec_st) in
       valid_local_step_input (machine0 spec_st) CoreId0 step0 config0 (regions spec_st) /\
@@ -1964,24 +1912,24 @@ Module Type Memory_sig (External: External_sig) (EnclaveParams: EnclaveParameter
       (* only one restart at a time *)
       (not (latest_write step0.(step_input) purge0 = Some ENUM_purge_restart /\
           latest_write step1.(step_input) purge1 = Some ENUM_purge_restart)) /\
-      valid_input_log__common step.(ifc_step).(step_input). (* TODO *)
+      valid_input_log__common step.(ghost_step).(step_input). (* TODO *)
 
     (* Not very interesting: machine0 only outputs to external0; behaves like interface *)
-    Definition valid_step_output__spec (spec_st: spec_state_t) (step: ifc_io) : Prop.
+    Definition valid_step_output__spec (spec_st: spec_state_t) (step: ghost_io) : Prop.
     Admitted.
 
     Definition spec_output_t : Type := output_t * output_t.
 
-    Definition do_step__spec (spec_st: spec_state_t) (step: ifc_io)
+    Definition do_step__spec (spec_st: spec_state_t) (step: ghost_io)
                            : spec_state_t * spec_output_t * props_t :=
       let '(st', log0, log1) := do_step_trans__spec spec_st step in
       let props' := {| P_input := valid_step_input__spec spec_st step;
                        P_output := valid_step_output__spec spec_st step;
-                       P_feedback := valid_feedback_log__common step.(ifc_step).(step_feedback)
+                       P_feedback := valid_feedback_log__common step.(ghost_step).(step_feedback)
                     |} in
       (st', (log0, log1), props').
 
-    Definition do_steps__spec (initial_dram: dram_t) (steps: list ifc_io)
+    Definition do_steps__spec (initial_dram: dram_t) (steps: list ghost_io)
                             : spec_state_t * list spec_output_t * list props_t :=
       fold_left (fun '(st, evs0, props) step =>
                    let '(st', ev0, prop) := do_step__spec st step in
@@ -2015,13 +1963,13 @@ Module Type Memory_sig (External: External_sig) (EnclaveParams: EnclaveParameter
 
     Axiom correctness :
       forall (initial_dram: dram_t)
-        (steps: list ifc_io)
+        (steps: list ghost_io)
         (spec_st: spec_state_t) (spec_tr: list spec_output_t) (props: list props_t)
         (koika_st: state) (koika_tr: list (Log R ContextEnv)),
       valid_inputs props ->
       valid_feedback props ->
       do_steps__spec initial_dram steps = (spec_st, spec_tr, props) ->
-      do_steps__impl initial_dram (List.map ifc_step steps) = (koika_st, koika_tr) ->
+      do_steps__impl initial_dram (List.map ghost_step steps) = (koika_st, koika_tr) ->
       trace_equivalent koika_tr spec_tr.
 
   End Correctness.
@@ -2029,13 +1977,13 @@ Module Type Memory_sig (External: External_sig) (EnclaveParams: EnclaveParameter
   Section Compliance.
     Axiom compliance:
       forall (initial_dram: dram_t)
-        (steps: list ifc_io)
+        (steps: list ghost_io)
         (spec_st: spec_state_t) (spec_tr: list spec_output_t) (props: list props_t)
         (koika_st: state) (koika_tr: list (Log R ContextEnv)),
       valid_inputs props ->
       valid_feedback props ->
       do_steps__spec initial_dram steps = (spec_st, spec_tr, props) ->
-      do_steps__impl initial_dram (List.map ifc_step steps) = (koika_st, koika_tr) ->
+      do_steps__impl initial_dram (List.map ghost_step steps) = (koika_st, koika_tr) ->
       valid_output props.
 
   End Compliance.

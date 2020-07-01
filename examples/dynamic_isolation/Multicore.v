@@ -66,19 +66,11 @@ Module Common.
 
 End Common.
 
-Module EnclaveInterface.
-  Record enclave_config :=
-    { eid : Common.enclave_id;
-      shared_page : bool;
-    }.
-
-End EnclaveInterface.
-
 Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParameters)
                         (Params0: CoreParameters) (Params1: CoreParameters)
                         (Core0: Core_sig External EnclaveParams Params0)
                         (Core1: Core_sig External EnclaveParams Params1)
-                        (Memory: Memory_sig External).
+                        (Memory: Memory_sig External EnclaveParams).
   Module System := Machine External EnclaveParams
                            Params0 Params1
                            Core0 Core1
@@ -397,7 +389,7 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
                           (Params0: CoreParameters) (Params1: CoreParameters)
                           (Core0: Core_sig External EnclaveParams Params0)
                           (Core1: Core_sig External EnclaveParams Params1)
-                          (Memory: Memory_sig External).
+                          (Memory: Memory_sig External EnclaveParams).
 
   Import Interfaces.Common.
   Import EnclaveInterface.
