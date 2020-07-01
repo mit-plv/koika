@@ -9,12 +9,10 @@ Record RLift {T} {A B: Type} {projA: A -> T} {projB: B -> T} := mk_RLift
 Arguments RLift : clear implicits.
 
 Ltac mk_rlift lift :=
-  exists lift;
-  match goal with
-  | [ |- forall r, _ (lift r) = _ r ] =>  destruct r; auto
-  | [ |- forall r1 r2, lift r1 = lift r2 -> r1 = r2] =>
-      destruct r1; destruct r2; simpl; destruct_all_matches
- end.
+  exists lift; intros;
+  repeat match goal with
+  | [ H: ?T |- _ ] => is_ind T; destruct H
+  end; simpl in *; try congruence; reflexivity.
 
 Ltac mk_rlift_id :=
   exists id; now auto.
