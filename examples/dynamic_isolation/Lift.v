@@ -26,6 +26,27 @@ Create HintDb lift.
 Hint Extern 1 (RLift _ _ _ _ _ ) => mk_rlift_id : lift.
 Hint Extern 1 (RLift _ _ _ _ _ ) => mk_rlift_trivial : lift.
 
+Section Inverse.
+  Context {A B: Type}.
+  Context {FT_A: FiniteType A}.
+  Context {EqDec_B: EqDec B}.
+
+  Definition partial_f_inv (f: A -> B) : B -> option A :=
+    fun b => List.find (fun a => beq_dec (f a) b) finite_elements.
+
+  Lemma is_partial_f_env (f: A -> B) :
+    forall a b,
+    partial_f_inv f b = Some a ->
+    f a = b.
+  Proof.
+    unfold partial_f_inv; intros.
+    apply find_some in H.
+    rewrite beq_dec_iff in H.
+    safe_intuition.
+  Qed.
+
+End Inverse.
+
 Section ScheduleLift.
   Context {pos_t : Type} {rule_name_t : Type} {rule_name_t' : Type}.
   Context (lift: rule_name_t -> rule_name_t').
@@ -74,13 +95,24 @@ Section LiftLog.
   Context {REnv: Env reg_t} {REnv': Env reg_t'}.
   Context (Rlift: RLift type reg_t reg_t' R R').
 
-  Definition proj_log (log' : Log R' REnv')
-                      : Log R REnv.
-  Proof.
-    refine (REnv.(create) _).
-    intro reg. rewrite<-Rlift.(pf_R_equal).
-    exact (REnv'.(getenv) log' (lift reg)).
-  Defined.
+  Context {FT_R : FiniteType reg_t}.
+  Context {EqDec_R' : EqDec reg_t'}.
+
+  Definition lift_log (log: Log R REnv) : Log R' REnv' :=
+    create REnv' (fun r' : reg_t' =>
+                    match partial_f_inv (rlift Rlift) r' as opt_r
+                          return ((partial_f_inv (rlift Rlift) r' = opt_r) -> RLog (R' r')) with
+                    | Some r => fun Heq : partial_f_inv (rlift Rlift) r' = Some r =>
+                                 let log_r := rew <- [fun t : type => RLog t] pf_R_equal Rlift r in
+                                                    getenv REnv log r in
+                                 rew [fun r' => RLog (R' r')] (is_partial_f_env (rlift Rlift) r r' Heq) in
+                                     log_r
+                    | None => fun _ => []
+                    end eq_refl).
+
+  Definition proj_log (log' : Log R' REnv') : Log R REnv :=
+    create REnv (fun reg : reg_t => rew [fun t : type => RLog t] pf_R_equal Rlift reg in
+                                     getenv REnv' log' (lift reg)).
 
 End LiftLog.
 
