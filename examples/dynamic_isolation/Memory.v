@@ -2041,11 +2041,13 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
       (* interp_scheduler' st ? rules log scheduler. *)
     Definition external_update_function : state -> Log R ContextEnv -> Log R ContextEnv * external_state_t.
       Admitted.
+
     
     Definition update_function (st: state) (input_log: Log R ContextEnv) : Log R ContextEnv * external_state_t :=
       let '(koika_st, ext_st) := st in
       let koika_log := koika_update_function koika_st input_log in
-      external_update_function (koika_st, ext_st) koika_log.
+      let '(ext_log, ext_st') := external_update_function (koika_st, ext_st) (log_app koika_log input_log) in
+      (log_app ext_log koika_log, ext_st').
 
     Record step_io :=
       { step_input : Log R_external ContextEnv;

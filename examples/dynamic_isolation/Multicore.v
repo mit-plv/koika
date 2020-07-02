@@ -3,9 +3,11 @@ Require Import Coq.Lists.List.
 
 Require Import Koika.Std.
 
-Require Import dynamic_isolation.Interfaces.
 Require Import dynamic_isolation.External.
 Require Import dynamic_isolation.Framework.
+Require Import dynamic_isolation.Interfaces.
+Require Import dynamic_isolation.Interp.
+Require Import dynamic_isolation.Lift.
 Require Import dynamic_isolation.LogHelpers.
 Require Import dynamic_isolation.TrivialCore.
 Require Import dynamic_isolation.Tactics.
@@ -38,7 +40,6 @@ Module Common.
           obs_resps : resp_observations_t;
           obs_encs : enc_observations_t
         }.
-
 
   Definition empty_obs_reqs : req_observations_t := {| obs_imem_req := None;
                                                        obs_dmem_req := None;
@@ -79,61 +80,109 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
   Import Common.
   Import EnclaveInterface.
 
-  Definition koika_state : Type := env_t ContextEnv (fun idx : reg_t => R idx).
-  Definition placeholder_external_state : Type. Admitted.
+  Definition koika_state_t : Type := env_t ContextEnv (fun idx : reg_t => R idx).
+  Definition placeholder_external_state : Type := Memory.external_state_t.
 
-  Definition state : Type := koika_state * placeholder_external_state.
+  Record state : Type := MkState
+    { koika_state : koika_state_t;
+      external_state: placeholder_external_state
+    }.
   Definition log_t : Type := Log R ContextEnv.
 
-  Definition get_dram : state -> dram_t. Admitted.
-  Definition get_rf : state -> env_t ContextEnv Rf.R. Admitted.
+  Definition get_dram (st: state) : dram_t := fst (external_state st).
+
+  Definition get_rf (core: ind_core_id) (st: state) : env_t ContextEnv Rf.R :=
+    let koika_st := koika_state st in
+    match core with
+    | CoreId0 => ContextEnv.(create) (fun r => ContextEnv.(getenv) koika_st (System.core0_rf r))
+    | CoreId1 => ContextEnv.(create) (fun r => ContextEnv.(getenv) koika_st (System.core1_rf r))
+    end.
 
   Definition sigma_t : Type := (forall fn: ext_fn_t, Sig_denote (Sigma fn)).
-  Definition derive_sigma : placeholder_external_state -> sigma_t. Admitted.
-  Definition update_ext_st: state -> placeholder_external_state. Admitted.
+
+  Definition update_ext_st: state -> Log R ContextEnv -> Log R ContextEnv * placeholder_external_state :=
+    fun st log =>
+      let (mem_log', ext_st') := 
+          Memory.external_update_function ((proj_env System.Lift_mem (koika_state st)), external_state st)
+                                          (proj_log System.Lift_mem log) in
+      (lift_log System.Lift_mem mem_log', ext_st').
+      
+  Definition update_koika (st: koika_state_t) : Log R ContextEnv :=
+    interp_scheduler st External.sigma System.rules System.schedule.
 
   Definition update_function (st: state) : Log R ContextEnv * placeholder_external_state :=
-    let (koika_st, ext_st) := st in
-    let sigma := derive_sigma ext_st in
-    let ext_st' := update_ext_st st in
-    (* TODO: really, interp_scheduler should update our external state at the same time *)
-    (interp_scheduler koika_st sigma System.rules System.schedule, ext_st').
+    let log' := update_koika (koika_state st) in
+    let (ext_log', ext_st') := update_ext_st st log' in
+    (log_app ext_log' log', ext_st').
 
-  (* Everything reset except for rf and eid *)
-  (* TODO! specify core id *)
+
+  Section TODO_MOVE.
+    Definition config_to_enclave_data (config: enclave_config) : struct_t enclave_data :=
+      mk_enclave_data {| enclave_data_eid := enclave_id_to_bits (eid config);
+                         enclave_data_addr_min := EnclaveParams.enclave_base (eid config);
+                         enclave_data_size := EnclaveParams.enclave_size (eid config);
+                         enclave_data_shared_page := if (shared_page config) then Ob~1 else Ob~0;
+
+                         enclave_data_valid := Ob~1
+                      |}.
+  End TODO_MOVE.
+
   Definition spin_up_single_core_machine
                              (core_id: ind_core_id)
                              (clk: bits_t 1)
                              (rf: env_t ContextEnv Rf.R)
                              (config: enclave_config)
                              (initial_dram: dram_t)
-                             : state.
-  Admitted.
+                             : state :=
+    let enclave_data := config_to_enclave_data config in
+    let initial (reg: System.reg_t) := 
+        match reg return R reg with
+        | System.SM_internal (System.SM.clk) => clk
+        | System.SM_internal System.SM.enc_data0 =>
+            match core_id with 
+            | CoreId0 => enclave_data
+            | CoreId1 => System.r (System.SM_internal System.SM.enc_data0)
+            end
+        | System.SM_internal System.SM.enc_data1 =>
+            match core_id with 
+            | CoreId0 => System.r (System.SM_internal System.SM.enc_data1)
+            | CoreId1 => enclave_data
+            end
+        | System.core0_rf s => ContextEnv.(getenv) rf s
+        | System.core1_rf s => ContextEnv.(getenv) rf s
+        | s => System.r s
+        end in
+    {| koika_state := create ContextEnv System.r;
+       external_state := Memory.initial_external_state initial_dram
+    |}.
 
   (* Replace enclave data *)
   Definition update_state_with_enclave_data (st: state) (core_id: ind_core_id) 
-                                            (config: enclave_config) : state. Admitted.
+                                            (config: enclave_config) : state :=
+    let enclave_data := config_to_enclave_data config in
+    let state := koika_state st in
+    let koika_st' := 
+      ContextEnv.(create) (fun reg => 
+                             match reg return R reg with
+                             | System.SM_internal System.SM.enc_data0 =>
+                                 match core_id with 
+                                 | CoreId0 => enclave_data
+                                 | CoreId1 => ContextEnv.(getenv) state (System.SM_internal System.SM.enc_data0)
+                                 end
+                             | System.SM_internal System.SM.enc_data1 =>
+                                 match core_id with 
+                                 | CoreId0 => ContextEnv.(getenv) state (System.SM_internal System.SM.enc_data1)
+                                 | CoreId1 => enclave_data
+                                 end
+                             | s => ContextEnv.(getenv) state s
+                             end 
+                          ) in
+    MkState koika_st' (external_state st).
 
   Definition empty_log : Log R ContextEnv := log_empty.
 
   Section Observations.
-    (*
-    (* TODO: generates code but requires dependent type rewrites *)
-    Definition observe_imem_reqs' (core_id: ind_core_id) (log: Log R ContextEnv) : option (struct_t mem_req).
-    Proof.
-      remember (match core_id with | CoreId0 => (System.Core0ToSM_IMem MemReq.valid0,
-                                                System.Core0ToSM_IMem MemReq.data0)
-                                   | CoreId1 => (System.Core1ToSM_IMem MemReq.valid0,
-                                                System.Core1ToSM_IMem MemReq.data0)
-                end
-               ) as regs; destruct regs as (reg_valid, reg_data).
-      set (latest_write0 log reg_data) as ret_value.
-      destruct_with_eqn (latest_write0 log reg_valid).
-      - destruct core_id; (inversion Heqregs; subst; case_eq (Bits.single t); intros; [ exact ret_value | exact None]).
-      - exact None.
-    Defined.
-    *)
-
+    (* TODO: turns of duplication *)
     Definition observe_imem_reqs0 (log: Log R ContextEnv) : option (struct_t mem_req) :=
       (observe_enq0 (System.Core0ToSM_IMem MemReq.valid0) eq_refl
                     (System.Core0ToSM_IMem MemReq.data0) eq_refl
@@ -143,22 +192,6 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
       (observe_enq0 (System.Core1ToSM_IMem MemReq.valid0) eq_refl
                     (System.Core1ToSM_IMem MemReq.data0) eq_refl
                     log).
-
-    (*
-    Definition observe_imem_reqs0 (log: Log R ContextEnv) : option (struct_t mem_req) :=
-      match latest_write0 log (System.Core0ToSM_IMem MemReq.valid0) with
-      | Some b =>
-          if Bits.single b then (latest_write0 log (System.Core0ToSM_IMem MemReq.data0)) else None
-      | None => None
-      end.
-
-    Definition observe_imem_reqs1 (log: Log R ContextEnv) : option (struct_t mem_req) :=
-      match latest_write0 log (System.Core1ToSM_IMem MemReq.valid0) with
-      | Some b =>
-          if Bits.single b then (latest_write0 log (System.Core1ToSM_IMem MemReq.data0)) else None
-      | None => None
-      end.
-      *)
 
     Definition observe_imem_reqs (log: Log R ContextEnv) (core_id: ind_core_id) : option (struct_t mem_req) :=
       match core_id with
@@ -175,22 +208,6 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
                     (System.Core1ToSM_DMem MemReq.data0) eq_refl
                     log).
 
-
-    (*
-    Definition observe_dmem_reqs0 (log: Log R ContextEnv) : option (struct_t mem_req) :=
-      match latest_write0 log (System.Core0ToSM_DMem MemReq.valid0) with
-      | Some b =>
-          if Bits.single b then (latest_write0 log (System.Core0ToSM_DMem MemReq.data0)) else None
-      | None => None
-      end.
-
-    Definition observe_dmem_reqs1 (log: Log R ContextEnv) : option (struct_t mem_req) :=
-      match latest_write0 log (System.Core1ToSM_DMem MemReq.valid0) with
-      | Some b =>
-          if Bits.single b then (latest_write1 log (System.Core1ToSM_DMem MemReq.data0)) else None
-      | None => None
-      end.
-    *)
 
     Definition observe_dmem_reqs (log: Log R ContextEnv) (core_id: ind_core_id) : option (struct_t mem_req) :=
       match core_id with
@@ -213,22 +230,6 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
                    (System.SMToCore1_IMem MemResp.data0) eq_refl
                    log.
 
-    (*
-    Definition observe_imem_resps0 (log: Log R ContextEnv) : option (struct_t mem_resp) :=
-      match latest_write1 log (System.SMToCore0_IMem MemResp.valid0) with
-      | Some b =>
-          if Bits.single b then (latest_write1 log (System.SMToCore0_IMem MemResp.data0)) else None
-      | None => None
-      end.
-
-    Definition observe_imem_resps1 (log: Log R ContextEnv) : option (struct_t mem_resp) :=
-      match latest_write1 log (System.SMToCore1_IMem MemResp.valid0) with
-      | Some b =>
-          if Bits.single b then (latest_write1 log (System.SMToCore1_IMem MemResp.data0)) else None
-      | None => None
-      end.
-      *)
-
     Definition observe_imem_resps (log: Log R ContextEnv) (core_id: ind_core_id) : option (struct_t mem_resp) :=
       match core_id with
       | CoreId0 => observe_imem_resps0 log
@@ -244,22 +245,6 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
       observe_enq1 (System.SMToCore1_DMem MemResp.valid0) eq_refl
                    (System.SMToCore1_DMem MemResp.data0) eq_refl
                    log.
-
-    (*
-    Definition observe_dmem_resps0 (log: Log R ContextEnv) : option (struct_t mem_resp) :=
-      match latest_write1 log (System.SMToCore0_DMem MemResp.valid0) with
-      | Some b =>
-          if Bits.single b then (latest_write1 log (System.SMToCore0_DMem MemResp.data0)) else None
-      | None => None
-      end.
-
-    Definition observe_dmem_resps1 (log: Log R ContextEnv) : option (struct_t mem_resp) :=
-      match latest_write1 log (System.SMToCore1_DMem MemResp.valid0) with
-      | Some b =>
-          if Bits.single b then (latest_write1 log (System.SMToCore1_DMem MemResp.data0)) else None
-      | None => None
-      end.
-      *)
 
     Definition observe_dmem_resps (log: Log R ContextEnv) (core_id: ind_core_id) : option (struct_t mem_resp) :=
       match core_id with
@@ -277,22 +262,6 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
       observe_enq1 (System.Core1ToSM_Enc EnclaveReq.valid0) eq_refl
                    (System.Core1ToSM_Enc EnclaveReq.data0) eq_refl
                    log.
-
-    (*
-    Definition observe_enclave_reqs0 (log: Log R ContextEnv) : option (struct_t enclave_req) :=
-      match latest_write0 log (System.Core0ToSM_Enc EnclaveReq.valid0) with
-      | Some b =>
-          if Bits.single b then (latest_write0 log (System.Core0ToSM_Enc EnclaveReq.data0)) else None
-      | None => None
-      end.
-
-    Definition observe_enclave_reqs1 (log: Log R ContextEnv) : option (struct_t enclave_req) :=
-      match latest_write0 log (System.Core1ToSM_Enc EnclaveReq.valid0) with
-      | Some b =>
-          if Bits.single b then (latest_write0 log (System.Core1ToSM_Enc EnclaveReq.data0)) else None
-      | None => None
-      end.
-      *)
 
     Definition observe_enclave_reqs (log: Log R ContextEnv) (core_id: ind_core_id) : option (struct_t enclave_req) :=
       match core_id with
@@ -366,17 +335,17 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
   End Observations.
 
   Definition step (st: state) : state * tau :=
-    let (koika_st, ext_st) := st in
     let (log, ext_st') := update_function st in
     let obs := do_observations log in
-    ((commit_update koika_st log, ext_st'), obs).
+    (MkState (commit_update (koika_state st) log) ext_st', obs).
 
   Section Initialised.
     Variable initial_dram : dram_t.
 
-    Definition initial_external_state : placeholder_external_state. Admitted.
+    Definition initial_external_state : placeholder_external_state :=
+      Memory.initial_external_state initial_dram.
 
-    Definition initial_state : state := (ContextEnv.(create) r, initial_external_state).
+    Definition initial_state : state := MkState (ContextEnv.(create) r) initial_external_state.
 
     Definition step_n (n: nat) : state * trace :=
         Framework.step_n initial_state step n.
@@ -622,8 +591,9 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
     (* Each core independently takes a step; 
      * context switching is only allowed for core0 and core1 on even and odd cycles respectively 
      *)
-    let magic0 := local_core_step machine_step0 Machine0.get_rf Machine0.get_dram (negb st.(clk)) st.(machine0_state) in
-    let magic1 := local_core_step machine_step1 Machine1.get_rf Machine1.get_dram st.(clk) st.(machine1_state) in
+    let magic0 := local_core_step machine_step0 (Machine0.get_rf CoreId0) Machine0.get_dram 
+                                  (negb st.(clk)) st.(machine0_state) in
+    let magic1 := local_core_step machine_step1 (Machine1.get_rf CoreId1) Machine1.get_dram st.(clk) st.(machine1_state) in
     (* Now we allow the core to exit it's enclave region or enter a new one, if it is it's turn.
      * We should have an invariant that no core is running the same memory region, so that 
      * the order of doing the exit commutes.
