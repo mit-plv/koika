@@ -1,186 +1,455 @@
 Require Import Koika.Frontend.
-Require Import Coq.Lists.List.
-
 Require Import Koika.Std.
+
+Require Import Coq.Lists.List.
+Require Import Coq.Logic.FunctionalExtensionality.
 
 Require Import dynamic_isolation.External.
 Require Import dynamic_isolation.Framework.
 Require Import dynamic_isolation.Interfaces.
+Require Import dynamic_isolation.Interp.
+Require Import dynamic_isolation.Lift.
 Require Import dynamic_isolation.LogHelpers.
 Require Import dynamic_isolation.Multicore.
 Require Import dynamic_isolation.Tactics.
 
-(*
-Module Pf (External: External_sig) (EnclaveParams: EnclaveParameters)
-          (Params0: CoreParameters) (Params1: CoreParameters)
-          (Core0: Core_sig External EnclaveParams Params0)
-          (Core1: Core_sig External EnclaveParams Params1)
-          (Memory: Memory_sig External).
-  Module Impl:= MachineSemantics External EnclaveParams Params0 Params1 Core0 Core1 Memory.
-  Import Common.
-  Import Interfaces.Common.
-
-  Record enclave_metadata :=
-    { meta_eid : enclave_id;
-      shared_page : bool
-    }.
-
-  Record enclave_params :=
-    { metadata : enclave_metadata;
-      param_dram: dram_t
-    }.
-
-  Record core_config : Type :=
-    { enclave_data : enclave_metadata;
-      in_limbo: bool;
-      requested_enclave: option enclave_metadata;
-      state_fn : nat -> observations_t
-    }.
-
-  Definition rf_t : Type := env_t ContextEnv Rf.R.
-
-  Definition isolated_function_t : Type := ind_core_id -> enclave_params -> rf_t -> nat -> observations_t.
-
-  Record partitioned_memory :=
-    { pm_enclave_mem : enclave_id -> option dram_t;
-      pm_shared_page : option dram_t;
-    }.
-
-  Record ghost_state :=
-    { core0_config : core_config;
-      core1_config : core_config;
-      mem_partitions : partitioned_memory;
-      num_cycles : nat
-    }.
-
-
-  (* TODO: This should be derived from Interfaces *)
-  Definition initial_rf : rf_t := ContextEnv.(create) Rf.r.
-
-  Definition mk_initial_config (fn: isolated_function_t) (core_id: ind_core_id)
-                               (params: enclave_params) (rf: rf_t) : core_config :=
-    {| enclave_data := params.(metadata);
-       in_limbo := false;
-       requested_enclave := None;
-       state_fn := fn core_id params rf
-    |}.
-
-  Definition enclave_base enc_id := Bits.to_nat (EnclaveParams.enclave_base enc_id).
-  Definition enclave_max enc_id := Bits.to_nat (Bits.plus (EnclaveParams.enclave_base enc_id)
-                                                          (EnclaveParams.enclave_size enc_id)).
-
-  Definition initial_enclave_dram initial_dram enc_id : dram_t :=
-    fun addr => if ((enclave_base enc_id) <=? addr) && (addr <? (enclave_max enc_id))
-             then initial_dram addr
-             else None.
-
-  Definition initial_shared_mem initial_dram : dram_t :=
-    fun addr => if ((Bits.to_nat (EnclaveParams.shared_mem_base) <=? addr) &&
-                 (addr <? Bits.to_nat (Bits.plus EnclaveParams.shared_mem_base EnclaveParams.shared_mem_size)))
-             then initial_dram addr
-             else None.
-
-  Definition mk_initial_pm (initial_dram: dram_t) : partitioned_memory :=
-    {| pm_enclave_mem := fun eid => Some (initial_enclave_dram initial_dram eid);
-       pm_shared_page := Some (initial_shared_mem initial_dram)
-    |}.
-
-  Definition initial_ghost_state (fn: isolated_function_t) (initial_dram: dram_t) : ghost_state :=
-    let enclave0_param :=
-        {| metadata := {| meta_eid := Enclave0;
-                          shared_page := false
-                       |};
-           param_dram := initial_enclave_dram initial_dram Enclave0
-        |} in
-    let enclave1_param :=
-        {| metadata := {| meta_eid := Enclave1;
-                          shared_page := false
-                       |};
-           param_dram := initial_enclave_dram initial_dram Enclave1
-        |} in
-    {| core0_config := mk_initial_config fn CoreId0 enclave0_param initial_rf;
-       core1_config := mk_initial_config fn CoreId1 enclave1_param initial_rf;
-       mem_partitions := {| pm_enclave_mem := fun eid => match eid with
-                                                      | (Enclave0 | Enclave1) => None
-                                                      | _ => Some (initial_enclave_dram initial_dram eid)
-                                                      end;
-                            pm_shared_page := Some (initial_shared_mem initial_dram)
-                         |};
-       num_cycles := 0
-    |}.
-
-  (* TODO: Do we care about cycle-accurate purge? *)
-  Inductive function_generates_trace_helper
-            (fn: isolated_function_t) (initial_dram: dram_t)
-            (ghost: ghost_state) (tr: trace) : Prop :=
-  | EmptyTrace :
-      forall (initial_ghost : ghost = initial_ghost_state fn initial_dram)
-        (empty_trace: tr = []),
-      function_generates_trace_helper fn initial_dram ghost tr
-  | IndTrace_BothRunning :
-      forall (prev_tr: trace) (obs: ind_core_id -> observations_t)
-        (prev_ghost: ghost_state) (ghost0 ghost1: ghost_state)
-
-        (* Induction hypothesis *)
-        (ind_hyp: function_generates_trace_helper fn initial_dram prev_ghost prev_tr)
-        (* If Core0 is running an enclave,
-         * fn must generate the relevant observation
-         *)
-        (pf_case_core0_running : prev_ghost.(core0_config).(in_limbo) = false ->
-                                 obs CoreId0 = prev_ghost.(core0_config).(state_fn) (S prev_ghost.(num_cycles))
-        )
-        (* If Core0 is not running an enclave *)
-        (pf_case_core0_limbo : prev_ghost.(core0_config).(in_limbo) = true ->
-                               obs CoreId0 = prev_ghost.(core0_config).(state_fn) (S prev_ghost.(num_cycles))
-        )
-
-
-        (* If Core1 is running an enclave *)
-        (* If Core1 is not running an enclave *)
-
-
-        (core0_running : prev_ghost.(core0_config).(in_limbo) = false)
-        (core1_running : prev_ghost.(core1_config).(in_limbo) = false)
-        (trace_eq: tr = prev_tr ++ [obs]),
-        (*
-        (ghost0_eq: ghost0 =
-        (ghost1_eq: ghost1 =
-
-        (cur_obs.obs_enclave_req
-        *)
-        (* TODO *)
-      function_generates_trace_helper fn initial_dram ghost tr.
-
-
-
-  Definition function_generates_trace (fn: isolated_function_t) (initial_dram: dram_t) (tr: trace) : Prop :=
-    exists ghost_state, function_generates_trace_helper fn initial_dram ghost_state tr.
-
-
-  Section Initialised.
-    Variable initial_dram: dram_t.
-
-    Theorem simulation: exists (iso_fn : isolated_function_t),
-      forall (n: nat) (impl_st: Impl.state) (impl_tr: trace),
-        Impl.step_n initial_dram n = (impl_st, impl_tr) ->
-        function_generates_trace iso_fn initial_dram impl_tr.
-    Admitted.
-
-  End Initialised.
-
-End Pf.
-*)
-
-(* TODO: move this *)
+Set Default Goal Selector "!".
 
 Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
           (Params0: CoreParameters) (Params1: CoreParameters)
           (Core0: Core_sig External EnclaveParams Params0)
           (Core1: Core_sig External EnclaveParams Params1)
-          (Memory: Memory_sig External).
+          (Memory: Memory_sig External EnclaveParams).
   Module Impl:= MachineSemantics External EnclaveParams Params0 Params1 Core0 Core1 Memory.
   Module Spec:= IsolationSemantics External EnclaveParams Params0 Params1 Core0 Core1 Memory.
 
+  Import Common.
+
+  (* ================= TMP ====================== *)
+  Definition impl_log_t : Type := Impl.log_t.
+
+  (* ================= END_TMP ====================== *)
+
+  Section GhostState.
+
+    (* Experimenting with input/output state representation *)
+    Inductive modules :=
+    | Module_Core0
+    | Module_Core1
+    | Module_SM
+    | Module_Memory
+    .
+
+    Record ghost_state : Type. (* TODO *)
+
+    Definition impl_ghost_state : Type. Admitted.
+    Definition spec_ghost_state : Type. Admitted.
+
+    Definition initial_impl_ghost : impl_ghost_state. Admitted.
+    Definition initial_spec_ghost : spec_ghost_state. Admitted.
+
+    Definition impl_step_with_ghost (st: Impl.state * impl_ghost_state)
+                                    : (Impl.state * impl_ghost_state) * tau :=
+      let (impl_st, ghost_st) := st in
+      ((fst (Impl.step impl_st), ghost_st (* TODO *)), (snd (Impl.step impl_st))).
+
+    Definition spec_step_with_ghost (st: Spec.state * spec_ghost_state)
+                                    : (Spec.state * spec_ghost_state) * tau :=
+      let (spec_st, ghost_st) := st in
+      ((fst (Spec.step spec_st), ghost_st (* TODO *)), (snd (Spec.step spec_st))).
+
+    Section Initialised.
+      Context (initial_dram : dram_t).
+
+      Definition impl_step_n_with_ghost (n: nat) : (Impl.state * impl_ghost_state) * trace :=
+        step_n (Impl.initial_state initial_dram, initial_impl_ghost)
+               impl_step_with_ghost
+               n.
+
+      Definition spec_step_n_with_ghost (n: nat) : (Spec.state * spec_ghost_state) * trace :=
+        step_n (Spec.initial_state initial_dram, initial_spec_ghost)
+               spec_step_with_ghost
+               n.
+
+    End Initialised.
+
+    Section Lemmas.
+
+      Lemma impl_drop_ghost :
+        forall (initial_dram: dram_t)
+          n st st' evs evs',
+          impl_step_n_with_ghost initial_dram n = (st, evs) ->
+          Impl.step_n initial_dram n = (st', evs') ->
+          st' = fst st /\ evs = evs'.
+      Proof.
+        intro. eapply proj_step_fn_eq.
+        - unfold is_proj; auto.
+        - unfold natural_step_fn. unfold impl_step_with_ghost, is_proj.
+          intros; destruct_all_matches.
+      Qed.
+
+      Lemma spec_drop_ghost :
+        forall (initial_dram: dram_t)
+          n st st' evs evs',
+          spec_step_n_with_ghost initial_dram n = (st, evs) ->
+          Spec.step_n initial_dram n = (st', evs') ->
+          st' = fst st /\ evs = evs'.
+      Proof.
+        intro. eapply proj_step_fn_eq.
+        - unfold is_proj; auto.
+        - unfold natural_step_fn. unfold spec_step_with_ghost, is_proj.
+          intros; destruct_all_matches.
+      Qed.
+
+    End Lemmas.
+
+  End GhostState.
+
+  Section ImplRegisterMap.
+    Definition impl_sm_clk : Impl.System.reg_t := Impl.System.SM_internal (Impl.System.SM.clk).
+    Definition impl_purge_core0 : Impl.System.reg_t := Impl.System.purge_core0.
+    Definition impl_purge_core1: Impl.System.reg_t := Impl.System.purge_core1.
+    Definition impl_purge_mem0 : Impl.System.reg_t := Impl.System.purge_mem0.
+    Definition impl_purge_mem1 : Impl.System.reg_t := Impl.System.purge_mem1.
+  End ImplRegisterMap.
+
+  Section ImplProjs.
+    Definition get_impl_core0 : Impl.koika_state_t -> Core0.state :=
+      fun impl_st => Lift.proj_env (REnv := ContextEnv) Impl.System.Lift_core0 impl_st.
+    Definition get_impl_core1 : Impl.koika_state_t -> Core1.state :=
+      fun impl_st => Lift.proj_env (REnv := ContextEnv) Impl.System.Lift_core1 impl_st.
+    Definition get_impl_sm : Impl.koika_state_t -> Impl.System.SM.state :=
+      fun impl_st => Lift.proj_env (REnv := ContextEnv) Impl.System.Lift_sm impl_st.
+    Definition get_impl_koika_mem : Impl.koika_state_t -> Memory.koika_state_t :=
+      fun impl_st => Lift.proj_env (REnv := ContextEnv) Impl.System.Lift_mem impl_st.
+    Definition get_impl_mem : Impl.state -> Memory.state :=
+      fun impl_st => (get_impl_koika_mem (Impl.koika_state impl_st), Impl.external_state impl_st).
+
+    Definition get_impl_log_core0 : Impl.log_t -> Log Core0.R ContextEnv :=
+      fun impl_st => Lift.proj_log (REnv := ContextEnv) Impl.System.Lift_core0 impl_st.
+    Definition get_impl_log_core1 : Impl.log_t -> Log Core1.R ContextEnv :=
+      fun impl_st => Lift.proj_log (REnv := ContextEnv) Impl.System.Lift_core1 impl_st.
+    Definition get_impl_log_sm : Impl.log_t -> Log Impl.System.SM.R ContextEnv :=
+      fun impl_st => Lift.proj_log (REnv := ContextEnv) Impl.System.Lift_sm impl_st.
+    Definition get_impl_log_mem : Impl.log_t -> Log Memory.R ContextEnv :=
+      fun impl_st => Lift.proj_log (REnv := ContextEnv) Impl.System.Lift_mem impl_st.
+
+  End ImplProjs.
+
+  Section SpecProjs.
+    Definition get_spec0_core0 : Spec.Machine0.koika_state_t -> Core0.state :=
+      fun spec_st => Lift.proj_env (REnv := ContextEnv) Spec.Machine0.System.Lift_core0 spec_st.
+    Definition get_spec1_core1 : Spec.Machine1.koika_state_t -> Core1.state :=
+      fun spec_st => Lift.proj_env (REnv := ContextEnv) Spec.Machine1.System.Lift_core1 spec_st.
+    Definition get_spec0_sm : Spec.Machine0.koika_state_t -> Spec.Machine0.System.SM.state :=
+      fun spec_st => Lift.proj_env (REnv := ContextEnv) Spec.Machine0.System.Lift_sm spec_st.
+    Definition get_spec1_sm : Spec.Machine1.koika_state_t -> Spec.Machine1.System.SM.state :=
+      fun spec_st => Lift.proj_env (REnv := ContextEnv) Spec.Machine1.System.Lift_sm spec_st.
+
+  End SpecProjs.
+
+  Import EnclaveInterface.
+
+  Section Interfaces.
+    (* TODO *)
+    Record sm_ghost_output_t :=
+      { ghost_output_config0 : option enclave_config;
+        ghost_output_config1 : option enclave_config
+      }.
+
+  End Interfaces.
+
+  Section Modular.
+    Record mod_step :=
+      { apres_core0: Log Impl.System.R ContextEnv;
+        apres_core1: Log Impl.System.R ContextEnv;
+        apres_sm   : Log Impl.System.R ContextEnv * sm_ghost_output_t;
+        final_log : Log Impl.System.R ContextEnv;
+        final_ext_state: Impl.placeholder_external_state
+      }.
+
+    (* TODO: (fancy?) notation *)
+    (* TODO:
+     * > Spec State
+     * > Modular spec state
+     * > Modular impl state
+     * > Impl
+     *)
+
+    (* TODO: generalize *)
+    Definition TODO_ghost_state_conversion (st: Impl.System.SM.ghost_output) : sm_ghost_output_t :=
+      {| ghost_output_config0 := Impl.System.SM.ghost_output_config0 st;
+         ghost_output_config1 := Impl.System.SM.ghost_output_config1 st
+      |}.
+
+    Definition do_core0_step (st: Core0.state) (input_log: Log Impl.System.R ContextEnv)
+                             : Log Impl.System.R ContextEnv :=
+      let core0_log := proj_log (REnv := ContextEnv) Impl.System.Lift_core0 input_log in
+      let output_log := Core0.update_function st core0_log in
+      lift_log (REnv := ContextEnv) Impl.System.Lift_core0 output_log.
+
+    Definition do_core1_step (st: Core1.state) (input_log: Log Impl.System.R ContextEnv)
+                             : Log Impl.System.R ContextEnv :=
+      let core1_log := proj_log (REnv := ContextEnv) Impl.System.Lift_core1 input_log in
+      let output_log := Core1.update_function st core1_log in
+      lift_log (REnv := ContextEnv) Impl.System.Lift_core1 output_log.
+
+    Definition do_sm_step (st: Impl.System.SM.state) (input_log: Log Impl.System.R ContextEnv)
+                          : Log Impl.System.R ContextEnv * sm_ghost_output_t :=
+      let sm_log := proj_log (REnv := ContextEnv) Impl.System.Lift_sm input_log in
+      let '(output_log, sm_ghost_output) := Impl.System.SM.update_function st sm_log in
+      (lift_log (REnv := ContextEnv) Impl.System.Lift_sm output_log, TODO_ghost_state_conversion sm_ghost_output).
+
+    Definition do_mem_step (st: Memory.state) (input_log: Log Impl.System.R ContextEnv)
+                          : Log Impl.System.R ContextEnv * Impl.placeholder_external_state :=
+      let mem_log := proj_log (REnv := ContextEnv) Impl.System.Lift_mem input_log in
+      let '(output_log, ext_st') := Memory.update_function st mem_log in
+      (lift_log (REnv' := ContextEnv) Impl.System.Lift_mem output_log, ext_st').
+
+    Definition get_mod_step (impl_st: Impl.state) : mod_step :=
+      let koika_st := Impl.koika_state impl_st in
+      let apres_core0_log := do_core0_step (get_impl_core0 koika_st) log_empty in
+      let apres_core1_log := do_core1_step (get_impl_core1 koika_st) apres_core0_log in
+      (* SM *)
+      let sm_input := log_app apres_core1_log apres_core0_log in
+      let (apres_sm_log, sm_ghost_output) := do_sm_step (get_impl_sm koika_st) sm_input in
+      (* Mem *)
+      let mem_input := log_app apres_sm_log sm_input in
+      let (apres_mem_log, ext_st') := do_mem_step (get_impl_mem impl_st) mem_input in
+      let final := log_app apres_mem_log mem_input in
+      {| apres_core0 := apres_core0_log;
+        apres_core1 := apres_core1_log;
+        apres_sm := (apres_sm_log, sm_ghost_output);
+        final_log := final;
+        final_ext_state := ext_st'
+      |}.
+
+  End Modular.
+
+  Section Initialised.
+    Context (initial_dram : dram_t).
+
+    (* Proof idea:
+     * - reduce steps to input/output to individual modules, then use the modular proofs to do the lift
+     * - The modular proofs give us trace equivalence of the input/output effects of the impl and spec.
+     * - Need to show that impl_step_n <-> do_steps and similarly for spec
+     * - traces produced are the same implies we get trace equivalence!
+     *)
+    Lemma refinement': forall (n: nat)
+                          (impl_st: Impl.state) (impl_tr: trace)
+                          (spec_st: Spec.state) (spec_tr: trace),
+        Impl.step_n initial_dram n = (impl_st, impl_tr) ->
+        Spec.step_n initial_dram n = (spec_st, spec_tr) ->
+        impl_tr = spec_tr.
+    Proof.
+    Admitted.
+
+
+
+    Theorem refinement: forall (n: nat)
+                          (impl_st: Impl.state) (impl_tr: trace)
+                          (spec_st: Spec.state) (spec_tr: trace),
+        Impl.step_n initial_dram n = (impl_st, impl_tr) ->
+        Spec.step_n initial_dram n = (spec_st, spec_tr) ->
+        impl_tr = spec_tr.
+    Proof.
+
+
+
+
+
+
+(* ============================================================================ *)
+
+
+
+
+
+
+  Definition impl_state_t : Type := Impl.state * impl_ghost_state.
+  Definition spec_state_t : Type := Spec.state * spec_ghost_state.
+
+  Definition SpecInvariant0 (spec_core: @Spec.core_state_machine Spec.Machine0.state) : Prop :=
+    match spec_core with
+    | Spec.CoreState_Enclave _ _ _ => True (* TODO *)
+    | Spec.CoreState_Waiting new next_rf => True
+    end.
+
+  Definition SpecInvariant : spec_state_t -> Prop. Admitted.
+
+  (* TODO: very WIP; maybe an explicit ghost state will be better *)
+  Definition State0_Sim : Impl.state -> @Spec.core_state_machine Spec.Machine0.state -> Prop :=
+    fun '(impl_st, impl_ext) spec_core =>
+    match spec_core with
+    | Spec.CoreState_Enclave machine_state config enclave_state =>
+        (* Machine state simulation: *)
+        (* 1) Core0 is in the same state *)
+        get_impl_core0 impl_st = get_spec0_core0 machine_state /\
+        (* 2) Mem0 is in the same state, or we've had the same history of requests from a reset state?
+         *    Note: this might be better stated as a ghost-state property; TBD
+         *)
+        (* 3) SM? *)
+        (* enclave state *)
+        match enclave_state with
+        | Spec.EnclaveState_Running =>
+          True
+        | Spec.EnclaveState_Switching next => True
+        end
+    | Spec.CoreState_Waiting new next_rf =>
+        (* Core0 is in a reset state *)
+        Core0.valid_reset_state (get_impl_core0 impl_st) /\
+        (* Core0 is purged *)
+        ContextEnv.(getenv) impl_st impl_purge_mem0 = Common.ENUM_purge_purged /\
+        (* Mem0 is in a reset state *)
+        Memory.valid_reset_state (get_impl_mem impl_st) Common.CoreId0 /\
+        (* Mem0 is purged *)
+        ContextEnv.(getenv) impl_st impl_purge_mem0 = Common.ENUM_purge_purged /\
+        (* Rf is related *)
+        Impl.get_rf (impl_st,impl_ext) = next_rf /\
+        (* SM is in a certain state *)
+        SMProperties.valid_waiting_state (get_impl_sm impl_st) Common.CoreId0 new
+        (* TODO: External memory is related *)
+    end.
+
+  Definition State1_Sim : Impl.state -> @Spec.core_state_machine Spec.Machine1.state -> Prop. Admitted.
+
+  Definition Clk_Sim : Impl.state -> bool -> Prop :=
+    fun '(impl_st, _) spec_clk =>
+      let impl_clk := getenv ContextEnv impl_st impl_sm_clk in
+      Bits.single impl_clk = spec_clk.
+
+  Definition StateSim : Impl.state -> Spec.state -> Prop :=
+    fun impl_st spec_st =>
+      State0_Sim impl_st (Spec.machine0_state spec_st) /\
+      State1_Sim impl_st (Spec.machine1_state spec_st) /\
+      Clk_Sim impl_st (Spec.clk spec_st).
+      (* TODO: Mem_Sim *)
+
+  Definition Sim (impl: impl_state_t) (spec: spec_state_t) : Prop :=
+    let (impl_st, impl_ghost) := impl in
+    let (spec_st, spec_ghost) := spec in
+    StateSim impl_st spec_st.
+
+  Section Initialised.
+    Variable initial_dram: dram_t.
+
+    Theorem initial_state_sim :
+      Sim (Impl.initial_state initial_dram, initial_impl_ghost)
+          (Spec.initial_state initial_dram, initial_spec_ghost).
+    Admitted.
+
+Ltac initialize :=
+  intros; unfold impl_state_t, spec_state_t in *; repeat destruct_pair.
+
+    Theorem step_sim : forall (impl_st impl_st': impl_state_t) (spec_st spec_st': spec_state_t)
+                         (impl_tau spec_tau: tau),
+      Sim impl_st spec_st ->
+      impl_step_with_ghost impl_st = (impl_st', impl_tau) ->
+      spec_step_with_ghost spec_st = (spec_st', spec_tau) ->
+      Sim impl_st' spec_st' /\ impl_tau = spec_tau.
+    Proof.
+      initialize.
+      unfold impl_step_with_ghost, Impl.step in *.
+      unfold spec_step_with_ghost, Spec.step in *.
+      destruct_all_matches.
+      simplify_all.
+
+      unfold Impl.do_observations.
+      unfold Spec.do_magic_step in Heqp.
+      destruct_outer_match_in_hyp Heqp; simplify_tuples; subst.
+
+      { (* Case1: MagicState_Continue *)
+        unfold Spec.local_core_step in Heqm1.
+        destruct_outer_match_in_hyp Heqm1.
+        { (* Case: Spec.CoreState_Enclave *)
+          destruct_outer_match_in_hyp Heqm1.
+          (* TODO: Machine step invariant: show preservation *)
+          destruct_outer_match_in_hyp Heqm1.
+          { (* Case: Spec.EnclaveState_Running *)
+            (* Invariant preservation, log preservation *)
+            admit.
+          }
+          { destruct_ite_in_hyp Heqm1; try congruence.
+            (* Case: Spec.EnclaveState_Switching; no exit *)
+            inversion_clear Heqm1.
+            (* Invariant preservation *)
+          admit.
+          }
+        }
+        { destruct_ite_in_hyp Heqm1; try congruence.
+          (* Case: Spec.CoreState_Waiting; no switch *)
+          inversion_clear Heqm1.
+          (* Idea: Spec.clk spec_st0 = true ->
+             Core0 still in reset and Mem0 still in reset *)
+          (* Therefore no update to logs, therefore empty observations *)
+          admit.
+        }
+      }
+      { (* Case2: Spec.MagicState_Exit *)
+        unfold Spec.local_core_step in Heqm1.
+        repeat destruct_matches_in_hyp Heqm1; try congruence.
+        inversion_clear Heqm1.
+        (* Idea: Simulation in terms of SM; prove that Impl step exits too *)
+        admit.
+      }
+      { (* Case3: Spec.MagicState_Enter *)
+        destruct_ite_in_hyp Heqp.
+        { (* Case: Spec.can_enter *)
+          simplify_all.
+          (* Initial enclave simulation: Impl enters enclave too *)
+          admit.
+        }
+        { (* Case: Spec can not enter; no change *)
+          simplify_all.
+          admit.
+        }
+      }
+    Admitted.
+
+    Theorem step_n_sim : forall (n: nat)
+                         (impl_st: Impl.state) (impl_tr: trace) (impl_ghost: impl_ghost_state)
+                         (spec_st: Spec.state) (spec_tr: trace) (spec_ghost: spec_ghost_state),
+        impl_step_n_with_ghost initial_dram n = ((impl_st, impl_ghost), impl_tr) ->
+        spec_step_n_with_ghost initial_dram n = ((spec_st, spec_ghost), spec_tr) ->
+        Sim (impl_st, impl_ghost) (spec_st, spec_ghost) /\ impl_tr = spec_tr.
+    Proof.
+      induction n.
+      - intros; simplify_all; split_cases; auto.
+        apply initial_state_sim.
+      - simpl; intros; destruct_all_matches; simplify_all.
+        repeat destruct_pair.
+        specialize IHn with (1 := eq_refl) (2 := eq_refl); propositional.
+        match goal with
+        | [ H0: Sim _ _,
+            H1: impl_step_with_ghost _ = _,
+            H2: spec_step_with_ghost _ = _ |- _ ] =>
+          specialize step_sim with (1 := H0) (2 := H1) (3 := H2)
+        end.
+        intuition.
+    Qed.
+
+    Theorem refinement: forall (n: nat)
+                          (impl_st: Impl.state) (impl_tr: trace)
+                          (spec_st: Spec.state) (spec_tr: trace),
+        Impl.step_n initial_dram n = (impl_st, impl_tr) ->
+        Spec.step_n initial_dram n = (spec_st, spec_tr) ->
+        impl_tr = spec_tr.
+    Proof.
+      intros *; intros H_impl H_spec.
+      destruct (impl_step_n_with_ghost initial_dram n) as [[impl_st' impl_ghost] impl_tr'] eqn:Heq_impl.
+      destruct (spec_step_n_with_ghost initial_dram n) as [[spec_st' spec_ghost] spec_tr'] eqn:Heq_spec.
+      edestruct impl_drop_ghost with (1 := Heq_impl) (2 := H_impl).
+      edestruct spec_drop_ghost with (1 := Heq_spec) (2 := H_spec).
+      simplify_all.
+      eapply step_n_sim; eauto.
+    Qed.
+
+  End Initialised.
+
+End TradPf.
+
+(* DEPRECATED *)
+(*
   Module SMProperties.
     Include Interfaces.Common.
     Include Interfaces.EnclaveInterface.
@@ -193,7 +462,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
         (* interp_scheduler' st ? rules log scheduler. *)
 
       (* Output intermediate log *)
-      Definition step (st: state) (input: Log R ContextEnv) (feedback: Log R ContextEnv) 
+      Definition step (st: state) (input: Log R ContextEnv) (feedback: Log R ContextEnv)
                       : state * Log R ContextEnv :=
         let output := update_function st input in
         (commit_update st (log_app feedback (log_app output input)), output).
@@ -977,335 +1246,167 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
 
       
   End SMProperties.
-  (* ==================================================================================== *)
+*)
+(*
+Module Pf (External: External_sig) (EnclaveParams: EnclaveParameters)
+          (Params0: CoreParameters) (Params1: CoreParameters)
+          (Core0: Core_sig External EnclaveParams Params0)
+          (Core1: Core_sig External EnclaveParams Params1)
+          (Memory: Memory_sig External).
+  Module Impl:= MachineSemantics External EnclaveParams Params0 Params1 Core0 Core1 Memory.
   Import Common.
+  Import Interfaces.Common.
 
-  (* ================= TMP ====================== *)
-  Definition impl_log_t : Type := Impl.log_t.
+  Record enclave_metadata :=
+    { meta_eid : enclave_id;
+      shared_page : bool
+    }.
 
-  (* ================= END_TMP ====================== *)
+  Record enclave_params :=
+    { metadata : enclave_metadata;
+      param_dram: dram_t
+    }.
 
-  Section GhostState.
+  Record core_config : Type :=
+    { enclave_data : enclave_metadata;
+      in_limbo: bool;
+      requested_enclave: option enclave_metadata;
+      state_fn : nat -> observations_t
+    }.
 
-    (* Experimenting with input/output state representation *)
-    Inductive modules :=
-    | Module_Core0
-    | Module_Core1
-    | Module_SM
-    | Module_Memory
-    .
+  Definition rf_t : Type := env_t ContextEnv Rf.R.
 
-    Record ghost_state : Type. (* TODO *)
+  Definition isolated_function_t : Type := ind_core_id -> enclave_params -> rf_t -> nat -> observations_t.
 
-    Definition impl_ghost_state : Type. Admitted.
-    Definition spec_ghost_state : Type. Admitted. 
+  Record partitioned_memory :=
+    { pm_enclave_mem : enclave_id -> option dram_t;
+      pm_shared_page : option dram_t;
+    }.
 
-    Definition initial_impl_ghost : impl_ghost_state. Admitted.
-    Definition initial_spec_ghost : spec_ghost_state. Admitted.
+  Record ghost_state :=
+    { core0_config : core_config;
+      core1_config : core_config;
+      mem_partitions : partitioned_memory;
+      num_cycles : nat
+    }.
 
-    Definition impl_step_with_ghost (st: Impl.state * impl_ghost_state)
-                                    : (Impl.state * impl_ghost_state) * tau :=
-      let (impl_st, ghost_st) := st in
-      ((fst (Impl.step impl_st), ghost_st (* TODO *)), (snd (Impl.step impl_st))).
 
-    Definition spec_step_with_ghost (st: Spec.state * spec_ghost_state)
-                                    : (Spec.state * spec_ghost_state) * tau :=
-      let (spec_st, ghost_st) := st in
-      ((fst (Spec.step spec_st), ghost_st (* TODO *)), (snd (Spec.step spec_st))).
+  (* TODO: This should be derived from Interfaces *)
+  Definition initial_rf : rf_t := ContextEnv.(create) Rf.r.
 
-    Section Initialised.
-      Context (initial_dram : dram_t).
+  Definition mk_initial_config (fn: isolated_function_t) (core_id: ind_core_id)
+                               (params: enclave_params) (rf: rf_t) : core_config :=
+    {| enclave_data := params.(metadata);
+       in_limbo := false;
+       requested_enclave := None;
+       state_fn := fn core_id params rf
+    |}.
 
-      Definition impl_step_n_with_ghost (n: nat) : (Impl.state * impl_ghost_state) * trace :=
-        step_n (Impl.initial_state initial_dram, initial_impl_ghost)
-               impl_step_with_ghost
-               n.
+  Definition enclave_base enc_id := Bits.to_nat (EnclaveParams.enclave_base enc_id).
+  Definition enclave_max enc_id := Bits.to_nat (Bits.plus (EnclaveParams.enclave_base enc_id)
+                                                          (EnclaveParams.enclave_size enc_id)).
 
-      Definition spec_step_n_with_ghost (n: nat) : (Spec.state * spec_ghost_state) * trace :=
-        step_n (Spec.initial_state initial_dram, initial_spec_ghost)
-               spec_step_with_ghost
-               n.
+  Definition initial_enclave_dram initial_dram enc_id : dram_t :=
+    fun addr => if ((enclave_base enc_id) <=? addr) && (addr <? (enclave_max enc_id))
+             then initial_dram addr
+             else None.
 
-    End Initialised.
+  Definition initial_shared_mem initial_dram : dram_t :=
+    fun addr => if ((Bits.to_nat (EnclaveParams.shared_mem_base) <=? addr) &&
+                 (addr <? Bits.to_nat (Bits.plus EnclaveParams.shared_mem_base EnclaveParams.shared_mem_size)))
+             then initial_dram addr
+             else None.
 
-    Section Lemmas.
+  Definition mk_initial_pm (initial_dram: dram_t) : partitioned_memory :=
+    {| pm_enclave_mem := fun eid => Some (initial_enclave_dram initial_dram eid);
+       pm_shared_page := Some (initial_shared_mem initial_dram)
+    |}.
 
-      Lemma impl_drop_ghost :
-        forall (initial_dram: dram_t)
-          n st st' evs evs',
-          impl_step_n_with_ghost initial_dram n = (st, evs) ->
-          Impl.step_n initial_dram n = (st', evs') ->
-          st' = fst st /\ evs = evs'.
-      Proof.
-        intro. eapply proj_step_fn_eq.
-        - unfold is_proj; auto.
-        - unfold natural_step_fn. unfold impl_step_with_ghost, is_proj.
-          intros; destruct_all_matches.
-      Qed.
+  Definition initial_ghost_state (fn: isolated_function_t) (initial_dram: dram_t) : ghost_state :=
+    let enclave0_param :=
+        {| metadata := {| meta_eid := Enclave0;
+                          shared_page := false
+                       |};
+           param_dram := initial_enclave_dram initial_dram Enclave0
+        |} in
+    let enclave1_param :=
+        {| metadata := {| meta_eid := Enclave1;
+                          shared_page := false
+                       |};
+           param_dram := initial_enclave_dram initial_dram Enclave1
+        |} in
+    {| core0_config := mk_initial_config fn CoreId0 enclave0_param initial_rf;
+       core1_config := mk_initial_config fn CoreId1 enclave1_param initial_rf;
+       mem_partitions := {| pm_enclave_mem := fun eid => match eid with
+                                                      | (Enclave0 | Enclave1) => None
+                                                      | _ => Some (initial_enclave_dram initial_dram eid)
+                                                      end;
+                            pm_shared_page := Some (initial_shared_mem initial_dram)
+                         |};
+       num_cycles := 0
+    |}.
 
-      Lemma spec_drop_ghost :
-        forall (initial_dram: dram_t)
-          n st st' evs evs',
-          spec_step_n_with_ghost initial_dram n = (st, evs) ->
-          Spec.step_n initial_dram n = (st', evs') ->
-          st' = fst st /\ evs = evs'.
-      Proof.
-        intro. eapply proj_step_fn_eq.
-        - unfold is_proj; auto.
-        - unfold natural_step_fn. unfold spec_step_with_ghost, is_proj.
-          intros; destruct_all_matches.
-      Qed.
+  (* TODO: Do we care about cycle-accurate purge? *)
+  Inductive function_generates_trace_helper
+            (fn: isolated_function_t) (initial_dram: dram_t)
+            (ghost: ghost_state) (tr: trace) : Prop :=
+  | EmptyTrace :
+      forall (initial_ghost : ghost = initial_ghost_state fn initial_dram)
+        (empty_trace: tr = []),
+      function_generates_trace_helper fn initial_dram ghost tr
+  | IndTrace_BothRunning :
+      forall (prev_tr: trace) (obs: ind_core_id -> observations_t)
+        (prev_ghost: ghost_state) (ghost0 ghost1: ghost_state)
 
-    End Lemmas.
-
-  End GhostState.
-
-  Section ImplRegisterMap.
-    Definition impl_sm_clk : Impl.System.reg_t := Impl.System.SM_internal (Impl.System.SM.clk).
-    Definition impl_purge_core0 : Impl.System.reg_t := Impl.System.purge_core0.
-    Definition impl_purge_core1: Impl.System.reg_t := Impl.System.purge_core1.
-    Definition impl_purge_mem0 : Impl.System.reg_t := Impl.System.purge_mem0.
-    Definition impl_purge_mem1 : Impl.System.reg_t := Impl.System.purge_mem1.
-  End ImplRegisterMap.
-
-  Section ImplProjs.
-    Definition get_impl_core0 : Impl.koika_state -> Core0.state :=
-      fun impl_st => Lift.proj_env (REnv := ContextEnv) Impl.System.Lift_core0 impl_st.
-    Definition get_impl_core1 : Impl.koika_state -> Core1.state :=
-      fun impl_st => Lift.proj_env (REnv := ContextEnv) Impl.System.Lift_core1 impl_st.
-    Definition get_impl_sm : Impl.koika_state -> Impl.System.SM.state :=
-      fun impl_st => Lift.proj_env (REnv := ContextEnv) Impl.System.Lift_sm impl_st.
-    Definition get_impl_mem : Impl.koika_state -> Memory.state :=
-      fun impl_st => Lift.proj_env (REnv := ContextEnv) Impl.System.Lift_mem impl_st.
-
-    Definition get_impl_log_core0 : Impl.log_t -> Log Core0.R ContextEnv :=
-      fun impl_st => Lift.proj_log (REnv := ContextEnv) Impl.System.Lift_core0 impl_st.
-    Definition get_impl_log_core1 : Impl.log_t -> Log Core1.R ContextEnv :=
-      fun impl_st => Lift.proj_log (REnv := ContextEnv) Impl.System.Lift_core1 impl_st.
-    Definition get_impl_log_sm : Impl.log_t -> Log Impl.System.SM.R ContextEnv :=
-      fun impl_st => Lift.proj_log (REnv := ContextEnv) Impl.System.Lift_sm impl_st.
-    Definition get_impl_log_mem : Impl.log_t -> Log Memory.R ContextEnv :=
-      fun impl_st => Lift.proj_log (REnv := ContextEnv) Impl.System.Lift_mem impl_st.
-
-  End ImplProjs. 
-
-  Section SpecProjs.
-    Definition get_spec0_core0 : Spec.Machine0.state -> Core0.state :=
-      fun '(spec_st, _) => Lift.proj_env (REnv := ContextEnv) Spec.Machine0.System.Lift_core0 spec_st.
-    Definition get_spec1_core1 : Spec.Machine1.state -> Core1.state :=
-      fun '(spec_st, _) => Lift.proj_env (REnv := ContextEnv) Spec.Machine1.System.Lift_core1 spec_st.
-    Definition get_spec0_sm : Spec.Machine0.state -> Spec.Machine0.System.SM.state :=
-      fun '(spec_st,_) => Lift.proj_env (REnv := ContextEnv) Spec.Machine0.System.Lift_sm spec_st.
-    Definition get_spec1_sm : Spec.Machine1.state -> Spec.Machine1.System.SM.state :=
-      fun '(spec_st,_) => Lift.proj_env (REnv := ContextEnv) Spec.Machine1.System.Lift_sm spec_st.
-
-  End SpecProjs.
-
-  Definition impl_state_t : Type := Impl.state * impl_ghost_state.
-  Definition spec_state_t : Type := Spec.state * spec_ghost_state.
-
-  Definition SpecInvariant0 (spec_core: @Spec.core_state_machine Spec.Machine0.state) : Prop :=
-    match spec_core with
-    | Spec.CoreState_Enclave _ _ _ => True (* TODO *)
-    | Spec.CoreState_Waiting new next_rf => True
-    end.
-
-  Definition SpecInvariant : spec_state_t -> Prop. Admitted.
-
-  (* TODO: very WIP; maybe an explicit ghost state will be better *)
-  Definition State0_Sim : Impl.state -> @Spec.core_state_machine Spec.Machine0.state -> Prop :=
-    fun '(impl_st, impl_ext) spec_core =>
-    match spec_core with
-    | Spec.CoreState_Enclave machine_state config enclave_state =>
-        (* Machine state simulation: *)
-        (* 1) Core0 is in the same state *)
-        get_impl_core0 impl_st = get_spec0_core0 machine_state /\
-        (* 2) Mem0 is in the same state, or we've had the same history of requests from a reset state? 
-         *    Note: this might be better stated as a ghost-state property; TBD
+        (* Induction hypothesis *)
+        (ind_hyp: function_generates_trace_helper fn initial_dram prev_ghost prev_tr)
+        (* If Core0 is running an enclave,
+         * fn must generate the relevant observation
          *)
-        (* 3) SM? *)
-        (* enclave state *)
-        match enclave_state with
-        | Spec.EnclaveState_Running =>
-          True
-        | Spec.EnclaveState_Switching next => True
-        end
-    | Spec.CoreState_Waiting new next_rf => 
-        (* Core0 is in a reset state *)
-        Core0.valid_reset_state (get_impl_core0 impl_st) /\
-        (* Core0 is purged *)
-        ContextEnv.(getenv) impl_st impl_purge_mem0 = Common.ENUM_purge_purged /\
-        (* Mem0 is in a reset state *)
-        Memory.valid_reset_state (get_impl_mem impl_st) Common.CoreId0 /\
-        (* Mem0 is purged *)
-        ContextEnv.(getenv) impl_st impl_purge_mem0 = Common.ENUM_purge_purged /\
-        (* Rf is related *)
-        Impl.get_rf (impl_st,impl_ext) = next_rf /\
-        (* SM is in a certain state *)
-        SMProperties.valid_waiting_state (get_impl_sm impl_st) Common.CoreId0 new 
-        (* TODO: External memory is related *)
-    end.
+        (pf_case_core0_running : prev_ghost.(core0_config).(in_limbo) = false ->
+                                 obs CoreId0 = prev_ghost.(core0_config).(state_fn) (S prev_ghost.(num_cycles))
+        )
+        (* If Core0 is not running an enclave *)
+        (pf_case_core0_limbo : prev_ghost.(core0_config).(in_limbo) = true ->
+                               obs CoreId0 = prev_ghost.(core0_config).(state_fn) (S prev_ghost.(num_cycles))
+        )
 
-  Definition State1_Sim : Impl.state -> @Spec.core_state_machine Spec.Machine1.state -> Prop. Admitted.
 
-  Definition Clk_Sim : Impl.state -> bool -> Prop :=
-    fun '(impl_st, _) spec_clk =>
-      let impl_clk := getenv ContextEnv impl_st impl_sm_clk in
-      Bits.single impl_clk = spec_clk.
+        (* If Core1 is running an enclave *)
+        (* If Core1 is not running an enclave *)
 
-  Definition StateSim : Impl.state -> Spec.state -> Prop :=
-    fun impl_st spec_st =>
-      State0_Sim impl_st (Spec.machine0_state spec_st) /\
-      State1_Sim impl_st (Spec.machine1_state spec_st) /\
-      Clk_Sim impl_st (Spec.clk spec_st).
-      (* TODO: Mem_Sim *) 
 
-  Definition Sim (impl: impl_state_t) (spec: spec_state_t) : Prop :=
-    let (impl_st, impl_ghost) := impl in
-    let (spec_st, spec_ghost) := spec in
-    StateSim impl_st spec_st.
+        (core0_running : prev_ghost.(core0_config).(in_limbo) = false)
+        (core1_running : prev_ghost.(core1_config).(in_limbo) = false)
+        (trace_eq: tr = prev_tr ++ [obs]),
+        (*
+        (ghost0_eq: ghost0 =
+        (ghost1_eq: ghost1 =
+
+        (cur_obs.obs_enclave_req
+        *)
+        (* TODO *)
+      function_generates_trace_helper fn initial_dram ghost tr.
+
+
+
+  Definition function_generates_trace (fn: isolated_function_t) (initial_dram: dram_t) (tr: trace) : Prop :=
+    exists ghost_state, function_generates_trace_helper fn initial_dram ghost_state tr.
+
 
   Section Initialised.
     Variable initial_dram: dram_t.
 
-    Theorem initial_state_sim :
-      Sim (Impl.initial_state initial_dram, initial_impl_ghost)
-          (Spec.initial_state initial_dram, initial_spec_ghost).
-    Admitted.
-
-Ltac destruct_pair :=
-  match goal with
-  | [ P : _ * _ |- _ ] =>
-    let p1 := fresh P in
-    let p2 := fresh P in
-    destruct P as [p1 p2]
-end.
-
-Require Import Coq.Logic.FunctionalExtensionality.    
-Arguments commit_update: simpl never.
-Arguments log_empty: simpl never.
-Arguments Log: simpl never.
-Arguments env_t : simpl never.
-
-Ltac initialize :=
-  intros; unfold impl_state_t, spec_state_t in *; repeat destruct_pair.
-
-Ltac destruct_outer_match_in_hyp H :=
-  lazymatch type of H with
-  | context[match ?d with | _ => _ end] =>
-      destruct d eqn:?
-  end.
-Ltac destruct_ite_in_hyp H :=
-  lazymatch type of H with
-  | context[if ?b then _ else _] =>
-      destruct b eqn:?
-  end.
-
-Set Default Goal Selector "!".
-
-    Theorem step_sim : forall (impl_st impl_st': impl_state_t) (spec_st spec_st': spec_state_t)
-                         (impl_tau spec_tau: tau),
-      Sim impl_st spec_st ->
-      impl_step_with_ghost impl_st = (impl_st', impl_tau) ->
-      spec_step_with_ghost spec_st = (spec_st', spec_tau) ->
-      Sim impl_st' spec_st' /\ impl_tau = spec_tau.
-    Proof.
-      initialize.
-      unfold impl_step_with_ghost, Impl.step in *.
-      unfold spec_step_with_ghost, Spec.step in *.
-      destruct_all_matches.
-      simplify_all.
-
-      unfold Impl.do_observations. 
-      unfold Spec.do_magic_step in Heqp.
-      destruct_outer_match_in_hyp Heqp; simplify_tuples; subst.
-
-      { (* Case1: MagicState_Continue *)
-        unfold Spec.local_core_step in Heqm1.
-        destruct_outer_match_in_hyp Heqm1.
-        { (* Case: Spec.CoreState_Enclave *)
-          destruct_outer_match_in_hyp Heqm1.
-          (* TODO: Machine step invariant: show preservation *)
-          destruct_outer_match_in_hyp Heqm1.
-          { (* Case: Spec.EnclaveState_Running *)
-            (* Invariant preservation, log preservation *)
-            admit.
-          } 
-          { destruct_ite_in_hyp Heqm1; try congruence.
-            (* Case: Spec.EnclaveState_Switching; no exit *)
-            inversion_clear Heqm1.
-            (* Invariant preservation *)
-          admit.
-          }
-        } 
-        { destruct_ite_in_hyp Heqm1; try congruence.
-          (* Case: Spec.CoreState_Waiting; no switch *)
-          inversion_clear Heqm1.
-          (* Idea: Spec.clk spec_st0 = true ->
-             Core0 still in reset and Mem0 still in reset *)
-          (* Therefore no update to logs, therefore empty observations *)
-          admit.
-        } 
-      }
-      { (* Case2: Spec.MagicState_Exit *)
-        unfold Spec.local_core_step in Heqm1.
-        repeat destruct_matches_in_hyp Heqm1; try congruence.
-        inversion_clear Heqm1.
-        (* Idea: Simulation in terms of SM; prove that Impl step exits too *)
-        admit.
-      }
-      { (* Case3: Spec.MagicState_Enter *)
-        destruct_ite_in_hyp Heqp.
-        { (* Case: Spec.can_enter *)
-          simplify_all.
-          (* Initial enclave simulation: Impl enters enclave too *)
-          admit.
-        }
-        { (* Case: Spec can not enter; no change *)
-          simplify_all.
-          admit.
-        }
-      }
-    Admitted.                 
-
-    Theorem step_n_sim : forall (n: nat)
-                         (impl_st: Impl.state) (impl_tr: trace) (impl_ghost: impl_ghost_state)
-                         (spec_st: Spec.state) (spec_tr: trace) (spec_ghost: spec_ghost_state),
-        impl_step_n_with_ghost initial_dram n = ((impl_st, impl_ghost), impl_tr) ->
-        spec_step_n_with_ghost initial_dram n = ((spec_st, spec_ghost), spec_tr) ->
-        Sim (impl_st, impl_ghost) (spec_st, spec_ghost) /\ impl_tr = spec_tr.
-    Proof.
-      induction n.
-      - intros; simplify_all; split_cases; auto.
-        apply initial_state_sim.
-      - simpl; intros; destruct_all_matches; simplify_all.
-        repeat destruct_pair.
-        specialize IHn with (1 := eq_refl) (2 := eq_refl); propositional.
-        match goal with
-        | [ H0: Sim _ _,
-            H1: impl_step_with_ghost _ = _,
-            H2: spec_step_with_ghost _ = _ |- _ ] =>
-          specialize step_sim with (1 := H0) (2 := H1) (3 := H2)
-        end.
-        intuition.
-    Qed.
-
-    Theorem refinement: forall (n: nat)
-                          (impl_st: Impl.state) (impl_tr: trace)
-                          (spec_st: Spec.state) (spec_tr: trace),
+    Theorem simulation: exists (iso_fn : isolated_function_t),
+      forall (n: nat) (impl_st: Impl.state) (impl_tr: trace),
         Impl.step_n initial_dram n = (impl_st, impl_tr) ->
-        Spec.step_n initial_dram n = (spec_st, spec_tr) ->
-        impl_tr = spec_tr.
-    Proof.
-      intros *; intros H_impl H_spec.
-      destruct (impl_step_n_with_ghost initial_dram n) as [[impl_st' impl_ghost] impl_tr'] eqn:Heq_impl.
-      destruct (spec_step_n_with_ghost initial_dram n) as [[spec_st' spec_ghost] spec_tr'] eqn:Heq_spec.
-      edestruct impl_drop_ghost with (1 := Heq_impl) (2 := H_impl).
-      edestruct spec_drop_ghost with (1 := Heq_spec) (2 := H_spec).
-      simplify_all.
-      eapply step_n_sim; eauto.
-    Qed.
+        function_generates_trace iso_fn initial_dram impl_tr.
+    Admitted.
 
   End Initialised.
 
-End TradPf.
+End Pf.
+*)
+
+(* TODO: move this *)
+

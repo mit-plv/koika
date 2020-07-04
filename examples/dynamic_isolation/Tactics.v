@@ -106,6 +106,13 @@ Module General.
       end
     end; subst; try congruence; eauto.
 
+  Ltac destruct_pair :=
+    match goal with
+    | [ P : _ * _ |- _ ] =>
+      let p1 := fresh P in
+      let p2 := fresh P in
+      destruct P as [p1 p2]
+  end.
 
   Ltac propositional_with t :=
     repeat match goal with

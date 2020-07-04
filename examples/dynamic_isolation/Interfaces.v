@@ -1199,7 +1199,15 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
   End Interface. 
 
   Section CycleSemantics.
-    Parameter update_function : state -> Log R ContextEnv -> Log R ContextEnv.
+    (* Could add ghost state *)
+    Record ghost_output :=
+      { ghost_output_config0 : option enclave_config;
+        ghost_output_config1 : option enclave_config
+      }.
+
+    Definition impl_output_t : Type := Log R ContextEnv * ghost_output.
+
+    Parameter update_function : state -> Log R ContextEnv -> impl_output_t.
 
     Definition initial_state (eid0: option enclave_id) (eid1: option enclave_id) (clk: bits_t 1): state :=
       ContextEnv.(create) (fun reg => match reg return R reg with
@@ -1223,14 +1231,14 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
         step_feedback : Log R_external ContextEnv
       }.
 
-    Definition do_step__impl (st: state) (step: step_io) : state * Log R ContextEnv :=
+    Definition do_step__impl (st: state) (step: step_io) : state * impl_output_t :=
       let input := lift_ext_log step.(step_input) in
-      let output := update_function st input in
+      let '(output, ghost) := update_function st input in
       let final := log_app (lift_ext_log step.(step_feedback)) (log_app output input) in
-      (commit_update st final, output).
+      (commit_update st final, (output, ghost)).
 
     Definition do_steps__impl (steps: list step_io) 
-                             : state * list (Log R ContextEnv) :=
+                             : state * list impl_output_t :=
       fold_left (fun '(st, evs) step =>
                    let '(st', ev) := do_step__impl st step in
                    (st', evs ++ [ev]))
@@ -1361,7 +1369,7 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
                                  : sm_magic_state_machine :=
         match config with
         | SmState_Enclave machine enclave enclave_state =>
-            let (machine', output_log) := do_step__impl machine step in
+            let '(machine', (output_log, _)) := do_step__impl machine step in
             match enclave_state with
             | EnclaveState_Running =>
                 let enclave_state' :=
@@ -1463,20 +1471,21 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
   End Spec.
 
   Section Correctness.
-    Definition trace_equivalent (koika_tr: list (Log R ContextEnv))
+    Definition trace_equivalent (koika_tr: list impl_output_t)
                                 (spec_tr: list spec_output_t) : Prop.
     Admitted.
 
     Theorem correctness :
       forall (steps: list step_io)        
         (spec_st: spec_state_t) (spec_tr: list spec_output_t) (props: list props_t)
-        (koika_st: state) (koika_tr: list (Log R ContextEnv)),
+        (koika_st: state) (koika_tr: list impl_output_t),
       valid_inputs props ->
       valid_feedback props ->
       do_steps__spec steps = (spec_st, spec_tr, props) ->
       do_steps__impl steps = (koika_st, koika_tr) ->
       trace_equivalent koika_tr spec_tr.
     Admitted.
+
   End Correctness.
 
   Section Compliance.
@@ -1484,7 +1493,7 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
     Theorem compliance:
       forall (steps: list step_io)        
         (spec_st: spec_state_t) (spec_tr: list spec_output_t) (props: list props_t)
-        (koika_st: state) (koika_tr: list (Log R ContextEnv)),
+        (koika_st: state) (koika_tr: list impl_output_t),
       valid_inputs props ->
       valid_feedback props ->
       do_steps__spec steps = (spec_st, spec_tr, props) ->
