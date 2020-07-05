@@ -127,6 +127,8 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
                       |}.
   End TODO_MOVE.
 
+  Print System.reg_t'.
+
   Definition spin_up_single_core_machine
                              (core_id: ind_core_id)
                              (clk: bits_t 1)
@@ -137,15 +139,15 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
     let enclave_data := config_to_enclave_data config in
     let initial (reg: System.reg_t) := 
         match reg return R reg with
-        | System.SM_internal (System.SM.clk) => clk
-        | System.SM_internal System.SM.enc_data0 =>
+        | System.SM_internal (SM_Common.clk) => clk
+        | System.SM_internal SM_Common.enc_data0 =>
             match core_id with 
             | CoreId0 => enclave_data
-            | CoreId1 => System.r (System.SM_internal System.SM.enc_data0)
+            | CoreId1 => System.r (System.SM_internal SM_Common.enc_data0)
             end
-        | System.SM_internal System.SM.enc_data1 =>
+        | System.SM_internal SM_Common.enc_data1 =>
             match core_id with 
-            | CoreId0 => System.r (System.SM_internal System.SM.enc_data1)
+            | CoreId0 => System.r (System.SM_internal SM_Common.enc_data1)
             | CoreId1 => enclave_data
             end
         | System.core0_rf s => ContextEnv.(getenv) rf s
@@ -164,14 +166,14 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
     let koika_st' := 
       ContextEnv.(create) (fun reg => 
                              match reg return R reg with
-                             | System.SM_internal System.SM.enc_data0 =>
+                             | System.SM_internal SM_Common.enc_data0 =>
                                  match core_id with 
                                  | CoreId0 => enclave_data
-                                 | CoreId1 => ContextEnv.(getenv) state (System.SM_internal System.SM.enc_data0)
+                                 | CoreId1 => ContextEnv.(getenv) state (System.SM_internal SM_Common.enc_data0)
                                  end
-                             | System.SM_internal System.SM.enc_data1 =>
+                             | System.SM_internal SM_Common.enc_data1 =>
                                  match core_id with 
-                                 | CoreId0 => ContextEnv.(getenv) state (System.SM_internal System.SM.enc_data1)
+                                 | CoreId0 => ContextEnv.(getenv) state (System.SM_internal SM_Common.enc_data1)
                                  | CoreId1 => enclave_data
                                  end
                              | s => ContextEnv.(getenv) state s
@@ -292,7 +294,7 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
       end.
 
     Definition observe_enclave_exit0 (log: Log R ContextEnv) : bool :=
-      match latest_write log (System.SM_internal System.SM.enc_data0) with
+      match latest_write log (System.SM_internal SM_Common.enc_data0) with
       | Some v => 
           let data := EnclaveInterface.extract_enclave_data v in
           bits_eqb (EnclaveInterface.enclave_data_valid data) Ob~0
@@ -300,7 +302,7 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
       end.
 
     Definition observe_enclave_exit1 (log: Log R ContextEnv) : bool :=
-      match latest_write log (System.SM_internal System.SM.enc_data1) with
+      match latest_write log (System.SM_internal SM_Common.enc_data1) with
       | Some v => 
           let data := EnclaveInterface.extract_enclave_data v in
           bits_eqb (EnclaveInterface.enclave_data_valid data) Ob~0

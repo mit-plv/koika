@@ -107,12 +107,17 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
 
     Definition initial_state := ContextEnv.(create) r.
 
-    Definition update_function : state -> Log R ContextEnv -> Log R ContextEnv. 
-    Admitted.
+    Parameter update_function : state -> Log R ContextEnv -> Log R ContextEnv.
+      (* interp_scheduler' st ? rules log scheduler. *)
+
+    Definition log_t := Log R ContextEnv.
+    Definition input_t := Log R_external ContextEnv.
+    Definition output_t := Log R ContextEnv.
+    Definition feedback_t := Log R_external ContextEnv.
 
     Record step_io :=
-      { step_input : Log R_external ContextEnv;
-        step_feedback: Log R_external ContextEnv
+      { step_input : input_t;
+        step_feedback: feedback_t
       }.
 
     Definition lift_ext_log (log: Log R_external ContextEnv) : Log R ContextEnv :=
@@ -121,11 +126,15 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
                                    | _ => []
                                    end).
 
+    Definition do_step_input__koika (st: state) (ext_input: input_t) : output_t * log_t :=
+       let input := lift_ext_log ext_input in
+       let output := update_function st input in
+       (output, log_app output input).
+
     Definition do_step__koika (st: state) (step: step_io)
                             : state * Log R ContextEnv :=
-      let input := lift_ext_log step.(step_input) in
-      let output := update_function st input in
-      let final := log_app (lift_ext_log step.(step_feedback)) (log_app output input) in
+      let '(output, acc) := do_step_input__koika st step.(step_input) in
+      let final := log_app (lift_ext_log step.(step_feedback)) acc in
       (commit_update st final, output).
 
     Definition do_steps__koika (steps: list step_io) 
@@ -200,33 +209,38 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
                                    | external pc => initial_pc
                                    | s => r s
                                    end).
+
+    Definition do_step_trans_input__spec (spec_st: spec_state_t) (ext_input: input_t) : output_t * log_t :=
+      do_step_input__koika (fst spec_st) ext_input.
     
     (* TODO: should really be inductive probably or option type? But too much effort to specify everything. *)
     Definition do_step_trans__spec (spec_st: spec_state_t) (step: step_io)
-                                 : spec_state_t * Log R_external ContextEnv :=
+                           : spec_state_t * Log R_external ContextEnv :=
       let '(st, phase) := spec_st in
       let '(st', output) := do_step__koika st step in
       let ext_output := proj_log__ext output in 
-      match phase with
-      | SpecSt_Running =>
-          let continue := ((st', SpecSt_Running), ext_output) in
-          match latest_write output (external purge) with
-          | Some v => if bits_eqb v ENUM_purge_purged 
-                     then ((st', SpecSt_Waiting (extract_rf st')), ext_output)
-                     else continue
-          | None => continue
-          end
-      | SpecSt_Waiting _rf => 
-         let continue := ((st', SpecSt_Waiting _rf), ext_output) in
-         match latest_write step.(step_feedback) purge,
-               latest_write step.(step_feedback) pc with
-         | Some v, Some _pc => 
-             if bits_eqb v ENUM_purge_restart then
-               (((initialise_with_rf _rf _pc), SpecSt_Running), ext_output)
-             else (* don't care *) continue
-         | _, _ => continue
-         end
-      end.
+      let final_st :=
+        match phase with
+        | SpecSt_Running =>
+            let continue := (st', SpecSt_Running) in
+            match latest_write output (external purge) with
+            | Some v => if bits_eqb v ENUM_purge_purged
+                       then (st', SpecSt_Waiting (extract_rf st'))
+                       else continue
+            | None => continue
+            end
+        | SpecSt_Waiting _rf =>
+           let continue := (st', SpecSt_Waiting _rf) in
+           match latest_write step.(step_feedback) purge,
+                 latest_write step.(step_feedback) pc with
+           | Some v, Some _pc =>
+               if bits_eqb v ENUM_purge_restart then
+                 ((initialise_with_rf _rf _pc), SpecSt_Running)
+               else (* don't care *) continue
+           | _, _ => continue
+           end
+        end in
+      (final_st, ext_output).
 
     (* Behaves nicely with enq/deqs *)
     Definition valid_interface_log (st: state) (init_log: Log R_external ContextEnv) 
@@ -293,6 +307,10 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
   Section Correctness.
 
     (* TODO: clean *)
+
+    Definition ext_log_equivalent (log0 log1: Log R_external ContextEnv) : Prop.
+    Admitted.
+
     Definition log_equivalent (koika_log: Log R ContextEnv) (spec_log: Log R_external ContextEnv) : Prop :=
       forall (reg: external_reg_t), 
         latest_write koika_log (external reg) = latest_write spec_log reg /\
@@ -303,6 +321,19 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
     Definition trace_equivalent (koika_tr: list (Log R ContextEnv)) 
                                 (spec_tr: list (Log R_external ContextEnv)) : Prop :=
       Forall2 log_equivalent koika_tr spec_tr.
+
+    Axiom output_correctness:
+      forall (steps: list step_io)
+        (spec_st: spec_state_t) (spec_tr: list (Log R_external ContextEnv)) (props: list props_t)
+        (koika_st: state) (koika_tr: list (Log R ContextEnv))
+        (input: input_t) (output0 output1: output_t),
+        valid_inputs props ->
+        valid_feedback props ->
+        do_steps__spec steps = (spec_st, spec_tr, props) ->
+        do_steps__koika steps = (koika_st, koika_tr) ->
+        fst (do_step_input__koika koika_st input) = output0 ->
+        fst (do_step_trans_input__spec spec_st input) = output1 ->
+        ext_log_equivalent (proj_log__ext output0) (proj_log__ext output1).
 
     Axiom correctness :
       forall (steps: list step_io) 

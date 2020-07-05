@@ -259,9 +259,14 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
     Parameter update_function : state -> Log R ContextEnv -> Log R ContextEnv.
       (* interp_scheduler' st ? rules log scheduler. *)
 
+    Definition log_t := Log R ContextEnv.
+    Definition input_t := Log R_external ContextEnv.
+    Definition output_t := Log R ContextEnv.
+    Definition feedback_t := Log R_external ContextEnv.
+
     Record step_io :=
-      { step_input : Log R_external ContextEnv;
-        step_feedback: Log R_external ContextEnv
+      { step_input : input_t;
+        step_feedback: feedback_t
       }.
 
     Definition lift_ext_log (log: Log R_external ContextEnv) : Log R ContextEnv :=
@@ -270,11 +275,15 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
                                    | _ => []
                                    end).
 
+    Definition do_step_input__koika (st: state) (ext_input: input_t) : output_t * log_t :=
+       let input := lift_ext_log ext_input in
+       let output := update_function st input in
+       (output, log_app output input).
+
     Definition do_step__koika (st: state) (step: step_io)
                             : state * Log R ContextEnv :=
-      let input := lift_ext_log step.(step_input) in
-      let output := update_function st input in
-      let final := log_app (lift_ext_log step.(step_feedback)) (log_app output input) in
+      let '(output, acc) := do_step_input__koika st step.(step_input) in
+      let final := log_app (lift_ext_log step.(step_feedback)) acc in
       (commit_update st final, output).
 
     Definition do_steps__koika (steps: list step_io) 
@@ -349,33 +358,38 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
                                    | external pc => initial_pc
                                    | s => r s
                                    end).
+
+    Definition do_step_trans_input__spec (spec_st: spec_state_t) (ext_input: input_t) : output_t * log_t :=
+      do_step_input__koika (fst spec_st) ext_input.
     
     (* TODO: should really be inductive probably or option type? But too much effort to specify everything. *)
     Definition do_step_trans__spec (spec_st: spec_state_t) (step: step_io)
-                                 : spec_state_t * Log R_external ContextEnv :=
+                           : spec_state_t * Log R_external ContextEnv :=
       let '(st, phase) := spec_st in
       let '(st', output) := do_step__koika st step in
       let ext_output := proj_log__ext output in 
-      match phase with
-      | SpecSt_Running =>
-          let continue := ((st', SpecSt_Running), ext_output) in
-          match latest_write output (external purge) with
-          | Some v => if bits_eqb v ENUM_purge_purged 
-                     then ((st', SpecSt_Waiting (extract_rf st')), ext_output)
-                     else continue
-          | None => continue
-          end
-      | SpecSt_Waiting _rf => 
-         let continue := ((st', SpecSt_Waiting _rf), ext_output) in
-         match latest_write step.(step_feedback) purge,
-               latest_write step.(step_feedback) pc with
-         | Some v, Some _pc => 
-             if bits_eqb v ENUM_purge_restart then
-               (((initialise_with_rf _rf _pc), SpecSt_Running), ext_output)
-             else (* don't care *) continue
-         | _, _ => continue
-         end
-      end.
+      let final_st :=
+        match phase with
+        | SpecSt_Running =>
+            let continue := (st', SpecSt_Running) in
+            match latest_write output (external purge) with
+            | Some v => if bits_eqb v ENUM_purge_purged
+                       then (st', SpecSt_Waiting (extract_rf st'))
+                       else continue
+            | None => continue
+            end
+        | SpecSt_Waiting _rf =>
+           let continue := (st', SpecSt_Waiting _rf) in
+           match latest_write step.(step_feedback) purge,
+                 latest_write step.(step_feedback) pc with
+           | Some v, Some _pc =>
+               if bits_eqb v ENUM_purge_restart then
+                 ((initialise_with_rf _rf _pc), SpecSt_Running)
+               else (* don't care *) continue
+           | _, _ => continue
+           end
+        end in
+      (final_st, ext_output).
 
     (* Behaves nicely with enq/deqs *)
     Definition valid_interface_log (st: state) (init_log: Log R_external ContextEnv) 
@@ -442,6 +456,10 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
   Section Correctness.
 
     (* TODO: clean *)
+
+    Definition ext_log_equivalent (log0 log1: Log R_external ContextEnv) : Prop.
+    Admitted.
+
     Definition log_equivalent (koika_log: Log R ContextEnv) (spec_log: Log R_external ContextEnv) : Prop :=
       forall (reg: external_reg_t), 
         latest_write koika_log (external reg) = latest_write spec_log reg /\
@@ -452,6 +470,19 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
     Definition trace_equivalent (koika_tr: list (Log R ContextEnv)) 
                                 (spec_tr: list (Log R_external ContextEnv)) : Prop :=
       Forall2 log_equivalent koika_tr spec_tr.
+
+    Axiom output_correctness:
+      forall (steps: list step_io)
+        (spec_st: spec_state_t) (spec_tr: list (Log R_external ContextEnv)) (props: list props_t)
+        (koika_st: state) (koika_tr: list (Log R ContextEnv))
+        (input: input_t) (output0 output1: output_t),
+        valid_inputs props ->
+        valid_feedback props ->
+        do_steps__spec steps = (spec_st, spec_tr, props) ->
+        do_steps__koika steps = (koika_st, koika_tr) ->
+        fst (do_step_input__koika koika_st input) = output0 ->
+        fst (do_step_trans_input__spec spec_st input) = output1 ->
+        ext_log_equivalent (proj_log__ext output0) (proj_log__ext output1).
 
     Axiom correctness :
       forall (steps: list step_io) 
@@ -662,8 +693,7 @@ Module EnclaveInterface.
 
 End EnclaveInterface.
 
-(* NOTE: in our model we say this is fixed, so we can talk about the internal registers. *)
-Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
+Module SM_Common.
   Import Common.
   Import EnclaveInterface.
 
@@ -690,6 +720,8 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
 
   Definition internal_reg_t := internal_reg_t'.
 
+  Instance FiniteType_internal_reg_t : FiniteType internal_reg_t := _.
+
   Definition R_internal (idx: internal_reg_t) : type :=
     match idx with
     | state0 => enum_t core_state
@@ -700,29 +732,6 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
     | enc_req1 => struct_t enclave_data
     | clk => bits_t 1
     end.
-
-
-  Definition eid_to_initial_enclave_data (eid: enclave_id) : struct_t enclave_data :=
-    mk_enclave_data {| enclave_data_eid := enclave_id_to_bits eid;
-                       enclave_data_addr_min := Params.enclave_base eid;
-                       enclave_data_size := Params.enclave_size eid;
-                       enclave_data_shared_page := Ob~0;
-                       enclave_data_valid := Ob~1
-                    |}.
-
-
-  Definition r_internal (idx: internal_reg_t) : R_internal idx :=
-    match idx with
-    | state0 => Bits.zero
-    | state1 => Bits.zero
-    | enc_data0 => eid_to_initial_enclave_data Enclave0
-    | enc_data1 => eid_to_initial_enclave_data Enclave1
-    | enc_req0 => value_of_bits Bits.zero
-    | enc_req1 => value_of_bits Bits.zero
-    | clk => Bits.zero
-    end.
-
-  Instance FiniteType_internal_reg_t : FiniteType internal_reg_t := _.
 
   Inductive external_reg_t :=
   | fromCore0_IMem (state: MemReq.reg_t)
@@ -783,6 +792,49 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
     | purge_mem1 => enum_t purge_state
     end.
 
+  Inductive reg_t : Type :=
+  | external (idx: external_reg_t)
+  | internal (idx: internal_reg_t)
+  .
+
+  Definition R (idx: reg_t) :=
+    match idx with
+    | external st => R_external st
+    | internal st => R_internal st
+    end.
+
+  Instance FiniteType_external_reg_t : FiniteType external_reg_t := _.
+  Instance FiniteType_reg_t : FiniteType reg_t := _.
+
+End SM_Common.
+
+(* NOTE: in our model we say this is fixed, so we can talk about the internal registers. *)
+Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
+  Import Common.
+  Import EnclaveInterface.
+  Import SM_Common.
+
+  Definition eid_to_initial_enclave_data (eid: enclave_id) : struct_t enclave_data :=
+    mk_enclave_data {| enclave_data_eid := enclave_id_to_bits eid;
+                       enclave_data_addr_min := Params.enclave_base eid;
+                       enclave_data_size := Params.enclave_size eid;
+                       enclave_data_shared_page := Ob~0;
+                       enclave_data_valid := Ob~1
+                    |}.
+
+  Definition r_internal (idx: internal_reg_t) : R_internal idx :=
+    match idx with
+    | state0 => Bits.zero
+    | state1 => Bits.zero
+    | enc_data0 => eid_to_initial_enclave_data Enclave0
+    | enc_data1 => eid_to_initial_enclave_data Enclave1
+    | enc_req0 => value_of_bits Bits.zero
+    | enc_req1 => value_of_bits Bits.zero
+    | clk => Bits.zero
+    end.
+
+
+
   Definition r_external (idx: external_reg_t) : R_external idx :=
     match idx with
     | fromCore0_IMem st => MemReq.r st
@@ -813,25 +865,11 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
     | purge_mem1 => value_of_bits (Bits.zero)
     end.
 
-  Inductive reg_t : Type :=
-  | external (idx: external_reg_t)
-  | internal (idx: internal_reg_t)
-  .
-
-  Definition R (idx: reg_t) :=
-    match idx with
-    | external st => R_external st
-    | internal st => R_internal st
-    end.
-
   Definition r (idx: reg_t) : R idx :=
     match idx with
     | external st => r_external st
     | internal st => r_internal st
     end.
-
-  Instance FiniteType_external_reg_t : FiniteType external_reg_t := _.
-  Instance FiniteType_reg_t : FiniteType reg_t := _.
 
   Definition Sigma := External.Sigma.
   Definition ext_fn_t := External.ext_fn_t.
@@ -1209,6 +1247,12 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
 
     Parameter update_function : state -> Log R ContextEnv -> impl_output_t.
 
+    Definition log_t := Log R ContextEnv.
+    Definition input_t := Log R_external ContextEnv.
+    Definition output_t : Type := Log R ContextEnv * ghost_output.
+    Definition feedback_t := Log R_external ContextEnv.
+
+
     Definition initial_state (eid0: option enclave_id) (eid1: option enclave_id) (clk: bits_t 1): state :=
       ContextEnv.(create) (fun reg => match reg return R reg with
                                    | internal enc_data0 =>
@@ -1231,11 +1275,15 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
         step_feedback : Log R_external ContextEnv
       }.
 
+    Definition do_step_input__impl (st: state) (ext_input: input_t) : output_t * log_t :=
+       let input := lift_ext_log ext_input in
+       let '(output, ghost) := update_function st input in
+       ((output, ghost), log_app output input).
+
     Definition do_step__impl (st: state) (step: step_io) : state * impl_output_t :=
-      let input := lift_ext_log step.(step_input) in
-      let '(output, ghost) := update_function st input in
-      let final := log_app (lift_ext_log step.(step_feedback)) (log_app output input) in
-      (commit_update st final, (output, ghost)).
+      let '(output, acc) := do_step_input__impl st step.(step_input) in
+      let final := log_app (lift_ext_log step.(step_feedback)) acc in
+      (commit_update st final, output).
 
     Definition do_steps__impl (steps: list step_io) 
                              : state * list impl_output_t :=
@@ -1436,8 +1484,8 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
         | _ => None
         end.
 
-      Definition output_t : Type := Log R_external ContextEnv * option enclave_config.
-      Definition spec_output_t : Type := output_t * output_t.
+      Definition local_output_t : Type := Log R_external ContextEnv * option enclave_config.
+      Definition spec_output_t : Type := local_output_t * local_output_t.
 
       (*
       Definition iso_step (st: iso_machine_t) (input: Log R ContextEnv) (feedback: Log R ContextEnv) 
@@ -1457,6 +1505,10 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
 
     Definition spec_state_t := iso_machine_t.
     Definition initial_spec_state : spec_state_t. Admitted.
+
+    Definition do_step_input__spec (spec_st: spec_state_t) (input: Log R_external ContextEnv)
+                                 : spec_output_t.
+    Admitted.
 
     Definition do_step__spec (spec_st: spec_state_t) (step: step_io)
                            : spec_state_t * spec_output_t * props_t. Admitted.
@@ -1484,6 +1536,22 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
       do_steps__spec steps = (spec_st, spec_tr, props) ->
       do_steps__impl steps = (koika_st, koika_tr) ->
       trace_equivalent koika_tr spec_tr.
+    Admitted.
+
+    Definition output_log_equivalent : impl_output_t -> spec_output_t -> Prop. Admitted.
+
+    Theorem output_correctness:
+      forall (steps: list step_io)
+        (spec_st: spec_state_t) (spec_tr: list spec_output_t) (props: list props_t)
+        (koika_st: state) (koika_tr: list impl_output_t)
+        (input: Log R_external ContextEnv) (impl_output: impl_output_t) (spec_output: spec_output_t),
+        valid_inputs props ->
+        valid_feedback props ->
+        do_steps__spec steps = (spec_st, spec_tr, props) ->
+        do_steps__impl steps = (koika_st, koika_tr) ->
+        fst (do_step_input__impl koika_st input) = impl_output ->
+        do_step_input__spec spec_st input = spec_output ->
+        output_log_equivalent impl_output spec_output.
     Admitted.
 
   End Correctness.
@@ -1664,6 +1732,11 @@ Module Type Memory_sig (External: External_sig) (EnclaveParams: EnclaveParameter
       let '(ext_log, ext_st') := external_update_function (koika_st, ext_st) (log_app koika_log input_log) in
       (log_app ext_log koika_log, ext_st').
 
+    Import EnclaveInterface.
+
+    Definition input_t : Type := Log R_external ContextEnv * option enclave_config * option enclave_config.
+    Definition feedback_t := Log R_external ContextEnv.
+
     Record step_io :=
       { step_input : Log R_external ContextEnv;
         step_feedback : Log R_external ContextEnv
@@ -1671,15 +1744,20 @@ Module Type Memory_sig (External: External_sig) (EnclaveParams: EnclaveParameter
 
     Record ghost_io :=
       { ghost_step : step_io;
-        ghost_input_config0 : option EnclaveInterface.enclave_config;
-        ghost_input_config1 : option EnclaveInterface.enclave_config;
+        ghost_input_config0 : option enclave_config;
+        ghost_input_config1 : option enclave_config;
       }.
 
-    Definition get_input_config (step: ghost_io) (core: ind_core_id) : option EnclaveInterface.enclave_config :=
+    Definition get_input_config (step: ghost_io) (core: ind_core_id) : option enclave_config :=
       match core with
       | CoreId0 => step.(ghost_input_config0)
       | CoreId1 => step.(ghost_input_config1)
       end.
+
+    Definition do_step_input__impl (st: state) (ext_input: Log R_external ContextEnv)
+                                 : Log R ContextEnv * external_state_t :=
+      let input := lift_ext_log ext_input in
+      update_function st input.
 
     Definition do_step__impl (st: state) (step: step_io) : state * Log R ContextEnv :=
       let input := lift_ext_log step.(step_input) in
@@ -1823,6 +1901,7 @@ Module Type Memory_sig (External: External_sig) (EnclaveParams: EnclaveParameter
     Definition proj_ghost_io (step: ghost_io) (core: ind_core_id) : step_io * option enclave_config :=
       (filter_step step.(ghost_step) core, get_input_config step core).
 
+    (* TODO: currently wrong. need to proj log of step *)
     Definition do_local_step_trans__spec (machine: local_spec_state_t)
                                        (core: ind_core_id)
                                        (step: step_io)
@@ -1855,6 +1934,21 @@ Module Type Memory_sig (External: External_sig) (EnclaveParams: EnclaveParameter
           | _, _ => continue
           end
       end.
+
+    Definition do_local_step_trans_input__spec (machine: local_spec_state_t)
+                                             (input: Log R_external ContextEnv)
+                                             : Log R ContextEnv * external_state_t :=
+      let '(st, phase) := machine in
+      do_step_input__impl st input.
+
+    Definition filter_input : Log R_external ContextEnv -> ind_core_id -> Log R_external ContextEnv.
+    Admitted.
+
+    Definition do_step_trans_input__spec (spec_st: spec_state_t) (ext_input: Log R_external ContextEnv)
+                                 : Log R ContextEnv * Log R ContextEnv :=
+      let output0 := do_local_step_trans_input__spec (machine0 spec_st) (filter_input ext_input CoreId0) in
+      let output1 := do_local_step_trans_input__spec (machine1 spec_st) (filter_input ext_input CoreId1) in
+      (fst output0, fst output1).
 
     Definition do_step_trans__spec (spec_st: spec_state_t) (step: ghost_io)
                                  : spec_state_t * output_t * output_t :=
@@ -1982,6 +2076,23 @@ Module Type Memory_sig (External: External_sig) (EnclaveParams: EnclaveParameter
       do_steps__impl initial_dram (List.map ghost_step steps) = (koika_st, koika_tr) ->
       trace_equivalent koika_tr spec_tr.
 
+    (* TODO: fix types *)
+    Definition output_log_equivalent : Log R ContextEnv -> Log R ContextEnv * Log R ContextEnv -> Prop.
+    Admitted.
+
+    Axiom output_correctness:
+      forall (initial_dram: dram_t)
+        (steps: list ghost_io)
+        (spec_st: spec_state_t) (spec_tr: list spec_output_t) (props: list props_t)
+        (koika_st: state) (koika_tr: list (Log R ContextEnv))
+        (input: Log R_external ContextEnv) (impl_output spec_output0 spec_output1: Log R ContextEnv),
+        valid_inputs props ->
+        valid_feedback props ->
+        do_steps__spec initial_dram steps = (spec_st, spec_tr, props) ->
+        do_steps__impl initial_dram (List.map ghost_step steps) = (koika_st, koika_tr) ->
+        fst (do_step_input__impl koika_st input) = impl_output ->
+        do_step_trans_input__spec spec_st input = (spec_output0, spec_output1) ->
+        output_log_equivalent impl_output (spec_output0, spec_output1).
   End Correctness.
 
   Section Compliance.
@@ -2678,7 +2789,6 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
                (Core0: Core_sig External EnclaveParams Params0)
                (Core1: Core_sig External EnclaveParams Params1)
                (Memory: Memory_sig External EnclaveParams) <: Machine_sig.
-
   Module SM := SecurityMonitor External EnclaveParams.
 
   Include Common.
@@ -2721,7 +2831,7 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
   (* Internal registers *)
   | Core0_internal (state: Core0.internal_reg_t)
   | Core1_internal (state: Core1.internal_reg_t)
-  | SM_internal (state: SM.internal_reg_t)
+  | SM_internal (state: SM_Common.internal_reg_t)
   | Mem_internal (state: Memory.internal_reg_t)
   .
 
@@ -2765,7 +2875,7 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
     (* Internal registers *)
     | Core0_internal st => Core0.R_internal st
     | Core1_internal st => Core1.R_internal st
-    | SM_internal st => SM.R_internal st
+    | SM_internal st => SM_Common.R_internal st
     | Mem_internal st => Memory.R_internal st
     end.
 
@@ -2883,45 +2993,45 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
 
   Section SM_Lift.
 
-    Definition sm_external_lift (reg: SM.external_reg_t) : reg_t :=
+    Definition sm_external_lift (reg: SM_Common.external_reg_t) : reg_t :=
       match reg with
-      | SM.fromCore0_IMem st => Core0ToSM_IMem st
-      | SM.fromCore0_DMem st => Core0ToSM_DMem st
-      | SM.fromCore0_Enc st => Core0ToSM_Enc st
-      | SM.toCore0_IMem st => SMToCore0_IMem st
-      | SM.toCore0_DMem st => SMToCore0_DMem st
-      (* Core1 <-> SM *)
-      | SM.fromCore1_IMem st => Core1ToSM_IMem st
-      | SM.fromCore1_DMem st => Core1ToSM_DMem st
-      | SM.fromCore1_Enc st => Core1ToSM_Enc st
-      | SM.toCore1_IMem st => SMToCore1_IMem st
-      | SM.toCore1_DMem st => SMToCore1_DMem st
-      (* SM <-> Mem *)
-      | SM.toMem0_IMem st => SMToMem0_IMem st
-      | SM.toMem0_DMem st => SMToMem0_DMem st
-      | SM.toMem1_IMem st => SMToMem1_IMem st
-      | SM.toMem1_DMem st => SMToMem1_DMem st
-      | SM.fromMem0_IMem st => MemToSM0_IMem st
-      | SM.fromMem0_DMem st => MemToSM0_DMem st
-      | SM.fromMem1_IMem st => MemToSM1_IMem st
-      | SM.fromMem1_DMem st => MemToSM1_DMem st
+      | SM_Common.fromCore0_IMem st => Core0ToSM_IMem st
+      | SM_Common.fromCore0_DMem st => Core0ToSM_DMem st
+      | SM_Common.fromCore0_Enc st => Core0ToSM_Enc st
+      | SM_Common.toCore0_IMem st => SMToCore0_IMem st
+      | SM_Common.toCore0_DMem st => SMToCore0_DMem st
+      (* Core1 <-> SM_Common *)
+      | SM_Common.fromCore1_IMem st => Core1ToSM_IMem st
+      | SM_Common.fromCore1_DMem st => Core1ToSM_DMem st
+      | SM_Common.fromCore1_Enc st => Core1ToSM_Enc st
+      | SM_Common.toCore1_IMem st => SMToCore1_IMem st
+      | SM_Common.toCore1_DMem st => SMToCore1_DMem st
+      (* SM_Common <-> Mem *)
+      | SM_Common.toMem0_IMem st => SMToMem0_IMem st
+      | SM_Common.toMem0_DMem st => SMToMem0_DMem st
+      | SM_Common.toMem1_IMem st => SMToMem1_IMem st
+      | SM_Common.toMem1_DMem st => SMToMem1_DMem st
+      | SM_Common.fromMem0_IMem st => MemToSM0_IMem st
+      | SM_Common.fromMem0_DMem st => MemToSM0_DMem st
+      | SM_Common.fromMem1_IMem st => MemToSM1_IMem st
+      | SM_Common.fromMem1_DMem st => MemToSM1_DMem st
       (* pc *)
-      | SM.pc_core0 => pc0
-      | SM.pc_core1 => pc1
+      | SM_Common.pc_core0 => pc0
+      | SM_Common.pc_core1 => pc1
       (* purge *)
-      | SM.purge_core0 => purge_core0
-      | SM.purge_core1 => purge_core1
-      | SM.purge_mem0 => purge_mem0
-      | SM.purge_mem1 => purge_mem1
+      | SM_Common.purge_core0 => purge_core0
+      | SM_Common.purge_core1 => purge_core1
+      | SM_Common.purge_mem0 => purge_mem0
+      | SM_Common.purge_mem1 => purge_mem1
       end.
 
-    Definition sm_lift (reg: SM.reg_t) : reg_t :=
+    Definition sm_lift (reg: SM_Common.reg_t) : reg_t :=
       match reg with
-      | SM.external st => sm_external_lift st
-      | SM.internal st => SM_internal st
+      | SM_Common.external st => sm_external_lift st
+      | SM_Common.internal st => SM_internal st
       end.
 
-    Definition Lift_sm : RLift _ SM.reg_t reg_t SM.R R := ltac:(mk_rlift sm_lift).
+    Definition Lift_sm : RLift _ SM_Common.reg_t reg_t SM_Common.R R := ltac:(mk_rlift sm_lift).
     Definition FnLift_sm : RLift _ SM.ext_fn_t ext_fn_t SM.Sigma Sigma := ltac:(lift_auto).
 
   End SM_Lift.
