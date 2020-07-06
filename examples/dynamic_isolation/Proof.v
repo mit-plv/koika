@@ -22,6 +22,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
           (Memory: Memory_sig External EnclaveParams).
   Module Impl:= MachineSemantics External EnclaveParams Params0 Params1 Core0 Core1 Memory.
   Module Spec:= IsolationSemantics External EnclaveParams Params0 Params1 Core0 Core1 Memory.
+  Module SM := SecurityMonitor External EnclaveParams.
 
   Import Common.
 
@@ -106,7 +107,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
   End GhostState.
 
   Section ImplRegisterMap.
-    Definition impl_sm_clk : Impl.System.reg_t := Impl.System.SM_internal (Impl.System.SM.clk).
+    Definition impl_sm_clk : Impl.System.reg_t := Impl.System.SM_internal (SM_Common.clk).
     Definition impl_purge_core0 : Impl.System.reg_t := Impl.System.purge_core0.
     Definition impl_purge_core1: Impl.System.reg_t := Impl.System.purge_core1.
     Definition impl_purge_mem0 : Impl.System.reg_t := Impl.System.purge_mem0.
@@ -118,7 +119,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
       fun impl_st => Lift.proj_env (REnv := ContextEnv) Impl.System.Lift_core0 impl_st.
     Definition get_impl_core1 : Impl.koika_state_t -> Core1.state :=
       fun impl_st => Lift.proj_env (REnv := ContextEnv) Impl.System.Lift_core1 impl_st.
-    Definition get_impl_sm : Impl.koika_state_t -> Impl.System.SM.state :=
+    Definition get_impl_sm : Impl.koika_state_t -> SM.state :=
       fun impl_st => Lift.proj_env (REnv := ContextEnv) Impl.System.Lift_sm impl_st.
     Definition get_impl_koika_mem : Impl.koika_state_t -> Memory.koika_state_t :=
       fun impl_st => Lift.proj_env (REnv := ContextEnv) Impl.System.Lift_mem impl_st.
@@ -129,7 +130,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
       fun impl_st => Lift.proj_log (REnv := ContextEnv) Impl.System.Lift_core0 impl_st.
     Definition get_impl_log_core1 : Impl.log_t -> Log Core1.R ContextEnv :=
       fun impl_st => Lift.proj_log (REnv := ContextEnv) Impl.System.Lift_core1 impl_st.
-    Definition get_impl_log_sm : Impl.log_t -> Log Impl.System.SM.R ContextEnv :=
+    Definition get_impl_log_sm : Impl.log_t -> Log SM_Common.R ContextEnv :=
       fun impl_st => Lift.proj_log (REnv := ContextEnv) Impl.System.Lift_sm impl_st.
     Definition get_impl_log_mem : Impl.log_t -> Log Memory.R ContextEnv :=
       fun impl_st => Lift.proj_log (REnv := ContextEnv) Impl.System.Lift_mem impl_st.
@@ -158,6 +159,306 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
       }.
 
   End Interfaces.
+
+  Module ModImpl.
+
+    Record state :=
+      { state_core0 : Core0.state
+      ; state_core1 : Core1.state
+      ; state_sm : SM.state
+      ; state_mem : Memory.state
+      }.
+
+    Record tau :=
+      { output_core0 : Log Core0.R ContextEnv
+      ; output_core1 : Log Core1.R ContextEnv
+      ; output_sm : Log SM_Common.R ContextEnv * sm_ghost_output_t
+      ; output_mem : Log Memory.R ContextEnv * Memory.external_state_t
+      }.
+
+    Definition trace := list tau.
+
+    Section TODO_MOVE.
+      Definition sm_proj_log__ext (log: Log SM_Common.R ContextEnv) : Log SM_Common.R_external ContextEnv :=
+        ContextEnv.(create) (fun reg => ContextEnv.(getenv) log (SM_Common.external reg)).
+
+      Definition TODO_ghost_state_conversion (st: SM.ghost_output) : sm_ghost_output_t :=
+        {| ghost_output_config0 := SM.ghost_output_config0 st;
+           ghost_output_config1 := SM.ghost_output_config1 st
+        |}.
+
+    End TODO_MOVE.
+
+    Definition initial_state (initial_dram: dram_t) : state :=
+      {| state_core0 := ContextEnv.(create) Core0.r;
+         state_core1 := ContextEnv.(create) Core1.r;
+         state_sm := ContextEnv.(create) Impl.System.SM.r;
+         state_mem := (ContextEnv.(create) Memory.r, Memory.initial_external_state initial_dram)
+      |}.
+
+    (* TODO: Monad! *)
+    (* TODO: fix Interfaces' do_step_input function *)
+    (* TODO: Modularize *)
+    Definition do_step (st: state) : state * tau :=
+      (* Core0 *)
+      let '(core0_output__local, _) := Core0.do_step_input__koika (state_core0 st) log_empty in
+      let core0_output__global := lift_log (REnv' := ContextEnv) Impl.System.Lift_core0 core0_output__local in
+      let acc__core0 := core0_output__global in
+      (* Core1 *)
+      let core1_input := Core1.proj_log__ext (proj_log (REnv := ContextEnv) Impl.System.Lift_core1 acc__core0) in
+      let '(core1_output__local, _) := Core1.do_step_input__koika (state_core1 st) core1_input in
+      let core1_output__global := lift_log (REnv := ContextEnv) Impl.System.Lift_core1 core1_output__local in
+      let acc__core1 := log_app core1_output__global acc__core0 in
+      (* SM *)
+      let sm_input := sm_proj_log__ext (proj_log (REnv := ContextEnv) Impl.System.Lift_sm acc__core1) in
+      let '((sm_output__local, sm_ghost), _) := SM.do_step_input__impl (state_sm st) sm_input in
+      let sm_output__global := lift_log (REnv := ContextEnv) Impl.System.Lift_sm sm_output__local in
+      let acc_sm := log_app sm_output__global acc__core1 in
+      (* Mem *)
+      let mem_input := Memory.proj_log__ext (proj_log (REnv := ContextEnv) Impl.System.Lift_mem acc_sm) in
+      let '(mem_output__local, ext_st) := Memory.do_step_input__impl (state_mem st) mem_input in
+      let mem_output__global := lift_log (REnv := ContextEnv) Impl.System.Lift_mem mem_output__local in
+      let acc_mem := log_app mem_output__global acc_sm in
+      let outputs :=
+        {| output_core0 := core0_output__local;
+           output_core1 := core1_output__local;
+           output_sm := (sm_output__local, TODO_ghost_state_conversion sm_ghost);
+           output_mem := (mem_output__local, ext_st)
+        |} in
+      (* Do feedback: reverse *)
+      let mem_feedback__global := log_empty in
+      let sm_feedback__global := log_app mem_output__global mem_feedback__global in
+      let core1_feedback__global := log_app sm_output__global sm_feedback__global in
+      let core0_feedback__global := log_app core1_output__global core1_feedback__global in
+
+      let core0_step_io :=
+          {| Core0.step_input := log_empty;
+             Core0.step_feedback := Core0.proj_log__ext (proj_log (REnv := ContextEnv) Impl.System.Lift_core0
+                                                                core0_feedback__global)
+          |} in
+      let core1_step_io :=
+          {| Core1.step_input := core1_input;
+             Core1.step_feedback := Core1.proj_log__ext (proj_log Impl.System.Lift_core1 core1_feedback__global)
+          |} in
+      let sm_step_io :=
+          {| Impl.System.SM.step_input := sm_input;
+             Impl.System.SM.step_feedback := sm_proj_log__ext (proj_log Impl.System.Lift_sm sm_feedback__global)
+          |} in
+      let mem_step_io :=
+          {| Memory.step_input := mem_input;
+             Memory.step_feedback := Memory.proj_log__ext (proj_log Impl.System.Lift_mem mem_feedback__global)
+          |} in
+      ({| state_core0 := fst (Core0.do_step__koika (state_core0 st) core0_step_io);
+         state_core1 := fst (Core1.do_step__koika (state_core1 st) core1_step_io);
+         state_sm := fst (Impl.System.SM.do_step__impl (state_sm st) sm_step_io);
+         state_mem := fst (Memory.do_step__impl (state_mem st) mem_step_io)
+       |}, outputs).
+
+    Definition step_n (initial_dram: dram_t) (n: nat) : state * trace :=
+      Framework.step_n (initial_state initial_dram) do_step n.
+
+  End ModImpl.
+
+  Module ModSpec.
+
+    Record state :=
+      { state_core0 : Core0.spec_state_t
+      ; state_core1 : Core1.spec_state_t
+      ; state_sm : SM.spec_state_t
+      ; state_mem : Memory.spec_state_t
+      }.
+
+    Record tau :=
+      { output_core0 : Log Core0.R ContextEnv
+      ; output_core1 : Log Core1.R ContextEnv
+      ; output_sm : SM.spec_output_t
+      ; output_mem : Log Memory.R ContextEnv (* * Memory.external_state_t *)
+      }.
+
+    Definition trace := list tau.
+
+    Definition initial_state (initial_dram: dram_t): state :=
+      {| state_core0 := Core0.initial_spec_state;
+         state_core1 := Core1.initial_spec_state;
+         state_sm := SM.initial_spec_state;
+         state_mem := Memory.initial_spec_state initial_dram
+      |}.
+
+    Section TODO_MOVE.
+      Definition sm_proj_log__ext (log: Log SM_Common.R ContextEnv) : Log SM_Common.R_external ContextEnv :=
+        ContextEnv.(create) (fun reg => ContextEnv.(getenv) log (SM_Common.external reg)).
+
+      Definition TODO_ghost_state_conversion (st: SM.ghost_output) : sm_ghost_output_t :=
+        {| ghost_output_config0 := SM.ghost_output_config0 st;
+           ghost_output_config1 := SM.ghost_output_config1 st
+        |}.
+
+      Definition combine_spec_output : SM.spec_output_t -> Log SM_Common.R ContextEnv * sm_ghost_output_t.
+      Admitted.
+
+      Definition combine_mem_output : Log Memory.R ContextEnv * Log Memory.R ContextEnv -> Log Memory.R ContextEnv.
+      Admitted.
+
+    End TODO_MOVE.
+
+    (* TODO: modularize *)
+    Definition do_step (st: state) : state * tau :=
+      (* Core0 *)
+      let '(core0_output__local, _) := Core0.do_step_trans_input__spec (state_core0 st) log_empty in
+      let core0_output__global := lift_log (REnv' := ContextEnv) Impl.System.Lift_core0 core0_output__local in
+      let acc__core0 := core0_output__global in
+      (* Core1 *)
+      let core1_input := Core1.proj_log__ext (proj_log (REnv := ContextEnv) Impl.System.Lift_core1 acc__core0) in
+      let '(core1_output__local, _) := Core1.do_step_trans_input__spec (state_core1 st) core1_input in
+      let core1_output__global := lift_log (REnv := ContextEnv) Impl.System.Lift_core1 core1_output__local in
+      let acc__core1 := log_app core1_output__global acc__core0 in
+      (* SM *)
+      let sm_input := sm_proj_log__ext (proj_log (REnv := ContextEnv) Impl.System.Lift_sm acc__core1) in
+      let sm_output__raw := SM.do_step_input__spec (state_sm st) sm_input in
+      let '(sm_output__local, sm_ghost) := combine_spec_output sm_output__raw in
+      let sm_output__global := lift_log (REnv := ContextEnv) Impl.System.Lift_sm sm_output__local in
+      let acc_sm := log_app sm_output__global acc__core1 in
+      (* Mem *)
+      let mem_input := Memory.proj_log__ext (proj_log (REnv := ContextEnv) Impl.System.Lift_mem acc_sm) in
+      let mem_output__raw := Memory.do_step_trans_input__spec (state_mem st) mem_input in
+      let mem_output__local := combine_mem_output mem_output__raw in
+      let mem_output__global := lift_log (REnv := ContextEnv) Impl.System.Lift_mem mem_output__local in
+      let acc_mem := log_app mem_output__global acc_sm in
+      let outputs :=
+        {| output_core0 := core0_output__local;
+           output_core1 := core1_output__local;
+           output_sm := sm_output__raw;
+           output_mem := mem_output__local
+        |} in
+      (* Do feedback: reverse *)
+      let mem_feedback__global := log_empty in
+      let sm_feedback__global := log_app mem_output__global mem_feedback__global in
+      let core1_feedback__global := log_app sm_output__global sm_feedback__global in
+      let core0_feedback__global := log_app core1_output__global core1_feedback__global in
+
+      let core0_step_io :=
+          {| Core0.step_input := log_empty;
+             Core0.step_feedback := Core0.proj_log__ext (proj_log (REnv := ContextEnv) Impl.System.Lift_core0
+                                                                core0_feedback__global)
+          |} in
+      let core1_step_io :=
+          {| Core1.step_input := core1_input;
+             Core1.step_feedback := Core1.proj_log__ext (proj_log Impl.System.Lift_core1 core1_feedback__global)
+          |} in
+      let sm_step_io :=
+          {| SM.step_input := sm_input;
+             SM.step_feedback := sm_proj_log__ext (proj_log Impl.System.Lift_sm sm_feedback__global)
+          |} in
+      let mem_step_io :=
+          {| Memory.step_input := mem_input;
+             Memory.step_feedback := Memory.proj_log__ext (proj_log Impl.System.Lift_mem mem_feedback__global)
+          |} in
+      let mem_ghost_io :=
+          {| Memory.ghost_step := mem_step_io;
+             Memory.ghost_input_config0 := (ghost_output_config0 sm_ghost);
+             Memory.ghost_input_config1 := (ghost_output_config1 sm_ghost)
+          |} in
+      ({| state_core0 := fst (fst (Core0.do_step__spec (state_core0 st) core0_step_io));
+         state_core1 := fst (fst (Core1.do_step__spec (state_core1 st) core1_step_io));
+         state_sm := fst (fst (SM.do_step__spec (state_sm st) sm_step_io));
+         state_mem := fst (fst (Memory.do_step__spec (state_mem st) mem_ghost_io))
+       |}, outputs).
+
+
+    Definition step_n (initial_dram: dram_t) (n: nat) : state * trace :=
+      Framework.step_n (initial_state initial_dram) do_step n.
+
+  End ModSpec.
+
+  Module ImplToModImpl.
+    Definition trace_related : trace -> ModImpl.trace -> Prop. Admitted.
+
+    Theorem refinement :
+      forall (initial_dram: dram_t) (n: nat)
+        (impl_st: Impl.state) (impl_tr: trace)
+        (mod_st: ModImpl.state) (mod_tr: ModImpl.trace),
+      Impl.step_n initial_dram n = (impl_st, impl_tr) ->
+      ModImpl.step_n initial_dram n = (mod_st, mod_tr) ->
+      trace_related impl_tr mod_tr.
+    Proof.
+    Admitted.
+
+  End ImplToModImpl.
+
+  Module ModImplToModSpec.
+    Definition trace_related : ModImpl.trace -> ModSpec.trace -> Prop. Admitted.
+
+    Theorem refinement :
+      forall (initial_dram: dram_t) (n: nat)
+        (impl_st: ModImpl.state) (impl_tr: ModImpl.trace)
+        (spec_st: ModSpec.state) (spec_tr: ModSpec.trace),
+      ModImpl.step_n initial_dram n = (impl_st, impl_tr) ->
+      ModSpec.step_n initial_dram n = (spec_st, spec_tr) ->
+      trace_related impl_tr spec_tr.
+    Proof.
+    Admitted.
+
+  End ModImplToModSpec.
+
+  Module ModSpecToSpec.
+    Definition trace_related : ModSpec.trace -> trace -> Prop. Admitted.
+
+    Theorem refinement :
+      forall (initial_dram: dram_t) (n: nat)
+        (mod_st: ModSpec.state) (mod_tr: ModSpec.trace)
+        (spec_st: Spec.state) (spec_tr: trace),
+      ModSpec.step_n initial_dram n = (mod_st, mod_tr) ->
+      Spec.step_n initial_dram n = (spec_st, spec_tr) ->
+      trace_related mod_tr spec_tr.
+    Proof.
+    Admitted.
+
+  End ModSpecToSpec.
+
+  Section TopLevel.
+    Context (initial_dram: dram_t).
+
+    Theorem chain_trace_equivalence :
+      forall (impl_tr: trace) (impl_mod_tr: ModImpl.trace)
+        (spec_mod_tr: ModSpec.trace) (spec_tr: trace),
+      ImplToModImpl.trace_related impl_tr impl_mod_tr ->
+      ModImplToModSpec.trace_related impl_mod_tr spec_mod_tr ->
+      ModSpecToSpec.trace_related spec_mod_tr spec_tr ->
+      impl_tr = spec_tr.
+    Proof.
+    Admitted.
+
+    Theorem top_level_refinement:
+        forall (n: nat)
+          (impl_st: Impl.state) (impl_tr: trace)
+          (spec_st: Spec.state) (spec_tr: trace),
+        Impl.step_n initial_dram n = (impl_st, impl_tr) ->
+        Spec.step_n initial_dram n = (spec_st, spec_tr) ->
+        impl_tr = spec_tr.
+    Proof.
+      intros *; intros HStepImpl HStepSpec.
+      destruct (ModImpl.step_n initial_dram n) eqn:?.
+      destruct (ModSpec.step_n initial_dram n) eqn:?.
+      eapply chain_trace_equivalence.
+      - eapply ImplToModImpl.refinement; eauto.
+      - eapply ModImplToModSpec.refinement; eauto.
+      - eapply ModSpecToSpec.refinement; eauto.
+    Qed.
+
+  End TopLevel.
+
+
+  (* ============== DEPRECATED ================== *)
+
+
+  Section Modularspec.
+    Record mod_step_tau_t :=
+      { mod_core0_output : Log Core0.R ContextEnv
+      ; mod_core1_output : Log Core1.R ContextEnv
+      ; sm_output__spec
+      }.
+
+  End ModularSpec.
 
   Section Modular.
     Record mod_step :=
@@ -206,7 +507,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
       let '(output_log, ext_st') := Memory.update_function st mem_log in
       (lift_log (REnv' := ContextEnv) Impl.System.Lift_mem output_log, ext_st').
 
-    Definition get_mod_step (impl_st: Impl.state) : mod_step :=
+    Definition get_mod_step__impl (impl_st: Impl.state) : mod_step :=
       let koika_st := Impl.koika_state impl_st in
       let apres_core0_log := do_core0_step (get_impl_core0 koika_st) log_empty in
       let apres_core1_log := do_core1_step (get_impl_core1 koika_st) apres_core0_log in
@@ -218,13 +519,79 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
       let (apres_mem_log, ext_st') := do_mem_step (get_impl_mem impl_st) mem_input in
       let final := log_app apres_mem_log mem_input in
       {| apres_core0 := apres_core0_log;
-        apres_core1 := apres_core1_log;
-        apres_sm := (apres_sm_log, sm_ghost_output);
-        final_log := final;
-        final_ext_state := ext_st'
+         apres_core1 := apres_core1_log;
+         apres_sm := (apres_sm_log, sm_ghost_output);
+         final_log := final;
+         final_ext_state := ext_st'
       |}.
 
+    Definition do_mod_step__impl (impl_st: Impl.state) (step: mod_step) : Impl.state :=
+      {| Impl.koika_state := commit_update (Impl.koika_state impl_st) (final_log step);
+         Impl.external_state := final_ext_state step
+      |}.
+
+    Fixpoint get_mod_steps__impl (initial_dram: dram_t) (n: nat) : Impl.state * list mod_step :=
+      match n with
+      | 0 => (Impl.initial_state initial_dram, [])
+      | S n' =>
+          let '(st, steps) := get_mod_steps__impl initial_dram n' in
+          let mod_step := get_mod_step__impl st in
+          (do_mod_step__impl st mod_step, steps ++ [mod_step])
+      end.
+
+    Definition mod_spec_st : Type. Admitted.
+    Definition mod_spec_tr : Type. Admitted.
+
+    Definition do_mod_steps__spec (initial_dram: dram_t) (steps: list mod_step)
+                                : mod_spec_st * mod_spec_tr.
+    Admitted.
+
   End Modular.
+
+  (* TODO: this is just the standard layers. Can write as a framework later *)
+  Section ImplToModularImpl.
+
+    Definition impl_to_mod_impl_trace_equivalent : trace -> list mod_step -> Prop.
+    Admitted.
+
+    Lemma impl_to_mod_impl_refinement :
+      forall (initial_dram: dram_t) (n: nat)
+        (impl_st: Impl.state) (impl_tr: trace)
+        (mod_st: Impl.state) (mod_steps: list mod_step),
+        Impl.step_n initial_dram n = (impl_st, impl_tr) ->
+        get_mod_steps__impl initial_dram n = (mod_st, mod_steps) ->
+        impl_to_mod_impl_trace_equivalent impl_tr mod_steps.
+    Admitted.
+
+  End ImplToModularImpl.
+
+  Section ModularImplToModularSpec.
+    Definition mod_impl_to_mod_spec_trace_equivalent : list mod_step -> mod_spec_tr -> Prop.
+    Admitted.
+
+
+    Lemma mod_impl_to_mod_spec_refinement :
+      forall (initial_dram: dram_t) (n: nat)
+        (impl_st: Impl.state) (mod_steps: list mod_step)
+        (spec_st: mod_spec_st) (spec_tr: mod_spec_tr),
+        get_mod_steps__impl initial_dram n = (impl_st, mod_steps) ->
+        do_mod_steps__spec initial_dram mod_steps = (spec_st, spec_tr) ->
+        mod_impl_to_mod_spec_trace_equivalent mod_steps spec_tr.
+    Proof.
+    Admitted.
+
+  End ModularImplToModularSpec.
+
+  Section ModularSpecToSpec.
+    Lemma mod_spec_to_spec_refinement :
+      forall (initial_dram: dram_t) (n: nat)
+        (mod_st: mod_spec_st) (mod_tr: mod_spec_tr)
+        (spec_st: Spec.state) (spec_tr: trace),
+        ?get_mod_steps__impl initial_dram n = (impl_st, mod_steps) ->
+        Spec.step_n initial_dram n = (spec_st, spec_tr) ->
+
+
+  End ModularSpecToSpec.
 
   Section Initialised.
     Context (initial_dram : dram_t).
@@ -243,7 +610,6 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
         impl_tr = spec_tr.
     Proof.
     Admitted.
-
 
 
     Theorem refinement: forall (n: nat)
