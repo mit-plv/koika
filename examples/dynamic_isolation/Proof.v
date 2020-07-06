@@ -190,37 +190,91 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
     Definition initial_state (initial_dram: dram_t) : state :=
       {| state_core0 := ContextEnv.(create) Core0.r;
          state_core1 := ContextEnv.(create) Core1.r;
-         state_sm := ContextEnv.(create) Impl.System.SM.r;
+         state_sm := ContextEnv.(create) SM.r;
          state_mem := (ContextEnv.(create) Memory.r, Memory.initial_external_state initial_dram)
       |}.
+
+    (* TODO: stop duplicating *)
+    Section ModularStep.
+
+      Definition do_core0 (st: Core0.state) (input_log: Log Impl.System.R ContextEnv)
+                          : Log Core0.R_external ContextEnv * Log Core0.R ContextEnv *
+                            Log Impl.System.R ContextEnv * Log Impl.System.R ContextEnv *
+                            (Log Impl.System.R ContextEnv -> Core0.step_io) :=
+        let core0_input := Core0.proj_log__ext (proj_log Impl.System.Lift_core0 input_log) in
+        let '(core0_output__local, _) := Core0.do_step_input__koika st core0_input in
+        let core0_output__global := lift_log (REnv' := ContextEnv) Impl.System.Lift_core0 core0_output__local in
+        let acc := log_app core0_output__global input_log in
+        let mk_core0_step_io feedback_log :=
+            {| Core0.step_input := core0_input;
+               Core0.step_feedback := Core0.proj_log__ext (proj_log Impl.System.Lift_core0 feedback_log)
+            |} in
+        (core0_input, core0_output__local, core0_output__global, acc, mk_core0_step_io).
+
+      Definition do_core1 (st: Core1.state) (input_log: Log Impl.System.R ContextEnv)
+                          : Log Core1.R_external ContextEnv * Log Core1.R ContextEnv *
+                            Log Impl.System.R ContextEnv * Log Impl.System.R ContextEnv *
+                            (Log Impl.System.R ContextEnv -> Core1.step_io) :=
+        let core1_input := Core1.proj_log__ext (proj_log Impl.System.Lift_core1 input_log) in
+        let '(core1_output__local, _) := Core1.do_step_input__koika st core1_input in
+        let core1_output__global := lift_log (REnv' := ContextEnv) Impl.System.Lift_core1 core1_output__local in
+        let acc := log_app core1_output__global input_log in
+        let mk_core1_step_io feedback_log :=
+            {| Core1.step_input := core1_input;
+               Core1.step_feedback := Core1.proj_log__ext (proj_log Impl.System.Lift_core1 feedback_log)
+            |} in
+        (core1_input, core1_output__local, core1_output__global, acc, mk_core1_step_io).
+
+      Definition do_sm (st: SM.state) (input_log: Log Impl.System.R ContextEnv)
+                             : Log SM_Common.R_external ContextEnv * Log SM_Common.R ContextEnv *
+                               sm_ghost_output_t * Log Impl.System.R ContextEnv * Log Impl.System.R ContextEnv *
+                               (Log Impl.System.R ContextEnv -> SM.step_io) :=
+        let sm_input := SM.proj_log__ext (proj_log Impl.System.Lift_sm input_log) in
+        let '((sm_output__local, sm_ghost), _) := SM.do_step_input__impl st sm_input in
+        let sm_output__global := lift_log (REnv' := ContextEnv) Impl.System.Lift_sm sm_output__local in
+        let acc := log_app sm_output__global input_log in
+        let mk_sm_step_io feedback_log :=
+            {| SM.step_input := sm_input;
+               SM.step_feedback := SM.proj_log__ext (proj_log Impl.System.Lift_sm feedback_log)
+            |} in
+        (sm_input, sm_output__local, TODO_ghost_state_conversion sm_ghost, sm_output__global, acc, mk_sm_step_io).
+
+      Definition do_mem (st: Memory.state) (input_log: Log Impl.System.R ContextEnv)
+                        : Log Memory.R_external ContextEnv * Log Memory.R ContextEnv *
+                          Memory.external_state_t * Log Impl.System.R ContextEnv * Log Impl.System.R ContextEnv *
+                          (Log Impl.System.R ContextEnv -> Memory.step_io) :=
+        let mem_input := Memory.proj_log__ext (proj_log (REnv := ContextEnv) Impl.System.Lift_mem input_log) in
+        let '(mem_output__local, ext_st) := Memory.do_step_input__impl st mem_input in
+        let mem_output__global := lift_log (REnv := ContextEnv) Impl.System.Lift_mem mem_output__local in
+        let acc_mem := log_app mem_output__global input_log in
+        let mk_mem_step_io feedback_log :=
+            {| Memory.step_input := mem_input;
+               Memory.step_feedback := Memory.proj_log__ext (proj_log Impl.System.Lift_mem feedback_log)
+            |} in
+        (mem_input, mem_output__local, ext_st, mem_output__global, acc_mem, mk_mem_step_io).
+
+    End ModularStep.
 
     (* TODO: Monad! *)
     (* TODO: fix Interfaces' do_step_input function *)
     (* TODO: Modularize *)
     Definition do_step (st: state) : state * tau :=
       (* Core0 *)
-      let '(core0_output__local, _) := Core0.do_step_input__koika (state_core0 st) log_empty in
-      let core0_output__global := lift_log (REnv' := ContextEnv) Impl.System.Lift_core0 core0_output__local in
-      let acc__core0 := core0_output__global in
+      let '(core0_input, core0_output__local, core0_output__global, acc__core0, mk_core0_step_io) :=
+          do_core0 (state_core0 st) log_empty in
       (* Core1 *)
-      let core1_input := Core1.proj_log__ext (proj_log (REnv := ContextEnv) Impl.System.Lift_core1 acc__core0) in
-      let '(core1_output__local, _) := Core1.do_step_input__koika (state_core1 st) core1_input in
-      let core1_output__global := lift_log (REnv := ContextEnv) Impl.System.Lift_core1 core1_output__local in
-      let acc__core1 := log_app core1_output__global acc__core0 in
+      let '(core1_input, core1_output__local, core1_output__global, acc__core1, mk_core1_step_io) :=
+          do_core1 (state_core1 st) acc__core0 in
       (* SM *)
-      let sm_input := SM.proj_log__ext (proj_log (REnv := ContextEnv) Impl.System.Lift_sm acc__core1) in
-      let '((sm_output__local, sm_ghost), _) := SM.do_step_input__impl (state_sm st) sm_input in
-      let sm_output__global := lift_log (REnv := ContextEnv) Impl.System.Lift_sm sm_output__local in
-      let acc_sm := log_app sm_output__global acc__core1 in
+      let '(sm_input, sm_output__local, sm_ghost, sm_output__global, acc_sm, mk_sm_step_io) :=
+          do_sm (state_sm st) acc__core1 in
       (* Mem *)
-      let mem_input := Memory.proj_log__ext (proj_log (REnv := ContextEnv) Impl.System.Lift_mem acc_sm) in
-      let '(mem_output__local, ext_st) := Memory.do_step_input__impl (state_mem st) mem_input in
-      let mem_output__global := lift_log (REnv := ContextEnv) Impl.System.Lift_mem mem_output__local in
-      let acc_mem := log_app mem_output__global acc_sm in
+      let '(mem_input, mem_output__local, ext_st, mem_output__global, acc_mem, mk_mem_step_io) :=
+          do_mem (state_mem st) acc_sm in
       let outputs :=
         {| output_core0 := core0_output__local;
            output_core1 := core1_output__local;
-           output_sm := (sm_output__local, TODO_ghost_state_conversion sm_ghost);
+           output_sm := (sm_output__local, sm_ghost);
            output_mem := (mem_output__local, ext_st)
         |} in
       (* Do feedback: reverse *)
@@ -229,26 +283,13 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
       let core1_feedback__global := log_app sm_output__global sm_feedback__global in
       let core0_feedback__global := log_app core1_output__global core1_feedback__global in
 
-      let core0_step_io :=
-          {| Core0.step_input := log_empty;
-             Core0.step_feedback := Core0.proj_log__ext (proj_log (REnv := ContextEnv) Impl.System.Lift_core0
-                                                                core0_feedback__global)
-          |} in
-      let core1_step_io :=
-          {| Core1.step_input := core1_input;
-             Core1.step_feedback := Core1.proj_log__ext (proj_log Impl.System.Lift_core1 core1_feedback__global)
-          |} in
-      let sm_step_io :=
-          {| Impl.System.SM.step_input := sm_input;
-             Impl.System.SM.step_feedback := SM.proj_log__ext (proj_log Impl.System.Lift_sm sm_feedback__global)
-          |} in
-      let mem_step_io :=
-          {| Memory.step_input := mem_input;
-             Memory.step_feedback := Memory.proj_log__ext (proj_log Impl.System.Lift_mem mem_feedback__global)
-          |} in
+      let core0_step_io := mk_core0_step_io core0_feedback__global in
+      let core1_step_io := mk_core1_step_io core1_feedback__global in
+      let sm_step_io := mk_sm_step_io sm_feedback__global in
+      let mem_step_io := mk_mem_step_io mem_feedback__global in
       ({| state_core0 := fst (Core0.do_step__koika (state_core0 st) core0_step_io);
          state_core1 := fst (Core1.do_step__koika (state_core1 st) core1_step_io);
-         state_sm := fst (Impl.System.SM.do_step__impl (state_sm st) sm_step_io);
+         state_sm := fst (SM.do_step__impl (state_sm st) sm_step_io);
          state_mem := fst (Memory.do_step__impl (state_mem st) mem_step_io)
        |}, outputs).
 
