@@ -179,8 +179,6 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
     Definition trace := list tau.
 
     Section TODO_MOVE.
-      Definition sm_proj_log__ext (log: Log SM_Common.R ContextEnv) : Log SM_Common.R_external ContextEnv :=
-        ContextEnv.(create) (fun reg => ContextEnv.(getenv) log (SM_Common.external reg)).
 
       Definition TODO_ghost_state_conversion (st: SM.ghost_output) : sm_ghost_output_t :=
         {| ghost_output_config0 := SM.ghost_output_config0 st;
@@ -210,7 +208,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
       let core1_output__global := lift_log (REnv := ContextEnv) Impl.System.Lift_core1 core1_output__local in
       let acc__core1 := log_app core1_output__global acc__core0 in
       (* SM *)
-      let sm_input := sm_proj_log__ext (proj_log (REnv := ContextEnv) Impl.System.Lift_sm acc__core1) in
+      let sm_input := SM.proj_log__ext (proj_log (REnv := ContextEnv) Impl.System.Lift_sm acc__core1) in
       let '((sm_output__local, sm_ghost), _) := SM.do_step_input__impl (state_sm st) sm_input in
       let sm_output__global := lift_log (REnv := ContextEnv) Impl.System.Lift_sm sm_output__local in
       let acc_sm := log_app sm_output__global acc__core1 in
@@ -242,7 +240,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
           |} in
       let sm_step_io :=
           {| Impl.System.SM.step_input := sm_input;
-             Impl.System.SM.step_feedback := sm_proj_log__ext (proj_log Impl.System.Lift_sm sm_feedback__global)
+             Impl.System.SM.step_feedback := SM.proj_log__ext (proj_log Impl.System.Lift_sm sm_feedback__global)
           |} in
       let mem_step_io :=
           {| Memory.step_input := mem_input;
@@ -285,8 +283,6 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
       |}.
 
     Section TODO_MOVE.
-      Definition sm_proj_log__ext (log: Log SM_Common.R ContextEnv) : Log SM_Common.R_external ContextEnv :=
-        ContextEnv.(create) (fun reg => ContextEnv.(getenv) log (SM_Common.external reg)).
 
       Definition TODO_ghost_state_conversion (st: SM.ghost_output) : sm_ghost_output_t :=
         {| ghost_output_config0 := SM.ghost_output_config0 st;
@@ -313,7 +309,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
       let core1_output__global := lift_log (REnv := ContextEnv) Impl.System.Lift_core1 core1_output__local in
       let acc__core1 := log_app core1_output__global acc__core0 in
       (* SM *)
-      let sm_input := sm_proj_log__ext (proj_log (REnv := ContextEnv) Impl.System.Lift_sm acc__core1) in
+      let sm_input := SM.proj_log__ext (proj_log (REnv := ContextEnv) Impl.System.Lift_sm acc__core1) in
       let sm_output__raw := SM.do_step_input__spec (state_sm st) sm_input in
       let '(sm_output__local, sm_ghost) := combine_spec_output sm_output__raw in
       let sm_output__global := lift_log (REnv := ContextEnv) Impl.System.Lift_sm sm_output__local in
@@ -347,7 +343,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
           |} in
       let sm_step_io :=
           {| SM.step_input := sm_input;
-             SM.step_feedback := sm_proj_log__ext (proj_log Impl.System.Lift_sm sm_feedback__global)
+             SM.step_feedback := SM.proj_log__ext (proj_log Impl.System.Lift_sm sm_feedback__global)
           |} in
       let mem_step_io :=
           {| Memory.step_input := mem_input;
@@ -370,8 +366,144 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
 
   End ModSpec.
 
+  Module Observations.
+    Import Interfaces.Common.
+
+    (* TODO: write this in a nicer way *)
+    Definition observe_imem_req0 (log: Log Core0.R ContextEnv) : option (struct_t mem_req) :=
+      observe_enq0 (Core0.external (Core0.toIMem MemReq.valid0)) eq_refl
+                   (Core0.external (Core0.toIMem MemReq.data0)) eq_refl log.
+    Definition observe_dmem_req0 (log: Log Core0.R ContextEnv) : option (struct_t mem_req) :=
+      observe_enq0 (Core0.external (Core0.toDMem MemReq.valid0)) eq_refl
+                   (Core0.external (Core0.toDMem MemReq.data0)) eq_refl log.
+    Definition observe_imem_req1 (log: Log Core1.R ContextEnv) : option (struct_t mem_req) :=
+      observe_enq0 (Core1.external (Core1.toIMem MemReq.valid0)) eq_refl
+                   (Core1.external (Core1.toIMem MemReq.data0)) eq_refl log.
+    Definition observe_dmem_req1 (log: Log Core1.R ContextEnv) : option (struct_t mem_req) :=
+      observe_enq0 (Core1.external (Core1.toDMem MemReq.valid0)) eq_refl
+                   (Core1.external (Core1.toDMem MemReq.data0)) eq_refl log.
+    Definition observe_imem_resp0 (log: Log SM_Common.R ContextEnv) : option (struct_t mem_resp) :=
+      observe_enq1 (SM_Common.external (SM_Common.toCore0_IMem MemResp.valid0)) eq_refl
+                   (SM_Common.external (SM_Common.toCore0_IMem MemResp.data0)) eq_refl log.
+    Definition observe_dmem_resp0 (log: Log SM_Common.R ContextEnv) : option (struct_t mem_resp) :=
+      observe_enq1 (SM_Common.external (SM_Common.toCore0_DMem MemResp.valid0)) eq_refl
+                   (SM_Common.external (SM_Common.toCore0_DMem MemResp.data0)) eq_refl log.
+    Definition observe_imem_resp1 (log: Log SM_Common.R ContextEnv) : option (struct_t mem_resp) :=
+      observe_enq1 (SM_Common.external (SM_Common.toCore1_IMem MemResp.valid0)) eq_refl
+                   (SM_Common.external (SM_Common.toCore1_IMem MemResp.data0)) eq_refl log.
+    Definition observe_dmem_resp1 (log: Log SM_Common.R ContextEnv) : option (struct_t mem_resp) :=
+      observe_enq1 (SM_Common.external (SM_Common.toCore1_DMem MemResp.valid0)) eq_refl
+                   (SM_Common.external (SM_Common.toCore1_DMem MemResp.data0)) eq_refl log.
+    Definition observe_enclave_req0 (log: Log Core0.R ContextEnv) : option (struct_t enclave_req) :=
+      observe_enq0 (Core0.external (Core0.toSMEnc EnclaveReq.valid0)) eq_refl
+                   (Core0.external (Core0.toSMEnc EnclaveReq.data0)) eq_refl
+                   log.
+    Definition observe_enclave_req1 (log: Log Core1.R ContextEnv) : option (struct_t enclave_req) :=
+      observe_enq0 (Core1.external (Core1.toSMEnc EnclaveReq.valid0)) eq_refl
+                   (Core1.external (Core1.toSMEnc EnclaveReq.data0)) eq_refl
+                   log.
+    Definition observe_enclave_enter0 (log: Log SM_Common.R ContextEnv) : bool :=
+      match latest_write log (SM_Common.external SM_Common.purge_core0) with
+      | Some v => bits_eqb v ENUM_purge_restart
+      | None => false
+      end.
+    Definition observe_enclave_enter1 (log: Log SM_Common.R ContextEnv) : bool :=
+      match latest_write log (SM_Common.external SM_Common.purge_core1) with
+      | Some v => bits_eqb v ENUM_purge_restart
+      | None => false
+      end.
+    Definition observe_enclave_exit0 (log: Log SM_Common.R ContextEnv) : bool :=
+      match latest_write log (SM_Common.internal SM_Common.enc_data0) with
+      | Some v =>
+          let data := EnclaveInterface.extract_enclave_data v in
+          bits_eqb (EnclaveInterface.enclave_data_valid data) Ob~0
+      | None => false
+      end.
+    Definition observe_enclave_exit1 (log: Log SM_Common.R ContextEnv) : bool :=
+      match latest_write log (SM_Common.internal SM_Common.enc_data0) with
+      | Some v =>
+          let data := EnclaveInterface.extract_enclave_data v in
+          bits_eqb (EnclaveInterface.enclave_data_valid data) Ob~0
+      | None => false
+      end.
+
+    Definition generate_observations__modImpl (ev: ModImpl.tau) : tau :=
+      fun core_id =>
+        let sm_output := fst (ModImpl.output_sm ev) in
+        let core0_output := ModImpl.output_core0 ev in
+        let core1_output := ModImpl.output_core1 ev in
+        match core_id with
+        | CoreId0 =>
+            {| obs_reqs := {| obs_imem_req := observe_imem_req0 (core0_output);
+                              obs_dmem_req := observe_dmem_req0 (core0_output)
+                           |};
+               obs_resps := {| obs_imem_resp := observe_imem_resp0 (sm_output);
+                               obs_dmem_resp := observe_dmem_resp0 (sm_output)
+                            |};
+               obs_encs := {| obs_enclave_req := observe_enclave_req0 (core0_output);
+                              obs_enclave_enter := observe_enclave_enter0 (sm_output);
+                              obs_enclave_exit := observe_enclave_exit0 (sm_output)
+                           |}
+            |}
+        | CoreId1 =>
+            {| obs_reqs := {| obs_imem_req := observe_imem_req1 (core1_output);
+                              obs_dmem_req := observe_dmem_req1 (core1_output)
+                           |};
+               obs_resps := {| obs_imem_resp := observe_imem_resp1 (sm_output);
+                               obs_dmem_resp := observe_dmem_resp1 (sm_output)
+                            |};
+               obs_encs := {| obs_enclave_req := observe_enclave_req1 (core1_output);
+                              obs_enclave_enter := observe_enclave_enter1 (sm_output);
+                              obs_enclave_exit := observe_enclave_exit1 (sm_output)
+                           |}
+           |}
+        end.
+
+    Definition generate_observations__modSpec (ev: ModSpec.tau) : tau :=
+      fun core_id =>
+        let sm0_output := fst (fst (ModSpec.output_sm ev)) in
+        let sm1_output := fst (snd (ModSpec.output_sm ev)) in
+        let core0_output := ModSpec.output_core0 ev in
+        let core1_output := ModSpec.output_core1 ev in
+        match core_id with
+        | CoreId0 =>
+            {| obs_reqs := {| obs_imem_req := observe_imem_req0 (core0_output);
+                              obs_dmem_req := observe_dmem_req0 (core0_output)
+                           |};
+               obs_resps := {| obs_imem_resp := observe_imem_resp0 (sm0_output);
+                               obs_dmem_resp := observe_dmem_resp0 (sm0_output)
+                            |};
+               obs_encs := {| obs_enclave_req := observe_enclave_req0 (core0_output);
+                              obs_enclave_enter := observe_enclave_enter0 (sm0_output);
+                              obs_enclave_exit := observe_enclave_exit0 (sm0_output)
+                           |}
+            |}
+        | CoreId1 =>
+            {| obs_reqs := {| obs_imem_req := observe_imem_req1 (core1_output);
+                              obs_dmem_req := observe_dmem_req1 (core1_output)
+                           |};
+               obs_resps := {| obs_imem_resp := observe_imem_resp1 (sm1_output);
+                               obs_dmem_resp := observe_dmem_resp1 (sm1_output)
+                            |};
+               obs_encs := {| obs_enclave_req := observe_enclave_req1 (core1_output);
+                              obs_enclave_enter := observe_enclave_enter1 (sm1_output);
+                              obs_enclave_exit := observe_enclave_exit1 (sm1_output)
+                           |}
+           |}
+        end.
+
+  End Observations.
+
   Module ImplToModImpl.
-    Definition trace_related : trace -> ModImpl.trace -> Prop. Admitted.
+    Import Observations.
+    Import Interfaces.Common.
+
+    Definition tau_related : tau -> ModImpl.tau -> Prop :=
+      fun impl_ev mod_ev =>
+        impl_ev = generate_observations__modImpl mod_ev.
+
+    Definition trace_related : trace -> ModImpl.trace -> Prop :=
+      fun impl_tr mod_tr => List.Forall2 tau_related impl_tr mod_tr.
 
     Theorem refinement :
       forall (initial_dram: dram_t) (n: nat)
@@ -386,7 +518,13 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
   End ImplToModImpl.
 
   Module ModImplToModSpec.
-    Definition trace_related : ModImpl.trace -> ModSpec.trace -> Prop. Admitted.
+    Import Observations.
+    Definition tau_related : ModImpl.tau -> ModSpec.tau -> Prop :=
+      fun impl_ev spec_ev =>
+      generate_observations__modImpl impl_ev = generate_observations__modSpec spec_ev.
+
+    Definition trace_related : ModImpl.trace -> ModSpec.trace -> Prop :=
+      fun impl_tr spec_tr => List.Forall2 tau_related impl_tr spec_tr.
 
     Theorem refinement :
       forall (initial_dram: dram_t) (n: nat)
@@ -401,7 +539,15 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
   End ModImplToModSpec.
 
   Module ModSpecToSpec.
-    Definition trace_related : ModSpec.trace -> trace -> Prop. Admitted.
+    Import Observations.
+    Import Interfaces.Common.
+
+    Definition tau_related :  ModSpec.tau -> tau -> Prop :=
+      fun mod_ev spec_ev =>
+      generate_observations__modSpec mod_ev = spec_ev.
+
+    Definition trace_related : ModSpec.trace -> trace -> Prop :=
+      fun mod_tr spec_tr => List.Forall2 tau_related mod_tr spec_tr.
 
     Theorem refinement :
       forall (initial_dram: dram_t) (n: nat)
@@ -418,6 +564,47 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
   Section TopLevel.
     Context (initial_dram: dram_t).
 
+    Ltac simplify_forall :=
+      match goal with
+      | H: Forall2 _ [] (_ :: _) |- _ => solve[inversion H]
+      | H: Forall2 _ (_ :: _) [] |- _ => solve[inversion H]
+      | H: Forall2 _ [] [] |- _ => solve[constructor]
+      end.
+
+    Section TODO_MOVE.
+      Lemma Forall2_eq : forall {A} (xs ys: list A),
+        List.Forall2 (@eq A) xs ys ->
+        xs = ys.
+      Proof.
+        induction xs; intros.
+        - destruct ys; intuition; simplify_forall.
+        - destruct ys; simpl in *; try simplify_forall.
+          f_equal.
+          + inversion H; auto.
+          + apply IHxs; inversion H; auto.
+      Qed.
+
+      Lemma Forall2_compose : forall {X Y Z} {P: X -> Y -> Prop} {Q: Y -> Z -> Prop} {R: X -> Z -> Prop}
+                                {xs: list X} {ys: list Y} {zs: list Z},
+        List.Forall2 P xs ys ->
+        List.Forall2 Q ys zs ->
+        (forall x y z, P x y /\ Q y z -> R x z) ->
+        List.Forall2 R xs zs.
+      Proof.
+        induction xs.
+        - induction ys; induction zs; intuition; simplify_forall.
+        - induction ys; intuition; try simplify_forall.
+          generalize dependent zs.
+          induction zs; intuition; try simplify_forall.
+          inversion_clear H; subst.
+          inversion_clear H0; subst.
+          constructor.
+          + eapply H1; eauto.
+          + eapply IHxs; eauto.
+      Qed.
+
+    End TODO_MOVE.
+
     Theorem chain_trace_equivalence :
       forall (impl_tr: trace) (impl_mod_tr: ModImpl.trace)
         (spec_mod_tr: ModSpec.trace) (spec_tr: trace),
@@ -426,7 +613,17 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
       ModSpecToSpec.trace_related spec_mod_tr spec_tr ->
       impl_tr = spec_tr.
     Proof.
-    Admitted.
+      intros.
+      apply Forall2_eq.
+      eapply Forall2_compose with (1 := H).
+      - apply Forall2_compose with (1 := H0) (2 := H1).
+        unfold ModImplToModSpec.tau_related.
+        unfold ModSpecToSpec.tau_related.
+        Unshelve.
+        2 : exact (fun x z => Observations.generate_observations__modImpl x = z).
+        intuition.
+      - intuition.
+    Qed.
 
     Theorem top_level_refinement:
         forall (n: nat)

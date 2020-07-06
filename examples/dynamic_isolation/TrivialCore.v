@@ -166,7 +166,7 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
     Definition valid_input_log__common (input_log: Log R_external ContextEnv) : Prop :=
       input_log = log_empty.
 
-    Definition valid_output_log__common (output_log: Log R_external ContextEnv) : Prop :=
+    Definition valid_output_log__common (output_log: Log R ContextEnv) : Prop :=
       True.
     
     Definition valid_feedback_log__common (log: Log R_external ContextEnv) : Prop :=
@@ -215,10 +215,9 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
     
     (* TODO: should really be inductive probably or option type? But too much effort to specify everything. *)
     Definition do_step_trans__spec (spec_st: spec_state_t) (step: step_io)
-                           : spec_state_t * Log R_external ContextEnv :=
+                           : spec_state_t * Log R ContextEnv :=
       let '(st, phase) := spec_st in
       let '(st', output) := do_step__koika st step in
-      let ext_output := proj_log__ext output in 
       let final_st :=
         match phase with
         | SpecSt_Running =>
@@ -240,7 +239,7 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
            | _, _ => continue
            end
         end in
-      (final_st, ext_output).
+      (final_st, output).
 
     (* Behaves nicely with enq/deqs *)
     Definition valid_interface_log (st: state) (init_log: Log R_external ContextEnv) 
@@ -253,11 +252,11 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
       let '(st, phase) := spec_st in
       let '(st', log) := do_step_trans__spec spec_st step in
       valid_output_log__common log /\
-      valid_interface_log st log_empty log  /\
+      valid_interface_log st log_empty (proj_log__ext log) /\
         (match phase with
         | SpecSt_Running => True
         | SpecSt_Waiting _ =>
-            no_writes log
+            no_writes (proj_log__ext log)
         end).
 
     Definition reset_external_state (st: state) : Prop :=
@@ -274,7 +273,7 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
       let feedback := step.(step_feedback) in
 
       valid_feedback_log__common step.(step_feedback) /\
-      valid_interface_log st (log_app output step.(step_input)) feedback /\
+      valid_interface_log st (log_app (proj_log__ext output) step.(step_input)) feedback /\
       match phase with
       | SpecSt_Running =>
           only_write_ext_purge feedback ENUM_purge_purging
@@ -287,7 +286,7 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
       end.
 
     Definition do_step__spec (spec_st: spec_state_t) (step: step_io)
-                           : spec_state_t * Log R_external ContextEnv * props_t :=
+                           : spec_state_t * Log R ContextEnv * props_t :=
       let '(st', log) := do_step_trans__spec spec_st step in
       let props' := {| P_input := valid_input_log__common step.(step_input);
                        P_output := valid_step_output__spec spec_st step;
@@ -296,7 +295,7 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
       (st', log, props').
 
     Definition do_steps__spec (steps: list step_io) 
-                            : spec_state_t * list (Log R_external ContextEnv) * list props_t :=
+                            : spec_state_t * list (Log R ContextEnv) * list props_t :=
       fold_left (fun '(st, evs, props) step => 
                    let '(st', ev, prop) := do_step__spec st step in
                    (st', evs ++ [ev], props ++ [prop]))
@@ -311,20 +310,20 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
     Definition ext_log_equivalent (log0 log1: Log R_external ContextEnv) : Prop.
     Admitted.
 
-    Definition log_equivalent (koika_log: Log R ContextEnv) (spec_log: Log R_external ContextEnv) : Prop :=
+    Definition log_equivalent (koika_log: Log R ContextEnv) (spec_log: Log R ContextEnv) : Prop :=
       forall (reg: external_reg_t), 
-        latest_write koika_log (external reg) = latest_write spec_log reg /\
-        (forall port, may_read koika_log port (external reg) = may_read spec_log port reg) /\
+        latest_write koika_log (external reg) = latest_write spec_log (external reg) /\
+        (forall port, may_read koika_log port (external reg) = may_read spec_log port (external reg)) /\
         (forall port, may_write koika_log log_empty port (external reg) =
-                 may_write spec_log log_empty port reg).
+                 may_write spec_log log_empty port (external reg)).
 
     Definition trace_equivalent (koika_tr: list (Log R ContextEnv)) 
-                                (spec_tr: list (Log R_external ContextEnv)) : Prop :=
+                                (spec_tr: list (Log R ContextEnv)) : Prop :=
       Forall2 log_equivalent koika_tr spec_tr.
 
     Axiom output_correctness:
       forall (steps: list step_io)
-        (spec_st: spec_state_t) (spec_tr: list (Log R_external ContextEnv)) (props: list props_t)
+        (spec_st: spec_state_t) (spec_tr: list (Log R ContextEnv)) (props: list props_t)
         (koika_st: state) (koika_tr: list (Log R ContextEnv))
         (input: input_t) (output0 output1: output_t),
         valid_inputs props ->
@@ -337,7 +336,7 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
 
     Axiom correctness :
       forall (steps: list step_io) 
-        (spec_st: spec_state_t) (spec_tr: list (Log R_external ContextEnv)) (props: list props_t)
+        (spec_st: spec_state_t) (spec_tr: list (Log R ContextEnv)) (props: list props_t)
         (koika_st: state) (koika_tr: list (Log R ContextEnv)),
       valid_inputs props ->
       valid_feedback props ->
@@ -350,7 +349,7 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
   Section Compliance.
     Axiom compliance:
       forall (steps: list step_io) 
-        (spec_st: spec_state_t) (spec_tr: list (Log R_external ContextEnv)) (props: list props_t)
+        (spec_st: spec_state_t) (spec_tr: list (Log R ContextEnv)) (props: list props_t)
         (koika_st: state) (koika_tr: list (Log R ContextEnv)),
       valid_inputs props ->
       valid_feedback props ->

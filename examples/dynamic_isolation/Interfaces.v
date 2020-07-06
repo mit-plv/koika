@@ -99,6 +99,7 @@ Module Common.
 
   Scheme Equality for ind_core_id.
 
+  (* TODO: rename to ind_cache_t *)
   Inductive ind_cache_type :=
   | CacheType_Imem
   | CacheType_Dmem
@@ -315,7 +316,7 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
     Definition valid_input_log__common (input_log: Log R_external ContextEnv) : Prop :=
       input_log = log_empty.
 
-    Definition valid_output_log__common (output_log: Log R_external ContextEnv) : Prop :=
+    Definition valid_output_log__common (output_log: Log R ContextEnv) : Prop :=
       True.
     
     Definition valid_feedback_log__common (log: Log R_external ContextEnv) : Prop :=
@@ -364,10 +365,9 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
     
     (* TODO: should really be inductive probably or option type? But too much effort to specify everything. *)
     Definition do_step_trans__spec (spec_st: spec_state_t) (step: step_io)
-                           : spec_state_t * Log R_external ContextEnv :=
+                           : spec_state_t * Log R ContextEnv :=
       let '(st, phase) := spec_st in
       let '(st', output) := do_step__koika st step in
-      let ext_output := proj_log__ext output in 
       let final_st :=
         match phase with
         | SpecSt_Running =>
@@ -389,7 +389,7 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
            | _, _ => continue
            end
         end in
-      (final_st, ext_output).
+      (final_st, output).
 
     (* Behaves nicely with enq/deqs *)
     Definition valid_interface_log (st: state) (init_log: Log R_external ContextEnv) 
@@ -402,11 +402,11 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
       let '(st, phase) := spec_st in
       let '(st', log) := do_step_trans__spec spec_st step in
       valid_output_log__common log /\
-      valid_interface_log st log_empty log  /\
+      valid_interface_log st log_empty (proj_log__ext log) /\
         (match phase with
         | SpecSt_Running => True
         | SpecSt_Waiting _ =>
-            no_writes log
+            no_writes (proj_log__ext log)
         end).
 
     Definition reset_external_state (st: state) : Prop :=
@@ -423,7 +423,7 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
       let feedback := step.(step_feedback) in
 
       valid_feedback_log__common step.(step_feedback) /\
-      valid_interface_log st (log_app output step.(step_input)) feedback /\
+      valid_interface_log st (log_app (proj_log__ext output) step.(step_input)) feedback /\
       match phase with
       | SpecSt_Running =>
           only_write_ext_purge feedback ENUM_purge_purging
@@ -436,7 +436,7 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
       end.
 
     Definition do_step__spec (spec_st: spec_state_t) (step: step_io)
-                           : spec_state_t * Log R_external ContextEnv * props_t :=
+                           : spec_state_t * Log R ContextEnv * props_t :=
       let '(st', log) := do_step_trans__spec spec_st step in
       let props' := {| P_input := valid_input_log__common step.(step_input);
                        P_output := valid_step_output__spec spec_st step;
@@ -445,7 +445,7 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
       (st', log, props').
 
     Definition do_steps__spec (steps: list step_io) 
-                            : spec_state_t * list (Log R_external ContextEnv) * list props_t :=
+                            : spec_state_t * list (Log R ContextEnv) * list props_t :=
       fold_left (fun '(st, evs, props) step => 
                    let '(st', ev, prop) := do_step__spec st step in
                    (st', evs ++ [ev], props ++ [prop]))
@@ -460,20 +460,20 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
     Definition ext_log_equivalent (log0 log1: Log R_external ContextEnv) : Prop.
     Admitted.
 
-    Definition log_equivalent (koika_log: Log R ContextEnv) (spec_log: Log R_external ContextEnv) : Prop :=
+    Definition log_equivalent (koika_log: Log R ContextEnv) (spec_log: Log R ContextEnv) : Prop :=
       forall (reg: external_reg_t), 
-        latest_write koika_log (external reg) = latest_write spec_log reg /\
-        (forall port, may_read koika_log port (external reg) = may_read spec_log port reg) /\
+        latest_write koika_log (external reg) = latest_write spec_log (external reg) /\
+        (forall port, may_read koika_log port (external reg) = may_read spec_log port (external reg)) /\
         (forall port, may_write koika_log log_empty port (external reg) =
-                 may_write spec_log log_empty port reg).
+                 may_write spec_log log_empty port (external reg)).
 
     Definition trace_equivalent (koika_tr: list (Log R ContextEnv)) 
-                                (spec_tr: list (Log R_external ContextEnv)) : Prop :=
+                                (spec_tr: list (Log R ContextEnv)) : Prop :=
       Forall2 log_equivalent koika_tr spec_tr.
 
     Axiom output_correctness:
       forall (steps: list step_io)
-        (spec_st: spec_state_t) (spec_tr: list (Log R_external ContextEnv)) (props: list props_t)
+        (spec_st: spec_state_t) (spec_tr: list (Log R ContextEnv)) (props: list props_t)
         (koika_st: state) (koika_tr: list (Log R ContextEnv))
         (input: input_t) (output0 output1: output_t),
         valid_inputs props ->
@@ -486,7 +486,7 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
 
     Axiom correctness :
       forall (steps: list step_io) 
-        (spec_st: spec_state_t) (spec_tr: list (Log R_external ContextEnv)) (props: list props_t)
+        (spec_st: spec_state_t) (spec_tr: list (Log R ContextEnv)) (props: list props_t)
         (koika_st: state) (koika_tr: list (Log R ContextEnv)),
       valid_inputs props ->
       valid_feedback props ->
@@ -499,7 +499,7 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
   Section Compliance.
     Axiom compliance:
       forall (steps: list step_io) 
-        (spec_st: spec_state_t) (spec_tr: list (Log R_external ContextEnv)) (props: list props_t)
+        (spec_st: spec_state_t) (spec_tr: list (Log R ContextEnv)) (props: list props_t)
         (koika_st: state) (koika_tr: list (Log R ContextEnv)),
       valid_inputs props ->
       valid_feedback props ->
@@ -1234,6 +1234,10 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
                                    | external s => ContextEnv.(getenv) log s
                                    | _ => []
                                    end).
+
+    Definition proj_log__ext (log: Log R ContextEnv) : Log R_external ContextEnv :=
+      ContextEnv.(create) (fun reg => ContextEnv.(getenv) log (SM_Common.external reg)).
+
   End Interface. 
 
   Section CycleSemantics.
@@ -1484,7 +1488,7 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
         | _ => None
         end.
 
-      Definition local_output_t : Type := Log R_external ContextEnv * option enclave_config.
+      Definition local_output_t : Type := Log R ContextEnv * option enclave_config.
       Definition spec_output_t : Type := local_output_t * local_output_t.
 
       (*
@@ -1875,7 +1879,7 @@ Module Type Memory_sig (External: External_sig) (EnclaveParams: EnclaveParameter
       forall reg, external_reg_to_taint reg = core_id ->
              ContextEnv.(getenv) (fst st) (external reg) = r_external reg.
 
-    Definition output_t := Log R_external ContextEnv.
+    Definition output_t := Log R ContextEnv.
 
     Definition get_purge_reg (core: ind_core_id) : external_reg_t :=
       match core with
@@ -1910,26 +1914,26 @@ Module Type Memory_sig (External: External_sig) (EnclaveParams: EnclaveParameter
                                        : local_spec_state_t * output_t * memory_map :=
       let '(st, phase) := machine in
       let '(st', output) := do_step__impl st step in
-      let ext_output := proj_log__ext output in
+      (* let ext_output := proj_log__ext output in *)
       let purge_reg := get_purge_reg core in
       match phase with
       | SpecSt_Running config =>
-          let continue := ((st', phase), ext_output, mem_map) in
+          let continue := ((st', phase), output, mem_map) in
           let ext_st' := get_dram_from_state st' in
           match rew_latest_write output (external purge_reg) (pf_R_ext_purge_reg core) with
           | Some v => if bits_eqb v ENUM_purge_purged
-                     then ((st', SpecSt_Waiting), ext_output, update_regions config ext_st' mem_map)
+                     then ((st', SpecSt_Waiting), output, update_regions config ext_st' mem_map)
                      else continue
           | None => continue
           end
       | SpecSt_Waiting =>
-          let continue := ((st', SpecSt_Waiting), ext_output, mem_map) in
+          let continue := ((st', SpecSt_Waiting), output, mem_map) in
           let input_log := step.(step_input) in
           match rew_latest_write input_log purge_reg (pf_R_ext_purge_reg core), opt_config with
           | Some v, Some config =>
              if bits_eqb v ENUM_purge_restart then
                let dram := get_dram mem_map config in
-               ((initial_state dram, SpecSt_Running config), ext_output, mem_map)
+               ((initial_state dram, SpecSt_Running config), output, mem_map)
              else (* don't care *) continue
           | _, _ => continue
           end
@@ -2056,8 +2060,8 @@ Module Type Memory_sig (External: External_sig) (EnclaveParams: EnclaveParameter
       let (log0, log1) := spec_tau in
       let spec_ext_log := ContextEnv.(create)
                             (fun reg => match external_reg_to_taint reg with
-                                     | CoreId0 => ContextEnv.(getenv) log0 reg
-                                     | CoreId1 => ContextEnv.(getenv) log1 reg
+                                     | CoreId0 => ContextEnv.(getenv) log0 (external reg)
+                                     | CoreId1 => ContextEnv.(getenv) log1 (external reg)
                                      end) in
       log_equivalent impl_tau spec_ext_log.
 
@@ -2782,7 +2786,6 @@ k    Definition bits_eqb {sz} (v1: bits_t sz) (v2: bits_t sz) : bool :=
 *)
 
 End Memory_sig.
-
 
 Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
                (Params0: CoreParameters) (Params1: CoreParameters)
