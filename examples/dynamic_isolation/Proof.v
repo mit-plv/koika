@@ -19,7 +19,12 @@ Set Default Goal Selector "!".
 
 Arguments latest_write0 : simpl never.
 Arguments proj_log : simpl never.
+Arguments create : simpl never.
+Arguments getenv : simpl never.
+Arguments pf_R_equal : simpl nomatch.
 
+
+Hint Rewrite @getenv_create : log_helpers.
 
 Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
           (Params0: CoreParameters) (Params1: CoreParameters)
@@ -28,7 +33,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
           (Memory: Memory_sig External EnclaveParams).
   Module Impl:= MachineSemantics External EnclaveParams Params0 Params1 Core0 Core1 Memory.
   Module Spec:= IsolationSemantics External EnclaveParams Params0 Params1 Core0 Core1 Memory.
-  Module SM := SecurityMonitor External EnclaveParams.
+  Module SM := SecurityMonitor External EnclaveParams Params0 Params1.
 
   Import Common.
 
@@ -144,7 +149,8 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
   End ImplProjs.
 
   Ltac unfold_get_impls :=
-    unfold get_impl_log_core0, get_impl_log_core1, get_impl_log_sm, get_impl_log_mem in *.
+    unfold get_impl_core0, get_impl_core1, get_impl_sm, get_impl_mem, get_impl_koika_mem,
+           get_impl_log_core0, get_impl_log_core1, get_impl_log_sm, get_impl_log_mem in *.
 
   Section SpecProjs.
     Definition get_spec0_core0 : Spec.Machine0.koika_state_t -> Core0.state :=
@@ -609,6 +615,60 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
       Local Hint Constructors GenTauSim : core.
       Local Hint Unfold GenTraceSim : core.
 
+
+Ltac destruct_one_ind :=
+  match goal with
+  | [ H: ?T |- _ ] => is_ind T; destruct H
+  end.
+Ltac destruct_inds := repeat destruct_one_ind.
+
+Lemma wf_r_lift_core0:
+  forall k,
+  rew [fun t : type => t] pf_R_equal Impl.System.Lift_core0 k in Impl.System.r (rlift Impl.System.Lift_core0 k) =
+  Core0.r k.
+Proof.
+  intros; destruct_inds; auto.
+Qed.
+
+Lemma wf_r_lift_core1:
+  forall k,
+  rew [fun t : type => t] pf_R_equal Impl.System.Lift_core1 k in Impl.System.r (rlift Impl.System.Lift_core1 k) =
+  Core1.r k.
+Proof.
+  intros; destruct_inds; auto.
+Qed.
+
+Lemma wf_r_lift_sm:
+  forall k,
+  rew [fun t : type => t] pf_R_equal Impl.System.Lift_sm k in Impl.System.r (rlift Impl.System.Lift_sm k) =
+  SM.r k.
+Proof.
+  intros; destruct_inds; auto.
+Qed.
+
+Lemma wf_r_lift_mem:
+  forall k,
+  rew [fun t : type => t] pf_R_equal Impl.System.Lift_mem k in Impl.System.r (rlift Impl.System.Lift_mem k) =
+  Memory.r k.
+Proof.
+  intros; destruct_inds; auto.
+Qed.
+
+
+Local Hint Resolve wf_r_lift_core0 : core.
+Local Hint Resolve wf_r_lift_core1 : core.
+Local Hint Resolve wf_r_lift_sm : core.
+Local Hint Resolve wf_r_lift_mem : core.
+
+      Lemma initial_state_sim (initial_dram: dram_t):
+        Sim (Impl.initial_state initial_dram) (ModImpl.initial_state initial_dram).
+      Proof.
+        constructor; simpl; unfold_get_impls.
+        4: apply f_equal2; auto.
+        all: apply equiv_eq; unfold equiv, proj_env; intros;
+             repeat (autorewrite with log_helpers; simpl; auto).
+      Qed.
+
       Theorem step_sim : forall (impl_st impl_st': Impl.state) (mod_st mod_st': ModImpl.state)
                            (impl_ev: gen_impl_tau) (mod_ev: ModImpl.tau),
         Sim impl_st mod_st ->
@@ -626,7 +686,13 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
           ModImpl.step_n initial_dram n = (mod_st, mod_tr) ->
           Sim gen_st mod_st /\ GenTraceSim gen_tr mod_tr.
       Proof.
-      Admitted.
+        induction n; simpl; intros; simplify_tuples; subst; auto.
+        - intuition. apply initial_state_sim.
+        - destruct_all_matches; simplify_tuples; subst; auto.
+          specialize IHn with (1 := eq_refl) (2 := eq_refl); propositional.
+          specialize step_sim with (1 := IHn0) (2 := Heqp2) (3 := Heqp0); intuition.
+          apply Forall2_app; auto.
+      Qed.
 
     End Simulation.
 

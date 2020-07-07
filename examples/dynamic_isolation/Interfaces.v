@@ -809,7 +809,9 @@ Module SM_Common.
 End SM_Common.
 
 (* NOTE: in our model we say this is fixed, so we can talk about the internal registers. *)
-Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
+(* Core Params in the SM is weird. But we need it for the initial state of the PC? *)
+Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters)
+                       (Params0: CoreParameters) (Params1: CoreParameters).
   Import Common.
   Import EnclaveInterface.
   Import SM_Common.
@@ -857,8 +859,8 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters).
     | fromMem0_DMem st => MemResp.r st
     | fromMem1_IMem st => MemResp.r st
     | fromMem1_DMem st => MemResp.r st
-    | pc_core0 => Bits.zero
-    | pc_core1 => Bits.zero
+    | pc_core0 => Params0.initial_pc
+    | pc_core1 => Params1.initial_pc
     | purge_core0 => value_of_bits (Bits.zero)
     | purge_core1 => value_of_bits (Bits.zero)
     | purge_mem0 => value_of_bits (Bits.zero)
@@ -2792,7 +2794,7 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
                (Core0: Core_sig External EnclaveParams Params0)
                (Core1: Core_sig External EnclaveParams Params1)
                (Memory: Memory_sig External EnclaveParams) <: Machine_sig.
-  Module SM := SecurityMonitor External EnclaveParams.
+  Module SM := SecurityMonitor External EnclaveParams Params0 Params1.
 
   Include Common.
 
