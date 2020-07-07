@@ -3,6 +3,7 @@ Require Import Koika.Std.
 
 Require Import Coq.Lists.List.
 Require Import Coq.Logic.FunctionalExtensionality.
+Require Import Coq.Program.Equality.
 
 Require Import dynamic_isolation.External.
 Require Import dynamic_isolation.Framework.
@@ -12,8 +13,13 @@ Require Import dynamic_isolation.Lift.
 Require Import dynamic_isolation.LogHelpers.
 Require Import dynamic_isolation.Multicore.
 Require Import dynamic_isolation.Tactics.
+Require Import dynamic_isolation.Util.
 
 Set Default Goal Selector "!".
+
+Arguments latest_write0 : simpl never.
+Arguments proj_log : simpl never.
+
 
 Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
           (Params0: CoreParameters) (Params1: CoreParameters)
@@ -116,36 +122,39 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
 
   Section ImplProjs.
     Definition get_impl_core0 : Impl.koika_state_t -> Core0.state :=
-      fun impl_st => Lift.proj_env (REnv := ContextEnv) Impl.System.Lift_core0 impl_st.
+      fun impl_st => proj_env Impl.System.Lift_core0 impl_st.
     Definition get_impl_core1 : Impl.koika_state_t -> Core1.state :=
-      fun impl_st => Lift.proj_env (REnv := ContextEnv) Impl.System.Lift_core1 impl_st.
+      fun impl_st => proj_env Impl.System.Lift_core1 impl_st.
     Definition get_impl_sm : Impl.koika_state_t -> SM.state :=
-      fun impl_st => Lift.proj_env (REnv := ContextEnv) Impl.System.Lift_sm impl_st.
+      fun impl_st => proj_env Impl.System.Lift_sm impl_st.
     Definition get_impl_koika_mem : Impl.koika_state_t -> Memory.koika_state_t :=
-      fun impl_st => Lift.proj_env (REnv := ContextEnv) Impl.System.Lift_mem impl_st.
+      fun impl_st => proj_env Impl.System.Lift_mem impl_st.
     Definition get_impl_mem : Impl.state -> Memory.state :=
       fun impl_st => (get_impl_koika_mem (Impl.koika_state impl_st), Impl.external_state impl_st).
 
     Definition get_impl_log_core0 : Impl.log_t -> Log Core0.R ContextEnv :=
-      fun impl_st => Lift.proj_log (REnv := ContextEnv) Impl.System.Lift_core0 impl_st.
+      fun impl_st => proj_log Impl.System.Lift_core0 impl_st.
     Definition get_impl_log_core1 : Impl.log_t -> Log Core1.R ContextEnv :=
-      fun impl_st => Lift.proj_log (REnv := ContextEnv) Impl.System.Lift_core1 impl_st.
+      fun impl_st => proj_log Impl.System.Lift_core1 impl_st.
     Definition get_impl_log_sm : Impl.log_t -> Log SM_Common.R ContextEnv :=
-      fun impl_st => Lift.proj_log (REnv := ContextEnv) Impl.System.Lift_sm impl_st.
+      fun impl_st => proj_log Impl.System.Lift_sm impl_st.
     Definition get_impl_log_mem : Impl.log_t -> Log Memory.R ContextEnv :=
-      fun impl_st => Lift.proj_log (REnv := ContextEnv) Impl.System.Lift_mem impl_st.
+      fun impl_st => proj_log Impl.System.Lift_mem impl_st.
 
   End ImplProjs.
 
+  Ltac unfold_get_impls :=
+    unfold get_impl_log_core0, get_impl_log_core1, get_impl_log_sm, get_impl_log_mem in *.
+
   Section SpecProjs.
     Definition get_spec0_core0 : Spec.Machine0.koika_state_t -> Core0.state :=
-      fun spec_st => Lift.proj_env (REnv := ContextEnv) Spec.Machine0.System.Lift_core0 spec_st.
+      fun spec_st => proj_env Spec.Machine0.System.Lift_core0 spec_st.
     Definition get_spec1_core1 : Spec.Machine1.koika_state_t -> Core1.state :=
-      fun spec_st => Lift.proj_env (REnv := ContextEnv) Spec.Machine1.System.Lift_core1 spec_st.
+      fun spec_st => proj_env Spec.Machine1.System.Lift_core1 spec_st.
     Definition get_spec0_sm : Spec.Machine0.koika_state_t -> Spec.Machine0.System.SM.state :=
-      fun spec_st => Lift.proj_env (REnv := ContextEnv) Spec.Machine0.System.Lift_sm spec_st.
+      fun spec_st => proj_env Spec.Machine0.System.Lift_sm spec_st.
     Definition get_spec1_sm : Spec.Machine1.koika_state_t -> Spec.Machine1.System.SM.state :=
-      fun spec_st => Lift.proj_env (REnv := ContextEnv) Spec.Machine1.System.Lift_sm spec_st.
+      fun spec_st => proj_env Spec.Machine1.System.Lift_sm spec_st.
 
   End SpecProjs.
 
@@ -160,6 +169,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
 
   End Interfaces.
 
+  (* TODO: Better name: Decoupled implementation *)
   Module ModImpl.
 
     Record state :=
@@ -461,7 +471,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
       | None => false
       end.
     Definition observe_enclave_exit1 (log: Log SM_Common.R ContextEnv) : bool :=
-      match latest_write log (SM_Common.internal SM_Common.enc_data0) with
+      match latest_write log (SM_Common.internal SM_Common.enc_data1) with
       | Some v =>
           let data := EnclaveInterface.extract_enclave_data v in
           bits_eqb (EnclaveInterface.enclave_data_valid data) Ob~0
@@ -533,28 +543,181 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
            |}
         end.
 
+    Ltac unfold_mod_impl_obs :=
+      unfold observe_imem_req0, observe_imem_req1,
+             observe_dmem_req0, observe_dmem_req1,
+             observe_imem_resp0, observe_imem_resp1,
+             observe_dmem_resp0, observe_dmem_resp1,
+             observe_enclave_req0, observe_enclave_req1,
+             observe_enclave_enter0, observe_enclave_enter0,
+             observe_enclave_exit0, observe_enclave_exit1
+             in *.
+
+    (* TODO_MOVE *)
+    Ltac unfold_impl_obs :=
+      unfold Impl.observe_reqs, Impl.observe_resps, Impl.observe_enclaves,
+             Impl.observe_imem_reqs, Impl.observe_imem_reqs0, Impl.observe_imem_reqs1,
+             Impl.observe_dmem_reqs, Impl.observe_dmem_reqs0, Impl.observe_dmem_reqs1,
+             Impl.observe_imem_resps, Impl.observe_imem_resps0, Impl.observe_imem_resps1,
+             Impl.observe_dmem_resps, Impl.observe_dmem_resps0, Impl.observe_dmem_resps1,
+             Impl.observe_enclave_reqs, Impl.observe_enclave_reqs0, Impl.observe_enclave_reqs1,
+             Impl.observe_enclave_exits, Impl.observe_enclave_exit0, Impl.observe_enclave_exit1,
+             Impl.observe_enclave_exits, Impl.observe_enclave_exit0, Impl.observe_enclave_exit1
+             in *.
   End Observations.
+
 
   Module ImplToModImpl.
     Import Observations.
     Import Interfaces.Common.
 
-    Definition tau_related : tau -> ModImpl.tau -> Prop :=
-      fun impl_ev mod_ev =>
-        impl_ev = generate_observations__modImpl mod_ev.
+    Section GeneralizeImpl.
+      Definition gen_impl_tau : Type := Log Impl.System.R ContextEnv * Impl.placeholder_external_state.
+      Definition gen_impl_trace := list gen_impl_tau.
+      Definition gen_impl_step (st: Impl.state) : Impl.state * gen_impl_tau :=
+        let (log, ext_st') := Impl.update_function st in
+        (Impl.MkState (commit_update (Impl.koika_state st) log) ext_st', (log, ext_st')).
+      Definition gen_impl_step_n (dram: dram_t) (n: nat) : Impl.state * gen_impl_trace :=
+        Framework.step_n (Impl.initial_state dram) gen_impl_step n.
+    End GeneralizeImpl.
 
-    Definition trace_related : trace -> ModImpl.trace -> Prop :=
-      fun impl_tr mod_tr => List.Forall2 tau_related impl_tr mod_tr.
+    Section Simulation.
+      (* TODO: inductive vs relation? *)
+      (* TODO: eventually we'll need a log equality definition *)
 
-    Theorem refinement :
-      forall (initial_dram: dram_t) (n: nat)
-        (impl_st: Impl.state) (impl_tr: trace)
-        (mod_st: ModImpl.state) (mod_tr: ModImpl.trace),
-      Impl.step_n initial_dram n = (impl_st, impl_tr) ->
-      ModImpl.step_n initial_dram n = (mod_st, mod_tr) ->
-      trace_related impl_tr mod_tr.
-    Proof.
-    Admitted.
+      Inductive Sim (impl_st: Impl.state) (mod_st: ModImpl.state) : Type :=
+      | _Sim:
+          forall (core0_sim: get_impl_core0 (Impl.koika_state impl_st) = ModImpl.state_core0 mod_st)
+            (core1_sim: get_impl_core1 (Impl.koika_state impl_st) = ModImpl.state_core1 mod_st)
+            (sm_sim: get_impl_sm (Impl.koika_state impl_st) = ModImpl.state_sm mod_st)
+            (mem_sim: get_impl_mem impl_st = ModImpl.state_mem mod_st),
+          Sim impl_st mod_st.
+
+      Inductive GenTauSim (gen_ev: gen_impl_tau) (mod_ev: ModImpl.tau) :=
+      | _GenTauSim :
+          forall (core0_sim: get_impl_log_core0 (fst gen_ev) = ModImpl.output_core0 mod_ev)
+            (core1_sim: get_impl_log_core1 (fst gen_ev) = ModImpl.output_core1 mod_ev)
+            (sm_sim: get_impl_log_sm (fst gen_ev) = fst (ModImpl.output_sm mod_ev))
+            (mem_log_sim : get_impl_log_mem (fst gen_ev) = fst (ModImpl.output_mem mod_ev))
+            (mem_ext_st_sm : snd gen_ev = snd (ModImpl.output_mem mod_ev)),
+          GenTauSim gen_ev mod_ev.
+
+      Definition GenTraceSim (gen_tr: gen_impl_trace) (mod_tr: ModImpl.trace) : Prop :=
+        Forall2 GenTauSim gen_tr mod_tr.
+
+      Local Hint Constructors Sim : core.
+      Local Hint Constructors GenTauSim : core.
+      Local Hint Unfold GenTraceSim : core.
+
+      Theorem step_sim : forall (impl_st impl_st': Impl.state) (mod_st mod_st': ModImpl.state)
+                           (impl_ev: gen_impl_tau) (mod_ev: ModImpl.tau),
+        Sim impl_st mod_st ->
+        gen_impl_step impl_st = (impl_st', impl_ev) ->
+        ModImpl.do_step mod_st = (mod_st', mod_ev) ->
+        Sim impl_st' mod_st' /\ GenTauSim impl_ev mod_ev.
+      Proof.
+      Admitted.
+
+      Theorem step_n_sim :
+        forall (initial_dram: dram_t) (n: nat)
+          (gen_st: Impl.state) (gen_tr: gen_impl_trace)
+          (mod_st: ModImpl.state) (mod_tr: ModImpl.trace),
+          gen_impl_step_n initial_dram n = (gen_st, gen_tr) ->
+          ModImpl.step_n initial_dram n = (mod_st, mod_tr) ->
+          Sim gen_st mod_st /\ GenTraceSim gen_tr mod_tr.
+      Proof.
+      Admitted.
+
+    End Simulation.
+
+    Section GenToImpl.
+      Definition genToImpl_tau_related (impl_tau: tau) (gen_tau: gen_impl_tau) :=
+        impl_tau = Impl.do_observations (fst gen_tau).
+
+      Definition genToImpl_trace_related (impl_tr: trace) (gen_tr: gen_impl_trace) :=
+        Forall2 genToImpl_tau_related impl_tr gen_tr.
+
+      Local Hint Unfold genToImpl_tau_related : core.
+      Local Hint Unfold genToImpl_trace_related : core.
+
+      Theorem genToImpl_refinement :
+        forall (initial_dram: dram_t) (n: nat)
+          (gen_st: Impl.state) (gen_tr: gen_impl_trace)
+          (impl_st: Impl.state) (impl_tr: trace),
+          Impl.step_n initial_dram n = (impl_st, impl_tr) ->
+          gen_impl_step_n initial_dram n = (gen_st, gen_tr) ->
+          impl_st = gen_st /\ genToImpl_trace_related impl_tr gen_tr.
+      Proof.
+        induction n; simpl; intros; simplify_tuples; subst; auto.
+        destruct_all_matches; simplify_tuples; subst.
+        specialize IHn with (1 := eq_refl) (2 := eq_refl); propositional.
+        unfold gen_impl_step, Impl.step in *.
+        destruct_all_matches; simplify_tuples; subst.
+        split; auto.
+        apply Forall2_app; auto.
+      Qed.
+
+    End GenToImpl.
+
+    Section TopLevel.
+
+      Definition tau_related : tau -> ModImpl.tau -> Prop :=
+        fun impl_ev mod_ev =>
+          impl_ev = generate_observations__modImpl mod_ev.
+
+      Definition trace_related : trace -> ModImpl.trace -> Prop :=
+        fun impl_tr mod_tr => List.Forall2 tau_related impl_tr mod_tr.
+
+      Local Hint Unfold tau_related : core.
+      Local Hint Unfold trace_related : core.
+
+      Lemma chain_tau_implication :
+        forall impl_tau gen_tau mod_tau,
+        genToImpl_tau_related impl_tau gen_tau ->
+        GenTauSim gen_tau mod_tau ->
+        tau_related impl_tau mod_tau.
+      Proof.
+        intros.
+        unfold genToImpl_tau_related, tau_related in *; subst.
+        unfold generate_observations__modImpl.
+        unfold Impl.do_observations in *.
+        apply functional_extensionality.
+        destruct H0; subst.
+        unfold_impl_obs; unfold_mod_impl_obs; unfold_fifo_obs; unfold_get_impls.
+        destruct x; auto;
+          try rewrite<-core0_sim; try rewrite<-core1_sim; try rewrite<-sm_sim;
+          repeat apply f_equal3;
+          repeat (autorewrite with log_helpers; autounfold with log_helpers); auto.
+      Qed.
+
+      Lemma chain_trace_implication :
+        forall impl_tr gen_tr mod_tr,
+        genToImpl_trace_related impl_tr gen_tr ->
+        GenTraceSim gen_tr mod_tr ->
+        trace_related impl_tr mod_tr.
+      Proof.
+        unfold genToImpl_trace_related, GenTraceSim, trace_related.
+        intros.
+        apply Forall2_compose with (2 := H) (3 := H0).
+        apply chain_tau_implication.
+      Qed.
+
+      Theorem refinement :
+        forall (initial_dram: dram_t) (n: nat)
+          (impl_st: Impl.state) (impl_tr: trace)
+          (mod_st: ModImpl.state) (mod_tr: ModImpl.trace),
+        Impl.step_n initial_dram n = (impl_st, impl_tr) ->
+        ModImpl.step_n initial_dram n = (mod_st, mod_tr) ->
+        trace_related impl_tr mod_tr.
+      Proof.
+        intros.
+        destruct_with_eqn (gen_impl_step_n initial_dram n).
+        eapply chain_trace_implication with (gen_tr := g).
+        - eapply genToImpl_refinement; eauto.
+        - eapply step_n_sim; eauto.
+      Qed.
+
+    End TopLevel.
 
   End ImplToModImpl.
 
@@ -605,47 +768,6 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
   Section TopLevel.
     Context (initial_dram: dram_t).
 
-    Ltac simplify_forall :=
-      match goal with
-      | H: Forall2 _ [] (_ :: _) |- _ => solve[inversion H]
-      | H: Forall2 _ (_ :: _) [] |- _ => solve[inversion H]
-      | H: Forall2 _ [] [] |- _ => solve[constructor]
-      end.
-
-    Section TODO_MOVE.
-      Lemma Forall2_eq : forall {A} (xs ys: list A),
-        List.Forall2 (@eq A) xs ys ->
-        xs = ys.
-      Proof.
-        induction xs; intros.
-        - destruct ys; intuition; simplify_forall.
-        - destruct ys; simpl in *; try simplify_forall.
-          f_equal.
-          + inversion H; auto.
-          + apply IHxs; inversion H; auto.
-      Qed.
-
-      Lemma Forall2_compose : forall {X Y Z} {P: X -> Y -> Prop} {Q: Y -> Z -> Prop} {R: X -> Z -> Prop}
-                                {xs: list X} {ys: list Y} {zs: list Z},
-        List.Forall2 P xs ys ->
-        List.Forall2 Q ys zs ->
-        (forall x y z, P x y /\ Q y z -> R x z) ->
-        List.Forall2 R xs zs.
-      Proof.
-        induction xs.
-        - induction ys; induction zs; intuition; simplify_forall.
-        - induction ys; intuition; try simplify_forall.
-          generalize dependent zs.
-          induction zs; intuition; try simplify_forall.
-          inversion_clear H; subst.
-          inversion_clear H0; subst.
-          constructor.
-          + eapply H1; eauto.
-          + eapply IHxs; eauto.
-      Qed.
-
-    End TODO_MOVE.
-
     Theorem chain_trace_equivalence :
       forall (impl_tr: trace) (impl_mod_tr: ModImpl.trace)
         (spec_mod_tr: ModSpec.trace) (spec_tr: trace),
@@ -656,14 +778,16 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
     Proof.
       intros.
       apply Forall2_eq.
-      eapply Forall2_compose with (1 := H).
-      - apply Forall2_compose with (1 := H0) (2 := H1).
-        unfold ModImplToModSpec.tau_related.
-        unfold ModSpecToSpec.tau_related.
-        Unshelve.
-        2 : exact (fun x z => Observations.generate_observations__modImpl x = z).
-        intuition.
-      - intuition.
+      eapply Forall2_compose with (2 := H).
+      2: { apply Forall2_compose with (2 := H0) (3 := H1).
+           unfold ModImplToModSpec.tau_related.
+           unfold ModSpecToSpec.tau_related.
+           Unshelve.
+           2 : exact (fun x z => Observations.generate_observations__modImpl x = z).
+           intuition.
+         }
+      intuition. unfold ImplToModImpl.tau_related in *.
+      intuition.
     Qed.
 
     Theorem top_level_refinement:

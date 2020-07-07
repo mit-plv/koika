@@ -1,5 +1,6 @@
 Require Import Koika.Frontend.
 Require Import dynamic_isolation.Tactics.
+Require Import Coq.Program.Equality.
 
 Record RLift {T} {A B: Type} {projA: A -> T} {projB: B -> T} := mk_RLift
   { rlift: A -> B
@@ -74,22 +75,7 @@ Notation "r '||>' s" :=
   (schedule_app r s)
     (at level 99, s at level 99, right associativity).
 
-Section LiftEnv.
-  Context {reg_t reg_t' : Type}.
-  Context {R: reg_t -> type} {R' : reg_t' -> type}.
-  Context {REnv: Env reg_t} {REnv': Env reg_t'}.
-  Context (Rlift: RLift type reg_t reg_t' R R').
-
-  Definition proj_env (env': env_t REnv' R') : env_t REnv R.
-  Proof.
-    refine (REnv.(create) _).
-    intro reg. rewrite<-Rlift.(pf_R_equal).
-    exact (REnv'.(getenv) env' (Rlift.(rlift) reg)).
-  Defined.
-
-End LiftEnv.
-
-Section LiftLog.
+Section Lift.
   Context {reg_t reg_t' : Type}.
   Context {R: reg_t -> type} {R' : reg_t' -> type}.
   Context {REnv: Env reg_t} {REnv': Env reg_t'}.
@@ -98,23 +84,86 @@ Section LiftLog.
   Context {FT_R : FiniteType reg_t}.
   Context {EqDec_R' : EqDec reg_t'}.
 
-  Definition lift_log (log: Log R REnv) : Log R' REnv' :=
-    create REnv' (fun r' : reg_t' =>
-                    match partial_f_inv (rlift Rlift) r' as opt_r
-                          return ((partial_f_inv (rlift Rlift) r' = opt_r) -> RLog (R' r')) with
-                    | Some r => fun Heq : partial_f_inv (rlift Rlift) r' = Some r =>
-                                 let log_r := rew <- [fun t : type => RLog t] pf_R_equal Rlift r in
-                                                    getenv REnv log r in
-                                 rew [fun r' => RLog (R' r')] (is_partial_f_env (rlift Rlift) r r' Heq) in
-                                     log_r
-                    | None => fun _ => []
-                    end eq_refl).
+  Section LiftEnv.
+    Definition proj_env (env': env_t REnv' R') : env_t REnv R.
+    Proof.
+      refine (REnv.(create) _).
+      intro reg. rewrite<-Rlift.(pf_R_equal).
+      exact (REnv'.(getenv) env' (Rlift.(rlift) reg)).
+    Defined.
+  End LiftEnv.
 
-  Definition proj_log (log' : Log R' REnv') : Log R REnv :=
-    create REnv (fun reg : reg_t => rew [fun t : type => RLog t] pf_R_equal Rlift reg in
-                                     getenv REnv' log' (lift reg)).
+  Section LiftLog.
 
-End LiftLog.
+    Definition lift_log (log: Log R REnv) : Log R' REnv' :=
+      create REnv' (fun r' : reg_t' =>
+                      match partial_f_inv (rlift Rlift) r' as opt_r
+                            return ((partial_f_inv (rlift Rlift) r' = opt_r) -> RLog (R' r')) with
+                      | Some r => fun Heq : partial_f_inv (rlift Rlift) r' = Some r =>
+                                   let log_r := rew <- [fun t : type => RLog t] pf_R_equal Rlift r in
+                                                      getenv REnv log r in
+                                   rew [fun r' => RLog (R' r')] (is_partial_f_env (rlift Rlift) r r' Heq) in
+                                       log_r
+                      | None => fun _ => []
+                      end eq_refl).
+
+    Definition proj_log (log' : Log R' REnv') : Log R REnv :=
+      create REnv (fun reg : reg_t => rew [fun t : type => RLog t] pf_R_equal Rlift reg in
+                                       getenv REnv' log' (Rlift.(rlift) reg)).
+  End LiftLog.
+
+  Hint Rewrite @getenv_create : log_helpers.
+
+  Section Lemmas.
+    Lemma getenv_proj_log :
+      forall log' r,
+      getenv REnv (proj_log log') r =
+        rew [fun t : type => RLog t] pf_R_equal Rlift r in
+            (getenv REnv' log' (Rlift.(rlift) r)).
+    Proof.
+      intros.
+      unfold proj_log.
+      autorewrite with log_helpers.
+      auto.
+    Qed.
+
+    Lemma latest_write_proj_log :
+      (forall log' r,
+         latest_write (proj_log log') r = rew [fun t : type => option t] pf_R_equal Rlift r in
+                                              (latest_write log' (Rlift.(rlift) r))).
+    Proof.
+      intros. unfold proj_log, latest_write, log_find.
+      autorewrite with log_helpers.
+      elim_eq_rect; simpl; auto.
+    Qed.
+
+    Lemma latest_write0_proj_log :
+      (forall log' r,
+         latest_write0 (proj_log log') r = rew [fun t : type => option t] pf_R_equal Rlift r in
+                                               (latest_write0 log' (Rlift.(rlift) r))).
+    Proof.
+      intros; unfold proj_log, latest_write0, log_find.
+      autorewrite with log_helpers.
+      elim_eq_rect; simpl; auto.
+    Qed.
+
+    Lemma latest_write1_proj_log :
+      (forall log' r,
+         latest_write1 (proj_log log') r = rew [fun t : type => option t] pf_R_equal Rlift r in
+                                               (latest_write1 log' (Rlift.(rlift) r))).
+    Proof.
+      intros; unfold proj_log, latest_write1, log_find.
+      autorewrite with log_helpers.
+      elim_eq_rect; simpl; auto.
+    Qed.
+
+  End Lemmas.
+
+End Lift.
+
+Hint Rewrite @Lift.latest_write_proj_log : log_helpers.
+Hint Rewrite @Lift.latest_write0_proj_log : log_helpers.
+Hint Rewrite @Lift.latest_write1_proj_log : log_helpers.
 
 Section LiftAction.
   Context {reg_t reg_t' : Type}.

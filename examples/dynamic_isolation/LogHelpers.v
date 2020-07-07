@@ -44,3 +44,9 @@ Section LogEvents.
 
 End LogEvents.
 
+Ltac unfold_fifo_obs :=
+  unfold observe_enq0, observe_enq1 in *.
+
+Hint Unfold rew_latest_write : log_helpers.
+Hint Unfold rew_latest_write0 : log_helpers.
+Hint Unfold rew_latest_write1 : log_helpers.

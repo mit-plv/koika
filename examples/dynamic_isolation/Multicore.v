@@ -261,7 +261,7 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
                    log.
 
     Definition observe_enclave_reqs1 (log: Log R ContextEnv) : option (struct_t enclave_req) :=
-      observe_enq1 (System.Core1ToSM_Enc EnclaveReq.valid0) eq_refl
+      observe_enq0 (System.Core1ToSM_Enc EnclaveReq.valid0) eq_refl
                    (System.Core1ToSM_Enc EnclaveReq.data0) eq_refl
                    log.
 
