@@ -39,3 +39,56 @@ Proof.
     + eapply H; eauto.
     + eapply IHxs; eauto.
 Qed.
+
+Definition maybe_holds {T} (p:T -> Prop) : option T -> Prop :=
+fun mt => match mt with
+       | Some t => p t
+       | None => True
+       end.
+
+Lemma holds_in_none_eq : forall T (p: T -> Prop) mt,
+    mt = None ->
+    maybe_holds p mt.
+Proof.
+  intros; subst.
+  simpl; auto.
+Qed.
+
+Lemma holds_in_some : forall T (p:T -> Prop) (v:T),
+    p v ->
+    maybe_holds p (Some v).
+Proof.
+  simpl; auto.
+Qed.
+
+Lemma holds_in_some_eq : forall T (p:T -> Prop) (v:T) mt,
+    mt = Some v ->
+    p v ->
+    maybe_holds p mt.
+Proof.
+  intros; subst.
+  simpl; auto.
+Qed.
+
+Lemma holds_some_inv_eq : forall T (p: T -> Prop) mt v,
+
+    mt = Some v ->
+    maybe_holds p mt ->
+    p v.
+Proof.
+  intros; subst.
+  auto.
+Qed.
+
+Lemma pred_weaken : forall T (p p': T -> Prop) mt,
+    maybe_holds p mt ->
+    (forall t, p t -> p' t) ->
+    maybe_holds p' mt.
+Proof.
+  unfold maybe_holds; destruct mt; eauto.
+Qed.
+
+Definition maybe_eq {T} (mv : option T) (v : T) : Prop :=
+  maybe_holds (eq v) mv.
+
+Notation "mv =?= v" := (maybe_eq mv v) (at level 20, v at level 50).

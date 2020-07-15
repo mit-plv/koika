@@ -106,6 +106,15 @@ Module General.
       end
     end; subst; try congruence; eauto.
 
+  Ltac fast_match_innermost_in_goal :=
+      match goal with
+      | [ |- context[match ?E with _ => _ end] ]=>
+        match E with
+        | context[match _ with _ => _ end] => fail 1
+        | _ => destruct E eqn:?
+        end
+      end.
+
   Ltac destruct_pair :=
     match goal with
     | [ P : _ * _ |- _ ] =>
@@ -113,6 +122,8 @@ Module General.
       let p2 := fresh P in
       destruct P as [p1 p2]
   end.
+
+  Ltac destruct_pairs := repeat destruct_pair.
 
   Ltac propositional_with t :=
     repeat match goal with
@@ -304,6 +315,9 @@ Module General.
 
   Tactic Notation "intuition" := intuition_with auto.
   Tactic Notation "intuition" tactic(t) := intuition_with t.
+
+  Tactic Notation "assert_false" :=
+    elimtype False.
 
   Ltac solve_false :=
     solve [ exfalso; eauto with false ].
