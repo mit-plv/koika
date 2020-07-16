@@ -1225,8 +1225,12 @@ namespace cuttlesim {
 #define PASTE_EXPANDED_3(x0, x1, x2) PASTE_ARGS_3(x0, x1, x2)
 #define PASTE_EXPANDED_4(x0, x1, x2, x3) PASTE_ARGS_4(x0, x1, x2, x3)
 
-#define DECL_FN(fname, rtype) \
-  using PASTE_EXPANDED_3(ti_fn, RULE_NAME, fname) = rtype;
+// Using __VA_ARGS__ in DECL_FN and WRITE* macros lets us parse things like
+// WRITE0(reg, struct_xyz{a, b}) and DECL_FN(xyz, array<int, 4>).
+// See https://stackoverflow.com/questions/29578902/.
+
+#define DECL_FN(fname, ...) \
+  using PASTE_EXPANDED_3(ti_fn, RULE_NAME, fname) = __VA_ARGS__;
 
 #define DEF_FN(fname, ...) \
   bool PASTE_EXPANDED_3(fn, RULE_NAME, fname)(__VA_ARGS__) noexcept
@@ -1237,10 +1241,6 @@ namespace cuttlesim {
 #define DEF_RULE(rl) RULE_DECL(bool, rule, rl)
 #define DEF_RESET(rl) RULE_DECL(void, reset, rl)
 #define DEF_COMMIT(rl) RULE_DECL(void, commit, rl)
-
-// Using __VA_ARGS__ in WRITE* macros below ensures that we can parse things
-// like WRITE0(reg, struct_xyz{a, b}).
-// See https://stackoverflow.com/questions/29578902/.
 
 #define FAIL() \
   { PASTE_EXPANDED_2(reset, RULE_NAME)(); return false; }
