@@ -33,7 +33,9 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
           (Memory: Memory_sig External EnclaveParams).
   Module Impl:= MachineSemantics External EnclaveParams Params0 Params1 Core0 Core1 Memory.
   Module Spec:= IsolationSemantics External EnclaveParams Params0 Params1 Core0 Core1 Memory.
-  Module SM := SecurityMonitor External EnclaveParams Params0 Params1.
+  (* Deduplicate *)
+  Module TODO_SM := SecurityMonitor External EnclaveParams Params0 Params1.
+
 
   Import Common.
 
@@ -130,7 +132,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
       fun impl_st => proj_env Impl.System.Lift_core0 impl_st.
     Definition get_impl_core1 : Impl.koika_state_t -> Core1.state :=
       fun impl_st => proj_env Impl.System.Lift_core1 impl_st.
-    Definition get_impl_sm : Impl.koika_state_t -> SM.state :=
+    Definition get_impl_sm : Impl.koika_state_t -> SM_Common.state :=
       fun impl_st => proj_env Impl.System.Lift_sm impl_st.
     Definition get_impl_koika_mem : Impl.koika_state_t -> Memory.koika_state_t :=
       fun impl_st => proj_env Impl.System.Lift_mem impl_st.
@@ -157,9 +159,9 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
       fun spec_st => proj_env Spec.Machine0.System.Lift_core0 spec_st.
     Definition get_spec1_core1 : Spec.Machine1.koika_state_t -> Core1.state :=
       fun spec_st => proj_env Spec.Machine1.System.Lift_core1 spec_st.
-    Definition get_spec0_sm : Spec.Machine0.koika_state_t -> Spec.Machine0.System.SM.state :=
+    Definition get_spec0_sm : Spec.Machine0.koika_state_t -> SM_Common.state :=
       fun spec_st => proj_env Spec.Machine0.System.Lift_sm spec_st.
-    Definition get_spec1_sm : Spec.Machine1.koika_state_t -> Spec.Machine1.System.SM.state :=
+    Definition get_spec1_sm : Spec.Machine1.koika_state_t -> SM_Common.state :=
       fun spec_st => proj_env Spec.Machine1.System.Lift_sm spec_st.
 
   End SpecProjs.
@@ -181,7 +183,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
     Record state :=
       { state_core0 : Core0.state
       ; state_core1 : Core1.state
-      ; state_sm : SM.state
+      ; state_sm : SM_Common.state
       ; state_mem : Memory.state
       }.
 
@@ -196,9 +198,9 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
 
     Section TODO_MOVE.
 
-      Definition TODO_ghost_state_conversion (st: SM.ghost_output) : sm_ghost_output_t :=
-        {| ghost_output_config0 := SM.ghost_output_config0 st;
-           ghost_output_config1 := SM.ghost_output_config1 st
+      Definition TODO_ghost_state_conversion (st: SM_Common.ghost_output) : sm_ghost_output_t :=
+        {| ghost_output_config0 := SM_Common.ghost_output_config0 st;
+           ghost_output_config1 := SM_Common.ghost_output_config1 st
         |}.
 
     End TODO_MOVE.
@@ -206,7 +208,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
     Definition initial_state (initial_dram: dram_t) : state :=
       {| state_core0 := ContextEnv.(create) Core0.r;
          state_core1 := ContextEnv.(create) Core1.r;
-         state_sm := ContextEnv.(create) SM.r;
+         state_sm := ContextEnv.(create) Impl.System.SM.r;
          state_mem := (ContextEnv.(create) Memory.r, Memory.initial_external_state initial_dram)
       |}.
 
@@ -241,17 +243,17 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
             |} in
         (core1_input, core1_output__local, core1_output__global, acc, mk_core1_step_io).
 
-      Definition do_sm (st: SM.state) (input_log: Log Impl.System.R ContextEnv)
+      Definition do_sm (st: SM_Common.state) (input_log: Log Impl.System.R ContextEnv)
                              : Log SM_Common.R_external ContextEnv * Log SM_Common.R ContextEnv *
                                Log Impl.System.R ContextEnv * Log Impl.System.R ContextEnv *
-                               (Log Impl.System.R ContextEnv -> SM.step_io) :=
-        let sm_input := SM.proj_log__ext (proj_log Impl.System.Lift_sm input_log) in
-        let '(sm_output__local, _) := SM.do_step_input__impl st sm_input in
+                               (Log Impl.System.R ContextEnv -> SM_Common.step_io) :=
+        let sm_input := SM_Common.proj_log__ext (proj_log Impl.System.Lift_sm input_log) in
+        let '(sm_output__local, _) := Impl.System.SM.do_step_input__impl st sm_input in
         let sm_output__global := lift_log (REnv' := ContextEnv) Impl.System.Lift_sm sm_output__local in
         let acc := log_app sm_output__global input_log in
         let mk_sm_step_io feedback_log :=
-            {| SM.step_input := sm_input;
-               SM.step_feedback := SM.proj_log__ext (proj_log Impl.System.Lift_sm feedback_log)
+            {| SM_Common.step_input := sm_input;
+               SM_Common.step_feedback := SM_Common.proj_log__ext (proj_log Impl.System.Lift_sm feedback_log)
             |} in
         (sm_input, sm_output__local, sm_output__global, acc, mk_sm_step_io).
 
@@ -305,7 +307,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
       let mem_step_io := mk_mem_step_io mem_feedback__global in
       ({| state_core0 := fst (Core0.do_step__koika (state_core0 st) core0_step_io);
          state_core1 := fst (Core1.do_step__koika (state_core1 st) core1_step_io);
-         state_sm := fst (SM.do_step__impl (state_sm st) sm_step_io);
+         state_sm := fst (Impl.System.SM.do_step__impl (state_sm st) sm_step_io);
          state_mem := fst (Memory.do_step__impl (state_mem st) mem_step_io)
        |}, outputs).
 
@@ -336,14 +338,14 @@ Open Scope log_scope.
     Record state :=
       { state_core0 : Core0.spec_state_t
       ; state_core1 : Core1.spec_state_t
-      ; state_sm : SM.spec_state_t
+      ; state_sm : SM_Common.spec_state_t
       ; state_mem : Memory.spec_state_t
       }.
 
     Record tau :=
       { output_core0 : Log Core0.R ContextEnv
       ; output_core1 : Log Core1.R ContextEnv
-      ; output_sm : SM.spec_output_t
+      ; output_sm : SM_Common.spec_output_t
       ; output_mem : Log Memory.R ContextEnv (* * Memory.external_state_t *)
       }.
 
@@ -352,18 +354,18 @@ Open Scope log_scope.
     Definition initial_state (initial_dram: dram_t): state :=
       {| state_core0 := Core0.initial_spec_state;
          state_core1 := Core1.initial_spec_state;
-         state_sm := SM.initial_spec_state;
+         state_sm := SM_Common.initial_spec_state;
          state_mem := Memory.initial_spec_state initial_dram
       |}.
 
     Section TODO_MOVE.
 
-      Definition TODO_ghost_state_conversion (st: SM.ghost_output) : sm_ghost_output_t :=
-        {| ghost_output_config0 := SM.ghost_output_config0 st;
-           ghost_output_config1 := SM.ghost_output_config1 st
+      Definition TODO_ghost_state_conversion (st: SM_Common.ghost_output) : sm_ghost_output_t :=
+        {| ghost_output_config0 := SM_Common.ghost_output_config0 st;
+           ghost_output_config1 := SM_Common.ghost_output_config1 st
         |}.
 
-      Definition combine_spec_output : SM.spec_output_t -> Log SM_Common.R ContextEnv * sm_ghost_output_t.
+      Definition combine_spec_output : SM_Common.spec_output_t -> Log SM_Common.R ContextEnv * sm_ghost_output_t.
       Admitted.
 
       Definition combine_mem_output : Log Memory.R ContextEnv * Log Memory.R ContextEnv -> Log Memory.R ContextEnv.
@@ -383,8 +385,8 @@ Open Scope log_scope.
       let core1_output__global := lift_log (REnv := ContextEnv) Impl.System.Lift_core1 core1_output__local in
       let acc__core1 := log_app core1_output__global acc__core0 in
       (* SM *)
-      let sm_input := SM.proj_log__ext (proj_log (REnv := ContextEnv) Impl.System.Lift_sm acc__core1) in
-      let sm_output__raw := SM.do_step_input__spec (state_sm st) sm_input in
+      let sm_input := SM_Common.proj_log__ext (proj_log (REnv := ContextEnv) Impl.System.Lift_sm acc__core1) in
+      let sm_output__raw := TODO_SM.do_step_input__spec (state_sm st) sm_input in
       let '(sm_output__local, sm_ghost) := combine_spec_output sm_output__raw in
       let sm_output__global := lift_log (REnv := ContextEnv) Impl.System.Lift_sm sm_output__local in
       let acc_sm := log_app sm_output__global acc__core1 in
@@ -416,8 +418,8 @@ Open Scope log_scope.
              Core1.step_feedback := Core1.proj_log__ext (proj_log Impl.System.Lift_core1 core1_feedback__global)
           |} in
       let sm_step_io :=
-          {| SM.step_input := sm_input;
-             SM.step_feedback := SM.proj_log__ext (proj_log Impl.System.Lift_sm sm_feedback__global)
+          {| SM_Common.step_input := sm_input;
+             SM_Common.step_feedback := SM_Common.proj_log__ext (proj_log Impl.System.Lift_sm sm_feedback__global)
           |} in
       let mem_step_io :=
           {| Memory.step_input := mem_input;
@@ -430,10 +432,9 @@ Open Scope log_scope.
           |} in
       ({| state_core0 := fst (fst (Core0.do_step__spec (state_core0 st) core0_step_io));
          state_core1 := fst (fst (Core1.do_step__spec (state_core1 st) core1_step_io));
-         state_sm := fst (fst (SM.do_step__spec (state_sm st) sm_step_io));
+         state_sm := fst (fst (TODO_SM.do_step__spec (state_sm st) sm_step_io));
          state_mem := fst (fst (Memory.do_step__spec (state_mem st) mem_ghost_io))
        |}, outputs).
-
 
     Definition step_n (initial_dram: dram_t) (n: nat) : state * trace :=
       Framework.step_n (initial_state initial_dram) do_step n.
@@ -536,8 +537,9 @@ Open Scope log_scope.
  *)
 
     (* TODO: might be easier to combine logs first *)
+    Definition generate_observations__modSpec (ev: ModSpec.tau) : tau.
+    Admitted.
     (*
-    Definition generate_observations__modSpec (ev: ModSpec.tau) : tau :=
       fun core_id =>
         let sm0_output := fst (fst (ModSpec.output_sm ev)) in
         let sm1_output := fst (snd (ModSpec.output_sm ev)) in
@@ -660,7 +662,7 @@ Qed.
 Lemma wf_r_lift_sm:
   forall k,
   rew [fun t : type => t] pf_R_equal Impl.System.Lift_sm k in Impl.System.r (rlift Impl.System.Lift_sm k) =
-  SM.r k.
+  Impl.System.SM.r k.
 Proof.
   intros; destruct_inds; auto.
 Qed.
@@ -772,10 +774,10 @@ Qed.
 Property sm_lift_ext_log_cancels_proj:
   forall log,
   sm_empty_internal_regs log ->
-  SM.lift_ext_log (SM.proj_log__ext log) = log.
+  SM_Common.lift_ext_log (SM_Common.proj_log__ext log) = log.
 Proof.
   unfold sm_empty_internal_regs; intros.
-  unfold SM.lift_ext_log, SM.proj_log__ext.
+  unfold SM_Common.lift_ext_log, SM_Common.proj_log__ext.
   apply_equiv_eq.
   destruct k; auto_with_log_helpers.
 Qed.
@@ -952,8 +954,8 @@ Hint Extern 10 => solve_not_exists_lift_to_internal : log_helpers.
 
         consider ModImpl.do_sm.
         destruct_one_match_in HModStep2.
-        consider SM.do_step_input__impl.
-        consider SM.update_function.
+        consider Impl.System.SM.do_step_input__impl.
+        consider Impl.System.SM.update_function.
         rewrite sm_lift_ext_log_cancels_proj in *.
         2: { auto_with_log_helpers; elim_eq_rect; simpl; auto.
              unfold RLog.
@@ -964,7 +966,7 @@ Hint Extern 10 => solve_not_exists_lift_to_internal : log_helpers.
         consider get_impl_sm.
         consider Impl.System.sm_schedule.
         simplify_tuples; subst.
-        erewrite<-interp_scheduler'_rules_equiv with (1 := equivalent_rules_sm_lift Impl.System.SM.schedule).
+        erewrite<-interp_scheduler'_rules_equiv with (1 := equivalent_rules_sm_lift SM_Common.schedule).
         autorewrite with log_helpers.
 
         consider ModImpl.do_mem.
@@ -1032,12 +1034,6 @@ Arguments lift_scheduler : simpl never.
               try typeclasses eauto.
             replace (Impl.System.FnLift_core1) with Impl.System.FnLift_sm in Heql4; auto.
             unfold Impl.System.sigma in *.
-            rewrite interp_scheduler_delta_rules_equiv with
-                (rules1 := lift_rule Impl.System.Lift_sm Impl.System.FnLift_sm) 
-                (sched1 := lift_scheduler Impl.System.SM.rules Impl.System.SM.schedule)
-                (rules2 := lift_rule Impl.System.Lift_sm Impl.System.FnLift_sm) 
-                (sched2 := lift_scheduler SM.rules SM.schedule).
-            2: { admit. (* TODO: Coq Modules ugh. *) }
             setoid_rewrite<-Heql4.
             erewrite lift_proj_interp_scheduler_delta in Heql3; eauto with log_helpers;
               try typeclasses eauto.

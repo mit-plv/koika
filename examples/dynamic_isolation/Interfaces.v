@@ -807,6 +807,192 @@ Module SM_Common.
   Instance FiniteType_external_reg_t : FiniteType external_reg_t := _.
   Instance FiniteType_reg_t : FiniteType reg_t := _.
 
+  Definition state := env_t ContextEnv (fun idx : reg_t => R idx).
+
+  Inductive rule_name_t' :=
+  | UpdateEnclave0
+  | UpdateEnclave1
+  | FilterReqsIMem0
+  | FilterReqsDMem0
+  | FilterReqsIMem1
+  | FilterReqsDMem1
+  | FilterRespsIMem0
+  | FilterRespsDMem0
+  | FilterRespsIMem1
+  | FilterRespsDMem1
+  | ExitEnclave0
+  | ExitEnclave1
+  | EnterEnclave0
+  | EnterEnclave1
+  | DoClk
+  .
+
+  Definition rule_name_t := rule_name_t'.
+
+  Definition schedule : Syntax.scheduler pos_t rule_name_t :=
+    UpdateEnclave0 |> UpdateEnclave1
+                   |> FilterReqsIMem0 |> FilterReqsDMem0 |> FilterReqsIMem1 |> FilterReqsDMem1
+                   |> FilterRespsIMem0 |> FilterRespsDMem0 |> FilterRespsIMem1 |> FilterRespsDMem1
+                   (* |> ResetProcAndMem0 |> ResetProcAndMem1 *)
+                   (* |> RestartPipeline0 |> RestartPipeline1 *)
+                   |> ExitEnclave0 |> ExitEnclave1
+                   |> EnterEnclave0 |> EnterEnclave1
+                   |> DoClk
+                   |> done.
+
+  Section Interface.
+    Definition lift_ext_log (log: Log R_external ContextEnv) : Log R ContextEnv :=
+      ContextEnv.(create) (fun reg => match reg return (RLog (R reg)) with
+                                   | external s => ContextEnv.(getenv) log s
+                                   | _ => []
+                                   end).
+
+    Definition proj_log__ext (log: Log R ContextEnv) : Log R_external ContextEnv :=
+      ContextEnv.(create) (fun reg => ContextEnv.(getenv) log (SM_Common.external reg)).
+
+  End Interface.
+
+  Section CycleSemantics.
+
+    Definition impl_output_t : Type := Log R ContextEnv (* * ghost_output *).
+
+    Record ghost_output :=
+      { ghost_output_config0 : option enclave_config;
+        ghost_output_config1 : option enclave_config
+      }.
+
+    Record step_io :=
+      { step_input : Log R_external ContextEnv;
+        step_feedback : Log R_external ContextEnv
+      }.
+
+    Definition log_t := Log R ContextEnv.
+    Definition input_t := Log R_external ContextEnv.
+    Definition output_t : Type := Log R ContextEnv * ghost_output.
+    Definition feedback_t := Log R_external ContextEnv.
+
+  End CycleSemantics.
+
+  Section TODO_MOVE.
+    Definition is_external_log (log: Log R ContextEnv) : Prop :=
+      forall reg, match reg with
+             | external r => True
+             | internal r => ContextEnv.(getenv) log reg = []
+             end.
+  End TODO_MOVE.
+
+  Section Taint.
+
+      Inductive taint_t :=
+      | TaintCore (core_id: ind_core_id)
+      | Bottom.
+
+      Definition internal_reg_to_taint (reg: internal_reg_t) : taint_t :=
+        match reg with
+        | state0 => TaintCore CoreId0
+        | state1 => TaintCore CoreId1
+        | enc_data0 => TaintCore CoreId0
+        | enc_data1 => TaintCore CoreId1
+        | enc_req0 => TaintCore CoreId0
+        | enc_req1 => TaintCore CoreId1
+        | clk => Bottom
+        end.
+
+      Definition external_reg_to_taint (reg: external_reg_t) : taint_t :=
+        match reg with
+        | fromCore0_IMem st => TaintCore CoreId0
+        | fromCore0_DMem st => TaintCore CoreId0
+        | fromCore0_Enc st => TaintCore CoreId0
+        | toCore0_IMem st => TaintCore CoreId0
+        | toCore0_DMem st => TaintCore CoreId0
+        (* Core1 <-> SM *)
+        | fromCore1_IMem st => TaintCore CoreId1
+        | fromCore1_DMem st => TaintCore CoreId1
+        | fromCore1_Enc st => TaintCore CoreId1
+        | toCore1_IMem st => TaintCore CoreId1
+        | toCore1_DMem st => TaintCore CoreId1
+        (* SM <-> Mem *)
+        | toMem0_IMem st => TaintCore CoreId0
+        | toMem0_DMem st => TaintCore CoreId0
+        | toMem1_IMem st => TaintCore CoreId1
+        | toMem1_DMem st => TaintCore CoreId1
+        | fromMem0_IMem st => TaintCore CoreId0
+        | fromMem0_DMem st => TaintCore CoreId0
+        | fromMem1_IMem st => TaintCore CoreId1
+        | fromMem1_DMem st => TaintCore CoreId1
+        | pc_core0 => TaintCore CoreId0
+        | pc_core1 => TaintCore CoreId1
+        | purge_core0 => TaintCore CoreId0
+        | purge_core1 => TaintCore CoreId1
+        | purge_mem0 => TaintCore CoreId0
+        | purge_mem1 => TaintCore CoreId1
+        end.
+
+      Definition reg_to_taint (reg: reg_t) : taint_t :=
+        match reg with
+        | external s => external_reg_to_taint s
+        | internal s => internal_reg_to_taint s
+        end.
+
+      Scheme Equality for taint_t.
+
+  End Taint.
+
+  Section Spec.
+      Inductive enclave_state_t :=
+      | EnclaveState_Running
+      | EnclaveState_Switching (next_enclave: enclave_config)
+      .
+
+      Inductive sm_state_machine :=
+      | SmState_Enclave (machine_state: state) (config: enclave_config)
+                        (enclave_state: enclave_state_t)
+      | SmState_Waiting (new: enclave_config).
+
+      Inductive sm_magic_state_machine :=
+      | SmMagicState_Continue (st: sm_state_machine) (ext: Log R ContextEnv) (config: option enclave_config)
+      | SmMagicState_Exit (waiting: enclave_config) (ext: Log R ContextEnv)
+      | SmMagicState_TryToEnter (next_enclave: enclave_config).
+
+      Record iso_machine_t :=
+        { iso_sm0 : sm_state_machine;
+          iso_sm1 : sm_state_machine;
+          turn : bool
+        }.
+
+      Definition filter_external (log: Log R ContextEnv) (core: ind_core_id) : Log R ContextEnv :=
+        ContextEnv.(create) (fun r => match r with
+                                   | internal s => []
+                                   | reg => if (taint_t_beq (reg_to_taint reg) (TaintCore core))
+                                              || (taint_t_beq (reg_to_taint reg) Bottom) then
+                                              ContextEnv.(getenv) log reg
+                                           else []
+                                   end).
+
+      (* TODO: normal way of writing this? *)
+      Definition observe_enclave_exit (core_id: ind_core_id) (log: Log R ContextEnv) : bool.
+        refine(
+        let enc_data_reg := match core_id with
+                            | CoreId0 => internal enc_data0
+                            | CoreId1 => internal enc_data1
+                            end in
+        match rew_latest_write log enc_data_reg _ with
+        | Some v =>
+            let data := EnclaveInterface.extract_enclave_data v in
+            bits_eqb (EnclaveInterface.enclave_data_valid data) Ob~0
+        | None => false
+        end).
+        - destruct core_id; reflexivity.
+      Defined.
+
+      Definition local_output_t : Type := Log R ContextEnv * option enclave_config.
+      Definition spec_output_t : Type := local_output_t * local_output_t.
+
+      Definition spec_state_t := iso_machine_t.
+      Definition initial_spec_state : spec_state_t. Admitted.
+
+  End Spec.
+
 End SM_Common.
 
 (* NOTE: in our model we say this is fixed, so we can talk about the internal registers. *)
@@ -876,7 +1062,6 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters)
 
   Definition Sigma := External.Sigma.
   Definition ext_fn_t := External.ext_fn_t.
-  Definition state := env_t ContextEnv (fun idx : reg_t => R idx).
   Definition sigma := External.sigma. 
 
   Definition eid_to_enc_data : UInternalFunction reg_t empty_ext_fn_t :=
@@ -1171,32 +1356,6 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters)
 
   (* Definition tc_forward := tc_rule R Sigma forward <: rule R Sigma. *)
 
-  Inductive rule_name_t' :=
-  | UpdateEnclave0
-  | UpdateEnclave1
-  | FilterReqsIMem0
-  | FilterReqsDMem0
-  | FilterReqsIMem1
-  | FilterReqsDMem1
-  | FilterRespsIMem0
-  | FilterRespsDMem0
-  | FilterRespsIMem1
-  | FilterRespsDMem1
-  (*
-  | ResetProcAndMem0
-  | ResetProcAndMem1
-  | RestartPipeline0
-  | RestartPipeline1
-  *)
-  | ExitEnclave0
-  | ExitEnclave1
-  | EnterEnclave0
-  | EnterEnclave1
-  | DoClk
-  .
-
-  Definition rule_name_t := rule_name_t'.
-
   Definition rules (rl : rule_name_t) : rule R Sigma :=
     match rl with
     | UpdateEnclave0 => tc_update_enclave0
@@ -1222,34 +1381,8 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters)
     | DoClk => tc_clk
     end.
 
-  Definition schedule : Syntax.scheduler pos_t rule_name_t :=
-    UpdateEnclave0 |> UpdateEnclave1
-                   |> FilterReqsIMem0 |> FilterReqsDMem0 |> FilterReqsIMem1 |> FilterReqsDMem1
-                   |> FilterRespsIMem0 |> FilterRespsDMem0 |> FilterRespsIMem1 |> FilterRespsDMem1
-                   (* |> ResetProcAndMem0 |> ResetProcAndMem1 *)
-                   (* |> RestartPipeline0 |> RestartPipeline1 *)
-                   |> ExitEnclave0 |> ExitEnclave1
-                   |> EnterEnclave0 |> EnterEnclave1
-                   |> DoClk
-                   |> done.
-  Section Interface.
-    Definition lift_ext_log (log: Log R_external ContextEnv) : Log R ContextEnv :=
-      ContextEnv.(create) (fun reg => match reg return (RLog (R reg)) with
-                                   | external s => ContextEnv.(getenv) log s
-                                   | _ => []
-                                   end).
-
-    Definition proj_log__ext (log: Log R ContextEnv) : Log R_external ContextEnv :=
-      ContextEnv.(create) (fun reg => ContextEnv.(getenv) log (SM_Common.external reg)).
-
-  End Interface. 
-
   Section CycleSemantics.
     (* Could add ghost state *)
-    Record ghost_output :=
-      { ghost_output_config0 : option enclave_config;
-        ghost_output_config1 : option enclave_config
-      }.
 
     Definition impl_output_t : Type := Log R ContextEnv (* * ghost_output *).
 
@@ -1257,12 +1390,6 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters)
     Definition update_function : state -> Log R ContextEnv -> impl_output_t :=
       fun st log => interp_scheduler_delta st sigma rules log schedule.
         
-
-    Definition log_t := Log R ContextEnv.
-    Definition input_t := Log R_external ContextEnv.
-    Definition output_t : Type := Log R ContextEnv * ghost_output.
-    Definition feedback_t := Log R_external ContextEnv.
-
     Definition initial_state (eid0: option enclave_id) (eid1: option enclave_id) (clk: bits_t 1): state :=
       ContextEnv.(create) (fun reg => match reg return R reg with
                                    | internal enc_data0 =>
@@ -1280,10 +1407,6 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters)
                                    | external reg' => r_external reg'
                                    end).
 
-    Record step_io :=
-      { step_input : Log R_external ContextEnv;
-        step_feedback : Log R_external ContextEnv
-      }.
 
     Definition do_step_input__impl (st: state) (ext_input: input_t) : impl_output_t * log_t :=
        let input := lift_ext_log ext_input in
@@ -1307,118 +1430,9 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters)
 
   End CycleSemantics.
 
-  Section TODO_MOVE.
-    Definition is_external_log (log: Log R ContextEnv) : Prop :=
-      forall reg, match reg with
-             | external r => True
-             | internal r => ContextEnv.(getenv) log reg = []
-             end.
-  End TODO_MOVE.
 
-  Section Taint.
+    Section Spec.
 
-      Inductive taint_t :=
-      | TaintCore (core_id: ind_core_id)
-      | Bottom.
-
-      Definition internal_reg_to_taint (reg: internal_reg_t) : taint_t :=
-        match reg with
-        | state0 => TaintCore CoreId0
-        | state1 => TaintCore CoreId1
-        | enc_data0 => TaintCore CoreId0
-        | enc_data1 => TaintCore CoreId1
-        | enc_req0 => TaintCore CoreId0
-        | enc_req1 => TaintCore CoreId1
-        | clk => Bottom
-        end.
-
-      Definition external_reg_to_taint (reg: external_reg_t) : taint_t :=
-        match reg with
-        | fromCore0_IMem st => TaintCore CoreId0
-        | fromCore0_DMem st => TaintCore CoreId0
-        | fromCore0_Enc st => TaintCore CoreId0
-        | toCore0_IMem st => TaintCore CoreId0
-        | toCore0_DMem st => TaintCore CoreId0
-        (* Core1 <-> SM *)
-        | fromCore1_IMem st => TaintCore CoreId1
-        | fromCore1_DMem st => TaintCore CoreId1
-        | fromCore1_Enc st => TaintCore CoreId1
-        | toCore1_IMem st => TaintCore CoreId1
-        | toCore1_DMem st => TaintCore CoreId1
-        (* SM <-> Mem *)
-        | toMem0_IMem st => TaintCore CoreId0
-        | toMem0_DMem st => TaintCore CoreId0
-        | toMem1_IMem st => TaintCore CoreId1
-        | toMem1_DMem st => TaintCore CoreId1
-        | fromMem0_IMem st => TaintCore CoreId0
-        | fromMem0_DMem st => TaintCore CoreId0
-        | fromMem1_IMem st => TaintCore CoreId1
-        | fromMem1_DMem st => TaintCore CoreId1
-        | pc_core0 => TaintCore CoreId0
-        | pc_core1 => TaintCore CoreId1
-        | purge_core0 => TaintCore CoreId0
-        | purge_core1 => TaintCore CoreId1
-        | purge_mem0 => TaintCore CoreId0
-        | purge_mem1 => TaintCore CoreId1
-        end.
-
-      Definition reg_to_taint (reg: reg_t) : taint_t :=
-        match reg with
-        | external s => external_reg_to_taint s
-        | internal s => internal_reg_to_taint s
-        end.
-
-      Scheme Equality for taint_t.
-
-  End Taint.
-
-  Section Spec.
-      Inductive enclave_state_t :=
-      | EnclaveState_Running 
-      | EnclaveState_Switching (next_enclave: enclave_config)
-      .
-
-      Inductive sm_state_machine :=
-      | SmState_Enclave (machine_state: state) (config: enclave_config) 
-                        (enclave_state: enclave_state_t)
-      | SmState_Waiting (new: enclave_config).
-
-      Inductive sm_magic_state_machine :=
-      | SmMagicState_Continue (st: sm_state_machine) (ext: Log R ContextEnv) (config: option enclave_config)
-      | SmMagicState_Exit (waiting: enclave_config) (ext: Log R ContextEnv)
-      | SmMagicState_TryToEnter (next_enclave: enclave_config). 
-
-      Record iso_machine_t :=
-        { iso_sm0 : sm_state_machine;
-          iso_sm1 : sm_state_machine;
-          turn : bool
-        }.
-
-      Definition filter_external (log: Log R ContextEnv) (core: ind_core_id) : Log R ContextEnv :=
-        ContextEnv.(create) (fun r => match r with
-                                   | internal s => []
-                                   | reg => if (taint_t_beq (reg_to_taint reg) (TaintCore core))
-                                              || (taint_t_beq (reg_to_taint reg) Bottom) then
-                                              ContextEnv.(getenv) log reg
-                                           else []
-                                   end).
-
-
-      (* TODO: normal way of writing this? *)
-      Definition observe_enclave_exit (core_id: ind_core_id) (log: Log R ContextEnv) : bool.
-        refine(
-        let enc_data_reg := match core_id with
-                            | CoreId0 => internal enc_data0 
-                            | CoreId1 => internal enc_data1
-                            end in
-        match rew_latest_write log enc_data_reg _ with
-        | Some v =>
-            let data := EnclaveInterface.extract_enclave_data v in
-            bits_eqb (EnclaveInterface.enclave_data_valid data) Ob~0
-        | None => false
-        end).
-        - destruct core_id; reflexivity.
-      Defined.
 
       Definition check_for_context_switching (core_id: ind_core_id) (input_log: Log R_external ContextEnv) 
                                              : option EnclaveInterface.enclave_config.
@@ -1497,8 +1511,6 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters)
         | _ => None
         end.
 
-      Definition local_output_t : Type := Log R ContextEnv * option enclave_config.
-      Definition spec_output_t : Type := local_output_t * local_output_t.
 
       (*
       Definition iso_step (st: iso_machine_t) (input: Log R ContextEnv) (feedback: Log R ContextEnv) 
@@ -1515,9 +1527,6 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters)
                    |} in
         (st', (log0, log1)). (* TODO: process log0 and log1 *)
         *)
-
-    Definition spec_state_t := iso_machine_t.
-    Definition initial_spec_state : spec_state_t. Admitted.
 
     Definition do_step_input__spec (spec_st: spec_state_t) (input: Log R_external ContextEnv)
                                  : spec_output_t.
@@ -2950,7 +2959,7 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
   Inductive rule_name_t' :=
   | Core0Rule (r: Core0.rule_name_t)
   | Core1Rule (r: Core1.rule_name_t)
-  | SmRule   (r: SM.rule_name_t)
+  | SmRule   (r: SM_Common.rule_name_t)
   | MemRule  (r: Memory.rule_name_t)
   .
 
@@ -3082,7 +3091,7 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
       Core0Rule rl.
     Definition core1_rule_name_lift (rl: Core1.rule_name_t) : rule_name_t :=
       Core1Rule rl.
-    Definition sm_rule_name_lift (rl: SM.rule_name_t) : rule_name_t :=
+    Definition sm_rule_name_lift (rl: SM_Common.rule_name_t) : rule_name_t :=
       SmRule rl.
     Definition mem_rule_name_lift (rl: Memory.rule_name_t) : rule_name_t :=
       MemRule rl.
@@ -3091,7 +3100,7 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
       lift_rule Lift_core0 FnLift_core0 (Core0.rules rl).
     Definition core1_rules (rl: Core1.rule_name_t) : rule :=
       lift_rule Lift_core1 FnLift_core1 (Core1.rules rl).
-    Definition sm_rules (rl: SM.rule_name_t) : rule :=
+    Definition sm_rules (rl: SM_Common.rule_name_t) : rule :=
       lift_rule Lift_sm FnLift_sm (SM.rules rl).
     Definition mem_rules (rl: Memory.rule_name_t) : rule :=
       lift_rule Lift_mem FnLift_mem (Memory.rules rl).
@@ -3109,7 +3118,7 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
   Section Schedule.
     Definition core0_schedule := lift_scheduler core0_rule_name_lift Core0.schedule.
     Definition core1_schedule := lift_scheduler core1_rule_name_lift Core1.schedule.
-    Definition sm_schedule := lift_scheduler sm_rule_name_lift SM.schedule.
+    Definition sm_schedule := lift_scheduler sm_rule_name_lift SM_Common.schedule.
     Definition mem_schedule := lift_scheduler mem_rule_name_lift Memory.schedule.
 
     Definition schedule :=
