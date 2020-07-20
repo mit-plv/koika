@@ -1,5 +1,20 @@
 Require Import Koika.Frontend.
 
+Section SemanticProperties.
+  Context {reg_t: Type}.
+  Context {R: reg_t -> type}.
+  Context {REnv: Env reg_t}.
+
+  Lemma getenv_empty :
+    forall (r: reg_t), REnv.(getenv) (log_empty (R := R)) r = [].
+  Proof.
+    unfold log_empty. intros; rewrite getenv_create. auto.
+  Qed.
+
+End SemanticProperties.
+
+Hint Rewrite @getenv_empty : log_helpers.
+
 Section LatestWrite.
   Context {reg_t: Type}.
   Context {R: reg_t -> type}.
@@ -50,3 +65,8 @@ Ltac unfold_fifo_obs :=
 Hint Unfold rew_latest_write : log_helpers.
 Hint Unfold rew_latest_write0 : log_helpers.
 Hint Unfold rew_latest_write1 : log_helpers.
+
+
+Ltac auto_with_log_helpers :=
+  autounfold with log_helpers; intros; autorewrite with log_helpers; auto with log_helpers.
+Ltac apply_equiv_eq := apply equiv_eq; unfold equiv.

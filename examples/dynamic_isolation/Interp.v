@@ -7,6 +7,7 @@ Require Import Koika.TypedSyntax.
 
 Require Import dynamic_isolation.Tactics.
 
+
 Section Interp.
   Context {pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t: Type}.
   Context {reg_t_eq_dec: EqDec reg_t}.
@@ -127,8 +128,92 @@ Section Interp.
     Qed.
 
   End Lemmas.
-
 End Interp.
+
+Section Lemmas_InterpScheduler.
+  Context {pos_t var_t fn_name_t reg_t ext_fn_t: Type}.
+  Context {R: reg_t -> type}.
+  Context {Sigma: ext_fn_t -> ExternalSignature}.
+
+  Context {REnv: Env reg_t}.
+  Context (r: REnv.(env_t) R).
+  Context (sigma: forall f, Sig_denote (Sigma f)).
+
+  Notation interp_scheduler' := (interp_scheduler' r sigma).
+  Notation interp_scheduler_delta := (interp_scheduler_delta r sigma).
+  Notation interp_scheduler_delta' := (interp_scheduler_delta' r sigma).
+
+  Notation rule := (rule pos_t var_t fn_name_t R Sigma).
+
+  Fixpoint equivalent_rules {rule_name_t rule_name_t' : Type}
+                            (rules1: rule_name_t -> rule) (sched1: scheduler pos_t rule_name_t)
+                            (rules2: rule_name_t' -> rule) (sched2: scheduler pos_t rule_name_t') : Prop :=
+    match sched1, sched2 with
+    | Done, Done => True
+    | Cons r1 s1, Cons r2 s2 =>
+       rules1 r1 = rules2 r2 /\
+       equivalent_rules rules1 s1 rules2 s2
+    | Try r1 s1 s1', Try r2 s2 s2' =>
+        rules1 r1 = rules2 r2 /\
+        equivalent_rules rules1 s1 rules2 s2 /\
+        equivalent_rules rules1 s1' rules2 s2'
+    | SPos v1 s1, SPos v2 s2 =>
+        v1 = v2 /\
+        equivalent_rules rules1 s1 rules2 s2
+    | _, _ => False
+    end.
+
+  Lemma interp_scheduler'_rules_equiv :
+    forall {rule_name_t rule_name_t'}
+      (rules1: rule_name_t -> rule) (sched1: scheduler pos_t rule_name_t)
+      (rules2: rule_name_t' -> rule) (sched2: scheduler pos_t rule_name_t') log_input,
+    equivalent_rules rules1 sched1 rules2 sched2 ->
+    interp_scheduler' rules1 log_input sched1 =
+    interp_scheduler' rules2 log_input sched2.
+  Proof.
+    induction sched1; induction sched2; simpl; auto.
+    - intros; propositional.
+      rewrite H0.
+      match_innermost_in_goal; auto.
+    - intros; propositional.
+      rewrite H0.
+      match_innermost_in_goal; auto.
+    - intros; propositional.
+  Qed.
+
+  Lemma interp_scheduler_delta'_rules_equiv :
+    forall {rule_name_t rule_name_t'}
+      (rules1: rule_name_t -> rule) (sched1: @Syntax.scheduler pos_t rule_name_t)
+      (rules2: rule_name_t' -> rule) (sched2: @Syntax.scheduler pos_t rule_name_t')
+      sched_log acc_log,
+    equivalent_rules rules1 sched1 rules2 sched2 ->
+    interp_scheduler_delta' rules1 sched_log acc_log sched1 =
+    interp_scheduler_delta' rules2 sched_log acc_log sched2.
+  Proof.
+    induction sched1; induction sched2; simpl; auto.
+    - intros; propositional.
+      rewrite H0.
+      match_innermost_in_goal; auto.
+    - intros; propositional.
+      rewrite H0.
+      match_innermost_in_goal; auto.
+    - intros; propositional.
+  Qed.
+
+  Lemma interp_scheduler_delta_rules_equiv :
+    forall (sched_log: Log R REnv) {rule_name_t rule_name_t'}
+      (rules1: rule_name_t -> rule) (sched1: @Syntax.scheduler pos_t rule_name_t)
+      (rules2: rule_name_t' -> rule) (sched2: @Syntax.scheduler pos_t rule_name_t'),
+    equivalent_rules rules1 sched1 rules2 sched2 ->
+    interp_scheduler_delta rules1 sched_log sched1 =
+    interp_scheduler_delta rules2 sched_log sched2.
+  Proof.
+    unfold interp_scheduler_delta.
+    intros.
+    apply interp_scheduler_delta'_rules_equiv; auto.
+  Qed.
+
+End Lemmas_InterpScheduler.
 
 Notation "r '||>' s" :=
   (schedule_app r s)

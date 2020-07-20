@@ -1,6 +1,7 @@
 Require Import Koika.Frontend.
 Require Import Coq.Lists.List.
 Require Import Coq.micromega.Lia.
+Require Import Coq.Program.Equality.
 Require Import EquivDec.
 
 Module General.
@@ -354,6 +355,21 @@ Module General.
          | [ |- ~ (@eq ?t _ _) ] =>
            progress change t with nat
          end; Lia.lia.
+
+  Ltac dep_destruct E := let x := fresh "x" in
+      remember E as x; simpl in x; dependent destruction x;
+        try match goal with
+              | [ H : _ = E |- _ ] => rewrite <- H in *; clear H
+            end.
+
+  Ltac auto_dep_destruct :=
+    match goal with
+    | H: context[match ?x as _ return _ with _ => _ end] |- _ =>
+        dep_destruct x
+    | |- context[match ?x as _ return _ with _ => _ end] =>
+        dep_destruct x
+    end.
+
 End General.
 
 Export General.

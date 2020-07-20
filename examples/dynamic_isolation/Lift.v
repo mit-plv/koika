@@ -1,6 +1,8 @@
 Require Import Koika.Frontend.
 Require Import dynamic_isolation.Interp.
+Require Import dynamic_isolation.LogHelpers.
 Require Import dynamic_isolation.Tactics.
+Require Import dynamic_isolation.Util.
 Require Import Coq.Program.Equality.
 
 Record RLift {T} {A B: Type} {projA: A -> T} {projB: B -> T} := mk_RLift
@@ -36,7 +38,7 @@ Section Inverse.
   Definition partial_f_inv (f: A -> B) : B -> option A :=
     fun b => List.find (fun a => beq_dec (f a) b) finite_elements.
 
-  Lemma is_partial_f_env (f: A -> B) :
+  Lemma is_partial_f_inv (f: A -> B) :
     forall a b,
     partial_f_inv f b = Some a ->
     f a = b.
@@ -45,6 +47,45 @@ Section Inverse.
     apply find_some in H.
     rewrite beq_dec_iff in H.
     safe_intuition.
+  Qed.
+
+
+  Lemma partial_f_inv_is_inv (f: A -> B) (inj: forall a1 a2, f a1 = f a2 -> a1 = a2) :
+    forall a,
+    partial_f_inv f (f a) = Some a.
+  Proof.
+    unfold partial_f_inv; intros.
+    destruct find eqn:?.
+    - apply f_equal. apply is_partial_f_inv in Heqo.
+      apply inj; intuition.
+    - eapply find_none with (x := a) in Heqo.
+      + rewrite beq_dec_false_iff in Heqo. contradiction.
+      + eapply nth_error_In.
+        eapply (finite_surjective a).
+   Qed.
+
+
+  Lemma not_exists_lift_iff_partial_f_inv:
+    forall (f: A -> B) reg',
+    not (exists reg, f reg = reg') <->
+    partial_f_inv f reg' = None.
+  Proof.
+    intros; unfold not; split.
+    - intuition.
+      unfold partial_f_inv.
+      apply not_exists_some_is_none.
+      intuition.
+      eapply find_some in H1; propositional.
+      apply H. exists a; auto.
+      unfold beq_dec in *.
+      destruct_all_matches.
+    - intro; propositional.
+      unfold partial_f_inv in *.
+      eapply find_none with (x := reg) in H.
+      + apply beq_dec_false_iff in H.
+        contradiction.
+      + eapply nth_error_In.
+        eapply (finite_surjective reg).
   Qed.
 
 End Inverse.
@@ -90,16 +131,16 @@ Section Lift.
   Section LiftLog.
 
     Definition lift_log (log: Log R REnv) : Log R' REnv' :=
-      create REnv' (fun r' : reg_t' =>
-                      match partial_f_inv (rlift Rlift) r' as opt_r
-                            return ((partial_f_inv (rlift Rlift) r' = opt_r) -> RLog (R' r')) with
-                      | Some r => fun Heq : partial_f_inv (rlift Rlift) r' = Some r =>
-                                   let log_r := rew <- [fun t : type => RLog t] pf_R_equal Rlift r in
-                                                      getenv REnv log r in
-                                   rew [fun r' => RLog (R' r')] (is_partial_f_env (rlift Rlift) r r' Heq) in
-                                       log_r
-                      | None => fun _ => []
-                      end eq_refl).
+      create REnv'
+        (fun r' : reg_t' =>
+         match partial_f_inv (rlift Rlift) r'  as o0 return (partial_f_inv (rlift Rlift) r' = o0 -> RLog (R' r')) with
+         | Some r =>
+             fun Heqo0 : partial_f_inv (rlift Rlift) r' = Some r =>
+             let X := getenv REnv log r in
+             let X0 := rew <- [fun t : type => RLog t] pf_R_equal Rlift r in X in
+             let X1 := rew [fun r0 : reg_t' => RLog (R' r0)] is_partial_f_inv (rlift Rlift) r r' Heqo0 in X0 in X1
+         | None => fun _ : partial_f_inv (rlift Rlift) r' = None => []
+         end eq_refl).
 
     Definition proj_log (log' : Log R' REnv') : Log R REnv :=
       create REnv (fun reg : reg_t => rew [fun t : type => RLog t] pf_R_equal Rlift reg in
@@ -107,6 +148,64 @@ Section Lift.
   End LiftLog.
 
   Section Lemmas.
+
+    Lemma getenv_lift_log_not_exists :
+      forall (reg': reg_t') (log: Log R REnv),
+      not (exists reg, Rlift.(rlift) reg = reg') ->
+      getenv REnv' (lift_log log) reg' = [].
+    Proof.
+      intros.
+      unfold lift_log.
+      rewrite getenv_create.
+      rewrite not_exists_lift_iff_partial_f_inv in H.
+      unfold eq_rect.
+      set (is_partial_f_inv' :=
+             fun r => is_partial_f_inv (rlift Rlift) r reg').
+      change (is_partial_f_inv (rlift Rlift) ?r reg')
+        with (is_partial_f_inv' r).
+      clearbody is_partial_f_inv'.
+      destruct partial_f_inv.
+      - discriminate.
+      - reflexivity.
+    Qed.
+
+    Lemma getenv_lift_log_eq :
+      forall (reg: reg_t) (log: Log R REnv) ,
+      getenv REnv' (lift_log log) (Rlift.(rlift) reg) =
+        rew<-[fun t : type => RLog t] pf_R_equal Rlift reg in
+            getenv REnv log reg.
+    Proof.
+      intros. unfold lift_log. rewrite getenv_create.
+      unfold eq_rect.
+      set (is_partial_f_inv' :=
+             fun r => is_partial_f_inv (rlift Rlift) r (rlift Rlift reg)).
+      change (is_partial_f_inv (rlift Rlift) ?r (rlift Rlift reg))
+        with (is_partial_f_inv' r).
+      clearbody is_partial_f_inv'.
+      destruct (partial_f_inv (rlift Rlift) (rlift Rlift reg)) eqn:?.
+      - unfold eq_rect_r.
+        rewrite partial_f_inv_is_inv in Heqo; [ | apply (pf_inj_rlift Rlift)]; option_simpl; subst.
+        auto_dep_destruct; auto.
+      - rewrite partial_f_inv_is_inv in Heqo; [ | apply (pf_inj_rlift Rlift)]; option_simpl; subst.
+    Qed.
+
+
+    Lemma lift_log_app :
+      forall l1 l2,
+      lift_log (log_app l1 l2) = log_app (lift_log l1) (lift_log l2).
+    Proof.
+      intros. apply equiv_eq. unfold equiv.
+      intros.
+      setoid_rewrite SemanticProperties.getenv_logapp.
+      destruct (partial_f_inv (rlift Rlift) k) eqn:?.
+      - apply is_partial_f_inv in Heqo. rewrite<-Heqo.
+        repeat rewrite getenv_lift_log_eq.
+        unfold eq_rect_r; elim_eq_rect; simpl; auto.
+        setoid_rewrite SemanticProperties.getenv_logapp; auto.
+      - repeat rewrite getenv_lift_log_not_exists; auto.
+        all: rewrite not_exists_lift_iff_partial_f_inv; auto.
+    Qed.
+
     Lemma getenv_proj_log :
       forall log' r,
       getenv REnv (proj_log log') r =
@@ -118,6 +217,27 @@ Section Lift.
       autorewrite with log_helpers.
       auto.
     Qed.
+
+    Lemma lift_log_proj_inv :
+      forall log',
+      (forall reg', not (exists reg, (Rlift.(rlift) reg = reg')) ->
+               getenv REnv' log' reg' = []) ->
+      lift_log (proj_log log') = log'.
+    Proof.
+      intros. apply equiv_eq. unfold equiv.
+      intro k.
+      destruct (partial_f_inv (rlift Rlift) k) eqn:?.
+      - apply is_partial_f_inv with (b := k) in Heqo.
+        rewrite<-Heqo.
+        rewrite getenv_lift_log_eq.
+        rewrite getenv_proj_log.
+        unfold eq_rect_r.
+        simpl_eqs. auto.
+      - rewrite<-not_exists_lift_iff_partial_f_inv in Heqo.
+        rewrite H; auto.
+        rewrite getenv_lift_log_not_exists; auto.
+    Qed.
+
 
     Lemma getenv_proj_env :
       forall st' r,
@@ -350,8 +470,10 @@ Section Properties_LiftSchedule.
 
   Section LiftActionPreserves.
 
-    Ltac _start := simpl; unfold opt_bind, proj_interp_action_result in *; intros; auto.
+    Ltac _start := simpl; unfold opt_bind, proj_interp_action_result in *;
+                   intros; option_simpl; simplify_tuples; subst; auto.
     Ltac _destruct := match_innermost_in_goal; destruct_pairs; auto.
+    Ltac _destruct_in H := match_innermost_in H; destruct_pairs; option_simpl; simplify_tuples; subst; auto.
 
     Fixpoint lift_action_preserves {sig: tsig var_t}
                                    {ret_ty : type}
@@ -511,7 +633,162 @@ Section Properties_LiftSchedule.
         - _start.
     Qed.
 
+    Fixpoint lift_action_preserves_other_registers
+          {sig: tsig var_t}
+          {ret_ty: type}
+          (action: action sig ret_ty)
+          {struct action}:
+      forall (st': REnv'.(env_t) (fun idx: reg_t' => R' idx)) (sched_log: Log R' REnv') (action_log: Log R' REnv')
+        (gamma: tcontext sig) (log': Log R' REnv') (r': reg_t') v2 v3,
+      ~ (exists r : reg_t, rlift Rlift r = r') ->
+        interp_action st' sigma' gamma sched_log action_log
+                      (lift_action action) = Some (log', v2, v3) ->
+        getenv REnv' log' r' = getenv REnv' action_log r'.
+    Proof.
+      destruct action.
+      (* Fail *)
+      - _start.
+      (* Var *)
+      - _start.
+      (* Const *)
+      - _start.
+      (* Assign *)
+      - _start.
+        _destruct_in H0.
+        erewrite lift_action_preserves_other_registers; eauto.
+      (* Seq *)
+      - _start.
+        _destruct_in H0.
+        erewrite lift_action_preserves_other_registers with (2 := H0); eauto.
+        erewrite lift_action_preserves_other_registers with (action := action1); eauto.
+      (* Bind *)
+      - _start.
+        _destruct_in H0.
+        _destruct_in H0.
+        erewrite lift_action_preserves_other_registers with (2 := Heqo0); eauto.
+      (* If *)
+      - _start.
+        _destruct_in H0.
+        _destruct_in H0.
+        + erewrite lift_action_preserves_other_registers with (2 := H0); eauto.
+          erewrite lift_action_preserves_other_registers with (action := action1); eauto.
+        + erewrite lift_action_preserves_other_registers with (2 := H0); eauto.
+          erewrite lift_action_preserves_other_registers with (action := action1); eauto.
+      (* Read *)
+      - _start.
+        destruct pf_R_equal; simpl in *.
+        _destruct_in H0.
+        rewrite SemanticProperties.log_cons_neq; auto.
+        intuition. unfold not in *. apply H. eauto.
+      (* Write *)
+      - _start.
+        unfold eq_rect_r in *.
+        destruct pf_R_equal; simpl in *.
+        _destruct_in H0.
+        _destruct_in H0.
+        rewrite SemanticProperties.log_cons_neq.
+        + erewrite lift_action_preserves_other_registers with (2 := Heqo); eauto.
+        + unfold not in *; intuition. apply H; eauto.
+     (* Unop *)
+      - _start.
+        _destruct_in H0.
+        erewrite lift_action_preserves_other_registers with (2 := Heqo); eauto.
+      (* Binop *)
+      -  _start.
+         _destruct_in H0.
+         _destruct_in H0.
+         erewrite lift_action_preserves_other_registers with (2 := Heqo0); eauto.
+      (* ExternalCall *)
+      - _start.
+        unfold eq_rect_r in *.
+        destruct pf_R_equal; simpl in *.
+        unfold opt_bind in *.
+        _destruct_in H0.
+         erewrite lift_action_preserves_other_registers with (2 := Heqo); eauto.
+      (* InternalCall *)
+      - _start.
+        _destruct_in H0.
+        _destruct_in H0.
+        erewrite lift_action_preserves_other_registers with (2 := Heqo0); eauto.
+        assert (
+        forall (st': REnv'.(env_t) (fun idx: reg_t' => R' idx)) (sched_log: Log R' REnv') (action_log: Log R' REnv')
+          (gamma: tcontext sig) (log': Log R' REnv') (r': reg_t') v2 v3,
+        ~ (exists r : reg_t, rlift Rlift r = r') ->
+          interp_args st' sigma' gamma sched_log action_log
+                      (lift_args (@Lift.lift_action reg_t reg_t' R R' Rlift fn_name_t ext_fn_t ext_fn_t' Sigma Sigma' Fnlift)
+                                    args) = Some (log', v2, v3) ->
+          getenv REnv' log' r' = getenv REnv' action_log r') as lift_args_preserves_other_registers.
+        { clear - lift_action_preserves_other_registers.
+          induction args.
+          - _start.
+          - _start.
+            _destruct_in H0.
+            _destruct_in H0.
+            erewrite lift_action_preserves_other_registers with (2 := Heqo0); eauto.
+        }
+        { erewrite lift_args_preserves_other_registers; eauto. }
+      (* APos *)
+      - _start.
+        eauto.
+    Qed.
+
   End LiftActionPreserves.
+
+  Lemma wf_interp_scheduler_delta'_on_lifted_rules:
+    forall schedule sched_log action_log,
+    (forall rule, rules' (rule_name_lift rule) = lift_rule (rules rule)) ->
+    forall reg', not (exists reg, (Rlift.(rlift) reg = reg')) ->
+    getenv REnv' action_log reg' = [] ->
+    getenv REnv' (interp_scheduler_delta' r' sigma'
+                                         rules' sched_log action_log (lift_scheduler rule_name_lift schedule))
+                 reg' = [].
+  Proof.
+    induction schedule; simpl; auto.
+    - intros.
+      match_innermost_in_goal.
+      rewrite interp_scheduler'_delta_log_app.
+      setoid_rewrite SemanticProperties.getenv_logapp.
+      setoid_rewrite H1.
+      rewrite app_nil_r.
+      apply IHschedule; auto.
+      unfold interp_rule in *.
+      match_innermost_in Heqo.
+      destruct_pairs; option_simpl; subst.
+      rewrite H in *. unfold lift_rule in *.
+      erewrite lift_action_preserves_other_registers with
+          (action := rules r0)
+          (sched_log0 := log_app action_log sched_log) (action_log0 := log_empty); eauto.
+      auto_with_log_helpers.
+    - intros.
+      match_innermost_in_goal.
+      rewrite interp_scheduler'_delta_log_app.
+      setoid_rewrite SemanticProperties.getenv_logapp.
+      setoid_rewrite H1.
+      rewrite app_nil_r.
+      apply IHschedule1; auto.
+      unfold interp_rule in *.
+      match_innermost_in Heqo.
+      destruct_pairs; option_simpl; subst.
+      rewrite H in *. unfold lift_rule in *.
+      erewrite lift_action_preserves_other_registers with
+          (action := rules r0)
+          (sched_log0 := log_app action_log sched_log) (action_log0 := log_empty); eauto.
+      auto_with_log_helpers.
+  Qed.
+
+  Lemma wf_interp_scheduler_delta_on_lifted_rules:
+    forall sched_log schedule,
+    (forall rule, rules' (rule_name_lift rule) = lift_rule (rules rule)) ->
+    forall reg', not (exists reg, (Rlift.(rlift) reg = reg')) ->
+    getenv REnv' (interp_scheduler_delta r' sigma'
+                                         rules' sched_log (lift_scheduler rule_name_lift schedule))
+                 reg' = [].
+  Proof.
+    intros.
+    unfold interp_scheduler_delta.
+    apply wf_interp_scheduler_delta'_on_lifted_rules; auto.
+    unfold log_empty; autorewrite with log_helpers; auto.
+  Qed.
 
   Lemma interp_rule_comm_proj :
     forall rule (log_input: Log R' REnv'),
@@ -533,6 +810,7 @@ Section Properties_LiftSchedule.
       simpl_match. eexists; eauto.
     - unfold lift_rule. simpl_match. reflexivity.
   Qed.
+
 
   Lemma interp_scheduler_delta'_comm_proj :
     forall schedule (log_input acc_log: Log R' REnv'),
@@ -577,8 +855,22 @@ Section Properties_LiftSchedule.
     autorewrite with log_helpers; reflexivity.
   Qed.
 
+  Lemma lift_proj_interp_scheduler_delta:
+    forall schedule log,
+    (forall rule, rules' (rule_name_lift rule) = lift_rule (rules rule)) ->
+    (forall f, Sigma f = Sigma' (Fnlift.(rlift) f)) ->
+    (forall f, sigma f = rew [fun e : ExternalSignature => Sig_denote e] pf_R_equal Fnlift f in sigma' (Fnlift.(rlift) f)) ->
+    lift_log Rlift (interp_scheduler_delta (proj_env r') sigma rules (proj_log log) schedule) =
+    interp_scheduler_delta r' sigma' rules' log (lift_scheduler rule_name_lift schedule).
+  Proof.
+    intros.
+    rewrite interp_scheduler_delta_comm_proj; auto.
+    rewrite lift_log_proj_inv; auto.
+    apply wf_interp_scheduler_delta_on_lifted_rules; auto.
+  Qed.
+
   (* TODO: rename *)
-  Lemma log_app_interp_schedulre_delta_proj_comm_proj_interp_scheduler' :
+  Lemma log_app_interp_scheduler_delta_proj_comm_proj_interp_scheduler' :
     forall schedule (log_input: Log R' REnv'),
     (forall rule, rules' (rule_name_lift rule) = lift_rule (rules rule)) ->
     (forall f, Sigma f = Sigma' (Fnlift.(rlift) f)) ->

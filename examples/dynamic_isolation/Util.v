@@ -1,4 +1,5 @@
 Require Import Coq.Lists.List.
+Require Import dynamic_isolation.Tactics.
 Import ListNotations.
 
 Ltac simplify_forall :=
@@ -38,6 +39,16 @@ Proof.
     constructor.
     + eapply H; eauto.
     + eapply IHxs; eauto.
+Qed.
+
+Lemma not_exists_some_is_none :
+  forall {A} (opt: option A),
+  not (exists a, opt = Some a) ->
+  opt = None.
+Proof.
+  intros. destruct opt; auto.
+  unfold not in *. assert_false.
+  apply H. exists a; auto.
 Qed.
 
 Definition maybe_holds {T} (p:T -> Prop) : option T -> Prop :=
