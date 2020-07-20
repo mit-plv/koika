@@ -188,7 +188,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
     Record tau :=
       { output_core0 : Log Core0.R ContextEnv
       ; output_core1 : Log Core1.R ContextEnv
-      ; output_sm : Log SM_Common.R ContextEnv * sm_ghost_output_t
+      ; output_sm : Log SM_Common.R ContextEnv 
       ; output_mem : Log Memory.R ContextEnv * Memory.external_state_t
       }.
 
@@ -243,17 +243,17 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
 
       Definition do_sm (st: SM.state) (input_log: Log Impl.System.R ContextEnv)
                              : Log SM_Common.R_external ContextEnv * Log SM_Common.R ContextEnv *
-                               sm_ghost_output_t * Log Impl.System.R ContextEnv * Log Impl.System.R ContextEnv *
+                               Log Impl.System.R ContextEnv * Log Impl.System.R ContextEnv *
                                (Log Impl.System.R ContextEnv -> SM.step_io) :=
         let sm_input := SM.proj_log__ext (proj_log Impl.System.Lift_sm input_log) in
-        let '((sm_output__local, sm_ghost), _) := SM.do_step_input__impl st sm_input in
+        let '(sm_output__local, _) := SM.do_step_input__impl st sm_input in
         let sm_output__global := lift_log (REnv' := ContextEnv) Impl.System.Lift_sm sm_output__local in
         let acc := log_app sm_output__global input_log in
         let mk_sm_step_io feedback_log :=
             {| SM.step_input := sm_input;
                SM.step_feedback := SM.proj_log__ext (proj_log Impl.System.Lift_sm feedback_log)
             |} in
-        (sm_input, sm_output__local, TODO_ghost_state_conversion sm_ghost, sm_output__global, acc, mk_sm_step_io).
+        (sm_input, sm_output__local, sm_output__global, acc, mk_sm_step_io).
 
       Definition do_mem (st: Memory.state) (input_log: Log Impl.System.R ContextEnv)
                         : Log Memory.R_external ContextEnv * Log Memory.R ContextEnv *
@@ -282,7 +282,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
       let '(core1_input, core1_output__local, core1_output__global, acc__core1, mk_core1_step_io) :=
           do_core1 (state_core1 st) acc__core0 in
       (* SM *)
-      let '(sm_input, sm_output__local, sm_ghost, sm_output__global, acc_sm, mk_sm_step_io) :=
+      let '(sm_input, sm_output__local, sm_output__global, acc_sm, mk_sm_step_io) :=
           do_sm (state_sm st) acc__core1 in
       (* Mem *)
       let '(mem_input, mem_output__local, ext_st, mem_output__global, acc_mem, mk_mem_step_io) :=
@@ -290,7 +290,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
       let outputs :=
         {| output_core0 := core0_output__local;
            output_core1 := core1_output__local;
-           output_sm := (sm_output__local, sm_ghost);
+           output_sm := sm_output__local ;
            output_mem := (mem_output__local, ext_st)
         |} in
       (* Do feedback: reverse *)
@@ -311,6 +311,23 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
 
     Definition step_n (initial_dram: dram_t) (n: nat) : state * trace :=
       Framework.step_n (initial_state initial_dram) do_step n.
+
+(* TODO MOVE *)
+Declare Scope log_scope.
+Infix "++" := log_app (right associativity, at level 60) : log_scope.
+
+Open Scope log_scope.
+
+    Section HelperLemmas.
+
+      Definition outputs_to_impl_log (ev: tau) : impl_log_t :=
+        let core0_log := lift_log Impl.System.Lift_core0 ev.(output_core0) in
+        let core1_log := lift_log Impl.System.Lift_core1 ev.(output_core1) in
+        let sm_log := lift_log Impl.System.Lift_sm ev.(output_sm) in
+        let mem_log := lift_log Impl.System.Lift_mem (fst ev.(output_mem)) in
+        mem_log ++ sm_log ++ core1_log ++ core0_log.
+
+    End HelperLemmas.
 
   End ModImpl.
 
@@ -425,7 +442,6 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
 
   Module Observations.
     Import Interfaces.Common.
-
     (* TODO: write this in a nicer way *)
     Definition observe_imem_req0 (log: Log Core0.R ContextEnv) : option (struct_t mem_req) :=
       observe_enq0 (Core0.external (Core0.toIMem MemReq.valid0)) eq_refl
@@ -485,8 +501,10 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
       end.
 
     Definition generate_observations__modImpl (ev: ModImpl.tau) : tau :=
-      fun core_id =>
-        let sm_output := fst (ModImpl.output_sm ev) in
+      fun core_id => Impl.do_observations (ModImpl.outputs_to_impl_log ev) core_id.
+
+        (*
+        let sm_output := ModImpl.output_sm ev in
         let core0_output := ModImpl.output_core0 ev in
         let core1_output := ModImpl.output_core1 ev in
         match core_id with
@@ -515,7 +533,10 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
                            |}
            |}
         end.
+ *)
 
+    (* TODO: might be easier to combine logs first *)
+    (*
     Definition generate_observations__modSpec (ev: ModSpec.tau) : tau :=
       fun core_id =>
         let sm0_output := fst (fst (ModSpec.output_sm ev)) in
@@ -548,6 +569,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
                            |}
            |}
         end.
+    *)
 
     Ltac unfold_mod_impl_obs :=
       unfold observe_imem_req0, observe_imem_req1,
@@ -567,7 +589,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
              Impl.observe_imem_resps, Impl.observe_imem_resps0, Impl.observe_imem_resps1,
              Impl.observe_dmem_resps, Impl.observe_dmem_resps0, Impl.observe_dmem_resps1,
              Impl.observe_enclave_reqs, Impl.observe_enclave_reqs0, Impl.observe_enclave_reqs1,
-             Impl.observe_enclave_exits, Impl.observe_enclave_exit0, Impl.observe_enclave_exit1,
+             Impl.observe_enclave_enters, Impl.observe_enclave_enter0, Impl.observe_enclave_enter1,
              Impl.observe_enclave_exits, Impl.observe_enclave_exit0, Impl.observe_enclave_exit1
              in *.
   End Observations.
@@ -601,10 +623,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
 
       Inductive GenTauSim (gen_ev: gen_impl_tau) (mod_ev: ModImpl.tau) :=
       | _GenTauSim :
-          forall (core0_sim: get_impl_log_core0 (fst gen_ev) = ModImpl.output_core0 mod_ev)
-            (core1_sim: get_impl_log_core1 (fst gen_ev) = ModImpl.output_core1 mod_ev)
-            (sm_sim: get_impl_log_sm (fst gen_ev) = fst (ModImpl.output_sm mod_ev))
-            (mem_log_sim : get_impl_log_mem (fst gen_ev) = fst (ModImpl.output_mem mod_ev))
+          forall (log_sim: fst gen_ev = ModImpl.outputs_to_impl_log mod_ev)
             (mem_ext_st_sm : snd gen_ev = snd (ModImpl.output_mem mod_ev)),
           GenTauSim gen_ev mod_ev.
 
@@ -660,6 +679,18 @@ Local Hint Resolve wf_r_lift_core1 : core.
 Local Hint Resolve wf_r_lift_sm : core.
 Local Hint Resolve wf_r_lift_mem : core.
 
+Ltac destruct_one_match_in H :=
+  lazymatch type of H with
+  | context[match ?d with | _ => _ end] =>
+      let H1 := fresh H in
+      destruct d eqn:H1
+  end.
+Arguments log_empty : simpl never.
+Arguments log_app : simpl never.
+Arguments interp_scheduler' : simpl never.
+Arguments commit_update : simpl never.
+Arguments proj_env : simpl never.
+
       Lemma initial_state_sim (initial_dram: dram_t):
         Sim (Impl.initial_state initial_dram) (ModImpl.initial_state initial_dram).
       Proof.
@@ -669,6 +700,194 @@ Local Hint Resolve wf_r_lift_mem : core.
              repeat (autorewrite with log_helpers; simpl; auto).
       Qed.
 
+Lemma wf_core0_Sigma : 
+  forall f, Impl.System.Sigma (Impl.System.FnLift_core0.(rlift) f) = Core0.Sigma f.
+Proof.
+  auto.
+Qed.
+Local Hint Resolve wf_core0_Sigma.
+
+Lemma wf_core0_sigma : 
+ forall f : External.ext_fn_t,
+   Core0.sigma f =
+     rew [fun e : ExternalSignature => Sig_denote e] pf_R_equal Impl.System.FnLift_core0 f in
+     Impl.System.sigma (rlift Impl.System.FnLift_core0 f).
+Proof. 
+  auto. 
+Qed.
+Local Hint Resolve wf_core0_sigma.
+Lemma wf_core1_Sigma : 
+  forall f, Impl.System.Sigma (Impl.System.FnLift_core1.(rlift) f) = Core1.Sigma f.
+Proof.
+  auto.
+Qed.
+Local Hint Resolve wf_core1_Sigma.
+
+Lemma wf_core1_sigma : 
+ forall f : External.ext_fn_t,
+   Core1.sigma f =
+     rew [fun e : ExternalSignature => Sig_denote e] pf_R_equal Impl.System.FnLift_core1 f in
+     Impl.System.sigma (rlift Impl.System.FnLift_core1 f).
+Proof. 
+  auto. 
+Qed.
+Local Hint Resolve wf_core1_sigma.
+
+
+Definition core0_empty_internal_regs (log: Log Core0.R ContextEnv) :=
+  (forall internal_reg, ContextEnv.(getenv) log (Core0.internal internal_reg) = []).
+Local Hint Unfold core0_empty_internal_regs : log_helpers.
+Definition core1_empty_internal_regs (log: Log Core1.R ContextEnv) :=
+  (forall internal_reg, ContextEnv.(getenv) log (Core1.internal internal_reg) = []).
+Local Hint Unfold core1_empty_internal_regs : log_helpers.
+Definition sm_empty_internal_regs (log: Log SM_Common.R ContextEnv) :=
+  (forall internal_reg, ContextEnv.(getenv) log (SM_Common.internal internal_reg) = []).
+Local Hint Unfold sm_empty_internal_regs : log_helpers.
+Definition mem_empty_internal_regs (log: Log Memory.R ContextEnv) :=
+  (forall internal_reg, ContextEnv.(getenv) log (Memory.internal internal_reg) = []).
+Local Hint Unfold mem_empty_internal_regs : log_helpers.
+
+Property core0_lift_ext_log_cancels_proj:
+  forall log,
+  core0_empty_internal_regs log ->
+  Core0.lift_ext_log (Core0.proj_log__ext log) = log.
+Proof.
+  unfold core0_empty_internal_regs; intros.
+  unfold Core0.lift_ext_log, Core0.proj_log__ext.
+  apply_equiv_eq.
+  destruct k; auto_with_log_helpers.
+Qed.
+
+Property core1_lift_ext_log_cancels_proj:
+  forall log,
+  core1_empty_internal_regs log ->
+  Core1.lift_ext_log (Core1.proj_log__ext log) = log.
+Proof.
+  unfold core1_empty_internal_regs; intros.
+  unfold Core1.lift_ext_log, Core1.proj_log__ext.
+  apply_equiv_eq.
+  destruct k; auto_with_log_helpers.
+Qed.
+
+Property sm_lift_ext_log_cancels_proj:
+  forall log,
+  sm_empty_internal_regs log ->
+  SM.lift_ext_log (SM.proj_log__ext log) = log.
+Proof.
+  unfold sm_empty_internal_regs; intros.
+  unfold SM.lift_ext_log, SM.proj_log__ext.
+  apply_equiv_eq.
+  destruct k; auto_with_log_helpers.
+Qed.
+
+Property mem_lift_ext_log_cancels_proj:
+  forall log,
+  mem_empty_internal_regs log ->
+  Memory.lift_ext_log (Memory.proj_log__ext log) = log.
+Proof.
+  unfold sm_empty_internal_regs; intros.
+  unfold Memory.lift_ext_log, Memory.proj_log__ext.
+  apply_equiv_eq.
+  destruct k; auto_with_log_helpers.
+Qed.
+
+Lemma getenv_log_empty :
+  forall (reg_t : Type) (R : reg_t -> type) (REnv : Env reg_t) (r: reg_t), 
+    getenv REnv (log_empty (R := R)) r = [].
+Proof.
+  unfold log_empty. 
+  intros; rewrite getenv_create; auto.
+Qed.
+Hint Rewrite getenv_log_empty : log_helpers.
+
+Property equivalent_rules_core0_lift :
+  forall sched,
+  equivalent_rules 
+     (lift_rule Impl.System.Lift_core0 Impl.System.FnLift_core0)
+     (lift_scheduler Core0.rules sched)
+     Impl.System.rules
+     (lift_scheduler Impl.System.core0_rule_name_lift sched).
+Proof.
+  induction sched; simpl; auto.
+Qed.
+
+Local Hint Resolve equivalent_rules_core0_lift : core.
+
+Property equivalent_rules_core1_lift :
+  forall sched,
+  equivalent_rules 
+     (lift_rule Impl.System.Lift_core1 Impl.System.FnLift_core1)
+     (lift_scheduler Core1.rules sched)
+     Impl.System.rules
+     (lift_scheduler Impl.System.core1_rule_name_lift sched).
+Proof.
+  induction sched; simpl; auto.
+Qed.
+
+Local Hint Resolve equivalent_rules_core1_lift : core.
+
+Property equivalent_rules_sm_lift :
+  forall (sched: scheduler),
+  equivalent_rules 
+     (lift_rule Impl.System.Lift_sm Impl.System.FnLift_sm)
+     (lift_scheduler Impl.System.SM.rules sched)
+     Impl.System.rules
+     (lift_scheduler Impl.System.sm_rule_name_lift sched).
+Proof.
+  induction sched; simpl; auto.
+Qed.
+
+Local Hint Resolve equivalent_rules_sm_lift : core.
+
+Property equivalent_rules_mem_lift :
+  forall (sched: scheduler),
+  equivalent_rules 
+     (lift_rule Impl.System.Lift_mem Impl.System.FnLift_mem)
+     (lift_scheduler Memory.rules sched)
+     Impl.System.rules
+     (lift_scheduler Impl.System.mem_rule_name_lift sched).
+Proof.
+  induction sched; simpl; auto.
+Qed.
+
+Local Hint Resolve equivalent_rules_sm_lift : core.
+
+
+Hint Rewrite @SemanticProperties.log_app_empty_l 
+             @SemanticProperties.log_app_empty_r 
+             : log_helpers.
+
+Arguments lift_log : simpl never.
+(*
+Property lift_core0_not_core1_internal :
+  forall internal_reg,
+  ~ (exists reg : Core0.reg_t, rlift Impl.System.Lift_core0 reg = Impl.System.Core1_internal internal_reg).
+Proof.
+  intros. intuition. repeat (destruct_one_ind; try discriminate).
+Qed.
+Hint Resolve lift_core0_not_core1_internal : core.
+Property lift_core1_not_sm_internal :
+  forall internal_reg,
+ ~ (exists reg : Core1.reg_t, rlift Impl.System.Lift_core1 reg = Impl.System.SM_internal internal_reg).
+Proof.
+  intros. intuition. repeat (destruct_one_ind; try discriminate).
+Qed.
+
+Hint Resolve lift_core1_not_sm_internal : core.
+*)
+
+Ltac solve_not_exists_lift_to_internal :=
+  match goal with
+  | |- not (exists reg, rlift _ reg = Impl.System.Core1_internal _) =>
+    clear; intros; intuition; solve[repeat (destruct_one_ind; try discriminate)]
+  | |- not (exists reg, rlift _ reg = Impl.System.SM_internal _) =>
+    clear; intros; intuition; solve[repeat (destruct_one_ind; try discriminate)]
+  | |- not (exists reg, rlift _ reg = Impl.System.Mem_internal _) =>
+    clear; intros; intuition; solve[repeat (destruct_one_ind; try discriminate)]
+  end.
+Hint Extern 10 => solve_not_exists_lift_to_internal : log_helpers.
+
+
       Theorem step_sim : forall (impl_st impl_st': Impl.state) (mod_st mod_st': ModImpl.state)
                            (impl_ev: gen_impl_tau) (mod_ev: ModImpl.tau),
         Sim impl_st mod_st ->
@@ -676,6 +895,156 @@ Local Hint Resolve wf_r_lift_mem : core.
         ModImpl.do_step mod_st = (mod_st', mod_ev) ->
         Sim impl_st' mod_st' /\ GenTauSim impl_ev mod_ev.
       Proof.
+        intros *; intros HSim HGenStep HModStep.
+        consider gen_impl_step.
+        destruct_one_match_in HGenStep.
+        consider Impl.update_function.
+        destruct_one_match_in HGenStep0.
+        remember (Impl.update_koika (Impl.koika_state impl_st)) as UpdateKoika.
+        consider Impl.update_koika.
+        consider Impl.System.schedule.
+        consider @interp_scheduler.
+        
+        repeat rewrite interp_scheduler'_app in HeqUpdateKoika.
+        unfold ModImpl.do_step in HModStep.
+        destruct_one_match_in HModStep; repeat destruct_pair.
+        destruct_one_match_in HModStep; repeat destruct_pair.
+        destruct_one_match_in HModStep; repeat destruct_pair.
+        destruct_one_match_in HModStep; repeat destruct_pair.
+
+        consider ModImpl.do_core0.
+        destruct_one_match_in HModStep0.
+        consider Core0.do_step_input__koika.
+        consider Core0.update_function.
+
+        rewrite core0_lift_ext_log_cancels_proj in *; [ | solve[auto_with_log_helpers]].
+        destruct HSim.
+        rewrite<-core0_sim in *.
+        consider get_impl_core0.
+        erewrite log_app_interp_scheduler_delta_proj_comm_proj_interp_scheduler' in HModStep4; 
+          try typeclasses eauto; eauto.
+        erewrite interp_scheduler_delta_comm_proj in HModStep4; try typeclasses eauto; eauto.
+        consider Impl.System.core0_schedule.
+        consider Impl.System.sigma.
+        unfold Core0.rule in *.
+        unfold Impl.System.rule_name_t in *.
+        simplify_tuples; subst.
+        erewrite<-interp_scheduler'_rules_equiv with (1 := equivalent_rules_core0_lift Core0.schedule).
+        autorewrite with log_helpers.
+
+        consider ModImpl.do_core1.
+        destruct_one_match_in HModStep1.
+        consider Core1.do_step_input__koika.
+        consider Core1.update_function.
+        rewrite core1_lift_ext_log_cancels_proj in *.
+        2: { auto_with_log_helpers; elim_eq_rect; simpl.
+             rewrite getenv_lift_log_not_exists; auto_with_log_helpers.
+           }
+        rewrite<-core1_sim in *.
+        consider get_impl_core1.
+        consider Impl.System.core1_schedule.
+        unfold Core1.rule in *.
+        simplify_tuples; subst.
+        erewrite<-interp_scheduler'_rules_equiv with (1 := equivalent_rules_core1_lift Core1.schedule).
+        autorewrite with log_helpers.
+
+        consider Core0.do_step__koika; simpl.
+
+        consider ModImpl.do_sm.
+        destruct_one_match_in HModStep2.
+        consider SM.do_step_input__impl.
+        consider SM.update_function.
+        rewrite sm_lift_ext_log_cancels_proj in *.
+        2: { auto_with_log_helpers; elim_eq_rect; simpl; auto.
+             unfold RLog.
+             rewrite SemanticProperties.getenv_logapp.
+             repeat rewrite getenv_lift_log_not_exists; auto_with_log_helpers.
+           }
+        rewrite<-sm_sim in *.
+        consider get_impl_sm.
+        consider Impl.System.sm_schedule.
+        simplify_tuples; subst.
+        erewrite<-interp_scheduler'_rules_equiv with (1 := equivalent_rules_sm_lift Impl.System.SM.schedule).
+        autorewrite with log_helpers.
+
+        consider ModImpl.do_mem.
+        destruct_one_match_in HModStep3.
+        consider Memory.do_step_input__impl.
+        consider Memory.update_function.
+        destruct_one_match_in HModStep0.
+        destruct_one_match_in HModStep0.
+        consider Memory.koika_update_function.
+        rewrite mem_lift_ext_log_cancels_proj in *.
+        2: { auto_with_log_helpers; elim_eq_rect; simpl; auto.
+             setoid_rewrite SemanticProperties.getenv_logapp.
+             repeat rewrite getenv_lift_log_not_exists; auto_with_log_helpers.
+             setoid_rewrite SemanticProperties.getenv_logapp.
+             repeat (rewrite getenv_lift_log_not_exists; auto_with_log_helpers).
+           }
+        2: { unfold mem_empty_internal_regs. autorewrite with log_helpers.
+             intros; rewrite getenv_proj_log; elim_eq_rect; simpl; auto.
+             setoid_rewrite SemanticProperties.getenv_logapp.
+             rewrite getenv_lift_log_not_exists; auto_with_log_helpers.
+             setoid_rewrite SemanticProperties.getenv_logapp.
+             repeat rewrite getenv_lift_log_not_exists; auto_with_log_helpers.
+           }
+        rewrite<-mem_sim in *.
+        consider get_impl_mem.
+        consider Impl.System.mem_schedule.
+        unfold Memory.rule in *.
+        simplify_tuples; subst.
+        erewrite<-interp_scheduler'_rules_equiv with (1 := equivalent_rules_mem_lift Memory.schedule) in *.
+        autorewrite with log_helpers.
+        consider Impl.update_ext_st.
+        destruct_one_match_in HGenStep1.
+        consider get_impl_koika_mem.
+
+        erewrite log_app_interp_scheduler_delta_proj_comm_proj_interp_scheduler' in HModStep2;
+          try typeclasses eauto; eauto.
+        autorewrite with log_helpers in *.
+        simplify_tuples; subst.
+        split.
+
+Arguments lift_scheduler : simpl never.
+        { admit. }
+        { constructor; simpl.
+          { unfold ModImpl.outputs_to_impl_log; simpl.
+            repeat rewrite lift_log_app in *.
+            repeat rewrite<-SemanticProperties.log_app_assoc in *.
+
+            repeat match goal with
+            | |- context[lift_log ?x ?y] =>
+                remember (lift_log x y)
+            end.
+            repeat rewrite interp_scheduler_delta_correspond_to_interp_scheduler.
+            repeat rewrite<-SemanticProperties.log_app_assoc in *.
+            autorewrite with log_helpers.
+            replace Impl.System.FnLift_core1 with Impl.System.FnLift_core0 in Heql6; auto.
+            rewrite lift_log_proj_inv in Heql6; eauto.
+            2: { eapply wf_interp_scheduler_delta_on_lifted_rules; eauto with log_helpers;
+                 try typeclasses eauto.
+               } 
+            setoid_rewrite<-Heql6.
+            erewrite lift_proj_interp_scheduler_delta in Heql5; eauto with log_helpers;
+              try typeclasses eauto.
+            setoid_rewrite<-Heql5.
+            erewrite lift_proj_interp_scheduler_delta in Heql4; eauto with log_helpers;
+              try typeclasses eauto.
+            replace (Impl.System.FnLift_core1) with Impl.System.FnLift_sm in Heql4; auto.
+            unfold Impl.System.sigma in *.
+            rewrite interp_scheduler_delta_rules_equiv with
+                (rules1 := lift_rule Impl.System.Lift_sm Impl.System.FnLift_sm) 
+                (sched1 := lift_scheduler Impl.System.SM.rules Impl.System.SM.schedule)
+                (rules2 := lift_rule Impl.System.Lift_sm Impl.System.FnLift_sm) 
+                (sched2 := lift_scheduler SM.rules SM.schedule).
+            2: { admit. (* TODO: Coq Modules ugh. *) }
+            setoid_rewrite<-Heql4.
+            erewrite lift_proj_interp_scheduler_delta in Heql3; eauto with log_helpers;
+              try typeclasses eauto.
+            setoid_rewrite<-Heql3.
+            admit. (* Morally done *)
+          }
+          { admit. }
       Admitted.
 
       Theorem step_n_sim :
@@ -749,11 +1118,7 @@ Local Hint Resolve wf_r_lift_mem : core.
         unfold Impl.do_observations in *.
         apply functional_extensionality.
         destruct H0; subst.
-        unfold_impl_obs; unfold_mod_impl_obs; unfold_fifo_obs; unfold_get_impls.
-        destruct x; auto;
-          try rewrite<-core0_sim; try rewrite<-core1_sim; try rewrite<-sm_sim;
-          repeat apply f_equal3;
-          repeat (autorewrite with log_helpers; autounfold with log_helpers); auto.
+        rewrite log_sim. auto.
       Qed.
 
       Lemma chain_trace_implication :
@@ -877,8 +1242,8 @@ Local Hint Resolve wf_r_lift_mem : core.
 
 
   (* ============== DEPRECATED ================== *)
-
-
+End TradPf.
+(*
   Section Modularspec.
     Record mod_step_tau_t :=
       { mod_core0_output : Log Core0.R ContextEnv
@@ -2204,3 +2569,4 @@ End Pf.
 
 (* TODO: move this *)
 
+*)

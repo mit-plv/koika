@@ -3,6 +3,7 @@ Require Import Coq.Lists.List.
 
 Require Import Koika.Std.
 
+Require Import dynamic_isolation.Interp.
 Require Import dynamic_isolation.Lift.
 Require Import dynamic_isolation.LogHelpers.
 Require Import dynamic_isolation.Tactics.
@@ -237,14 +238,14 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
     | internal s => r_internal s
     end.                              
 
-  (* TODO: recompile Tactics.v and this should work *)
   Declare Instance FiniteType_ext_reg_t : FiniteType external_reg_t. 
   Declare Instance FiniteType_reg_t : FiniteType reg_t.
+  Declare Instance EqDec_reg_t : EqDec reg_t.
 
   Definition ext_fn_t := External.ext_fn_t.
   Definition Sigma := External.Sigma.
   Definition rule := rule R Sigma.
-  (* Definition sigma := External.sigma. *)
+  Definition sigma := External.sigma. 
 
   Parameter rule_name_t : Type.
   Parameter rules  : rule_name_t -> rule.
@@ -257,8 +258,8 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
 
     Definition initial_state := ContextEnv.(create) r.
 
-    Parameter update_function : state -> Log R ContextEnv -> Log R ContextEnv.
-      (* interp_scheduler' st ? rules log scheduler. *)
+    Definition update_function : state -> Log R ContextEnv -> Log R ContextEnv :=
+      fun st log => interp_scheduler_delta st sigma rules log schedule.
 
     Definition log_t := Log R ContextEnv.
     Definition input_t := Log R_external ContextEnv.
@@ -876,6 +877,7 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters)
   Definition Sigma := External.Sigma.
   Definition ext_fn_t := External.ext_fn_t.
   Definition state := env_t ContextEnv (fun idx : reg_t => R idx).
+  Definition sigma := External.sigma. 
 
   Definition eid_to_enc_data : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun eid_to_enc_data (eid: bits_t 32) : struct_t enclave_data =>
@@ -1249,15 +1251,17 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters)
         ghost_output_config1 : option enclave_config
       }.
 
-    Definition impl_output_t : Type := Log R ContextEnv * ghost_output.
+    Definition impl_output_t : Type := Log R ContextEnv (* * ghost_output *).
 
-    Parameter update_function : state -> Log R ContextEnv -> impl_output_t.
+    (* TODO: need ghost state to interface with the memory module? *)
+    Definition update_function : state -> Log R ContextEnv -> impl_output_t :=
+      fun st log => interp_scheduler_delta st sigma rules log schedule.
+        
 
     Definition log_t := Log R ContextEnv.
     Definition input_t := Log R_external ContextEnv.
     Definition output_t : Type := Log R ContextEnv * ghost_output.
     Definition feedback_t := Log R_external ContextEnv.
-
 
     Definition initial_state (eid0: option enclave_id) (eid1: option enclave_id) (clk: bits_t 1): state :=
       ContextEnv.(create) (fun reg => match reg return R reg with
@@ -1281,10 +1285,13 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters)
         step_feedback : Log R_external ContextEnv
       }.
 
-    Definition do_step_input__impl (st: state) (ext_input: input_t) : output_t * log_t :=
+    Definition do_step_input__impl (st: state) (ext_input: input_t) : impl_output_t * log_t :=
        let input := lift_ext_log ext_input in
-       let '(output, ghost) := update_function st input in
-       ((output, ghost), log_app output input).
+       let output := update_function st input in
+       (output, log_app output input).
+       
+       (* let '(output, ghost) := update_function st input in *)
+       (* ((output, ghost), log_app output input). *)
 
     Definition do_step__impl (st: state) (step: step_io) : state * impl_output_t :=
       let '(output, acc) := do_step_input__impl st step.(step_input) in
@@ -1423,7 +1430,7 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters)
                                  : sm_magic_state_machine :=
         match config with
         | SmState_Enclave machine enclave enclave_state =>
-            let '(machine', (output_log, _)) := do_step__impl machine step in
+            let '(machine', output_log) := do_step__impl machine step in
             match enclave_state with
             | EnclaveState_Running =>
                 let enclave_state' :=
@@ -1726,9 +1733,11 @@ Module Type Memory_sig (External: External_sig) (EnclaveParams: EnclaveParameter
     Definition initial_state (initial_dram: dram_t) : state :=
       (ContextEnv.(create) r, initial_external_state initial_dram).
     Definition empty_log : Log R ContextEnv := log_empty.
+    Definition sigma := External.sigma.
 
-    Definition koika_update_function : koika_state_t -> Log R ContextEnv -> Log R ContextEnv. Admitted.
-      (* interp_scheduler' st ? rules log scheduler. *)
+    Definition koika_update_function : koika_state_t -> Log R ContextEnv -> Log R ContextEnv :=
+      fun st log => interp_scheduler_delta st sigma rules log schedule.
+ 
     Definition external_update_function : state -> Log R ContextEnv -> Log R ContextEnv * external_state_t.
       Admitted.
     
@@ -2928,13 +2937,14 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
 
   Definition ext_fn_t := External.ext_fn_t.
   Definition Sigma := External.Sigma.
+  Definition sigma := External.sigma.
   Definition ext_fn_specs := External.ext_fn_specs.
   Definition rule : Type := rule R Sigma.
 
   (* TODO: very slow right now *)
   (*Instance FiniteType_reg_t : FiniteType reg_t := FiniteTypeHelpers.FiniteType_t'.*)
   Declare Instance FiniteType_reg_t : FiniteType reg_t.   
-
+  
   Instance EqDec_reg_t : EqDec reg_t := _.
 
   Inductive rule_name_t' :=

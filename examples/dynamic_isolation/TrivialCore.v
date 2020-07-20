@@ -3,6 +3,7 @@ Require Import Koika.Std.
 
 Require Import dynamic_isolation.External.
 Require Import dynamic_isolation.Interfaces.
+Require Import dynamic_isolation.Interp.
 
 Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParams: CoreParameters)
                  <: Core_sig External Params CoreParams.
@@ -100,15 +101,15 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
   Instance FiniteType_internal_reg_t : FiniteType internal_reg_t := _.
   Instance FiniteType_ext_reg_t : FiniteType external_reg_t := _.
   Instance FiniteType_reg_t : FiniteType reg_t := _.
+  Instance EqDec_reg_t : EqDec reg_t := _.
 
   Section CycleSemantics.
     Definition state := env_t ContextEnv (fun idx : reg_t => R idx).
     Definition empty_log : Log R ContextEnv := log_empty.
-
     Definition initial_state := ContextEnv.(create) r.
 
-    Parameter update_function : state -> Log R ContextEnv -> Log R ContextEnv.
-      (* interp_scheduler' st ? rules log scheduler. *)
+    Definition update_function : state -> Log R ContextEnv -> Log R ContextEnv :=
+      fun st log => interp_scheduler_delta st sigma rules log schedule.
 
     Definition log_t := Log R ContextEnv.
     Definition input_t := Log R_external ContextEnv.
