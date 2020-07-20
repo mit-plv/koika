@@ -115,20 +115,6 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
     let (ext_log', ext_st') := update_ext_st st log' in
     (log_app ext_log' log', ext_st').
 
-
-  Section TODO_MOVE.
-    Definition config_to_enclave_data (config: enclave_config) : struct_t enclave_data :=
-      mk_enclave_data {| enclave_data_eid := enclave_id_to_bits (eid config);
-                         enclave_data_addr_min := EnclaveParams.enclave_base (eid config);
-                         enclave_data_size := EnclaveParams.enclave_size (eid config);
-                         enclave_data_shared_page := if (shared_page config) then Ob~1 else Ob~0;
-
-                         enclave_data_valid := Ob~1
-                      |}.
-  End TODO_MOVE.
-
-  Print System.reg_t'.
-
   Definition spin_up_single_core_machine
                              (core_id: ind_core_id)
                              (clk: bits_t 1)
@@ -136,7 +122,7 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
                              (config: enclave_config)
                              (initial_dram: dram_t)
                              : state :=
-    let enclave_data := config_to_enclave_data config in
+    let enclave_data := enclave_config_to_enclave_data config in
     let initial (reg: System.reg_t) := 
         match reg return R reg with
         | System.SM_internal (SM_Common.clk) => clk
@@ -161,7 +147,7 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
   (* Replace enclave data *)
   Definition update_state_with_enclave_data (st: state) (core_id: ind_core_id) 
                                             (config: enclave_config) : state :=
-    let enclave_data := config_to_enclave_data config in
+    let enclave_data := enclave_config_to_enclave_data config in
     let state := koika_state st in
     let koika_st' := 
       ContextEnv.(create) (fun reg => 
@@ -386,18 +372,30 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
     let '(eid, _) := enclave_req in
     EnclaveInterface.bits_id_to_ind_id eid.
 
+  Definition enclave_req_to_enclave_config_opt (enclave_req: struct_t enclave_req) : option enclave_config :=
+    let '(eid, (bits_regions, _)) := enclave_req in
+    match EnclaveInterface.bits_id_to_ind_id eid with
+    | Some _eid =>
+        let regions := bits_regions_to_function bits_regions in
+        let ret := Some {| eid := _eid;
+                           shared_regions := regions
+                        |} in
+        let should_be_false :=
+            match _eid with
+           | Enclave0 => regions Shared12 || regions Shared13 || regions Shared23
+           | Enclave1 => regions Shared02 || regions Shared03 || regions Shared23
+           | Enclave2 => regions Shared01 || regions Shared03 || regions Shared13
+           | Enclave3 => regions Shared01 || regions Shared02 || regions Shared12
+           end in
+        if should_be_false
+        then None
+        else ret
+    | None => None
+    end.
 
   Definition check_for_context_switching (obs: observations_t) : option enclave_config :=
     match obs.(obs_encs).(obs_enclave_req) with
-    | Some req => 
-      match enclave_req_to_eid req with
-      | Some eid => 
-          (* We have a valid enclave request, initiate context switching *)
-          Some {| eid := eid;
-                  shared_page := false; (* TODO *)
-               |} 
-      | None => None (* drop request *)
-      end
+    | Some req => enclave_req_to_enclave_config_opt req (* drop invalid requests *)
     | None => None
     end.
 
@@ -412,19 +410,22 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
   Definition memory_map : Type := EnclaveInterface.mem_region -> dram_t.
   Import Interfaces.EnclaveInterface.
 
+  (* TODO: MOVE. Duplicated in interfaces *)
   Section Dram.
     Definition enclave_base enc_id := Bits.to_nat (EnclaveParams.enclave_base enc_id).
     Definition enclave_max enc_id := Bits.to_nat (Bits.plus (EnclaveParams.enclave_base enc_id)
                                                             (EnclaveParams.enclave_size enc_id)).
-    Definition shared_base := Bits.to_nat EnclaveParams.shared_mem_base.
-    Definition shared_max := Bits.to_nat (Bits.plus EnclaveParams.shared_mem_base EnclaveParams.shared_mem_size).
+    Definition shared_base (id: shared_id) := Bits.to_nat (EnclaveParams.shared_region_base id).
+    Definition shared_max (id: shared_id) :=
+      Bits.to_nat (Bits.plus (EnclaveParams.shared_region_base id)
+                             (EnclaveParams.shared_region_size)).
 
     Definition addr_in_region (region: mem_region) (addr: nat): bool :=
       match region with
       | MemRegion_Enclave eid =>
           (enclave_base eid <=? addr) && (addr <? (enclave_max eid))
-      | MemRegion_Shared =>
-          (shared_base <=? addr) && (addr <? shared_max)
+      | MemRegion_Shared id =>
+          (shared_base id <=? addr) && (addr <? shared_max id)
       | MemRegion_Other => false
       end.
 
@@ -438,35 +439,42 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
     Definition get_dram : memory_map -> enclave_config -> dram_t :=
       fun mem_map enclave_config addr =>
         let enclave_region := MemRegion_Enclave enclave_config.(eid) in
+        let shared := enclave_config.(shared_regions) in
         if addr_in_region enclave_region addr then
           (mem_map enclave_region) addr
-        else if enclave_config.(shared_page) && (addr_in_region MemRegion_Shared addr) then
-          (mem_map MemRegion_Shared) addr
+        else if shared Shared01 && addr_in_region (MemRegion_Shared Shared01) addr then
+          (mem_map (MemRegion_Shared Shared01)) addr
+        else if shared Shared02 && addr_in_region (MemRegion_Shared Shared02) addr then
+          (mem_map (MemRegion_Shared Shared02)) addr
+        else if shared Shared03 && addr_in_region (MemRegion_Shared Shared01) addr then
+          (mem_map (MemRegion_Shared Shared03)) addr
+        else if shared Shared12 && addr_in_region (MemRegion_Shared Shared12) addr then
+          (mem_map (MemRegion_Shared Shared12)) addr
+        else if shared Shared13 && addr_in_region (MemRegion_Shared Shared13) addr then
+          (mem_map (MemRegion_Shared Shared13)) addr
+        else if shared Shared23 && addr_in_region (MemRegion_Shared Shared23) addr then
+          (mem_map (MemRegion_Shared Shared23)) addr
         else None.
 
-    (* Copy back relevant regions of dram *)
     Definition update_regions (config: enclave_config) (dram: dram_t)
                               (regions: memory_map)
                               : memory_map :=
       fun region =>
-        if mem_region_beq region MemRegion_Shared && config.(shared_page) then
-          filter_dram dram MemRegion_Shared
-        else if mem_region_beq region (MemRegion_Enclave config.(eid)) then
-          filter_dram dram region
-        else regions region.
+        match region with
+        | MemRegion_Enclave _eid =>
+            if enclave_id_beq _eid config.(eid) then
+              filter_dram dram region
+            else regions region
+        | MemRegion_Shared id =>
+            if config.(shared_regions) id then
+              filter_dram dram region
+            else regions region
+        | MemRegion_Other => regions region
+        end.
 
   End Dram.
 
   Scheme Equality for Common.enclave_id.
-
-  Definition can_enter_enclave (next_enclave: enclave_config) (other_core_enclave: option enclave_config) : bool :=
-    match other_core_enclave with
-    | None => true
-    | Some config =>
-        (* Other core hasn't claimed the requested memory regions *)
-        negb (enclave_id_beq next_enclave.(eid) config.(eid)) &&
-        negb (next_enclave.(shared_page) && config.(shared_page))
-    end.
 
 
   Section LocalStateMachine.
@@ -743,11 +751,11 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
 
   Definition initial_enclave_config0 : enclave_config :=
     {| eid := Enclave0;
-       shared_page  := false
+       shared_regions := fun _ => false
     |}.
   Definition initial_enclave_config1 : enclave_config :=
     {| eid := Enclave1;
-       shared_page  := false
+       shared_regions := fun _ => false
     |}.
 
   Section Initialised.

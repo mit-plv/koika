@@ -69,9 +69,20 @@ Module Common.
   | Enclave2
   | Enclave3.
 
+  (* TODO: do this better *)
+  Inductive shared_id :=
+  | Shared01
+  | Shared02
+  | Shared03
+  | Shared12
+  | Shared13
+  | Shared23
+  .
+ 
   Definition enclave_req :=
     {| struct_name := "enclave_req";
-       struct_fields := [("eid", bits_t 32)]
+       struct_fields := [("eid", bits_t 32);
+                         ("shared_regions", bits_t 6)]
     |}.
 
   Module FifoMemReq <: Fifo.
@@ -150,16 +161,17 @@ Module Common.
   Module Rf := RfPow2 RfParams.
 
   Instance FiniteType_rf : FiniteType Rf.reg_t := _.
-   
+
 End Common.
 
-(* TODO: need a well-formed predicate *)
+(* TODO: need a well-formed predicate about address regions being disjoint *)
 Module Type EnclaveParameters.
   Parameter enclave_base : Common.enclave_id -> Common.addr_t.
   Parameter enclave_size : Common.enclave_id -> bits_t 32.
   Parameter enclave_bootloader_addr : Common.enclave_id -> Common.addr_t.
-  Parameter shared_mem_base : Common.addr_t.
-  Parameter shared_mem_size : bits_t 32.
+
+  Parameter shared_region_base : Common.shared_id -> Common.addr_t.
+  Parameter shared_region_size : bits_t 32.
 End EnclaveParameters.
 
 Module Type CoreParameters.
@@ -632,41 +644,44 @@ Module EnclaveInterface.
   Definition enclave_data :=
     {| struct_name := "enclave_data";
        struct_fields := [("eid", bits_t 32);
-                         ("addr_min", bits_t 32);
-                         ("size", bits_t 32);
-                         ("shared_page", bits_t 1);
+                         (* ("addr_min", bits_t 32); *)
+                         (* ("size", bits_t 32); *)
+                         ("shared_regions", bits_t 6);
                          ("valid", bits_t 1)
                         ]
     |}.
 
   Record struct_enclave_data :=
     { enclave_data_eid : bits_t 32;
-      enclave_data_addr_min : bits_t 32;
-      enclave_data_size : bits_t 32;
-      enclave_data_shared_page : bits_t 1;
+      (* enclave_data_addr_min : bits_t 32; *)
+      (* enclave_data_size : bits_t 32; *)
+      enclave_data_shared_regions : bits_t 6;
       enclave_data_valid : bits_t 1;
     }.
 
+  (* TODO: remove Other? *)
   Inductive mem_region :=
   | MemRegion_Enclave (eid: enclave_id)
-  | MemRegion_Shared
+  | MemRegion_Shared (id: shared_id)
   | MemRegion_Other
   .
 
   Scheme Equality for mem_region.
 
   Definition mk_enclave_data (data: struct_enclave_data) : struct_t enclave_data :=
-    (data.(enclave_data_eid),
-     (data.(enclave_data_addr_min), (data.(enclave_data_size), 
-                                     (data.(enclave_data_shared_page), (data.(enclave_data_valid), tt))))).
+    (data.(enclave_data_eid), (data.(enclave_data_shared_regions), (data.(enclave_data_valid), tt))).
+    (* (data.(enclave_data_eid), *)
+    (*  (data.(enclave_data_addr_min), (data.(enclave_data_size),  *)
+    (*                                  (data.(enclave_data_shared_regions), (data.(enclave_data_valid), tt))))). *)
 
   (* TODO: generalize this. *)
   Definition extract_enclave_data (data: struct_t enclave_data) : struct_enclave_data :=
-      let '(eid, (addr_min, (size, (shared_page, (valid, _))))) := data in
+      (* let '(eid, (addr_min, (size, (shared_regions, (valid, _))))) := data in *)
+      let '(eid, (shared_regions, (valid, _))) := data in
       {| enclave_data_eid := eid;
-         enclave_data_addr_min := addr_min;
-         enclave_data_size := size;
-         enclave_data_shared_page := shared_page;
+         (* enclave_data_addr_min := addr_min; *)
+         (* enclave_data_size := size; *)
+         enclave_data_shared_regions := shared_regions;
          enclave_data_valid := valid;
       |}.
 
@@ -689,8 +704,44 @@ Module EnclaveInterface.
 
   Record enclave_config :=
     { eid : Common.enclave_id;
-      shared_page : bool;
+      shared_regions : shared_id -> bool;
     }.
+
+  Definition bits_regions_to_function (regions: bits_t 6) : shared_id -> bool :=
+      match vect_to_list regions with
+      | [s01; s02; s03; s12; s13; s23] =>
+          fun id =>
+            match id with
+            | Shared01 => s01
+            | Shared02 => s02
+            | Shared03 => s03
+            | Shared12 => s12
+            | Shared13 => s13
+            | Shared23 => s23
+            end
+      | _ => fun _ => false (* should not occur *)
+      end.
+
+  Definition shared_region_config_to_bits (config: shared_id -> bool) : bits_t 6 :=
+    vect_of_list [config Shared01; config Shared02; config Shared03;
+                  config Shared12; config Shared13; config Shared23].
+
+  Definition enclave_config_to_enclave_data (config: enclave_config) : struct_t enclave_data :=
+    mk_enclave_data {| enclave_data_eid := enclave_id_to_bits config.(eid);
+                       enclave_data_shared_regions := shared_region_config_to_bits config.(shared_regions);
+                       enclave_data_valid := Ob~1
+                    |}.
+
+  Definition can_enter_enclave (next_enclave: enclave_config) (other_core_enclave: option enclave_config) : bool :=
+    match other_core_enclave with
+    | None => true
+    | Some config =>
+        let next_shared := shared_region_config_to_bits (next_enclave.(shared_regions)) in
+        let other_shared := shared_region_config_to_bits (config.(shared_regions)) in
+        (* Other core hasn't claimed the requested memory regions *)
+        negb (enclave_id_beq next_enclave.(eid) config.(eid)) &&
+        (bits_eqb (Bits.and next_shared other_shared) Bits.zero)
+    end.
 
 End EnclaveInterface.
 
@@ -879,6 +930,7 @@ Module SM_Common.
              | external r => True
              | internal r => ContextEnv.(getenv) log reg = []
              end.
+
   End TODO_MOVE.
 
   Section Taint.
@@ -1003,11 +1055,18 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters)
   Import EnclaveInterface.
   Import SM_Common.
 
+  Definition enclave_req_to_enclave_data (req: struct_t enclave_req) : struct_t enclave_data :=
+    let '(eid, (shared, _)) := req in
+    mk_enclave_data {| enclave_data_eid := eid;
+                       enclave_data_shared_regions := shared;
+                       enclave_data_valid := Ob~1
+                    |}.
+
   Definition eid_to_initial_enclave_data (eid: enclave_id) : struct_t enclave_data :=
     mk_enclave_data {| enclave_data_eid := enclave_id_to_bits eid;
-                       enclave_data_addr_min := Params.enclave_base eid;
-                       enclave_data_size := Params.enclave_size eid;
-                       enclave_data_shared_page := Ob~0;
+                       (* enclave_data_addr_min := Params.enclave_base eid; *)
+                       (* enclave_data_size := Params.enclave_size eid; *)
+                       enclave_data_shared_regions := Ob~0~0~0~0~0~0;
                        enclave_data_valid := Ob~1
                     |}.
 
@@ -1064,21 +1123,6 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters)
   Definition ext_fn_t := External.ext_fn_t.
   Definition sigma := External.sigma. 
 
-  Definition eid_to_enc_data : UInternalFunction reg_t empty_ext_fn_t :=
-    {{ fun eid_to_enc_data (eid: bits_t 32) : struct_t enclave_data =>
-         match eid with
-         | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0 =>
-             `UConst (tau := struct_t enclave_data) (eid_to_initial_enclave_data Enclave0)`
-         | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1 =>
-             `UConst (tau := struct_t enclave_data) (eid_to_initial_enclave_data Enclave1)`
-         | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1~0 =>
-             `UConst (tau := struct_t enclave_data) (eid_to_initial_enclave_data Enclave2)`
-         | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1~1 =>
-             `UConst (tau := struct_t enclave_data) (eid_to_initial_enclave_data Enclave3)`
-         return default : `UConst (tau := struct_t enclave_data) (value_of_bits (Bits.zero))`
-         end
-    }}.
-
   Definition lookup_reg_state (core: ind_core_id) : reg_t :=
     match core with
     | CoreId0 => internal state0
@@ -1115,13 +1159,85 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters)
     | CoreId1 => external pc_core1
     end.
 
-  (* TODO: This is wrong. While in a limbo state, other core can't switch into old enclave until done reset *)
+  Definition max_eid : bits_t 32 :=
+    Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1~1.
+
+  Definition valid_shared_regions : UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun valid_shared_regions (eid: bits_t 32) (shared_regions: bits_t 6) : bits_t 1 =>
+         match eid with
+         | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0 =>
+             shared_regions[|3`d3| :+ 3] == Ob~0~0~0
+         | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1 =>
+             (shared_regions[|3`d1|] ++ shared_regions[|3`d2|] ++ shared_regions[|3`d5|]) == Ob~0~0~0
+         | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1~0 =>
+             (shared_regions[|3`d0|] ++ shared_regions[|3`d2|] ++ shared_regions[|3`d4|]) == Ob~0~0~0
+         | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1~1 =>
+             (shared_regions[|3`d0|] ++ shared_regions[|3`d1|] ++ shared_regions[|3`d3|]) == Ob~0~0~0
+         return default: Ob~0
+         end
+    }}.
+
+  Definition valid_enclave_req : UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun valid_enclave_req (req: struct_t enclave_req) : bits_t 1 =>
+           (get(req, eid) <= #max_eid) &&
+           (valid_shared_regions(get(req,eid), get(req, shared_regions)))
+    }}.
+
+  Definition addr_in_eid_range : UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun addr_in_eid_range (eid: bits_t 32) (addr: bits_t 32): bits_t 1 =>
+         match eid with
+         | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0 =>
+             let addr_min := #(Params.enclave_base Enclave0) in
+             let addr_max := #(Params.enclave_size Enclave0) + addr_min in
+             addr_min <= addr && addr < addr_max
+         | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1 =>
+             let addr_min := #(Params.enclave_base Enclave1) in
+             let addr_max := #(Params.enclave_size Enclave1) + addr_min in
+             addr_min <= addr && addr < addr_max
+         | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1~0 =>
+             let addr_min := #(Params.enclave_base Enclave2) in
+             let addr_max := #(Params.enclave_size Enclave2) + addr_min in
+             addr_min <= addr && addr < addr_max
+         | #Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1~1 =>
+             let addr_min := #(Params.enclave_base Enclave3) in
+             let addr_max := #(Params.enclave_size Enclave3) + addr_min in
+             addr_min <= addr && addr < addr_max
+         return default : Ob~0
+         end
+    }}.
+
+  Definition addr_in_shared_range : UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun addr_in_shared_range (shared: bits_t 6) (addr: bits_t 32) : bits_t 1 =>
+          let shared01_base := #(Params.shared_region_base Shared01) in
+          let shared02_base := #(Params.shared_region_base Shared02) in
+          let shared03_base := #(Params.shared_region_base Shared03) in
+          let shared12_base := #(Params.shared_region_base Shared12) in
+          let shared13_base := #(Params.shared_region_base Shared13) in
+          let shared23_base := #(Params.shared_region_base Shared23) in
+          let shared_size := #(Params.shared_region_size) in
+          (shared[|3`d0|] && (shared01_base <= addr && addr < (shared01_base + shared_size))) ||
+          (shared[|3`d1|] && (shared02_base <= addr && addr < (shared02_base + shared_size))) ||
+          (shared[|3`d2|] && (shared03_base <= addr && addr < (shared03_base + shared_size))) ||
+          (shared[|3`d3|] && (shared12_base <= addr && addr < (shared12_base + shared_size))) ||
+          (shared[|3`d4|] && (shared13_base <= addr && addr < (shared13_base + shared_size))) ||
+          (shared[|3`d5|] && (shared23_base <= addr && addr < (shared23_base + shared_size)))
+    }}.
+
+  Definition valid_addr_req : UInternalFunction reg_t empty_ext_fn_t :=
+    {{ fun valid_addr_req (eid: bits_t 32) (shared: bits_t 6) (addr: bits_t 32) : bits_t 1 =>
+         addr_in_eid_range (eid,addr) || addr_in_shared_range(shared,addr)
+    }}.
+
   Definition canSwitchToEnc (core: ind_core_id) : UInternalFunction reg_t empty_ext_fn_t :=
     let other_core := match core with CoreId0 => CoreId1 | CoreId1 => CoreId0 end in
     let reg_other_enc := lookup_reg_enc_data other_core in
-    {{ fun canSwitchToEnc (eid: bits_t 32) : bits_t 1 =>
+    {{ fun canSwitchToEnc (eid: bits_t 32) (shared: bits_t 6): bits_t 1 =>
          let other_enc_data := read0(reg_other_enc) in
-         get(other_enc_data, eid) != eid
+         (* Enclave is not valid or regions are disjoint *)
+         (!get(other_enc_data, valid)) ||
+         (get(other_enc_data, eid) != eid &&
+          ((get(other_enc_data, shared_regions) && shared) == Ob~0~0~0~0~0~0))
+           (* TODO: rewrite properly *)
     }}.
 
   Notation "'__external__' instance " :=
@@ -1145,9 +1261,14 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters)
          let max_eid := |32`d3| in
          let enclaveRequest := (__external__ fromCore).(EnclaveReq.deq)() in
          let eid := get(enclaveRequest, eid) in
-         if (eid <= max_eid) then
+         let shared_regions := get(enclaveRequest, shared_regions) in
+         if (valid_enclave_req(enclaveRequest)) then
            write0(reg_state, enum core_state { Purging });
-           write0(reg_enc_req, eid_to_enc_data(eid));
+             (* TODO *)
+           write0(reg_enc_req, struct enclave_data
+                                      { eid := eid;
+                                        shared_regions := shared_regions;
+                                        valid := Ob~1 });
            write1(reg_proc_reset, enum purge_state { Purging });
            write1(reg_mem_reset, enum purge_state { Purging })
          else (* drop it *)
@@ -1171,10 +1292,11 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters)
          let request := (__external__ fromCore).(MemReq.deq)() in
          let address := get(request, addr) in
          let enc_data := read0(reg_enc) in
-         let addr_min := get(enc_data, addr_min) in
-         let addr_max := get(enc_data, size) + addr_min in
+         (* let addr_min := get(enc_data, addr_min) in *)
+         (* let addr_max := get(enc_data, size) + addr_min in *)
          let TODO_temp_bypass := address >= #(MMIO_UART_ADDRESS) in
-         if ((addr_min <= address && address < addr_max) ||  TODO_temp_bypass) then
+         if (valid_addr_req (get(enc_data,eid), get(enc_data, shared_regions), address) ||
+             TODO_temp_bypass) then
            (__external__ toMem).(MemReq.enq)(request)
          else pass
     }}.
@@ -1193,10 +1315,11 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters)
          let response:= (__external__ fromMem).(MemResp.deq)() in
          let address := get(response, addr) in
          let enc_data := read0(reg_enc) in
-         let addr_min := get(enc_data, addr_min) in
-         let addr_max := get(enc_data, size) + addr_min in
+         (* let addr_min := get(enc_data, addr_min) in *)
+         (* let addr_max := get(enc_data, size) + addr_min in *)
          let TODO_temp_bypass := address >= #(MMIO_UART_ADDRESS) in
-         if (addr_min <= address && address < addr_max) || TODO_temp_bypass then
+         if (valid_addr_req (get(enc_data,eid), get(enc_data, shared_regions), address) ||
+             TODO_temp_bypass) then
            (__external__ toCore).(MemResp.enq)(response)
          else pass
     }}.
@@ -1267,6 +1390,7 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters)
        else fail
     }}.
 
+  (* TODO: implement turns *)
   (* TODO: avoiding dealing with semantics of valid bits... *)
   Definition sm_enter_enclave (core: ind_core_id) : uaction reg_t ext_fn_t :=
     let reg_state := lookup_reg_state core in
@@ -1280,8 +1404,9 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters)
             read0(internal clk) == #valid_clk) then
          let enc_req := read0(reg_enc_req) in
          let eid := get(enc_req,eid) in
+         let shared_req := get(enc_req, shared_regions) in
          (* Check for permission to enter by reading other core's enclave data *)
-         if ({canSwitchToEnc core}(eid)) then
+         if ({canSwitchToEnc core}(eid, shared_req)) then
            (* Set up new enclave *)
            write0(reg_enc_data, enc_req);
            write0(reg_enc_req, `UConst (tau := struct_t enclave_data) (value_of_bits (Bits.zero))`);
@@ -1294,7 +1419,6 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters)
          else fail
         else fail
     }}.
-
 
   (*
   Definition sm_restart_pipeline (core: ind_core_id) : uaction reg_t ext_fn_t :=
@@ -1463,23 +1587,6 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters)
             then SmMagicState_TryToEnter next_enclave
             else SmMagicState_Continue config log_empty None
         end.
-
-      Definition can_enter_enclave (next_enclave: enclave_config) (other_core_enclave: option enclave_config) : bool :=
-        match other_core_enclave with
-        | None => true
-        | Some config =>
-            (* Other core hasn't claimed the requested memory regions *)
-            negb (enclave_id_beq next_enclave.(eid) config.(eid)) &&
-            negb (next_enclave.(shared_page) && config.(shared_page))
-        end.
-
-      Definition enclave_config_to_enclave_data (config: enclave_config) : struct_t enclave_data :=
-        mk_enclave_data {| enclave_data_eid := enclave_id_to_bits config.(eid);
-                           enclave_data_addr_min := Params.enclave_base config.(eid);
-                           enclave_data_size := Params.enclave_size config.(eid);
-                           enclave_data_shared_page := if config.(shared_page) then Ob~1 else Ob~0;
-                           enclave_data_valid := Ob~1
-                        |}.
 
       Definition TODO_spin_up_machine (core: ind_core_id) (next: enclave_config) (turn: bool) : state :=
         match core with
@@ -1747,8 +1854,7 @@ Module Type Memory_sig (External: External_sig) (EnclaveParams: EnclaveParameter
     Definition koika_update_function : koika_state_t -> Log R ContextEnv -> Log R ContextEnv :=
       fun st log => interp_scheduler_delta st sigma rules log schedule.
  
-    Definition external_update_function : state -> Log R ContextEnv -> Log R ContextEnv * external_state_t.
-      Admitted.
+    Axiom external_update_function : state -> Log R ContextEnv -> Log R ContextEnv * external_state_t.
     
     Definition update_function (st: state) (input_log: Log R ContextEnv) : Log R ContextEnv * external_state_t :=
       let '(koika_st, ext_st) := st in
@@ -1801,11 +1907,11 @@ Module Type Memory_sig (External: External_sig) (EnclaveParams: EnclaveParameter
   Section TODO_MOVE.
     Definition initial_enclave_config0 : enclave_config :=
       {| eid := Enclave0;
-         shared_page  := false
+         shared_regions := fun _ => false
       |}.
     Definition initial_enclave_config1 : enclave_config :=
       {| eid := Enclave1;
-         shared_page  := false
+         shared_regions  := fun _ => false
       |}.
 
   End TODO_MOVE.
@@ -1814,8 +1920,11 @@ Module Type Memory_sig (External: External_sig) (EnclaveParams: EnclaveParameter
     Definition enclave_base enc_id := Bits.to_nat (EnclaveParams.enclave_base enc_id).
     Definition enclave_max enc_id := Bits.to_nat (Bits.plus (EnclaveParams.enclave_base enc_id)
                                                             (EnclaveParams.enclave_size enc_id)).
-    Definition shared_base := Bits.to_nat EnclaveParams.shared_mem_base.
-    Definition shared_max := Bits.to_nat (Bits.plus EnclaveParams.shared_mem_base EnclaveParams.shared_mem_size).
+
+    Definition shared_base (id: shared_id) := Bits.to_nat (EnclaveParams.shared_region_base id).
+    Definition shared_max (id: shared_id) :=
+      Bits.to_nat (Bits.plus (EnclaveParams.shared_region_base id)
+                             (EnclaveParams.shared_region_size)).
 
     Definition memory_map : Type := EnclaveInterface.mem_region -> dram_t.
 
@@ -1825,8 +1934,8 @@ Module Type Memory_sig (External: External_sig) (EnclaveParams: EnclaveParameter
       match region with
       | MemRegion_Enclave eid =>
           (enclave_base eid <=? addr) && (addr <? (enclave_max eid))
-      | MemRegion_Shared =>
-          (shared_base <=? addr) && (addr <? shared_max)
+      | MemRegion_Shared id =>
+          (shared_base id <=? addr) && (addr <? shared_max id)
       | MemRegion_Other => false
       end.
 
@@ -1840,21 +1949,38 @@ Module Type Memory_sig (External: External_sig) (EnclaveParams: EnclaveParameter
     Definition get_dram : memory_map -> enclave_config -> dram_t :=
       fun mem_map enclave_config addr =>
         let enclave_region := MemRegion_Enclave enclave_config.(eid) in
+        let shared := enclave_config.(shared_regions) in
         if addr_in_region enclave_region addr then
           (mem_map enclave_region) addr
-        else if enclave_config.(shared_page) && (addr_in_region MemRegion_Shared addr) then
-          (mem_map MemRegion_Shared) addr
+        else if shared Shared01 && addr_in_region (MemRegion_Shared Shared01) addr then
+          (mem_map (MemRegion_Shared Shared01)) addr
+        else if shared Shared02 && addr_in_region (MemRegion_Shared Shared02) addr then
+          (mem_map (MemRegion_Shared Shared02)) addr
+        else if shared Shared03 && addr_in_region (MemRegion_Shared Shared01) addr then
+          (mem_map (MemRegion_Shared Shared03)) addr
+        else if shared Shared12 && addr_in_region (MemRegion_Shared Shared12) addr then
+          (mem_map (MemRegion_Shared Shared12)) addr
+        else if shared Shared13 && addr_in_region (MemRegion_Shared Shared13) addr then
+          (mem_map (MemRegion_Shared Shared13)) addr
+        else if shared Shared23 && addr_in_region (MemRegion_Shared Shared23) addr then
+          (mem_map (MemRegion_Shared Shared23)) addr
         else None.
 
     Definition update_regions (config: enclave_config) (dram: dram_t)
                               (regions: memory_map)
                               : memory_map :=
       fun region =>
-        if mem_region_beq region MemRegion_Shared && config.(shared_page) then
-          filter_dram dram MemRegion_Shared
-        else if mem_region_beq region (MemRegion_Enclave config.(eid)) then
-          filter_dram dram region
-        else regions region.
+        match region with
+        | MemRegion_Enclave _eid =>
+            if enclave_id_beq _eid config.(eid) then
+              filter_dram dram region
+            else regions region
+        | MemRegion_Shared id =>
+            if config.(shared_regions) id then
+              filter_dram dram region
+            else regions region
+        | MemRegion_Other => regions region
+        end.
 
   End TODO_dram.
 
@@ -1999,7 +2125,8 @@ Module Type Memory_sig (External: External_sig) (EnclaveParams: EnclaveParameter
     Definition disjoint_configs (opt_config0: option enclave_config) (opt_config1: option enclave_config) : Prop :=
       match opt_config0, opt_config1 with
       | Some config0, Some config1 =>
-          config0.(eid) <> config1.(eid) /\ (config0.(shared_page) && config1.(shared_page) = false)
+          config0.(eid) <> config1.(eid) /\
+          (forall shared_id, config0.(shared_regions) shared_id && config1.(shared_regions) shared_id = false)
       | _, _ => True
       end.
 
@@ -2275,7 +2402,7 @@ k    Definition bits_eqb {sz} (v1: bits_t sz) (v2: bits_t sz) : bool :=
           let enclave_region := MemRegion_Enclave enclave_config.(eid) in
           if addr_in_region enclave_region addr then
             (mem_map enclave_region) addr
-          else if enclave_config.(shared_page) && (addr_in_region MemRegion_Shared addr) then
+          else if enclave_config.(shared_region) && (addr_in_region MemRegion_Shared addr) then
             (mem_map MemRegion_Shared) addr
           else None.
 
@@ -2284,7 +2411,7 @@ k    Definition bits_eqb {sz} (v1: bits_t sz) (v2: bits_t sz) : bool :=
                                 (regions: memory_map)
                                 : memory_map :=
         fun region =>
-          if mem_region_beq region MemRegion_Shared && config.(shared_page) then
+          if mem_region_beq region MemRegion_Shared && config.(shared_region) then
             filter_dram dram MemRegion_Shared
           else if mem_region_beq region (MemRegion_Enclave config.(eid)) then
             filter_dram dram region
