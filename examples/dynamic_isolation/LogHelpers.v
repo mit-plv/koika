@@ -11,9 +11,19 @@ Section SemanticProperties.
     unfold log_empty. intros; rewrite getenv_create. auto.
   Qed.
 
+  Lemma getenv_logapp:
+    forall (l l': Log R REnv) idx,
+      getenv REnv (V := fun idx => RLog (type_denote (R idx))) (log_app l l') idx =
+      getenv REnv l idx ++ REnv.(getenv) l' idx.
+  Proof.
+    unfold log_app, map2; intros; rewrite getenv_create; reflexivity.
+  Qed.
+
+
 End SemanticProperties.
 
 Hint Rewrite @getenv_empty : log_helpers.
+Hint Rewrite @getenv_logapp : log_helpers.
 
 Section LatestWrite.
   Context {reg_t: Type}.
