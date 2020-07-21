@@ -116,6 +116,13 @@ Module General.
         end
       end.
 
+  Ltac destruct_one_match_in H :=
+    lazymatch type of H with
+    | context[match ?d with | _ => _ end] =>
+        let H1 := fresh H in
+        destruct d eqn:H1
+    end.
+
   Ltac destruct_pair :=
     match goal with
     | [ P : _ * _ |- _ ] =>
@@ -125,6 +132,13 @@ Module General.
   end.
 
   Ltac destruct_pairs := repeat destruct_pair.
+
+  Ltac destruct_one_ind :=
+    match goal with
+    | [ H: ?T |- _ ] => is_ind T; destruct H
+    end.
+
+  Ltac destruct_inds := repeat destruct_one_ind.
 
   Ltac propositional_with t :=
     repeat match goal with

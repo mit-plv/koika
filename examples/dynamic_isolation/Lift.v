@@ -238,6 +238,17 @@ Section Lift.
         rewrite getenv_lift_log_not_exists; auto.
     Qed.
 
+    Lemma proj_log_lift_inv :
+      forall log,
+      proj_log (lift_log log) = log.
+    Proof.
+      intros. apply equiv_eq; unfold equiv.
+      intros.
+      rewrite getenv_proj_log.
+      rewrite getenv_lift_log_eq.
+      rewrite rew_opp_r.
+      auto.
+    Qed.
 
     Lemma getenv_proj_env :
       forall st' r,
@@ -322,6 +333,20 @@ Section Lift.
       intros.
       autorewrite with log_helpers.
       elim_eq_rect; auto.
+    Qed.
+
+    Lemma commit_update_comm_proj_env :
+      forall st' log',
+      commit_update (proj_env st') (proj_log log') =
+      proj_env (commit_update st' log').
+    Proof.
+      intros; unfold commit_update.
+      apply_equiv_eq; intros.
+      rewrite getenv_proj_env.
+      repeat rewrite getenv_create.
+      rewrite latest_write_proj_log.
+      rewrite getenv_proj_env.
+      simpl_eqs; auto.
     Qed.
 
     Lemma may_read_proj_eq_may_read_lift :
@@ -790,6 +815,23 @@ Section Properties_LiftSchedule.
     unfold log_empty; autorewrite with log_helpers; auto.
   Qed.
 
+  Lemma wf_interp_scheduler'_with_lifted_rules:
+    forall sched_log schedule,
+    (forall rule, rules' (rule_name_lift rule) = lift_rule (rules rule)) ->
+    forall reg', not (exists reg, (Rlift.(rlift) reg = reg')) ->
+    getenv REnv' (interp_scheduler' r' sigma'
+                                    rules' sched_log (lift_scheduler rule_name_lift schedule))
+                 reg' = getenv REnv' sched_log reg'.
+  Proof.
+    intros.
+    rewrite interp_scheduler_delta_correspond_to_interp_scheduler.
+    setoid_rewrite SemanticProperties.getenv_logapp.
+    rewrite wf_interp_scheduler_delta_on_lifted_rules; auto.
+  Qed.
+
+
+
+
   Lemma interp_rule_comm_proj :
     forall rule (log_input: Log R' REnv'),
     (forall f, Sigma f = Sigma' (Fnlift.(rlift) f)) ->
@@ -810,7 +852,6 @@ Section Properties_LiftSchedule.
       simpl_match. eexists; eauto.
     - unfold lift_rule. simpl_match. reflexivity.
   Qed.
-
 
   Lemma interp_scheduler_delta'_comm_proj :
     forall schedule (log_input acc_log: Log R' REnv'),
@@ -840,6 +881,7 @@ Section Properties_LiftSchedule.
       + auto.
   Qed.
 
+
   Lemma interp_scheduler_delta_comm_proj :
     forall schedule (log_input: Log R' REnv'),
     (forall rule, rules' (rule_name_lift rule) = lift_rule (rules rule)) ->
@@ -853,6 +895,22 @@ Section Properties_LiftSchedule.
     intros.
     rewrite<-interp_scheduler_delta'_comm_proj; auto.
     autorewrite with log_helpers; reflexivity.
+  Qed.
+
+  Lemma interp_scheduler'_comm_proj :
+    forall schedule (log_input: Log R' REnv'),
+    (forall rule, rules' (rule_name_lift rule) = lift_rule (rules rule)) ->
+    (forall f, Sigma f = Sigma' (Fnlift.(rlift) f)) ->
+    (forall f, sigma f = rew [fun e : ExternalSignature => Sig_denote e] pf_R_equal Fnlift f in sigma' (Fnlift.(rlift) f)) ->
+    interp_scheduler' (REnv := REnv) (proj_env r') sigma rules (proj_log log_input) schedule =
+    proj_log (interp_scheduler' r' sigma' rules' log_input (lift_scheduler rule_name_lift schedule)).
+  Proof.
+    intros.
+    rewrite interp_scheduler_delta_correspond_to_interp_scheduler.
+    rewrite interp_scheduler_delta_comm_proj; auto.
+    rewrite interp_scheduler_delta_correspond_to_interp_scheduler.
+    rewrite log_app_comm_proj_log.
+    auto.
   Qed.
 
   Lemma lift_proj_interp_scheduler_delta:
@@ -887,4 +945,3 @@ Section Properties_LiftSchedule.
 End Properties_LiftSchedule.
 
 Ltac lift_auto := auto with lift.
-

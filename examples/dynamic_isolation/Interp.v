@@ -127,6 +127,16 @@ Section Interp.
       autorewrite with log_rewrites. auto.
     Qed.
 
+    Lemma interp_scheduler_delta_correspond_to_interp_scheduler_empty :
+      forall (sched: scheduler)  ,
+      interp_scheduler' log_empty sched =
+        interp_scheduler_delta log_empty sched.
+    Proof.
+      intros. rewrite interp_scheduler_delta_correspond_to_interp_scheduler.
+      rewrite SemanticProperties.log_app_empty_l.
+      auto.
+    Qed.
+
   End Lemmas.
 End Interp.
 
