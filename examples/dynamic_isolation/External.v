@@ -122,6 +122,12 @@ Module External <: External_sig.
     | ext_ppp_bookkeeping => fun _ => value_of_bits Bits.zero
     end.
 
+  Definition ext : external_sig :=
+    {| _ext_fn_t := ext_fn_t;
+       _Sigma := Sigma;
+       _sigma := sigma;
+       _ext_fn_specs := ext_fn_specs
+    |}.
 End External.
 
 Module EnclaveParams <: EnclaveParameters.

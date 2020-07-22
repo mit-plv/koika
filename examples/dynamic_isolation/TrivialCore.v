@@ -31,7 +31,7 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
   | fromIMem (state: MemResp.reg_t)
   | fromDMem (state: MemResp.reg_t)
   | toSMEnc (state: EnclaveReq.reg_t)
-  | rf (state: Rf.reg_t) 
+  | rf (state: Rf.reg_t)
   | pc
   | purge
   .
@@ -44,10 +44,10 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
     | fromIMem  r => MemResp.R r
     | fromDMem  r => MemResp.R r
     | toSMEnc r => EnclaveReq.R r
-    | rf r => Rf.R r  
+    | rf r => Rf.R r
     | pc => bits_t 32
     | purge => enum_t purge_state
-    end.  
+    end.
 
   Definition r_external (idx: external_reg_t) : R_external idx :=
     match idx with
@@ -57,7 +57,7 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
     | toDMem s => MemReq.r s
     | fromDMem s => MemResp.r s
     | toSMEnc s => EnclaveReq.r s
-    | rf r => Rf.r r  
+    | rf r => Rf.r r
     | pc => CoreParams.initial_pc
     | purge => value_of_bits (Bits.zero)
     end.
@@ -79,10 +79,10 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
     | internal s => r_internal s
     end.
 
-  Definition ext_fn_t := External.ext_fn_t.
-  Definition Sigma := External.Sigma.
+  Definition ext_fn_t := _ext_fn_t External.ext.
+  Definition Sigma := _Sigma External.ext.
   Definition rule := rule R Sigma.
-  Definition sigma := External.sigma.
+  Definition sigma := _sigma External.ext.
 
   Inductive rule_name_t' : Type := DoNothing | StillDoNothing.
   Definition rule_name_t := rule_name_t'.
@@ -138,7 +138,7 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
       let final := log_app (lift_ext_log step.(step_feedback)) acc in
       (commit_update st final, output).
 
-    Definition do_steps__koika (steps: list step_io) 
+    Definition do_steps__koika (steps: list step_io)
                              : state * list (Log R ContextEnv) :=
       fold_left (fun '(st, evs) step =>
                    let '(st', ev) := do_step__koika st step in
@@ -169,7 +169,7 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
 
     Definition valid_output_log__common (output_log: Log R ContextEnv) : Prop :=
       True.
-    
+
     Definition valid_feedback_log__common (log: Log R_external ContextEnv) : Prop :=
       (* Writeback to external registers only *)
       latest_write log core_id = None /\
@@ -179,7 +179,7 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
       (latest_write log (external (toIMem MemReq.valid0)) = None \/
       latest_write log (external (toIMem MemReq.valid0)) = Some Ob~0).
       *)
-    
+
     (* - While running, SM only gets to write purging (which doesn't change anything)
      * - Only Core writes purged, transitioning from running -> waiting
      * - Here, Core promises to not change external state
@@ -203,7 +203,7 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
 
     Definition extract_rf (st: state) : env_t ContextEnv Rf.R :=
       ContextEnv.(create) (fun reg => ContextEnv.(getenv) st (external (rf reg))).
-    
+
     Definition initialise_with_rf (initial_rf: env_t ContextEnv Rf.R) (initial_pc: bits_t 32) : state :=
       ContextEnv.(create) (fun reg => match reg return R reg with
                                    | external (rf s) => ContextEnv.(getenv) initial_rf s
@@ -213,7 +213,7 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
 
     Definition do_step_trans_input__spec (spec_st: spec_state_t) (ext_input: input_t) : output_t * log_t :=
       do_step_input__koika (fst spec_st) ext_input.
-    
+
     (* TODO: should really be inductive probably or option type? But too much effort to specify everything. *)
     Definition do_step_trans__spec (spec_st: spec_state_t) (step: step_io)
                            : spec_state_t * Log R ContextEnv :=
@@ -243,7 +243,7 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
       (final_st, output).
 
     (* Behaves nicely with enq/deqs *)
-    Definition valid_interface_log (st: state) (init_log: Log R_external ContextEnv) 
+    Definition valid_interface_log (st: state) (init_log: Log R_external ContextEnv)
                                    (log: Log R_external ContextEnv) : Prop. Admitted.
 
     Definition no_writes (log: Log R_external ContextEnv) : Prop :=
@@ -295,13 +295,13 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
                     |} in
       (st', log, props').
 
-    Definition do_steps__spec (steps: list step_io) 
+    Definition do_steps__spec (steps: list step_io)
                             : spec_state_t * list (Log R ContextEnv) * list props_t :=
-      fold_left (fun '(st, evs, props) step => 
+      fold_left (fun '(st, evs, props) step =>
                    let '(st', ev, prop) := do_step__spec st step in
                    (st', evs ++ [ev], props ++ [prop]))
                 steps (initial_spec_state, [], []).
-     
+
   End Spec.
 
   Section Correctness.
@@ -312,13 +312,13 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
     Admitted.
 
     Definition log_equivalent (koika_log: Log R ContextEnv) (spec_log: Log R ContextEnv) : Prop :=
-      forall (reg: external_reg_t), 
+      forall (reg: external_reg_t),
         latest_write koika_log (external reg) = latest_write spec_log (external reg) /\
         (forall port, may_read koika_log port (external reg) = may_read spec_log port (external reg)) /\
         (forall port, may_write koika_log log_empty port (external reg) =
                  may_write spec_log log_empty port (external reg)).
 
-    Definition trace_equivalent (koika_tr: list (Log R ContextEnv)) 
+    Definition trace_equivalent (koika_tr: list (Log R ContextEnv))
                                 (spec_tr: list (Log R ContextEnv)) : Prop :=
       Forall2 log_equivalent koika_tr spec_tr.
 
@@ -336,7 +336,7 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
         ext_log_equivalent (proj_log__ext output0) (proj_log__ext output1).
 
     Axiom correctness :
-      forall (steps: list step_io) 
+      forall (steps: list step_io)
         (spec_st: spec_state_t) (spec_tr: list (Log R ContextEnv)) (props: list props_t)
         (koika_st: state) (koika_tr: list (Log R ContextEnv)),
       valid_inputs props ->
@@ -349,7 +349,7 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
 
   Section Compliance.
     Axiom compliance:
-      forall (steps: list step_io) 
+      forall (steps: list step_io)
         (spec_st: spec_state_t) (spec_tr: list (Log R ContextEnv)) (props: list props_t)
         (koika_st: state) (koika_tr: list (Log R ContextEnv)),
       valid_inputs props ->

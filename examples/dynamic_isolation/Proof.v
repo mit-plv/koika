@@ -48,6 +48,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
   Module Spec:= IsolationSemantics External EnclaveParams Params0 Params1 Core0 Core1 Memory.
   (* Deduplicate *)
   Module TODO_SM := SecurityMonitor External EnclaveParams Params0 Params1.
+  Import Interfaces.Common.
 
   Section TODO_WF_Properties.
     Property wf_r_lift_core0:
@@ -89,7 +90,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
     Qed.
 
     Property wf_core0_sigma :
-     forall f : External.ext_fn_t,
+     forall f : (_ext_fn_t External.ext),
        Core0.sigma f =
          rew [fun e : ExternalSignature => Sig_denote e] pf_R_equal Impl.System.FnLift_core0 f in
          Impl.System.sigma (rlift Impl.System.FnLift_core0 f).
@@ -104,7 +105,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
     Qed.
 
     Lemma wf_core1_sigma :
-     forall f : External.ext_fn_t,
+     forall f : (_ext_fn_t External.ext),
        Core1.sigma f =
          rew [fun e : ExternalSignature => Sig_denote e] pf_R_equal Impl.System.FnLift_core1 f in
          Impl.System.sigma (rlift Impl.System.FnLift_core1 f).
@@ -217,6 +218,8 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
 
   (* ================= TMP ====================== *)
   Definition impl_log_t : Type := Impl.log_t.
+  Definition spec0_log_t : Type := Spec.Machine0.log_t.
+  Definition spec1_log_t : Type := Spec.Machine1.log_t.
 
   (* ================= END_TMP ====================== *)
 
@@ -452,6 +455,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
     (* TODO: Monad! *)
     (* TODO: fix Interfaces' do_step_input function *)
     (* TODO: Modularize *)
+
     Definition do_step (st: state) : state * tau :=
       (* Core0 *)
       let '(core0_input, core0_output__local, core0_output__global, acc__core0, mk_core0_step_io) :=
@@ -521,12 +525,12 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
 
     Definition trace := list tau.
 
-    Definition initial_state (initial_dram: dram_t): state :=
-      {| state_core0 := Core0.initial_spec_state;
-         state_core1 := Core1.initial_spec_state;
-         state_sm := SM_Common.initial_spec_state;
-         state_mem := Memory.initial_spec_state initial_dram
-      |}.
+    Definition initial_state (initial_dram: dram_t): state. Admitted.
+      (* {| state_core0 := Core0.initial_spec_state; *)
+      (*    state_core1 := Core1.initial_spec_state; *)
+      (*    state_sm := SM_Common.initial_spec_state; *)
+      (*    state_mem := Memory.initial_spec_state initial_dram *)
+      (* |}. *)
 
     Section TODO_MOVE.
 
@@ -608,12 +612,29 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
 
     Definition step_n (initial_dram: dram_t) (n: nat) : state * trace :=
       Framework.step_n (initial_state initial_dram) do_step n.
+    Print impl_log_t.
+
+    Section HelperLemmas.
+      Definition outputs_to_spec_log (ev: tau) : (spec0_log_t * spec1_log_t) :=
+        let core0_log := lift_log (REnv' := ContextEnv) Spec.Machine0.System.Lift_core0 ev.(output_core0) in
+        let core1_log := lift_log (REnv' := ContextEnv) Spec.Machine1.System.Lift_core1 ev.(output_core1) in
+        let sm0_log := lift_log (REnv' := ContextEnv) Spec.Machine0.System.Lift_sm (fst (fst ev.(output_sm))) in
+        let sm1_log := lift_log (REnv' := ContextEnv) Spec.Machine1.System.Lift_sm (fst (snd ev.(output_sm))) in
+        let mem0_log := lift_log (REnv' := ContextEnv) Spec.Machine0.System.Lift_mem ev.(output_mem) in
+        let mem1_log := lift_log (REnv' := ContextEnv) Spec.Machine1.System.Lift_mem ev.(output_mem) in
+        (* Define machine logs *)
+        let machine0_log := mem0_log ++ sm0_log ++ core0_log in
+        let machine1_log := mem1_log ++ sm1_log ++ core1_log in
+        (machine0_log, machine1_log).
+
+    End HelperLemmas.
 
   End ModSpec.
 
   Module Observations.
     Import Interfaces.Common.
     (* TODO: write this in a nicer way *)
+    (*
     Definition observe_imem_req0 (log: Log Core0.R ContextEnv) : option (struct_t mem_req) :=
       observe_enq0 (Core0.external (Core0.toIMem MemReq.valid0)) eq_refl
                    (Core0.external (Core0.toIMem MemReq.data0)) eq_refl log.
@@ -670,6 +691,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
           bits_eqb (EnclaveInterface.enclave_data_valid data) Ob~0
       | None => false
       end.
+      *)
 
     Definition generate_observations__modImpl (ev: ModImpl.tau) : tau :=
       fun core_id => Impl.do_observations (ModImpl.outputs_to_impl_log ev) core_id.
@@ -707,8 +729,14 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
  *)
 
     (* TODO: might be easier to combine logs first *)
-    Definition generate_observations__modSpec (ev: ModSpec.tau) : tau.
-    Admitted.
+    Definition generate_observations__modSpec (ev: ModSpec.tau) : tau :=
+      let '(log0, log1) := ModSpec.outputs_to_spec_log ev in
+      fun core_id =>
+        match core_id with
+        | CoreId0 => Spec.Machine0.do_observations log0 CoreId0
+        | CoreId1 => Spec.Machine1.do_observations log1 CoreId1
+         end.
+
     (*
       fun core_id =>
         let sm0_output := fst (fst (ModSpec.output_sm ev)) in
@@ -743,15 +771,15 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
         end.
     *)
 
-    Ltac unfold_mod_impl_obs :=
-      unfold observe_imem_req0, observe_imem_req1,
-             observe_dmem_req0, observe_dmem_req1,
-             observe_imem_resp0, observe_imem_resp1,
-             observe_dmem_resp0, observe_dmem_resp1,
-             observe_enclave_req0, observe_enclave_req1,
-             observe_enclave_enter0, observe_enclave_enter0,
-             observe_enclave_exit0, observe_enclave_exit1
-             in *.
+    (* Ltac unfold_mod_impl_obs := *)
+    (*   unfold observe_imem_req0, observe_imem_req1, *)
+    (*          observe_dmem_req0, observe_dmem_req1, *)
+    (*          observe_imem_resp0, observe_imem_resp1, *)
+    (*          observe_dmem_resp0, observe_dmem_resp1, *)
+    (*          observe_enclave_req0, observe_enclave_req1, *)
+    (*          observe_enclave_enter0, observe_enclave_enter0, *)
+    (*          observe_enclave_exit0, observe_enclave_exit1 *)
+    (*          in *. *)
 
     (* TODO_MOVE *)
     Ltac unfold_impl_obs :=
@@ -766,6 +794,53 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
              in *.
   End Observations.
 
+  Module ModImplToModSpec.
+    Import Observations.
+    Import Interfaces.Common.
+
+    Definition Sim (impl_st: ModImpl.state) (spec_st: ModSpec.state) : Prop. Admitted.
+
+    Definition tau_related : ModImpl.tau -> ModSpec.tau -> Prop :=
+      fun impl_ev spec_ev =>
+      generate_observations__modImpl impl_ev = generate_observations__modSpec spec_ev.
+
+    Definition trace_related : ModImpl.trace -> ModSpec.trace -> Prop :=
+      fun impl_tr spec_tr => List.Forall2 tau_related impl_tr spec_tr.
+
+    Theorem refinement :
+      forall (initial_dram: dram_t) (n: nat)
+        (impl_st: ModImpl.state) (impl_tr: ModImpl.trace)
+        (spec_st: ModSpec.state) (spec_tr: ModSpec.trace),
+      ModImpl.step_n initial_dram n = (impl_st, impl_tr) ->
+      ModSpec.step_n initial_dram n = (spec_st, spec_tr) ->
+      trace_related impl_tr spec_tr.
+    Proof.
+    Admitted.
+
+  End ModImplToModSpec.
+
+  Module ModSpecToSpec.
+    Import Observations.
+    Import Interfaces.Common.
+
+    Definition tau_related :  ModSpec.tau -> tau -> Prop :=
+      fun mod_ev spec_ev =>
+      generate_observations__modSpec mod_ev = spec_ev.
+
+    Definition trace_related : ModSpec.trace -> trace -> Prop :=
+      fun mod_tr spec_tr => List.Forall2 tau_related mod_tr spec_tr.
+
+    Theorem refinement :
+      forall (initial_dram: dram_t) (n: nat)
+        (mod_st: ModSpec.state) (mod_tr: ModSpec.trace)
+        (spec_st: Spec.state) (spec_tr: trace),
+      ModSpec.step_n initial_dram n = (mod_st, mod_tr) ->
+      Spec.step_n initial_dram n = (spec_st, spec_tr) ->
+      trace_related mod_tr spec_tr.
+    Proof.
+    Admitted.
+
+  End ModSpecToSpec.
 
   Module ImplToModImpl.
     Import Observations.
@@ -968,6 +1043,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
       Hint Rewrite<-@interp_scheduler_delta_correspond_to_interp_scheduler : log_helpers.
       Hint Rewrite @log_app_comm_proj_log : log_helpers.
 
+      Axiom __magic : forall T, T.
 
       Theorem step_sim : forall (impl_st impl_st': Impl.state) (mod_st mod_st': ModImpl.state)
                            (impl_ev: gen_impl_tau) (mod_ev: ModImpl.tau),
@@ -1003,6 +1079,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
           in HeqUpdateKoika.
         erewrite<-interp_scheduler'_rules_equiv with (1 := equivalent_rules_mem_lift Memory.schedule)
           in HeqUpdateKoika.
+        simpl in *.
 
         consider ModImpl.do_core0.
         destruct_all_matches.
@@ -1023,15 +1100,17 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
 
         consider ModImpl.do_sm.
         destruct_all_matches.
-        consider Impl.System.SM.do_step__impl.
         consider Impl.System.SM.do_step_input__impl.
-        consider Impl.System.SM.update_function.
-        consider Impl.System.sm_schedule.
+        consider @Impl.System.SM.__instantiate.
+        consider Impl.System.SM.do_step__impl.
+        consider SM_Common.do_step_input__impl.
+        consider SM_Common.update_function.
 
         consider ModImpl.do_mem.
         destruct_all_matches.
         consider Memory.do_step_input__impl.
         consider Memory.do_step__impl.
+
         consider Memory.update_function.
         destruct_all_matches.
         consider Memory.koika_update_function.
@@ -1039,7 +1118,6 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
 
         repeat do_rewrites.
         repeat rewrite<-interp_scheduler_delta_correspond_to_interp_scheduler in *.
-
         replace Impl.System.FnLift_core1 with Impl.System.FnLift_core0 in *; auto.
         simplify_tuples; subst; simpl in *.
 
@@ -1051,7 +1129,8 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
         repeat quick_cleanup.
         repeat remove_deltas.
         simpl in *; subst.
-        autorewrite with log_helpers in *.
+        autorewrite with log_helpers in *. (* slightly slow *)
+
         replace (Impl.System.FnLift_core1) with Impl.System.FnLift_core0 in * by auto.
         repeat do_rewrites.
         repeat remove_deltas.
@@ -1204,50 +1283,6 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
     End TopLevel.
 
   End ImplToModImpl.
-
-  Module ModImplToModSpec.
-    Import Observations.
-    Definition tau_related : ModImpl.tau -> ModSpec.tau -> Prop :=
-      fun impl_ev spec_ev =>
-      generate_observations__modImpl impl_ev = generate_observations__modSpec spec_ev.
-
-    Definition trace_related : ModImpl.trace -> ModSpec.trace -> Prop :=
-      fun impl_tr spec_tr => List.Forall2 tau_related impl_tr spec_tr.
-
-    Theorem refinement :
-      forall (initial_dram: dram_t) (n: nat)
-        (impl_st: ModImpl.state) (impl_tr: ModImpl.trace)
-        (spec_st: ModSpec.state) (spec_tr: ModSpec.trace),
-      ModImpl.step_n initial_dram n = (impl_st, impl_tr) ->
-      ModSpec.step_n initial_dram n = (spec_st, spec_tr) ->
-      trace_related impl_tr spec_tr.
-    Proof.
-    Admitted.
-
-  End ModImplToModSpec.
-
-  Module ModSpecToSpec.
-    Import Observations.
-    Import Interfaces.Common.
-
-    Definition tau_related :  ModSpec.tau -> tau -> Prop :=
-      fun mod_ev spec_ev =>
-      generate_observations__modSpec mod_ev = spec_ev.
-
-    Definition trace_related : ModSpec.trace -> trace -> Prop :=
-      fun mod_tr spec_tr => List.Forall2 tau_related mod_tr spec_tr.
-
-    Theorem refinement :
-      forall (initial_dram: dram_t) (n: nat)
-        (mod_st: ModSpec.state) (mod_tr: ModSpec.trace)
-        (spec_st: Spec.state) (spec_tr: trace),
-      ModSpec.step_n initial_dram n = (mod_st, mod_tr) ->
-      Spec.step_n initial_dram n = (spec_st, spec_tr) ->
-      trace_related mod_tr spec_tr.
-    Proof.
-    Admitted.
-
-  End ModSpecToSpec.
 
   Section TopLevel.
     Context (initial_dram: dram_t).

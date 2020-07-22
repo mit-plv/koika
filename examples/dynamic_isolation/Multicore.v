@@ -32,7 +32,7 @@ Module Common.
   Record enc_observations_t : Type :=
     { obs_enclave_req : option (struct_t enclave_req);
       obs_enclave_enter : bool;
-      obs_enclave_exit : bool 
+      obs_enclave_exit : bool
     }.
 
   Record observations_t :=
@@ -50,7 +50,7 @@ Module Common.
 
   Definition empty_obs_encs : enc_observations_t := {| obs_enclave_req := None;
                                                        obs_enclave_enter := false;
-                                                       obs_enclave_exit := false 
+                                                       obs_enclave_exit := false
                                                     |}.
 
   Definition empty_observations : observations_t :=
@@ -102,13 +102,13 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
 
   Definition update_ext_st: state -> Log R ContextEnv -> Log R ContextEnv * placeholder_external_state :=
     fun st log =>
-      let (mem_log', ext_st') := 
+      let (mem_log', ext_st') :=
           Memory.external_update_function ((proj_env System.Lift_mem (koika_state st)), external_state st)
                                           (proj_log System.Lift_mem log) in
       (lift_log System.Lift_mem mem_log', ext_st').
-      
+
   Definition update_koika (st: koika_state_t) : Log R ContextEnv :=
-    interp_scheduler st External.sigma System.rules System.schedule.
+    interp_scheduler st sigma System.rules System.schedule.
 
   Definition update_function (st: state) : Log R ContextEnv * placeholder_external_state :=
     let log' := update_koika (koika_state st) in
@@ -123,16 +123,16 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
                              (initial_dram: dram_t)
                              : state :=
     let enclave_data := enclave_config_to_enclave_data config in
-    let initial (reg: System.reg_t) := 
+    let initial (reg: System.reg_t) :=
         match reg return R reg with
         | System.SM_internal (SM_Common.clk) => clk
         | System.SM_internal SM_Common.enc_data0 =>
-            match core_id with 
+            match core_id with
             | CoreId0 => enclave_data
             | CoreId1 => System.r (System.SM_internal SM_Common.enc_data0)
             end
         | System.SM_internal SM_Common.enc_data1 =>
-            match core_id with 
+            match core_id with
             | CoreId0 => System.r (System.SM_internal SM_Common.enc_data1)
             | CoreId1 => enclave_data
             end
@@ -145,25 +145,25 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
     |}.
 
   (* Replace enclave data *)
-  Definition update_state_with_enclave_data (st: state) (core_id: ind_core_id) 
+  Definition update_state_with_enclave_data (st: state) (core_id: ind_core_id)
                                             (config: enclave_config) : state :=
     let enclave_data := enclave_config_to_enclave_data config in
     let state := koika_state st in
-    let koika_st' := 
-      ContextEnv.(create) (fun reg => 
+    let koika_st' :=
+      ContextEnv.(create) (fun reg =>
                              match reg return R reg with
                              | System.SM_internal SM_Common.enc_data0 =>
-                                 match core_id with 
+                                 match core_id with
                                  | CoreId0 => enclave_data
                                  | CoreId1 => ContextEnv.(getenv) state (System.SM_internal SM_Common.enc_data0)
                                  end
                              | System.SM_internal SM_Common.enc_data1 =>
-                                 match core_id with 
+                                 match core_id with
                                  | CoreId0 => ContextEnv.(getenv) state (System.SM_internal SM_Common.enc_data1)
                                  | CoreId1 => enclave_data
                                  end
                              | s => ContextEnv.(getenv) state s
-                             end 
+                             end
                           ) in
     MkState koika_st' (external_state st).
 
@@ -263,7 +263,7 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
     (* TODO (slight hack): If write reg_proc_reset == Restart, treat as switching enclaves *)
     Definition observe_enclave_enter0 (log: Log R ContextEnv) : bool :=
       match latest_write log System.purge_core0 with
-      | Some v => bits_eqb v ENUM_purge_restart 
+      | Some v => bits_eqb v ENUM_purge_restart
       | None => false
       end.
 
@@ -281,7 +281,7 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
 
     Definition observe_enclave_exit0 (log: Log R ContextEnv) : bool :=
       match latest_write log (System.SM_internal SM_Common.enc_data0) with
-      | Some v => 
+      | Some v =>
           let data := EnclaveInterface.extract_enclave_data v in
           bits_eqb (EnclaveInterface.enclave_data_valid data) Ob~0
       | None => false
@@ -289,7 +289,7 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
 
     Definition observe_enclave_exit1 (log: Log R ContextEnv) : bool :=
       match latest_write log (System.SM_internal SM_Common.enc_data1) with
-      | Some v => 
+      | Some v =>
           let data := EnclaveInterface.extract_enclave_data v in
           bits_eqb (EnclaveInterface.enclave_data_valid data) Ob~0
       | None => false
@@ -364,7 +364,7 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
   Module Machine1 := MachineSemantics External EnclaveParams VoidCoreParams Params1 VoidCore Core1 Memory.
 
   Inductive enclave_state_t :=
-  | EnclaveState_Running 
+  | EnclaveState_Running
   | EnclaveState_Switching (next_enclave: enclave_config)
   .
 
@@ -485,7 +485,7 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
     Context (spin_up_machine: env_t ContextEnv Rf.R -> enclave_config -> dram_t -> machine_state_t).
 
     Inductive core_state_machine :=
-    | CoreState_Enclave (machine_state: machine_state_t) (config: enclave_config) 
+    | CoreState_Enclave (machine_state: machine_state_t) (config: enclave_config)
                         (enclave_state: enclave_state_t)
     | CoreState_Waiting (new: enclave_config) (next_rf: env_t ContextEnv Rf.R)
     .
@@ -498,21 +498,21 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
 
     Definition get_enclave_config (st: core_state_machine) : option enclave_config :=
       match st with
-      | CoreState_Enclave _ config _ => Some config 
+      | CoreState_Enclave _ config _ => Some config
       | _ => None
       end.
-       
+
 
     Definition do_magic_step (config: magic_state_machine)
                              (mem_regions: memory_map)
                              (other_cores_enclave: option enclave_config)
                              : core_state_machine * observations_t * memory_map :=
       match config with
-      | MagicState_Continue st obs => (st, obs, mem_regions) 
+      | MagicState_Continue st obs => (st, obs, mem_regions)
       | MagicState_Exit next_enclave old_data obs =>
-          let new_regions := update_regions old_data.(contextSwitch_oldEnclave) 
+          let new_regions := update_regions old_data.(contextSwitch_oldEnclave)
                                             old_data.(contextSwitch_dram)
-                                            mem_regions in            
+                                            mem_regions in
           let core_state := CoreState_Waiting next_enclave old_data.(contextSwitch_rf) in
           let obs := {| obs_reqs := empty_obs_reqs;
                         obs_resps := empty_obs_resps;
@@ -524,7 +524,7 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
           (core_state, obs, new_regions)
       | MagicState_TryToEnter next_enclave next_rf =>
           (* Can only peek at other core's enclave when context switching *)
-          if can_enter_enclave next_enclave other_cores_enclave then 
+          if can_enter_enclave next_enclave other_cores_enclave then
             let machine := spin_up_machine next_rf next_enclave (get_dram mem_regions next_enclave) in
             let core_state := CoreState_Enclave machine next_enclave EnclaveState_Running in
             let obs := {| obs_reqs := empty_obs_reqs;
@@ -567,9 +567,9 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
           end
       | CoreState_Waiting new_enclave next_rf =>
           (* Here all we can do is try to enter the enclave if it's our turn *)
-          if can_switch 
+          if can_switch
           then MagicState_TryToEnter new_enclave next_rf
-          else MagicState_Continue config empty_observations 
+          else MagicState_Continue config empty_observations
       end.
 
   End LocalStateMachine.
@@ -586,7 +586,7 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
     fun st => let '(st', tau) := Machine0.step st in (st', tau CoreId0).
   Definition machine_step1 : Machine1.state -> Machine1.state * observations_t :=
     fun st => let '(st', tau) := Machine1.step st in (st', tau CoreId1).
-  
+
   (* Hmmm. contention with exit/enter? *)
 
   Definition spin_up_machine0 (rf: env_t ContextEnv Rf.R) (config: enclave_config) (dram: dram_t)
@@ -597,17 +597,17 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
                               : Machine1.state :=
     Machine1.spin_up_single_core_machine CoreId1 Ob~0 rf config dram.
 
-  Definition step (st: state) : state * tau := 
-    (* Each core independently takes a step; 
-     * context switching is only allowed for core0 and core1 on even and odd cycles respectively 
+  Definition step (st: state) : state * tau :=
+    (* Each core independently takes a step;
+     * context switching is only allowed for core0 and core1 on even and odd cycles respectively
      *)
-    let magic0 := local_core_step machine_step0 (Machine0.get_rf CoreId0) Machine0.get_dram 
+    let magic0 := local_core_step machine_step0 (Machine0.get_rf CoreId0) Machine0.get_dram
                                   (negb st.(clk)) st.(machine0_state) in
     let magic1 := local_core_step machine_step1 (Machine1.get_rf CoreId1) Machine1.get_dram st.(clk) st.(machine1_state) in
     (* Now we allow the core to exit it's enclave region or enter a new one, if it is it's turn.
-     * We should have an invariant that no core is running the same memory region, so that 
+     * We should have an invariant that no core is running the same memory region, so that
      * the order of doing the exit commutes.
-     * We also enforce that you can only observe the other core's state at the start of the "previous" cycle 
+     * We also enforce that you can only observe the other core's state at the start of the "previous" cycle
      * (check security).
      *)
     let '(core0, obs0, regions') :=
@@ -620,7 +620,7 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
                   clk := negb st.(clk)
                |} in
     (st', fun id => match id with | CoreId0 => obs0 | CoreId1 => obs1 end).
-  
+
   (*
   Record context_switch_data  :=
     { old_enclave: enclave_id;
