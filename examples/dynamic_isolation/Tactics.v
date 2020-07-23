@@ -140,6 +140,13 @@ Module General.
 
   Ltac destruct_inds := repeat destruct_one_ind.
 
+  Ltac destruct_rightmost_var term :=
+    lazymatch term with
+    | ?f ?x =>
+        destruct_rightmost_var x
+    | ?x => is_var x; destruct x
+    end.
+
   Ltac propositional_with t :=
     repeat match goal with
     | [ H : _ /\ _  |- _ ] =>

@@ -169,4 +169,13 @@ Module EnclaveParams <: EnclaveParameters.
 
   Definition shared_region_size : bits_t 32 := Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0.
 
+  Definition params : enclave_params_sig :=
+    {| _enclave_base := enclave_base
+     ; _enclave_size := enclave_size
+     ; _enclave_bootloader_addr := enclave_bootloader_addr
+     ; _shared_region_base := shared_region_base
+     ; _shared_region_size := shared_region_size
+    |}.
+
+
 End EnclaveParams.

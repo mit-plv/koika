@@ -79,40 +79,39 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
   Import System.
   Import Common.
   Import EnclaveInterface.
+  Import Interfaces.Common.
 
   Definition koika_state_t : Type := env_t ContextEnv (fun idx : reg_t => R idx).
-  Definition placeholder_external_state : Type := Memory.external_state_t.
+  Definition non_koika_state_t : Type := Memory.non_koika_state_t.
 
   Record state : Type := MkState
     { koika_state : koika_state_t;
-      external_state: placeholder_external_state
+      non_koika_state: non_koika_state_t
     }.
   Definition log_t : Type := Log R ContextEnv.
 
-  Definition get_dram (st: state) : dram_t := fst (external_state st).
+  Definition get_dram (st: state) : dram_t := fst (non_koika_state st).
 
   Definition get_rf (core: ind_core_id) (st: state) : env_t ContextEnv Rf.R :=
     let koika_st := koika_state st in
     match core with
-    | CoreId0 => ContextEnv.(create) (fun r => ContextEnv.(getenv) koika_st (System.core0_rf r))
-    | CoreId1 => ContextEnv.(create) (fun r => ContextEnv.(getenv) koika_st (System.core1_rf r))
+    | CoreId0 => ContextEnv.(create) (fun r => ContextEnv.(getenv) koika_st (Machine_Common.core0_rf r))
+    | CoreId1 => ContextEnv.(create) (fun r => ContextEnv.(getenv) koika_st (Machine_Common.core1_rf r))
     end.
 
-  Definition sigma_t : Type := (forall fn: ext_fn_t, Sig_denote (Sigma fn)).
-
-  Definition update_ext_st: state -> Log R ContextEnv -> Log R ContextEnv * placeholder_external_state :=
+  Definition update_non_koika_st: state -> Log R ContextEnv -> Log R ContextEnv * non_koika_state_t :=
     fun st log =>
       let (mem_log', ext_st') :=
-          Memory.external_update_function ((proj_env System.Lift_mem (koika_state st)), external_state st)
-                                          (proj_log System.Lift_mem log) in
-      (lift_log System.Lift_mem mem_log', ext_st').
+          Memory.non_koika_update_function ((proj_env Machine_Common.Lift_mem (koika_state st)), non_koika_state st)
+                                           (proj_log Machine_Common.Lift_mem log) in
+      (lift_log Machine_Common.Lift_mem mem_log', ext_st').
 
   Definition update_koika (st: koika_state_t) : Log R ContextEnv :=
-    interp_scheduler st sigma System.rules System.schedule.
+    interp_scheduler st System.sigma System.rules System.schedule.
 
-  Definition update_function (st: state) : Log R ContextEnv * placeholder_external_state :=
+  Definition update_function (st: state) : Log R ContextEnv * non_koika_state_t :=
     let log' := update_koika (koika_state st) in
-    let (ext_log', ext_st') := update_ext_st st log' in
+    let (ext_log', ext_st') := update_non_koika_st st log' in
     (log_app ext_log' log', ext_st').
 
   Definition spin_up_single_core_machine
@@ -125,23 +124,23 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
     let enclave_data := enclave_config_to_enclave_data config in
     let initial (reg: System.reg_t) :=
         match reg return R reg with
-        | System.SM_internal (SM_Common.clk) => clk
-        | System.SM_internal SM_Common.enc_data0 =>
+        | Machine_Common.SM_internal (SM_Common.clk) => clk
+        | Machine_Common.SM_internal SM_Common.enc_data0 =>
             match core_id with
             | CoreId0 => enclave_data
-            | CoreId1 => System.r (System.SM_internal SM_Common.enc_data0)
+            | CoreId1 => System.r (Machine_Common.SM_internal SM_Common.enc_data0)
             end
-        | System.SM_internal SM_Common.enc_data1 =>
+        | Machine_Common.SM_internal SM_Common.enc_data1 =>
             match core_id with
-            | CoreId0 => System.r (System.SM_internal SM_Common.enc_data1)
+            | CoreId0 => System.r (Machine_Common.SM_internal SM_Common.enc_data1)
             | CoreId1 => enclave_data
             end
-        | System.core0_rf s => ContextEnv.(getenv) rf s
-        | System.core1_rf s => ContextEnv.(getenv) rf s
+        | Machine_Common.core0_rf s => ContextEnv.(getenv) rf s
+        | Machine_Common.core1_rf s => ContextEnv.(getenv) rf s
         | s => System.r s
         end in
     {| koika_state := create ContextEnv System.r;
-       external_state := Memory.initial_external_state initial_dram
+       non_koika_state := Memory.initial_non_koika_state initial_dram
     |}.
 
   (* Replace enclave data *)
@@ -152,33 +151,33 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
     let koika_st' :=
       ContextEnv.(create) (fun reg =>
                              match reg return R reg with
-                             | System.SM_internal SM_Common.enc_data0 =>
+                             | Machine_Common.SM_internal SM_Common.enc_data0 =>
                                  match core_id with
                                  | CoreId0 => enclave_data
-                                 | CoreId1 => ContextEnv.(getenv) state (System.SM_internal SM_Common.enc_data0)
+                                 | CoreId1 => ContextEnv.(getenv) state (Machine_Common.SM_internal SM_Common.enc_data0)
                                  end
-                             | System.SM_internal SM_Common.enc_data1 =>
+                             | Machine_Common.SM_internal SM_Common.enc_data1 =>
                                  match core_id with
-                                 | CoreId0 => ContextEnv.(getenv) state (System.SM_internal SM_Common.enc_data1)
+                                 | CoreId0 => ContextEnv.(getenv) state (Machine_Common.SM_internal SM_Common.enc_data1)
                                  | CoreId1 => enclave_data
                                  end
                              | s => ContextEnv.(getenv) state s
                              end
                           ) in
-    MkState koika_st' (external_state st).
+    MkState koika_st' (non_koika_state st).
 
   Definition empty_log : Log R ContextEnv := log_empty.
 
   Section Observations.
     (* TODO: turns of duplication *)
     Definition observe_imem_reqs0 (log: Log R ContextEnv) : option (struct_t mem_req) :=
-      (observe_enq0 (System.Core0ToSM_IMem MemReq.valid0) eq_refl
-                    (System.Core0ToSM_IMem MemReq.data0) eq_refl
+      (observe_enq0 (Machine_Common.Core0ToSM_IMem MemReq.valid0) eq_refl
+                    (Machine_Common.Core0ToSM_IMem MemReq.data0) eq_refl
                     log).
 
     Definition observe_imem_reqs1 (log: Log R ContextEnv) : option (struct_t mem_req) :=
-      (observe_enq0 (System.Core1ToSM_IMem MemReq.valid0) eq_refl
-                    (System.Core1ToSM_IMem MemReq.data0) eq_refl
+      (observe_enq0 (Machine_Common.Core1ToSM_IMem MemReq.valid0) eq_refl
+                    (Machine_Common.Core1ToSM_IMem MemReq.data0) eq_refl
                     log).
 
     Definition observe_imem_reqs (log: Log R ContextEnv) (core_id: ind_core_id) : option (struct_t mem_req) :=
@@ -188,12 +187,12 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
       end.
 
     Definition observe_dmem_reqs0 (log: Log R ContextEnv) : option (struct_t mem_req) :=
-      (observe_enq0 (System.Core0ToSM_DMem MemReq.valid0) eq_refl
-                    (System.Core0ToSM_DMem MemReq.data0) eq_refl
+      (observe_enq0 (Machine_Common.Core0ToSM_DMem MemReq.valid0) eq_refl
+                    (Machine_Common.Core0ToSM_DMem MemReq.data0) eq_refl
                     log).
     Definition observe_dmem_reqs1 (log: Log R ContextEnv) : option (struct_t mem_req) :=
-      (observe_enq0 (System.Core1ToSM_DMem MemReq.valid0) eq_refl
-                    (System.Core1ToSM_DMem MemReq.data0) eq_refl
+      (observe_enq0 (Machine_Common.Core1ToSM_DMem MemReq.valid0) eq_refl
+                    (Machine_Common.Core1ToSM_DMem MemReq.data0) eq_refl
                     log).
 
 
@@ -209,13 +208,13 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
       |}.
 
     Definition observe_imem_resps0 (log: Log R ContextEnv) : option (struct_t mem_resp) :=
-      observe_enq1 (System.SMToCore0_IMem MemResp.valid0) eq_refl
-                   (System.SMToCore0_IMem MemResp.data0) eq_refl
+      observe_enq1 (Machine_Common.SMToCore0_IMem MemResp.valid0) eq_refl
+                   (Machine_Common.SMToCore0_IMem MemResp.data0) eq_refl
                    log.
 
     Definition observe_imem_resps1 (log: Log R ContextEnv) : option (struct_t mem_resp) :=
-      observe_enq1 (System.SMToCore1_IMem MemResp.valid0) eq_refl
-                   (System.SMToCore1_IMem MemResp.data0) eq_refl
+      observe_enq1 (Machine_Common.SMToCore1_IMem MemResp.valid0) eq_refl
+                   (Machine_Common.SMToCore1_IMem MemResp.data0) eq_refl
                    log.
 
     Definition observe_imem_resps (log: Log R ContextEnv) (core_id: ind_core_id) : option (struct_t mem_resp) :=
@@ -225,13 +224,13 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
       end.
 
     Definition observe_dmem_resps0 (log: Log R ContextEnv) : option (struct_t mem_resp) :=
-      observe_enq1 (System.SMToCore0_DMem MemResp.valid0) eq_refl
-                   (System.SMToCore0_DMem MemResp.data0) eq_refl
+      observe_enq1 (Machine_Common.SMToCore0_DMem MemResp.valid0) eq_refl
+                   (Machine_Common.SMToCore0_DMem MemResp.data0) eq_refl
                    log.
 
     Definition observe_dmem_resps1 (log: Log R ContextEnv) : option (struct_t mem_resp) :=
-      observe_enq1 (System.SMToCore1_DMem MemResp.valid0) eq_refl
-                   (System.SMToCore1_DMem MemResp.data0) eq_refl
+      observe_enq1 (Machine_Common.SMToCore1_DMem MemResp.valid0) eq_refl
+                   (Machine_Common.SMToCore1_DMem MemResp.data0) eq_refl
                    log.
 
     Definition observe_dmem_resps (log: Log R ContextEnv) (core_id: ind_core_id) : option (struct_t mem_resp) :=
@@ -242,13 +241,13 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
 
 
     Definition observe_enclave_reqs0 (log: Log R ContextEnv) : option (struct_t enclave_req) :=
-      observe_enq0 (System.Core0ToSM_Enc EnclaveReq.valid0) eq_refl
-                   (System.Core0ToSM_Enc EnclaveReq.data0) eq_refl
+      observe_enq0 (Machine_Common.Core0ToSM_Enc EnclaveReq.valid0) eq_refl
+                   (Machine_Common.Core0ToSM_Enc EnclaveReq.data0) eq_refl
                    log.
 
     Definition observe_enclave_reqs1 (log: Log R ContextEnv) : option (struct_t enclave_req) :=
-      observe_enq0 (System.Core1ToSM_Enc EnclaveReq.valid0) eq_refl
-                   (System.Core1ToSM_Enc EnclaveReq.data0) eq_refl
+      observe_enq0 (Machine_Common.Core1ToSM_Enc EnclaveReq.valid0) eq_refl
+                   (Machine_Common.Core1ToSM_Enc EnclaveReq.data0) eq_refl
                    log.
 
     Definition observe_enclave_reqs (log: Log R ContextEnv) (core_id: ind_core_id) : option (struct_t enclave_req) :=
@@ -262,13 +261,13 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
 
     (* TODO (slight hack): If write reg_proc_reset == Restart, treat as switching enclaves *)
     Definition observe_enclave_enter0 (log: Log R ContextEnv) : bool :=
-      match latest_write log System.purge_core0 with
+      match latest_write log Machine_Common.purge_core0 with
       | Some v => bits_eqb v ENUM_purge_restart
       | None => false
       end.
 
     Definition observe_enclave_enter1 (log: Log R ContextEnv) : bool :=
-      match latest_write log System.purge_core1 with
+      match latest_write log Machine_Common.purge_core1 with
       | Some v => bits_eqb v ENUM_purge_restart
       | None => false
       end.
@@ -280,7 +279,7 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
       end.
 
     Definition observe_enclave_exit0 (log: Log R ContextEnv) : bool :=
-      match latest_write log (System.SM_internal SM_Common.enc_data0) with
+      match latest_write log (Machine_Common.SM_internal SM_Common.enc_data0) with
       | Some v =>
           let data := EnclaveInterface.extract_enclave_data v in
           bits_eqb (EnclaveInterface.enclave_data_valid data) Ob~0
@@ -288,7 +287,7 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
       end.
 
     Definition observe_enclave_exit1 (log: Log R ContextEnv) : bool :=
-      match latest_write log (System.SM_internal SM_Common.enc_data1) with
+      match latest_write log (Machine_Common.SM_internal SM_Common.enc_data1) with
       | Some v =>
           let data := EnclaveInterface.extract_enclave_data v in
           bits_eqb (EnclaveInterface.enclave_data_valid data) Ob~0
@@ -330,8 +329,8 @@ Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParamete
   Section Initialised.
     Variable initial_dram : dram_t.
 
-    Definition initial_external_state : placeholder_external_state :=
-      Memory.initial_external_state initial_dram.
+    Definition initial_external_state : non_koika_state_t :=
+      Memory.initial_non_koika_state initial_dram.
 
     Definition initial_state : state := MkState (ContextEnv.(create) r) initial_external_state.
 
