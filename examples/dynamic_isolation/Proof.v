@@ -48,15 +48,29 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
   Module Spec:= IsolationSemantics External EnclaveParams Params0 Params1 Core0 Core1 Memory.
   (* Deduplicate *)
   Module TODO_SM := SecurityMonitor External EnclaveParams Params0 Params1.
+
   Import Interfaces.Common.
+
+(* TODO_MOVE *)
+Ltac destruct_one_var_with t :=
+  match goal with
+  | [ H: ?T |- _ ] => is_var H; destruct H; try t
+  end.
+Ltac destruct_vars_with t :=
+  repeat (destruct_one_var_with t).
+
+Tactic Notation "destruct_one_var" := destruct_one_var_with auto.
+Tactic Notation "destruct_vars_with" tactic(t) := repeat (destruct_one_var_with t).
+Tactic Notation "destruct_vars" := destruct_vars_with auto.
 
   Section TODO_WF_Properties.
     Property wf_r_lift_core0:
       forall k,
-      rew [fun t : type => t] pf_R_equal Impl.System.Lift_core0 k in Impl.System.r (rlift Impl.System.Lift_core0 k) =
+      rew [fun t : type => t] pf_R_equal Impl.System.Lift_core0 k in
+          Impl.System.r (rlift Impl.System.Lift_core0 k) =
       Core0.r k.
     Proof.
-      intros; destruct_inds; auto.
+      intros; destruct_vars; auto.
     Qed.
 
     Property wf_r_lift_core1:
@@ -64,7 +78,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
       rew [fun t : type => t] pf_R_equal Impl.System.Lift_core1 k in Impl.System.r (rlift Impl.System.Lift_core1 k) =
       Core1.r k.
     Proof.
-      intros; destruct_inds; auto.
+      intros; destruct_vars; auto.
     Qed.
 
     Property wf_r_lift_sm:
@@ -72,7 +86,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
       rew [fun t : type => t] pf_R_equal Impl.System.Lift_sm k in Impl.System.r (rlift Impl.System.Lift_sm k) =
       Impl.System.SM.r k.
     Proof.
-      intros; destruct_inds; auto.
+      intros; destruct_vars; auto.
     Qed.
 
     Property wf_r_lift_mem:
@@ -80,11 +94,11 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
       rew [fun t : type => t] pf_R_equal Impl.System.Lift_mem k in Impl.System.r (rlift Impl.System.Lift_mem k) =
       Memory.r k.
     Proof.
-      intros; destruct_inds; auto.
+      intros; destruct_vars; auto.
     Qed.
 
     Property wf_core0_Sigma :
-      forall f, Impl.System.Sigma (Impl.System.FnLift_core0.(rlift) f) = Core0.Sigma f.
+      forall f, Impl.System.Sigma (Impl.System.FnLift_id.(rlift) f) = Core0.Sigma f.
     Proof.
       auto.
     Qed.
@@ -92,14 +106,14 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
     Property wf_core0_sigma :
      forall f : (_ext_fn_t External.ext),
        Core0.sigma f =
-         rew [fun e : ExternalSignature => Sig_denote e] pf_R_equal Impl.System.FnLift_core0 f in
-         Impl.System.sigma (rlift Impl.System.FnLift_core0 f).
+         rew [fun e : ExternalSignature => Sig_denote e] pf_R_equal Impl.System.FnLift_id f in
+         Impl.System.sigma (rlift Impl.System.FnLift_id f).
     Proof.
       auto.
     Qed.
 
     Lemma wf_core1_Sigma :
-      forall f, Impl.System.Sigma (Impl.System.FnLift_core1.(rlift) f) = Core1.Sigma f.
+      forall f, Impl.System.Sigma (Impl.System.FnLift_id.(rlift) f) = Core1.Sigma f.
     Proof.
       auto.
     Qed.
@@ -107,30 +121,30 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
     Lemma wf_core1_sigma :
      forall f : (_ext_fn_t External.ext),
        Core1.sigma f =
-         rew [fun e : ExternalSignature => Sig_denote e] pf_R_equal Impl.System.FnLift_core1 f in
-         Impl.System.sigma (rlift Impl.System.FnLift_core1 f).
+         rew [fun e : ExternalSignature => Sig_denote e] pf_R_equal Impl.System.FnLift_id f in
+         Impl.System.sigma (rlift Impl.System.FnLift_id f).
     Proof.
       auto.
     Qed.
 
     Definition core0_empty_internal_regs (log: Log Core0.R ContextEnv) :=
-      (forall internal_reg, ContextEnv.(getenv) log (Core0.internal internal_reg) = []).
+      (forall internal_reg, ContextEnv.(getenv) log (Core_Common.internal internal_reg) = []).
     Definition core1_empty_internal_regs (log: Log Core1.R ContextEnv) :=
-      (forall internal_reg, ContextEnv.(getenv) log (Core1.internal internal_reg) = []).
+      (forall internal_reg, ContextEnv.(getenv) log (Core_Common.internal internal_reg) = []).
 
     Definition sm_empty_internal_regs (log: Log SM_Common.R ContextEnv) :=
       (forall internal_reg, ContextEnv.(getenv) log (SM_Common.internal internal_reg) = []).
 
     Definition mem_empty_internal_regs (log: Log Memory.R ContextEnv) :=
-      (forall internal_reg, ContextEnv.(getenv) log (Memory.internal internal_reg) = []).
+      (forall internal_reg, ContextEnv.(getenv) log (Mem_Common.internal internal_reg) = []).
 
     Property core0_lift_ext_log_cancels_proj:
       forall log,
       core0_empty_internal_regs log ->
-      Core0.lift_ext_log (Core0.proj_log__ext log) = log.
+      Core_Common.lift_ext_log (Core_Common.proj_log__ext log) = log.
     Proof.
       unfold core0_empty_internal_regs; intros.
-      unfold Core0.lift_ext_log, Core0.proj_log__ext.
+      unfold Core_Common.lift_ext_log, Core_Common.proj_log__ext.
       apply_equiv_eq.
       destruct k; auto_with_log_helpers.
     Qed.
@@ -138,10 +152,10 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
     Property core1_lift_ext_log_cancels_proj:
       forall log,
       core1_empty_internal_regs log ->
-      Core1.lift_ext_log (Core1.proj_log__ext log) = log.
+      Core_Common.lift_ext_log (Core_Common.proj_log__ext log) = log.
     Proof.
       unfold core1_empty_internal_regs; intros.
-      unfold Core1.lift_ext_log, Core1.proj_log__ext.
+      unfold Core_Common.lift_ext_log, Core_Common.proj_log__ext.
       apply_equiv_eq.
       destruct k; auto_with_log_helpers.
     Qed.
@@ -160,10 +174,10 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
     Property mem_lift_ext_log_cancels_proj:
       forall log,
       mem_empty_internal_regs log ->
-      Memory.lift_ext_log (Memory.proj_log__ext log) = log.
+      Mem_Common.lift_ext_log (Mem_Common.proj_log__ext log) = log.
     Proof.
       unfold sm_empty_internal_regs; intros.
-      unfold Memory.lift_ext_log, Memory.proj_log__ext.
+      unfold Mem_Common.lift_ext_log, Mem_Common.proj_log__ext.
       apply_equiv_eq.
       destruct k; auto_with_log_helpers.
     Qed.
@@ -171,7 +185,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
     Property equivalent_rules_core0_lift :
       forall sched,
       equivalent_rules
-         (lift_rule Impl.System.Lift_core0 Impl.System.FnLift_core0)
+         (lift_rule Impl.System.Lift_core0 Impl.System.FnLift_id)
          (lift_scheduler Core0.rules sched)
          Impl.System.rules
          (lift_scheduler Impl.System.core0_rule_name_lift sched).
@@ -182,7 +196,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
     Property equivalent_rules_core1_lift :
       forall sched,
       equivalent_rules
-         (lift_rule Impl.System.Lift_core1 Impl.System.FnLift_core1)
+         (lift_rule Impl.System.Lift_core1 Impl.System.FnLift_id)
          (lift_scheduler Core1.rules sched)
          Impl.System.rules
          (lift_scheduler Impl.System.core1_rule_name_lift sched).
@@ -193,7 +207,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
     Property equivalent_rules_sm_lift :
       forall (sched: scheduler),
       equivalent_rules
-         (lift_rule Impl.System.Lift_sm Impl.System.FnLift_sm)
+         (lift_rule Impl.System.Lift_sm Impl.System.FnLift_id)
          (lift_scheduler Impl.System.SM.rules sched)
          Impl.System.rules
          (lift_scheduler Impl.System.sm_rule_name_lift sched).
@@ -204,7 +218,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
     Property equivalent_rules_mem_lift :
       forall (sched: scheduler),
       equivalent_rules
-         (lift_rule Impl.System.Lift_mem Impl.System.FnLift_mem)
+         (lift_rule Impl.System.Lift_mem Impl.System.FnLift_id)
          (lift_scheduler Memory.rules sched)
          Impl.System.rules
          (lift_scheduler Impl.System.mem_rule_name_lift sched).
@@ -306,17 +320,137 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
     Definition impl_purge_mem1 : Impl.System.reg_t := Impl.System.purge_mem1.
   End ImplRegisterMap.
 
+  (* TODO: fix this *)
+  Section Derived_Core0.
+    Definition core0_state_t := @Core_Common.state Core0.internal_params.
+
+    Definition core0_do_step_input__koika :=
+      @Core_Common.do_step_input__koika Core0.internal_params
+                                      External.ext
+                                      Core0.rule_name_t
+                                      Core0.rules
+                                      Core0.schedule.
+
+    Definition core0_do_step__koika :=
+      @Core_Common.do_step__koika Core0.internal_params
+                                      External.ext
+                                      Core0.rule_name_t
+                                      Core0.rules
+                                      Core0.schedule.
+
+    Definition core0_spec_state_t : Type := @Core_Common.spec_state_t Core0.internal_params.
+
+    Definition core0_do_step_trans_input__spec :=
+      @Core_Common.do_step_trans_input__spec Core0.internal_params
+                                           External.ext
+                                           Core0.rule_name_t
+                                           Core0.rules
+                                           Core0.schedule.
+    Definition core0_do_step__spec :=
+      @Core_Common.do_step__spec Params0.core_id
+                               Params0.initial_pc
+                               Core0.internal_params
+                               External.ext
+                               Core0.rule_name_t
+                               Core0.rules
+                               Core0.schedule.
+
+
+  End Derived_Core0.
+
+  Section Derived_Core1.
+
+    Definition core1_state_t := @Core_Common.state Core1.internal_params.
+    Definition core1_do_step_input__koika :=
+      @Core_Common.do_step_input__koika Core1.internal_params
+                                      External.ext
+                                      Core1.rule_name_t
+                                      Core1.rules
+                                      Core1.schedule.
+
+    Definition core1_do_step__koika :=
+      @Core_Common.do_step__koika Core1.internal_params
+                                      External.ext
+                                      Core1.rule_name_t
+                                      Core1.rules
+                                      Core1.schedule.
+
+    Definition core1_spec_state_t : Type := @Core_Common.spec_state_t Core1.internal_params.
+
+    Definition core1_do_step_trans_input__spec :=
+      @Core_Common.do_step_trans_input__spec Core1.internal_params
+                                           External.ext
+                                           Core1.rule_name_t
+                                           Core1.rules
+                                           Core1.schedule.
+
+    Definition core1_do_step__spec :=
+      @Core_Common.do_step__spec Params1.core_id
+                               Params1.initial_pc
+                               Core1.internal_params
+                               External.ext
+                               Core1.rule_name_t
+                               Core1.rules
+                               Core1.schedule.
+
+  End Derived_Core1.
+
+  Section Derived_Mem.
+    Definition mem_do_step_input__impl :=
+      @Mem_Common.do_step_input__impl Memory.internal_params
+                                    External.ext
+                                    Memory.rule_name_t
+                                    Memory.rules
+                                    Memory.schedule
+                                    Memory.internal_non_koika_state_t
+                                    Memory.non_koika_update_function.
+
+    Definition mem_do_step__impl :=
+      @Mem_Common.do_step__impl Memory.internal_params
+                                    External.ext
+                                    Memory.rule_name_t
+                                    Memory.rules
+                                    Memory.schedule
+                                    Memory.internal_non_koika_state_t
+                                    Memory.non_koika_update_function.
+
+    Definition mem_spec_state_t : Type :=
+      @Mem_Common.spec_state_t Memory.internal_params Memory.internal_non_koika_state_t.
+
+    Definition mem_do_step_trans_input__spec :=
+      @Mem_Common.do_step_trans_input__spec Memory.internal_params
+                                          External.ext
+                                          EnclaveParams.params
+                                          Memory.rule_name_t
+                                          Memory.rules
+                                          Memory.schedule
+                                          Memory.internal_non_koika_state_t
+                                          Memory.initial_internal_non_koika_state
+                                          Memory.non_koika_update_function.
+    Definition mem_do_step__spec :=
+      @Mem_Common.do_step__spec Memory.internal_params
+                              External.ext
+                              EnclaveParams.params
+                              Memory.rule_name_t
+                              Memory.rules
+                              Memory.schedule
+                              Memory.internal_non_koika_state_t
+                              Memory.initial_internal_non_koika_state
+                              Memory.non_koika_update_function.
+
+  End Derived_Mem.
+
   Section ImplProjs.
-    Definition get_impl_core0 : Impl.koika_state_t -> Core0.state :=
+    Definition get_impl_core0 : Impl.koika_state_t -> core0_state_t :=
       fun impl_st => proj_env Impl.System.Lift_core0 impl_st.
-    Definition get_impl_core1 : Impl.koika_state_t -> Core1.state :=
+    Definition get_impl_core1 : Impl.koika_state_t -> core1_state_t :=
       fun impl_st => proj_env Impl.System.Lift_core1 impl_st.
     Definition get_impl_sm : Impl.koika_state_t -> SM_Common.state :=
       fun impl_st => proj_env Impl.System.Lift_sm impl_st.
     Definition get_impl_koika_mem : Impl.koika_state_t -> Memory.koika_state_t :=
       fun impl_st => proj_env Impl.System.Lift_mem impl_st.
     Definition get_impl_mem : Impl.state -> Memory.state :=
-      fun impl_st => (get_impl_koika_mem (Impl.koika_state impl_st), Impl.external_state impl_st).
+      fun impl_st => (get_impl_koika_mem (Impl.koika_state impl_st), Impl.non_koika_state impl_st).
 
     Definition get_impl_log_core0 : Impl.log_t -> Log Core0.R ContextEnv :=
       fun impl_st => proj_log Impl.System.Lift_core0 impl_st.
@@ -334,9 +468,9 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
            get_impl_log_core0, get_impl_log_core1, get_impl_log_sm, get_impl_log_mem in *.
 
   Section SpecProjs.
-    Definition get_spec0_core0 : Spec.Machine0.koika_state_t -> Core0.state :=
+    Definition get_spec0_core0 : Spec.Machine0.koika_state_t -> core0_state_t :=
       fun spec_st => proj_env Spec.Machine0.System.Lift_core0 spec_st.
-    Definition get_spec1_core1 : Spec.Machine1.koika_state_t -> Core1.state :=
+    Definition get_spec1_core1 : Spec.Machine1.koika_state_t -> core1_state_t :=
       fun spec_st => proj_env Spec.Machine1.System.Lift_core1 spec_st.
     Definition get_spec0_sm : Spec.Machine0.koika_state_t -> SM_Common.state :=
       fun spec_st => proj_env Spec.Machine0.System.Lift_sm spec_st.
@@ -360,8 +494,8 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
   Module ModImpl.
 
     Record state :=
-      { state_core0 : Core0.state
-      ; state_core1 : Core1.state
+      { state_core0 : core0_state_t
+      ; state_core1 : core1_state_t
       ; state_sm : SM_Common.state
       ; state_mem : Memory.state
       }.
@@ -370,7 +504,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
       { output_core0 : Log Core0.R ContextEnv
       ; output_core1 : Log Core1.R ContextEnv
       ; output_sm : Log SM_Common.R ContextEnv
-      ; output_mem : Log Memory.R ContextEnv * Memory.external_state_t
+      ; output_mem : Log Memory.R ContextEnv * Memory.non_koika_state_t
       }.
 
     Definition trace := list tau.
@@ -388,37 +522,37 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
       {| state_core0 := ContextEnv.(create) Core0.r;
          state_core1 := ContextEnv.(create) Core1.r;
          state_sm := ContextEnv.(create) Impl.System.SM.r;
-         state_mem := (ContextEnv.(create) Memory.r, Memory.initial_external_state initial_dram)
+         state_mem := (ContextEnv.(create) Memory.r, Memory.initial_non_koika_state initial_dram)
       |}.
 
     (* TODO: stop duplicating *)
     Section ModularStep.
 
-      Definition do_core0 (st: Core0.state) (input_log: Log Impl.System.R ContextEnv)
-                          : Log Core0.R_external ContextEnv * Log Core0.R ContextEnv *
+      Definition do_core0 (st: core0_state_t) (input_log: Log Impl.System.R ContextEnv)
+                          : Log Core_Common.R_external ContextEnv * Log Core0.R ContextEnv *
                             Log Impl.System.R ContextEnv * Log Impl.System.R ContextEnv *
-                            (Log Impl.System.R ContextEnv -> Core0.step_io) :=
-        let core0_input := Core0.proj_log__ext (proj_log Impl.System.Lift_core0 input_log) in
-        let '(core0_output__local, _) := Core0.do_step_input__koika st core0_input in
+                            (Log Impl.System.R ContextEnv -> Core_Common.step_io) :=
+        let core0_input := Core_Common.proj_log__ext (proj_log Impl.System.Lift_core0 input_log) in
+        let '(core0_output__local, _) := core0_do_step_input__koika st core0_input in
         let core0_output__global := lift_log (REnv' := ContextEnv) Impl.System.Lift_core0 core0_output__local in
         let acc := log_app core0_output__global input_log in
         let mk_core0_step_io feedback_log :=
-            {| Core0.step_input := core0_input;
-               Core0.step_feedback := Core0.proj_log__ext (proj_log Impl.System.Lift_core0 feedback_log)
+            {| Core_Common.step_input := core0_input;
+               Core_Common.step_feedback := Core_Common.proj_log__ext (proj_log Impl.System.Lift_core0 feedback_log)
             |} in
         (core0_input, core0_output__local, core0_output__global, acc, mk_core0_step_io).
 
-      Definition do_core1 (st: Core1.state) (input_log: Log Impl.System.R ContextEnv)
-                          : Log Core1.R_external ContextEnv * Log Core1.R ContextEnv *
+      Definition do_core1 (st: core1_state_t) (input_log: Log Impl.System.R ContextEnv)
+                          : Log Core_Common.R_external ContextEnv * Log Core1.R ContextEnv *
                             Log Impl.System.R ContextEnv * Log Impl.System.R ContextEnv *
-                            (Log Impl.System.R ContextEnv -> Core1.step_io) :=
-        let core1_input := Core1.proj_log__ext (proj_log Impl.System.Lift_core1 input_log) in
-        let '(core1_output__local, _) := Core1.do_step_input__koika st core1_input in
+                            (Log Impl.System.R ContextEnv -> Core_Common.step_io) :=
+        let core1_input := Core_Common.proj_log__ext (proj_log Impl.System.Lift_core1 input_log) in
+        let '(core1_output__local, _) := core1_do_step_input__koika st core1_input in
         let core1_output__global := lift_log (REnv' := ContextEnv) Impl.System.Lift_core1 core1_output__local in
         let acc := log_app core1_output__global input_log in
         let mk_core1_step_io feedback_log :=
-            {| Core1.step_input := core1_input;
-               Core1.step_feedback := Core1.proj_log__ext (proj_log Impl.System.Lift_core1 feedback_log)
+            {| Core_Common.step_input := core1_input;
+               Core_Common.step_feedback := Core_Common.proj_log__ext (proj_log Impl.System.Lift_core1 feedback_log)
             |} in
         (core1_input, core1_output__local, core1_output__global, acc, mk_core1_step_io).
 
@@ -437,16 +571,16 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
         (sm_input, sm_output__local, sm_output__global, acc, mk_sm_step_io).
 
       Definition do_mem (st: Memory.state) (input_log: Log Impl.System.R ContextEnv)
-                        : Log Memory.R_external ContextEnv * Log Memory.R ContextEnv *
-                          Memory.external_state_t * Log Impl.System.R ContextEnv * Log Impl.System.R ContextEnv *
-                          (Log Impl.System.R ContextEnv -> Memory.step_io) :=
-        let mem_input := Memory.proj_log__ext (proj_log (REnv := ContextEnv) Impl.System.Lift_mem input_log) in
-        let '(mem_output__local, ext_st) := Memory.do_step_input__impl st mem_input in
+                        : Log Mem_Common.R_external ContextEnv * Log Memory.R ContextEnv *
+                          Mem_Common.non_koika_state_t * Log Impl.System.R ContextEnv * Log Impl.System.R ContextEnv *
+                          (Log Impl.System.R ContextEnv -> Mem_Common.step_io) :=
+        let mem_input := Mem_Common.proj_log__ext (proj_log (REnv := ContextEnv) Impl.System.Lift_mem input_log) in
+        let '(mem_output__local, ext_st) := mem_do_step_input__impl st mem_input in
         let mem_output__global := lift_log (REnv := ContextEnv) Impl.System.Lift_mem mem_output__local in
         let acc_mem := log_app mem_output__global input_log in
         let mk_mem_step_io feedback_log :=
-            {| Memory.step_input := mem_input;
-               Memory.step_feedback := Memory.proj_log__ext (proj_log Impl.System.Lift_mem feedback_log)
+            {| Mem_Common.step_input := mem_input;
+               Mem_Common.step_feedback := Mem_Common.proj_log__ext (proj_log Impl.System.Lift_mem feedback_log)
             |} in
         (mem_input, mem_output__local, ext_st, mem_output__global, acc_mem, mk_mem_step_io).
 
@@ -485,10 +619,10 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
       let core1_step_io := mk_core1_step_io core1_feedback__global in
       let sm_step_io := mk_sm_step_io sm_feedback__global in
       let mem_step_io := mk_mem_step_io mem_feedback__global in
-      ({| state_core0 := fst (Core0.do_step__koika (state_core0 st) core0_step_io);
-         state_core1 := fst (Core1.do_step__koika (state_core1 st) core1_step_io);
+      ({| state_core0 := fst (core0_do_step__koika (state_core0 st) core0_step_io);
+         state_core1 := fst (core1_do_step__koika (state_core1 st) core1_step_io);
          state_sm := fst (Impl.System.SM.do_step__impl (state_sm st) sm_step_io);
-         state_mem := fst (Memory.do_step__impl (state_mem st) mem_step_io)
+         state_mem := fst (mem_do_step__impl (state_mem st) mem_step_io)
        |}, outputs).
 
     Definition step_n (initial_dram: dram_t) (n: nat) : state * trace :=
@@ -510,10 +644,10 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
   Module ModSpec.
 
     Record state :=
-      { state_core0 : Core0.spec_state_t
-      ; state_core1 : Core1.spec_state_t
+      { state_core0 : core0_spec_state_t
+      ; state_core1 : core1_spec_state_t
       ; state_sm : SM_Common.spec_state_t
-      ; state_mem : Memory.spec_state_t
+      ; state_mem : mem_spec_state_t
       }.
 
     Record tau :=
@@ -550,12 +684,12 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
     (* TODO: modularize *)
     Definition do_step (st: state) : state * tau :=
       (* Core0 *)
-      let '(core0_output__local, _) := Core0.do_step_trans_input__spec (state_core0 st) log_empty in
+      let '(core0_output__local, _) := core0_do_step_trans_input__spec (state_core0 st) log_empty in
       let core0_output__global := lift_log (REnv' := ContextEnv) Impl.System.Lift_core0 core0_output__local in
       let acc__core0 := core0_output__global in
       (* Core1 *)
-      let core1_input := Core1.proj_log__ext (proj_log (REnv := ContextEnv) Impl.System.Lift_core1 acc__core0) in
-      let '(core1_output__local, _) := Core1.do_step_trans_input__spec (state_core1 st) core1_input in
+      let core1_input := Core_Common.proj_log__ext (proj_log (REnv := ContextEnv) Impl.System.Lift_core1 acc__core0) in
+      let '(core1_output__local, _) := core1_do_step_trans_input__spec (state_core1 st) core1_input in
       let core1_output__global := lift_log (REnv := ContextEnv) Impl.System.Lift_core1 core1_output__local in
       let acc__core1 := log_app core1_output__global acc__core0 in
       (* SM *)
@@ -565,8 +699,8 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
       let sm_output__global := lift_log (REnv := ContextEnv) Impl.System.Lift_sm sm_output__local in
       let acc_sm := log_app sm_output__global acc__core1 in
       (* Mem *)
-      let mem_input := Memory.proj_log__ext (proj_log (REnv := ContextEnv) Impl.System.Lift_mem acc_sm) in
-      let mem_output__raw := Memory.do_step_trans_input__spec (state_mem st) mem_input in
+      let mem_input := Mem_Common.proj_log__ext (proj_log (REnv := ContextEnv) Impl.System.Lift_mem acc_sm) in
+      let mem_output__raw := mem_do_step_trans_input__spec (state_mem st) mem_input in
       let mem_output__local := combine_mem_output mem_output__raw in
       let mem_output__global := lift_log (REnv := ContextEnv) Impl.System.Lift_mem mem_output__local in
       let acc_mem := log_app mem_output__global acc_sm in
@@ -583,31 +717,31 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
       let core0_feedback__global := log_app core1_output__global core1_feedback__global in
 
       let core0_step_io :=
-          {| Core0.step_input := log_empty;
-             Core0.step_feedback := Core0.proj_log__ext (proj_log (REnv := ContextEnv) Impl.System.Lift_core0
+          {| Core_Common.step_input := log_empty;
+             Core_Common.step_feedback := Core_Common.proj_log__ext (proj_log (REnv := ContextEnv) Impl.System.Lift_core0
                                                                 core0_feedback__global)
           |} in
       let core1_step_io :=
-          {| Core1.step_input := core1_input;
-             Core1.step_feedback := Core1.proj_log__ext (proj_log Impl.System.Lift_core1 core1_feedback__global)
+          {| Core_Common.step_input := core1_input;
+             Core_Common.step_feedback := Core_Common.proj_log__ext (proj_log Impl.System.Lift_core1 core1_feedback__global)
           |} in
       let sm_step_io :=
           {| SM_Common.step_input := sm_input;
              SM_Common.step_feedback := SM_Common.proj_log__ext (proj_log Impl.System.Lift_sm sm_feedback__global)
           |} in
       let mem_step_io :=
-          {| Memory.step_input := mem_input;
-             Memory.step_feedback := Memory.proj_log__ext (proj_log Impl.System.Lift_mem mem_feedback__global)
+          {| Mem_Common.step_input := mem_input;
+             Mem_Common.step_feedback := Mem_Common.proj_log__ext (proj_log Impl.System.Lift_mem mem_feedback__global)
           |} in
       let mem_ghost_io :=
-          {| Memory.ghost_step := mem_step_io;
-             Memory.ghost_input_config0 := (ghost_output_config0 sm_ghost);
-             Memory.ghost_input_config1 := (ghost_output_config1 sm_ghost)
+          {| Mem_Common.ghost_step := mem_step_io;
+             Mem_Common.ghost_input_config0 := (ghost_output_config0 sm_ghost);
+             Mem_Common.ghost_input_config1 := (ghost_output_config1 sm_ghost)
           |} in
-      ({| state_core0 := fst (fst (Core0.do_step__spec (state_core0 st) core0_step_io));
-         state_core1 := fst (fst (Core1.do_step__spec (state_core1 st) core1_step_io));
+      ({| state_core0 := fst (fst (core0_do_step__spec (state_core0 st) core0_step_io));
+         state_core1 := fst (fst (core1_do_step__spec (state_core1 st) core1_step_io));
          state_sm := fst (fst (TODO_SM.do_step__spec (state_sm st) sm_step_io));
-         state_mem := fst (fst (Memory.do_step__spec (state_mem st) mem_ghost_io))
+         state_mem := fst (fst (mem_do_step__spec (state_mem st) mem_ghost_io))
        |}, outputs).
 
     Definition step_n (initial_dram: dram_t) (n: nat) : state * trace :=
@@ -847,7 +981,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
     Import Interfaces.Common.
 
     Section GeneralizeImpl.
-      Definition gen_impl_tau : Type := Log Impl.System.R ContextEnv * Impl.placeholder_external_state.
+      Definition gen_impl_tau : Type := Log Impl.System.R ContextEnv * Impl.non_koika_state_t.
       Definition gen_impl_trace := list gen_impl_tau.
       Definition gen_impl_step (st: Impl.state) : Impl.state * gen_impl_tau :=
         let (log, ext_st') := Impl.update_function st in
@@ -953,17 +1087,30 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
         | |- _ => progress simplify_tuples; subst
         end.
 
+      Hint Rewrite @getenv_lift_log_not_exists using (solve[auto_with_log_helpers]) : log_helpers.
+      Hint Rewrite @lift_log_app : log_helpers.
+      Hint Rewrite<-@SemanticProperties.log_app_assoc : log_helpers.
+
+      Ltac solve_getenv_lift_log_not_exists :=
+        repeat match goal with
+        | |- getenv _ (lift_log _ _ ) = [] =>
+            rewrite getenv_lift_log_not_exists; auto
+        | |- context[getenv _ (interp_scheduler_delta _ _ (lift_rule ?lift _) _ _ ) _] =>
+          erewrite<-lift_proj_interp_scheduler_delta with (Rlift := lift); eauto;
+            try typeclasses eauto; auto_with_log_helpers
+        end.
+
       (* TODO: goal vs hypothesis pattern? *)
       Ltac do_rewrites :=
         match goal with
-        | H: context[Core0.lift_ext_log (Core0.proj_log__ext _)] |- _ =>
-          rewrite core0_lift_ext_log_cancels_proj in H; [ | solve[repeat bash_step]]
-        | H: context[Core1.lift_ext_log (Core1.proj_log__ext _)] |- _ =>
-          rewrite core1_lift_ext_log_cancels_proj in H; [ | solve[repeat bash_step]]
+        | H: context[Core_Common.lift_ext_log (Core_Common.proj_log__ext _)] |- _ =>
+          rewrite core0_lift_ext_log_cancels_proj in H; [ | solve[solve_getenv_lift_log_not_exists; repeat bash_step]]
+        (* | H: context[Core_Common.lift_ext_log (Core_Common.proj_log__ext _)] |- _ => *)
+        (*   rewrite core1_lift_ext_log_cancels_proj in H; [ | solve[solve_getenv_lift_log_not_exists; repeat bash_step]] *)
         | H: context[SM_Common.lift_ext_log (SM_Common.proj_log__ext _)] |- _ =>
-          rewrite sm_lift_ext_log_cancels_proj in H; [ | solve[repeat bash_step]]
-        | H: context[Memory.lift_ext_log (Memory.proj_log__ext _)] |- _ =>
-          rewrite mem_lift_ext_log_cancels_proj in H; [ | solve[repeat bash_step]]
+          rewrite sm_lift_ext_log_cancels_proj in H; [ | solve[solve_getenv_lift_log_not_exists;repeat bash_step]]
+        | H: context[Mem_Common.lift_ext_log (Mem_Common.proj_log__ext _)] |- _ =>
+          rewrite mem_lift_ext_log_cancels_proj in H; [ | solve[solve_getenv_lift_log_not_exists;repeat bash_step]]
         | H: context[log_app (interp_scheduler_delta (proj_env _ _) _ _ (proj_log _ _) _) (proj_log _ _)] |- _ =>
           erewrite log_app_interp_scheduler_delta_proj_comm_proj_interp_scheduler' in H;
             eauto; try typeclasses eauto
@@ -989,16 +1136,6 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
                       (intros; setoid_rewrite wf_interp_scheduler'_with_lifted_rules; auto_with_log_helpers)]]
         end.
 
-      Hint Rewrite @getenv_lift_log_not_exists using (solve[auto_with_log_helpers]) : log_helpers.
-      Hint Rewrite @lift_log_app : log_helpers.
-      Hint Rewrite<-@SemanticProperties.log_app_assoc : log_helpers.
-
-      Ltac solve_getenv_lift_log_not_exists :=
-        repeat match goal with
-        | |- context[getenv _ (interp_scheduler_delta _ _ (lift_rule ?lift _) _ _ ) _] =>
-          erewrite<-lift_proj_interp_scheduler_delta with (Rlift := lift); eauto;
-            try typeclasses eauto; auto_with_log_helpers
-        end.
 
       Hint Rewrite core0_lift_ext_log_cancels_proj using (solve[repeat bash_step; solve_getenv_lift_log_not_exists]): log_helpers.
       Hint Rewrite core1_lift_ext_log_cancels_proj using (solve[repeat bash_step; solve_getenv_lift_log_not_exists]): log_helpers.
@@ -1063,8 +1200,8 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
         consider @interp_scheduler.
 
         consider Impl.System.sigma.
-        consider Impl.System.rule_name_t.
-        consider Impl.update_ext_st.
+        (* consider Impl.System.rule_name_t. *)
+        consider Impl.update_non_koika_st.
 
         repeat rewrite interp_scheduler'_app in HeqUpdateKoika.
         consider ModImpl.do_step.
@@ -1079,46 +1216,58 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
           in HeqUpdateKoika.
         erewrite<-interp_scheduler'_rules_equiv with (1 := equivalent_rules_mem_lift Memory.schedule)
           in HeqUpdateKoika.
+Arguments Log : simpl never.
         simpl in *.
 
         consider ModImpl.do_core0.
         destruct_all_matches.
-        consider Core0.do_step__koika.
-        consider Core0.do_step_input__koika.
-        consider Core0.update_function.
-        consider Impl.System.core0_schedule.
+        consider core0_do_step__koika.
+        consider core0_do_step_input__koika.
+        (* consider Impl.System.core0_schedule. *)
         consider Core0.rule.
         consider Core0.sigma.
 
         consider ModImpl.do_core1.
         destruct_all_matches.
-        consider Core1.do_step__koika.
-        consider Core1.do_step_input__koika.
-        consider Core1.update_function.
-        consider Impl.System.core1_schedule.
+        consider core1_do_step__koika.
+        consider core1_do_step_input__koika.
+        (* consider Core1.update_function.  *)
+        (* consider Impl.System.core1_schedule. *)
         consider Core1.rule.
+        consider Core1.sigma.
+
+        consider @Core_Common.do_step__koika.
+        consider @Core_Common.do_step_input__koika.
+        consider @Core_Common.update_function.
+
+        repeat do_rewrites.
 
         consider ModImpl.do_sm.
         destruct_all_matches.
         consider Impl.System.SM.do_step_input__impl.
-        consider @Impl.System.SM.__instantiate.
         consider Impl.System.SM.do_step__impl.
-        consider SM_Common.do_step_input__impl.
-        consider SM_Common.update_function.
+        consider @SM_Common.do_step_input__impl.
+        consider @SM_Common.update_function.
 
         consider ModImpl.do_mem.
         destruct_all_matches.
-        consider Memory.do_step_input__impl.
-        consider Memory.do_step__impl.
+        consider mem_do_step__impl.
+        consider @Mem_Common.do_step__impl.
+        consider mem_do_step_input__impl.
+        consider @Mem_Common.do_step_input__impl.
 
-        consider Memory.update_function.
+        consider @Mem_Common.update_function.
         destruct_all_matches.
-        consider Memory.koika_update_function.
+        consider @Mem_Common.koika_update_function.
         consider Memory.rule.
 
+        (* repeat (rewrite core0_lift_ext_log_cancels_proj in *; *)
+        (*           [ | solve[solve_getenv_lift_log_not_exists; repeat bash_step]]); *)
+        (* repeat (rewrite sm_lift_ext_log_cancels_proj in *; *)
+        (*          [ | solve[solve_getenv_lift_log_not_exists;repeat bash_step]]). *)
         repeat do_rewrites.
+        (* repeat do_rewrites. (* TODO: speed this up *) *)
         repeat rewrite<-interp_scheduler_delta_correspond_to_interp_scheduler in *.
-        replace Impl.System.FnLift_core1 with Impl.System.FnLift_core0 in *; auto.
         simplify_tuples; subst; simpl in *.
 
         repeat match goal with
@@ -1364,13 +1513,13 @@ End TradPf.
          ghost_output_config1 := Impl.System.SM.ghost_output_config1 st
       |}.
 
-    Definition do_core0_step (st: Core0.state) (input_log: Log Impl.System.R ContextEnv)
+    Definition do_core0_step (st: core0_state_t) (input_log: Log Impl.System.R ContextEnv)
                              : Log Impl.System.R ContextEnv :=
       let core0_log := proj_log (REnv := ContextEnv) Impl.System.Lift_core0 input_log in
       let output_log := Core0.update_function st core0_log in
       lift_log (REnv := ContextEnv) Impl.System.Lift_core0 output_log.
 
-    Definition do_core1_step (st: Core1.state) (input_log: Log Impl.System.R ContextEnv)
+    Definition do_core1_step (st: core1_state_t) (input_log: Log Impl.System.R ContextEnv)
                              : Log Impl.System.R ContextEnv :=
       let core1_log := proj_log (REnv := ContextEnv) Impl.System.Lift_core1 input_log in
       let output_log := Core1.update_function st core1_log in
