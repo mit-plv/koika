@@ -168,16 +168,16 @@ Module MessageFifo1.
 End MessageFifo1.
 
 Module MessageRouter.
-  Inductive internal_reg_t :=
+  Inductive private_reg_t :=
   | routerTieBreaker (* To implement round robin fairness *)
   .
 
-  Definition R_internal (idx: internal_reg_t) : type :=
+  Definition R_private (idx: private_reg_t) : type :=
     match idx with
     | routerTieBreaker => bits_t 2
     end.
 
-  Definition r_internal (idx: internal_reg_t) : R_internal idx :=
+  Definition r_private (idx: private_reg_t) : R_private idx :=
     match idx with
     | routerTieBreaker => Bits.zero
     end.
@@ -193,7 +193,7 @@ Module MessageRouter.
   | ToCore1D (state: MessageFifo1.reg_t)
   | ToProto (state: MessageFifo1.reg_t)
   | FromProto (state: MessageFifo1.reg_t)
-  | internal (state: internal_reg_t)
+  | private (state: private_reg_t)
   .
 
   Definition R (idx: reg_t) : type :=
@@ -208,11 +208,11 @@ Module MessageRouter.
     | ToCore1D st => MessageFifo1.R st
     | ToProto st => MessageFifo1.R st
     | FromProto st => MessageFifo1.R st
-    | internal st => R_internal st
+    | private st => R_private st
     end.
 
-  Notation "'__internal__' instance " :=
-    (fun reg => internal ((instance) reg)) (in custom koika at level 1, instance constr at level 99).
+  Notation "'__private__' instance " :=
+    (fun reg => private ((instance) reg)) (in custom koika at level 1, instance constr at level 99).
   Notation "'(' instance ').(' method ')' args" :=
     (USugar (UCallModule instance _ method args))
       (in custom koika at level 1, method constr, args custom koika_args at level 99).
@@ -322,7 +322,7 @@ Module MessageRouter.
             when (get(curResp, valid)) do (
               set foundMsg := Ob~1;
               set msg := {valid (struct_t cache_mem_msg)} (get(curResp, data));
-              write0(internal routerTieBreaker, tiebreaker + |2`d1|)
+              write0(private routerTieBreaker, tiebreaker + |2`d1|)
             )
          ));
          (when (!foundMsg) do (
@@ -330,7 +330,7 @@ Module MessageRouter.
             when (get(curResp, valid)) do (
               set foundMsg := Ob~1;
               set msg := {valid (struct_t cache_mem_msg)} (get(curResp, data));
-              write0(internal routerTieBreaker, tiebreaker + |2`d2|)
+              write0(private routerTieBreaker, tiebreaker + |2`d2|)
             )
           ));
          (when (!foundMsg) do (
@@ -338,7 +338,7 @@ Module MessageRouter.
             when (get(curResp, valid)) do (
               set foundMsg := Ob~1;
               set msg := {valid (struct_t cache_mem_msg)} (get(curResp, data));
-              write0(internal routerTieBreaker, tiebreaker + |2`d3|)
+              write0(private routerTieBreaker, tiebreaker + |2`d3|)
             )
           ));
          (when (!foundMsg) do (
@@ -346,7 +346,7 @@ Module MessageRouter.
             when (get(curResp, valid)) do (
               set foundMsg := Ob~1;
               set msg := {valid (struct_t cache_mem_msg)} (get(curResp, data));
-              write0(internal routerTieBreaker, tiebreaker + |2`d4|)
+              write0(private routerTieBreaker, tiebreaker + |2`d4|)
             )
           ));
          msg
@@ -364,7 +364,7 @@ Module MessageRouter.
             when (get(curReq, valid)) do (
               set foundMsg := Ob~1;
               set msg := curReq;
-              write0(internal routerTieBreaker, tiebreaker + |2`d1|)
+              write0(private routerTieBreaker, tiebreaker + |2`d1|)
             )
           ));
          (when (!foundMsg) do (
@@ -372,7 +372,7 @@ Module MessageRouter.
            when (get(curReq, valid)) do (
              set foundMsg := Ob~1;
              set msg := curReq;
-             write0(internal routerTieBreaker, tiebreaker + |2`d2|)
+             write0(private routerTieBreaker, tiebreaker + |2`d2|)
            )
          ));
          (when (!foundMsg) do (
@@ -380,7 +380,7 @@ Module MessageRouter.
            when (get(curReq, valid)) do (
              set foundMsg := Ob~1;
              set msg := curReq;
-             write0(internal routerTieBreaker, tiebreaker + |2`d3|)
+             write0(private routerTieBreaker, tiebreaker + |2`d3|)
            )
          ));
          (when (!foundMsg) do (
@@ -388,14 +388,14 @@ Module MessageRouter.
            when (get(curReq, valid)) do (
              set foundMsg := Ob~1;
              set msg := curReq;
-             write0(internal routerTieBreaker, tiebreaker + |2`d4|)
+             write0(private routerTieBreaker, tiebreaker + |2`d4|)
            )
          ));
          msg
      }}.
 
   Definition coreToMem : uaction reg_t empty_ext_fn_t :=
-    {{ let tiebreaker := read0(internal routerTieBreaker) in
+    {{ let tiebreaker := read0(private routerTieBreaker) in
        (* Search for requests, starting with tieBreaker *)
        let msg_opt := searchResponses (tiebreaker) in
        if (get(msg_opt, valid)) then
@@ -409,7 +409,7 @@ Module MessageRouter.
            let msg := get(msg_opt, data) in
            ToProto.(MessageFifo1.enq_req)(get(msg,req))
          else
-           write0(internal routerTieBreaker, tiebreaker + |2`d1|)
+           write0(private routerTieBreaker, tiebreaker + |2`d1|)
     }}.
 
   Inductive rule_name_t :=
@@ -487,7 +487,7 @@ Module Cache (Params: CacheParams).
                          ("curIndex", cache_index_t)]
     |}.
 
-  Inductive internal_reg_t :=
+  Inductive private_reg_t :=
   | downgradeState
   | requestsQ (state: MemReq.reg_t)
   | responsesQ (state: MemResp.reg_t)
@@ -495,9 +495,9 @@ Module Cache (Params: CacheParams).
   | flushState
   .
 
-  Instance FiniteType_internal_reg_t : FiniteType internal_reg_t := _.
+  Instance FiniteType_private_reg_t : FiniteType private_reg_t := _.
 
-  Definition R_internal (idx: internal_reg_t) : type :=
+  Definition R_private (idx: private_reg_t) : type :=
     match idx with
     | downgradeState => bits_t 1
     | requestsQ st => MemReq.R st
@@ -506,7 +506,7 @@ Module Cache (Params: CacheParams).
     | flushState => struct_t flush_state_t
     end.
 
-  Definition r_internal (idx: internal_reg_t) : R_internal idx :=
+  Definition r_private (idx: private_reg_t) : R_private idx :=
     match idx with
     | downgradeState => Ob~0
     | requestsQ st => MemReq.r st
@@ -518,18 +518,18 @@ Module Cache (Params: CacheParams).
   Inductive reg_t :=
   | fromMem (state: MessageFifo1.reg_t)
   | toMem (state: MessageFifo1.reg_t)
-  | internal (state: internal_reg_t)
+  | private (state: private_reg_t)
   .
 
   Definition R (idx: reg_t) : type :=
     match idx with
     | fromMem st => MessageFifo1.R st
     | toMem st => MessageFifo1.R st
-    | internal st => R_internal st
+    | private st => R_private st
     end.
 
-  Notation "'__internal__' instance " :=
-    (fun reg => internal ((instance) reg)) (in custom koika at level 1, instance constr at level 99).
+  Notation "'__private__' instance " :=
+    (fun reg => private ((instance) reg)) (in custom koika at level 1, instance constr at level 99).
   Notation "'(' instance ').(' method ')' args" :=
     (USugar (UCallModule instance _ method args))
       (in custom koika at level 1, method constr, args custom koika_args at level 99).
@@ -591,7 +591,7 @@ Module Cache (Params: CacheParams).
          let new_state := enum mshr_tag { Ready } in
          (
          if (get(req, byte_en) == Ob~0~0~0~0) then
-           (__internal__ responsesQ).(MemResp.enq)(
+           (__private__ responsesQ).(MemResp.enq)(
              struct mem_resp { addr := get(req, addr);
                                 data := get(row,data);
                                 byte_en := get(req, byte_en)
@@ -616,7 +616,7 @@ Module Cache (Params: CacheParams).
                                        MSI := {valid (enum_t MSI)}(enum MSI { M })
                                     } in
              ignore({memoryBus mem}(Ob~1, Ob~1, cache_req));
-             (__internal__ responsesQ).(MemResp.enq)(
+             (__private__ responsesQ).(MemResp.enq)(
                struct mem_resp { addr := get(req, addr);
                                   data := |32`d0|;
                                   byte_en := get(req, byte_en)
@@ -633,7 +633,7 @@ Module Cache (Params: CacheParams).
     {{
         if (fromMem.(MessageFifo1.not_empty)() &&
             !fromMem.(MessageFifo1.has_resp)()) then
-          write0(internal downgradeState, Ob~1);
+          write0(private downgradeState, Ob~1);
           let req := get(fromMem.(MessageFifo1.deq)(), req) in
           let index := getIndex(get(req,addr)) in
           let tag := getTag(get(req,addr)) in
@@ -667,17 +667,17 @@ Module Cache (Params: CacheParams).
            ignore({memoryBus mem}(Ob~1, Ob~1, cache_req))
           else pass
         else
-          write0(internal downgradeState, Ob~0)
+          write0(private downgradeState, Ob~0)
     }}.
 
 
   (* TOOD: for now, just assume miss and skip cache and forward to memory *)
   Definition process_request (mem: External.cache): uaction reg_t ext_fn_t :=
     {{
-        let mshr := read0(internal MSHR) in
-        let downgrade_state := read1(internal downgradeState) in
+        let mshr := read0(private MSHR) in
+        let downgrade_state := read1(private downgradeState) in
         guard((get(mshr,mshr_tag) == enum mshr_tag { Ready }) && !downgrade_state);
-        let req := (__internal__ requestsQ).(MemReq.deq)() in
+        let req := (__private__ requestsQ).(MemReq.deq)() in
         let addr := get(req,addr) in
         let tag := getTag(addr) in
         let index := getIndex(addr) in
@@ -688,7 +688,7 @@ Module Cache (Params: CacheParams).
                                                      data := get(req,data);
                                                      MSI := {invalid (enum_t MSI)}()
                                                   } in
-        guard((__internal__ responsesQ).(MemResp.can_enq)());
+        guard((__private__ responsesQ).(MemResp.can_enq)());
         guard(!toMem.(MessageFifo1.has_resp)());
         let cache_output := {memoryBus mem}(Ob~1, Ob~1, cache_req) in
         guard ((get(cache_output, get_valid)));
@@ -696,7 +696,7 @@ Module Cache (Params: CacheParams).
         let inCache := ((get(row,tag) == tag) && (get(row,flag) != enum MSI { I } )) in
         if (inCache) then
           let newMSHR := {hit mem}(req, row, Ob~0) in
-          write0(internal MSHR, struct MSHR_t { mshr_tag := newMSHR;
+          write0(private MSHR, struct MSHR_t { mshr_tag := newMSHR;
                                                  req := req
                                               })
           (* miss *)
@@ -718,7 +718,7 @@ Module Cache (Params: CacheParams).
                                                          MSI := {valid (enum_t MSI)}(enum MSI { I }) } in
             ignore({memoryBus mem}(Ob~1, Ob~1, cache_req))
           ));
-          write0(internal MSHR, struct MSHR_t { mshr_tag := enum mshr_tag { SendFillReq };
+          write0(private MSHR, struct MSHR_t { mshr_tag := enum mshr_tag { SendFillReq };
                                                  req := req
                                               })
         )
@@ -735,8 +735,8 @@ Module Cache (Params: CacheParams).
 
   Definition SendFillReq : uaction reg_t ext_fn_t :=
     {{
-        let mshr := read0(internal MSHR) in
-        let downgrade_state := read1(internal downgradeState) in
+        let mshr := read0(private MSHR) in
+        let downgrade_state := read1(private downgradeState) in
         guard(get(mshr,mshr_tag) == enum mshr_tag { SendFillReq } && !downgrade_state);
         let mshr_req := get(mshr,req) in
         toMem.(MessageFifo1.enq_req)(
@@ -748,15 +748,15 @@ Module Cache (Params: CacheParams).
                                                         return default : enum MSI { M }
                                                         end)
                                        });
-        write0(internal MSHR, struct MSHR_t { mshr_tag := enum mshr_tag { WaitFillResp };
+        write0(private MSHR, struct MSHR_t { mshr_tag := enum mshr_tag { WaitFillResp };
                                                req := mshr_req
                                             })
     }}.
 
   Definition WaitFillResp (mem: External.cache): uaction reg_t ext_fn_t :=
     {{
-        let mshr := read0(internal MSHR) in
-        let downgrade_state := read1(internal downgradeState) in
+        let mshr := read0(private MSHR) in
+        let downgrade_state := read1(private downgradeState) in
         guard(get(mshr,mshr_tag) == enum mshr_tag { WaitFillResp }
               && !downgrade_state
               && fromMem.(MessageFifo1.has_resp)());
@@ -769,7 +769,7 @@ Module Cache (Params: CacheParams).
                                     } in
         ignore({hit mem}(req, row, Ob~1));
         (* write to Mem *)
-        write0(internal MSHR, struct MSHR_t { mshr_tag := enum mshr_tag { Ready };
+        write0(private MSHR, struct MSHR_t { mshr_tag := enum mshr_tag { Ready };
                                                req := (`UConst dummy_mem_req`)
                                             })
     }}.
@@ -777,8 +777,8 @@ Module Cache (Params: CacheParams).
   (*
   Definition Flush (mem: External.cache): uaction reg_t ext_fn_t :=
     {{
-        let mshr := read0(internal MSHR) in
-        let flush_st := read0(internal flushState) in
+        let mshr := read0(private MSHR) in
+        let flush_st := read0(private flushState) in
         guard(get(mshr,mshr_tag) == enum mshr_tag { Ready } &&
               get(flush_st, flush_status) == enum flush_status { Flushing });
         let index := get(flush_st, curIndex) in
@@ -809,51 +809,51 @@ Module Cache (Params: CacheParams).
                                                      MSI := {valid (enum_t MSI)}(enum MSI { I }) } in
         ignore({memoryBus mem}(Ob~1, Ob~1, cache_req));
         if (index == |12`d4095|) then
-          write0(internal flushState, struct flush_state_t { status := enum flush_status { Flushed };
+          write0(private flushState, struct flush_state_t { status := enum flush_status { Flushed };
                                                               curIndex := |12`d0| })
         else
-          write0(internal flushState, struct flush_state_t { status := enum flush_status { Flushing };
+          write0(private flushState, struct flush_state_t { status := enum flush_status { Flushing };
                                                               curIndex := index + |12`d1| })
     }}.
     *)
   Definition can_send_req : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun can_send_req () : bits_t 1 =>
-         let mshr := read0(internal MSHR) in
+         let mshr := read0(private MSHR) in
          get(mshr,mshr_tag) == enum mshr_tag { Ready } &&
-         (__internal__ requestsQ).(MemReq.can_enq)()
+         (__private__ requestsQ).(MemReq.can_enq)()
     }}.
 
   Definition req: UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun req (r: struct_t mem_req) : bits_t 0 =>
-         let mshr := read0(internal MSHR) in
+         let mshr := read0(private MSHR) in
          guard(get(mshr,mshr_tag) == enum mshr_tag { Ready });
-         (__internal__ requestsQ).(MemReq.enq)(r)
+         (__private__ requestsQ).(MemReq.enq)(r)
     }}.
 
   Definition can_recv_resp: UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun can_recv_resp () : bits_t 1 =>
-         (__internal__ responsesQ).(MemResp.can_deq)()
+         (__private__ responsesQ).(MemResp.can_deq)()
     }}.
 
   Definition resp: UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun resp () : struct_t mem_resp =>
-         (__internal__ responsesQ).(MemResp.deq)()
+         (__private__ responsesQ).(MemResp.deq)()
     }}.
 
   Definition is_ready: UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun is_ready () : bits_t 1 =>
-         let mshr := read0(internal MSHR) in
+         let mshr := read0(private MSHR) in
          get(mshr, mshr_tag) == enum mshr_tag { Ready }
     }}.
 
   (*
   Definition do_flush: UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun do_flush () : bits_t 1 =>
-         let st := read0(internal flushState) in
+         let st := read0(private flushState) in
          if (get(st,status) == enum flush_status { Flushed }) then
            Ob~1
          else if (get(st,status) == enum flush_status { Ready }) then
-           write0(internal flushState, struct flush_state_t { status := enum flush_status { Flushing };
+           write0(private flushState, struct flush_state_t { status := enum flush_status { Flushing };
                                                                curIndex := |12`d0| });
            Ob~0
          else Ob~0
@@ -936,22 +936,22 @@ Module ProtocolProcessor.
 
   Definition num_sets : nat := Nat.shiftl 1 External.log_num_sets.
 
-  Inductive internal_reg_t :=
+  Inductive private_reg_t :=
   | ushr
   | downgrade_tracker
   | bypass
   .
 
-  Instance FiniteType_internal_reg_t : FiniteType internal_reg_t := _.
+  Instance FiniteType_private_reg_t : FiniteType private_reg_t := _.
 
-  Definition R_internal (reg: internal_reg_t) : type :=
+  Definition R_private (reg: private_reg_t) : type :=
     match reg with
     | ushr => struct_t USHR
     | downgrade_tracker => bits_t 4
     | bypass => maybe (data_t)
     end.
 
-  Definition r_internal (reg: internal_reg_t) : R_internal reg :=
+  Definition r_private (reg: private_reg_t) : R_private reg :=
     match reg with
     | ushr => value_of_bits (Bits.zero)
     | downgrade_tracker => Bits.zero
@@ -964,7 +964,7 @@ Module ProtocolProcessor.
   | ToRouter (state: MessageFifo1.reg_t)
   | ToMem (state: MemReq.reg_t)
   | FromMem (state: MemResp.reg_t)
-  | internal (state: internal_reg_t)
+  | private (state: private_reg_t)
   .
 
   Definition R (idx: reg_t) : type :=
@@ -973,7 +973,7 @@ Module ProtocolProcessor.
     | ToRouter st => MessageFifo1.R st
     | ToMem st => MemReq.R st
     | FromMem st => MemResp.R st
-    | internal st => R_internal st
+    | private st => R_private st
     end.
 
   Instance FiniteType_reg_t : FiniteType reg_t := _.
@@ -993,14 +993,14 @@ Module ProtocolProcessor.
                                                addr := resp_addr;
                                                data := get(data_opt, data)
                                             });
-          let ushr := read0(internal ushr) in
+          let ushr := read0(private ushr) in
           if (get(ushr,state) == enum USHR_state { Confirming } ||
               get(ushr,state) == enum USHR_state { Downgrading}) then
             let req := get(ushr,req) in
             let req_addr := get(req,addr) in
             if (getTag(req_addr) == getTag(resp_addr) &&
                 getIndex(req_addr) == getIndex(resp_addr)) then
-              write0(internal bypass, {valid (data_t)}(get(data_opt,data)))
+              write0(private bypass, {valid (data_t)}(get(data_opt,data)))
             else pass
           else pass
         else pass
@@ -1113,7 +1113,7 @@ Module ProtocolProcessor.
    *)
   Definition receive_upgrade_requests: uaction reg_t ext_fn_t :=
     {{
-        let ushr := read0(internal ushr) in
+        let ushr := read0(private ushr) in
         guard (!FromRouter.(MessageFifo1.has_resp)() &&
                 FromRouter.(MessageFifo1.has_req)() &&
                 (get(ushr, state) == enum USHR_state { Ready })
@@ -1125,10 +1125,10 @@ Module ProtocolProcessor.
         let index := getIndex(addr) in
         let core_id := get(req,core_id) in
         let other_core_has_line := has_line(index, tag, !core_id) in
-        write0(internal bypass, {invalid (data_t)}());
+        write0(private bypass, {invalid (data_t)}());
         (* Load *)
         if (get(req,MSI_state) == enum MSI { S }) then
-          write0(internal ushr, struct USHR { state := enum USHR_state { Confirming };
+          write0(private ushr, struct USHR { state := enum USHR_state { Confirming };
                                                req := req });
           if (other_core_has_line) then
             (* Parent !get(req,core_id) has the line, issue downgrade to S *)
@@ -1157,34 +1157,34 @@ Module ProtocolProcessor.
               set_invalid_at_cache(compute_downgrade_tracker(index, tag),
                                    core_id, get(req, cache_type)) in
           let tracker2 := do_downgrade_from_tracker(addr, downgrade_tracker) in
-          write0(internal downgrade_tracker, tracker2);
+          write0(private downgrade_tracker, tracker2);
           if (tracker2 == |4`d0|) then
             (* done issuing downgrade requests *)
-            write0(internal ushr, struct USHR { state := enum USHR_state { Downgrading };
+            write0(private ushr, struct USHR { state := enum USHR_state { Downgrading };
                                                  req := req })
           else
-            write0(internal ushr, struct USHR { state := enum USHR_state { Confirming };
+            write0(private ushr, struct USHR { state := enum USHR_state { Confirming };
                                                  req := req })
         else pass (* Should not happen? Could do fail for ease of debugging *)
     }}.
 
   Definition issue_downgrades: uaction reg_t ext_fn_t :=
     {{
-        let ushr := read0(internal ushr) in
+        let ushr := read0(private ushr) in
         guard(get(ushr, state) == enum USHR_state { Downgrading });
         let req := get(ushr,req) in
-        let tracker := read0(internal downgrade_tracker) in
+        let tracker := read0(private downgrade_tracker) in
         let tracker2 := do_downgrade_from_tracker(get(req,addr), tracker) in
-        write0(internal downgrade_tracker, tracker2);
+        write0(private downgrade_tracker, tracker2);
         (when (tracker2 == |4`d0|) do
-            (write0(internal ushr, struct USHR { state := enum USHR_state { Confirming };
+            (write0(private ushr, struct USHR { state := enum USHR_state { Confirming };
                                                  req := req })))
     }}.
 
   Definition dummy_cache_mem_req : struct_t cache_mem_req := value_of_bits (Bits.zero).
 
   Definition confirm_downgrades: uaction reg_t ext_fn_t :=
-    {{ let ushr := read0(internal ushr) in
+    {{ let ushr := read0(private ushr) in
        guard(get(ushr, state) == enum USHR_state { Confirming });
        let req := get(ushr,req) in
        let addr := get(req,addr) in
@@ -1194,7 +1194,7 @@ Module ProtocolProcessor.
        if ((get(req, MSI_state) == enum MSI { S }) ||
            states2 == Ob~0~0~0~0) then
          let data := {invalid (data_t)}() in
-         let bypass_opt := read1(internal bypass) in
+         let bypass_opt := read1(private bypass) in
          (
            (* if (getState(addr,child) != I) then *)
          if (states[cache_encoding(get(req,core_id), get(req,cache_type))]) then
@@ -1223,7 +1223,7 @@ Module ProtocolProcessor.
                                cache_type := get(req, cache_type)
                            } in
          ignore(extcall ext_ppp_bookkeeping (input));
-         write0(internal ushr, struct USHR { state := enum USHR_state { Ready };
+         write0(private ushr, struct USHR { state := enum USHR_state { Ready };
                                               req := `UConst dummy_cache_mem_req` })
        else pass
     }}.
@@ -1231,7 +1231,7 @@ Module ProtocolProcessor.
   (*
   Definition forward_req: uaction reg_t empty_ext_fn_t :=
     {{
-        let ushr := read0(internal ushr) in
+        let ushr := read0(private ushr) in
         guard (!FromRouter.(MessageFifo1.has_resp)() &&
                 FromRouter.(MessageFifo1.has_req)() &&
                 (get(ushr, state) == enum USHR_state { Ready })
@@ -1241,7 +1241,7 @@ Module ProtocolProcessor.
         ToMem.(MemReq.enq)(struct mem_req { byte_en := Ob~0~0~0~0;
                                              addr := get(req,addr);
                                              data := |32`d0| });
-        write0(internal ushr, struct USHR { state := enum USHR_state { Confirming };
+        write0(private ushr, struct USHR { state := enum USHR_state { Confirming };
                                              req := req })
     }}.
     *)
@@ -1250,7 +1250,7 @@ Module ProtocolProcessor.
   Definition dummy_cache_mem_req : struct_t cache_mem_req := value_of_bits (Bits.zero).
 
   Definition forward_resp_from_mem : uaction reg_t empty_ext_fn_t :=
-    {{ let ushr := read0(internal ushr) in
+    {{ let ushr := read0(private ushr) in
        guard(get(ushr, state) == enum USHR_state { Confirming });
        let resp := FromMem.(MemResp.deq)() in
        let req_info := get(ushr, req) in
@@ -1261,7 +1261,7 @@ Module ProtocolProcessor.
                                              MSI_state := get(req_info, MSI_state);
                                              data := {valid data_t} (get(resp, data))
                                           });
-       write0(internal ushr, struct USHR { state := enum USHR_state { Ready };
+       write0(private ushr, struct USHR { state := enum USHR_state { Ready };
                                             req := `UConst dummy_cache_mem_req` })
     }}.
     *)
@@ -1390,7 +1390,7 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
 
   (* TODO: In theory we would do this in a more modular way, but we simplify for now.
    *)
-  Inductive internal_reg_t :=
+  Inductive private_reg_t :=
   | core0IToRouter (state: MessageFifo1.reg_t)
   | core0DToRouter (state: MessageFifo1.reg_t)
   | core1IToRouter (state: MessageFifo1.reg_t)
@@ -1403,15 +1403,15 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
   | ProtoToRouter (state: MessageFifo1.reg_t)
   | ProtoToMem (state: MemReq.reg_t)
   | MemToProto (state: MemResp.reg_t)
-  | Router_internal (state: MessageRouter.internal_reg_t)
-  | Proto_internal (state: ProtocolProcessor.internal_reg_t)
-  | Core0I_internal (state: Core0IMem.internal_reg_t)
-  | Core0D_internal (state: Core0DMem.internal_reg_t)
-  | Core1I_internal (state: Core1IMem.internal_reg_t)
-  | Core1D_internal (state: Core1DMem.internal_reg_t)
+  | Router_private (state: MessageRouter.private_reg_t)
+  | Proto_private (state: ProtocolProcessor.private_reg_t)
+  | Core0I_private (state: Core0IMem.private_reg_t)
+  | Core0D_private (state: Core0DMem.private_reg_t)
+  | Core1I_private (state: Core1IMem.private_reg_t)
+  | Core1D_private (state: Core1DMem.private_reg_t)
   .
 
-  Definition R_internal (idx: internal_reg_t) : type :=
+  Definition R_private (idx: private_reg_t) : type :=
     match idx with
     | core0IToRouter st => MessageFifo1.R st
     | core0DToRouter st => MessageFifo1.R st
@@ -1425,15 +1425,15 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
     | ProtoToRouter st => MessageFifo1.R st
     | ProtoToMem st => MemReq.R st
     | MemToProto st => MemResp.R st
-    | Router_internal st => MessageRouter.R_internal st
-    | Proto_internal st => ProtocolProcessor.R_internal st
-    | Core0I_internal st => Core0IMem.R_internal st
-    | Core0D_internal st => Core0DMem.R_internal st
-    | Core1I_internal st => Core1IMem.R_internal st
-    | Core1D_internal st => Core1DMem.R_internal st
+    | Router_private st => MessageRouter.R_private st
+    | Proto_private st => ProtocolProcessor.R_private st
+    | Core0I_private st => Core0IMem.R_private st
+    | Core0D_private st => Core0DMem.R_private st
+    | Core1I_private st => Core1IMem.R_private st
+    | Core1D_private st => Core1DMem.R_private st
     end.
 
-  Definition r_internal (idx: internal_reg_t) : R_internal idx :=
+  Definition r_private (idx: private_reg_t) : R_private idx :=
     match idx with
     | core0IToRouter st => MessageFifo1.r st
     | core0DToRouter st => MessageFifo1.r st
@@ -1447,36 +1447,36 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
     | ProtoToRouter st => MessageFifo1.r st
     | ProtoToMem st => MemReq.r st
     | MemToProto st => MemResp.r st
-    | Router_internal st => MessageRouter.r_internal st
-    | Proto_internal st => ProtocolProcessor.r_internal st
-    | Core0I_internal st => Core0IMem.r_internal st
-    | Core0D_internal st => Core0DMem.r_internal st
-    | Core1I_internal st => Core1IMem.r_internal st
-    | Core1D_internal st => Core1DMem.r_internal st
+    | Router_private st => MessageRouter.r_private st
+    | Proto_private st => ProtocolProcessor.r_private st
+    | Core0I_private st => Core0IMem.r_private st
+    | Core0D_private st => Core0DMem.r_private st
+    | Core1I_private st => Core1IMem.r_private st
+    | Core1D_private st => Core1DMem.r_private st
     end.
 
-  (* Declare Instance FiniteType_internal_reg_t : FiniteType internal_reg_t. *)
-  Instance FiniteType_internal_reg_t : FiniteType internal_reg_t := _.
+  (* Declare Instance FiniteType_private_reg_t : FiniteType private_reg_t. *)
+  Instance FiniteType_private_reg_t : FiniteType private_reg_t := _.
 
-  Definition internal_params : internal_module_sig :=
-    {| _internal_reg_t := internal_reg_t;
-       _R_internal := R_internal;
-       _r_internal := r_internal;
-       _FiniteType_internal_reg_t := FiniteType_internal_reg_t
+  Definition private_params : private_module_sig :=
+    {| _private_reg_t := private_reg_t;
+       _R_private := R_private;
+       _r_private := r_private;
+       _FiniteType_private_reg_t := FiniteType_private_reg_t
     |}.
 
-  Definition reg_t := @Mem_Common.reg_t internal_params.
-  Definition r := @Mem_Common.r internal_params.
-  Definition R := @Mem_Common.R internal_params.
+  Definition reg_t := @Mem_Common.reg_t private_params.
+  Definition r := @Mem_Common.r private_params.
+  Definition R := @Mem_Common.R private_params.
 
-  Instance FiniteType_reg_t : FiniteType reg_t := @Mem_Common.FiniteType_reg_t internal_params.
-  Definition rule := @Mem_Common.rule internal_params External.ext.
+  Instance FiniteType_reg_t : FiniteType reg_t := @Mem_Common.FiniteType_reg_t private_params.
+  Definition rule := @Mem_Common.rule private_params External.ext.
   Definition sigma := @Mem_Common.sigma External.ext.
 
-  Notation "'__internal__' instance " :=
-    (fun reg => internal ((instance) reg)) (in custom koika at level 1, instance constr at level 99).
-  Notation "'__external__' instance " :=
-    (fun reg => external ((instance) reg)) (in custom koika at level 1, instance constr at level 99).
+  Notation "'__private__' instance " :=
+    (fun reg => private ((instance) reg)) (in custom koika at level 1, instance constr at level 99).
+  Notation "'__public__' instance " :=
+    (fun reg => public ((instance) reg)) (in custom koika at level 1, instance constr at level 99).
   Notation "'(' instance ').(' method ')' args" :=
     (USugar (UCallModule instance _ method args))
       (in custom koika at level 1, method constr, args custom koika_args at level 99).
@@ -1484,15 +1484,15 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
   Import External.
 
   (* =============== Lifts ================ *)
-  Notation internal := (@internal internal_params).
+  Notation private := (@private private_params).
 
   Section Core0_IMemLift.
 
     Definition core0_imem_lift (reg: Core0IMem.reg_t) : reg_t :=
       match reg with
-      | Core0IMem.fromMem st => (internal (RouterToCore0I st))
-      | Core0IMem.toMem st => (internal (core0IToRouter st))
-      | Core0IMem.internal st => (internal (Core0I_internal st))
+      | Core0IMem.fromMem st => (private (RouterToCore0I st))
+      | Core0IMem.toMem st => (private (core0IToRouter st))
+      | Core0IMem.private st => (private (Core0I_private st))
       end.
 
     Definition Lift_core0_imem : RLift _ Core0IMem.reg_t reg_t Core0IMem.R R := ltac:(mk_rlift core0_imem_lift).
@@ -1503,9 +1503,9 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
   Section Core0_DMemLift.
     Definition core0_dmem_lift (reg: Core0DMem.reg_t) : reg_t :=
       match reg with
-      | Core0DMem.fromMem st => (internal (RouterToCore0D st))
-      | Core0DMem.toMem st => (internal (core0DToRouter st))
-      | Core0DMem.internal st => (internal (Core0D_internal st))
+      | Core0DMem.fromMem st => (private (RouterToCore0D st))
+      | Core0DMem.toMem st => (private (core0DToRouter st))
+      | Core0DMem.private st => (private (Core0D_private st))
       end.
 
     Definition Lift_core0_dmem : RLift _ Core0DMem.reg_t reg_t Core0DMem.R R := ltac:(mk_rlift core0_dmem_lift).
@@ -1516,9 +1516,9 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
   Section Core1_IMemLift.
     Definition core1_imem_lift (reg: Core1IMem.reg_t) : reg_t :=
       match reg with
-      | Core1IMem.fromMem st => (internal (RouterToCore1I st))
-      | Core1IMem.toMem st => (internal (core1IToRouter st))
-      | Core1IMem.internal st => (internal (Core1I_internal st))
+      | Core1IMem.fromMem st => (private (RouterToCore1I st))
+      | Core1IMem.toMem st => (private (core1IToRouter st))
+      | Core1IMem.private st => (private (Core1I_private st))
       end.
 
     Definition Lift_core1_imem : RLift _ Core1IMem.reg_t reg_t Core1IMem.R R := ltac:(mk_rlift core1_imem_lift).
@@ -1529,9 +1529,9 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
   Section Core1_DMemLift.
     Definition core1_dmem_lift (reg: Core1DMem.reg_t) : reg_t :=
       match reg with
-      | Core1DMem.fromMem st => (internal (RouterToCore1D st))
-      | Core1DMem.toMem st => (internal (core1DToRouter st))
-      | Core1DMem.internal st => (internal (Core1D_internal st))
+      | Core1DMem.fromMem st => (private (RouterToCore1D st))
+      | Core1DMem.toMem st => (private (core1DToRouter st))
+      | Core1DMem.private st => (private (Core1D_private st))
       end.
 
     Definition Lift_core1_dmem : RLift _ Core1DMem.reg_t reg_t Core1DMem.R R := ltac:(mk_rlift core1_dmem_lift).
@@ -1543,17 +1543,17 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
   Section MessageRouterLift.
     Definition router_lift (reg: MessageRouter.reg_t) : reg_t :=
     match reg with
-    | MessageRouter.FromCore0I st => (internal (core0IToRouter st))
-    | MessageRouter.FromCore0D st => (internal (core0DToRouter st))
-    | MessageRouter.FromCore1I st => (internal (core1IToRouter st))
-    | MessageRouter.FromCore1D st => (internal (core1DToRouter st))
-    | MessageRouter.ToCore0I st => (internal (RouterToCore0I st))
-    | MessageRouter.ToCore0D st => (internal (RouterToCore0D st))
-    | MessageRouter.ToCore1I st => (internal (RouterToCore1I st))
-    | MessageRouter.ToCore1D st => (internal (RouterToCore1D st))
-    | MessageRouter.ToProto st => (internal (RouterToProto st))
-    | MessageRouter.FromProto st => (internal (ProtoToRouter st))
-    | MessageRouter.internal st => (internal (Router_internal st))
+    | MessageRouter.FromCore0I st => (private (core0IToRouter st))
+    | MessageRouter.FromCore0D st => (private (core0DToRouter st))
+    | MessageRouter.FromCore1I st => (private (core1IToRouter st))
+    | MessageRouter.FromCore1D st => (private (core1DToRouter st))
+    | MessageRouter.ToCore0I st => (private (RouterToCore0I st))
+    | MessageRouter.ToCore0D st => (private (RouterToCore0D st))
+    | MessageRouter.ToCore1I st => (private (RouterToCore1I st))
+    | MessageRouter.ToCore1D st => (private (RouterToCore1D st))
+    | MessageRouter.ToProto st => (private (RouterToProto st))
+    | MessageRouter.FromProto st => (private (ProtoToRouter st))
+    | MessageRouter.private st => (private (Router_private st))
     end.
 
     Definition Lift_router : RLift _ MessageRouter.reg_t reg_t MessageRouter.R R := ltac:(mk_rlift router_lift).
@@ -1565,11 +1565,11 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
 
     Definition proto_lift (reg: ProtocolProcessor.reg_t) : reg_t :=
     match reg with
-    | ProtocolProcessor.FromRouter st => (internal (RouterToProto st))
-    | ProtocolProcessor.ToRouter st => (internal (ProtoToRouter st ))
-    | ProtocolProcessor.ToMem st => (internal (ProtoToMem st))
-    | ProtocolProcessor.FromMem st => (internal (MemToProto st))
-    | ProtocolProcessor.internal st => (internal (Proto_internal st))
+    | ProtocolProcessor.FromRouter st => (private (RouterToProto st))
+    | ProtocolProcessor.ToRouter st => (private (ProtoToRouter st ))
+    | ProtocolProcessor.ToMem st => (private (ProtoToMem st))
+    | ProtocolProcessor.FromMem st => (private (MemToProto st))
+    | ProtocolProcessor.private st => (private (Proto_private st))
     end.
 
     Definition Lift_proto : RLift _ ProtocolProcessor.reg_t reg_t ProtocolProcessor.R R := ltac:(mk_rlift proto_lift).
@@ -1580,8 +1580,8 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
   Section MainMemLift.
     Definition main_mem_lift (reg: MainMem.reg_t) : reg_t :=
       match reg with
-      | MainMem.FromProto st => internal (ProtoToMem st)
-      | MainMem.ToProto st => internal (MemToProto st)
+      | MainMem.FromProto st => private (ProtoToMem st)
+      | MainMem.ToProto st => private (MemToProto st)
       end.
 
     Definition Lift_main_mem: RLift _ MainMem.reg_t reg_t MainMem.R R := ltac:(mk_rlift main_mem_lift).
@@ -1590,7 +1590,7 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
 
   (* TODO: slow *)
 
-  Instance FiniteType_ext_reg_t : FiniteType external_reg_t := _.
+  Instance FiniteType_ext_reg_t : FiniteType public_reg_t := _.
   (* Instance FiniteType_reg_t : FiniteType reg_t := _. *)
   (* Declare Instance FiniteType_reg_t : FiniteType reg_t.   *)
   Instance EqDec_reg_t : EqDec reg_t := _.
@@ -1662,9 +1662,9 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
     (* TODO: stop duplicating, need to do lifts properly *)
     Definition memCore0I : uaction reg_t ext_fn_t :=
       {{
-          guard(read0(external purge0) == enum purge_state { Ready });
-          let get_ready := (__external__ fromIMem0).(MemResp.can_enq)() in
-          let put_request_opt := (__external__ toIMem0).(MemReq.peek)() in
+          guard(read0(public purge0) == enum purge_state { Ready });
+          let get_ready := (__public__ fromIMem0).(MemResp.can_enq)() in
+          let put_request_opt := (__public__ toIMem0).(MemReq.peek)() in
           let put_request := get(put_request_opt, data) in
           let put_valid := get(put_request_opt, valid) in
 
@@ -1672,17 +1672,17 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
           if (get(mem_out_opt,valid)) then
             (* valid output *)
             let mem_out := get(mem_out_opt,data) in
-            (when (get_ready && get(mem_out, get_valid)) do (__external__ fromIMem0).(MemResp.enq)(get(mem_out, get_response)));
-            (when (put_valid && get(mem_out, put_ready)) do ignore((__external__ toIMem0).(MemReq.deq)()))
+            (when (get_ready && get(mem_out, get_valid)) do (__public__ fromIMem0).(MemResp.enq)(get(mem_out, get_response)));
+            (when (put_valid && get(mem_out, put_ready)) do ignore((__public__ toIMem0).(MemReq.deq)()))
           else
             (* TODO: these rules can fail *)
             (when (put_valid && (`core0_imem_lift`).(Core0IMem.can_send_req)()) do (
-              ignore((__external__ toIMem0).(MemReq.deq)());
+              ignore((__public__ toIMem0).(MemReq.deq)());
               (`core0_imem_lift`).(Core0IMem.req)(put_request)
             ));
             (when (get_ready && (`core0_imem_lift`).(Core0IMem.can_recv_resp)()) do (
               let resp := (`core0_imem_lift`).(Core0IMem.resp)() in
-              (__external__ fromIMem0).(MemResp.enq)(resp))
+              (__public__ fromIMem0).(MemResp.enq)(resp))
             )
       }}.
 
@@ -1690,9 +1690,9 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
 
     Definition memCore0D : uaction reg_t ext_fn_t :=
       {{
-          guard(read0(external purge0) == enum purge_state { Ready });
-          let get_ready := (__external__ fromDMem0).(MemResp.can_enq)() in
-          let put_request_opt := (__external__ toDMem0).(MemReq.peek)() in
+          guard(read0(public purge0) == enum purge_state { Ready });
+          let get_ready := (__public__ fromDMem0).(MemResp.can_enq)() in
+          let put_request_opt := (__public__ toDMem0).(MemReq.peek)() in
           let put_request := get(put_request_opt, data) in
           let put_valid := get(put_request_opt, valid) in
 
@@ -1700,17 +1700,17 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
           if (get(mem_out_opt,valid)) then
             (* valid output *)
             let mem_out := get(mem_out_opt,data) in
-            (when (get_ready && get(mem_out, get_valid)) do (__external__ fromDMem0).(MemResp.enq)(get(mem_out, get_response)));
-            (when (put_valid && get(mem_out, put_ready)) do ignore((__external__ toDMem0).(MemReq.deq)()))
+            (when (get_ready && get(mem_out, get_valid)) do (__public__ fromDMem0).(MemResp.enq)(get(mem_out, get_response)));
+            (when (put_valid && get(mem_out, put_ready)) do ignore((__public__ toDMem0).(MemReq.deq)()))
           else
             (* TODO: these rules can fail *)
             (when (put_valid && (`core0_dmem_lift`).(Core0DMem.can_send_req)()) do (
-              ignore((__external__ toDMem0).(MemReq.deq)());
+              ignore((__public__ toDMem0).(MemReq.deq)());
               (`core0_dmem_lift`).(Core0DMem.req)(put_request)
             ));
             (when (get_ready && (`core0_dmem_lift`).(Core0DMem.can_recv_resp)()) do (
               let resp := (`core0_dmem_lift`).(Core0DMem.resp)() in
-              (__external__ fromDMem0).(MemResp.enq)(resp))
+              (__public__ fromDMem0).(MemResp.enq)(resp))
             )
       }}.
 
@@ -1718,9 +1718,9 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
 
     Definition memCore1I : uaction reg_t ext_fn_t :=
       {{
-          guard(read0(external purge1) == enum purge_state { Ready });
-          let get_ready := (__external__ fromIMem1).(MemResp.can_enq)() in
-          let put_request_opt := (__external__ toIMem1).(MemReq.peek)() in
+          guard(read0(public purge1) == enum purge_state { Ready });
+          let get_ready := (__public__ fromIMem1).(MemResp.can_enq)() in
+          let put_request_opt := (__public__ toIMem1).(MemReq.peek)() in
           let put_request := get(put_request_opt, data) in
           let put_valid := get(put_request_opt, valid) in
 
@@ -1728,17 +1728,17 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
           if (get(mem_out_opt,valid)) then
             (* valid output *)
             let mem_out := get(mem_out_opt,data) in
-            (when (get_ready && get(mem_out, get_valid)) do (__external__ fromIMem1).(MemResp.enq)(get(mem_out, get_response)));
-            (when (put_valid && get(mem_out, put_ready)) do ignore((__external__ toIMem1).(MemReq.deq)()))
+            (when (get_ready && get(mem_out, get_valid)) do (__public__ fromIMem1).(MemResp.enq)(get(mem_out, get_response)));
+            (when (put_valid && get(mem_out, put_ready)) do ignore((__public__ toIMem1).(MemReq.deq)()))
           else
             (* TODO: these rules can fail *)
             (when (put_valid && (`core1_imem_lift`).(Core1IMem.can_send_req)()) do (
-              ignore((__external__ toIMem1).(MemReq.deq)());
+              ignore((__public__ toIMem1).(MemReq.deq)());
               (`core1_imem_lift`).(Core1IMem.req)(put_request)
             ));
             (when (get_ready && (`core1_imem_lift`).(Core1IMem.can_recv_resp)()) do (
               let resp := (`core1_imem_lift`).(Core1IMem.resp)() in
-              (__external__ fromIMem1).(MemResp.enq)(resp))
+              (__public__ fromIMem1).(MemResp.enq)(resp))
             )
       }}.
 
@@ -1746,9 +1746,9 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
 
     Definition memCore1D : uaction reg_t ext_fn_t :=
       {{
-          guard(read0(external purge1) == enum purge_state { Ready });
-          let get_ready := (__external__ fromDMem1).(MemResp.can_enq)() in
-          let put_request_opt := (__external__ toDMem1).(MemReq.peek)() in
+          guard(read0(public purge1) == enum purge_state { Ready });
+          let get_ready := (__public__ fromDMem1).(MemResp.can_enq)() in
+          let put_request_opt := (__public__ toDMem1).(MemReq.peek)() in
           let put_request := get(put_request_opt, data) in
           let put_valid := get(put_request_opt, valid) in
 
@@ -1756,17 +1756,17 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
           if (get(mem_out_opt,valid)) then
             (* valid output *)
             let mem_out := get(mem_out_opt,data) in
-            (when (get_ready && get(mem_out, get_valid)) do (__external__ fromDMem1).(MemResp.enq)(get(mem_out, get_response)));
-            (when (put_valid && get(mem_out, put_ready)) do ignore((__external__ toDMem1).(MemReq.deq)()))
+            (when (get_ready && get(mem_out, get_valid)) do (__public__ fromDMem1).(MemResp.enq)(get(mem_out, get_response)));
+            (when (put_valid && get(mem_out, put_ready)) do ignore((__public__ toDMem1).(MemReq.deq)()))
           else
             (* TODO: these rules can fail *)
             (when (put_valid && (`core1_dmem_lift`).(Core1DMem.can_send_req)()) do (
-              ignore((__external__ toDMem1).(MemReq.deq)());
+              ignore((__public__ toDMem1).(MemReq.deq)());
               (`core1_dmem_lift`).(Core1DMem.req)(put_request)
             ));
             (when (get_ready && (`core1_dmem_lift`).(Core1DMem.can_recv_resp)()) do (
               let resp := (`core1_dmem_lift`).(Core1DMem.resp)() in
-              (__external__ fromDMem1).(MemResp.enq)(resp))
+              (__public__ fromDMem1).(MemResp.enq)(resp))
             )
       }}.
 
@@ -1774,7 +1774,7 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
 
     (* TODO *)
     Definition purge_placeholder0 : uaction reg_t ext_fn_t :=
-      let purge_reg := external purge0 in
+      let purge_reg := public purge0 in
       {{
           let purge := read0(purge_reg) in
           if (purge == enum purge_state { Purging }) then
@@ -1797,7 +1797,7 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
     Definition tc_purge0 := tc_rule R Sigma (purge_placeholder0) <: rule.
 
     Definition purge_placeholder1 : uaction reg_t ext_fn_t :=
-      let purge_reg := external purge1 in
+      let purge_reg := public purge1 in
       {{
           let purge := read0(purge_reg) in
           if (purge == enum purge_state { Purging }) then
@@ -1851,7 +1851,7 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
       | SysRl_Purge1 => tc_purge1
       end.
 
-    Definition internal_system_schedule : Syntax.scheduler pos_t SystemRule :=
+    Definition private_system_schedule : Syntax.scheduler pos_t SystemRule :=
       SysRl_MemCore0I |> SysRl_MemCore0D |> SysRl_MemCore1I |> SysRl_MemCore1D |>
                          SysRl_Purge0 |> SysRl_Purge1 |> done.
 
@@ -1922,7 +1922,7 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
   End Rules.
 
   Section Schedule.
-    Definition system_schedule := lift_scheduler Rl_System internal_system_schedule.
+    Definition system_schedule := lift_scheduler Rl_System private_system_schedule.
     Definition core0I_schedule := lift_scheduler Rl_Core0IMem Core0IMem.schedule.
     Definition core0D_schedule := lift_scheduler Rl_Core0DMem  Core0DMem.schedule.
     Definition core1I_schedule := lift_scheduler Rl_Core1IMem Core1IMem.schedule.
@@ -1939,32 +1939,32 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
 
   End Schedule.
 
-  Parameter internal_non_koika_state_t : Type.
-  Parameter initial_internal_non_koika_state : internal_non_koika_state_t.
+  Parameter private_external_state_t : Type.
+  Parameter initial_private_external_state : private_external_state_t.
 
-  Definition koika_state_t := @Mem_Common.koika_state_t internal_params.
-  Definition non_koika_state_t := @Mem_Common.non_koika_state_t internal_non_koika_state_t.
-  Definition initial_non_koika_state (dram: dram_t) : non_koika_state_t :=
-    (@Mem_Common.initial_non_koika _ initial_internal_non_koika_state dram).
-  Definition state := @Mem_Common.state internal_params internal_non_koika_state_t.
+  Definition koika_state_t := @Mem_Common.koika_state_t private_params.
+  Definition external_state_t := @Mem_Common.external_state_t private_external_state_t.
+  Definition initial_external_state (dram: dram_t) : external_state_t :=
+    (@Mem_Common.initial_external_state _ initial_private_external_state dram).
+  Definition state := @Mem_Common.state private_params private_external_state_t.
 
-  Parameter non_koika_update_function: state -> Log R ContextEnv -> Log R ContextEnv * non_koika_state_t.
+  Parameter external_update_function: state -> Log R ContextEnv -> Log R ContextEnv * external_state_t.
 
-  Parameter output_correctness : @P_output_correctness internal_params External.ext EnclaveParams.params
+  Parameter output_correctness : @P_output_correctness private_params External.ext EnclaveParams.params
                                                        rule_name_t rules schedule
-                                                       internal_non_koika_state_t
-                                                       initial_internal_non_koika_state
-                                                       non_koika_update_function.
-  Parameter correctness : @P_correctness internal_params External.ext EnclaveParams.params
+                                                       private_external_state_t
+                                                       initial_private_external_state
+                                                       external_update_function.
+  Parameter correctness : @P_correctness private_params External.ext EnclaveParams.params
                                          rule_name_t rules schedule
-                                         internal_non_koika_state_t
-                                         initial_internal_non_koika_state
-                                         non_koika_update_function.
-  Parameter compliance: @P_compliance internal_params External.ext EnclaveParams.params
+                                         private_external_state_t
+                                         initial_private_external_state
+                                         external_update_function.
+  Parameter compliance: @P_compliance private_params External.ext EnclaveParams.params
                                       rule_name_t rules schedule
-                                      internal_non_koika_state_t
-                                      initial_internal_non_koika_state
-                                      non_koika_update_function.
+                                      private_external_state_t
+                                      initial_private_external_state
+                                      external_update_function.
 
 
 End WIPMemory.
@@ -1974,18 +1974,18 @@ Module SimpleMemory <: Memory_sig OriginalExternal.
   Import Common.
 
   (* TOOD: Silly workaround due to extraction issues: https://github.com/coq/coq/issues/12124 *)
-  Inductive internal_reg_t' : Type :=
+  Inductive private_reg_t' : Type :=
   | Foo | Bar .
 
-  Definition internal_reg_t := internal_reg_t'.
+  Definition private_reg_t := private_reg_t'.
 
-  Definition R_internal (idx: internal_reg_t) : type :=
+  Definition R_private (idx: private_reg_t) : type :=
     match idx with
     | Foo => bits_t 1
     | Bar => bits_t 1
     end.
 
-  Definition r_internal (idx: internal_reg_t) : R_internal idx :=
+  Definition r_private (idx: private_reg_t) : R_private idx :=
     match idx with
     | Foo => Bits.zero
     | Bar => Bits.zero
@@ -2000,7 +2000,7 @@ Module SimpleMemory <: Memory_sig OriginalExternal.
   | fromIMem1 (state: MemResp.reg_t)
   | fromDMem0 (state: MemResp.reg_t)
   | fromDMem1 (state: MemResp.reg_t)
-  | internal (r: internal_reg_t)
+  | private (r: private_reg_t)
   .
 
   Definition R (idx: reg_t) :=
@@ -2013,7 +2013,7 @@ Module SimpleMemory <: Memory_sig OriginalExternal.
     | fromIMem1 st => MemResp.R st
     | fromDMem0 st => MemResp.R st
     | fromDMem1 st => MemResp.R st
-    | internal st => R_internal st
+    | private st => R_private st
     end.
 
   Definition r idx : R idx :=
@@ -2026,7 +2026,7 @@ Module SimpleMemory <: Memory_sig OriginalExternal.
     | fromIMem1 st => MemResp.r st
     | fromDMem0 st => MemResp.r st
     | fromDMem1 st => MemResp.r st
-    | internal st => r_internal st
+    | private st => r_private st
     end.
 
   Definition ext_fn_t := OriginalExternal.ext_fn_t.
@@ -2134,7 +2134,7 @@ Module SimpleMemory <: Memory_sig OriginalExternal.
   Definition schedule : scheduler :=
     Imem |> Dmem |> done.
 
-  Instance FiniteType_internal_reg_t : FiniteType internal_reg_t := _.
+  Instance FiniteType_private_reg_t : FiniteType private_reg_t := _.
   Instance FiniteType_reg_t : FiniteType reg_t := _.
 End SimpleMemory.
 *)

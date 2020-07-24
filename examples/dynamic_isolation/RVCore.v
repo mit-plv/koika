@@ -438,7 +438,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
   End ScoreboardParams.
   Module Scoreboard := Scoreboard ScoreboardParams.
 
-  Inductive internal_reg_t :=
+  Inductive private_reg_t :=
   | f2d (state: fromFetch.reg_t)
   | f2dprim (state: waitFromFetch.reg_t)
   | d2e (state: fromDecode.reg_t)
@@ -451,7 +451,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
   | freeze_fetch
   .
 
-  Definition R_internal (idx: internal_reg_t) : type :=
+  Definition R_private (idx: private_reg_t) : type :=
     match idx with
     | f2d r => fromFetch.R r
     | f2dprim r => waitFromFetch.R r
@@ -465,7 +465,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
     | freeze_fetch => bits_t 1
     end.
 
-  Definition r_internal (idx: internal_reg_t) : R_internal idx :=
+  Definition r_private (idx: private_reg_t) : R_private idx :=
     match idx with
     | f2d s => fromFetch.r s
     | f2dprim s => waitFromFetch.r s
@@ -491,33 +491,33 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
   Instance FiniteType_rf : FiniteType Rf.reg_t := _.
   Declare Instance FiniteType_scoreboard_rf : FiniteType Scoreboard.Rf.reg_t.
   Instance FiniteType_scoreboard : FiniteType Scoreboard.reg_t := _.
-  Declare Instance FiniteType_internal_reg_t : FiniteType internal_reg_t. (* TODO *)
+  Declare Instance FiniteType_private_reg_t : FiniteType private_reg_t. (* TODO *)
 
-  Definition internal_params : internal_module_sig :=
-    {| _internal_reg_t := internal_reg_t;
-       _r_internal := r_internal;
-       _R_internal := R_internal;
-       _FiniteType_internal_reg_t := FiniteType_internal_reg_t
+  Definition private_params : private_module_sig :=
+    {| _private_reg_t := private_reg_t;
+       _r_private := r_private;
+       _R_private := R_private;
+       _FiniteType_private_reg_t := FiniteType_private_reg_t
     |}.
 
-  Definition reg_t := @Core_Common.reg_t internal_params.
-  Definition r := @Core_Common.r CoreParams.core_id CoreParams.initial_pc internal_params.
-  Definition R := @Core_Common.R internal_params.
+  Definition reg_t := @Core_Common.reg_t private_params.
+  Definition r := @Core_Common.r CoreParams.core_id CoreParams.initial_pc private_params.
+  Definition R := @Core_Common.R private_params.
 
-  Instance FiniteType_reg_t : FiniteType reg_t := @Core_Common.FiniteType_reg_t internal_params.
+  Instance FiniteType_reg_t : FiniteType reg_t := @Core_Common.FiniteType_reg_t private_params.
 
   Definition ext_fn_t := @Core_Common.ext_fn_t External.ext.
-  Definition rule := @Core_Common.rule internal_params External.ext.
+  Definition rule := @Core_Common.rule private_params External.ext.
   Definition sigma := @Core_Common.sigma External.ext.
   Definition Sigma := @Core_Common.Sigma External.ext.
 
-  Notation internal := (@internal internal_params).
-  Notation external := (@external internal_params).
+  Notation private := (@private private_params).
+  Notation public := (@public private_params).
   (* TODO *)
-  Notation "'__external__' instance " :=
-    (fun reg => external ((instance) reg)) (in custom koika at level 1, instance constr at level 99).
-  Notation "'__internal__' instance " :=
-    (fun reg => internal ((instance) reg)) (in custom koika at level 1, instance constr at level 99).
+  Notation "'__public__' instance " :=
+    (fun reg => public ((instance) reg)) (in custom koika at level 1, instance constr at level 99).
+  Notation "'__private__' instance " :=
+    (fun reg => private ((instance) reg)) (in custom koika at level 1, instance constr at level 99).
   Notation "'(' instance ').(' method ')' args" :=
     (USugar (UCallModule instance _ method args))
       (in custom koika at level 1, method constr, args custom koika_args at level 99).
@@ -525,9 +525,9 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
 
   Definition fetch : uaction reg_t ext_fn_t :=
     {{
-        guard(read0(external purge) == enum purge_state { Ready } &&
-              !read0(internal freeze_fetch));
-        let pc := read1(external pc) in
+        guard(read0(public purge) == enum purge_state { Ready } &&
+              !read0(private freeze_fetch));
+        let pc := read1(public pc) in
         let req := struct mem_req {
                               byte_en := |4`d0|; (* Load *)
                               addr := pc;
@@ -535,19 +535,19 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
         let fetch_bookkeeping := struct fetch_bookkeeping {
                                           pc := pc;
                                           ppc := pc + |32`d4|;
-                                          epoch := read1(internal epoch)
+                                          epoch := read1(private epoch)
                                         } in
-        (__external__ toIMem).(MemReq.enq)(req);
-        write1(external pc, pc + |32`d4|);
-        (__internal__ f2d).(fromFetch.enq)(fetch_bookkeeping)
+        (__public__ toIMem).(MemReq.enq)(req);
+        write1(public pc, pc + |32`d4|);
+        (__private__ f2d).(fromFetch.enq)(fetch_bookkeeping)
     }}.
 
   Definition wait_imem : uaction reg_t ext_fn_t :=
     {{
-        guard(read0(external purge) == enum purge_state { Ready } &&
-               !read0(internal freeze_fetch));
-        let fetched_bookkeeping := (__internal__ f2d).(fromFetch.deq)() in
-        (__internal__ f2dprim).(waitFromFetch.enq)(fetched_bookkeeping)
+        guard(read0(public purge) == enum purge_state { Ready } &&
+               !read0(private freeze_fetch));
+        let fetched_bookkeeping := (__private__ f2d).(fromFetch.deq)() in
+        (__private__ f2dprim).(waitFromFetch.enq)(fetched_bookkeeping)
     }}.
 
   Definition sliceReg : UInternalFunction reg_t empty_ext_fn_t :=
@@ -562,23 +562,23 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
   (* muxing on the input, TODO check if it changes anything *)
   Definition decode : uaction reg_t ext_fn_t :=
     {{
-        guard(read0(external purge) == enum purge_state { Ready } &&
-              !read0(internal freeze_fetch));
-        let instr := (__external__ fromIMem).(MemResp.deq)() in
+        guard(read0(public purge) == enum purge_state { Ready } &&
+              !read0(private freeze_fetch));
+        let instr := (__public__ fromIMem).(MemResp.deq)() in
         let instr := get(instr,data) in
-        let fetched_bookkeeping := (__internal__ f2dprim).(waitFromFetch.deq)() in
+        let fetched_bookkeeping := (__private__ f2dprim).(waitFromFetch.deq)() in
         let decodedInst := decode_fun(instr) in
-        when (get(fetched_bookkeeping, epoch) == read1(internal epoch)) do
+        when (get(fetched_bookkeeping, epoch) == read1(private epoch)) do
              (let rs1_idx := get(getFields(instr), rs1) in
              let rs2_idx := get(getFields(instr), rs2) in
-             let score1 := (__internal__ scoreboard).(Scoreboard.search)(sliceReg(rs1_idx)) in
-             let score2 := (__internal__ scoreboard).(Scoreboard.search)(sliceReg(rs2_idx)) in
+             let score1 := (__private__ scoreboard).(Scoreboard.search)(sliceReg(rs1_idx)) in
+             let score2 := (__private__ scoreboard).(Scoreboard.search)(sliceReg(rs2_idx)) in
              guard (score1 == Ob~0~0 && score2 == Ob~0~0);
              (when (get(decodedInst, valid_rd)) do
                   let rd_idx := get(getFields(instr), rd) in
-                  (__internal__ scoreboard).(Scoreboard.insert)(sliceReg(rd_idx)));
-             let rs1 := (__external__ rf).(Rf.read_1)(sliceReg(rs1_idx)) in
-             let rs2 := (__external__ rf).(Rf.read_1)(sliceReg(rs2_idx)) in
+                  (__private__ scoreboard).(Scoreboard.insert)(sliceReg(rd_idx)));
+             let rs1 := (__public__ rf).(Rf.read_1)(sliceReg(rs1_idx)) in
+             let rs2 := (__public__ rf).(Rf.read_1)(sliceReg(rs2_idx)) in
              let decode_bookkeeping := struct decode_bookkeeping {
                                                 pc    := get(fetched_bookkeeping, pc);
                                                 ppc   := get(fetched_bookkeeping, ppc);
@@ -587,7 +587,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
                                                 rval1 := rs1;
                                                 rval2 := rs2
                                               } in
-             (__internal__ d2e).(fromDecode.enq)(decode_bookkeeping))
+             (__private__ d2e).(fromDecode.enq)(decode_bookkeeping))
     }}.
 
   (* Useful for debugging *)
@@ -602,7 +602,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
   Definition isMultiplyInst : UInternalFunction reg_t empty_ext_fn_t :=
     {{
         fun isMultiplyInst (dInst: struct_t decoded_sig) : bits_t 1 =>
-          (__internal__ mulState).(Multiplier.enabled)() &&
+          (__private__ mulState).(Multiplier.enabled)() &&
           let fields := getFields(get(dInst, inst)) in
           (get(fields, funct7) == #funct7_MUL) &&
           (get(fields, funct3) == #funct3_MUL) &&
@@ -622,23 +622,23 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
 
   Definition step_multiplier : uaction reg_t ext_fn_t :=
     {{
-        guard(read0(external purge) == enum purge_state { Ready });
-        (__internal__ mulState).(Multiplier.step)()
+        guard(read0(public purge) == enum purge_state { Ready });
+        (__private__ mulState).(Multiplier.step)()
     }}.
 
   Definition execute : uaction reg_t ext_fn_t :=
     {{
-        guard(read0(external purge) == enum purge_state { Ready } &&
-              !read0(internal freeze_fetch));
-        let decoded_bookkeeping := (__internal__ d2e).(fromDecode.deq)() in
-        if get(decoded_bookkeeping, epoch) == read0(internal epoch) then
+        guard(read0(public purge) == enum purge_state { Ready } &&
+              !read0(private freeze_fetch));
+        let decoded_bookkeeping := (__private__ d2e).(fromDecode.deq)() in
+        if get(decoded_bookkeeping, epoch) == read0(private epoch) then
           (* By then we guarantee that this instruction is correct-path *)
           let dInst := get(decoded_bookkeeping, dInst) in
           if get(dInst, legal) == Ob~0 then
             (* Always say that we had a misprediction in this case for
             simplicity *)
-            write0(internal epoch, read0(internal epoch)+Ob~1);
-            write0(external pc, |32`d0|)
+            write0(private epoch, read0(private epoch)+Ob~1);
+            write0(public pc, |32`d0|)
           else
             (let fInst := get(dInst, inst) in
              let funct3 := get(getFields(fInst), funct3) in
@@ -668,22 +668,22 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
                set data := rs2_val << shift_amount;
                set addr := addr[|5`d2| :+ 30 ] ++ |2`d0|;
                set isUnsigned := funct3[|2`d2|];
-               (__external__ toDMem).(MemReq.enq)(struct mem_req {
+               (__public__ toDMem).(MemReq.enq)(struct mem_req {
                  byte_en := byte_en; addr := addr; data := data })
              else if (isControlInst(dInst)) then
                set data := (pc + |32`d4|)     (* For jump and link *)
              else if (isEnclaveInst(dInst)) then
                set eid := rs1_val;
-               write0(internal freeze_fetch, Ob~1)
+               write0(private freeze_fetch, Ob~1)
              else if (isMultiplyInst(dInst)) then
-               (__internal__ mulState).(Multiplier.enq)(rs1_val, rs2_val)
+               (__private__ mulState).(Multiplier.enq)(rs1_val, rs2_val)
              else
                pass;
              let controlResult := execControl32(fInst, rs1_val, rs2_val, imm, pc) in
              let nextPc := get(controlResult,nextPC) in
              if nextPc != get(decoded_bookkeeping, ppc) then
-               write0(internal epoch, read0(internal epoch)+Ob~1);
-               write0(external pc, nextPc)
+               write0(private epoch, read0(private epoch)+Ob~1);
+               write0(public pc, nextPc)
              else
                pass;
              let execute_bookkeeping := struct execute_bookkeeping {
@@ -694,22 +694,22 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
                                                  dInst := get(decoded_bookkeeping, dInst);
                                                  eid := eid
                                                } in
-             (__internal__ e2w).(fromExecute.enq)(execute_bookkeeping))
+             (__private__ e2w).(fromExecute.enq)(execute_bookkeeping))
         else
           pass
     }}.
 
   Definition writeback : uaction reg_t ext_fn_t :=
     {{
-        guard(read0(external purge) == enum purge_state { Ready });
-        let execute_bookkeeping := (__internal__ e2w).(fromExecute.deq)() in
+        guard(read0(public purge) == enum purge_state { Ready });
+        let execute_bookkeeping := (__private__ e2w).(fromExecute.deq)() in
         let dInst := get(execute_bookkeeping, dInst) in
         let data := get(execute_bookkeeping, newrd) in
         let fields := getFields(get(dInst, inst)) in
-        write0(internal instr_count, read0(internal instr_count)+|32`d1|);
+        write0(private instr_count, read0(private instr_count)+|32`d1|);
         if isMemoryInst(dInst) then (* // write_val *)
           (* Byte enable shifting back *)
-          let resp := (__external__ fromDMem).(MemResp.deq)() in
+          let resp := (__public__ fromDMem).(MemResp.deq)() in
           let mem_data := get(resp,data) in
           set mem_data := mem_data >> (get(execute_bookkeeping,offset) ++ Ob~0~0~0);
           match (get(execute_bookkeeping,isUnsigned)++get(execute_bookkeeping,size)) with
@@ -723,17 +723,17 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
         else if isEnclaveInst(dInst) then
            let eid := get(execute_bookkeeping, eid) in
            let req := struct enclave_req { eid := eid} in
-           (__external__ toSMEnc).(EnclaveReq.enq)(req)
+           (__public__ toSMEnc).(EnclaveReq.enq)(req)
         else if isMultiplyInst(dInst) then
-          set data := (__internal__ mulState).(Multiplier.deq)()[|6`d0| :+ 32]
+          set data := (__private__ mulState).(Multiplier.deq)()[|6`d0| :+ 32]
         else
           pass;
         if get(dInst,valid_rd) then
           let rd_idx := get(fields,rd) in
-          (__internal__ scoreboard).(Scoreboard.remove)(sliceReg(rd_idx));
+          (__private__ scoreboard).(Scoreboard.remove)(sliceReg(rd_idx));
           if (rd_idx == |5`d0|)
           then pass
-          else (__external__ rf).(Rf.write_0)(sliceReg(rd_idx),data)
+          else (__public__ rf).(Rf.write_0)(sliceReg(rd_idx),data)
         else
           pass
     }}.
@@ -741,8 +741,8 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
 
   Definition tick : uaction reg_t ext_fn_t :=
     {{
-        guard(read0(external purge) == enum purge_state { Ready });
-        write0(internal cycle_count, read0(internal cycle_count) + |32`d1|)
+        guard(read0(public purge) == enum purge_state { Ready });
+        write0(private cycle_count, read0(private cycle_count) + |32`d1|)
     }}.
 
   Definition rv_register_name {n} (v: Vect.index n) :=
@@ -847,67 +847,67 @@ Module RV32I (EnclaveParams: EnclaveParameters) (CoreParams: CoreParameters)
 
   Definition reset_scoreboard : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun reset_scoreboard () : bits_t 0 =>
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d0|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d1|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d2|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d3|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d4|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d5|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d6|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d7|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d8|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d9|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d10|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d11|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d12|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d13|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d14|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d15|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d16|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d17|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d18|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d19|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d20|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d21|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d22|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d23|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d24|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d25|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d26|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d27|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d28|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d29|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d30|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|5`d31|)
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|5`d0|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|5`d1|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|5`d2|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|5`d3|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|5`d4|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|5`d5|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|5`d6|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|5`d7|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|5`d8|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|5`d9|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|5`d10|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|5`d11|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|5`d12|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|5`d13|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|5`d14|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|5`d15|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|5`d16|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|5`d17|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|5`d18|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|5`d19|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|5`d20|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|5`d21|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|5`d22|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|5`d23|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|5`d24|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|5`d25|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|5`d26|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|5`d27|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|5`d28|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|5`d29|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|5`d30|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|5`d31|)
     }}.
 
   (* TODO: generalize reset for scoreboard *)
-  Definition do_internal_purge: uaction reg_t ext_fn_t :=
+  Definition do_private_purge: uaction reg_t ext_fn_t :=
     {{
-        let purge_st := read0(external purge) in
+        let purge_st := read0(public purge) in
         if (purge_st == enum purge_state { Purging }) then
            (* f2d *)
-           (__internal__ f2d).(fromFetch.reset)();
+           (__private__ f2d).(fromFetch.reset)();
            (* f2dprim *)
-           (__internal__ f2dprim).(waitFromFetch.reset)();
+           (__private__ f2dprim).(waitFromFetch.reset)();
            (* d2e *)
-           (__internal__ d2e).(fromDecode.reset)();
+           (__private__ d2e).(fromDecode.reset)();
            (* e2w *)
-           (__internal__ e2w).(fromExecute.reset)();
+           (__private__ e2w).(fromExecute.reset)();
            (* mulState *)
-           (__internal__ mulState).(Multiplier.reset)();
+           (__private__ mulState).(Multiplier.reset)();
            (* scoreboard *)
            reset_scoreboard();
            (* cycle_count *)
-           write0(internal cycle_count, |32`d0|);
+           write0(private cycle_count, |32`d0|);
            (* instr_count *)
-           write0(internal instr_count, |32`d0|);
+           write0(private instr_count, |32`d0|);
            (* epoch *)
-           write0(internal epoch, Ob~0);
-           write0(internal freeze_fetch, Ob~0);
-           write0(external purge, enum purge_state { Purged })
+           write0(private epoch, Ob~0);
+           write0(private freeze_fetch, Ob~0);
+           write0(public purge, enum purge_state { Purged })
          else if (purge_st == enum purge_state { Restart }) then
-           write0(external purge, enum purge_state { Ready })
+           write0(public purge, enum purge_state { Ready })
          else fail
     }}.
 
@@ -919,7 +919,7 @@ Module RV32I (EnclaveParams: EnclaveParameters) (CoreParams: CoreParameters)
   Definition tc_writeback := tc_rule R Sigma writeback.
   Definition tc_step_multiplier := tc_rule R Sigma step_multiplier.
   Definition tc_tick := tc_rule R Sigma tick.
-  Definition tc_purge := tc_rule R Sigma do_internal_purge.
+  Definition tc_purge := tc_rule R Sigma do_private_purge.
 
   Definition rules (rl: rule_name_t) : rule :=
     match rl with
@@ -939,19 +939,19 @@ Module RV32I (EnclaveParams: EnclaveParameters) (CoreParams: CoreParameters)
   (* Instance FiniteType_rf : FiniteType Rf.reg_t := _. *)
   (* Instance FiniteType_scoreboard_rf : FiniteType Scoreboard.Rf.reg_t := _. *)
   (* Instance FiniteType_scoreboard : FiniteType Scoreboard.reg_t := _. *)
-  (* Instance FiniteType_internal_reg_t : FiniteType internal_reg_t := _. *)
+  (* Instance FiniteType_private_reg_t : FiniteType private_reg_t := _. *)
   (* Instance FiniteType_ext_reg_t : FiniteType external_reg_t := _. *)
   (* Instance FiniteType_reg_t : FiniteType reg_t := _. *)
 
   Parameter output_correctness : @P_output_correctness CoreParams.core_id CoreParams.initial_pc
-                                                        internal_params External.ext
+                                                        private_params External.ext
                                                         rule_name_t rules schedule.
 
   Parameter correctness : @P_correctness CoreParams.core_id CoreParams.initial_pc
-                                         internal_params External.ext
+                                         private_params External.ext
                                          rule_name_t rules schedule.
   Parameter compliance : @P_compliance CoreParams.core_id CoreParams.initial_pc
-                                       internal_params External.ext
+                                       private_params External.ext
                                        rule_name_t rules schedule.
 
 End RV32I.
@@ -970,48 +970,48 @@ Module RV32E (EnclaveParams: EnclaveParameters) (CoreParams: CoreParameters)
 
   Definition reset_scoreboard : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun reset_scoreboard () : bits_t 0 =>
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|4`d0|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|4`d1|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|4`d2|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|4`d3|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|4`d4|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|4`d5|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|4`d6|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|4`d7|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|4`d8|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|4`d9|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|4`d10|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|4`d11|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|4`d12|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|4`d13|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|4`d14|);
-         (__internal__ scoreboard).(Scoreboard.reset_at_idx)(|4`d15|)
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|4`d0|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|4`d1|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|4`d2|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|4`d3|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|4`d4|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|4`d5|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|4`d6|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|4`d7|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|4`d8|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|4`d9|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|4`d10|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|4`d11|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|4`d12|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|4`d13|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|4`d14|);
+         (__private__ scoreboard).(Scoreboard.reset_at_idx)(|4`d15|)
     }}.
 
   (* TODO: generalize reset for scoreboard *)
-  Definition do_internal_purge: uaction reg_t ext_fn_t :=
+  Definition do_private_purge: uaction reg_t ext_fn_t :=
     {{
        guard(read0(purge) == enum purge_state { Purging });
        (* f2d *)
-       (__internal__ f2d).(fromFetch.reset)();
+       (__private__ f2d).(fromFetch.reset)();
        (* f2dprim *)
-       (__internal__ f2dprim).(waitFromFetch.reset)();
+       (__private__ f2dprim).(waitFromFetch.reset)();
        (* d2e *)
-       (__internal__ d2e).(fromDecode.reset)();
+       (__private__ d2e).(fromDecode.reset)();
        (* e2w *)
-       (__internal__ e2w).(fromExecute.reset)();
+       (__private__ e2w).(fromExecute.reset)();
        (* mulState *)
-       (__internal__ mulState).(Multiplier.reset)();
+       (__private__ mulState).(Multiplier.reset)();
        (* scoreboard *)
        reset_scoreboard();
        (* cycle_count *)
-       write0(internal cycle_count, |32`d0|);
+       write0(private cycle_count, |32`d0|);
        (* instr_count *)
-       write0(internal instr_count, |32`d0|);
+       write0(private instr_count, |32`d0|);
        (* epoch *)
-       write0(internal epoch, Ob~0);
+       write0(private epoch, Ob~0);
        (* pc *)
-       write0(internal pc, |32`d0|)
+       write0(private pc, |32`d0|)
     }}.
 
 
@@ -1022,7 +1022,7 @@ Module RV32E (EnclaveParams: EnclaveParameters) (CoreParams: CoreParameters)
   Definition tc_writeback := tc_rule R Sigma writeback <: rule.
   Definition tc_step_multiplier := tc_rule R Sigma step_multiplier <: rule.
   Definition tc_tick := tc_rule R Sigma tick.
-  Definition tc_purge := tc_rule R Sigma do_internal_purge <: rule.
+  Definition tc_purge := tc_rule R Sigma do_private_purge <: rule.
 
   Definition rules (rl: rule_name_t) : rule :=
     match rl with
@@ -1042,7 +1042,7 @@ Module RV32E (EnclaveParams: EnclaveParameters) (CoreParams: CoreParameters)
   Instance FiniteType_rf : FiniteType Rf.reg_t := _.
   Instance FiniteType_scoreboard_rf : FiniteType Scoreboard.Rf.reg_t := _.
   Instance FiniteType_scoreboard : FiniteType Scoreboard.reg_t := _.
-  Instance FiniteType_internal_reg_t : FiniteType internal_reg_t := _.
+  Instance FiniteType_private_reg_t : FiniteType private_reg_t := _.
   Instance FiniteType_reg_t : FiniteType reg_t := _.
 End RV32E.
 *)

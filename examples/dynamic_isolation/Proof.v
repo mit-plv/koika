@@ -29,6 +29,7 @@ Arguments log_app : simpl never.
 Arguments interp_scheduler' : simpl never.
 Arguments commit_update : simpl never.
 Arguments lift_scheduler : simpl never.
+Arguments Log : simpl never.
 
 Hint Rewrite @getenv_create : log_helpers.
 
@@ -127,57 +128,57 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
       auto.
     Qed.
 
-    Definition core0_empty_internal_regs (log: Log Core0.R ContextEnv) :=
-      (forall internal_reg, ContextEnv.(getenv) log (Core_Common.internal internal_reg) = []).
-    Definition core1_empty_internal_regs (log: Log Core1.R ContextEnv) :=
-      (forall internal_reg, ContextEnv.(getenv) log (Core_Common.internal internal_reg) = []).
+    Definition core0_empty_private_regs (log: Log Core0.R ContextEnv) :=
+      (forall private_reg, ContextEnv.(getenv) log (Core_Common.private private_reg) = []).
+    Definition core1_empty_private_regs (log: Log Core1.R ContextEnv) :=
+      (forall private_reg, ContextEnv.(getenv) log (Core_Common.private private_reg) = []).
 
-    Definition sm_empty_internal_regs (log: Log SM_Common.R ContextEnv) :=
-      (forall internal_reg, ContextEnv.(getenv) log (SM_Common.internal internal_reg) = []).
+    Definition sm_empty_private_regs (log: Log SM_Common.R ContextEnv) :=
+      (forall private_reg, ContextEnv.(getenv) log (SM_Common.private private_reg) = []).
 
-    Definition mem_empty_internal_regs (log: Log Memory.R ContextEnv) :=
-      (forall internal_reg, ContextEnv.(getenv) log (Mem_Common.internal internal_reg) = []).
+    Definition mem_empty_private_regs (log: Log Memory.R ContextEnv) :=
+      (forall private_reg, ContextEnv.(getenv) log (Mem_Common.private private_reg) = []).
 
     Property core0_lift_ext_log_cancels_proj:
       forall log,
-      core0_empty_internal_regs log ->
-      Core_Common.lift_ext_log (Core_Common.proj_log__ext log) = log.
+      core0_empty_private_regs log ->
+      Core_Common.lift_ext_log (Core_Common.proj_log__pub log) = log.
     Proof.
-      unfold core0_empty_internal_regs; intros.
-      unfold Core_Common.lift_ext_log, Core_Common.proj_log__ext.
+      unfold core0_empty_private_regs; intros.
+      unfold Core_Common.lift_ext_log, Core_Common.proj_log__pub.
       apply_equiv_eq.
       destruct k; auto_with_log_helpers.
     Qed.
 
     Property core1_lift_ext_log_cancels_proj:
       forall log,
-      core1_empty_internal_regs log ->
-      Core_Common.lift_ext_log (Core_Common.proj_log__ext log) = log.
+      core1_empty_private_regs log ->
+      Core_Common.lift_ext_log (Core_Common.proj_log__pub log) = log.
     Proof.
-      unfold core1_empty_internal_regs; intros.
-      unfold Core_Common.lift_ext_log, Core_Common.proj_log__ext.
+      unfold core1_empty_private_regs; intros.
+      unfold Core_Common.lift_ext_log, Core_Common.proj_log__pub.
       apply_equiv_eq.
       destruct k; auto_with_log_helpers.
     Qed.
 
     Property sm_lift_ext_log_cancels_proj:
       forall log,
-      sm_empty_internal_regs log ->
-      SM_Common.lift_ext_log (SM_Common.proj_log__ext log) = log.
+      sm_empty_private_regs log ->
+      SM_Common.lift_ext_log (SM_Common.proj_log__pub log) = log.
     Proof.
-      unfold sm_empty_internal_regs; intros.
-      unfold SM_Common.lift_ext_log, SM_Common.proj_log__ext.
+      unfold sm_empty_private_regs; intros.
+      unfold SM_Common.lift_ext_log, SM_Common.proj_log__pub.
       apply_equiv_eq.
       destruct k; auto_with_log_helpers.
     Qed.
 
     Property mem_lift_ext_log_cancels_proj:
       forall log,
-      mem_empty_internal_regs log ->
-      Mem_Common.lift_ext_log (Mem_Common.proj_log__ext log) = log.
+      mem_empty_private_regs log ->
+      Mem_Common.lift_ext_log (Mem_Common.proj_log__pub log) = log.
     Proof.
-      unfold sm_empty_internal_regs; intros.
-      unfold Mem_Common.lift_ext_log, Mem_Common.proj_log__ext.
+      unfold sm_empty_private_regs; intros.
+      unfold Mem_Common.lift_ext_log, Mem_Common.proj_log__pub.
       apply_equiv_eq.
       destruct k; auto_with_log_helpers.
     Qed.
@@ -313,7 +314,7 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
   End GhostState.
 
   Section ImplRegisterMap.
-    Definition impl_sm_clk : Impl.System.reg_t := Impl.System.SM_internal (SM_Common.clk).
+    Definition impl_sm_clk : Impl.System.reg_t := Impl.System.SM_private (SM_Common.clk).
     Definition impl_purge_core0 : Impl.System.reg_t := Impl.System.purge_core0.
     Definition impl_purge_core1: Impl.System.reg_t := Impl.System.purge_core1.
     Definition impl_purge_mem0 : Impl.System.reg_t := Impl.System.purge_mem0.
@@ -322,26 +323,26 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
 
   (* TODO: fix this *)
   Section Derived_Core0.
-    Definition core0_state_t := @Core_Common.state Core0.internal_params.
+    Definition core0_state_t := @Core_Common.state Core0.private_params.
 
     Definition core0_do_step_input__koika :=
-      @Core_Common.do_step_input__koika Core0.internal_params
+      @Core_Common.do_step_input__koika Core0.private_params
                                       External.ext
                                       Core0.rule_name_t
                                       Core0.rules
                                       Core0.schedule.
 
     Definition core0_do_step__koika :=
-      @Core_Common.do_step__koika Core0.internal_params
+      @Core_Common.do_step__koika Core0.private_params
                                       External.ext
                                       Core0.rule_name_t
                                       Core0.rules
                                       Core0.schedule.
 
-    Definition core0_spec_state_t : Type := @Core_Common.spec_state_t Core0.internal_params.
+    Definition core0_spec_state_t : Type := @Core_Common.spec_state_t Core0.private_params.
 
     Definition core0_do_step_trans_input__spec :=
-      @Core_Common.do_step_trans_input__spec Core0.internal_params
+      @Core_Common.do_step_trans_input__spec Core0.private_params
                                            External.ext
                                            Core0.rule_name_t
                                            Core0.rules
@@ -349,7 +350,7 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
     Definition core0_do_step__spec :=
       @Core_Common.do_step__spec Params0.core_id
                                Params0.initial_pc
-                               Core0.internal_params
+                               Core0.private_params
                                External.ext
                                Core0.rule_name_t
                                Core0.rules
@@ -360,25 +361,25 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
 
   Section Derived_Core1.
 
-    Definition core1_state_t := @Core_Common.state Core1.internal_params.
+    Definition core1_state_t := @Core_Common.state Core1.private_params.
     Definition core1_do_step_input__koika :=
-      @Core_Common.do_step_input__koika Core1.internal_params
+      @Core_Common.do_step_input__koika Core1.private_params
                                       External.ext
                                       Core1.rule_name_t
                                       Core1.rules
                                       Core1.schedule.
 
     Definition core1_do_step__koika :=
-      @Core_Common.do_step__koika Core1.internal_params
+      @Core_Common.do_step__koika Core1.private_params
                                       External.ext
                                       Core1.rule_name_t
                                       Core1.rules
                                       Core1.schedule.
 
-    Definition core1_spec_state_t : Type := @Core_Common.spec_state_t Core1.internal_params.
+    Definition core1_spec_state_t : Type := @Core_Common.spec_state_t Core1.private_params.
 
     Definition core1_do_step_trans_input__spec :=
-      @Core_Common.do_step_trans_input__spec Core1.internal_params
+      @Core_Common.do_step_trans_input__spec Core1.private_params
                                            External.ext
                                            Core1.rule_name_t
                                            Core1.rules
@@ -387,7 +388,7 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
     Definition core1_do_step__spec :=
       @Core_Common.do_step__spec Params1.core_id
                                Params1.initial_pc
-                               Core1.internal_params
+                               Core1.private_params
                                External.ext
                                Core1.rule_name_t
                                Core1.rules
@@ -397,46 +398,46 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
 
   Section Derived_Mem.
     Definition mem_do_step_input__impl :=
-      @Mem_Common.do_step_input__impl Memory.internal_params
+      @Mem_Common.do_step_input__impl Memory.private_params
                                     External.ext
                                     Memory.rule_name_t
                                     Memory.rules
                                     Memory.schedule
-                                    Memory.internal_non_koika_state_t
-                                    Memory.non_koika_update_function.
+                                    Memory.private_external_state_t
+                                    Memory.external_update_function.
 
     Definition mem_do_step__impl :=
-      @Mem_Common.do_step__impl Memory.internal_params
+      @Mem_Common.do_step__impl Memory.private_params
                                     External.ext
                                     Memory.rule_name_t
                                     Memory.rules
                                     Memory.schedule
-                                    Memory.internal_non_koika_state_t
-                                    Memory.non_koika_update_function.
+                                    Memory.private_external_state_t
+                                    Memory.external_update_function.
 
     Definition mem_spec_state_t : Type :=
-      @Mem_Common.spec_state_t Memory.internal_params Memory.internal_non_koika_state_t.
+      @Mem_Common.spec_state_t Memory.private_params Memory.private_external_state_t.
 
     Definition mem_do_step_trans_input__spec :=
-      @Mem_Common.do_step_trans_input__spec Memory.internal_params
+      @Mem_Common.do_step_trans_input__spec Memory.private_params
                                           External.ext
                                           EnclaveParams.params
                                           Memory.rule_name_t
                                           Memory.rules
                                           Memory.schedule
-                                          Memory.internal_non_koika_state_t
-                                          Memory.initial_internal_non_koika_state
-                                          Memory.non_koika_update_function.
+                                          Memory.private_external_state_t
+                                          Memory.initial_private_external_state
+                                          Memory.external_update_function.
     Definition mem_do_step__spec :=
-      @Mem_Common.do_step__spec Memory.internal_params
+      @Mem_Common.do_step__spec Memory.private_params
                               External.ext
                               EnclaveParams.params
                               Memory.rule_name_t
                               Memory.rules
                               Memory.schedule
-                              Memory.internal_non_koika_state_t
-                              Memory.initial_internal_non_koika_state
-                              Memory.non_koika_update_function.
+                              Memory.private_external_state_t
+                              Memory.initial_private_external_state
+                              Memory.external_update_function.
 
   End Derived_Mem.
 
@@ -450,7 +451,7 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
     Definition get_impl_koika_mem : Impl.koika_state_t -> Memory.koika_state_t :=
       fun impl_st => proj_env Impl.System.Lift_mem impl_st.
     Definition get_impl_mem : Impl.state -> Memory.state :=
-      fun impl_st => (get_impl_koika_mem (Impl.koika_state impl_st), Impl.non_koika_state impl_st).
+      fun impl_st => (get_impl_koika_mem (Impl.koika_state impl_st), Impl.external_state impl_st).
 
     Definition get_impl_log_core0 : Impl.log_t -> Log Core0.R ContextEnv :=
       fun impl_st => proj_log Impl.System.Lift_core0 impl_st.
@@ -504,7 +505,7 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
       { output_core0 : Log Core0.R ContextEnv
       ; output_core1 : Log Core1.R ContextEnv
       ; output_sm : Log SM_Common.R ContextEnv
-      ; output_mem : Log Memory.R ContextEnv * Memory.non_koika_state_t
+      ; output_mem : Log Memory.R ContextEnv * Memory.external_state_t
       }.
 
     Definition trace := list tau.
@@ -522,65 +523,65 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
       {| state_core0 := ContextEnv.(create) Core0.r;
          state_core1 := ContextEnv.(create) Core1.r;
          state_sm := ContextEnv.(create) Impl.System.SM.r;
-         state_mem := (ContextEnv.(create) Memory.r, Memory.initial_non_koika_state initial_dram)
+         state_mem := (ContextEnv.(create) Memory.r, Memory.initial_external_state initial_dram)
       |}.
 
     (* TODO: stop duplicating *)
     Section ModularStep.
 
       Definition do_core0 (st: core0_state_t) (input_log: Log Impl.System.R ContextEnv)
-                          : Log Core_Common.R_external ContextEnv * Log Core0.R ContextEnv *
+                          : Log Core_Common.R_public ContextEnv * Log Core0.R ContextEnv *
                             Log Impl.System.R ContextEnv * Log Impl.System.R ContextEnv *
                             (Log Impl.System.R ContextEnv -> Core_Common.step_io) :=
-        let core0_input := Core_Common.proj_log__ext (proj_log Impl.System.Lift_core0 input_log) in
+        let core0_input := Core_Common.proj_log__pub (proj_log Impl.System.Lift_core0 input_log) in
         let '(core0_output__local, _) := core0_do_step_input__koika st core0_input in
         let core0_output__global := lift_log (REnv' := ContextEnv) Impl.System.Lift_core0 core0_output__local in
         let acc := log_app core0_output__global input_log in
         let mk_core0_step_io feedback_log :=
             {| Core_Common.step_input := core0_input;
-               Core_Common.step_feedback := Core_Common.proj_log__ext (proj_log Impl.System.Lift_core0 feedback_log)
+               Core_Common.step_feedback := Core_Common.proj_log__pub (proj_log Impl.System.Lift_core0 feedback_log)
             |} in
         (core0_input, core0_output__local, core0_output__global, acc, mk_core0_step_io).
 
       Definition do_core1 (st: core1_state_t) (input_log: Log Impl.System.R ContextEnv)
-                          : Log Core_Common.R_external ContextEnv * Log Core1.R ContextEnv *
+                          : Log Core_Common.R_public ContextEnv * Log Core1.R ContextEnv *
                             Log Impl.System.R ContextEnv * Log Impl.System.R ContextEnv *
                             (Log Impl.System.R ContextEnv -> Core_Common.step_io) :=
-        let core1_input := Core_Common.proj_log__ext (proj_log Impl.System.Lift_core1 input_log) in
+        let core1_input := Core_Common.proj_log__pub (proj_log Impl.System.Lift_core1 input_log) in
         let '(core1_output__local, _) := core1_do_step_input__koika st core1_input in
         let core1_output__global := lift_log (REnv' := ContextEnv) Impl.System.Lift_core1 core1_output__local in
         let acc := log_app core1_output__global input_log in
         let mk_core1_step_io feedback_log :=
             {| Core_Common.step_input := core1_input;
-               Core_Common.step_feedback := Core_Common.proj_log__ext (proj_log Impl.System.Lift_core1 feedback_log)
+               Core_Common.step_feedback := Core_Common.proj_log__pub (proj_log Impl.System.Lift_core1 feedback_log)
             |} in
         (core1_input, core1_output__local, core1_output__global, acc, mk_core1_step_io).
 
       Definition do_sm (st: SM_Common.state) (input_log: Log Impl.System.R ContextEnv)
-                             : Log SM_Common.R_external ContextEnv * Log SM_Common.R ContextEnv *
+                             : Log SM_Common.R_public ContextEnv * Log SM_Common.R ContextEnv *
                                Log Impl.System.R ContextEnv * Log Impl.System.R ContextEnv *
                                (Log Impl.System.R ContextEnv -> SM_Common.step_io) :=
-        let sm_input := SM_Common.proj_log__ext (proj_log Impl.System.Lift_sm input_log) in
+        let sm_input := SM_Common.proj_log__pub (proj_log Impl.System.Lift_sm input_log) in
         let '(sm_output__local, _) := Impl.System.SM.do_step_input__impl st sm_input in
         let sm_output__global := lift_log (REnv' := ContextEnv) Impl.System.Lift_sm sm_output__local in
         let acc := log_app sm_output__global input_log in
         let mk_sm_step_io feedback_log :=
             {| SM_Common.step_input := sm_input;
-               SM_Common.step_feedback := SM_Common.proj_log__ext (proj_log Impl.System.Lift_sm feedback_log)
+               SM_Common.step_feedback := SM_Common.proj_log__pub (proj_log Impl.System.Lift_sm feedback_log)
             |} in
         (sm_input, sm_output__local, sm_output__global, acc, mk_sm_step_io).
 
       Definition do_mem (st: Memory.state) (input_log: Log Impl.System.R ContextEnv)
-                        : Log Mem_Common.R_external ContextEnv * Log Memory.R ContextEnv *
-                          Mem_Common.non_koika_state_t * Log Impl.System.R ContextEnv * Log Impl.System.R ContextEnv *
+                        : Log Mem_Common.R_public ContextEnv * Log Memory.R ContextEnv *
+                          Mem_Common.external_state_t * Log Impl.System.R ContextEnv * Log Impl.System.R ContextEnv *
                           (Log Impl.System.R ContextEnv -> Mem_Common.step_io) :=
-        let mem_input := Mem_Common.proj_log__ext (proj_log (REnv := ContextEnv) Impl.System.Lift_mem input_log) in
+        let mem_input := Mem_Common.proj_log__pub (proj_log (REnv := ContextEnv) Impl.System.Lift_mem input_log) in
         let '(mem_output__local, ext_st) := mem_do_step_input__impl st mem_input in
         let mem_output__global := lift_log (REnv := ContextEnv) Impl.System.Lift_mem mem_output__local in
         let acc_mem := log_app mem_output__global input_log in
         let mk_mem_step_io feedback_log :=
             {| Mem_Common.step_input := mem_input;
-               Mem_Common.step_feedback := Mem_Common.proj_log__ext (proj_log Impl.System.Lift_mem feedback_log)
+               Mem_Common.step_feedback := Mem_Common.proj_log__pub (proj_log Impl.System.Lift_mem feedback_log)
             |} in
         (mem_input, mem_output__local, ext_st, mem_output__global, acc_mem, mk_mem_step_io).
 
@@ -688,18 +689,18 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
       let core0_output__global := lift_log (REnv' := ContextEnv) Impl.System.Lift_core0 core0_output__local in
       let acc__core0 := core0_output__global in
       (* Core1 *)
-      let core1_input := Core_Common.proj_log__ext (proj_log (REnv := ContextEnv) Impl.System.Lift_core1 acc__core0) in
+      let core1_input := Core_Common.proj_log__pub (proj_log (REnv := ContextEnv) Impl.System.Lift_core1 acc__core0) in
       let '(core1_output__local, _) := core1_do_step_trans_input__spec (state_core1 st) core1_input in
       let core1_output__global := lift_log (REnv := ContextEnv) Impl.System.Lift_core1 core1_output__local in
       let acc__core1 := log_app core1_output__global acc__core0 in
       (* SM *)
-      let sm_input := SM_Common.proj_log__ext (proj_log (REnv := ContextEnv) Impl.System.Lift_sm acc__core1) in
+      let sm_input := SM_Common.proj_log__pub (proj_log (REnv := ContextEnv) Impl.System.Lift_sm acc__core1) in
       let sm_output__raw := TODO_SM.do_step_input__spec (state_sm st) sm_input in
       let '(sm_output__local, sm_ghost) := combine_spec_output sm_output__raw in
       let sm_output__global := lift_log (REnv := ContextEnv) Impl.System.Lift_sm sm_output__local in
       let acc_sm := log_app sm_output__global acc__core1 in
       (* Mem *)
-      let mem_input := Mem_Common.proj_log__ext (proj_log (REnv := ContextEnv) Impl.System.Lift_mem acc_sm) in
+      let mem_input := Mem_Common.proj_log__pub (proj_log (REnv := ContextEnv) Impl.System.Lift_mem acc_sm) in
       let mem_output__raw := mem_do_step_trans_input__spec (state_mem st) mem_input in
       let mem_output__local := combine_mem_output mem_output__raw in
       let mem_output__global := lift_log (REnv := ContextEnv) Impl.System.Lift_mem mem_output__local in
@@ -718,20 +719,20 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
 
       let core0_step_io :=
           {| Core_Common.step_input := log_empty;
-             Core_Common.step_feedback := Core_Common.proj_log__ext (proj_log (REnv := ContextEnv) Impl.System.Lift_core0
+             Core_Common.step_feedback := Core_Common.proj_log__pub (proj_log (REnv := ContextEnv) Impl.System.Lift_core0
                                                                 core0_feedback__global)
           |} in
       let core1_step_io :=
           {| Core_Common.step_input := core1_input;
-             Core_Common.step_feedback := Core_Common.proj_log__ext (proj_log Impl.System.Lift_core1 core1_feedback__global)
+             Core_Common.step_feedback := Core_Common.proj_log__pub (proj_log Impl.System.Lift_core1 core1_feedback__global)
           |} in
       let sm_step_io :=
           {| SM_Common.step_input := sm_input;
-             SM_Common.step_feedback := SM_Common.proj_log__ext (proj_log Impl.System.Lift_sm sm_feedback__global)
+             SM_Common.step_feedback := SM_Common.proj_log__pub (proj_log Impl.System.Lift_sm sm_feedback__global)
           |} in
       let mem_step_io :=
           {| Mem_Common.step_input := mem_input;
-             Mem_Common.step_feedback := Mem_Common.proj_log__ext (proj_log Impl.System.Lift_mem mem_feedback__global)
+             Mem_Common.step_feedback := Mem_Common.proj_log__pub (proj_log Impl.System.Lift_mem mem_feedback__global)
           |} in
       let mem_ghost_io :=
           {| Mem_Common.ghost_step := mem_step_io;
@@ -770,56 +771,56 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
     (* TODO: write this in a nicer way *)
     (*
     Definition observe_imem_req0 (log: Log Core0.R ContextEnv) : option (struct_t mem_req) :=
-      observe_enq0 (Core0.external (Core0.toIMem MemReq.valid0)) eq_refl
-                   (Core0.external (Core0.toIMem MemReq.data0)) eq_refl log.
+      observe_enq0 (Core0.public (Core0.toIMem MemReq.valid0)) eq_refl
+                   (Core0.public (Core0.toIMem MemReq.data0)) eq_refl log.
     Definition observe_dmem_req0 (log: Log Core0.R ContextEnv) : option (struct_t mem_req) :=
-      observe_enq0 (Core0.external (Core0.toDMem MemReq.valid0)) eq_refl
-                   (Core0.external (Core0.toDMem MemReq.data0)) eq_refl log.
+      observe_enq0 (Core0.public (Core0.toDMem MemReq.valid0)) eq_refl
+                   (Core0.public (Core0.toDMem MemReq.data0)) eq_refl log.
     Definition observe_imem_req1 (log: Log Core1.R ContextEnv) : option (struct_t mem_req) :=
-      observe_enq0 (Core1.external (Core1.toIMem MemReq.valid0)) eq_refl
-                   (Core1.external (Core1.toIMem MemReq.data0)) eq_refl log.
+      observe_enq0 (Core1.public (Core1.toIMem MemReq.valid0)) eq_refl
+                   (Core1.public (Core1.toIMem MemReq.data0)) eq_refl log.
     Definition observe_dmem_req1 (log: Log Core1.R ContextEnv) : option (struct_t mem_req) :=
-      observe_enq0 (Core1.external (Core1.toDMem MemReq.valid0)) eq_refl
-                   (Core1.external (Core1.toDMem MemReq.data0)) eq_refl log.
+      observe_enq0 (Core1.public (Core1.toDMem MemReq.valid0)) eq_refl
+                   (Core1.public (Core1.toDMem MemReq.data0)) eq_refl log.
     Definition observe_imem_resp0 (log: Log SM_Common.R ContextEnv) : option (struct_t mem_resp) :=
-      observe_enq1 (SM_Common.external (SM_Common.toCore0_IMem MemResp.valid0)) eq_refl
-                   (SM_Common.external (SM_Common.toCore0_IMem MemResp.data0)) eq_refl log.
+      observe_enq1 (SM_Common.public (SM_Common.toCore0_IMem MemResp.valid0)) eq_refl
+                   (SM_Common.public (SM_Common.toCore0_IMem MemResp.data0)) eq_refl log.
     Definition observe_dmem_resp0 (log: Log SM_Common.R ContextEnv) : option (struct_t mem_resp) :=
-      observe_enq1 (SM_Common.external (SM_Common.toCore0_DMem MemResp.valid0)) eq_refl
-                   (SM_Common.external (SM_Common.toCore0_DMem MemResp.data0)) eq_refl log.
+      observe_enq1 (SM_Common.public (SM_Common.toCore0_DMem MemResp.valid0)) eq_refl
+                   (SM_Common.public (SM_Common.toCore0_DMem MemResp.data0)) eq_refl log.
     Definition observe_imem_resp1 (log: Log SM_Common.R ContextEnv) : option (struct_t mem_resp) :=
-      observe_enq1 (SM_Common.external (SM_Common.toCore1_IMem MemResp.valid0)) eq_refl
-                   (SM_Common.external (SM_Common.toCore1_IMem MemResp.data0)) eq_refl log.
+      observe_enq1 (SM_Common.public (SM_Common.toCore1_IMem MemResp.valid0)) eq_refl
+                   (SM_Common.public (SM_Common.toCore1_IMem MemResp.data0)) eq_refl log.
     Definition observe_dmem_resp1 (log: Log SM_Common.R ContextEnv) : option (struct_t mem_resp) :=
-      observe_enq1 (SM_Common.external (SM_Common.toCore1_DMem MemResp.valid0)) eq_refl
-                   (SM_Common.external (SM_Common.toCore1_DMem MemResp.data0)) eq_refl log.
+      observe_enq1 (SM_Common.public (SM_Common.toCore1_DMem MemResp.valid0)) eq_refl
+                   (SM_Common.public (SM_Common.toCore1_DMem MemResp.data0)) eq_refl log.
     Definition observe_enclave_req0 (log: Log Core0.R ContextEnv) : option (struct_t enclave_req) :=
-      observe_enq0 (Core0.external (Core0.toSMEnc EnclaveReq.valid0)) eq_refl
-                   (Core0.external (Core0.toSMEnc EnclaveReq.data0)) eq_refl
+      observe_enq0 (Core0.public (Core0.toSMEnc EnclaveReq.valid0)) eq_refl
+                   (Core0.public (Core0.toSMEnc EnclaveReq.data0)) eq_refl
                    log.
     Definition observe_enclave_req1 (log: Log Core1.R ContextEnv) : option (struct_t enclave_req) :=
-      observe_enq0 (Core1.external (Core1.toSMEnc EnclaveReq.valid0)) eq_refl
-                   (Core1.external (Core1.toSMEnc EnclaveReq.data0)) eq_refl
+      observe_enq0 (Core1.public (Core1.toSMEnc EnclaveReq.valid0)) eq_refl
+                   (Core1.public (Core1.toSMEnc EnclaveReq.data0)) eq_refl
                    log.
     Definition observe_enclave_enter0 (log: Log SM_Common.R ContextEnv) : bool :=
-      match latest_write log (SM_Common.external SM_Common.purge_core0) with
+      match latest_write log (SM_Common.public SM_Common.purge_core0) with
       | Some v => bits_eqb v ENUM_purge_restart
       | None => false
       end.
     Definition observe_enclave_enter1 (log: Log SM_Common.R ContextEnv) : bool :=
-      match latest_write log (SM_Common.external SM_Common.purge_core1) with
+      match latest_write log (SM_Common.public SM_Common.purge_core1) with
       | Some v => bits_eqb v ENUM_purge_restart
       | None => false
       end.
     Definition observe_enclave_exit0 (log: Log SM_Common.R ContextEnv) : bool :=
-      match latest_write log (SM_Common.internal SM_Common.enc_data0) with
+      match latest_write log (SM_Common.private SM_Common.enc_data0) with
       | Some v =>
           let data := EnclaveInterface.extract_enclave_data v in
           bits_eqb (EnclaveInterface.enclave_data_valid data) Ob~0
       | None => false
       end.
     Definition observe_enclave_exit1 (log: Log SM_Common.R ContextEnv) : bool :=
-      match latest_write log (SM_Common.internal SM_Common.enc_data1) with
+      match latest_write log (SM_Common.private SM_Common.enc_data1) with
       | Some v =>
           let data := EnclaveInterface.extract_enclave_data v in
           bits_eqb (EnclaveInterface.enclave_data_valid data) Ob~0
@@ -981,7 +982,7 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
     Import Interfaces.Common.
 
     Section GeneralizeImpl.
-      Definition gen_impl_tau : Type := Log Impl.System.R ContextEnv * Impl.non_koika_state_t.
+      Definition gen_impl_tau : Type := Log Impl.System.R ContextEnv * Impl.external_state_t.
       Definition gen_impl_trace := list gen_impl_tau.
       Definition gen_impl_step (st: Impl.state) : Impl.state * gen_impl_tau :=
         let (log, ext_st') := Impl.update_function st in
@@ -1024,10 +1025,10 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
       Local Hint Resolve wf_core0_sigma : core.
       Local Hint Resolve wf_core1_Sigma : core.
       Local Hint Resolve wf_core1_sigma : core.
-      Local Hint Unfold core0_empty_internal_regs : log_helpers.
-      Local Hint Unfold core1_empty_internal_regs : log_helpers.
-      Local Hint Unfold sm_empty_internal_regs : log_helpers.
-      Local Hint Unfold mem_empty_internal_regs : log_helpers.
+      Local Hint Unfold core0_empty_private_regs : log_helpers.
+      Local Hint Unfold core1_empty_private_regs : log_helpers.
+      Local Hint Unfold sm_empty_private_regs : log_helpers.
+      Local Hint Unfold mem_empty_private_regs : log_helpers.
       Local Hint Resolve equivalent_rules_core0_lift : core.
       Local Hint Resolve equivalent_rules_core1_lift : core.
       Local Hint Resolve equivalent_rules_sm_lift : core.
@@ -1048,19 +1049,19 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
       Qed.
 
 
-      Ltac solve_not_exists_lift_to_internal :=
+      Ltac solve_not_exists_lift_to_private :=
         match goal with
-        | |- not (exists reg, _ reg = Impl.System.Core0_internal _) =>
+        | |- not (exists reg, _ reg = Impl.System.Core0_private _) =>
           clear; intros; intuition; solve[repeat (destruct_one_ind; try discriminate)]
-        | |- not (exists reg, _ reg = Impl.System.Core1_internal _) =>
+        | |- not (exists reg, _ reg = Impl.System.Core1_private _) =>
           clear; intros; intuition; solve[repeat (destruct_one_ind; try discriminate)]
-        | |- not (exists reg, _ reg = Impl.System.SM_internal _) =>
+        | |- not (exists reg, _ reg = Impl.System.SM_private _) =>
           clear; intros; intuition; solve[repeat (destruct_one_ind; try discriminate)]
-        | |- not (exists reg, _ reg = Impl.System.Mem_internal _) =>
+        | |- not (exists reg, _ reg = Impl.System.Mem_private _) =>
           clear; intros; intuition; solve[repeat (destruct_one_ind; try discriminate)]
         end.
 
-      Hint Extern 10 => solve_not_exists_lift_to_internal : log_helpers.
+      Hint Extern 10 => solve_not_exists_lift_to_private : log_helpers.
 
       Ltac destruct_and_rewrite_Hsim :=
         match goal with
@@ -1103,13 +1104,13 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
       (* TODO: goal vs hypothesis pattern? *)
       Ltac do_rewrites :=
         match goal with
-        | H: context[Core_Common.lift_ext_log (Core_Common.proj_log__ext _)] |- _ =>
+        | H: context[Core_Common.lift_ext_log (Core_Common.proj_log__pub _)] |- _ =>
           rewrite core0_lift_ext_log_cancels_proj in H; [ | solve[solve_getenv_lift_log_not_exists; repeat bash_step]]
-        (* | H: context[Core_Common.lift_ext_log (Core_Common.proj_log__ext _)] |- _ => *)
+        (* | H: context[Core_Common.lift_ext_log (Core_Common.proj_log__pub _)] |- _ => *)
         (*   rewrite core1_lift_ext_log_cancels_proj in H; [ | solve[solve_getenv_lift_log_not_exists; repeat bash_step]] *)
-        | H: context[SM_Common.lift_ext_log (SM_Common.proj_log__ext _)] |- _ =>
+        | H: context[SM_Common.lift_ext_log (SM_Common.proj_log__pub _)] |- _ =>
           rewrite sm_lift_ext_log_cancels_proj in H; [ | solve[solve_getenv_lift_log_not_exists;repeat bash_step]]
-        | H: context[Mem_Common.lift_ext_log (Mem_Common.proj_log__ext _)] |- _ =>
+        | H: context[Mem_Common.lift_ext_log (Mem_Common.proj_log__pub _)] |- _ =>
           rewrite mem_lift_ext_log_cancels_proj in H; [ | solve[solve_getenv_lift_log_not_exists;repeat bash_step]]
         | H: context[log_app (interp_scheduler_delta (proj_env _ _) _ _ (proj_log _ _) _) (proj_log _ _)] |- _ =>
           erewrite log_app_interp_scheduler_delta_proj_comm_proj_interp_scheduler' in H;
@@ -1201,7 +1202,7 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
 
         consider Impl.System.sigma.
         (* consider Impl.System.rule_name_t. *)
-        consider Impl.update_non_koika_st.
+        consider Impl.update_external_st.
 
         repeat rewrite interp_scheduler'_app in HeqUpdateKoika.
         consider ModImpl.do_step.
@@ -1216,7 +1217,6 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
           in HeqUpdateKoika.
         erewrite<-interp_scheduler'_rules_equiv with (1 := equivalent_rules_mem_lift Memory.schedule)
           in HeqUpdateKoika.
-Arguments Log : simpl never.
         simpl in *.
 
         consider ModImpl.do_core0.
@@ -1267,22 +1267,27 @@ Arguments Log : simpl never.
         (*          [ | solve[solve_getenv_lift_log_not_exists;repeat bash_step]]). *)
         repeat do_rewrites.
         (* repeat do_rewrites. (* TODO: speed this up *) *)
-        repeat rewrite<-interp_scheduler_delta_correspond_to_interp_scheduler in *.
+        (* repeat rewrite<-interp_scheduler_delta_correspond_to_interp_scheduler in *. *)
         simplify_tuples; subst; simpl in *.
+        repeat quick_cleanup.
+        repeat remove_deltas.
 
         repeat match goal with
         | |- context[lift_log ?x ?y] =>
             remember (lift_log x y)
         end.
 
-        repeat quick_cleanup.
+        (* repeat quick_cleanup. *)
+        (* repeat remove_deltas. *)
+        (* simpl in *; subst. *)
+        autorewrite with log_helpers in *. (* slightly slow *)
+        repeat do_rewrites.
+
+        (* replace (Impl.System.FnLift_core1) with Impl.System.FnLift_core0 in * by auto. *)
+
         repeat remove_deltas.
         simpl in *; subst.
-        autorewrite with log_helpers in *. (* slightly slow *)
-
-        replace (Impl.System.FnLift_core1) with Impl.System.FnLift_core0 in * by auto.
-        repeat do_rewrites.
-        repeat remove_deltas.
+        autorewrite with log_helpers in *.
         setoid_rewrite Heqp0 in Heqp5; simplify_tuples; subst.
         setoid_rewrite Heqp0 in Heqp4; simplify_tuples; subst.
         split.
@@ -1496,7 +1501,7 @@ End TradPf.
         apres_core1: Log Impl.System.R ContextEnv;
         apres_sm   : Log Impl.System.R ContextEnv * sm_ghost_output_t;
         final_log : Log Impl.System.R ContextEnv;
-        final_ext_state: Impl.placeholder_external_state
+        final_ext_state: Impl.placeholder_public_state
       }.
 
     (* TODO: (fancy?) notation *)
@@ -1532,7 +1537,7 @@ End TradPf.
       (lift_log (REnv := ContextEnv) Impl.System.Lift_sm output_log, TODO_ghost_state_conversion sm_ghost_output).
 
     Definition do_mem_step (st: Memory.state) (input_log: Log Impl.System.R ContextEnv)
-                          : Log Impl.System.R ContextEnv * Impl.placeholder_external_state :=
+                          : Log Impl.System.R ContextEnv * Impl.placeholder_public_state :=
       let mem_log := proj_log (REnv := ContextEnv) Impl.System.Lift_mem input_log in
       let '(output_log, ext_st') := Memory.update_function st mem_log in
       (lift_log (REnv' := ContextEnv) Impl.System.Lift_mem output_log, ext_st').
@@ -1557,7 +1562,7 @@ End TradPf.
 
     Definition do_mod_step__impl (impl_st: Impl.state) (step: mod_step) : Impl.state :=
       {| Impl.koika_state := commit_update (Impl.koika_state impl_st) (final_log step);
-         Impl.external_state := final_ext_state step
+         Impl.public_state := final_ext_state step
       |}.
 
     Fixpoint get_mod_steps__impl (initial_dram: dram_t) (n: nat) : Impl.state * list mod_step :=
@@ -1704,7 +1709,7 @@ End TradPf.
         Impl.get_rf (impl_st,impl_ext) = next_rf /\
         (* SM is in a certain state *)
         SMProperties.valid_waiting_state (get_impl_sm impl_st) Common.CoreId0 new
-        (* TODO: External memory is related *)
+        (* TODO: Public memory is related *)
     end.
 
   Definition State1_Sim : Impl.state -> @Spec.core_state_machine Spec.Machine1.state -> Prop. Admitted.
@@ -1900,7 +1905,7 @@ End TradPf.
       | TaintCore (core_id: ind_core_id)
       | Bottom.
 
-      Definition internal_reg_to_taint (reg: internal_reg_t) : taint_t :=
+      Definition private_reg_to_taint (reg: private_reg_t) : taint_t :=
         match reg with
         | state0 => TaintCore CoreId0
         | state1 => TaintCore CoreId1
@@ -1939,14 +1944,14 @@ End TradPf.
         | purge_core1 => TaintCore CoreId1
         | purge_mem0 => TaintCore CoreId0
         | purge_mem1 => TaintCore CoreId1
-        | internal st => internal_reg_to_taint st
+        | private st => private_reg_to_taint st
       end.
 
       Scheme Equality for taint_t.
 
-      Definition filter_external (log: Log R ContextEnv) (core: ind_core_id) : Log R ContextEnv :=
+      Definition filter_public (log: Log R ContextEnv) (core: ind_core_id) : Log R ContextEnv :=
         ContextEnv.(create) (fun r => match r with
-                                   | internal s => []
+                                   | private s => []
                                    | reg => if (taint_t_beq (reg_to_taint reg) (TaintCore core))
                                               || (taint_t_beq (reg_to_taint reg) Bottom) then
                                               ContextEnv.(getenv) log reg
@@ -1964,8 +1969,8 @@ End TradPf.
       Definition observe_enclave_exit (core_id: ind_core_id) (log: Log R ContextEnv) : bool.
         refine(
         let enc_data_reg := match core_id with
-                            | CoreId0 => internal enc_data0
-                            | CoreId1 => internal enc_data1
+                            | CoreId0 => private enc_data0
+                            | CoreId1 => private enc_data1
                             end in
         match rew_latest_write log enc_data_reg _ with
         | Some v =>
@@ -1985,7 +1990,7 @@ End TradPf.
           match config with
           | SmState_Enclave machine enclave enclave_state =>
               let (machine', output_log) := step machine input feedback in
-              (* let output_log := filter_external *)
+              (* let output_log := filter_public *)
               match enclave_state with
               | EnclaveState_Running =>
                   let enclave_state' :=
@@ -2025,15 +2030,15 @@ End TradPf.
 
       Definition TODO_spin_up_machine (core: ind_core_id) (next: enclave_config) (turn: bool) : state :=
         ContextEnv.(create) (fun reg => match reg return R reg with
-                                   | internal enc_data0 =>
+                                   | private enc_data0 =>
                                        if ind_core_id_beq core CoreId0
                                        then enclave_config_to_enclave_data next
-                                       else r (internal enc_data0)
-                                   | internal enc_data1 =>
+                                       else r (private enc_data0)
+                                   | private enc_data1 =>
                                        if ind_core_id_beq core CoreId1
                                        then enclave_config_to_enclave_data next
-                                       else r (internal enc_data1)
-                                   | internal clk => if turn then Ob~1 else Ob~0
+                                       else r (private enc_data1)
+                                   | private clk => if turn then Ob~1 else Ob~0
                                    | reg' => r reg'
                                    end).
 
@@ -2064,9 +2069,9 @@ End TradPf.
       Definition iso_step (st: iso_machine_t) (input: Log R ContextEnv) (feedback: Log R ContextEnv)
                           : iso_machine_t * (Log R ContextEnv * Log R ContextEnv) :=
         let magic0 := local_core_step (negb st.(turn)) CoreId0 st.(iso_sm0)
-                                      (filter_external input CoreId0) (filter_external feedback CoreId0) in
+                                      (filter_public input CoreId0) (filter_public feedback CoreId0) in
         let magic1 := local_core_step st.(turn) CoreId1 st.(iso_sm1)
-                                      (filter_external input CoreId1) (filter_external feedback CoreId1) in
+                                      (filter_public input CoreId1) (filter_public feedback CoreId1) in
         let '(iso0', log0) := do_magic_step CoreId0 (negb st.(turn)) magic0 (get_enclave_config st.(iso_sm1)) in
         let '(iso1', log1) := do_magic_step CoreId1 (negb st.(turn)) magic1 (get_enclave_config st.(iso_sm0)) in
         let st' := {| iso_sm0 := iso0';
@@ -2079,7 +2084,7 @@ End TradPf.
 
     Section ValidInput.
       (* Input log is valid iff
-       * - only touches interface/external registers
+       * - only touches interface/public registers
        * - only enqueues/dequeues to relevant FIFOs
        * - any write to purge_core is well-behaved as per purge state machine model
        *)
@@ -2115,7 +2120,7 @@ End TradPf.
        * Idea is that equivalence holds as an independent function of time?;
        * Note: SM is entirely spatially partitioned. Normally this would need to be a function of time too
        *)
-      Definition internal_reg_to_taint (reg: internal_reg_t) : taint_t :=
+      Definition private_reg_to_taint (reg: private_reg_t) : taint_t :=
         match reg with
         | state0 => TaintCore CoreId0
         | state1 => TaintCore CoreId1
@@ -2154,15 +2159,15 @@ End TradPf.
         | purge_core1 => TaintCore CoreId1
         | purge_mem0 => TaintCore CoreId0
         | purge_mem1 => TaintCore CoreId1
-        | internal st => internal_reg_to_taint st
+        | private st => private_reg_to_taint st
       end.
 
     End ValidInput.
 
     Section Initialise.
 
-      Definition internal_waiting_state (eid_req0: option enclave_id) (eid_req1: option enclave_id)
-                                        (clk: bits_t 1) (idx: internal_reg_t) : R_internal idx :=
+      Definition private_waiting_state (eid_req0: option enclave_id) (eid_req1: option enclave_id)
+                                        (clk: bits_t 1) (idx: private_reg_t) : R_private idx :=
         match idx with
         | state0 => ENUM_CORESTATE_WAITING
         | state1 => ENUM_CORESTATE_WAITING
@@ -2181,9 +2186,9 @@ End TradPf.
         | clk => clk
         end.
 
-      Definition initialise_internal_with_eid
+      Definition initialise_private_with_eid
                  (eid0: option enclave_id) (eid1: option enclave_id) (clk: bits_t 1)
-                 (idx: internal_reg_t) : R_internal idx :=
+                 (idx: private_reg_t) : R_private idx :=
         match idx with
         | state0 => value_of_bits Bits.zero
         | state1 => value_of_bits Bits.zero
@@ -2205,14 +2210,14 @@ End TradPf.
       Definition initialise_waiting_r (eid_req0: option enclave_id) (eid_req1: option enclave_id)
                                       (clk: bits_t 1) (idx: reg_t) : R idx :=
         match idx with
-        | internal s => internal_waiting_state eid_req0 eid_req1 clk s
+        | private s => private_waiting_state eid_req0 eid_req1 clk s
         | s => r s
         end.
 
       Definition initialise_with_eid (eid0: option enclave_id) (eid1: option enclave_id)
                                      (clk: bits_t 1) (idx: reg_t) : R idx :=
         match idx with
-        | internal s => initialise_internal_with_eid eid0 eid1 clk s
+        | private s => initialise_private_with_eid eid0 eid1 clk s
         | s => r s
         end.
 
@@ -2242,7 +2247,7 @@ End TradPf.
 
     End ValidResetState.
 
-    Section SMInternalAxioms.
+    Section SMPrivateAxioms.
 
       Definition valid_enclave_data (data: struct_t enclave_data) : Prop :=
         let enclave_data := extract_enclave_data data in
@@ -2254,17 +2259,17 @@ End TradPf.
         end.
 
       Definition valid_enclave_data_regs (st: state) : Prop :=
-        valid_enclave_data (ContextEnv.(getenv) st (internal enc_data0)) /\
-        valid_enclave_data (ContextEnv.(getenv) st (internal enc_data1)).
+        valid_enclave_data (ContextEnv.(getenv) st (private enc_data0)) /\
+        valid_enclave_data (ContextEnv.(getenv) st (private enc_data1)).
 
       (* TODO: incomplete *)
-      Definition valid_internal_state (st: state) : Prop :=
+      Definition valid_private_state (st: state) : Prop :=
         valid_enclave_data_regs st.
 
       Definition state_eq (st: state) (core_id: ind_core_id) (v: enum_t core_state): Prop :=
         match core_id with
-        | CoreId0 => ContextEnv.(getenv) st (internal state0) = v
-        | CoreId1 => ContextEnv.(getenv) st (internal state1) = v
+        | CoreId0 => ContextEnv.(getenv) st (private state0) = v
+        | CoreId1 => ContextEnv.(getenv) st (private state1) = v
         end.
 
       (* Idea:
@@ -2338,11 +2343,11 @@ End TradPf.
         end.
 
       (* TODO: rephrase this. This is annoying to work with *)
-      Definition no_external_enqs (core_id: ind_core_id) (st: state) (log: Log R ContextEnv) : Prop :=
+      Definition no_public_enqs (core_id: ind_core_id) (st: state) (log: Log R ContextEnv) : Prop :=
         forall reg, no_enq_to_output_reg core_id reg (update_function st log) \/
                update_no_writes_to_reg st log reg.
 
-    End SMInternalAxioms.
+    End SMPrivateAxioms.
 
     (* TODO: this needs to be in a framework *)
     Section CycleModel.
@@ -2476,12 +2481,12 @@ End TradPf.
         end.
 
       (* If the core starts out in a limbo state, we say there are no valid writes to the outside world *)
-      Theorem limbo_implies_no_external_enqs:
+      Theorem limbo_implies_no_public_enqs:
         forall (core_id: ind_core_id) (st: state) (log: Log R ContextEnv),
         not (state_eq st core_id (value_of_bits Bits.zero)) ->
         valid_input_state st ->
         valid_input_log st log ->
-        no_external_enqs core_id st log.
+        no_public_enqs core_id st log.
       Proof.
       Admitted.
 

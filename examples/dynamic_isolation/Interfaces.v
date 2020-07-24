@@ -169,11 +169,11 @@ Module Common.
     ; _ext_fn_specs : _ext_fn_t -> ext_fn_spec
     }.
 
-  Record internal_module_sig :=
-    { _internal_reg_t : Type
-    ; _R_internal : _internal_reg_t -> type
-    ; _r_internal : forall (idx: _internal_reg_t), _R_internal idx
-    ; _FiniteType_internal_reg_t : FiniteType _internal_reg_t
+  Record private_module_sig :=
+    { _private_reg_t : Type
+    ; _R_private : _private_reg_t -> type
+    ; _r_private : forall (idx: _private_reg_t), _R_private idx
+    ; _FiniteType_private_reg_t : FiniteType _private_reg_t
     }.
 
   Record schedule_sig {rule_t: Type} :=
@@ -209,7 +209,7 @@ End External_sig.
 
 Module Core_Common.
   Import Common.
-  Inductive external_reg_t :=
+  Inductive public_reg_t :=
   | core_id
   | toIMem (state: MemReq.reg_t)
   | toDMem (state: MemReq.reg_t)
@@ -221,9 +221,9 @@ Module Core_Common.
   | purge
   .
 
-  Instance FiniteType_external_reg_t : FiniteType external_reg_t := _.
+  Instance FiniteType_public_reg_t : FiniteType public_reg_t := _.
 
-  Definition R_external (idx: external_reg_t) : type :=
+  Definition R_public (idx: public_reg_t) : type :=
     match idx with
     | core_id => core_id_t
     | toIMem r => MemReq.R r
@@ -239,15 +239,15 @@ Module Core_Common.
   Section Parameterised.
     Context {param_core_id: Common.core_id_t}.
     Context {initial_pc: addr_t}.
-    Context {internal_sig: internal_module_sig}.
+    Context {private_sig: private_module_sig}.
     Context {ext_sig: external_sig}.
 
-    Definition internal_reg_t := _internal_reg_t internal_sig.
-    Definition R_internal := _R_internal internal_sig.
-    Definition r_internal : forall (idx: internal_reg_t), R_internal idx := _r_internal internal_sig.
-    Instance FiniteType_internal_reg_t : FiniteType internal_reg_t := _FiniteType_internal_reg_t internal_sig.
+    Definition private_reg_t := _private_reg_t private_sig.
+    Definition R_private := _R_private private_sig.
+    Definition r_private : forall (idx: private_reg_t), R_private idx := _r_private private_sig.
+    Instance FiniteType_private_reg_t : FiniteType private_reg_t := _FiniteType_private_reg_t private_sig.
 
-    Definition r_external (idx: external_reg_t) : R_external idx :=
+    Definition r_public (idx: public_reg_t) : R_public idx :=
       match idx with
       | core_id => param_core_id
       | toIMem s => MemReq.r s
@@ -261,20 +261,20 @@ Module Core_Common.
       end.
 
     Inductive reg_t :=
-    | external (r: external_reg_t)
-    | internal (r: internal_reg_t)
+    | public (r: public_reg_t)
+    | private (r: private_reg_t)
     .
 
     Definition R (idx: reg_t) : type :=
       match idx with
-      | external r => R_external r
-      | internal r => R_internal r
+      | public r => R_public r
+      | private r => R_private r
       end.
 
     Definition r idx : R idx :=
       match idx with
-      | external s => r_external s
-      | internal s => r_internal s
+      | public s => r_public s
+      | private s => r_private s
       end.
 
     (* Instance FiniteType_reg_t : FiniteType reg_t := _. (* slow *) *)
@@ -301,18 +301,18 @@ Module Core_Common.
         fun st log => interp_scheduler_delta st sigma rules log schedule.
 
       Definition log_t := Log R ContextEnv.
-      Definition input_t := Log R_external ContextEnv.
+      Definition input_t := Log R_public ContextEnv.
       Definition output_t := Log R ContextEnv.
-      Definition feedback_t := Log R_external ContextEnv.
+      Definition feedback_t := Log R_public ContextEnv.
 
       Record step_io :=
         { step_input : input_t;
           step_feedback: feedback_t
         }.
 
-      Definition lift_ext_log (log: Log R_external ContextEnv) : Log R ContextEnv :=
+      Definition lift_ext_log (log: Log R_public ContextEnv) : Log R ContextEnv :=
         ContextEnv.(create) (fun reg => match reg return (RLog (R reg)) with
-                                     | external s => ContextEnv.(getenv) log s
+                                     | public s => ContextEnv.(getenv) log s
                                      | _ => []
                                      end).
 
@@ -337,42 +337,42 @@ Module Core_Common.
     End CycleSemantics.
 
     Section Interface.
-      Definition proj_log__ext (log: Log R ContextEnv) : Log R_external ContextEnv :=
-        ContextEnv.(create) (fun reg => ContextEnv.(getenv) log (external reg)).
+      Definition proj_log__pub (log: Log R ContextEnv) : Log R_public ContextEnv :=
+        ContextEnv.(create) (fun reg => ContextEnv.(getenv) log (public reg)).
 
-        Definition tau := Log R_external ContextEnv.
+        Definition tau := Log R_public ContextEnv.
         Definition trace := list tau.
     End Interface.
 
     Section Spec.
 
-      Definition is_external_log (log: Log R ContextEnv) : Prop :=
+      Definition is_public_log (log: Log R ContextEnv) : Prop :=
         forall reg, match reg with
-               | external r => True
-               | internal r => ContextEnv.(getenv) log reg = []
+               | public r => True
+               | private r => ContextEnv.(getenv) log reg = []
                end.
 
       (* TODO: to simplify for now, we say that the Core executes first *)
-      Definition valid_input_log__common (input_log: Log R_external ContextEnv) : Prop :=
+      Definition valid_input_log__common (input_log: Log R_public ContextEnv) : Prop :=
         input_log = log_empty.
 
       Definition valid_output_log__common (output_log: Log R ContextEnv) : Prop :=
         True.
 
-      Definition valid_feedback_log__common (log: Log R_external ContextEnv) : Prop :=
-        (* Writeback to external registers only *)
+      Definition valid_feedback_log__common (log: Log R_public ContextEnv) : Prop :=
+        (* Writeback to public registers only *)
         latest_write log core_id = None /\
         (* TODO: Register file is really internal... we just wanted to be able to talk about it *)
         (forall s, latest_write log (rf s) = None).
       (*
-        (latest_write log (external (toIMem MemReq.valid0)) = None \/
-        latest_write log (external (toIMem MemReq.valid0)) = Some Ob~0).
+        (latest_write log (public (toIMem MemReq.valid0)) = None \/
+        latest_write log (public (toIMem MemReq.valid0)) = Some Ob~0).
         *)
 
       (* - While running, SM only gets to write purging (which doesn't change anything)
        * - Only Core writes purged, transitioning from running -> waiting
-       * - Here, Core promises to not change external state
-       * - Supposing that SM writes restart only when external state is cleared (apart from certain regs),
+       * - Here, Core promises to not change public state
+       * - Supposing that SM writes restart only when public state is cleared (apart from certain regs),
        * - Then simulation of resetting holds.
        *)
       Inductive phase_state :=
@@ -384,19 +384,19 @@ Module Core_Common.
 
       Definition initial_spec_state : spec_state_t := (initial_state, SpecSt_Running).
 
-      Definition only_write_ext_purge (log: Log R_external ContextEnv) (v: bits_t 2) : Prop :=
+      Definition only_write_ext_purge (log: Log R_public ContextEnv) (v: bits_t 2) : Prop :=
         latest_write log purge = Some v \/ latest_write log purge = None.
 
       Definition only_write_purge (log: Log R ContextEnv) (v: bits_t 2) : Prop :=
-        latest_write log (external purge) = Some v \/ latest_write log (external purge) = None.
+        latest_write log (public purge) = Some v \/ latest_write log (public purge) = None.
 
       Definition extract_rf (st: state) : env_t ContextEnv Rf.R :=
-        ContextEnv.(create) (fun reg => ContextEnv.(getenv) st (external (rf reg))).
+        ContextEnv.(create) (fun reg => ContextEnv.(getenv) st (public (rf reg))).
 
       Definition initialise_with_rf (initial_rf: env_t ContextEnv Rf.R) (initial_pc: bits_t 32) : state :=
         ContextEnv.(create) (fun reg => match reg return R reg with
-                                     | external (rf s) => ContextEnv.(getenv) initial_rf s
-                                     | external pc => initial_pc
+                                     | public (rf s) => ContextEnv.(getenv) initial_rf s
+                                     | public pc => initial_pc
                                      | s => r s
                                      end).
 
@@ -412,7 +412,7 @@ Module Core_Common.
           match phase with
           | SpecSt_Running =>
               let continue := (st', SpecSt_Running) in
-              match latest_write output (external purge) with
+              match latest_write output (public purge) with
               | Some v => if bits_eqb v ENUM_purge_purged
                          then (st', SpecSt_Waiting (extract_rf st'))
                          else continue
@@ -432,29 +432,29 @@ Module Core_Common.
         (final_st, output).
 
       (* Behaves nicely with enq/deqs *)
-      Definition valid_interface_log (st: state) (init_log: Log R_external ContextEnv)
-                                     (log: Log R_external ContextEnv) : Prop. Admitted.
+      Definition valid_interface_log (st: state) (init_log: Log R_public ContextEnv)
+                                     (log: Log R_public ContextEnv) : Prop. Admitted.
 
-      Definition no_writes (log: Log R_external ContextEnv) : Prop :=
+      Definition no_writes (log: Log R_public ContextEnv) : Prop :=
         forall r, latest_write log r = None.
 
       Definition valid_step_output__spec (spec_st: spec_state_t) (step: step_io) : Prop :=
         let '(st, phase) := spec_st in
         let '(st', log) := do_step_trans__spec spec_st step in
         valid_output_log__common log /\
-        valid_interface_log st log_empty (proj_log__ext log) /\
+        valid_interface_log st log_empty (proj_log__pub log) /\
           (match phase with
           | SpecSt_Running => True
           | SpecSt_Waiting _ =>
-              no_writes (proj_log__ext log)
+              no_writes (proj_log__pub log)
           end).
 
-      Definition reset_external_state (st: state) : Prop :=
+      Definition reset_public_state (st: state) : Prop :=
         forall reg, match reg with
                | rf _ => True
                | pc => True
                | purge => True
-               | s => ContextEnv.(getenv) st (external s) = r_external s
+               | s => ContextEnv.(getenv) st (public s) = r_public s
                end.
 
       Definition valid_step_feedback__spec (spec_st: spec_state_t) (step: step_io) : Prop :=
@@ -463,7 +463,7 @@ Module Core_Common.
         let feedback := step.(step_feedback) in
 
         valid_feedback_log__common step.(step_feedback) /\
-        valid_interface_log st (log_app (proj_log__ext output) step.(step_input)) feedback /\
+        valid_interface_log st (log_app (proj_log__pub output) step.(step_input)) feedback /\
         match phase with
         | SpecSt_Running =>
             only_write_ext_purge feedback ENUM_purge_purging
@@ -471,7 +471,7 @@ Module Core_Common.
             only_write_ext_purge feedback ENUM_purge_restart /\
             (latest_write feedback purge = Some ENUM_purge_restart ->
              latest_write feedback pc <> None /\
-             reset_external_state (fst st') (* TODO: whose responsibility to clear FIFOs? *)
+             reset_public_state (fst st') (* TODO: whose responsibility to clear FIFOs? *)
             )
         end.
 
@@ -497,15 +497,15 @@ Module Core_Common.
 
       (* TODO: clean *)
 
-      Definition ext_log_equivalent (log0 log1: Log R_external ContextEnv) : Prop.
+      Definition ext_log_equivalent (log0 log1: Log R_public ContextEnv) : Prop.
       Admitted.
 
       Definition log_equivalent (koika_log: Log R ContextEnv) (spec_log: Log R ContextEnv) : Prop :=
-        forall (reg: external_reg_t),
-          latest_write koika_log (external reg) = latest_write spec_log (external reg) /\
-          (forall port, may_read koika_log port (external reg) = may_read spec_log port (external reg)) /\
-          (forall port, may_write koika_log log_empty port (external reg) =
-                   may_write spec_log log_empty port (external reg)).
+        forall (reg: public_reg_t),
+          latest_write koika_log (public reg) = latest_write spec_log (public reg) /\
+          (forall port, may_read koika_log port (public reg) = may_read spec_log port (public reg)) /\
+          (forall port, may_write koika_log log_empty port (public reg) =
+                   may_write spec_log log_empty port (public reg)).
 
       Definition trace_equivalent (koika_tr: list (Log R ContextEnv))
                                   (spec_tr: list (Log R ContextEnv)) : Prop :=
@@ -522,7 +522,7 @@ Module Core_Common.
           do_steps__koika steps = (koika_st, koika_tr) ->
           fst (do_step_input__koika koika_st input) = output0 ->
           fst (do_step_trans_input__spec spec_st input) = output1 ->
-          ext_log_equivalent (proj_log__ext output0) (proj_log__ext output1).
+          ext_log_equivalent (proj_log__pub output0) (proj_log__pub output1).
 
       Definition P_correctness :=
         forall (steps: list step_io)
@@ -557,17 +557,17 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
   Import Common.
   Import Core_Common.
 
-  Parameter internal_params : internal_module_sig.
+  Parameter private_params : private_module_sig.
 
   Parameter rule_name_t : Type.
 
   (* TODO: make these notations? *)
-  Definition reg_t := @Core_Common.reg_t internal_params.
-  Definition r := @Core_Common.r CoreParams.core_id CoreParams.initial_pc internal_params.
-  Definition R := @Core_Common.R internal_params.
+  Definition reg_t := @Core_Common.reg_t private_params.
+  Definition r := @Core_Common.r CoreParams.core_id CoreParams.initial_pc private_params.
+  Definition R := @Core_Common.R private_params.
 
   (* Declare Instance FiniteType_reg_t : FiniteType reg_t. *)
-  Definition rule := @Core_Common.rule internal_params External.ext.
+  Definition rule := @Core_Common.rule private_params External.ext.
   Definition sigma := @Core_Common.sigma External.ext.
   Definition Sigma := @Core_Common.Sigma External.ext.
 
@@ -575,17 +575,17 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
 
   Parameter schedule : Syntax.scheduler pos_t rule_name_t.
 
-  Instance FiniteType_reg_t : FiniteType reg_t := @Core_Common.FiniteType_reg_t internal_params.
+  Instance FiniteType_reg_t : FiniteType reg_t := @Core_Common.FiniteType_reg_t private_params.
 
   (* TODO: clean up instantiation *)
   Parameter output_correctness : @P_output_correctness CoreParams.core_id CoreParams.initial_pc
-                                                       internal_params External.ext
+                                                       private_params External.ext
                                                        rule_name_t rules schedule.
   Parameter correctness : @P_correctness CoreParams.core_id CoreParams.initial_pc
-                                         internal_params External.ext
+                                         private_params External.ext
                                          rule_name_t rules schedule.
   Parameter compliance : @P_compliance CoreParams.core_id CoreParams.initial_pc
-                                       internal_params External.ext
+                                       private_params External.ext
                                        rule_name_t rules schedule.
 
 End Core_sig.
@@ -727,7 +727,7 @@ Module SM_Common.
     |}.
 
   (* Note: somewhat redundant registers *)
-  Inductive internal_reg_t' :=
+  Inductive private_reg_t' :=
   | state0
   | state1
   | enc_data0
@@ -737,11 +737,11 @@ Module SM_Common.
   | clk
   .
 
-  Definition internal_reg_t := internal_reg_t'.
+  Definition private_reg_t := private_reg_t'.
 
-  Instance FiniteType_internal_reg_t : FiniteType internal_reg_t := _.
+  Instance FiniteType_private_reg_t : FiniteType private_reg_t := _.
 
-  Definition R_internal (idx: internal_reg_t) : type :=
+  Definition R_private (idx: private_reg_t) : type :=
     match idx with
     | state0 => enum_t core_state
     | state1 => enum_t core_state
@@ -752,7 +752,7 @@ Module SM_Common.
     | clk => bits_t 1
     end.
 
-  Definition r_internal (idx: internal_reg_t) : R_internal idx :=
+  Definition r_private (idx: private_reg_t) : R_private idx :=
     match idx with
     | state0 => Bits.zero
     | state1 => Bits.zero
@@ -763,7 +763,7 @@ Module SM_Common.
     | clk => Bits.zero
     end.
 
-  Inductive external_reg_t :=
+  Inductive public_reg_t :=
   | fromCore0_IMem (state: MemReq.reg_t)
   | fromCore0_DMem (state: MemReq.reg_t)
   | fromCore0_Enc (state: EnclaveReq.reg_t)
@@ -792,7 +792,7 @@ Module SM_Common.
   | purge_mem1
   .
 
-  Definition R_external (idx: external_reg_t) : type :=
+  Definition R_public (idx: public_reg_t) : type :=
     match idx with
     | fromCore0_IMem st => MemReq.R st
     | fromCore0_DMem st => MemReq.R st
@@ -824,17 +824,17 @@ Module SM_Common.
 
 
   Inductive reg_t : Type :=
-  | external (idx: external_reg_t)
-  | internal (idx: internal_reg_t)
+  | public (idx: public_reg_t)
+  | private (idx: private_reg_t)
   .
 
   Definition R (idx: reg_t) :=
     match idx with
-    | external st => R_external st
-    | internal st => R_internal st
+    | public st => R_public st
+    | private st => R_private st
     end.
 
-  Instance FiniteType_external_reg_t : FiniteType external_reg_t := _.
+  Instance FiniteType_public_reg_t : FiniteType public_reg_t := _.
   Instance FiniteType_reg_t : FiniteType reg_t := _.
 
   Definition state := env_t ContextEnv (fun idx : reg_t => R idx).
@@ -873,38 +873,38 @@ Module SM_Common.
 
     Definition lookup_reg_state (core: ind_core_id) : reg_t :=
       match core with
-      | CoreId0 => internal state0
-      | CoreId1 => internal state1
+      | CoreId0 => private state0
+      | CoreId1 => private state1
       end.
 
     Definition lookup_reg_enc_data (core: ind_core_id) : reg_t :=
       match core with
-      | CoreId0 => internal enc_data0
-      | CoreId1 => internal enc_data1
+      | CoreId0 => private enc_data0
+      | CoreId1 => private enc_data1
       end.
 
     Definition lookup_reg_enc_req (core: ind_core_id) : reg_t :=
       match core with
-      | CoreId0 => internal enc_req0
-      | CoreId1 => internal enc_req1
+      | CoreId0 => private enc_req0
+      | CoreId1 => private enc_req1
       end.
 
     Definition lookup_reg_proc_reset (core: ind_core_id) : reg_t :=
       match core with
-      | CoreId0 => external purge_core0
-      | CoreId1 => external purge_core1
+      | CoreId0 => public purge_core0
+      | CoreId1 => public purge_core1
       end.
 
     Definition lookup_reg_mem_reset (core: ind_core_id) : reg_t :=
       match core with
-      | CoreId0 => external purge_mem0
-      | CoreId1 => external purge_mem1
+      | CoreId0 => public purge_mem0
+      | CoreId1 => public purge_mem1
       end.
 
     Definition lookup_reg_pc (core: ind_core_id) : reg_t :=
       match core with
-      | CoreId0 => external pc_core0
-      | CoreId1 => external pc_core1
+      | CoreId0 => public pc_core0
+      | CoreId1 => public pc_core1
       end.
 
     Definition max_eid : bits_t 32 :=
@@ -925,7 +925,7 @@ Module SM_Common.
 
     Context {ext_sig: external_sig}.
 
-    Definition r_external (idx: external_reg_t) : R_external idx :=
+    Definition r_public (idx: public_reg_t) : R_public idx :=
       match idx with
       | fromCore0_IMem st => MemReq.r st
       | fromCore0_DMem st => MemReq.r st
@@ -957,8 +957,8 @@ Module SM_Common.
 
     Definition r (idx: reg_t) : R idx :=
       match idx with
-      | external st => r_external st
-      | internal st => r_internal st
+      | public st => r_public st
+      | private st => r_private st
       end.
 
     Definition ext_fn_t := _ext_fn_t ext_sig.
@@ -1045,8 +1045,8 @@ Module SM_Common.
              (* TODO: rewrite properly *)
       }}.
 
-    Notation "'__external__' instance " :=
-      (fun reg => external ((instance) reg)) (in custom koika at level 1, instance constr at level 99).
+    Notation "'__public__' instance " :=
+      (fun reg => public ((instance) reg)) (in custom koika at level 1, instance constr at level 99).
     Notation "'(' instance ').(' method ')' args" :=
       (USugar (UCallModule instance _ method args))
         (in custom koika at level 1, method constr, args custom koika_args at level 99).
@@ -1063,7 +1063,7 @@ Module SM_Common.
           end in
       {{ when (read0(reg_state) == enum core_state { Running }) do (
            let max_eid := |32`d3| in
-           let enclaveRequest := (__external__ fromCore).(EnclaveReq.deq)() in
+           let enclaveRequest := (__public__ fromCore).(EnclaveReq.deq)() in
            let eid := get(enclaveRequest, eid) in
            let shared_regions := get(enclaveRequest, shared_regions) in
            if (valid_enclave_req(enclaveRequest)) then
@@ -1093,7 +1093,7 @@ Module SM_Common.
           | CoreId1, CacheType_Dmem => (fromCore1_DMem, toMem1_DMem)
           end in
       {{ when (read0(reg_state) == enum core_state { Running }) do
-           let request := (__external__ fromCore).(MemReq.deq)() in
+           let request := (__public__ fromCore).(MemReq.deq)() in
            let address := get(request, addr) in
            let enc_data := read0(reg_enc) in
            (* let addr_min := get(enc_data, addr_min) in *)
@@ -1101,7 +1101,7 @@ Module SM_Common.
            let TODO_temp_bypass := address >= #(MMIO_UART_ADDRESS) in
            if (valid_addr_req (get(enc_data,eid), get(enc_data, shared_regions), address) ||
                TODO_temp_bypass) then
-             (__external__ toMem).(MemReq.enq)(request)
+             (__public__ toMem).(MemReq.enq)(request)
            else pass
       }}.
 
@@ -1117,7 +1117,7 @@ Module SM_Common.
           | CoreId1, CacheType_Dmem => (fromMem1_DMem, toCore1_DMem)
           end in
       {{ when (read0(reg_state) == enum core_state { Running }) do
-           let response:= (__external__ fromMem).(MemResp.deq)() in
+           let response:= (__public__ fromMem).(MemResp.deq)() in
            let address := get(response, addr) in
            let enc_data := read0(reg_enc) in
            (* let addr_min := get(enc_data, addr_min) in *)
@@ -1125,7 +1125,7 @@ Module SM_Common.
            let TODO_temp_bypass := address >= #(MMIO_UART_ADDRESS) in
            if (valid_addr_req (get(enc_data,eid), get(enc_data, shared_regions), address) ||
                TODO_temp_bypass) then
-             (__external__ toCore).(MemResp.enq)(response)
+             (__public__ toCore).(MemResp.enq)(response)
            else pass
       }}.
 
@@ -1145,24 +1145,24 @@ Module SM_Common.
       }}.
     Definition reset_fifos : UInternalFunction reg_t ext_fn_t :=
       {{ fun reset_fifos () : bits_t 0 =>
-           (__external__ fromCore0_IMem).(MemReq.reset)();
-           (__external__ fromCore0_DMem).(MemReq.reset)();
-           (__external__ fromCore0_Enc).(EnclaveReq.reset)();
-           (__external__ toCore0_IMem).(MemResp.reset)();
-           (__external__ toCore0_DMem).(MemResp.reset)();
-           (__external__ fromCore1_IMem).(MemReq.reset)();
-           (__external__ fromCore1_DMem).(MemReq.reset)();
-           (__external__ fromCore1_Enc).(EnclaveReq.reset)();
-           (__external__ toCore1_IMem).(MemResp.reset)();
-           (__external__ toCore1_DMem).(MemResp.reset)();
-           (__external__ toMem0_IMem).(MemReq.reset)();
-           (__external__ toMem0_DMem).(MemReq.reset)();
-           (__external__ toMem1_IMem).(MemReq.reset)();
-           (__external__ toMem1_DMem).(MemReq.reset)();
-           (__external__ fromMem0_IMem).(MemResp.reset)();
-           (__external__ fromMem0_DMem).(MemResp.reset)();
-           (__external__ fromMem1_IMem).(MemResp.reset)();
-           (__external__ fromMem1_DMem).(MemResp.reset)()
+           (__public__ fromCore0_IMem).(MemReq.reset)();
+           (__public__ fromCore0_DMem).(MemReq.reset)();
+           (__public__ fromCore0_Enc).(EnclaveReq.reset)();
+           (__public__ toCore0_IMem).(MemResp.reset)();
+           (__public__ toCore0_DMem).(MemResp.reset)();
+           (__public__ fromCore1_IMem).(MemReq.reset)();
+           (__public__ fromCore1_DMem).(MemReq.reset)();
+           (__public__ fromCore1_Enc).(EnclaveReq.reset)();
+           (__public__ toCore1_IMem).(MemResp.reset)();
+           (__public__ toCore1_DMem).(MemResp.reset)();
+           (__public__ toMem0_IMem).(MemReq.reset)();
+           (__public__ toMem0_DMem).(MemReq.reset)();
+           (__public__ toMem1_IMem).(MemReq.reset)();
+           (__public__ toMem1_DMem).(MemReq.reset)();
+           (__public__ fromMem0_IMem).(MemResp.reset)();
+           (__public__ fromMem0_DMem).(MemResp.reset)();
+           (__public__ fromMem1_IMem).(MemResp.reset)();
+           (__public__ fromMem1_DMem).(MemResp.reset)()
       }}.
 
     Definition sm_exit_enclave (core: ind_core_id) : uaction reg_t ext_fn_t :=
@@ -1192,7 +1192,7 @@ Module SM_Common.
       let valid_clk := match core with | CoreId0 => Ob~0 | CoreId1 => Ob~1 end in
       let reg_pc := lookup_reg_pc core in
       {{  if (read0(reg_state) == enum core_state { Waiting } &&
-              read0(internal clk) == #valid_clk) then
+              read0(private clk) == #valid_clk) then
            let enc_req := read0(reg_enc_req) in
            let eid := get(enc_req,eid) in
            let shared_req := get(enc_req, shared_regions) in
@@ -1212,7 +1212,7 @@ Module SM_Common.
       }}.
 
     Definition do_clk : uaction reg_t ext_fn_t :=
-      {{ write0 (internal clk, !read0(internal clk)) }}.
+      {{ write0 (private clk, !read0(private clk)) }}.
 
     Definition tc_update_enclave0 := tc_rule R Sigma (sm_update_enclave CoreId0) <: rule.
     Definition tc_update_enclave1 := tc_rule R Sigma (sm_update_enclave CoreId1) <: rule.
@@ -1255,19 +1255,19 @@ Module SM_Common.
      end.
 
     Section Interface.
-      Definition lift_ext_log (log: Log R_external ContextEnv) : Log R ContextEnv :=
+      Definition lift_ext_log (log: Log R_public ContextEnv) : Log R ContextEnv :=
         ContextEnv.(create) (fun reg => match reg return (RLog (R reg)) with
-                                     | external s => ContextEnv.(getenv) log s
+                                     | public s => ContextEnv.(getenv) log s
                                      | _ => []
                                      end).
 
-      Definition proj_log__ext (log: Log R ContextEnv) : Log R_external ContextEnv :=
-        ContextEnv.(create) (fun reg => ContextEnv.(getenv) log (SM_Common.external reg)).
+      Definition proj_log__pub (log: Log R ContextEnv) : Log R_public ContextEnv :=
+        ContextEnv.(create) (fun reg => ContextEnv.(getenv) log (SM_Common.public reg)).
 
-      Definition is_external_log (log: Log R ContextEnv) : Prop :=
+      Definition is_public_log (log: Log R ContextEnv) : Prop :=
         forall reg, match reg with
-               | external r => True
-               | internal r => ContextEnv.(getenv) log reg = []
+               | public r => True
+               | private r => ContextEnv.(getenv) log reg = []
                end.
 
     End Interface.
@@ -1283,14 +1283,14 @@ Module SM_Common.
         }.
 
       Record step_io :=
-        { step_input : Log R_external ContextEnv;
-          step_feedback : Log R_external ContextEnv
+        { step_input : Log R_public ContextEnv;
+          step_feedback : Log R_public ContextEnv
         }.
 
       Definition log_t := Log R ContextEnv.
-      Definition input_t := Log R_external ContextEnv.
+      Definition input_t := Log R_public ContextEnv.
       Definition output_t : Type := Log R ContextEnv * ghost_output.
-      Definition feedback_t := Log R_external ContextEnv.
+      Definition feedback_t := Log R_public ContextEnv.
 
       (* TODO: need ghost state to interface with the memory module? *)
       Definition update_function : state -> Log R ContextEnv -> impl_output_t :=
@@ -1298,19 +1298,19 @@ Module SM_Common.
 
       Definition initial_state (eid0: option enclave_id) (eid1: option enclave_id) (clk: bits_t 1): state :=
         ContextEnv.(create) (fun reg => match reg return R reg with
-                                     | internal enc_data0 =>
+                                     | private enc_data0 =>
                                          match eid0 with
                                          | Some id => eid_to_initial_enclave_data id
                                          | None => value_of_bits Bits.zero
                                          end
-                                     | internal enc_data1 =>
+                                     | private enc_data1 =>
                                          match eid1 with
                                          | Some id => eid_to_initial_enclave_data id
                                          | None => value_of_bits Bits.zero
                                          end
-                                     | internal clk => clk
-                                     | internal reg' => r_internal reg'
-                                     | external reg' => r_external reg'
+                                     | private clk => clk
+                                     | private reg' => r_private reg'
+                                     | public reg' => r_public reg'
                                      end).
 
 
@@ -1339,7 +1339,7 @@ Module SM_Common.
       | TaintCore (core_id: ind_core_id)
       | Bottom.
 
-      Definition internal_reg_to_taint (reg: internal_reg_t) : taint_t :=
+      Definition private_reg_to_taint (reg: private_reg_t) : taint_t :=
         match reg with
         | state0 => TaintCore CoreId0
         | state1 => TaintCore CoreId1
@@ -1350,7 +1350,7 @@ Module SM_Common.
         | clk => Bottom
         end.
 
-      Definition external_reg_to_taint (reg: external_reg_t) : taint_t :=
+      Definition public_reg_to_taint (reg: public_reg_t) : taint_t :=
         match reg with
         | fromCore0_IMem st => TaintCore CoreId0
         | fromCore0_DMem st => TaintCore CoreId0
@@ -1382,8 +1382,8 @@ Module SM_Common.
 
       Definition reg_to_taint (reg: reg_t) : taint_t :=
         match reg with
-        | external s => external_reg_to_taint s
-        | internal s => internal_reg_to_taint s
+        | public s => public_reg_to_taint s
+        | private s => private_reg_to_taint s
         end.
 
       Scheme Equality for taint_t.
@@ -1412,9 +1412,9 @@ Module SM_Common.
           turn : bool
         }.
 
-      Definition filter_external (log: Log R ContextEnv) (core: ind_core_id) : Log R ContextEnv :=
+      Definition filter_public (log: Log R ContextEnv) (core: ind_core_id) : Log R ContextEnv :=
         ContextEnv.(create) (fun r => match r with
-                                   | internal s => []
+                                   | private s => []
                                    | reg => if (taint_t_beq (reg_to_taint reg) (TaintCore core))
                                               || (taint_t_beq (reg_to_taint reg) Bottom) then
                                               ContextEnv.(getenv) log reg
@@ -1425,8 +1425,8 @@ Module SM_Common.
       Definition observe_enclave_exit (core_id: ind_core_id) (log: Log R ContextEnv) : bool.
         refine(
         let enc_data_reg := match core_id with
-                            | CoreId0 => internal enc_data0
-                            | CoreId1 => internal enc_data1
+                            | CoreId0 => private enc_data0
+                            | CoreId1 => private enc_data1
                             end in
         match rew_latest_write log enc_data_reg _ with
         | Some v =>
@@ -1443,7 +1443,7 @@ Module SM_Common.
       Definition spec_state_t := iso_machine_t.
       Definition initial_spec_state : spec_state_t. Admitted.
 
-      Definition check_for_context_switching (core_id: ind_core_id) (input_log: Log R_external ContextEnv)
+      Definition check_for_context_switching (core_id: ind_core_id) (input_log: Log R_public ContextEnv)
                                              : option EnclaveInterface.enclave_config.
       Admitted.
 
@@ -1507,9 +1507,9 @@ Module SM_Common.
       Definition iso_step (st: iso_machine_t) (input: Log R ContextEnv) (feedback: Log R ContextEnv)
                           : iso_machine_t * output_t :=
         let magic0 := local_core_step (negb st.(turn)) CoreId0 st.(iso_sm0)
-                                      (filter_external input CoreId0) (filter_external feedback CoreId0) in
+                                      (filter_public input CoreId0) (filter_public feedback CoreId0) in
         let magic1 := local_core_step st.(turn) CoreId1 st.(iso_sm1)
-                                      (filter_external input CoreId1) (filter_external feedback CoreId1) in
+                                      (filter_public input CoreId1) (filter_public feedback CoreId1) in
         let '(iso0', log0) := do_magic_step CoreId0 (negb st.(turn)) magic0 (get_enclave_config st.(iso_sm1)) in
         let '(iso1', log1) := do_magic_step CoreId1 (negb st.(turn)) magic1 (get_enclave_config st.(iso_sm0)) in
         let st' := {| iso_sm0 := iso0';
@@ -1519,7 +1519,7 @@ Module SM_Common.
         (st', (log0, log1)). (* TODO: process log0 and log1 *)
         *)
 
-      Definition do_step_input__spec (spec_st: spec_state_t) (input: Log R_external ContextEnv)
+      Definition do_step_input__spec (spec_st: spec_state_t) (input: Log R_public ContextEnv)
                                    : spec_output_t.
       Admitted.
 
@@ -1557,7 +1557,7 @@ Module SM_Common.
         forall (steps: list step_io)
           (spec_st: spec_state_t) (spec_tr: list spec_output_t) (props: list props_t)
           (koika_st: state) (koika_tr: list impl_output_t)
-          (input: Log R_external ContextEnv) (impl_output: impl_output_t) (spec_output: spec_output_t),
+          (input: Log R_public ContextEnv) (impl_output: impl_output_t) (spec_output: spec_output_t),
           valid_inputs props ->
           valid_feedback props ->
           do_steps__spec steps = (spec_st, spec_tr, props) ->
@@ -1586,7 +1586,7 @@ Module SM_Common.
   End Parameterised.
 End SM_Common.
 
-(* NOTE: in our model we say this is fixed, so we can talk about the internal registers. *)
+(* NOTE: in our model we say this is fixed, so we can talk about the private registers. *)
 (* Core Params in the SM is weird. But we need it for the initial state of the PC? *)
 Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters)
                        (Params0: CoreParameters) (Params1: CoreParameters).
@@ -1627,7 +1627,7 @@ End SecurityMonitor.
 Module Mem_Common.
   Import Common.
 
-  Inductive external_reg_t :=
+  Inductive public_reg_t :=
   | toIMem0 (state: MemReq.reg_t)
   | toIMem1 (state: MemReq.reg_t)
   | toDMem0 (state: MemReq.reg_t)
@@ -1640,7 +1640,7 @@ Module Mem_Common.
   | purge1
   .
 
-  Definition R_external (idx: external_reg_t) : type :=
+  Definition R_public (idx: public_reg_t) : type :=
     match idx with
     | toIMem0 st => MemReq.R st
     | toIMem1 st => MemReq.R st
@@ -1654,7 +1654,7 @@ Module Mem_Common.
     | purge1 => enum_t purge_state
     end.
 
-  Definition r_external (idx: external_reg_t) : R_external idx :=
+  Definition r_public (idx: public_reg_t) : R_public idx :=
     match idx with
     | toIMem0 st => MemReq.r st
     | toIMem1 st => MemReq.r st
@@ -1668,17 +1668,17 @@ Module Mem_Common.
     | purge1 => value_of_bits (Bits.zero)
     end.
 
-  Instance FiniteType_external_reg_t : FiniteType external_reg_t := _.
+  Instance FiniteType_public_reg_t : FiniteType public_reg_t := _.
 
   Section Parameterised.
-    Context {internal_sig: internal_module_sig}.
+    Context {private_sig: private_module_sig}.
     Context {ext_sig: external_sig}.
     Context {enclave_params: enclave_params_sig}.
 
-    Definition internal_reg_t := _internal_reg_t internal_sig.
-    Definition R_internal := _R_internal internal_sig.
-    Definition r_internal : forall (idx: internal_reg_t), R_internal idx := _r_internal internal_sig.
-    Instance FiniteType_internal_reg_t : FiniteType internal_reg_t := _FiniteType_internal_reg_t internal_sig.
+    Definition private_reg_t := _private_reg_t private_sig.
+    Definition R_private := _R_private private_sig.
+    Definition r_private : forall (idx: private_reg_t), R_private idx := _r_private private_sig.
+    Instance FiniteType_private_reg_t : FiniteType private_reg_t := _FiniteType_private_reg_t private_sig.
 
     Definition enclave_base := _enclave_base enclave_params.
     Definition enclave_size := _enclave_size enclave_params.
@@ -1687,22 +1687,22 @@ Module Mem_Common.
     Definition shared_region_size := _shared_region_size enclave_params.
 
     Inductive reg_t :=
-    | external (r: external_reg_t)
-    | internal (r: internal_reg_t)
+    | public (r: public_reg_t)
+    | private (r: private_reg_t)
     .
 
     Instance FiniteType_reg_t : FiniteType reg_t := _.
 
     Definition R (idx: reg_t) : type :=
       match idx with
-      | external r => R_external r
-      | internal r => R_internal r
+      | public r => R_public r
+      | private r => R_private r
       end.
 
     Definition r idx : R idx :=
       match idx with
-      | external s => r_external s
-      | internal s => r_internal s
+      | public s => r_public s
+      | private s => r_private s
       end.
 
     Definition ext_fn_t := _ext_fn_t ext_sig.
@@ -1718,7 +1718,7 @@ Module Mem_Common.
 
     Section Taint.
 
-      Definition external_reg_to_taint (reg: external_reg_t) : ind_core_id:=
+      Definition public_reg_to_taint (reg: public_reg_t) : ind_core_id:=
         match reg with
         | toIMem0 st => CoreId0
         | toIMem1 st => CoreId1
@@ -1735,58 +1735,58 @@ Module Mem_Common.
     End Taint.
 
     Section Interface.
-      Definition proj_log__ext (log: Log R ContextEnv) : Log R_external ContextEnv :=
-        ContextEnv.(create) (fun reg => ContextEnv.(getenv) log (external reg)).
+      Definition proj_log__pub (log: Log R ContextEnv) : Log R_public ContextEnv :=
+        ContextEnv.(create) (fun reg => ContextEnv.(getenv) log (public reg)).
 
-      Definition lift_ext_log (log: Log R_external ContextEnv) : Log R ContextEnv :=
+      Definition lift_ext_log (log: Log R_public ContextEnv) : Log R ContextEnv :=
         ContextEnv.(create) (fun reg => match reg return (RLog (R reg)) with
-                                     | external s => ContextEnv.(getenv) log s
+                                     | public s => ContextEnv.(getenv) log s
                                      | _ => []
                                      end).
 
-      Definition filter_ext_log (log: Log R_external ContextEnv) (core: ind_core_id) : Log R_external ContextEnv :=
-        ContextEnv.(create) (fun reg => if ind_core_id_beq (external_reg_to_taint reg) core
+      Definition filter_ext_log (log: Log R_public ContextEnv) (core: ind_core_id) : Log R_public ContextEnv :=
+        ContextEnv.(create) (fun reg => if ind_core_id_beq (public_reg_to_taint reg) core
                                      then ContextEnv.(getenv) log reg
                                      else []).
 
-      Definition tau := Log R_external ContextEnv.
+      Definition tau := Log R_public ContextEnv.
       Definition trace := list tau.
     End Interface.
 
     (* TODO: rename *)
     (* TODO: reorganize *)
-    Context {internal_non_koika_state_t : Type}.
-    Context {initial_internal_non_koika_state_t : internal_non_koika_state_t}.
+    Context {private_external_state_t : Type}.
+    Context {initial_private_external_state_t : private_external_state_t}.
 
     Definition koika_state_t : Type := env_t ContextEnv (fun idx: reg_t => R idx).
     Definition dram_t : Type := nat -> option data_t.
-    Definition non_koika_state_t : Type := dram_t * internal_non_koika_state_t.
-    Definition state : Type := koika_state_t * non_koika_state_t.
+    Definition external_state_t : Type := dram_t * private_external_state_t.
+    Definition state : Type := koika_state_t * external_state_t.
 
-    Context {non_koika_state_update_function: state -> Log R ContextEnv -> Log R ContextEnv * non_koika_state_t}.
+    Context {external_state_update_function: state -> Log R ContextEnv -> Log R ContextEnv * external_state_t}.
 
     Section CycleSemantics.
 
-      Definition initial_non_koika (initial_dram: dram_t) : non_koika_state_t :=
-        (initial_dram, initial_internal_non_koika_state_t).
+      Definition initial_external_state (initial_dram: dram_t) : external_state_t :=
+        (initial_dram, initial_private_external_state_t).
 
       Definition initial_state (initial_dram: dram_t) : state :=
-        (ContextEnv.(create) r, initial_non_koika initial_dram).
+        (ContextEnv.(create) r, initial_external_state initial_dram).
 
       Definition koika_update_function : koika_state_t -> Log R ContextEnv -> Log R ContextEnv :=
         fun st log => interp_scheduler_delta st sigma rules log schedule.
 
-      Definition update_function (st: state) (input_log: Log R ContextEnv) : Log R ContextEnv * non_koika_state_t :=
+      Definition update_function (st: state) (input_log: Log R ContextEnv) : Log R ContextEnv * external_state_t :=
         let '(koika_st, ext_st) := st in
         let koika_log := koika_update_function koika_st input_log in
-        let '(ext_log, ext_st') := non_koika_state_update_function (koika_st, ext_st) (log_app koika_log input_log) in
+        let '(ext_log, ext_st') := external_state_update_function (koika_st, ext_st) (log_app koika_log input_log) in
         (log_app ext_log koika_log, ext_st').
-      Definition input_t : Type := Log R_external ContextEnv * option enclave_config * option enclave_config.
-      Definition feedback_t := Log R_external ContextEnv.
+      Definition input_t : Type := Log R_public ContextEnv * option enclave_config * option enclave_config.
+      Definition feedback_t := Log R_public ContextEnv.
 
       Record step_io :=
-        { step_input : Log R_external ContextEnv;
-          step_feedback : Log R_external ContextEnv
+        { step_input : Log R_public ContextEnv;
+          step_feedback : Log R_public ContextEnv
         }.
 
       Record ghost_io :=
@@ -1801,8 +1801,8 @@ Module Mem_Common.
         | CoreId1 => step.(ghost_input_config1)
         end.
 
-      Definition do_step_input__impl (st: state) (ext_input: Log R_external ContextEnv)
-                                   : Log R ContextEnv * non_koika_state_t :=
+      Definition do_step_input__impl (st: state) (ext_input: Log R_public ContextEnv)
+                                   : Log R ContextEnv * external_state_t :=
         let input := lift_ext_log ext_input in
         update_function st input.
 
@@ -1904,13 +1904,13 @@ Module Mem_Common.
     Section Spec.
 
       (* Interface properties *)
-      Definition valid_input_log__common (input_log: Log R_external ContextEnv) : Prop.
+      Definition valid_input_log__common (input_log: Log R_public ContextEnv) : Prop.
       Admitted.
 
-      Definition valid_output_log__common (output_log: Log R_external ContextEnv) : Prop.
+      Definition valid_output_log__common (output_log: Log R_public ContextEnv) : Prop.
       Admitted.
 
-      Definition valid_feedback_log__common (log: Log R_external ContextEnv) : Prop :=
+      Definition valid_feedback_log__common (log: Log R_public ContextEnv) : Prop :=
         log = log_empty.
 
       Import EnclaveInterface.
@@ -1938,13 +1938,13 @@ Module Mem_Common.
            regions := initial_regions initial_dram
         |}.
 
-      Definition external_state_is_reset (st: state) (core_id: ind_core_id): Prop :=
-        forall reg, external_reg_to_taint reg = core_id ->
-               ContextEnv.(getenv) (fst st) (external reg) = r_external reg.
+      Definition public_state_is_reset (st: state) (core_id: ind_core_id): Prop :=
+        forall reg, public_reg_to_taint reg = core_id ->
+               ContextEnv.(getenv) (fst st) (public reg) = r_public reg.
 
       Definition output_t := Log R ContextEnv.
 
-      Definition get_purge_reg (core: ind_core_id) : external_reg_t :=
+      Definition get_purge_reg (core: ind_core_id) : public_reg_t :=
         match core with
         | CoreId0 => purge0
         | CoreId1 => purge1
@@ -1955,7 +1955,7 @@ Module Mem_Common.
 
       (* TODO: infer this *)
       Definition pf_R_ext_purge_reg: forall core,
-          (R (external (get_purge_reg core))) = enum_t purge_state.
+          (R (public (get_purge_reg core))) = enum_t purge_state.
       Proof.
         destruct core; reflexivity.
       Defined.
@@ -1977,13 +1977,13 @@ Module Mem_Common.
                                          : local_spec_state_t * output_t * memory_map :=
         let '(st, phase) := machine in
         let '(st', output) := do_step__impl st step in
-        (* let ext_output := proj_log__ext output in *)
+        (* let ext_output := proj_log__pub output in *)
         let purge_reg := get_purge_reg core in
         match phase with
         | SpecSt_Running config =>
             let continue := ((st', phase), output, mem_map) in
             let ext_st' := get_dram_from_state st' in
-            match rew_latest_write output (external purge_reg) (pf_R_ext_purge_reg core) with
+            match rew_latest_write output (public purge_reg) (pf_R_ext_purge_reg core) with
             | Some v => if bits_eqb v ENUM_purge_purged
                        then ((st', SpecSt_Waiting), output, update_regions config ext_st' mem_map)
                        else continue
@@ -2003,15 +2003,15 @@ Module Mem_Common.
         end.
 
       Definition do_local_step_trans_input__spec (machine: local_spec_state_t)
-                                               (input: Log R_external ContextEnv)
-                                               : Log R ContextEnv * non_koika_state_t :=
+                                               (input: Log R_public ContextEnv)
+                                               : Log R ContextEnv * external_state_t :=
         let '(st, phase) := machine in
         do_step_input__impl st input.
 
-      Definition filter_input : Log R_external ContextEnv -> ind_core_id -> Log R_external ContextEnv.
+      Definition filter_input : Log R_public ContextEnv -> ind_core_id -> Log R_public ContextEnv.
       Admitted.
 
-      Definition do_step_trans_input__spec (spec_st: spec_state_t) (ext_input: Log R_external ContextEnv)
+      Definition do_step_trans_input__spec (spec_st: spec_state_t) (ext_input: Log R_public ContextEnv)
                                    : Log R ContextEnv * Log R ContextEnv :=
         let output0 := do_local_step_trans_input__spec (machine0 spec_st) (filter_input ext_input CoreId0) in
         let output1 := do_local_step_trans_input__spec (machine1 spec_st) (filter_input ext_input CoreId1) in
@@ -2029,13 +2029,13 @@ Module Mem_Common.
             machine1 := machine1';
             regions := mem_map'' |}, output0, output1).
 
-      Definition only_write_ext_purge (log: Log R_external ContextEnv) (core: ind_core_id) (v: bits_t 2) : Prop :=
+      Definition only_write_ext_purge (log: Log R_public ContextEnv) (core: ind_core_id) (v: bits_t 2) : Prop :=
         let purge_reg := get_purge_reg core in
            rew_latest_write log purge_reg (pf_R_ext_purge_reg core) = Some v
         \/ latest_write log purge_reg = None.
 
       (* addr req are in range *)
-      Definition mem_reqs_in_config (log: Log R_external ContextEnv) (config: enclave_config) (core: ind_core_id)
+      Definition mem_reqs_in_config (log: Log R_public ContextEnv) (config: enclave_config) (core: ind_core_id)
                                     : Prop.
       Admitted.
 
@@ -2068,7 +2068,7 @@ Module Mem_Common.
             only_write_ext_purge input core ENUM_purge_restart /\
             (rew_latest_write input purge (pf_R_ext_purge_reg core) = Some ENUM_purge_restart ->
              opt_config <> None /\
-             external_state_is_reset (fst st') core (* TODO: whose responsibility to clear FIFOs? *)
+             public_state_is_reset (fst st') core (* TODO: whose responsibility to clear FIFOs? *)
             )
         end.
 
@@ -2086,7 +2086,7 @@ Module Mem_Common.
             latest_write step1.(step_input) purge1 = Some ENUM_purge_restart)) /\
         valid_input_log__common step.(ghost_step).(step_input). (* TODO *)
 
-      (* Not very interesting: machine0 only outputs to external0; behaves like interface *)
+      (* Not very interesting: machine0 only outputs to public0; behaves like interface *)
       Definition valid_step_output__spec (spec_st: spec_state_t) (step: ghost_io) : Prop.
       Admitted.
 
@@ -2113,19 +2113,19 @@ Module Mem_Common.
     Section Correctness.
 
       (* TODO: clean *)
-      Definition log_equivalent (koika_log: Log R ContextEnv) (spec_log: Log R_external ContextEnv) : Prop :=
-        forall (reg: external_reg_t),
-          latest_write koika_log (external reg) = latest_write spec_log reg /\
-          (forall port, may_read koika_log port (external reg) = may_read spec_log port reg) /\
-          (forall port, may_write koika_log log_empty port (external reg) =
+      Definition log_equivalent (koika_log: Log R ContextEnv) (spec_log: Log R_public ContextEnv) : Prop :=
+        forall (reg: public_reg_t),
+          latest_write koika_log (public reg) = latest_write spec_log reg /\
+          (forall port, may_read koika_log port (public reg) = may_read spec_log port reg) /\
+          (forall port, may_write koika_log log_empty port (public reg) =
                    may_write spec_log log_empty port reg).
 
       Definition tau_equivalent (impl_tau: Log R ContextEnv) (spec_tau: spec_output_t) : Prop :=
         let (log0, log1) := spec_tau in
         let spec_ext_log := ContextEnv.(create)
-                              (fun reg => match external_reg_to_taint reg with
-                                       | CoreId0 => ContextEnv.(getenv) log0 (external reg)
-                                       | CoreId1 => ContextEnv.(getenv) log1 (external reg)
+                              (fun reg => match public_reg_to_taint reg with
+                                       | CoreId0 => ContextEnv.(getenv) log0 (public reg)
+                                       | CoreId1 => ContextEnv.(getenv) log1 (public reg)
                                        end) in
         log_equivalent impl_tau spec_ext_log.
 
@@ -2153,7 +2153,7 @@ Module Mem_Common.
           (steps: list ghost_io)
           (spec_st: spec_state_t) (spec_tr: list spec_output_t) (props: list props_t)
           (koika_st: state) (koika_tr: list (Log R ContextEnv))
-          (input: Log R_external ContextEnv) (impl_output spec_output0 spec_output1: Log R ContextEnv),
+          (input: Log R_public ContextEnv) (impl_output spec_output0 spec_output1: Log R ContextEnv),
           valid_inputs props ->
           valid_feedback props ->
           do_steps__spec initial_dram steps = (spec_st, spec_tr, props) ->
@@ -2185,48 +2185,47 @@ Module Type Memory_sig (External: External_sig) (EnclaveParams: EnclaveParameter
   Import Common.
   Import Mem_Common.
 
-  Parameter internal_params : internal_module_sig.
+  Parameter private_params : private_module_sig.
   Parameter rule_name_t : Type.
 
-  Definition reg_t := @Mem_Common.reg_t internal_params.
-  Definition r := @Mem_Common.r internal_params.
-  Definition R := @Mem_Common.R internal_params.
+  Definition reg_t := @Mem_Common.reg_t private_params.
+  Definition r := @Mem_Common.r private_params.
+  Definition R := @Mem_Common.R private_params.
 
-  Instance FiniteType_reg_t : FiniteType reg_t := @Mem_Common.FiniteType_reg_t internal_params.
-  Definition rule := @Mem_Common.rule internal_params External.ext.
+  Instance FiniteType_reg_t : FiniteType reg_t := @Mem_Common.FiniteType_reg_t private_params.
+  Definition rule := @Mem_Common.rule private_params External.ext.
   Definition sigma := @Mem_Common.sigma External.ext.
 
   Parameter rules : rule_name_t -> rule.
 
   Parameter schedule : Syntax.scheduler pos_t rule_name_t.
 
-  (* TODO: rename this "non_koika" nonsense *)
-  Parameter internal_non_koika_state_t : Type.
-  Parameter initial_internal_non_koika_state : internal_non_koika_state_t.
+  Parameter private_external_state_t : Type.
+  Parameter initial_private_external_state : private_external_state_t.
 
-  Definition koika_state_t := @Mem_Common.koika_state_t internal_params.
-  Definition non_koika_state_t := @Mem_Common.non_koika_state_t internal_non_koika_state_t.
-  Definition initial_non_koika_state (dram: dram_t) : non_koika_state_t :=
-    (@Mem_Common.initial_non_koika _ initial_internal_non_koika_state dram).
-  Definition state := @Mem_Common.state internal_params internal_non_koika_state_t.
+  Definition koika_state_t := @Mem_Common.koika_state_t private_params.
+  Definition external_state_t := @Mem_Common.external_state_t private_external_state_t.
+  Definition initial_external_state (dram: dram_t) : external_state_t :=
+    (@Mem_Common.initial_external_state _ initial_private_external_state dram).
+  Definition state := @Mem_Common.state private_params private_external_state_t.
 
-  Parameter non_koika_update_function: state -> Log R ContextEnv -> Log R ContextEnv * non_koika_state_t.
+  Parameter external_update_function: state -> Log R ContextEnv -> Log R ContextEnv * external_state_t.
 
-  Parameter output_correctness : @P_output_correctness internal_params External.ext EnclaveParams.params
+  Parameter output_correctness : @P_output_correctness private_params External.ext EnclaveParams.params
                                                        rule_name_t rules schedule
-                                                       internal_non_koika_state_t
-                                                       initial_internal_non_koika_state
-                                                       non_koika_update_function.
-  Parameter correctness : @P_correctness internal_params External.ext EnclaveParams.params
+                                                       private_external_state_t
+                                                       initial_private_external_state
+                                                       external_update_function.
+  Parameter correctness : @P_correctness private_params External.ext EnclaveParams.params
                                          rule_name_t rules schedule
-                                         internal_non_koika_state_t
-                                         initial_internal_non_koika_state
-                                         non_koika_update_function.
-  Parameter compliance: @P_compliance internal_params External.ext EnclaveParams.params
+                                         private_external_state_t
+                                         initial_private_external_state
+                                         external_update_function.
+  Parameter compliance: @P_compliance private_params External.ext EnclaveParams.params
                                       rule_name_t rules schedule
-                                      internal_non_koika_state_t
-                                      initial_internal_non_koika_state
-                                      non_koika_update_function.
+                                      private_external_state_t
+                                      initial_private_external_state
+                                      external_update_function.
 End Memory_sig.
 
 Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
@@ -2273,11 +2272,11 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
   | MemToSM0_DMem (state: MemResp.reg_t)
   | MemToSM1_IMem (state: MemResp.reg_t)
   | MemToSM1_DMem (state: MemResp.reg_t)
-  (* Internal registers *)
-  | Core0_internal (state: _internal_reg_t Core0.internal_params)
-  | Core1_internal (state: _internal_reg_t Core1.internal_params)
-  | SM_internal (state: SM_Common.internal_reg_t)
-  | Mem_internal (state: _internal_reg_t Memory.internal_params)
+  (* Private registers *)
+  | Core0_private (state: _private_reg_t Core0.private_params)
+  | Core1_private (state: _private_reg_t Core1.private_params)
+  | SM_private (state: SM_Common.private_reg_t)
+  | Mem_private (state: _private_reg_t Memory.private_params)
   .
 
   (* TODO: fix finite types *)
@@ -2319,11 +2318,11 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
     | MemToSM0_DMem st => MemResp.R st
     | MemToSM1_IMem st => MemResp.R st
     | MemToSM1_DMem st => MemResp.R st
-    (* Internal registers *)
-    | Core0_internal st => (_R_internal Core0.internal_params) st
-    | Core1_internal st => (_R_internal Core1.internal_params) st
-    | SM_internal st => SM_Common.R_internal st
-    | Mem_internal st => (_R_internal Memory.internal_params) st
+    (* Private registers *)
+    | Core0_private st => (_R_private Core0.private_params) st
+    | Core1_private st => (_R_private Core1.private_params) st
+    | SM_private st => SM_Common.R_private st
+    | Mem_private st => (_R_private Memory.private_params) st
     end.
 
   Definition r (idx: reg_t) : R idx :=
@@ -2361,11 +2360,11 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
     | MemToSM0_DMem st => MemResp.r st
     | MemToSM1_IMem st => MemResp.r st
     | MemToSM1_DMem st => MemResp.r st
-    (* Internal registers *)
-    | Core0_internal st => (_r_internal Core0.internal_params) st
-    | Core1_internal st => (_r_internal Core1.internal_params) st
-    | SM_internal st => SM_Common.r_internal st
-    | Mem_internal st => (_r_internal Memory.internal_params) st
+    (* Private registers *)
+    | Core0_private st => (_r_private Core0.private_params) st
+    | Core1_private st => (_r_private Core1.private_params) st
+    | SM_private st => SM_Common.r_private st
+    | Mem_private st => (_r_private Memory.private_params) st
     end.
 
     Inductive rule_name_t :=
@@ -2384,7 +2383,7 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
 
     Section Core0_Lift.
 
-      Definition core0_external_lift (reg: Core_Common.external_reg_t) : reg_t :=
+      Definition core0_public_lift (reg: Core_Common.public_reg_t) : reg_t :=
         match reg with
         | Core_Common.core_id => core_id0
         | Core_Common.toIMem s => Core0ToSM_IMem s
@@ -2399,8 +2398,8 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
 
       Definition core0_lift (reg: Core0.reg_t) : reg_t :=
         match reg with
-        | Core_Common.external s => core0_external_lift s
-        | Core_Common.internal s => Core0_internal s
+        | Core_Common.public s => core0_public_lift s
+        | Core_Common.private s => Core0_private s
         end.
 
       Definition Lift_core0 : RLift _ Core0.reg_t reg_t Core0.R R := ltac:(mk_rlift core0_lift).
@@ -2408,7 +2407,7 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
 
     Section Core1_Lift.
 
-      Definition core1_external_lift (reg: Core_Common.external_reg_t) : reg_t :=
+      Definition core1_public_lift (reg: Core_Common.public_reg_t) : reg_t :=
         match reg with
         | Core_Common.core_id => core_id1
         | Core_Common.toIMem s => Core1ToSM_IMem s
@@ -2423,8 +2422,8 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
 
       Definition core1_lift (reg: Core1.reg_t) : reg_t :=
         match reg with
-        | Core_Common.external s => core1_external_lift s
-        | Core_Common.internal s => Core1_internal s
+        | Core_Common.public s => core1_public_lift s
+        | Core_Common.private s => Core1_private s
         end.
 
       Definition Lift_core1 : RLift _ Core1.reg_t reg_t Core1.R R := ltac:(mk_rlift core1_lift).
@@ -2432,7 +2431,7 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
 
     Section SM_Lift.
 
-      Definition sm_external_lift (reg: SM_Common.external_reg_t) : reg_t :=
+      Definition sm_public_lift (reg: SM_Common.public_reg_t) : reg_t :=
         match reg with
         | SM_Common.fromCore0_IMem st => Core0ToSM_IMem st
         | SM_Common.fromCore0_DMem st => Core0ToSM_DMem st
@@ -2466,8 +2465,8 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
 
       Definition sm_lift (reg: SM_Common.reg_t) : reg_t :=
         match reg with
-        | SM_Common.external st => sm_external_lift st
-        | SM_Common.internal st => SM_internal st
+        | SM_Common.public st => sm_public_lift st
+        | SM_Common.private st => SM_private st
 
         end.
 
@@ -2477,7 +2476,7 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
 
     Section Mem_Lift.
 
-      Definition mem_external_lift (reg: @Mem_Common.external_reg_t) : reg_t :=
+      Definition mem_public_lift (reg: @Mem_Common.public_reg_t) : reg_t :=
         match reg with
         | Mem_Common.toIMem0 st => SMToMem0_IMem st
         | Mem_Common.toIMem1 st => SMToMem1_IMem st
@@ -2493,8 +2492,8 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
 
       Definition mem_lift (reg: Memory.reg_t) : reg_t :=
         match reg with
-        | Mem_Common.external st => mem_external_lift st
-        | Mem_Common.internal st => Mem_internal st
+        | Mem_Common.public st => mem_public_lift st
+        | Mem_Common.private st => Mem_private st
         end.
 
       Definition Lift_mem : RLift _ Memory.reg_t reg_t Memory.R R := ltac:(mk_rlift mem_lift).
@@ -2560,7 +2559,7 @@ End Machine.
       | fromDMem1 st => Some (TaintCore CoreId1)
       | purge0 => Some (TaintCore CoreId0)
       | purge1 => Some (TaintCore CoreId1)
-      | internal st => None (* not external *)
+      | private st => None (* not external *)
       end.
 
     Definition reg_to_taint (reg: reg_t) (st: state) : option ind_core_id. Admitted.
@@ -2865,7 +2864,7 @@ k    Definition bits_eqb {sz} (v1: bits_t sz) (v2: bits_t sz) : bool :=
       | fromDMem1 st => Some (TaintCore CoreId1)
       | purge0 => Some (TaintCore CoreId0)
       | purge1 => Some (TaintCore CoreId1)
-      | internal st => None (* not external *)
+      | private st => None (* not external *)
       end.
 
     Definition reg_to_taint (reg: reg_t) (st: state) : option ind_core_id. Admitted.
