@@ -55,7 +55,7 @@ Module Package_rv32i.
     {| ip_koika := koika_package;
        ip_sim := {| sp_ext_fn_names fn := show fn;
                    sp_extfuns := None |};
-       ip_verilog := {| vp_ext_fn_specs := ext_fn_specs |} |}.
+       ip_verilog := {| vp_ext_fn_specs := Common._ext_fn_specs External.ext |} |}.
 
 End Package_rv32i.
 
