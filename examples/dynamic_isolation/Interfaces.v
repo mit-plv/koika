@@ -717,8 +717,8 @@ Module SM_Common.
   Import EnclaveInterface.
 
   Definition ENUM_CORESTATE_RUNNING := Ob~0~0.
-  Definition ENUM_CORESTATE_PURGING:= Ob~0~0.
-  Definition ENUM_CORESTATE_WAITING:= Ob~0~0.
+  Definition ENUM_CORESTATE_PURGING:= Ob~0~1.
+  Definition ENUM_CORESTATE_WAITING:= Ob~1~0.
 
   Definition core_state :=
     {| enum_name := "core_states";
