@@ -2,6 +2,8 @@ Require Import Coq.Lists.List.
 Require Import dynamic_isolation.Tactics.
 Import ListNotations.
 
+(*! List Helpers !*)
+
 Ltac simplify_forall :=
   match goal with
   | H: Forall2 _ [] (_ :: _) |- _ => solve[inversion H]
@@ -9,37 +11,156 @@ Ltac simplify_forall :=
   | H: Forall2 _ [] [] |- _ => solve[constructor]
   end.
 
+Module ListHelpers.
 
-Lemma Forall2_eq : forall {A} (xs ys: list A),
-  List.Forall2 (@eq A) xs ys ->
-  xs = ys.
-Proof.
-  induction xs; intros.
-  - destruct ys; intuition; simplify_forall.
-  - destruct ys; simpl in *; try simplify_forall.
-    f_equal.
-    + inversion H; auto.
-    + apply IHxs; inversion H; auto.
-Qed.
+  Lemma Forall2_eq : forall {A} (xs ys: list A),
+    List.Forall2 (@eq A) xs ys ->
+    xs = ys.
+  Proof.
+    induction xs; intros.
+    - destruct ys; intuition; simplify_forall.
+    - destruct ys; simpl in *; try simplify_forall.
+      f_equal.
+      + inversion H; auto.
+      + apply IHxs; inversion H; auto.
+  Qed.
 
-Lemma Forall2_compose : forall {X Y Z} {P: X -> Y -> Prop} {Q: Y -> Z -> Prop} {R: X -> Z -> Prop}
-                          {xs: list X} {ys: list Y} {zs: list Z},
-  (forall x y z, P x y -> Q y z -> R x z) ->
-  List.Forall2 P xs ys ->
-  List.Forall2 Q ys zs ->
-  List.Forall2 R xs zs.
-Proof.
-  induction xs.
-  - induction ys; induction zs; intuition; simplify_forall.
-  - induction ys; intuition; try simplify_forall.
-    generalize dependent zs.
-    induction zs; intuition; try simplify_forall.
-    inversion_clear H0; subst.
-    inversion_clear H1; subst.
+  Lemma Forall2_compose : forall {X Y Z} {P: X -> Y -> Prop} {Q: Y -> Z -> Prop} {R: X -> Z -> Prop}
+                            {xs: list X} {ys: list Y} {zs: list Z},
+    (forall x y z, P x y -> Q y z -> R x z) ->
+    List.Forall2 P xs ys ->
+    List.Forall2 Q ys zs ->
+    List.Forall2 R xs zs.
+  Proof.
+    induction xs.
+    - induction ys; induction zs; intuition; simplify_forall.
+    - induction ys; intuition; try simplify_forall.
+      generalize dependent zs.
+      induction zs; intuition; try simplify_forall.
+      inversion_clear H0; subst.
+      inversion_clear H1; subst.
+      constructor.
+      + eapply H; eauto.
+      + eapply IHxs; eauto.
+  Qed.
+
+  Lemma Forall_app: forall {A} P (xs ys: list A),
+    Forall P xs ->
+    Forall P ys ->
+    Forall P (xs ++ ys).
+  Proof.
+    induction xs; auto.
+    intros.
+    rewrite<-app_comm_cons.
+    inversion H; subst.
+    constructor; auto.
+  Qed.
+
+  Lemma NoDup_single_elem :
+    forall {T} (x:T), NoDup [x].
+  Proof.
+    intros. constructor; auto.
     constructor.
-    + eapply H; eauto.
-    + eapply IHxs; eauto.
-Qed.
+  Qed.
+
+
+  Lemma NoDup_map_inj:
+    forall {A} {B} {C} (f: A -> B) (g: B -> C) (xs: list A),
+    FinFun.Injective g ->
+    NoDup (map f xs) ->
+    NoDup (map (fun x => g (f x)) xs).
+  Proof.
+    intros. rewrite<-map_map.
+    apply FinFun.Injective_map_NoDup; auto.
+  Qed.
+
+  Lemma NoDup_map_succ :
+    forall {A} f (xs: list A),
+    NoDup (map f xs) ->
+    NoDup (map (fun x => S (f x)) xs).
+  Proof.
+    intros; apply NoDup_map_inj; auto.
+    unfold FinFun.Injective; intros.
+    lia.
+  Qed.
+
+  Lemma NoDup_map_plus:
+    forall {A} f (xs: list A) n,
+    NoDup (map f xs) ->
+    NoDup (map (fun x => n + (f x)) xs).
+  Proof.
+    intros; apply NoDup_map_inj; auto.
+    unfold FinFun.Injective; intros.
+    lia.
+  Qed.
+
+  Lemma nth_error_app_map :
+    forall {A} {B} (xs: list A) (ys: list B) f n z,
+    nth_error ys n = Some z ->
+    nth_error (map f xs ++ ys) (List.length xs + n) = Some z.
+  Proof.
+    intros. induction xs; auto.
+  Qed.
+
+  Lemma In_lt :
+    forall {A} (xs: list A) v f,
+    (forall x, v < f x) ->
+    In v (map (fun x => f x) xs) -> False.
+  Proof.
+    induction xs; simpl in *; auto.
+    intuition.
+    - specialize H with (x := a); lia.
+    - eapply IHxs; eauto.
+  Qed.
+
+  Lemma no_dup_increasing_app:
+    forall xs ys ,
+    (exists v, (forall x, (In x xs -> x < v)) /\
+           (forall y, ((In y ys -> y >= v)))) ->
+    NoDup xs ->
+    NoDup ys ->
+    NoDup (xs ++ ys).
+  Proof.
+    intros. induction xs.
+    - simpl in *. auto.
+    - simpl in *. apply NoDup_cons.
+      + intuition.
+        rewrite NoDup_cons_iff in *. propositional.
+        apply in_app_or in H2. intuition.
+        specialize H4 with (1 := or_introl eq_refl).
+        specialize H5 with (1 := H). lia.
+      + apply IHxs.
+        * propositional. exists v; auto.
+        * rewrite NoDup_cons_iff in H0; propositional; auto.
+  Qed.
+
+ Lemma cons_app :
+    forall {A} (x: A) (xs: list A),
+    x :: xs = [x] ++ xs.
+  Proof.
+    auto.
+  Qed.
+
+  Lemma map_nil : forall {A} {B} (f: A -> B),
+      map f [] = [].
+  Proof.
+    auto.
+  Qed.
+
+  Lemma map_not_nil :
+    forall {A B} (xs: list A) (f: A -> B),
+    xs <> [] ->
+    map f xs <> [].
+  Proof.
+    intuition.
+    destruct xs; simpl in *; auto.
+    congruence.
+  Qed.
+
+End ListHelpers.
+
+Export ListHelpers.
+
 
 Lemma not_exists_some_is_none :
   forall {A} (opt: option A),

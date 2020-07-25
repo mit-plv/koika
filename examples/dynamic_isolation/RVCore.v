@@ -489,9 +489,9 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface)
   Instance FiniteType_e2w : FiniteType fromExecute.reg_t := _.
   Instance FiniteType_mulState : FiniteType Multiplier.reg_t := Multiplier.FiniteType_reg_t.
   Instance FiniteType_rf : FiniteType Rf.reg_t := _.
-  Declare Instance FiniteType_scoreboard_rf : FiniteType Scoreboard.Rf.reg_t.
+  Instance FiniteType_scoreboard_rf : FiniteType Scoreboard.Rf.reg_t := _.
   Instance FiniteType_scoreboard : FiniteType Scoreboard.reg_t := _.
-  Declare Instance FiniteType_private_reg_t : FiniteType private_reg_t. (* TODO *)
+  Instance FiniteType_private_reg_t : FiniteType private_reg_t := _.
 
   Definition private_params : private_module_sig :=
     {| _private_reg_t := private_reg_t;

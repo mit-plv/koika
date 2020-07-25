@@ -7,6 +7,7 @@ Require Import dynamic_isolation.Scoreboard.
 Require Import dynamic_isolation.Multiplier.
 
 Require Import dynamic_isolation.External.
+Require Import dynamic_isolation.FiniteType.
 Require Import dynamic_isolation.Interfaces.
 Require Import dynamic_isolation.Interp.
 Require Import dynamic_isolation.Lift.

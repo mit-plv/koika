@@ -3,6 +3,7 @@ Require Import Coq.Lists.List.
 
 Require Import Koika.Std.
 
+Require Import dynamic_isolation.FiniteType.
 Require Import dynamic_isolation.Interp.
 Require Import dynamic_isolation.Lift.
 Require Import dynamic_isolation.LogHelpers.
@@ -221,7 +222,7 @@ Module Core_Common.
   | purge
   .
 
-  Instance FiniteType_public_reg_t : FiniteType public_reg_t := _.
+  Instance FiniteType_public_reg_t : FiniteType public_reg_t := ltac:(FiniteTypeHelpers.FiniteType_t'').
 
   Definition R_public (idx: public_reg_t) : type :=
     match idx with
@@ -277,10 +278,9 @@ Module Core_Common.
       | private s => r_private s
       end.
 
-    (* Instance FiniteType_reg_t : FiniteType reg_t := _. (* slow *) *)
-    Declare Instance FiniteType_reg_t : FiniteType reg_t.
-    (* Instance EqDec_reg_t : EqDec reg_t := _. *)
-    Declare Instance EqDec_reg_t : EqDec reg_t. (* slow *)
+    Instance FiniteType_reg_t : FiniteType reg_t := _.
+
+    Instance EqDec_reg_t : EqDec reg_t := _. (* a few seconds *)
 
     Definition ext_fn_t := _ext_fn_t ext_sig.
     Definition Sigma := _Sigma ext_sig.
@@ -834,6 +834,8 @@ Module SM_Common.
     | private st => R_private st
     end.
 
+  (* SLOW: 10s *)
+  (* Slowness mostly comes from autorewrites *)
   Instance FiniteType_public_reg_t : FiniteType public_reg_t := _.
   Instance FiniteType_reg_t : FiniteType reg_t := _.
 
@@ -2280,8 +2282,16 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
   .
 
   (* TODO: fix finite types *)
-  Declare Instance FiniteType_reg_t : FiniteType reg_t.
-  Declare Instance EqDec_reg_t : EqDec reg_t.
+  Instance FiniteType_core0_private : FiniteType (_private_reg_t Core0.private_params) :=
+    _FiniteType_private_reg_t Core0.private_params.
+  Instance FiniteType_core1_private : FiniteType (_private_reg_t Core1.private_params) :=
+    _FiniteType_private_reg_t Core1.private_params.
+  Instance FiniteType_mem_private : FiniteType (_private_reg_t Memory.private_params) :=
+    _FiniteType_private_reg_t Memory.private_params.
+
+  (* SLOW: ~30s *)
+  Instance FiniteType_reg_t : FiniteType reg_t := _.
+  Instance EqDec_reg_t : EqDec reg_t := _.
 
   Definition R (idx: reg_t) : type :=
     match idx with
