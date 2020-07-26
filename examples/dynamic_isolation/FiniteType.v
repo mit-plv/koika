@@ -29,7 +29,7 @@ Module FiniteTypeHelpers.
     intros; unfold t; rewrite fix_sub_eq; simpl; fold t; auto;
     intros; repeat auto_dep_destruct; auto; apply f_equal; auto.
 
-  Ltac reduce_program_fixpoint_in_hyp t H:=
+  Ltac reduce_program_fixpoint_in_hyp t H :=
     intros; unfold t in H; rewrite fix_sub_eq in H; simpl in H; fold t in H; auto;
     intros; repeat auto_dep_destruct; auto; apply f_equal; auto.
 
@@ -39,13 +39,11 @@ Module FiniteTypeHelpers.
     reduce_program_fixpoint increasing_lists.
   Qed.
 
-
   Lemma increasing_lists_red1 :
     forall l1, increasing_lists (l1 :: []).
   Proof.
     reduce_program_fixpoint increasing_lists.
   Qed.
-
 
   Lemma increasing_lists_red2 :
     forall l1 l3,
@@ -268,6 +266,7 @@ Module FiniteTypeHelpers.
     intros.
     rewrite in_map_iff in H0; propositional.
   Qed.
+
   Ltac list_length' l :=
     lazymatch l with
     | (map _ ?xs) ++ ?tl => let len := list_length' tl in constr:(List.length xs + len)

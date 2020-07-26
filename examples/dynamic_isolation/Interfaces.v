@@ -549,6 +549,22 @@ Module Core_Common.
 
     End Compliance.
 
+    Section Lemmas.
+
+      Lemma do_steps__koika_app:
+        forall ios io,
+        fst (do_steps__koika (ios ++ [io])) =
+        fst (do_step__koika (fst (do_steps__koika ios)) io).
+      Proof.
+        intros. consider do_steps__koika.
+        rewrite fold_left_app.
+        unfold fold_left at 1.
+        fast_destruct_goal_matches.
+        unfold fst. rewrite_solve.
+      Qed.
+
+    End Lemmas.
+
   End Parameterised.
 
 End Core_Common.
@@ -836,7 +852,8 @@ Module SM_Common.
 
   (* SLOW: 10s *)
   (* Slowness mostly comes from autorewrites *)
-  Instance FiniteType_public_reg_t : FiniteType public_reg_t := _.
+  Declare Instance FiniteType_public_reg_t : FiniteType public_reg_t.
+  (* Instance FiniteType_public_reg_t : FiniteType public_reg_t := _. *)
   Instance FiniteType_reg_t : FiniteType reg_t := _.
 
   Definition state := env_t ContextEnv (fun idx : reg_t => R idx).
@@ -1585,6 +1602,21 @@ Module SM_Common.
       Admitted.
     End Compliance.
 
+    Section Lemmas.
+
+      Lemma do_steps__impl_app:
+        forall ios io,
+        fst (do_steps__impl (ios ++ [io])) =
+        fst (do_step__impl (fst (do_steps__impl ios)) io).
+      Proof.
+        consider do_steps__impl.
+        intros. rewrite fold_left_app.
+        unfold fold_left at 1.
+        unfold fst. fast_destruct_goal_matches; auto.
+      Qed.
+
+    End Lemmas.
+
   End Parameterised.
 End SM_Common.
 
@@ -1605,10 +1637,15 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters)
   Definition do_step_input__impl := @SM_Common.do_step_input__impl Params.params External.ext.
   Definition do_step__impl:=
     @SM_Common.do_step__impl Params.params External.ext.
+  Definition do_steps__impl :=
+    @SM_Common.do_steps__impl Params0.initial_pc Params1.initial_pc Params.params External.ext.
+
   Definition do_step_input__spec :=
     @SM_Common.do_step_input__spec Params0.initial_pc Params1.initial_pc Params.params External.ext.
   Definition do_step__spec:=
     @SM_Common.do_step__spec Params0.initial_pc Params1.initial_pc Params.params External.ext.
+  Definition do_steps__spec:=
+    @SM_Common.do_steps__spec Params0.initial_pc Params1.initial_pc Params.params External.ext.
 
 End SecurityMonitor.
 
@@ -2179,6 +2216,21 @@ Module Mem_Common.
 
     End Compliance.
 
+    Section Lemmas.
+
+      Lemma do_steps__impl_app:
+        forall dram ios io,
+        fst (do_steps__impl dram (ios ++ [io])) =
+        fst (do_step__impl (fst (do_steps__impl dram ios)) io).
+      Proof.
+        consider do_steps__impl.
+        intros. rewrite fold_left_app.
+        simpl. fast_destruct_goal_matches.
+        unfold fst. rewrite_solve.
+      Qed.
+
+    End Lemmas.
+
   End Parameterised.
 
 End Mem_Common.
@@ -2290,8 +2342,10 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
     _FiniteType_private_reg_t Memory.private_params.
 
   (* SLOW: ~30s *)
-  Instance FiniteType_reg_t : FiniteType reg_t := _.
-  Instance EqDec_reg_t : EqDec reg_t := _.
+  (* Instance FiniteType_reg_t : FiniteType reg_t := _. *)
+  (* Instance EqDec_reg_t : EqDec reg_t := _. *)
+  Declare Instance FiniteType_reg_t : FiniteType reg_t.
+  Declare Instance EqDec_reg_t : EqDec reg_t.
 
   Definition R (idx: reg_t) : type :=
     match idx with

@@ -31,13 +31,13 @@ Arguments commit_update : simpl never.
 Arguments lift_scheduler : simpl never.
 Arguments Log : simpl never.
 
-Hint Rewrite @getenv_create : log_helpers.
-
 Declare Scope log_scope.
-
+Delimit Scope log_scope with log.
 Infix "++" := log_app (right associativity, at level 60) : log_scope.
 
-Open Scope log_scope.
+
+
+Hint Rewrite @getenv_create : log_helpers.
 
 
 Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
@@ -321,9 +321,14 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
     Definition impl_purge_mem1 : Impl.System.reg_t := Impl.System.purge_mem1.
   End ImplRegisterMap.
 
-  (* TODO: fix this *)
+  (* TODO: fix this/put into a module *)
   Section Derived_Core0.
     Definition core0_state_t := @Core_Common.state Core0.private_params.
+
+    Definition core0_initial_spec_state : Core_Common.spec_state_t :=
+      @Core_Common.initial_spec_state Params0.core_id
+                                      Params0.initial_pc
+                                      Core0.private_params.
 
     Definition core0_do_step_input__koika :=
       @Core_Common.do_step_input__koika Core0.private_params
@@ -338,6 +343,16 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
                                       Core0.rule_name_t
                                       Core0.rules
                                       Core0.schedule.
+
+    Definition core0_do_steps__koika :=
+      @Core_Common.do_steps__koika Params0.core_id
+                                 Params0.initial_pc
+                                 Core0.private_params
+                                 External.ext
+                                 Core0.rule_name_t
+                                 Core0.rules
+                                 Core0.schedule.
+
 
     Definition core0_spec_state_t : Type := @Core_Common.spec_state_t Core0.private_params.
 
@@ -356,12 +371,29 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
                                Core0.rules
                                Core0.schedule.
 
+    Definition core0_do_steps__spec :=
+      @Core_Common.do_steps__spec Params0.core_id
+                                Params0.initial_pc
+                                Core0.private_params
+                                External.ext
+                                Core0.rule_name_t
+                                Core0.rules
+                                Core0.schedule.
+
+
+
 
   End Derived_Core0.
 
   Section Derived_Core1.
 
     Definition core1_state_t := @Core_Common.state Core1.private_params.
+
+    Definition core1_initial_spec_state : Core_Common.spec_state_t :=
+      @Core_Common.initial_spec_state Params1.core_id
+                                      Params1.initial_pc
+                                      Core1.private_params.
+
     Definition core1_do_step_input__koika :=
       @Core_Common.do_step_input__koika Core1.private_params
                                       External.ext
@@ -375,6 +407,16 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
                                       Core1.rule_name_t
                                       Core1.rules
                                       Core1.schedule.
+
+    Definition core1_do_steps__koika :=
+      @Core_Common.do_steps__koika Params1.core_id
+                                 Params1.initial_pc
+                                 Core1.private_params
+                                 External.ext
+                                 Core1.rule_name_t
+                                 Core1.rules
+                                 Core1.schedule.
+
 
     Definition core1_spec_state_t : Type := @Core_Common.spec_state_t Core1.private_params.
 
@@ -394,9 +436,26 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
                                Core1.rules
                                Core1.schedule.
 
+    Definition core1_do_steps__spec :=
+      @Core_Common.do_steps__spec Params1.core_id
+                                Params1.initial_pc
+                                Core1.private_params
+                                External.ext
+                                Core1.rule_name_t
+                                Core1.rules
+                                Core1.schedule.
+
   End Derived_Core1.
 
   Section Derived_Mem.
+    Check Mem_Common.initial_spec_state.
+
+    Definition mem_initial_spec_state : Mem_Common.dram_t -> Mem_Common.spec_state_t :=
+      @Mem_Common.initial_spec_state Memory.private_params
+                                     EnclaveParams.params
+                                     Memory.private_external_state_t
+                                     Memory.initial_private_external_state.
+
     Definition mem_do_step_input__impl :=
       @Mem_Common.do_step_input__impl Memory.private_params
                                     External.ext
@@ -414,6 +473,17 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
                                     Memory.schedule
                                     Memory.private_external_state_t
                                     Memory.external_update_function.
+
+    Definition mem_do_steps__impl :=
+      @Mem_Common.do_steps__impl Memory.private_params
+                               External.ext
+                               Memory.rule_name_t
+                               Memory.rules
+                               Memory.schedule
+                               Memory.private_external_state_t
+                               Memory.initial_private_external_state
+                               Memory.external_update_function.
+
 
     Definition mem_spec_state_t : Type :=
       @Mem_Common.spec_state_t Memory.private_params Memory.private_external_state_t.
@@ -438,6 +508,17 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
                               Memory.private_external_state_t
                               Memory.initial_private_external_state
                               Memory.external_update_function.
+
+    Definition mem_do_steps__spec :=
+      @Mem_Common.do_steps__spec Memory.private_params
+                               External.ext
+                               EnclaveParams.params
+                               Memory.rule_name_t
+                               Memory.rules
+                               Memory.schedule
+                               Memory.private_external_state_t
+                               Memory.initial_private_external_state
+                               Memory.external_update_function.
 
   End Derived_Mem.
 
@@ -529,6 +610,13 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
     (* TODO: stop duplicating *)
     Section ModularStep.
 
+      Record mod_step_io :=
+        { step_io_core0 : Core_Common.step_io;
+          step_io_core1 : Core_Common.step_io;
+          step_io_sm : SM_Common.step_io;
+          step_io_mem : Mem_Common.step_io
+        }.
+
       Definition do_core0 (st: core0_state_t) (input_log: Log Impl.System.R ContextEnv)
                           : Log Core_Common.R_public ContextEnv * Log Core0.R ContextEnv *
                             Log Impl.System.R ContextEnv * Log Impl.System.R ContextEnv *
@@ -587,11 +675,7 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
 
     End ModularStep.
 
-    (* TODO: Monad! *)
-    (* TODO: fix Interfaces' do_step_input function *)
-    (* TODO: Modularize *)
-
-    Definition do_step (st: state) : state * tau :=
+    Definition compute_mod_outputs (st: state) : mod_step_io * tau :=
       (* Core0 *)
       let '(core0_input, core0_output__local, core0_output__global, acc__core0, mk_core0_step_io) :=
           do_core0 (state_core0 st) log_empty in
@@ -616,15 +700,40 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
       let core1_feedback__global := log_app sm_feedback__global sm_output__global in
       let core0_feedback__global := log_app core1_feedback__global core1_output__global in
 
-      let core0_step_io := mk_core0_step_io core0_feedback__global in
-      let core1_step_io := mk_core1_step_io core1_feedback__global in
-      let sm_step_io := mk_sm_step_io sm_feedback__global in
-      let mem_step_io := mk_mem_step_io mem_feedback__global in
-      ({| state_core0 := fst (core0_do_step__koika (state_core0 st) core0_step_io);
-         state_core1 := fst (core1_do_step__koika (state_core1 st) core1_step_io);
-         state_sm := fst (Impl.System.SM.do_step__impl (state_sm st) sm_step_io);
-         state_mem := fst (mem_do_step__impl (state_mem st) mem_step_io)
+      ({| step_io_core0 := mk_core0_step_io core0_feedback__global;
+          step_io_core1 := mk_core1_step_io core1_feedback__global;
+          step_io_sm := mk_sm_step_io sm_feedback__global;
+          step_io_mem := mk_mem_step_io mem_feedback__global
        |}, outputs).
+
+    Definition compute_state (st: state) (step_io: mod_step_io) : state :=
+      {| state_core0 := fst (core0_do_step__koika (state_core0 st) (step_io.(step_io_core0)));
+         state_core1 := fst (core1_do_step__koika (state_core1 st) (step_io.(step_io_core1)));
+         state_sm := fst (Impl.System.SM.do_step__impl (state_sm st) (step_io.(step_io_sm)));
+         state_mem := fst (mem_do_step__impl (state_mem st) (step_io.(step_io_mem)))
+      |}.
+
+    (* TODO: Monad! *)
+    (* TODO: fix Interfaces' do_step_input function *)
+    (* TODO: Modularize *)
+
+    (* Helper function *)
+    Definition do_step_with_metadata (st: state) : state * tau * mod_step_io :=
+      let (step_io, outputs) := compute_mod_outputs st in
+      let st' := compute_state st step_io in
+      ((st', outputs), step_io).
+
+    Definition do_step (st: state) : state * tau :=
+      fst (do_step_with_metadata st).
+
+    Fixpoint step_n_with_metadata (initial_dram: dram_t) (n: nat) : state * trace * list mod_step_io :=
+      match n with
+      | 0 => (initial_state initial_dram, [], [])
+      | S n' =>
+          let '(st, evs, ios) := step_n_with_metadata initial_dram n' in
+          let '(st', ev, io) := do_step_with_metadata st in
+          (st', evs ++ [ev], ios ++ [io])
+      end.
 
     Definition step_n (initial_dram: dram_t) (n: nat) : state * trace :=
       Framework.step_n (initial_state initial_dram) do_step n.
@@ -636,7 +745,75 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
         let core1_log := lift_log Impl.System.Lift_core1 ev.(output_core1) in
         let sm_log := lift_log Impl.System.Lift_sm ev.(output_sm) in
         let mem_log := lift_log Impl.System.Lift_mem (fst ev.(output_mem)) in
-        mem_log ++ sm_log ++ core1_log ++ core0_log.
+        (mem_log ++ sm_log ++ core1_log ++ core0_log)%log.
+
+      Definition core0_function_of_decoupled_io (st: core0_state_t) (ios: list Core_Common.step_io) : Prop :=
+        st = fst (core0_do_steps__koika ios).
+
+      Definition core1_function_of_decoupled_io (st: core1_state_t) (ios: list Core_Common.step_io) : Prop :=
+        st = fst (core1_do_steps__koika ios).
+
+      Definition sm_function_of_decoupled_io (st: SM_Common.state) (ios: list SM_Common.step_io) : Prop :=
+        st = fst (Impl.System.SM.do_steps__impl ios).
+
+      Definition mem_function_of_decoupled_io
+                 (initial_dram: dram_t) (st: Memory.state) (ios: list Mem_Common.step_io) : Prop :=
+        st = fst (mem_do_steps__impl initial_dram ios).
+
+      Definition state_function_of_decoupled_ios (initial_dram: dram_t) (st: state) (step_ios: list mod_step_io) :=
+        core0_function_of_decoupled_io st.(state_core0) (map step_io_core0 step_ios) /\
+        core1_function_of_decoupled_io st.(state_core1) (map step_io_core1 step_ios) /\
+        sm_function_of_decoupled_io st.(state_sm) (map step_io_sm step_ios) /\
+        mem_function_of_decoupled_io initial_dram st.(state_mem) (map step_io_mem step_ios).
+
+      Ltac unfold_decoupled_ios :=
+        consider @core0_function_of_decoupled_io;
+        consider @core1_function_of_decoupled_io;
+        consider @sm_function_of_decoupled_io;
+        consider @mem_function_of_decoupled_io.
+
+      Lemma step_state_function_of_decoupled_ios :
+        forall initial_dram st ios st' t io,
+        state_function_of_decoupled_ios initial_dram st ios ->
+        do_step_with_metadata st = (st', t, io) ->
+        state_function_of_decoupled_ios initial_dram st' (ios ++ [io]).
+      Proof.
+        intros *; intros Hdec Hstep.
+        consider state_function_of_decoupled_ios; unfold_decoupled_ios; propositional.
+        repeat rewrite map_app.
+        consider do_step_with_metadata.
+        consider compute_mod_outputs.
+        consider compute_state.
+        repeat (destruct_matches_in_hyp Hstep; simplify_tuples; subst).
+        intuition; simpl.
+        - consider core0_do_steps__koika.
+          rewrite Core_Common.do_steps__koika_app.
+          simpl; rewrite_solve.
+        - consider core1_do_steps__koika.
+          rewrite Core_Common.do_steps__koika_app.
+          simpl; rewrite_solve.
+        - consider Impl.System.SM.do_steps__impl.
+          rewrite SM_Common.do_steps__impl_app.
+          simpl; rewrite_solve.
+        - consider mem_do_steps__impl.
+          rewrite Mem_Common.do_steps__impl_app.
+          simpl; rewrite_solve.
+      Qed.
+
+      Theorem step_rel_decoupled_step :
+        forall (initial_dram: dram_t) (n: nat)
+          (st: state) (tr: trace) (step_ios : list mod_step_io),
+          step_n_with_metadata initial_dram n = (st, tr, step_ios) ->
+          state_function_of_decoupled_ios initial_dram st step_ios.
+      Proof.
+        induction n.
+        - simpl; intuition; simplify_tuples; subst; auto;
+            consider state_function_of_decoupled_ios; unfold_decoupled_ios; auto.
+        - intros; simpl in *.
+          repeat destruct_matches_in_hyp H; simplify_tuples; subst.
+          specialize IHn with (1 := eq_refl); propositional.
+          eapply step_state_function_of_decoupled_ios; eauto.
+      Qed.
 
     End HelperLemmas.
 
@@ -660,7 +837,11 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
 
     Definition trace := list tau.
 
-    Definition initial_state (initial_dram: dram_t): state. Admitted.
+    Check Core_Common.initial_spec_state.
+    Definition initial_state (initial_dram: dram_t): state :=
+      {| state_core0 := Core_Common.initial_spec_state
+
+Admitted.
       (* {| state_core0 := Core0.initial_spec_state; *)
       (*    state_core1 := Core1.initial_spec_state; *)
       (*    state_sm := SM_Common.initial_spec_state; *)
@@ -747,7 +928,6 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
 
     Definition step_n (initial_dram: dram_t) (n: nat) : state * trace :=
       Framework.step_n (initial_state initial_dram) do_step n.
-    Print impl_log_t.
 
     Section HelperLemmas.
       Definition outputs_to_spec_log (ev: tau) : (spec0_log_t * spec1_log_t) :=
@@ -758,8 +938,8 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
         let mem0_log := lift_log (REnv' := ContextEnv) Spec.Machine0.System.Lift_mem ev.(output_mem) in
         let mem1_log := lift_log (REnv' := ContextEnv) Spec.Machine1.System.Lift_mem ev.(output_mem) in
         (* Define machine logs *)
-        let machine0_log := mem0_log ++ sm0_log ++ core0_log in
-        let machine1_log := mem1_log ++ sm1_log ++ core1_log in
+        let machine0_log := (mem0_log ++ sm0_log ++ core0_log)%log in
+        let machine1_log := (mem1_log ++ sm1_log ++ core1_log)%log in
         (machine0_log, machine1_log).
 
     End HelperLemmas.
@@ -933,7 +1113,18 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
     Import Observations.
     Import Interfaces.Common.
 
-    Definition Sim (impl_st: ModImpl.state) (spec_st: ModSpec.state) : Prop. Admitted.
+    (* Inductive Sim (impl_st: ModImpl.state) (spec_st: ModSpec.state) := *)
+    (* | _Sim : *)
+    (*     forall (core0_sim: ModImpl.state_core0 impl_st = ModSpec.state_core0 spec_st), *)
+    (*     Sim impl_st spec_st. *)
+
+    Section Simulation.
+      Lemma foo:
+        forall (initial_dram: dram_t) (n: nat),
+        snd (ModImpl.step_n_with_metadata initial_dram n) =
+        snd (ModSpec.step_n_with_metadata initial_dram n).
+
+    End Simulation.
 
     Definition tau_related : ModImpl.tau -> ModSpec.tau -> Prop :=
       fun impl_ev spec_ev =>
@@ -950,6 +1141,22 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
       ModSpec.step_n initial_dram n = (spec_st, spec_tr) ->
       trace_related impl_tr spec_tr.
     Proof.
+      induction n.
+      - intros; simpl in *; simplify_tuples; subst; constructor.
+      - simpl; intros.
+        destruct_all_matches; simplify_tuples; subst.
+        specialize IHn with (1 := eq_refl) (2 := eq_refl).
+        unfold trace_related.
+        apply Forall2_app; auto.
+        constructor; auto.
+
+        consider ModImpl.do_step.
+        destruct_all_matches.
+        consider ModSpec.do_step.
+        destruct_all_matches.
+        simplify_tuples.
+        subst.
+
     Admitted.
 
   End ModImplToModSpec.
