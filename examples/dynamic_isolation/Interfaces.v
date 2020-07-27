@@ -1369,35 +1369,41 @@ Module SM_Common.
         | clk => Bottom
         end.
 
-      Definition public_reg_to_taint (reg: public_reg_t) : taint_t :=
+      (* Only works for partitioned interfaces right now *)
+      Definition public_reg_to_core_id (reg: public_reg_t) : ind_core_id :=
         match reg with
-        | fromCore0_IMem st => TaintCore CoreId0
-        | fromCore0_DMem st => TaintCore CoreId0
-        | fromCore0_Enc st => TaintCore CoreId0
-        | toCore0_IMem st => TaintCore CoreId0
-        | toCore0_DMem st => TaintCore CoreId0
+        | fromCore0_IMem st => CoreId0
+        | fromCore0_DMem st => CoreId0
+        | fromCore0_Enc st => CoreId0
+        | toCore0_IMem st => CoreId0
+        | toCore0_DMem st => CoreId0
         (* Core1 <-> SM *)
-        | fromCore1_IMem st => TaintCore CoreId1
-        | fromCore1_DMem st => TaintCore CoreId1
-        | fromCore1_Enc st => TaintCore CoreId1
-        | toCore1_IMem st => TaintCore CoreId1
-        | toCore1_DMem st => TaintCore CoreId1
+        | fromCore1_IMem st => CoreId1
+        | fromCore1_DMem st => CoreId1
+        | fromCore1_Enc st => CoreId1
+        | toCore1_IMem st => CoreId1
+        | toCore1_DMem st => CoreId1
         (* SM <-> Mem *)
-        | toMem0_IMem st => TaintCore CoreId0
-        | toMem0_DMem st => TaintCore CoreId0
-        | toMem1_IMem st => TaintCore CoreId1
-        | toMem1_DMem st => TaintCore CoreId1
-        | fromMem0_IMem st => TaintCore CoreId0
-        | fromMem0_DMem st => TaintCore CoreId0
-        | fromMem1_IMem st => TaintCore CoreId1
-        | fromMem1_DMem st => TaintCore CoreId1
-        | pc_core0 => TaintCore CoreId0
-        | pc_core1 => TaintCore CoreId1
-        | purge_core0 => TaintCore CoreId0
-        | purge_core1 => TaintCore CoreId1
-        | purge_mem0 => TaintCore CoreId0
-        | purge_mem1 => TaintCore CoreId1
+        | toMem0_IMem st => CoreId0
+        | toMem0_DMem st => CoreId0
+        | toMem1_IMem st => CoreId1
+        | toMem1_DMem st => CoreId1
+        | fromMem0_IMem st => CoreId0
+        | fromMem0_DMem st => CoreId0
+        | fromMem1_IMem st => CoreId1
+        | fromMem1_DMem st => CoreId1
+        | pc_core0 => CoreId0
+        | pc_core1 => CoreId1
+        | purge_core0 => CoreId0
+        | purge_core1 => CoreId1
+        | purge_mem0 => CoreId0
+        | purge_mem1 => CoreId1
         end.
+
+
+      Definition public_reg_to_taint (reg: public_reg_t) : taint_t :=
+        let core_id := public_reg_to_core_id reg in
+        TaintCore core_id.
 
       Definition reg_to_taint (reg: reg_t) : taint_t :=
         match reg with
