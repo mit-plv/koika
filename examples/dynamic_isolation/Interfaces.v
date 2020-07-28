@@ -563,6 +563,18 @@ Module Core_Common.
         unfold fst. rewrite_solve.
       Qed.
 
+      Lemma do_steps__spec_app:
+        forall ios io,
+        fst (fst (do_steps__spec (ios ++ [io]))) =
+        fst (fst (do_step__spec (fst (fst (do_steps__spec ios))) io)).
+      Proof.
+        intros. consider do_steps__spec.
+        rewrite fold_left_app.
+        unfold fold_left at 1.
+        fast_destruct_goal_matches.
+        unfold fst. rewrite_solve.
+      Qed.
+
     End Lemmas.
 
   End Parameterised.
@@ -1621,6 +1633,19 @@ Module SM_Common.
         unfold fst. fast_destruct_goal_matches; auto.
       Qed.
 
+      Lemma do_steps__spec_app:
+        forall ios io,
+        fst (fst (do_steps__spec (ios ++ [io]))) =
+        fst (fst (do_step__spec (fst (fst (do_steps__spec ios))) io)).
+      Proof.
+        intros. consider do_steps__spec.
+        rewrite fold_left_app.
+        unfold fold_left at 1.
+        fast_destruct_goal_matches.
+        unfold fst. rewrite_solve.
+      Qed.
+
+
     End Lemmas.
 
   End Parameterised.
@@ -2232,6 +2257,18 @@ Module Mem_Common.
         consider do_steps__impl.
         intros. rewrite fold_left_app.
         simpl. fast_destruct_goal_matches.
+        unfold fst. rewrite_solve.
+      Qed.
+
+      Lemma do_steps__spec_app:
+        forall dram ios io,
+        fst (fst (do_steps__spec dram (ios ++ [io]))) =
+        fst (fst (do_step__spec (fst (fst (do_steps__spec dram ios))) io)).
+      Proof.
+        intros. consider do_steps__spec.
+        rewrite fold_left_app.
+        unfold fold_left at 1.
+        fast_destruct_goal_matches.
         unfold fst. rewrite_solve.
       Qed.
 
