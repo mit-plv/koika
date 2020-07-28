@@ -747,30 +747,43 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
         let mem_log := lift_log Impl.System.Lift_mem (fst ev.(output_mem)) in
         (mem_log ++ sm_log ++ core1_log ++ core0_log)%log.
 
-      Definition core0_function_of_decoupled_io (st: core0_state_t) (ios: list Core_Common.step_io) : Prop :=
+      Definition core0_function_of_decoupled_io__state (st: core0_state_t) (ios: list Core_Common.step_io) : Prop :=
         st = fst (core0_do_steps__koika ios).
 
-      Definition core1_function_of_decoupled_io (st: core1_state_t) (ios: list Core_Common.step_io) : Prop :=
+      Definition core1_function_of_decoupled_io__state (st: core1_state_t) (ios: list Core_Common.step_io) : Prop :=
         st = fst (core1_do_steps__koika ios).
 
-      Definition sm_function_of_decoupled_io (st: SM_Common.state) (ios: list SM_Common.step_io) : Prop :=
+      Definition sm_function_of_decoupled_io__state (st: SM_Common.state) (ios: list SM_Common.step_io) : Prop :=
         st = fst (Impl.System.SM.do_steps__impl ios).
 
-      Definition mem_function_of_decoupled_io
+      Definition mem_function_of_decoupled_io__state
                  (initial_dram: dram_t) (st: Memory.state) (ios: list Mem_Common.step_io) : Prop :=
         st = fst (mem_do_steps__impl initial_dram ios).
 
       Definition state_function_of_decoupled_ios (initial_dram: dram_t) (st: state) (step_ios: list mod_step_io) :=
-        core0_function_of_decoupled_io st.(state_core0) (map step_io_core0 step_ios) /\
-        core1_function_of_decoupled_io st.(state_core1) (map step_io_core1 step_ios) /\
-        sm_function_of_decoupled_io st.(state_sm) (map step_io_sm step_ios) /\
-        mem_function_of_decoupled_io initial_dram st.(state_mem) (map step_io_mem step_ios).
+        core0_function_of_decoupled_io__state st.(state_core0) (map step_io_core0 step_ios) /\
+        core1_function_of_decoupled_io__state st.(state_core1) (map step_io_core1 step_ios) /\
+        sm_function_of_decoupled_io__state st.(state_sm) (map step_io_sm step_ios) /\
+        mem_function_of_decoupled_io__state initial_dram st.(state_mem) (map step_io_mem step_ios).
 
-      Ltac unfold_decoupled_ios :=
-        consider @core0_function_of_decoupled_io;
-        consider @core1_function_of_decoupled_io;
-        consider @sm_function_of_decoupled_io;
-        consider @mem_function_of_decoupled_io.
+      Ltac unfold_decoupled_ios__state :=
+        consider @core0_function_of_decoupled_io__state;
+        consider @core1_function_of_decoupled_io__state;
+        consider @sm_function_of_decoupled_io__state;
+        consider @mem_function_of_decoupled_io__state.
+
+      Ltac unfold_core0_steps :=
+        consider core0_do_steps__koika;
+        consider core0_do_step_input__koika.
+      Ltac unfold_core1_steps :=
+        consider core1_do_steps__koika;
+        consider core1_do_step_input__koika.
+      Ltac unfold_sm_steps :=
+        consider Impl.System.SM.do_steps__impl;
+        consider Impl.System.SM.do_step_input__impl.
+      Ltac unfold_mem_steps :=
+        consider mem_do_steps__impl;
+        consider mem_do_step_input__impl.
 
       Lemma step_state_function_of_decoupled_ios :
         forall initial_dram st ios st' t io,
@@ -779,28 +792,28 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
         state_function_of_decoupled_ios initial_dram st' (ios ++ [io]).
       Proof.
         intros *; intros Hdec Hstep.
-        consider state_function_of_decoupled_ios; unfold_decoupled_ios; propositional.
+        consider state_function_of_decoupled_ios; unfold_decoupled_ios__state; propositional.
         repeat rewrite map_app.
         consider do_step_with_metadata.
         consider compute_mod_outputs.
         consider compute_state.
         repeat (destruct_matches_in_hyp Hstep; simplify_tuples; subst).
         intuition; simpl.
-        - consider core0_do_steps__koika.
-          rewrite Core_Common.do_steps__koika_app.
+        - unfold_core0_steps.
+          rewrite Core_Common.do_steps__koika_app__state.
           simpl; rewrite_solve.
-        - consider core1_do_steps__koika.
-          rewrite Core_Common.do_steps__koika_app.
+        - unfold_core1_steps.
+          rewrite Core_Common.do_steps__koika_app__state.
           simpl; rewrite_solve.
-        - consider Impl.System.SM.do_steps__impl.
-          rewrite SM_Common.do_steps__impl_app.
+        - unfold_sm_steps.
+          rewrite SM_Common.do_steps__impl_app__state.
           simpl; rewrite_solve.
-        - consider mem_do_steps__impl.
-          rewrite Mem_Common.do_steps__impl_app.
+        - unfold_mem_steps.
+          rewrite Mem_Common.do_steps__impl_app__state.
           simpl; rewrite_solve.
       Qed.
 
-      Theorem step_rel_decoupled_step :
+      Theorem step_rel_decoupled_step__state :
         forall (initial_dram: dram_t) (n: nat)
           (st: state) (tr: trace) (step_ios : list mod_step_io),
           step_n_with_metadata initial_dram n = (st, tr, step_ios) ->
@@ -808,11 +821,109 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
       Proof.
         induction n.
         - simpl; intuition; simplify_tuples; subst; auto;
-            consider state_function_of_decoupled_ios; unfold_decoupled_ios; auto.
+            consider state_function_of_decoupled_ios; unfold_decoupled_ios__state; auto.
         - intros; simpl in *.
           repeat destruct_matches_in_hyp H; simplify_tuples; subst.
           specialize IHn with (1 := eq_refl); propositional.
           eapply step_state_function_of_decoupled_ios; eauto.
+      Qed.
+
+      Definition core0_function_of_decoupled_io__trace
+                 (tr: list (Log Core0.R ContextEnv)) (ios: list Core_Common.step_io) : Prop :=
+        tr = snd (core0_do_steps__koika ios).
+
+      Definition core1_function_of_decoupled_io__trace
+                 (tr: list (Log Core1.R ContextEnv)) (ios: list Core_Common.step_io) : Prop :=
+        tr = snd (core1_do_steps__koika ios).
+
+      Definition sm_function_of_decoupled_io__trace
+                 (tr: list (Log SM_Common.R ContextEnv)) (ios: list SM_Common.step_io) : Prop :=
+        tr = snd (Impl.System.SM.do_steps__impl ios).
+
+      Definition mem_function_of_decoupled_io__trace
+                 (initial_dram: dram_t) (tr: list (Log Memory.R ContextEnv)) (ios: list Mem_Common.step_io) : Prop :=
+        tr = snd (mem_do_steps__impl initial_dram ios).
+
+      Definition trace_function_of_decoupled_ios (initial_dram: dram_t) (tr: trace) (step_ios: list mod_step_io) :=
+        core0_function_of_decoupled_io__trace (map output_core0 tr) (map step_io_core0 step_ios) /\
+        core1_function_of_decoupled_io__trace (map output_core1 tr) (map step_io_core1 step_ios) /\
+        sm_function_of_decoupled_io__trace (map output_sm tr) (map step_io_sm step_ios) /\
+        mem_function_of_decoupled_io__trace initial_dram (map fst (map output_mem tr)) (map step_io_mem step_ios).
+
+      Ltac unfold_decoupled_ios__trace :=
+        consider @core0_function_of_decoupled_io__trace;
+        consider @core1_function_of_decoupled_io__trace;
+        consider @sm_function_of_decoupled_io__trace;
+        consider @mem_function_of_decoupled_io__trace.
+
+      Lemma step_trace_function_of_decoupled_ios :
+        forall initial_dram st ios st' tr t io,
+        state_function_of_decoupled_ios initial_dram st ios ->
+        trace_function_of_decoupled_ios initial_dram tr ios ->
+        do_step_with_metadata st = (st', t, io) ->
+        trace_function_of_decoupled_ios initial_dram (tr ++ [t]) (ios ++ [io]).
+      Proof.
+        intros *; intros Hst Htr Hstep.
+        consider trace_function_of_decoupled_ios; unfold_decoupled_ios__trace; propositional.
+        repeat rewrite map_app.
+        consider do_step_with_metadata.
+        consider compute_mod_outputs.
+        repeat (destruct_matches_in_hyp Hstep; simplify_tuples; subst).
+        consider state_function_of_decoupled_ios; propositional; unfold_decoupled_ios__state.
+        intuition; simpl.
+        - rewrite Htr0.
+          consider do_core0.
+          unfold_core0_steps.
+          destruct_matches_in_hyp Heqp.
+          simplify_tuples; subst.
+          rewrite<-Core_Common.do_steps__koika_app__trace.
+          simpl Core_Common.step_input.
+          rewrite<-Hst0.
+          rewrite_solve.
+        - rewrite Htr2.
+          consider do_core1.
+          unfold_core1_steps.
+          destruct_matches_in_hyp Heqp0.
+          simplify_tuples; subst.
+          rewrite<-Core_Common.do_steps__koika_app__trace.
+          simpl Core_Common.step_input.
+          rewrite<-Hst2.
+          rewrite_solve.
+        - rewrite Htr1.
+          consider do_sm.
+          unfold_sm_steps.
+          destruct_matches_in_hyp Heqp1.
+          simplify_tuples; subst.
+          rewrite Hst1 in Heqp3.
+          rewrite<-SM_Common.do_steps__impl_app__trace.
+          simpl SM_Common.step_input.
+          rewrite_solve.
+        - rewrite Htr4.
+          consider do_mem.
+          unfold_mem_steps.
+          destruct_matches_in_hyp  Heqp2.
+          simplify_tuples; subst.
+          rewrite Hst4 in Heqp3.
+          rewrite<-Mem_Common.do_steps__impl_app__trace.
+          simpl Mem_Common.step_input.
+          rewrite_solve.
+      Qed.
+
+
+      Theorem step_rel_decoupled_step__trace :
+        forall (initial_dram: dram_t) (n: nat)
+          (st: state) (tr: trace) (step_ios : list mod_step_io),
+          step_n_with_metadata initial_dram n = (st, tr, step_ios) ->
+          trace_function_of_decoupled_ios initial_dram tr step_ios.
+      Proof.
+        induction n.
+        - simpl; intuition; simplify_tuples; subst; auto;
+            consider trace_function_of_decoupled_ios; unfold_decoupled_ios__trace; auto.
+        - intros; simpl in *.
+          repeat destruct_matches_in_hyp H; simplify_tuples; subst.
+          specialize IHn with (1 := eq_refl); propositional.
+          eapply step_trace_function_of_decoupled_ios; eauto.
+          eapply step_rel_decoupled_step__state; eauto.
       Qed.
 
     End HelperLemmas.
@@ -1112,7 +1223,6 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
           eapply step_state_function_of_decoupled_ios; eauto.
       Qed.
 
-
     End HelperLemmas.
 
   End ModSpec.
@@ -1312,9 +1422,23 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
       ModSpec.step_n initial_dram n = (spec_st, spec_tr) ->
       trace_related impl_tr spec_tr.
     Proof.
+      intros.
+      consider trace_related.
+      consider tau_related.
+      consider ModImpl.trace.
+      consider ModSpec.trace.
+
+
+
       induction n.
       - intros; simpl in *; simplify_tuples; subst; constructor.
-      - simpl; intros.
+      - intros.
+        simpl in *
+
+
+
+
+simpl; intros.
         destruct_all_matches; simplify_tuples; subst.
         specialize IHn with (1 := eq_refl) (2 := eq_refl).
         unfold trace_related.

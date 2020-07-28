@@ -551,7 +551,7 @@ Module Core_Common.
 
     Section Lemmas.
 
-      Lemma do_steps__koika_app:
+      Lemma do_steps__koika_app__state:
         forall ios io,
         fst (do_steps__koika (ios ++ [io])) =
         fst (do_step__koika (fst (do_steps__koika ios)) io).
@@ -563,7 +563,30 @@ Module Core_Common.
         unfold fst. rewrite_solve.
       Qed.
 
-      Lemma do_steps__spec_app:
+      Lemma do_step_rel_do_step_input__koika :
+        forall st io,
+        snd (do_step__koika st io) =
+        fst (do_step_input__koika st (io.(step_input))).
+      Proof.
+        auto.
+      Qed.
+
+      Lemma do_steps__koika_app__trace :
+        forall ios io,
+        snd (do_steps__koika ios) ++ [fst (do_step_input__koika (fst (do_steps__koika ios)) (io.(step_input)) )] =
+        snd (do_steps__koika (ios ++ [io])).
+      Proof.
+        intros. consider do_steps__koika.
+        repeat rewrite fold_left_app.
+        unfold fold_left at 3.
+        fast_destruct_goal_matches.
+        unfold snd.
+        simpl fst at 2.
+        rewrite<-do_step_rel_do_step_input__koika.
+        rewrite_solve.
+      Qed.
+
+      Lemma do_steps__spec_app__state:
         forall ios io,
         fst (fst (do_steps__spec (ios ++ [io]))) =
         fst (fst (do_step__spec (fst (fst (do_steps__spec ios))) io)).
@@ -1622,7 +1645,7 @@ Module SM_Common.
 
     Section Lemmas.
 
-      Lemma do_steps__impl_app:
+      Lemma do_steps__impl_app__state:
         forall ios io,
         fst (do_steps__impl (ios ++ [io])) =
         fst (do_step__impl (fst (do_steps__impl ios)) io).
@@ -1633,7 +1656,32 @@ Module SM_Common.
         unfold fst. fast_destruct_goal_matches; auto.
       Qed.
 
-      Lemma do_steps__spec_app:
+      Lemma do_step_rel_do_step_input__impl :
+        forall st io,
+        snd (do_step__impl st io) =
+        fst (do_step_input__impl st (io.(step_input))).
+      Proof.
+        consider do_step__impl.
+        intros.
+        destruct_goal_matches.
+      Qed.
+
+      Lemma do_steps__impl_app__trace:
+        forall ios io,
+        snd (do_steps__impl ios) ++ [fst (do_step_input__impl (fst (do_steps__impl ios)) (step_input io) )] =
+        snd (do_steps__impl (ios ++ [io])).
+      Proof.
+        consider do_steps__impl.
+        intros. rewrite fold_left_app.
+        unfold fold_left at 3.
+        fast_destruct_goal_matches.
+        unfold snd.
+        simpl fst at 2.
+        rewrite<-do_step_rel_do_step_input__impl.
+        rewrite_solve.
+      Qed.
+
+      Lemma do_steps__spec_app__state:
         forall ios io,
         fst (fst (do_steps__spec (ios ++ [io]))) =
         fst (fst (do_step__spec (fst (fst (do_steps__spec ios))) io)).
@@ -1645,10 +1693,10 @@ Module SM_Common.
         unfold fst. rewrite_solve.
       Qed.
 
-
     End Lemmas.
 
   End Parameterised.
+
 End SM_Common.
 
 (* NOTE: in our model we say this is fixed, so we can talk about the private registers. *)
@@ -2249,7 +2297,7 @@ Module Mem_Common.
 
     Section Lemmas.
 
-      Lemma do_steps__impl_app:
+      Lemma do_steps__impl_app__state:
         forall dram ios io,
         fst (do_steps__impl dram (ios ++ [io])) =
         fst (do_step__impl (fst (do_steps__impl dram ios)) io).
@@ -2260,7 +2308,33 @@ Module Mem_Common.
         unfold fst. rewrite_solve.
       Qed.
 
-      Lemma do_steps__spec_app:
+      Lemma do_step_rel_do_step_input__impl :
+        forall st io,
+        snd (do_step__impl st io) =
+        fst (do_step_input__impl st (io.(step_input))).
+      Proof.
+        consider do_step__impl.
+        consider do_step_input__impl.
+        intros.
+        destruct_goal_matches.
+      Qed.
+
+      Lemma do_steps__impl_app__trace:
+        forall dram ios io,
+        snd (do_steps__impl dram ios) ++ [fst (do_step_input__impl (fst (do_steps__impl dram ios)) (step_input io) )] =
+        snd (do_steps__impl dram (ios ++ [io])).
+      Proof.
+        intros. consider do_steps__impl.
+        repeat rewrite fold_left_app.
+        unfold fold_left at 3.
+        fast_destruct_goal_matches.
+        unfold snd.
+        simpl fst at 2.
+        rewrite<-do_step_rel_do_step_input__impl.
+        rewrite_solve.
+      Qed.
+
+      Lemma do_steps__spec_app__state:
         forall dram ios io,
         fst (fst (do_steps__spec dram (ios ++ [io]))) =
         fst (fst (do_step__spec (fst (fst (do_steps__spec dram ios))) io)).
