@@ -598,6 +598,33 @@ Module Core_Common.
         unfold fst. rewrite_solve.
       Qed.
 
+      Lemma do_step_rel_do_step_input__spec :
+        forall st io,
+        snd (fst (do_step__spec st io)) =
+        fst (do_step_trans_input__spec st (io.(step_input))).
+      Proof.
+        consider do_step__spec.
+        consider do_step_trans_input__spec.
+        consider do_step_trans__spec.
+        intros.
+        rewrite <-do_step_rel_do_step_input__koika.
+        destruct_goal_matches; unfold snd; unfold fst; rewrite_solve.
+      Qed.
+
+      Lemma do_steps__spec_app__trace :
+        forall ios io,
+        snd (fst (do_steps__spec ios)) ++ [fst (do_step_trans_input__spec (fst (fst (do_steps__spec ios))) (io.(step_input)) )] =
+        snd (fst (do_steps__spec (ios ++ [io]))).
+      Proof.
+        intros. consider do_steps__spec.
+        repeat rewrite fold_left_app.
+        unfold fold_left at 3.
+        fast_destruct_goal_matches.
+        rewrite<-do_step_rel_do_step_input__spec.
+        unfold fst; unfold snd.
+        rewrite_solve.
+      Qed.
+
     End Lemmas.
 
   End Parameterised.
@@ -1693,6 +1720,28 @@ Module SM_Common.
         unfold fst. rewrite_solve.
       Qed.
 
+      Lemma do_step_rel_do_step_input__spec :
+        forall st io,
+        snd (fst (do_step__spec st io)) =
+        do_step_input__spec st (io.(step_input)).
+      Proof.
+      Admitted.
+
+
+      Lemma do_steps__spec_app__trace :
+        forall ios io,
+        snd (fst (do_steps__spec ios)) ++ [do_step_input__spec (fst (fst (do_steps__spec ios))) (io.(step_input))] =
+        snd (fst (do_steps__spec (ios ++ [io]))).
+      Proof.
+        intros. consider do_steps__spec.
+        repeat rewrite fold_left_app.
+        unfold fold_left at 3.
+        fast_destruct_goal_matches.
+        rewrite<-do_step_rel_do_step_input__spec.
+        unfold fst; unfold snd.
+        rewrite_solve.
+      Qed.
+
     End Lemmas.
 
   End Parameterised.
@@ -2126,13 +2175,11 @@ Module Mem_Common.
         let '(st, phase) := machine in
         do_step_input__impl st input.
 
-      Definition filter_input : Log R_public ContextEnv -> ind_core_id -> Log R_public ContextEnv.
-      Admitted.
 
       Definition do_step_trans_input__spec (spec_st: spec_state_t) (ext_input: Log R_public ContextEnv)
                                    : Log R ContextEnv * Log R ContextEnv :=
-        let output0 := do_local_step_trans_input__spec (machine0 spec_st) (filter_input ext_input CoreId0) in
-        let output1 := do_local_step_trans_input__spec (machine1 spec_st) (filter_input ext_input CoreId1) in
+        let output0 := do_local_step_trans_input__spec (machine0 spec_st) (filter_ext_log ext_input CoreId0) in
+        let output1 := do_local_step_trans_input__spec (machine1 spec_st) (filter_ext_log ext_input CoreId1) in
         (fst output0, fst output1).
 
       Definition do_step_trans__spec (spec_st: spec_state_t) (step: ghost_io)
@@ -2344,6 +2391,66 @@ Module Mem_Common.
         unfold fold_left at 1.
         fast_destruct_goal_matches.
         unfold fst. rewrite_solve.
+      Qed.
+
+      Lemma filter_then_do_step_rel_do_step_input__impl:
+        forall st io core_id,
+        snd (do_step__impl st (filter_step io core_id)) =
+        fst (do_step_input__impl st (filter_ext_log io.(step_input) core_id)).
+      Proof.
+        consider do_step__impl; consider do_step_input__impl; intros.
+        destruct_goal_matches.
+        unfold snd.
+        consider filter_step. simpl step_input in *.
+        rewrite_solve.
+      Qed.
+
+      Lemma do_step_rel_do_step_input__spec :
+        forall st io,
+        snd (fst (do_step__spec st io)) =
+        do_step_trans_input__spec st (io.(ghost_step).(step_input)).
+      Proof.
+        consider do_step__spec.
+        consider do_step_trans_input__spec.
+        consider do_step_trans__spec.
+        consider do_local_step_trans_input__spec.
+        intros; fast_destruct_goal_matches.
+        unfold fst; unfold snd.
+        fast_destruct_goal_matches; simplify_tuples; subst.
+        consider proj_ghost_io; simplify_tuples; subst.
+        subst_tuple_for l1.
+        subst_tuple_for l2.
+        subst_tuple_for o1.
+        subst_tuple_for o2.
+        assert (
+          forall machine io core_id regions,
+          snd (fst (do_local_step_trans__spec machine core_id (filter_step (ghost_step io) core_id)
+                                            (get_input_config io core_id) regions)) =
+          fst (do_step_input__impl (fst machine) (filter_ext_log (step_input (ghost_step io)) core_id)))
+               as Helper.
+        { clear.
+          intros.
+          consider do_local_step_trans__spec.
+          destruct_all_matches; simpl fst; simpl snd.
+          all: rewrite<-filter_then_do_step_rel_do_step_input__impl; rewrite_solve.
+        }
+        { repeat rewrite Helper; auto. }
+      Qed.
+
+
+      Lemma do_steps__spec_app__trace :
+        forall dram (ios: list ghost_io) (io: ghost_io),
+        snd (fst (do_steps__spec dram ios)) ++
+            [do_step_trans_input__spec (fst (fst (do_steps__spec dram ios))) (io.(ghost_step).(step_input))] =
+        snd (fst (do_steps__spec dram (ios ++ [io]))).
+      Proof.
+        intros. consider do_steps__spec.
+        repeat rewrite fold_left_app.
+        unfold fold_left at 3.
+        fast_destruct_goal_matches.
+        rewrite<-do_step_rel_do_step_input__spec.
+        unfold fst; unfold snd.
+        rewrite_solve.
       Qed.
 
     End Lemmas.

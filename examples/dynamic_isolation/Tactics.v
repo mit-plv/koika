@@ -213,6 +213,18 @@ Module General.
   Ltac simplify_all :=
     simpl in *; simplify_tuples; subst; auto.
 
+  Ltac subst_tuple_for t :=
+    match goal with
+    | H: _ = (t,?b) |- _ =>
+      replace t with (fst (t,b)) by auto; rewrite<-H
+    | H: _ = (?a,t) |- _ =>
+      replace t with (snd (a,t)) by auto; rewrite<-H
+    | H: _ = (?a,t,?c) |- _ =>
+      replace t with (snd (fst(a,t,c))) by auto; rewrite<-H
+    | H: _ = (t,?b,?c) |- _ =>
+      replace t with (fst(fst(t,b,c))) by auto; rewrite<-H
+    end.
+
   Definition is_some : forall {A}, option A -> Prop :=
     fun _ opt => exists v, opt = Some v.
 
