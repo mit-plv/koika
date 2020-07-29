@@ -18,6 +18,43 @@ Definition fn_name_t := string.
  * We have a well-defined interface to each component.
  *)
 
+(* ======================= Contract between modules =================================
+ * (Goal: chain outputs/inputs/feedback)
+ *
+ * Cores:
+ * - inputs are empty
+ * - outputs
+ *   + obeys FIFO output interface (enqs/deqs, read only/write only registers)
+ *   + Start in waiting state ==> no writes
+ * - feedback
+ *    + obeys FIFO interface
+ *    + While Core running, SM only gets to write purging
+ *    + Core waiting: SM only writes restart when public state is cleared (apart from, e.g., register file)
+ *
+ * SM
+ * - input
+ *   + obeys FIFO input interface (enq/deqs, read only/write only registers)
+ *   + In switching state (for core) -> no writes from core
+ * - output
+ *   + obeys FIFO output interface (enq/deqs, read only/write only registers)
+ *   + requests to memory are in the given enclave config
+ * - feedback
+ *   + Core/Mem in waiting state => no writes
+ *   + obeys FIFO interface
+ *
+ * Mem
+ * - inputs
+ *   + While running, SM only gets to write purging
+ *   + While waiting, SM only writes restart when public state is cleared
+ *   + Inputs are in the allowed enclave configuration
+ * - outputs
+ *   + In Waiting state => no writes
+ * - feedback is empty
+ *
+ * ======================= State simulation between modules =================================
+ *
+ *)
+
 Section Util.
   Definition AND (Ps: list Prop) : Prop :=
     List.fold_left and Ps True.
@@ -33,9 +70,9 @@ Section Util.
 
   Definition valid_inputs (props: list props_t) :=
     AND (List.map P_input props).
-  Definition valid_feedback (props: list props_t) :=
+  Definition valid_feedbacks (props: list props_t) :=
     AND (List.map P_feedback props).
-  Definition valid_output (props: list props_t) :=
+  Definition valid_outputs (props: list props_t) :=
     AND (List.map P_output props).
 
   Definition trivial_props : props_t :=
@@ -353,6 +390,7 @@ Module Core_Common.
                end.
 
       (* TODO: to simplify for now, we say that the Core executes first *)
+
       Definition valid_input_log__common (input_log: Log R_public ContextEnv) : Prop :=
         input_log = log_empty.
 
@@ -438,16 +476,19 @@ Module Core_Common.
       Definition no_writes (log: Log R_public ContextEnv) : Prop :=
         forall r, latest_write log r = None.
 
-      Definition valid_step_output__spec (spec_st: spec_state_t) (step: step_io) : Prop :=
-        let '(st, phase) := spec_st in
-        let '(st', log) := do_step_trans__spec spec_st step in
-        valid_output_log__common log /\
-        valid_interface_log st log_empty (proj_log__pub log) /\
-          (match phase with
-          | SpecSt_Running => True
-          | SpecSt_Waiting _ =>
-              no_writes (proj_log__pub log)
-          end).
+      Definition valid_output  (spec_st: spec_state_t) (input: input_t) (output_log: output_t) : Prop.
+      Admitted.
+
+      (* Definition valid_step_output__spec (spec_st: spec_state_t) (step: step_io) : Prop := *)
+      (*   let '(st, phase) := spec_st in *)
+      (*   let '(st', log) := do_step_trans__spec spec_st step in *)
+      (*   valid_output_log__common log /\ *)
+      (*   valid_interface_log st log_empty (proj_log__pub log) /\ *)
+      (*     (match phase with *)
+      (*     | SpecSt_Running => True *)
+      (*     | SpecSt_Waiting _ => *)
+      (*         no_writes (proj_log__pub log) *)
+      (*     end). *)
 
       Definition reset_public_state (st: state) : Prop :=
         forall reg, match reg with
@@ -457,30 +498,35 @@ Module Core_Common.
                | s => ContextEnv.(getenv) st (public s) = r_public s
                end.
 
-      Definition valid_step_feedback__spec (spec_st: spec_state_t) (step: step_io) : Prop :=
-        let '(st, phase) := spec_st in
-        let '(st', output) := do_step_trans__spec spec_st step in
-        let feedback := step.(step_feedback) in
+      Definition valid_feedback (spec_st: spec_state_t) (input: input_t) (feedback: feedback_t) : Prop.
+      Admitted.
 
-        valid_feedback_log__common step.(step_feedback) /\
-        valid_interface_log st (log_app (proj_log__pub output) step.(step_input)) feedback /\
-        match phase with
-        | SpecSt_Running =>
-            only_write_ext_purge feedback ENUM_purge_purging
-        | SpecSt_Waiting _  =>
-            only_write_ext_purge feedback ENUM_purge_restart /\
-            (latest_write feedback purge = Some ENUM_purge_restart ->
-             latest_write feedback pc <> None /\
-             reset_public_state (fst st') (* TODO: whose responsibility to clear FIFOs? *)
-            )
-        end.
+      (* Definition valid_step_feedback__spec (spec_st: spec_state_t) (step: step_io) : Prop := *)
+      (*   let '(st, phase) := spec_st in *)
+      (*   let '(st', output) := do_step_trans__spec spec_st step in *)
+      (*   let feedback := step.(step_feedback) in *)
+
+      (*   valid_feedback_log__common step.(step_feedback) /\ *)
+      (*   valid_interface_log st (log_app (proj_log__pub output) step.(step_input)) feedback /\ *)
+      (*   match phase with *)
+      (*   | SpecSt_Running => *)
+      (*       only_write_ext_purge feedback ENUM_purge_purging *)
+      (*   | SpecSt_Waiting _  => *)
+      (*       only_write_ext_purge feedback ENUM_purge_restart /\ *)
+      (*       (latest_write feedback purge = Some ENUM_purge_restart -> *)
+      (*        latest_write feedback pc <> None /\ *)
+      (*        reset_public_state (fst st') (* TODO: whose responsibility to clear FIFOs? *) *)
+      (*       ) *)
+      (*   end. *)
+
+      Definition valid_input (spec_st: spec_state_t) (log: input_t) : Prop := valid_input_log__common log.
 
       Definition do_step__spec (spec_st: spec_state_t) (step: step_io)
                              : spec_state_t * Log R ContextEnv * props_t :=
         let '(st', log) := do_step_trans__spec spec_st step in
-        let props' := {| P_input := valid_input_log__common step.(step_input);
-                         P_output := valid_step_output__spec spec_st step;
-                         P_feedback := valid_step_feedback__spec spec_st step
+        let props' := {| P_input := valid_input spec_st step.(step_input);
+                         P_output := valid_output spec_st step.(step_input) log;
+                         P_feedback := valid_feedback spec_st step.(step_input) step.(step_feedback)
                       |} in
         (st', log, props').
 
@@ -517,9 +563,10 @@ Module Core_Common.
           (koika_st: state) (koika_tr: list (Log R ContextEnv))
           (input: input_t) (output0 output1: output_t),
           valid_inputs props ->
-          valid_feedback props ->
+          valid_feedbacks props ->
           do_steps__spec steps = (spec_st, spec_tr, props) ->
           do_steps__koika steps = (koika_st, koika_tr) ->
+          valid_input spec_st input ->
           fst (do_step_input__koika koika_st input) = output0 ->
           fst (do_step_trans_input__spec spec_st input) = output1 ->
           ext_log_equivalent (proj_log__pub output0) (proj_log__pub output1).
@@ -529,7 +576,7 @@ Module Core_Common.
           (spec_st: spec_state_t) (spec_tr: list (Log R ContextEnv)) (props: list props_t)
           (koika_st: state) (koika_tr: list (Log R ContextEnv)),
         valid_inputs props ->
-        valid_feedback props ->
+        valid_feedbacks props ->
         do_steps__spec steps = (spec_st, spec_tr, props) ->
         do_steps__koika steps = (koika_st, koika_tr) ->
         trace_equivalent koika_tr spec_tr.
@@ -537,15 +584,24 @@ Module Core_Common.
     End Correctness.
 
     Section Compliance.
-      Definition P_compliance :=
+      Definition P_output_compliance :=
         forall (steps: list step_io)
           (spec_st: spec_state_t) (spec_tr: list (Log R ContextEnv)) (props: list props_t)
-          (koika_st: state) (koika_tr: list (Log R ContextEnv)),
+          (input: input_t) (output: output_t) (prop: props_t),
+          valid_inputs props ->
+          valid_feedbacks props ->
+          do_steps__spec steps = (spec_st, spec_tr, props) ->
+          valid_input spec_st input ->
+          fst (do_step_trans_input__spec spec_st input) = output ->
+          valid_output spec_st input output.
+
+      Definition P_compliance :=
+        forall (steps: list step_io)
+          (spec_st: spec_state_t) (spec_tr: list (Log R ContextEnv)) (props: list props_t),
         valid_inputs props ->
-        valid_feedback props ->
+        valid_feedbacks props ->
         do_steps__spec steps = (spec_st, spec_tr, props) ->
-        do_steps__koika steps = (koika_st, koika_tr) ->
-        valid_output props.
+        valid_outputs props.
 
     End Compliance.
 
@@ -662,6 +718,11 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
   Parameter correctness : @P_correctness CoreParams.core_id CoreParams.initial_pc
                                          private_params External.ext
                                          rule_name_t rules schedule.
+
+  Parameter output_compliance : @P_output_compliance CoreParams.core_id CoreParams.initial_pc
+                                                     private_params External.ext
+                                                     rule_name_t rules schedule.
+
   Parameter compliance : @P_compliance CoreParams.core_id CoreParams.initial_pc
                                        private_params External.ext
                                        rule_name_t rules schedule.
@@ -674,8 +735,6 @@ Module EnclaveInterface.
   Definition enclave_data :=
     {| struct_name := "enclave_data";
        struct_fields := [("eid", bits_t 32);
-                         (* ("addr_min", bits_t 32); *)
-                         (* ("size", bits_t 32); *)
                          ("shared_regions", bits_t 6);
                          ("valid", bits_t 1)
                         ]
@@ -683,8 +742,6 @@ Module EnclaveInterface.
 
   Record struct_enclave_data :=
     { enclave_data_eid : bits_t 32;
-      (* enclave_data_addr_min : bits_t 32; *)
-      (* enclave_data_size : bits_t 32; *)
       enclave_data_shared_regions : bits_t 6;
       enclave_data_valid : bits_t 1;
     }.
@@ -1610,6 +1667,18 @@ Module SM_Common.
                                    : spec_output_t.
       Admitted.
 
+      Definition valid_input (spec_st: spec_state_t) (log: Log R_public ContextEnv) : Prop.
+      Admitted.
+
+      Definition valid_output (spec_st: spec_state_t) (input: Log R_public ContextEnv) (log: spec_output_t) : Prop.
+      Admitted.
+
+      Definition valid_feedback (spec_st: spec_state_t)
+                                (input: Log R_public ContextEnv) (feedback: Log R_public ContextEnv)
+                                : Prop.
+      Admitted.
+
+
       Definition do_step__spec (spec_st: spec_state_t) (step: step_io)
                              : spec_state_t * spec_output_t * props_t. Admitted.
 
@@ -1623,6 +1692,7 @@ Module SM_Common.
     End Spec.
 
     Section Correctness.
+      (* needs to include any observable registers *)
       Definition trace_equivalent (koika_tr: list impl_output_t)
                                   (spec_tr: list spec_output_t) : Prop.
       Admitted.
@@ -1632,7 +1702,7 @@ Module SM_Common.
           (spec_st: spec_state_t) (spec_tr: list spec_output_t) (props: list props_t)
           (koika_st: state) (koika_tr: list impl_output_t),
         valid_inputs props ->
-        valid_feedback props ->
+        valid_feedbacks props ->
         do_steps__spec steps = (spec_st, spec_tr, props) ->
         do_steps__impl steps = (koika_st, koika_tr) ->
         trace_equivalent koika_tr spec_tr.
@@ -1646,9 +1716,10 @@ Module SM_Common.
           (koika_st: state) (koika_tr: list impl_output_t)
           (input: Log R_public ContextEnv) (impl_output: impl_output_t) (spec_output: spec_output_t),
           valid_inputs props ->
-          valid_feedback props ->
+          valid_feedbacks props ->
           do_steps__spec steps = (spec_st, spec_tr, props) ->
           do_steps__impl steps = (koika_st, koika_tr) ->
+          valid_input spec_st input ->
           fst (do_step_input__impl koika_st input) = impl_output ->
           do_step_input__spec spec_st input = spec_output ->
           output_log_equivalent impl_output spec_output.
@@ -1658,15 +1729,25 @@ Module SM_Common.
 
     Section Compliance.
 
-      Theorem compliance:
+      Theorem output_compliance :
         forall (steps: list step_io)
           (spec_st: spec_state_t) (spec_tr: list spec_output_t) (props: list props_t)
-          (koika_st: state) (koika_tr: list impl_output_t),
+          (input: input_t) (output: spec_output_t) (prop: props_t),
+          valid_inputs props ->
+          valid_feedbacks props ->
+          do_steps__spec steps = (spec_st, spec_tr, props) ->
+          valid_input spec_st input ->
+          do_step_input__spec spec_st input = output ->
+          valid_output spec_st input output.
+      Admitted.
+
+      Theorem compliance:
+        forall (steps: list step_io)
+          (spec_st: spec_state_t) (spec_tr: list spec_output_t) (props: list props_t),
         valid_inputs props ->
-        valid_feedback props ->
+        valid_feedbacks props ->
         do_steps__spec steps = (spec_st, spec_tr, props) ->
-        do_steps__impl steps = (koika_st, koika_tr) ->
-        valid_output props.
+        valid_outputs props.
       Admitted.
     End Compliance.
 
@@ -1948,6 +2029,7 @@ Module Mem_Common.
         let koika_log := koika_update_function koika_st input_log in
         let '(ext_log, ext_st') := external_state_update_function (koika_st, ext_st) (log_app koika_log input_log) in
         (log_app ext_log koika_log, ext_st').
+
       Definition input_t : Type := Log R_public ContextEnv * option enclave_config * option enclave_config.
       Definition feedback_t := Log R_public ContextEnv.
 
@@ -2175,15 +2257,22 @@ Module Mem_Common.
         let '(st, phase) := machine in
         do_step_input__impl st input.
 
+      Definition ghost_input_t : Type := Log R_public ContextEnv * (option enclave_config * option enclave_config).
+      Definition get_ghost_input (io: ghost_io) : ghost_input_t :=
+        (io.(ghost_step).(step_input), (io.(ghost_input_config0), io.(ghost_input_config1))).
 
-      Definition do_step_trans_input__spec (spec_st: spec_state_t) (ext_input: Log R_public ContextEnv)
-                                   : Log R ContextEnv * Log R ContextEnv :=
+      Definition spec_output_t : Type := Log R ContextEnv * Log R ContextEnv.
+
+      Definition do_step_trans_input__spec (spec_st: spec_state_t)
+                                         (ghost_input: ghost_input_t)
+                                   : spec_output_t :=
+        let ext_input := fst(ghost_input) in
         let output0 := do_local_step_trans_input__spec (machine0 spec_st) (filter_ext_log ext_input CoreId0) in
         let output1 := do_local_step_trans_input__spec (machine1 spec_st) (filter_ext_log ext_input CoreId1) in
         (fst output0, fst output1).
 
       Definition do_step_trans__spec (spec_st: spec_state_t) (step: ghost_io)
-                                   : spec_state_t * output_t * output_t :=
+                                   : spec_state_t * spec_output_t :=
         let '(step0, config0) := proj_ghost_io step CoreId0 in
         let '(step1, config1) := proj_ghost_io step CoreId1 in
         let '(machine0', output0, mem_map') :=
@@ -2192,7 +2281,7 @@ Module Mem_Common.
             do_local_step_trans__spec (machine1 spec_st) CoreId1 step1 config1 mem_map' in
         ({| machine0 := machine0';
             machine1 := machine1';
-            regions := mem_map'' |}, output0, output1).
+            regions := mem_map'' |}, (output0, output1)).
 
       Definition only_write_ext_purge (log: Log R_public ContextEnv) (core: ind_core_id) (v: bits_t 2) : Prop :=
         let purge_reg := get_purge_reg core in
@@ -2217,7 +2306,9 @@ Module Mem_Common.
                                         (step: step_io)
                                         (opt_config: option enclave_config)
                                         (mem_map: memory_map)
-                                        : Prop :=
+                                        : Prop.
+        Admitted.
+      (*
         let '(st, phase) := local_st in
         let '(st', output, _) := do_local_step_trans__spec local_st core step opt_config mem_map in
         let purge := get_purge_reg core in
@@ -2231,13 +2322,19 @@ Module Mem_Common.
             mem_reqs_in_config input config core
         | SpecSt_Waiting =>
             only_write_ext_purge input core ENUM_purge_restart /\
+            (* TODO: incomplete *)
             (rew_latest_write input purge (pf_R_ext_purge_reg core) = Some ENUM_purge_restart ->
              opt_config <> None /\
              public_state_is_reset (fst st') core (* TODO: whose responsibility to clear FIFOs? *)
             )
         end.
+        *)
 
-      Definition valid_step_input__spec (spec_st: spec_state_t) (step: ghost_io) : Prop :=
+      Definition valid_input (spec_st: spec_state_t)
+                             (input: ghost_input_t) : Prop.
+      Admitted.
+
+      (*
         let '(step0, config0) := proj_ghost_io step CoreId0 in
         let '(step1, config1) := proj_ghost_io step CoreId1 in
         let '(_, _, mem_map') :=
@@ -2250,19 +2347,24 @@ Module Mem_Common.
         (not (latest_write step0.(step_input) purge0 = Some ENUM_purge_restart /\
             latest_write step1.(step_input) purge1 = Some ENUM_purge_restart)) /\
         valid_input_log__common step.(ghost_step).(step_input). (* TODO *)
+        *)
 
       (* Not very interesting: machine0 only outputs to public0; behaves like interface *)
-      Definition valid_step_output__spec (spec_st: spec_state_t) (step: ghost_io) : Prop.
+
+      Definition valid_output (spec_st: spec_state_t) (input: ghost_input_t) (output: spec_output_t) : Prop.
       Admitted.
 
-      Definition spec_output_t : Type := output_t * output_t.
+      Definition valid_feedback (spec_st: spec_state_t) (input: ghost_input_t)
+                                (feedback: Log R_public ContextEnv) : Prop :=
+        feedback = log_empty.
+
 
       Definition do_step__spec (spec_st: spec_state_t) (step: ghost_io)
                              : spec_state_t * spec_output_t * props_t :=
-        let '(st', log0, log1) := do_step_trans__spec spec_st step in
-        let props' := {| P_input := valid_step_input__spec spec_st step;
-                         P_output := valid_step_output__spec spec_st step;
-                         P_feedback := valid_feedback_log__common step.(ghost_step).(step_feedback)
+        let '(st', (log0, log1)) := do_step_trans__spec spec_st step in
+        let props' := {| P_input := valid_input spec_st (get_ghost_input step);
+                         P_output := valid_output spec_st (get_ghost_input step) (log0,log1);
+                         P_feedback := valid_feedback spec_st (get_ghost_input step) step.(ghost_step).(step_feedback)
                       |} in
         (st', (log0, log1), props').
 
@@ -2304,7 +2406,7 @@ Module Mem_Common.
           (spec_st: spec_state_t) (spec_tr: list spec_output_t) (props: list props_t)
           (koika_st: state) (koika_tr: list (Log R ContextEnv)),
         valid_inputs props ->
-        valid_feedback props ->
+        valid_feedbacks props ->
         do_steps__spec initial_dram steps = (spec_st, spec_tr, props) ->
         do_steps__impl initial_dram (List.map ghost_step steps) = (koika_st, koika_tr) ->
         trace_equivalent koika_tr spec_tr.
@@ -2318,27 +2420,38 @@ Module Mem_Common.
           (steps: list ghost_io)
           (spec_st: spec_state_t) (spec_tr: list spec_output_t) (props: list props_t)
           (koika_st: state) (koika_tr: list (Log R ContextEnv))
-          (input: Log R_public ContextEnv) (impl_output spec_output0 spec_output1: Log R ContextEnv),
+          (input: ghost_input_t) (impl_output spec_output0 spec_output1: Log R ContextEnv),
           valid_inputs props ->
-          valid_feedback props ->
+          valid_feedbacks props ->
           do_steps__spec initial_dram steps = (spec_st, spec_tr, props) ->
           do_steps__impl initial_dram (List.map ghost_step steps) = (koika_st, koika_tr) ->
-          fst (do_step_input__impl koika_st input) = impl_output ->
+          valid_input spec_st input ->
+          fst (do_step_input__impl koika_st (fst input)) = impl_output ->
           do_step_trans_input__spec spec_st input = (spec_output0, spec_output1) ->
           output_log_equivalent impl_output (spec_output0, spec_output1).
     End Correctness.
 
     Section Compliance.
-      Definition P_compliance :=
+      Definition P_output_compliance :=
         forall (initial_dram: dram_t)
           (steps: list ghost_io)
           (spec_st: spec_state_t) (spec_tr: list spec_output_t) (props: list props_t)
-          (koika_st: state) (koika_tr: list (Log R ContextEnv)),
+          (input: ghost_io) (output: spec_output_t) (prop: props_t),
+          valid_inputs props ->
+          valid_feedbacks props ->
+          do_steps__spec initial_dram steps = (spec_st, spec_tr, props) ->
+          valid_input spec_st (get_ghost_input input) ->
+          do_step_trans_input__spec spec_st (get_ghost_input input) = output ->
+          valid_output spec_st (get_ghost_input input) output.
+
+      Definition P_compliance :=
+        forall (initial_dram: dram_t)
+          (steps: list ghost_io)
+          (spec_st: spec_state_t) (spec_tr: list spec_output_t) (props: list props_t),
         valid_inputs props ->
-        valid_feedback props ->
+        valid_feedbacks props ->
         do_steps__spec initial_dram steps = (spec_st, spec_tr, props) ->
-        do_steps__impl initial_dram (List.map ghost_step steps) = (koika_st, koika_tr) ->
-        valid_output props.
+        valid_outputs props.
 
     End Compliance.
 
@@ -2408,12 +2521,13 @@ Module Mem_Common.
       Lemma do_step_rel_do_step_input__spec :
         forall st io,
         snd (fst (do_step__spec st io)) =
-        do_step_trans_input__spec st (io.(ghost_step).(step_input)).
+        do_step_trans_input__spec st (get_ghost_input io).
       Proof.
         consider do_step__spec.
         consider do_step_trans_input__spec.
         consider do_step_trans__spec.
         consider do_local_step_trans_input__spec.
+        consider get_ghost_input.
         intros; fast_destruct_goal_matches.
         unfold fst; unfold snd.
         fast_destruct_goal_matches; simplify_tuples; subst.
@@ -2441,7 +2555,7 @@ Module Mem_Common.
       Lemma do_steps__spec_app__trace :
         forall dram (ios: list ghost_io) (io: ghost_io),
         snd (fst (do_steps__spec dram ios)) ++
-            [do_step_trans_input__spec (fst (fst (do_steps__spec dram ios))) (io.(ghost_step).(step_input))] =
+            [do_step_trans_input__spec (fst (fst (do_steps__spec dram ios))) (get_ghost_input io)] =
         snd (fst (do_steps__spec dram (ios ++ [io]))).
       Proof.
         intros. consider do_steps__spec.
@@ -2499,6 +2613,12 @@ Module Type Memory_sig (External: External_sig) (EnclaveParams: EnclaveParameter
                                          private_external_state_t
                                          initial_private_external_state
                                          external_update_function.
+  Parameter output_compliance: @P_output_compliance private_params External.ext EnclaveParams.params
+                                                    rule_name_t rules schedule
+                                                    private_external_state_t
+                                                    initial_private_external_state
+                                                    external_update_function.
+
   Parameter compliance: @P_compliance private_params External.ext EnclaveParams.params
                                       rule_name_t rules schedule
                                       private_external_state_t

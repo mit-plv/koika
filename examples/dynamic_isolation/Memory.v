@@ -1961,6 +1961,13 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
                                          private_external_state_t
                                          initial_private_external_state
                                          external_update_function.
+
+  Parameter output_compliance: @P_output_compliance private_params External.ext EnclaveParams.params
+                                                    rule_name_t rules schedule
+                                                    private_external_state_t
+                                                    initial_private_external_state
+                                                    external_update_function.
+
   Parameter compliance: @P_compliance private_params External.ext EnclaveParams.params
                                       rule_name_t rules schedule
                                       private_external_state_t
