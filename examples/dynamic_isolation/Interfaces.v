@@ -543,8 +543,9 @@ Module Core_Common.
 
       (* TODO: clean *)
 
-      Definition ext_log_equivalent (log0 log1: Log R_public ContextEnv) : Prop.
-      Admitted.
+      (* Potentially too strong *)
+      Definition ext_log_equivalent (log0 log1: Log R_public ContextEnv) : Prop :=
+        log0 = log1.
 
       Definition log_equivalent (koika_log: Log R ContextEnv) (spec_log: Log R ContextEnv) : Prop :=
         forall (reg: public_reg_t),
@@ -556,6 +557,10 @@ Module Core_Common.
       Definition trace_equivalent (koika_tr: list (Log R ContextEnv))
                                   (spec_tr: list (Log R ContextEnv)) : Prop :=
         Forall2 log_equivalent koika_tr spec_tr.
+
+
+      Definition output_log_equivalent (output0 output1 : Log R ContextEnv) : Prop :=
+        ext_log_equivalent (proj_log__pub output0) (proj_log__pub output1).
 
       Definition P_output_correctness :=
         forall (steps: list step_io)
@@ -569,7 +574,7 @@ Module Core_Common.
           valid_input spec_st input ->
           fst (do_step_input__koika koika_st input) = output0 ->
           fst (do_step_trans_input__spec spec_st input) = output1 ->
-          ext_log_equivalent (proj_log__pub output0) (proj_log__pub output1).
+          output_log_equivalent output0 output1.
 
       Definition P_correctness :=
         forall (steps: list step_io)
