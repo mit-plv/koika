@@ -76,6 +76,13 @@ Module General.
             end)
     .
 
+  Ltac fast_destruct_nongoal_matches :=
+    repeat (match goal with
+            | [ H: context[match ?d with | _ => _ end] |- _ ] =>
+                destruct_matches_in d
+                end).
+
+
   Ltac destruct_goal_matches :=
     repeat (try simpl_match;
             match goal with
@@ -147,6 +154,30 @@ Module General.
     | ?x => is_var x; destruct x
     end.
 
+  Ltac destruct_one_var_with t :=
+    match goal with
+    | [ H: ?T |- _ ] => is_var H; destruct H; try t
+    end.
+
+  Ltac destruct_vars_with t :=
+    repeat (destruct_one_var_with t).
+
+  Tactic Notation "destruct_one_var" := destruct_one_var_with auto.
+  Tactic Notation "destruct_vars_with" tactic(t) := repeat (destruct_one_var_with t).
+  Tactic Notation "destruct_vars" := destruct_vars_with auto.
+
+  Ltac solve' :=
+    match goal with
+    | |- ?x = (fst ?x, snd ?x) =>
+      destruct x; reflexivity
+    | [ H: False |- _ ] => solve [ destruct H ]
+    | [ H: ?P |- ?P ] => exact H
+    end.
+
+
+
+
+
   Ltac propositional_with t :=
     repeat match goal with
     | [ H : _ /\ _  |- _ ] =>
@@ -209,6 +240,8 @@ Module General.
     | [ H: (_,_) = (_,_) |- _ ] =>
       apply simple_tuple_inversion in H; destruct H
     end.
+
+  Ltac simplify_tupless := simplify_tuples; subst.
 
   Ltac simplify_all :=
     simpl in *; simplify_tuples; subst; auto.
@@ -283,6 +316,14 @@ Module General.
       replace term with (snd (x, term)) by auto;
       rewrite<-H
     end.
+
+  Ltac rewrite_in_goal :=
+    repeat lazymatch goal with
+    | H: ?x = ?x |- _ =>  fail 1
+    | H: ?x = _ |- context[?x] =>
+        rewrite H
+    end.
+
 
   Ltac rewrite_solve :=
     match goal with
