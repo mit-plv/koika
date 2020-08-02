@@ -1863,9 +1863,9 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
     End ExtractStep.
 
     Section Invariant.
-      Definition InvariantState (st: state) : Prop. Admitted.
+      Definition Invariant (st: state) : Prop. Admitted.
 
-      Lemma initial_invariant : forall dram, InvariantState (initial_state dram).
+      Lemma initial_invariant : forall dram, Invariant (initial_state dram).
       Admitted.
 
       Definition core0_P_prop (P_prop: list props_t -> Prop) io :=
@@ -1915,7 +1915,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
       Theorem step_n_invariant :
         forall initial_dram n spec_st spec_tr spec_io,
         ModSpec.step_n_with_metadata initial_dram n = (spec_st, spec_tr, spec_io) ->
-        InvariantState spec_st /\ valid_props initial_dram spec_io.
+        Invariant spec_st /\ valid_props initial_dram spec_io.
       Admitted.
 
     End Invariant.
@@ -2455,6 +2455,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
       trace_related impl_tr spec_tr.
     Proof.
     Admitted.
+
     Theorem refinement :
       forall (initial_dram: dram_t) (n: nat)
         (impl_st: ModImpl.state) (impl_tr: ModImpl.trace)
@@ -2512,12 +2513,86 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
     Import Observations.
     Import Interfaces.Common.
 
+    Module GenSpec.
+
+      Section Invariant.
+
+        Definition Invariant (spec_st: Spec.state) : Prop.
+        Admitted.
+
+        Theorem step_invariant :
+          forall st,
+          Invariant st ->
+          Invariant (fst (Spec.step st)).
+        Admitted.
+
+        Theorem step_n_invariant :
+          forall dram n ,
+          Invariant (fst (Spec.step_n dram n)).
+        Admitted.
+
+      End Invariant.
+
+    End GenSpec.
+
+    Section Simulation.
+      (* Invariant in simulation relation or not? *)
+      Definition Sim (mod_st: ModSpec.state) (spec_st: Spec.state) : Prop.
+      Admitted.
+
+      Definition GenTauSim (mod_ev: ModSpec.tau) (gen_ev: tau) : Prop.
+      Admitted.
+
+      Definition GenTraceSim (mod_tr: ModSpec.trace) (gen_tr: trace) : Prop :=
+        Forall2 GenTauSim mod_tr gen_tr.
+
+      Theorem initial_state_sim (initial_dram: dram_t):
+        Sim (ModSpec.initial_state initial_dram) (Spec.initial_state initial_dram).
+      Admitted.
+
+      Theorem step_sim: forall (mod_st mod_st': ModSpec.state) (gen_st gen_st': Spec.state)
+                          (mod_ev: ModSpec.tau) (gen_ev: tau),
+        ModSpec.Invariant mod_st ->
+        GenSpec.Invariant gen_st ->
+        Sim mod_st gen_st ->
+        ModSpec.do_step mod_st = (mod_st', mod_ev) ->
+        Spec.step gen_st = (gen_st', gen_ev) ->
+        Sim mod_st' gen_st' /\ GenTauSim mod_ev gen_ev.
+      Admitted.
+
+      Theorem step_n_sim :
+        forall (initial_dram: dram_t) (n: nat)
+          (mod_st: ModSpec.state) (mod_tr: ModSpec.trace)
+          (gen_st: Spec.state) (gen_tr: trace),
+          Spec.step_n initial_dram n = (gen_st, gen_tr) ->
+          ModSpec.step_n initial_dram n = (mod_st, mod_tr) ->
+          Sim mod_st gen_st /\ GenTraceSim mod_tr gen_tr.
+      Proof.
+        induction n; simpl; intros; simplify_tuples; subst; auto.
+        - intuition; [ | constructor ]. apply initial_state_sim.
+        - destruct_all_matches; simplify_tuples; subst; auto.
+          specialize IHn with (1 := eq_refl) (2 := eq_refl); propositional.
+          destruct ModSpec.step_n_extract_ios with (1 := Heqp).
+          specialize ModSpec.step_n_invariant with (1 := H); intros.
+          specialize GenSpec.step_n_invariant with (dram := initial_dram) (n := n). rewrite Heqp1; simpl.
+          specialize step_sim with (3 := IHn0) (4 := Heqp0) (5 := Heqp2); intuition; auto.
+          apply Forall2_app; auto.
+      Qed.
+
+    End Simulation.
+
     Definition tau_related :  ModSpec.tau -> tau -> Prop :=
       fun mod_ev spec_ev =>
       generate_observations__modSpec mod_ev = spec_ev.
 
     Definition trace_related : ModSpec.trace -> trace -> Prop :=
       fun mod_tr spec_tr => List.Forall2 tau_related mod_tr spec_tr.
+
+    Lemma GenTraceSim_impl_trace_related :
+      forall mod_tr spec_tr,
+      GenTraceSim mod_tr spec_tr ->
+      trace_related mod_tr spec_tr.
+    Admitted.
 
     Theorem refinement :
       forall (initial_dram: dram_t) (n: nat)
@@ -2527,7 +2602,10 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
       Spec.step_n initial_dram n = (spec_st, spec_tr) ->
       trace_related mod_tr spec_tr.
     Proof.
-    Admitted.
+        intros.
+        apply GenTraceSim_impl_trace_related.
+        eapply step_n_sim; eauto.
+    Qed.
 
   End ModSpecToSpec.
 
@@ -2593,7 +2671,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
                    : log_helpers.
 
 
-      Lemma initial_state_sim (initial_dram: dram_t):
+      Theorem initial_state_sim (initial_dram: dram_t):
         Sim (Impl.initial_state initial_dram) (ModImpl.initial_state initial_dram).
       Proof.
         constructor; simpl; unfold_get_impls.
