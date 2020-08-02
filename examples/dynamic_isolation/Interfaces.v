@@ -530,12 +530,17 @@ Module Core_Common.
                       |} in
         (st', log, props').
 
-      Definition do_steps__spec (steps: list step_io)
-                              : spec_state_t * list (Log R ContextEnv) * list props_t :=
+      Definition do_steps__spec' (st: spec_state_t)
+                               (steps: list step_io)
+                                : spec_state_t * list (Log R ContextEnv) * list props_t :=
         fold_left (fun '(st, evs, props) step =>
                      let '(st', ev, prop) := do_step__spec st step in
                      (st', evs ++ [ev], props ++ [prop]))
-                  steps (initial_spec_state, [], []).
+                  steps (st, [], []).
+
+      Definition do_steps__spec (steps: list step_io)
+                              : spec_state_t * list (Log R ContextEnv) * list props_t :=
+        do_steps__spec' initial_spec_state steps.
 
     End Spec.
 
@@ -592,7 +597,7 @@ Module Core_Common.
       Definition P_output_compliance :=
         forall (steps: list step_io)
           (spec_st: spec_state_t) (spec_tr: list (Log R ContextEnv)) (props: list props_t)
-          (input: input_t) (output: output_t) (prop: props_t),
+          (input: input_t) (output: output_t),
           valid_inputs props ->
           valid_feedbacks props ->
           do_steps__spec steps = (spec_st, spec_tr, props) ->
@@ -652,7 +657,7 @@ Module Core_Common.
         fst (fst (do_steps__spec (ios ++ [io]))) =
         fst (fst (do_step__spec (fst (fst (do_steps__spec ios))) io)).
       Proof.
-        intros. consider do_steps__spec.
+        intros. consider do_steps__spec; consider do_steps__spec'.
         rewrite fold_left_app.
         unfold fold_left at 1.
         fast_destruct_goal_matches.
@@ -677,7 +682,7 @@ Module Core_Common.
         snd (fst (do_steps__spec ios)) ++ [fst (do_step_trans_input__spec (fst (fst (do_steps__spec ios))) (io.(step_input)) )] =
         snd (fst (do_steps__spec (ios ++ [io]))).
       Proof.
-        intros. consider do_steps__spec.
+        intros. consider do_steps__spec; consider do_steps__spec'.
         repeat rewrite fold_left_app.
         unfold fold_left at 3.
         fast_destruct_goal_matches.
@@ -685,6 +690,45 @@ Module Core_Common.
         unfold fst; unfold snd.
         rewrite_solve.
       Qed.
+
+(*       (* TODO: write more general lemma *) *)
+(*       Lemma do_steps__spec_app__prop : *)
+(*         forall ios1 ios2, *)
+(*           snd (do_steps__spec (ios1 ++ ios2)) = *)
+(*           snd (do_steps__spec ios1) ++ snd (do_steps__spec' (fst (fst (do_steps__spec ios1))) ios2). *)
+(*       Proof. *)
+(*         consider do_steps__spec. *)
+(*         intro ios1. *)
+(*         generalize initial_spec_state. *)
+(*         induction ios1. *)
+(*         - auto. *)
+(*         - intros. *)
+(*           rewrite<-app_comm_cons. *)
+(* Arguments do_steps__spec' : simpl never. *)
+(* Lemma fold_left_cons : *)
+(*   forall (A B: Type) (f : A -> B -> A) b bs a, *)
+(*   fold_left f (b :: bs) a = fold_left f bs (f a b). *)
+(* Proof. *)
+(*   auto. *)
+(* Qed. *)
+
+(* Lemma do_steps__spec'_cons__prop : *)
+(*   forall xs s x , *)
+(*   snd (do_steps__spec' s (x::xs)) = *)
+(*   snd (do_step__spec s x) :: (snd (do_steps__spec' (fst (fst (do_step__spec s x))) xs)). *)
+(* Proof. *)
+(*   induction xs. *)
+(*   - intros. consider do_steps__spec'. *)
+(*     unfold fold_left at 1. *)
+(*     destruct_all_matches. *)
+(*   - intros. *)
+(*     destruct do_step__spec eqn:?; destruct p. *)
+(*     unfold fst. unfold snd at 2. *)
+(*     unfold do_steps__spec'. *)
+(*     rewrite fold_left_cons. *)
+(*     fast_destruct_goal_matches. *)
+
+
 
     End Lemmas.
 
@@ -1713,7 +1757,17 @@ Module SM_Common.
         trace_equivalent koika_tr spec_tr.
       Admitted.
 
-      Definition output_log_equivalent : impl_output_t -> spec_output_t -> Prop. Admitted.
+      Definition output_log_equivalent (impl_output: impl_output_t) (spec_output: spec_output_t) : Prop :=
+        forall reg, match reg with
+               | SM_Common.public reg' =>
+                   match public_reg_to_core_id reg' with
+                   | CoreId0 => ContextEnv.(getenv) (fst (fst spec_output)) (SM_Common.public reg') =
+                               ContextEnv.(getenv) impl_output (SM_Common.public reg')
+                   | CoreId1 => ContextEnv.(getenv) (fst (snd spec_output)) (SM_Common.public reg') =
+                               ContextEnv.(getenv) impl_output (SM_Common.public reg')
+                   end
+               | _ => True
+               end.
 
       Theorem output_correctness:
         forall (steps: list step_io)
@@ -1737,7 +1791,7 @@ Module SM_Common.
       Theorem output_compliance :
         forall (steps: list step_io)
           (spec_st: spec_state_t) (spec_tr: list spec_output_t) (props: list props_t)
-          (input: input_t) (output: spec_output_t) (prop: props_t),
+          (input: input_t) (output: spec_output_t),
           valid_inputs props ->
           valid_feedbacks props ->
           do_steps__spec steps = (spec_st, spec_tr, props) ->
@@ -2035,7 +2089,7 @@ Module Mem_Common.
         let '(ext_log, ext_st') := external_state_update_function (koika_st, ext_st) (log_app koika_log input_log) in
         (log_app ext_log koika_log, ext_st').
 
-      Definition input_t : Type := Log R_public ContextEnv * option enclave_config * option enclave_config.
+      Definition input_t : Type := Log R_public ContextEnv * (option enclave_config * option enclave_config).
       Definition feedback_t := Log R_public ContextEnv.
 
       Record step_io :=
@@ -2425,15 +2479,15 @@ Module Mem_Common.
           (steps: list ghost_io)
           (spec_st: spec_state_t) (spec_tr: list spec_output_t) (props: list props_t)
           (koika_st: state) (koika_tr: list (Log R ContextEnv))
-          (input: ghost_input_t) (impl_output spec_output0 spec_output1: Log R ContextEnv),
+          (input: ghost_input_t) (impl_output : Log R ContextEnv) spec_output,
           valid_inputs props ->
           valid_feedbacks props ->
           do_steps__spec initial_dram steps = (spec_st, spec_tr, props) ->
           do_steps__impl initial_dram (List.map ghost_step steps) = (koika_st, koika_tr) ->
           valid_input spec_st input ->
           fst (do_step_input__impl koika_st (fst input)) = impl_output ->
-          do_step_trans_input__spec spec_st input = (spec_output0, spec_output1) ->
-          output_log_equivalent impl_output (spec_output0, spec_output1).
+          do_step_trans_input__spec spec_st input = spec_output ->
+          output_log_equivalent impl_output spec_output.
     End Correctness.
 
     Section Compliance.
@@ -2441,7 +2495,7 @@ Module Mem_Common.
         forall (initial_dram: dram_t)
           (steps: list ghost_io)
           (spec_st: spec_state_t) (spec_tr: list spec_output_t) (props: list props_t)
-          (input: ghost_io) (output: spec_output_t) (prop: props_t),
+          (input: ghost_io) (output: spec_output_t) ,
           valid_inputs props ->
           valid_feedbacks props ->
           do_steps__spec initial_dram steps = (spec_st, spec_tr, props) ->

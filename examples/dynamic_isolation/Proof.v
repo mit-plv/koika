@@ -982,7 +982,7 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
            ghost_output_config1 := SM_Common.ghost_output_config1 st
         |}.
 
-      Definition combine_spec_public_output : SM_Common.spec_output_t ->
+      Definition combine_sm_public_output : SM_Common.spec_output_t ->
                                               Log SM_Common.R ContextEnv * sm_ghost_output_t :=
         fun '(output0, output1) =>
           let log := ContextEnv.(create)
@@ -1062,7 +1062,7 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
                          sm_ghost_output_t :=
         let sm_input := SM_Common.proj_log__pub (proj_log Impl.System.Lift_sm input_log) in
         let sm_output__raw := Impl.System.SM.do_step_input__spec st sm_input in
-        let '(sm_output__local, sm_ghost) := combine_spec_public_output sm_output__raw in
+        let '(sm_output__local, sm_ghost) := combine_sm_public_output sm_output__raw in
         let sm_output__global := lift_log (REnv' := ContextEnv) Impl.System.Lift_sm sm_output__local in
         let acc := log_app sm_output__global input_log in
         let mk_sm_step_io feedback_log :=
@@ -1437,25 +1437,27 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
         valid_P_prop valid_outputs initial_dram spec_io /\
         valid_P_prop valid_feedbacks initial_dram spec_io.
 
-    Ltac unfold_props :=
-      consider valid_props;
-      consider valid_P_prop;
-      consider core0_P_prop;
-      consider core1_P_prop;
-      consider sm_P_prop;
-      consider mem_P_prop.
+      Ltac unfold_props :=
+        consider valid_props;
+        consider valid_P_prop;
+        consider core0_P_prop;
+        consider core1_P_prop;
+        consider sm_P_prop;
+        consider mem_P_prop.
 
-      Lemma valid_props_app :
-        forall dram l1 l2,
-        valid_props dram (l1 ++ l2) <->
-        valid_props dram l1 /\ valid_props dram l2.
+      Ltac unfold_props' :=
+        consider valid_inputs;
+        consider valid_outputs;
+        consider valid_feedbacks.
+
+      Definition AND_nil : AND [] := ltac:(consider AND; simpl; auto).
+
+      Lemma valid_props_app_l :
+        forall l1 l2 dram,
+        valid_props dram (l1 ++ l2) ->
+        valid_props dram l1.
       Proof.
-        split.
-        - generalize l2. induction l1.
-          + intuition; unfold_props; simpl;
-            repeat split.
-          + simpl; intros.
-            split.
+        intros.
       Admitted.
 
 
@@ -1553,10 +1555,33 @@ Tactic Notation "destruct_vars" := destruct_vars_with auto.
       Definition core0_valid_input := @Core_Common.valid_input Core0.private_params.
       Definition core0_valid_output := @Core_Common.valid_output Params0.core_id Params0.initial_pc Core0.private_params External.ext Core0.rule_name_t Core0.rules Core0.schedule.
       Definition core0_valid_feedback := @Core_Common.valid_feedback Params0.core_id Params0.initial_pc Core0.private_params External.ext Core0.rule_name_t Core0.rules Core0.schedule.
-      Definition core0_output_log_equivalent := @Core_Common.output_log_equivalent Params0.core_id Params0.initial_pc Core0.private_params External.ext Core0.rule_name_t Core0.rules Core0.schedule.
+      Definition core0_output_log_equivalent := @Core_Common.output_log_equivalent Core0.private_params.
+      Definition core1_output_log_equivalent := @Core_Common.output_log_equivalent Core1.private_params.
       Definition core1_valid_input := @Core_Common.valid_input Core1.private_params.
       Definition core1_valid_output := @Core_Common.valid_output Params1.core_id Params1.initial_pc Core1.private_params External.ext Core1.rule_name_t Core1.rules Core1.schedule.
       Definition core1_valid_feedback := @Core_Common.valid_feedback Params1.core_id Params1.initial_pc Core1.private_params External.ext Core1.rule_name_t Core1.rules Core1.schedule.
+
+      Definition sm_valid_input := @SM_Common.valid_input Params0.initial_pc Params1.initial_pc
+                                                          EnclaveParams.params External.ext.
+      Definition sm_output_log_equivalent :=
+        @SM_Common.output_log_equivalent.
+
+      Definition mem_valid_input := @Mem_Common.valid_input
+                                          Memory.private_params External.ext
+                                          EnclaveParams.params Memory.rule_name_t
+                                          Memory.rules Memory.schedule
+                                          Memory.private_external_state_t
+                                          Memory.initial_private_external_state
+                                          Memory.external_update_function.
+
+      Definition mem_output_log_equivalent :=
+        @Mem_Common.output_log_equivalent Memory.private_params External.ext
+                                          EnclaveParams.params Memory.rule_name_t
+                                          Memory.rules Memory.schedule
+                                          Memory.private_external_state_t
+                                          Memory.initial_private_external_state
+                                          Memory.external_update_function.
+
 
       Theorem step_n_ios_sim:
         forall initial_dram n impl_st impl_tr spec_st spec_tr impl_io spec_io,
@@ -1604,13 +1629,23 @@ Definition impl_core1_input (impl_io: ModImpl.mod_step_io) : Core_Common.input_t
   Core_Common.step_input (ModImpl.step_io_core1 impl_io).
 Definition spec_core1_input (spec_io: ModSpec.mod_step_io) : Core_Common.input_t :=
   Core_Common.step_input (ModSpec.step_io_core1 spec_io).
+Definition impl_sm_input (impl_io: ModImpl.mod_step_io) : SM_Common.input_t :=
+  SM_Common.step_input (ModImpl.step_io_sm impl_io).
+Definition spec_sm_input (spec_io: ModSpec.mod_step_io) : SM_Common.input_t :=
+  SM_Common.step_input (fst (ModSpec.step_io_sm spec_io)).
+Definition impl_mem_input (impl_io: ModImpl.mod_step_io) : Log Mem_Common.R_public ContextEnv  :=
+  Mem_Common.step_input (ModImpl.step_io_mem impl_io).
+Definition spec_mem_input (spec_io: ModSpec.mod_step_io) : Mem_Common.input_t :=
+  (Mem_Common.step_input (Mem_Common.ghost_step (ModSpec.step_io_mem spec_io)),
+   (Mem_Common.ghost_input_config0 (ModSpec.step_io_mem spec_io),
+    Mem_Common.ghost_input_config1 (ModSpec.step_io_mem spec_io))).
 
 
-  Ltac fast_destruct_nongoal_matches :=
-    repeat (match goal with
-            | [ H: context[match ?d with | _ => _ end] |- _ ] =>
-                destruct_matches_in d
-                end).
+Ltac fast_destruct_nongoal_matches :=
+  repeat (match goal with
+          | [ H: context[match ?d with | _ => _ end] |- _ ] =>
+              destruct_matches_in d
+              end).
 
 Ltac unfold_spec_props :=
   consider ModSpec.valid_props;
@@ -1668,6 +1703,59 @@ Proof.
   auto.
 Qed.
 
+Lemma impl_core1_do_step_output :
+  forall impl_st impl_st' impl_ev impl_io,
+  ModImpl.do_step_with_metadata impl_st = (impl_st', impl_ev, impl_io) ->
+  fst (core1_do_step_input__koika (ModImpl.state_core1 impl_st)
+                                (impl_core1_input impl_io)) =
+  ModImpl.output_core1 impl_ev.
+Proof.
+  intros.
+  consider ModImpl.do_step_with_metadata; consider ModImpl.compute_mod_outputs;
+    fast_destruct_nongoal_matches; simplify_tupless.
+  simpl.
+  consider ModImpl.do_core1; fast_destruct_nongoal_matches; simplify_tupless; simpl.
+  unfold_core1_steps.
+  autorewrite with log_helpers in *.
+  consider @Core_Common.do_step_input__koika; simplify_tupless.
+  auto.
+Qed.
+
+Lemma impl_sm_do_step_output :
+  forall impl_st impl_st' impl_ev impl_io,
+  ModImpl.do_step_with_metadata impl_st = (impl_st', impl_ev, impl_io) ->
+  fst (Impl.System.SM.do_step_input__impl (ModImpl.state_sm impl_st)
+                                        (impl_sm_input impl_io)) =
+  ModImpl.output_sm impl_ev.
+Proof.
+  intros.
+  consider ModImpl.do_step_with_metadata; consider ModImpl.compute_mod_outputs;
+    fast_destruct_nongoal_matches; simplify_tupless.
+  simpl.
+  consider ModImpl.do_sm; fast_destruct_nongoal_matches; simplify_tupless; simpl.
+  unfold_sm_steps.
+  autorewrite with log_helpers in *.
+  consider @SM_Common.do_step_input__impl; simplify_tupless.
+  auto.
+Qed.
+
+Lemma impl_mem_do_step_output :
+  forall impl_st impl_st' impl_ev impl_io,
+  ModImpl.do_step_with_metadata impl_st = (impl_st', impl_ev, impl_io) ->
+  fst (mem_do_step_input__impl (ModImpl.state_mem impl_st)
+                             (impl_mem_input impl_io)) =
+  ModImpl.output_mem impl_ev.
+Proof.
+  intros.
+  consider ModImpl.do_step_with_metadata; consider ModImpl.compute_mod_outputs;
+    fast_destruct_nongoal_matches; simplify_tupless.
+  consider impl_mem_input.
+  simpl.
+  consider ModImpl.do_mem; fast_destruct_nongoal_matches; simplify_tupless; simpl.
+  autorewrite with log_helpers in *.
+  rewrite_solve.
+Qed.
+
 Lemma spec_core0_do_step_output :
   forall spec_st spec_st' spec_ev spec_io,
   ModSpec.do_step_with_metadata spec_st = (spec_st', spec_ev, spec_io) ->
@@ -1686,6 +1774,62 @@ Proof.
   consider spec_core0_input; simpl.
   auto.
 Qed.
+
+Lemma spec_core1_do_step_output :
+  forall spec_st spec_st' spec_ev spec_io,
+  ModSpec.do_step_with_metadata spec_st = (spec_st', spec_ev, spec_io) ->
+  fst (core1_do_step_trans_input__spec (ModSpec.state_core1 spec_st) (spec_core1_input spec_io)) =
+  ModSpec.output_core1 spec_ev.
+Proof.
+  intros.
+  consider ModSpec.do_step_with_metadata; consider ModSpec.compute_mod_outputs;
+    fast_destruct_nongoal_matches; simplify_tuples.
+  consider ModSpec.do_core1; fast_destruct_nongoal_matches; simplify_tupless.
+  unfold_core1_steps.
+  autorewrite with log_helpers in *.
+  consider @Core_Common.proj_log__pub.
+  consider @Core_Common.do_step_trans_input__spec; consider @Core_Common.do_step_input__koika; simplify_tupless.
+  simpl.
+  consider spec_core1_input; simpl.
+  auto.
+Qed.
+
+Lemma spec_sm_do_step_output :
+  forall spec_st spec_st' spec_ev spec_io,
+  ModSpec.do_step_with_metadata spec_st = (spec_st', spec_ev, spec_io) ->
+  Impl.System.SM.do_step_input__spec (ModSpec.state_sm spec_st)
+                                   (spec_sm_input spec_io) =
+  ModSpec.output_sm spec_ev.
+Proof.
+  intros.
+  consider ModSpec.do_step_with_metadata; consider ModSpec.compute_mod_outputs;
+    fast_destruct_nongoal_matches; simplify_tuples.
+  consider ModSpec.do_sm; fast_destruct_nongoal_matches; simplify_tupless.
+  unfold_sm_steps.
+  autorewrite with log_helpers in *; simpl.
+  consider spec_sm_input; simpl.
+  auto.
+Qed.
+
+Lemma spec_mem_do_step_output :
+  forall spec_st spec_st' spec_ev spec_io,
+  ModSpec.do_step_with_metadata spec_st = (spec_st', spec_ev, spec_io) ->
+  mem_do_step_trans_input__spec (ModSpec.state_mem spec_st)
+                              (spec_mem_input spec_io) =
+  ModSpec.output_mem spec_ev.
+Proof.
+  intros.
+  consider ModSpec.do_step_with_metadata; consider ModSpec.compute_mod_outputs;
+    fast_destruct_nongoal_matches; simplify_tuples.
+  consider ModSpec.do_mem; fast_destruct_nongoal_matches; simplify_tupless.
+  unfold_mem_steps.
+  autorewrite with log_helpers in *; simpl.
+  consider spec_mem_input; simpl.
+  auto.
+Qed.
+
+
+
 Hint Rewrite @SemanticProperties.log_app_empty_l : log_helpers.
 Lemma impl_core1_do_step_input :
   forall impl_st impl_st' impl_ev impl_io,
@@ -1720,18 +1864,234 @@ Proof.
   auto.
 Qed.
 
+Lemma impl_sm_do_step_input :
+  forall impl_st impl_st' impl_ev impl_io,
+  ModImpl.do_step_with_metadata impl_st = (impl_st', impl_ev, impl_io) ->
+  impl_sm_input impl_io =
+    SM_Common.proj_log__pub
+      (proj_log (REnv' := ContextEnv) Impl.System.Lift_sm
+                ((lift_log Impl.System.Lift_core1 (ModImpl.output_core1 impl_ev)) ++ (lift_log Impl.System.Lift_core0 (ModImpl.output_core0 impl_ev)))%log).
+Proof.
+  intros.
+  consider impl_sm_input; simpl.
+  consider ModImpl.do_step_with_metadata; consider ModImpl.compute_mod_outputs;
+    fast_destruct_nongoal_matches; simplify_tupless; simpl.
+  consider ModImpl.do_sm; fast_destruct_nongoal_matches; simplify_tupless; simpl.
+  consider ModImpl.do_core1; fast_destruct_nongoal_matches; simplify_tupless; simpl.
+  consider ModImpl.do_core0; destruct_all_matches; simplify_tupless.
+  autorewrite with log_helpers; auto.
+Qed.
+
+Lemma impl_mem_do_step_input :
+  forall impl_st impl_st' impl_ev impl_io,
+  ModImpl.do_step_with_metadata impl_st = (impl_st', impl_ev, impl_io) ->
+  impl_mem_input impl_io =
+    Mem_Common.proj_log__pub
+      (proj_log (REnv' := ContextEnv) Impl.System.Lift_mem
+                ((lift_log Impl.System.Lift_sm (ModImpl.output_sm impl_ev)) ++
+                 (lift_log Impl.System.Lift_core1 (ModImpl.output_core1 impl_ev)) ++
+                 (lift_log Impl.System.Lift_core0 (ModImpl.output_core0 impl_ev)))%log).
+Proof.
+  intros.
+  consider impl_mem_input; simpl.
+  consider ModImpl.do_step_with_metadata; consider ModImpl.compute_mod_outputs;
+    fast_destruct_nongoal_matches; simplify_tupless; simpl.
+  consider ModImpl.do_mem; fast_destruct_nongoal_matches; simplify_tupless; simpl.
+  consider ModImpl.do_sm; fast_destruct_nongoal_matches; simplify_tupless; simpl.
+  consider ModImpl.do_core1; fast_destruct_nongoal_matches; simplify_tupless; simpl.
+  consider ModImpl.do_core0; destruct_all_matches; simplify_tupless.
+  autorewrite with log_helpers; auto.
+Qed.
+
+Lemma spec_sm_do_step_input :
+  forall spec_st spec_st' spec_ev spec_io,
+  ModSpec.do_step_with_metadata spec_st = (spec_st', spec_ev, spec_io) ->
+  spec_sm_input spec_io =
+    (SM_Common.proj_log__pub
+      (proj_log (REnv' := ContextEnv) Impl.System.Lift_sm
+                ((lift_log Impl.System.Lift_core1 (ModSpec.output_core1 spec_ev)) ++
+                 (lift_log Impl.System.Lift_core0 (ModSpec.output_core0 spec_ev)))%log)).
+Proof.
+  intros.
+  consider spec_sm_input; simpl.
+  consider ModSpec.do_step_with_metadata; consider ModSpec.compute_mod_outputs;
+    fast_destruct_nongoal_matches; simplify_tupless; simpl.
+  consider ModSpec.do_sm; fast_destruct_nongoal_matches; simplify_tupless; simpl.
+  consider ModSpec.do_core1; fast_destruct_nongoal_matches; simplify_tupless; simpl.
+  consider ModSpec.do_core0; fast_destruct_nongoal_matches; simplify_tupless; simpl.
+  autorewrite with log_helpers in *.
+  auto.
+Qed.
+
+Lemma spec_mem_do_step_input :
+  forall spec_st spec_st' spec_ev spec_io,
+  ModSpec.do_step_with_metadata spec_st = (spec_st', spec_ev, spec_io) ->
+  spec_mem_input spec_io =
+    (Mem_Common.proj_log__pub
+      (proj_log (REnv' := ContextEnv) Impl.System.Lift_mem
+                ((lift_log Impl.System.Lift_sm (fst (ModSpec.combine_sm_public_output (ModSpec.output_sm spec_ev)))) ++
+                 (lift_log Impl.System.Lift_core1 (ModSpec.output_core1 spec_ev)) ++
+                 (lift_log Impl.System.Lift_core0 (ModSpec.output_core0 spec_ev)))%log),
+      ((ghost_output_config0 (snd (ModSpec.combine_sm_public_output (ModSpec.output_sm spec_ev)))),
+       (ghost_output_config1 (snd (ModSpec.combine_sm_public_output (ModSpec.output_sm spec_ev)))))).
+Proof.
+  intros.
+  consider spec_mem_input; simpl.
+  consider ModSpec.do_step_with_metadata; consider ModSpec.compute_mod_outputs;
+    fast_destruct_nongoal_matches; simplify_tupless; simpl.
+  consider spec_sm_input; simpl.
+  consider spec_core1_input; simpl.
+  consider spec_core0_input; simpl.
+  consider ModSpec.do_mem; fast_destruct_nongoal_matches; simplify_tupless; simpl.
+  consider ModSpec.do_sm; fast_destruct_nongoal_matches; simplify_tupless; simpl.
+  consider ModSpec.do_core1; fast_destruct_nongoal_matches; simplify_tupless; simpl.
+  consider ModSpec.do_core0; fast_destruct_nongoal_matches; simplify_tupless; simpl.
+  rewrite Heqp0; simpl.
+  autorewrite with log_helpers in *.
+  auto.
+Qed.
+
+Lemma cores_do_not_share_registers :
+  ~ (exists reg1 reg2, rlift Impl.System.Lift_core0 reg1 = rlift Impl.System.Lift_core1 reg2).
+Proof.
+  intuition.
+  destruct reg1; destruct reg2; simpl in *;
+    consider Impl.System.Lift_core0; consider Impl.System.Lift_core1;
+    consider Impl.System.core0_public_lift; consider Impl.System.core1_public_lift;
+      destruct_all_matches; congruence.
+Qed.
+
+
+Lemma proj_core1_lift_core0_log_equiv :
+  forall log1 log2,
+  Core_Common.proj_log__pub log1 = Core_Common.proj_log__pub log2 ->
+  proj_log (REnv := ContextEnv) (REnv' := ContextEnv) Impl.System.Lift_core1 (lift_log Impl.System.Lift_core0 log1) =
+  proj_log (REnv' := ContextEnv) Impl.System.Lift_core1 (lift_log Impl.System.Lift_core0 log2).
+Proof.
+  intros.
+  consider @Core_Common.proj_log__pub.
+  consider @proj_log.
+  apply_equiv_eq.
+  intros.
+  repeat rewrite getenv_create.
+  destruct k.
+  - repeat rewrite getenv_lift_log_not_exists; auto;
+      intuition; apply cores_do_not_share_registers;
+      eexists; eexists; eauto.
+  - repeat rewrite getenv_lift_log_not_exists; auto;
+      intuition; apply cores_do_not_share_registers;
+      eexists; eexists; eauto.
+Qed.
+
+Lemma valid_props_extract_core1_valid_input :
+  forall ios spec_st0 t initial_dram n,
+  ModSpec.step_n_with_metadata initial_dram n = (spec_st0, t, ios) ->
+  ModSpec.valid_props initial_dram (ios ++ [snd (ModSpec.do_step_with_metadata spec_st0)]) ->
+  core1_valid_input (ModSpec.state_core1 spec_st0) (spec_core1_input (snd (ModSpec.do_step_with_metadata spec_st0))).
+Admitted.
+
+Lemma valid_props_extract_sm_valid_input :
+  forall ios spec_st0 t initial_dram n,
+  ModSpec.step_n_with_metadata initial_dram n = (spec_st0, t, ios) ->
+  ModSpec.valid_props initial_dram (ios ++ [snd (ModSpec.do_step_with_metadata spec_st0)]) ->
+  sm_valid_input (ModSpec.state_sm spec_st0) (spec_sm_input (snd (ModSpec.do_step_with_metadata spec_st0))).
+Admitted.
+
+Lemma valid_props_extract_mem_valid_input :
+  forall ios spec_st0 t initial_dram n,
+  ModSpec.step_n_with_metadata initial_dram n = (spec_st0, t, ios) ->
+  ModSpec.valid_props initial_dram (ios ++ [snd (ModSpec.do_step_with_metadata spec_st0)]) ->
+  mem_valid_input (ModSpec.state_mem spec_st0) (spec_mem_input (snd (ModSpec.do_step_with_metadata spec_st0))).
+Admitted.
+
+
+
+Axiom __magic__ : forall T, T.
+Tactic Notation "__magic" := apply __magic__.
+
+Lemma proj_sm_lift_core0_log_equiv :
+  forall log1 log1' ,
+  Core_Common.proj_log__pub log1 = Core_Common.proj_log__pub log1' ->
+    (proj_log (REnv := ContextEnv) (REnv' := ContextEnv) Impl.System.Lift_sm
+       (lift_log Impl.System.Lift_core0 log1)) =
+    (proj_log (REnv' := ContextEnv) Impl.System.Lift_sm
+       (lift_log Impl.System.Lift_core0 log1')).
+Proof.
+  intros. consider @Core_Common.proj_log__pub.
+  consider @proj_log.
+  apply_equiv_eq; intros; repeat rewrite getenv_create.
+  destruct k.
+  - admit.
+  - repeat rewrite getenv_lift_log_not_exists; auto; intuition;
+      simpl in *; destruct reg; simpl in *; try congruence;
+      destruct r; simpl in *; congruence.
+Admitted.
+
+Lemma proj_sm_lift_core1_log_equiv :
+  forall log1 log1' ,
+  Core_Common.proj_log__pub log1 = Core_Common.proj_log__pub log1' ->
+    (proj_log (REnv := ContextEnv) (REnv' := ContextEnv) Impl.System.Lift_sm
+       (lift_log Impl.System.Lift_core1 log1)) =
+    (proj_log (REnv' := ContextEnv) Impl.System.Lift_sm
+       (lift_log Impl.System.Lift_core1 log1')).
+Admitted.
+
+Lemma proj_mem_lift_core1_log_equiv :
+  forall log1 log1' ,
+  Core_Common.proj_log__pub log1 = Core_Common.proj_log__pub log1' ->
+    (proj_log (REnv := ContextEnv) (REnv' := ContextEnv) Impl.System.Lift_mem
+       (lift_log Impl.System.Lift_core1 log1)) =
+    (proj_log (REnv' := ContextEnv) Impl.System.Lift_mem
+       (lift_log Impl.System.Lift_core1 log1')).
+Admitted.
+
+Lemma proj_mem_lift_core0_log_equiv :
+  forall log1 log1' ,
+  Core_Common.proj_log__pub log1 = Core_Common.proj_log__pub log1' ->
+    (proj_log (REnv := ContextEnv) (REnv' := ContextEnv) Impl.System.Lift_mem
+       (lift_log Impl.System.Lift_core0 log1)) =
+    (proj_log (REnv' := ContextEnv) Impl.System.Lift_mem
+       (lift_log Impl.System.Lift_core0 log1')).
+Admitted.
+
+Lemma proj_mem_lift_sm_log_equiv :
+  forall log1 log1' ,
+  SM_Common.proj_log__pub log1 = SM_Common.proj_log__pub log1' ->
+    (proj_log (REnv := ContextEnv) (REnv' := ContextEnv) Impl.System.Lift_mem
+       (lift_log Impl.System.Lift_sm log1)) =
+    (proj_log (REnv' := ContextEnv) Impl.System.Lift_mem
+       (lift_log Impl.System.Lift_sm log1')).
+Admitted.
+
+Lemma sm_output_log_equiv_impl_combine_public_output :
+  forall impl_out spec_out,
+  SM_Common.output_log_equivalent impl_out spec_out ->
+  SM_Common.proj_log__pub impl_out =
+  SM_Common.proj_log__pub (fst (ModSpec.combine_sm_public_output spec_out)).
+Proof.
+  intros. consider SM_Common.output_log_equivalent.
+  apply_equiv_eq.
+  intros. consider SM_Common.proj_log__pub.
+  repeat rewrite getenv_create.
+  consider ModSpec.combine_sm_public_output; simpl.
+  destruct spec_out; simpl. rewrite getenv_create.
+  specialize H with (reg := SM_Common.public k).
+  simpl in H.
+  destruct_all_matches; auto.
+Qed.
+
 
           (* ======== Equiv inputs/outputs, forward ========= *)
           assert (impl_core0_input impl_io = log_empty) as HImplCore0Empty
              by (eapply impl_do_step_core0_input_empty; eauto).
           assert (spec_core0_input spec_io = log_empty) as HSpecCore0Empty
              by (eapply spec_do_step_core0_input_empty; eauto).
-          (* Core0 input *)
+          (* Core0 input eq *)
           assert (impl_core0_input impl_io = spec_core0_input spec_io) as Heq_core0_input.
           { rewrite_solve. }
-          (* Core0 output *)
+          (* Core0 output eq *)
           assert (core0_output_log_equivalent (ModImpl.output_core0 impl_ev)
-                                              (ModSpec.output_core0 spec_ev)).
+                                              (ModSpec.output_core0 spec_ev)) as Heq_core0_output.
           { rewrite forall_sim_step_extract_core0 with (1 := IHn) in *.
             consider core0_output_log_equivalent.
             eapply Core0.output_correctness with (input := impl_core0_input impl_io); eauto.
@@ -1741,22 +2101,92 @@ Qed.
             - rewrite<-spec_core0_do_step_output with (1 := HSpecStep); unfold_core0_steps; rewrite_solve.
           }
           (* Core1 input *)
-          assert (impl_core1_input impl_io = spec_core1_input spec_io).
+          assert (impl_core1_input impl_io = spec_core1_input spec_io) as Heq_core1_input.
           {
             rewrite impl_core1_do_step_input with (1 := HImplStep).
             rewrite spec_core1_do_step_input with (1 := HSpecStep).
             consider core0_output_log_equivalent.
             consider @Core_Common.output_log_equivalent.
-
             consider @Core_Common.ext_log_equivalent.
-
-
-
+            erewrite proj_core1_lift_core0_log_equiv; eauto.
           }
-          assert (SM_Common.step_input (ModImpl.step_io_sm impl_io)
-                  = SM_Common.step_input (fst (ModSpec.step_io_sm spec_io))) by admit.
-          assert (Mem_Common.step_input (ModImpl.step_io_mem impl_io)
-                  = Mem_Common.step_input (Mem_Common.ghost_step (ModSpec.step_io_mem spec_io))) by admit.
+          (* Core1 output *)
+          assert (core1_output_log_equivalent (ModImpl.output_core1 impl_ev)
+                                              (ModSpec.output_core1 spec_ev)) as Heq_core1_output.
+          { rewrite forall_sim_step_extract_core1 with (1 := IHn) in *.
+            consider core1_output_log_equivalent.
+            eapply Core1.output_correctness with (input := spec_core1_input spec_io); eauto.
+            - rewrite_term_from_tuple prop_core1; clear - HSpecProp; unfold_spec_props; propositional.
+            - rewrite_term_from_tuple prop_core1; clear - HSpecProp; unfold_spec_props; propositional.
+            - rewrite_term_from_tuple spec_io.
+              eapply valid_props_extract_core1_valid_input; eauto.
+              rewrite_solve.
+            - rewrite<-impl_core1_do_step_output with (1 := HImplStep); rewrite_solve.
+            - rewrite<-spec_core1_do_step_output with (1 := HSpecStep); auto.
+          }
+          (* SM input *)
+          assert (impl_sm_input impl_io = spec_sm_input spec_io) as Heq_sm_input.
+          { rewrite impl_sm_do_step_input with (1 := HImplStep).
+            rewrite spec_sm_do_step_input with (1 := HSpecStep).
+            consider core0_output_log_equivalent.
+            consider core1_output_log_equivalent.
+            consider SM_Common.proj_log__pub.
+            apply_equiv_eq; intros; repeat rewrite getenv_create.
+            repeat rewrite<-log_app_comm_proj_log.
+            repeat rewrite getenv_logapp.
+            erewrite proj_sm_lift_core0_log_equiv; eauto.
+            erewrite proj_sm_lift_core1_log_equiv; eauto.
+          }
+          (* SM output *)
+          assert (sm_output_log_equivalent (ModImpl.output_sm impl_ev)
+                                            (ModSpec.output_sm spec_ev)) as Heq_sm_output.
+          { rewrite forall_sim_step_extract_sm with (1 := IHn) in *.
+            consider sm_output_log_equivalent.
+            consider Impl.System.SM.do_steps__spec.
+            consider Impl.System.SM.do_steps__impl.
+            apply SM_Common.output_correctness with (input := spec_sm_input spec_io) (3 := HSpecSM) (4 := HImplSM).
+            - rewrite_term_from_tuple prop_sm; clear - HSpecProp; unfold_spec_props; propositional.
+            - rewrite_term_from_tuple prop_sm; clear - HSpecProp; unfold_spec_props; propositional.
+            - rewrite_term_from_tuple spec_io.
+              eapply valid_props_extract_sm_valid_input; eauto.
+              rewrite_solve.
+            - rewrite<-impl_sm_do_step_output with (1 := HImplStep); rewrite_solve.
+            - rewrite<-spec_sm_do_step_output with (1 := HSpecStep); auto.
+          }
+          (* Mem input *)
+          assert (impl_mem_input impl_io = fst (spec_mem_input spec_io)) as Heq_mem_input.
+          { rewrite impl_mem_do_step_input with (1 := HImplStep).
+            rewrite spec_mem_do_step_input with (1 := HSpecStep).
+            consider sm_output_log_equivalent.
+            consider core0_output_log_equivalent.
+            consider core1_output_log_equivalent.
+            consider @Mem_Common.proj_log__pub.
+            apply_equiv_eq; intros; repeat rewrite getenv_create; simpl.
+            rewrite getenv_create.
+            repeat rewrite<-log_app_comm_proj_log.
+            repeat rewrite getenv_logapp; simpl.
+            erewrite proj_mem_lift_core0_log_equiv; eauto.
+            erewrite proj_mem_lift_core1_log_equiv; eauto.
+            erewrite proj_mem_lift_sm_log_equiv; eauto.
+            apply sm_output_log_equiv_impl_combine_public_output; auto.
+          }
+          (* Mem output *)
+          assert (mem_output_log_equivalent (ModImpl.output_mem impl_ev)
+                                            (ModSpec.output_mem spec_ev)) as Heq_mem_output.
+          { rewrite forall_sim_step_extract_mem with (1 := IHn) in *.
+            consider mem_output_log_equivalent.
+            consider mem_do_steps__impl.
+            consider mem_do_steps__spec.
+            pose proof Memory.output_correctness as MemOutputCorrect. consider @Mem_Common.P_output_correctness.
+            eapply MemOutputCorrect with (input := spec_mem_input spec_io); eauto.
+            - rewrite_term_from_tuple prop_mem; clear - HSpecProp; unfold_spec_props; propositional.
+            - rewrite_term_from_tuple prop_mem; clear - HSpecProp; unfold_spec_props; propositional.
+            - rewrite_term_from_tuple spec_io.
+              eapply valid_props_extract_mem_valid_input; eauto.
+              rewrite_solve.
+            - rewrite<-impl_mem_do_step_output with (1 := HImplStep); rewrite_solve.
+            - rewrite<-spec_mem_do_step_output with (1 := HSpecStep); auto.
+          }
 
           (* ======= Equiv feedback, backwards ====== *)
           assert (Mem_Common.step_feedback (ModImpl.step_io_mem impl_io)
@@ -1768,12 +2198,26 @@ Qed.
           assert (Core_Common.step_feedback (ModImpl.step_io_core0 impl_io)
                   = Core_Common.step_feedback (ModSpec.step_io_core0 spec_io)) by admit.
 
+Ltac unfold_short_ios :=
+  consider impl_core0_input;
+  consider impl_core1_input;
+  consider impl_sm_input;
+  consider impl_mem_input;
+  consider spec_core0_input;
+  consider spec_core1_input;
+  consider spec_sm_input;
+  consider spec_mem_input.
+
           (* ======= Solve ====== *)
           constructor;
-            destruct impl_io; destruct spec_io; simpl in *;
-            match goal with
-            | |- ?x = ?y => destruct x; destruct y
-            end; simpl in *; rewrite_solve.
+            destruct_with_eqn impl_io; destruct_with_eqn spec_io; simpl in *;
+              repeat match goal with
+              | H: Core_Common.step_io |- _ => destruct H
+              | H: SM_Common.step_io * _  |- _ => destruct H
+              | H: SM_Common.step_io |- _ => destruct H
+              | H: Mem_Common.ghost_io |- _ => destruct H
+              | H: Mem_Common.step_io |- _ => destruct H
+              end; unfold_short_ios; simpl in *; subst; auto.
 
       Admitted.
 
