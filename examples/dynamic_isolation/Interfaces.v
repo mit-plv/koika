@@ -2471,8 +2471,18 @@ Module Mem_Common.
         trace_equivalent koika_tr spec_tr.
 
       (* TODO: fix types *)
-      Definition output_log_equivalent : Log R ContextEnv -> Log R ContextEnv * Log R ContextEnv -> Prop.
-      Admitted.
+      Definition output_log_equivalent
+                 (impl_output: Log R ContextEnv) (spec_output: Log R ContextEnv * Log R ContextEnv) : Prop :=
+        forall reg, match reg with
+               | public reg' =>
+                   match public_reg_to_taint reg' with
+                   | CoreId0 => ContextEnv.(getenv) (fst spec_output) (public reg') =
+                               ContextEnv.(getenv) impl_output (public reg')
+                   | CoreId1 => ContextEnv.(getenv) (snd spec_output) (public reg') =
+                               ContextEnv.(getenv) impl_output (public reg')
+                   end
+               | _ => True
+               end.
 
       Definition P_output_correctness :=
         forall (initial_dram: dram_t)
