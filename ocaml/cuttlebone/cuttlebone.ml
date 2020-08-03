@@ -204,7 +204,7 @@ module Util = struct
         Extr.struct_of_list conv vv)
     | Array (sg, values) ->
        (Extr.Array_t (extr_array_sig_of_array_sig sg),
-        vect_of_array (Array.map extr_value_of_value values))
+        vect_of_array (Array.map (fun v -> snd (extr_value_of_value v)) values))
 
   let bits_of_value (v: value) : bool array =
     let tau, v = extr_value_of_value v in
