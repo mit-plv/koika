@@ -19,7 +19,7 @@ let run_ocamlc incl mli ml pkg =
     (["ocamlc"; "-package"; "koika.registry"; "-I"; incl;
       mli; ml; "-c"] @ alert_settings);
   (* ocamlc can't produce an arbitrarily named output file *)
-  Common.command ~verbose:true "mv"
+  Common.command "mv"
     [Filename.chop_suffix ml ".ml" ^ ".cmo"; pkg]
 
 let ext = match Sys.backend_type with Bytecode -> ".kobj" | _ -> ".kpkg"
