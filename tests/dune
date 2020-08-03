@@ -12,6 +12,18 @@
 
 
 ;; -*- dune -*-
+(subdir "_objects/double_write.v"
+ (rule (write-file "double_write_extr.v"
+                   "Require Coq.extraction.Extraction tests.double_write.
+Extraction \"double_write.ml\" double_write.prog."))
+ (coq.extraction
+  (prelude double_write_extr)
+  (extracted_modules double_write)
+  (theories Koika tests)
+  (flags "-w" "-overriding-logical-loadpath")))
+
+
+;; -*- dune -*-
 (subdir "_objects/errors.v"
  (rule (write-file "errors_extr.v"
                    "Require Coq.extraction.Extraction tests.errors.
@@ -19,42 +31,6 @@ Extraction \"errors.ml\" errors.prog."))
  (coq.extraction
   (prelude errors_extr)
   (extracted_modules errors)
-  (theories Koika tests)
-  (flags "-w" "-overriding-logical-loadpath")))
-
-
-;; -*- dune -*-
-(subdir "_objects/register_file_bypassing.v"
- (rule (write-file "register_file_bypassing_extr.v"
-                   "Require Coq.extraction.Extraction tests.register_file_bypassing.
-Extraction \"register_file_bypassing.ml\" register_file_bypassing.prog."))
- (coq.extraction
-  (prelude register_file_bypassing_extr)
-  (extracted_modules register_file_bypassing)
-  (theories Koika tests)
-  (flags "-w" "-overriding-logical-loadpath")))
-
-
-;; -*- dune -*-
-(subdir "_objects/large_writeset.v"
- (rule (write-file "large_writeset_extr.v"
-                   "Require Coq.extraction.Extraction tests.large_writeset.
-Extraction \"large_writeset.ml\" large_writeset.prog."))
- (coq.extraction
-  (prelude large_writeset_extr)
-  (extracted_modules large_writeset)
-  (theories Koika tests)
-  (flags "-w" "-overriding-logical-loadpath")))
-
-
-;; -*- dune -*-
-(subdir "_objects/internal_functions.v"
- (rule (write-file "internal_functions_extr.v"
-                   "Require Coq.extraction.Extraction tests.internal_functions.
-Extraction \"internal_functions.ml\" internal_functions.prog."))
- (coq.extraction
-  (prelude internal_functions_extr)
-  (extracted_modules internal_functions)
   (theories Koika tests)
   (flags "-w" "-overriding-logical-loadpath")))
 
@@ -72,37 +48,25 @@ Extraction \"extcall.ml\" extcall.prog."))
 
 
 ;; -*- dune -*-
-(subdir "_objects/switches.v"
- (rule (write-file "switches_extr.v"
-                   "Require Coq.extraction.Extraction tests.switches.
-Extraction \"switches.ml\" switches.prog."))
+(subdir "_objects/internal_functions.v"
+ (rule (write-file "internal_functions_extr.v"
+                   "Require Coq.extraction.Extraction tests.internal_functions.
+Extraction \"internal_functions.ml\" internal_functions.prog."))
  (coq.extraction
-  (prelude switches_extr)
-  (extracted_modules switches)
+  (prelude internal_functions_extr)
+  (extracted_modules internal_functions)
   (theories Koika tests)
   (flags "-w" "-overriding-logical-loadpath")))
 
 
 ;; -*- dune -*-
-(subdir "_objects/shifts.v"
- (rule (write-file "shifts_extr.v"
-                   "Require Coq.extraction.Extraction tests.shifts.
-Extraction \"shifts.ml\" shifts.prog."))
+(subdir "_objects/large_writeset.v"
+ (rule (write-file "large_writeset_extr.v"
+                   "Require Coq.extraction.Extraction tests.large_writeset.
+Extraction \"large_writeset.ml\" large_writeset.prog."))
  (coq.extraction
-  (prelude shifts_extr)
-  (extracted_modules shifts)
-  (theories Koika tests)
-  (flags "-w" "-overriding-logical-loadpath")))
-
-
-;; -*- dune -*-
-(subdir "_objects/unpack.v"
- (rule (write-file "unpack_extr.v"
-                   "Require Coq.extraction.Extraction tests.unpack.
-Extraction \"unpack.ml\" unpack.prog."))
- (coq.extraction
-  (prelude unpack_extr)
-  (extracted_modules unpack)
+  (prelude large_writeset_extr)
+  (extracted_modules large_writeset)
   (theories Koika tests)
   (flags "-w" "-overriding-logical-loadpath")))
 
@@ -120,6 +84,30 @@ Extraction \"muxelim.ml\" muxelim.prog."))
 
 
 ;; -*- dune -*-
+(subdir "_objects/register_file_bypassing.v"
+ (rule (write-file "register_file_bypassing_extr.v"
+                   "Require Coq.extraction.Extraction tests.register_file_bypassing.
+Extraction \"register_file_bypassing.ml\" register_file_bypassing.prog."))
+ (coq.extraction
+  (prelude register_file_bypassing_extr)
+  (extracted_modules register_file_bypassing)
+  (theories Koika tests)
+  (flags "-w" "-overriding-logical-loadpath")))
+
+
+;; -*- dune -*-
+(subdir "_objects/shifts.v"
+ (rule (write-file "shifts_extr.v"
+                   "Require Coq.extraction.Extraction tests.shifts.
+Extraction \"shifts.ml\" shifts.prog."))
+ (coq.extraction
+  (prelude shifts_extr)
+  (extracted_modules shifts)
+  (theories Koika tests)
+  (flags "-w" "-overriding-logical-loadpath")))
+
+
+;; -*- dune -*-
 (subdir "_objects/struct_init.v"
  (rule (write-file "struct_init_extr.v"
                    "Require Coq.extraction.Extraction tests.struct_init.
@@ -132,12 +120,24 @@ Extraction \"struct_init.ml\" struct_init.prog."))
 
 
 ;; -*- dune -*-
-(subdir "_objects/double_write.v"
- (rule (write-file "double_write_extr.v"
-                   "Require Coq.extraction.Extraction tests.double_write.
-Extraction \"double_write.ml\" double_write.prog."))
+(subdir "_objects/switches.v"
+ (rule (write-file "switches_extr.v"
+                   "Require Coq.extraction.Extraction tests.switches.
+Extraction \"switches.ml\" switches.prog."))
  (coq.extraction
-  (prelude double_write_extr)
-  (extracted_modules double_write)
+  (prelude switches_extr)
+  (extracted_modules switches)
+  (theories Koika tests)
+  (flags "-w" "-overriding-logical-loadpath")))
+
+
+;; -*- dune -*-
+(subdir "_objects/unpack.v"
+ (rule (write-file "unpack_extr.v"
+                   "Require Coq.extraction.Extraction tests.unpack.
+Extraction \"unpack.ml\" unpack.prog."))
+ (coq.extraction
+  (prelude unpack_extr)
+  (extracted_modules unpack)
   (theories Koika tests)
   (flags "-w" "-overriding-logical-loadpath")))

@@ -60,6 +60,8 @@ def fread(fname):
 
 def gen_objdirs(files):
     """Generate ``dune.inc`` files for all files in `files`."""
+    files = sorted(files)
+
     templates = {}
     for ext in (".v", ".lv"):
         templates[ext] = fread("dune{}.template".format(ext))

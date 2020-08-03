@@ -11,30 +11,6 @@
 
 
 ;; -*- dune -*-
-(subdir "_objects/datatypes.v"
- (rule (write-file "datatypes_extr.v"
-                   "Require Coq.extraction.Extraction examples.datatypes.
-Extraction \"datatypes.ml\" datatypes.prog."))
- (coq.extraction
-  (prelude datatypes_extr)
-  (extracted_modules datatypes)
-  (theories Koika examples)
-  (flags "-w" "-overriding-logical-loadpath")))
-
-
-;; -*- dune -*-
-(subdir "_objects/function_call.v"
- (rule (write-file "function_call_extr.v"
-                   "Require Coq.extraction.Extraction examples.function_call.
-Extraction \"function_call.ml\" function_call.prog."))
- (coq.extraction
-  (prelude function_call_extr)
-  (extracted_modules function_call)
-  (theories Koika examples)
-  (flags "-w" "-overriding-logical-loadpath")))
-
-
-;; -*- dune -*-
 (subdir "_objects/collatz.v"
  (rule (write-file "collatz_extr.v"
                    "Require Coq.extraction.Extraction examples.collatz.
@@ -42,66 +18,6 @@ Extraction \"collatz.ml\" collatz.prog."))
  (coq.extraction
   (prelude collatz_extr)
   (extracted_modules collatz)
-  (theories Koika examples)
-  (flags "-w" "-overriding-logical-loadpath")))
-
-
-;; -*- dune -*-
-(subdir "_objects/conflicts_modular.v"
- (rule (write-file "conflicts_modular_extr.v"
-                   "Require Coq.extraction.Extraction examples.conflicts_modular.
-Extraction \"conflicts_modular.ml\" conflicts_modular.prog."))
- (coq.extraction
-  (prelude conflicts_modular_extr)
-  (extracted_modules conflicts_modular)
-  (theories Koika examples)
-  (flags "-w" "-overriding-logical-loadpath")))
-
-
-;; -*- dune -*-
-(subdir "_objects/vector.v"
- (rule (write-file "vector_extr.v"
-                   "Require Coq.extraction.Extraction examples.vector.
-Extraction \"vector.ml\" vector.prog."))
- (coq.extraction
-  (prelude vector_extr)
-  (extracted_modules vector)
-  (theories Koika examples)
-  (flags "-w" "-overriding-logical-loadpath")))
-
-
-;; -*- dune -*-
-(subdir "_objects/external_rule.v"
- (rule (write-file "external_rule_extr.v"
-                   "Require Coq.extraction.Extraction examples.external_rule.
-Extraction \"external_rule.ml\" external_rule.prog."))
- (coq.extraction
-  (prelude external_rule_extr)
-  (extracted_modules external_rule)
-  (theories Koika examples)
-  (flags "-w" "-overriding-logical-loadpath")))
-
-
-;; -*- dune -*-
-(subdir "_objects/pipeline.v"
- (rule (write-file "pipeline_extr.v"
-                   "Require Coq.extraction.Extraction examples.pipeline.
-Extraction \"pipeline.ml\" pipeline.prog."))
- (coq.extraction
-  (prelude pipeline_extr)
-  (extracted_modules pipeline)
-  (theories Koika examples)
-  (flags "-w" "-overriding-logical-loadpath")))
-
-
-;; -*- dune -*-
-(subdir "_objects/method_call.v"
- (rule (write-file "method_call_extr.v"
-                   "Require Coq.extraction.Extraction examples.method_call.
-Extraction \"method_call.ml\" method_call.prog."))
- (coq.extraction
-  (prelude method_call_extr)
-  (extracted_modules method_call)
   (theories Koika examples)
   (flags "-w" "-overriding-logical-loadpath")))
 
@@ -119,13 +35,49 @@ Extraction \"conflicts.ml\" conflicts.prog."))
 
 
 ;; -*- dune -*-
-(subdir "_objects/uart.v"
- (rule (write-file "uart_extr.v"
-                   "Require Coq.extraction.Extraction examples.uart.
-Extraction \"uart.ml\" uart.prog."))
+(subdir "_objects/conflicts_modular.v"
+ (rule (write-file "conflicts_modular_extr.v"
+                   "Require Coq.extraction.Extraction examples.conflicts_modular.
+Extraction \"conflicts_modular.ml\" conflicts_modular.prog."))
  (coq.extraction
-  (prelude uart_extr)
-  (extracted_modules uart)
+  (prelude conflicts_modular_extr)
+  (extracted_modules conflicts_modular)
+  (theories Koika examples)
+  (flags "-w" "-overriding-logical-loadpath")))
+
+
+;; -*- dune -*-
+(subdir "_objects/datatypes.v"
+ (rule (write-file "datatypes_extr.v"
+                   "Require Coq.extraction.Extraction examples.datatypes.
+Extraction \"datatypes.ml\" datatypes.prog."))
+ (coq.extraction
+  (prelude datatypes_extr)
+  (extracted_modules datatypes)
+  (theories Koika examples)
+  (flags "-w" "-overriding-logical-loadpath")))
+
+
+;; -*- dune -*-
+(subdir "_objects/external_rule.v"
+ (rule (write-file "external_rule_extr.v"
+                   "Require Coq.extraction.Extraction examples.external_rule.
+Extraction \"external_rule.ml\" external_rule.prog."))
+ (coq.extraction
+  (prelude external_rule_extr)
+  (extracted_modules external_rule)
+  (theories Koika examples)
+  (flags "-w" "-overriding-logical-loadpath")))
+
+
+;; -*- dune -*-
+(subdir "_objects/function_call.v"
+ (rule (write-file "function_call_extr.v"
+                   "Require Coq.extraction.Extraction examples.function_call.
+Extraction \"function_call.ml\" function_call.prog."))
+ (coq.extraction
+  (prelude function_call_extr)
+  (extracted_modules function_call)
   (theories Koika examples)
   (flags "-w" "-overriding-logical-loadpath")))
 
@@ -138,5 +90,53 @@ Extraction \"gcd_machine.ml\" gcd_machine.prog."))
  (coq.extraction
   (prelude gcd_machine_extr)
   (extracted_modules gcd_machine)
+  (theories Koika examples)
+  (flags "-w" "-overriding-logical-loadpath")))
+
+
+;; -*- dune -*-
+(subdir "_objects/method_call.v"
+ (rule (write-file "method_call_extr.v"
+                   "Require Coq.extraction.Extraction examples.method_call.
+Extraction \"method_call.ml\" method_call.prog."))
+ (coq.extraction
+  (prelude method_call_extr)
+  (extracted_modules method_call)
+  (theories Koika examples)
+  (flags "-w" "-overriding-logical-loadpath")))
+
+
+;; -*- dune -*-
+(subdir "_objects/pipeline.v"
+ (rule (write-file "pipeline_extr.v"
+                   "Require Coq.extraction.Extraction examples.pipeline.
+Extraction \"pipeline.ml\" pipeline.prog."))
+ (coq.extraction
+  (prelude pipeline_extr)
+  (extracted_modules pipeline)
+  (theories Koika examples)
+  (flags "-w" "-overriding-logical-loadpath")))
+
+
+;; -*- dune -*-
+(subdir "_objects/uart.v"
+ (rule (write-file "uart_extr.v"
+                   "Require Coq.extraction.Extraction examples.uart.
+Extraction \"uart.ml\" uart.prog."))
+ (coq.extraction
+  (prelude uart_extr)
+  (extracted_modules uart)
+  (theories Koika examples)
+  (flags "-w" "-overriding-logical-loadpath")))
+
+
+;; -*- dune -*-
+(subdir "_objects/vector.v"
+ (rule (write-file "vector_extr.v"
+                   "Require Coq.extraction.Extraction examples.vector.
+Extraction \"vector.ml\" vector.prog."))
+ (coq.extraction
+  (prelude vector_extr)
+  (extracted_modules vector)
   (theories Koika examples)
   (flags "-w" "-overriding-logical-loadpath")))
