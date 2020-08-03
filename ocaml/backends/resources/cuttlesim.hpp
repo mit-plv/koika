@@ -793,7 +793,7 @@ namespace prims {
     bits<packed_sz> packed{};
     for (size_t pos = 0; pos < len; pos++) {
       packed <<= elem_sz;
-      packed |= prims::widen<packed_sz>(val[pos]);
+      packed |= prims::widen<packed_sz>(prims::pack(val[pos]));
     }
     return packed;
   }
