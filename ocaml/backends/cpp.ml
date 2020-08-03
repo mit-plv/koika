@@ -1338,7 +1338,7 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
 
     let p_run () =
       p_fn ~typ:run_typ ~name:"run" ~args:"std::uint_fast64_t ncycles" (fun () ->
-          p_cycle_loop (fun () -> p "cycle();"; p "strobe(cycle_id);");
+          p_cycle_loop (fun () -> p "cycle();"; p_ifnminimal (fun () -> p "strobe(cycle_id);"));
           p "return *this;") in
 
     let p_run_randomized () =
@@ -1402,7 +1402,8 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
         nl ();
         p_cycle ();
         nl ();
-        p_strobe ();
+        p_ifnminimal (fun () ->
+            p_strobe ());
         nl ();
         p_run ();
         nl ();
