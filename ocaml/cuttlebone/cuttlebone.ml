@@ -189,7 +189,7 @@ module Util = struct
        let values = Array.map (value_of_extr_value sg.array_type) extr_values in
        Array (array_sig_of_extr_array_sig sg, values)
 
-  let rec extr_value_of_value (v: value) =
+  let rec extr_value_of_value (v: value) : Extr.type0 * Extr.type_denote =
     match v with
     | Bits bs -> Extr.Bits_t (Array.length bs), (vect_of_array bs)
     | Enum (sg, v) -> Extr.Enum_t (extr_enum_sig_of_enum_sig sg), (vect_of_array v)
