@@ -63,8 +63,6 @@ Module Common.
   Definition local_trace := list observations_t.
   Definition trace := list tau.
 
-  Definition dram_t : Type := nat -> option data_t.
-
 End Common.
 
 Module MachineSemantics (External: External_sig) (EnclaveParams: EnclaveParameters)
@@ -362,11 +360,6 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
   Module Machine0 := MachineSemantics External EnclaveParams Params0 VoidCoreParams Core0 VoidCore Memory.
   Module Machine1 := MachineSemantics External EnclaveParams VoidCoreParams Params1 VoidCore Core1 Memory.
 
-  Inductive enclave_state_t :=
-  | EnclaveState_Running
-  | EnclaveState_Switching (next_enclave: enclave_config)
-  .
-
   Definition enclave_req_to_eid (enclave_req: struct_t enclave_req) : option enclave_id :=
     let '(eid, _) := enclave_req in
     EnclaveInterface.bits_id_to_ind_id eid.
@@ -406,72 +399,7 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
     }.
 
   (* Partitioned. *)
-  Definition memory_map : Type := EnclaveInterface.mem_region -> dram_t.
   Import Interfaces.EnclaveInterface.
-
-  (* TODO: MOVE. Duplicated in interfaces *)
-  Section Dram.
-    Definition enclave_base enc_id := Bits.to_nat (EnclaveParams.enclave_base enc_id).
-    Definition enclave_max enc_id := Bits.to_nat (Bits.plus (EnclaveParams.enclave_base enc_id)
-                                                            (EnclaveParams.enclave_size enc_id)).
-    Definition shared_base (id: shared_id) := Bits.to_nat (EnclaveParams.shared_region_base id).
-    Definition shared_max (id: shared_id) :=
-      Bits.to_nat (Bits.plus (EnclaveParams.shared_region_base id)
-                             (EnclaveParams.shared_region_size)).
-
-    Definition addr_in_region (region: mem_region) (addr: nat): bool :=
-      match region with
-      | MemRegion_Enclave eid =>
-          (enclave_base eid <=? addr) && (addr <? (enclave_max eid))
-      | MemRegion_Shared id =>
-          (shared_base id <=? addr) && (addr <? shared_max id)
-      | MemRegion_Other => false
-      end.
-
-    Definition filter_dram : dram_t -> mem_region -> dram_t :=
-      fun dram region addr =>
-        if addr_in_region region addr then
-          dram addr
-        else None.
-
-    (* NOTE: the current representation of memory regions is probably non-ideal... *)
-    Definition get_dram : memory_map -> enclave_config -> dram_t :=
-      fun mem_map enclave_config addr =>
-        let enclave_region := MemRegion_Enclave enclave_config.(eid) in
-        let shared := enclave_config.(shared_regions) in
-        if addr_in_region enclave_region addr then
-          (mem_map enclave_region) addr
-        else if shared Shared01 && addr_in_region (MemRegion_Shared Shared01) addr then
-          (mem_map (MemRegion_Shared Shared01)) addr
-        else if shared Shared02 && addr_in_region (MemRegion_Shared Shared02) addr then
-          (mem_map (MemRegion_Shared Shared02)) addr
-        else if shared Shared03 && addr_in_region (MemRegion_Shared Shared01) addr then
-          (mem_map (MemRegion_Shared Shared03)) addr
-        else if shared Shared12 && addr_in_region (MemRegion_Shared Shared12) addr then
-          (mem_map (MemRegion_Shared Shared12)) addr
-        else if shared Shared13 && addr_in_region (MemRegion_Shared Shared13) addr then
-          (mem_map (MemRegion_Shared Shared13)) addr
-        else if shared Shared23 && addr_in_region (MemRegion_Shared Shared23) addr then
-          (mem_map (MemRegion_Shared Shared23)) addr
-        else None.
-
-    Definition update_regions (config: enclave_config) (dram: dram_t)
-                              (regions: memory_map)
-                              : memory_map :=
-      fun region =>
-        match region with
-        | MemRegion_Enclave _eid =>
-            if enclave_id_beq _eid config.(eid) then
-              filter_dram dram region
-            else regions region
-        | MemRegion_Shared id =>
-            if config.(shared_regions) id then
-              filter_dram dram region
-            else regions region
-        | MemRegion_Other => regions region
-        end.
-
-  End Dram.
 
   Scheme Equality for Common.enclave_id.
 
@@ -509,7 +437,8 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
       match config with
       | MagicState_Continue st obs => (st, obs, mem_regions)
       | MagicState_Exit next_enclave old_data obs =>
-          let new_regions := update_regions old_data.(contextSwitch_oldEnclave)
+          let new_regions := update_regions EnclaveParams.params
+                                            old_data.(contextSwitch_oldEnclave)
                                             old_data.(contextSwitch_dram)
                                             mem_regions in
           let core_state := CoreState_Waiting next_enclave old_data.(contextSwitch_rf) in
@@ -524,7 +453,8 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
       | MagicState_TryToEnter next_enclave next_rf =>
           (* Can only peek at other core's enclave when context switching *)
           if can_enter_enclave next_enclave other_cores_enclave then
-            let machine := spin_up_machine next_rf next_enclave (get_dram mem_regions next_enclave) in
+            let machine := spin_up_machine next_rf next_enclave
+                                           (get_dram EnclaveParams.params mem_regions next_enclave) in
             let core_state := CoreState_Enclave machine next_enclave EnclaveState_Running in
             let obs := {| obs_reqs := empty_obs_reqs;
                           obs_resps := empty_obs_resps;
@@ -762,7 +692,7 @@ Module IsolationSemantics (External: External_sig) (EnclaveParams: EnclaveParame
     Context (initial_dram : dram_t).
 
     Definition initial_regions : memory_map :=
-      fun region => filter_dram initial_dram region.
+      fun region => filter_dram EnclaveParams.params initial_dram region.
 
     Definition initial_state : state :=
       let machine0 := Machine0.initial_state (initial_regions (MemRegion_Enclave Enclave0)) in

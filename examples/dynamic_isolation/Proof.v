@@ -382,7 +382,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
   Section Derived_Mem.
     Check Mem_Common.initial_spec_state.
 
-    Definition mem_initial_spec_state : Mem_Common.dram_t -> Mem_Common.spec_state_t :=
+    Definition mem_initial_spec_state : dram_t -> Mem_Common.spec_state_t :=
       @Mem_Common.initial_spec_state Memory.private_params
                                      EnclaveParams.params
                                      Memory.private_external_state_t
@@ -1863,6 +1863,12 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
     End ExtractStep.
 
     Section Invariant.
+
+      (* ============= State invariant between modules ======================
+       * Common state is equal
+       *)
+
+
       Definition Invariant (st: state) : Prop. Admitted.
 
       Lemma initial_invariant : forall dram, Invariant (initial_state dram).
@@ -2515,6 +2521,7 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
 
     Module GenSpec.
 
+      (* TODO: Rename to well-formed *)
       Section Invariant.
 
         Definition Invariant (spec_st: Spec.state) : Prop.
@@ -2536,9 +2543,174 @@ Module TradPf (External: External_sig) (EnclaveParams: EnclaveParameters)
     End GenSpec.
 
     Section Simulation.
-      (* Invariant in simulation relation or not? *)
-      Definition Sim (mod_st: ModSpec.state) (spec_st: Spec.state) : Prop.
+
+      (* ============= Equivalence ============
+       * - Core0 state equivalent
+       * - Core1 state equivalent
+       * - Sm0 state equivalent
+       * - Sm1 state equivalent
+       * - Clk sim?
+       * - Mem0 state equivalent
+       * - Mem1 state equivalent
+       * - External memory equivalent
+       *)
+
+      (* Invariants in simulation relation *)
+
+      (* Core0: Running/Waiting rf * state
+       * Core1: Running/Waiting rf * state
+       * SM
+       * Mem: Running config/Waiting * koika_state * external state
+       *)
+      Definition core0_state_equivalent (mod_core0: core0_spec_state_t)
+                                        (spec_st: @Spec.core_state_machine Spec.Machine0.state) : Prop :=
+        let '(mod_core0_st, mod_core0_phase) := mod_core0 in
+        match mod_core0_phase with
+        | Core_Common.SpecSt_Running =>
+            match spec_st with
+            | Spec.CoreState_Enclave machine_st config enclave_st =>
+                (* Core0 states are exactly equal *)
+                mod_core0_st = proj_env Spec.Machine0.System.Lift_core0 (Spec.Machine0.koika_state machine_st)
+            | Spec.CoreState_Waiting _ _ => False
+            end
+        | Core_Common.SpecSt_Waiting rf =>
+            match spec_st with
+            | Spec.CoreState_Enclave machine_st config enclave_st =>
+                (* Core0 states are exactly equal *)
+                mod_core0_st = proj_env Spec.Machine0.System.Lift_core0 (Spec.Machine0.koika_state machine_st)
+            | Spec.CoreState_Waiting _ rf' => rf = rf'
+            end
+        end.
+
+      Definition core1_state_equivalent (mod_core1: core1_spec_state_t)
+                                        (spec_st: @Spec.core_state_machine Spec.Machine1.state) : Prop :=
+        let '(mod_core1_st, mod_core1_phase) := mod_core1 in
+        match mod_core1_phase with
+        | Core_Common.SpecSt_Running =>
+            match spec_st with
+            | Spec.CoreState_Enclave machine_st config enclave_st =>
+                (* Core1 states are exactly equal *)
+                mod_core1_st = proj_env Spec.Machine1.System.Lift_core1 (Spec.Machine1.koika_state machine_st)
+            | Spec.CoreState_Waiting _ _ => False
+            end
+        | Core_Common.SpecSt_Waiting rf =>
+            match spec_st with
+            | Spec.CoreState_Enclave machine_st config enclave_st =>
+                (* Core1 states are exactly equal *)
+                mod_core1_st = proj_env Spec.Machine1.System.Lift_core1 (Spec.Machine1.koika_state machine_st)
+            | Spec.CoreState_Waiting _ rf' => rf = rf'
+            end
+        end.
+
+      Definition sm0_state_equivalent (mod_sm0: SM_Common.sm_state_machine)
+                                      (spec_st: @Spec.core_state_machine Spec.Machine0.state) : Prop :=
+        match mod_sm0 with
+        | SM_Common.SmState_Enclave machine_st config enclave_st =>
+            match spec_st with
+            | Spec.CoreState_Enclave machine_st' config' enclave_st' =>
+                machine_st = proj_env Spec.Machine0.System.Lift_sm (Spec.Machine0.koika_state machine_st')
+                /\ config = config'
+                /\ enclave_st = enclave_st'
+            | Spec.CoreState_Waiting _ _ => False
+            end
+        | SM_Common.SmState_Waiting new =>
+            match spec_st with
+            | Spec.CoreState_Enclave _ _ _ => False
+            | Spec.CoreState_Waiting new' _ => new = new'
+            end
+        end.
+
+      Definition sm1_state_equivalent (mod_sm1: SM_Common.sm_state_machine)
+                                      (spec_st: @Spec.core_state_machine Spec.Machine1.state) : Prop :=
+        match mod_sm1 with
+        | SM_Common.SmState_Enclave machine_st config enclave_st =>
+            match spec_st with
+            | Spec.CoreState_Enclave machine_st' config' enclave_st' =>
+                machine_st = proj_env Spec.Machine1.System.Lift_sm (Spec.Machine1.koika_state machine_st')
+                /\ config = config'
+                /\ enclave_st = enclave_st'
+            | Spec.CoreState_Waiting _ _ => False
+            end
+        | SM_Common.SmState_Waiting new =>
+            match spec_st with
+            | Spec.CoreState_Enclave _ _ _ => False
+            | Spec.CoreState_Waiting new' _ => new = new'
+            end
+        end.
+
+      Definition mem0_state_equivalent
+                 (mod_mem0: @Mem_Common.local_spec_state_t Memory.private_params Memory.private_external_state_t)
+                 (spec_st: @Spec.core_state_machine Spec.Machine0.state) : Prop :=
+        let '((koika_st, ext_st), mod_mem0_phase) := mod_mem0 in
+        match mod_mem0_phase with
+        | Mem_Common.SpecSt_Running config =>
+            match spec_st with
+            | Spec.CoreState_Enclave machine_st' config' enclave_st' =>
+                (* Mem koika states are exactly equal *)
+                koika_st = proj_env Spec.Machine0.System.Lift_mem (Spec.Machine0.koika_state machine_st') /\
+                (* TODO: Mem external states are exactly equal? *)
+                ext_st = Spec.Machine0.external_state machine_st' /\
+                config = config'
+            | Spec.CoreState_Waiting _ _ => False
+            end
+        | Mem_Common.SpecSt_Waiting =>
+            match spec_st with
+            | Spec.CoreState_Enclave machine_st' config' enclave_st' =>
+                (* TODO: what to do about external state *)
+                ext_st = Spec.Machine0.external_state machine_st'
+            | Spec.CoreState_Waiting _ _ => True
+                (* Okay to throw out external state here? *)
+            end
+        end.
+
+      Definition mem1_state_equivalent
+                 (mod_mem1: @Mem_Common.local_spec_state_t Memory.private_params Memory.private_external_state_t)
+                 (spec_st: @Spec.core_state_machine Spec.Machine1.state) : Prop :=
+        let '((koika_st, ext_st), mod_mem1_phase) := mod_mem1 in
+        match mod_mem1_phase with
+        | Mem_Common.SpecSt_Running config =>
+            match spec_st with
+            | Spec.CoreState_Enclave machine_st' config' enclave_st' =>
+                (* Mem koika states are exactly equal *)
+                koika_st = proj_env Spec.Machine1.System.Lift_mem (Spec.Machine1.koika_state machine_st') /\
+                (* TODO: Mem external states are exactly equal? *)
+                ext_st = Spec.Machine1.external_state machine_st' /\
+                config = config'
+            | Spec.CoreState_Waiting _ _ => False
+            end
+        | Mem_Common.SpecSt_Waiting =>
+            match spec_st with
+            | Spec.CoreState_Enclave machine_st' config' enclave_st' =>
+                (* TODO: what to do about external state *)
+                ext_st = Spec.Machine1.external_state machine_st'
+            | Spec.CoreState_Waiting _ _ => True
+                (* Okay to throw out external state here? *)
+            end
+        end.
+
+      (* TODO: slightly more complicated *)
+      Definition mem_map_equivalent (mem_map: memory_map)
+                                    (spec_st: memory_map) : Prop.
       Admitted.
+
+      (* TODO: sm clock equivalent *)
+
+      Inductive Sim (mod_st: ModSpec.state) (spec_st: Spec.state) :=
+      | _Sim :
+          forall (core0_sim: core0_state_equivalent (ModSpec.state_core0 mod_st) (Spec.machine0_state spec_st))
+            (core1_sim: core1_state_equivalent (ModSpec.state_core1 mod_st) (Spec.machine1_state spec_st))
+            (sm0_sim: sm0_state_equivalent (SM_Common.iso_sm0 (ModSpec.state_sm mod_st))
+                                           (Spec.machine0_state spec_st))
+            (sm1_sim: sm1_state_equivalent (SM_Common.iso_sm1 (ModSpec.state_sm mod_st))
+                                           (Spec.machine1_state spec_st))
+            (mem0_sim: mem0_state_equivalent (Mem_Common.machine0 (ModSpec.state_mem mod_st))
+                                             (Spec.machine0_state spec_st))
+            (mem1_sim: mem1_state_equivalent (Mem_Common.machine1 (ModSpec.state_mem mod_st))
+                                             (Spec.machine1_state spec_st))
+            (mem_map_equiv: mem_map_equivalent (Mem_Common.regions (ModSpec.state_mem mod_st))
+                                               (Spec.regions spec_st))
+            (turn_equiv: SM_Common.turn (ModSpec.state_sm mod_st) = Spec.clk spec_st),
+          Sim mod_st spec_st.
 
       Definition GenTauSim (mod_ev: ModSpec.tau) (gen_ev: tau) : Prop.
       Admitted.

@@ -228,6 +228,7 @@ Module Common.
     ; _shared_region_size : bits_t 32
     }.
 
+  Definition dram_t : Type := nat -> option data_t.
 End Common.
 
 (* TODO: need a well-formed predicate about address regions being disjoint *)
@@ -892,6 +893,96 @@ Module EnclaveInterface.
                        enclave_data_shared_regions := Ob~0~0~0~0~0~0;
                        enclave_data_valid := Ob~1
                     |}.
+
+  Inductive enclave_state_t :=
+  | EnclaveState_Running
+  | EnclaveState_Switching (next_enclave: enclave_config)
+  .
+
+  Definition memory_map : Type := EnclaveInterface.mem_region -> dram_t.
+
+  Definition initial_enclave_config0 : enclave_config :=
+    {| eid := Enclave0;
+       shared_regions := fun _ => false
+    |}.
+  Definition initial_enclave_config1 : enclave_config :=
+    {| eid := Enclave1;
+       shared_regions  := fun _ => false
+    |}.
+
+
+  Section MemoryRegions.
+    Context (enclave_params : Common.enclave_params_sig).
+
+    Definition enclave_base := _enclave_base enclave_params.
+    Definition enclave_size := _enclave_size enclave_params.
+    Definition enclave_bootloader_addr := _enclave_bootloader_addr enclave_params.
+    Definition shared_region_base := _shared_region_base enclave_params.
+    Definition shared_region_size := _shared_region_size enclave_params.
+
+    Definition enclave_base_nat enc_id := Bits.to_nat (enclave_base enc_id).
+    Definition enclave_max_nat enc_id := Bits.to_nat (Bits.plus (enclave_base enc_id)
+                                                                (enclave_size enc_id)).
+
+    Definition shared_base_nat (id: shared_id) := Bits.to_nat (shared_region_base id).
+    Definition shared_max_nat (id: shared_id) :=
+      Bits.to_nat (Bits.plus (shared_region_base id)
+                               (shared_region_size)).
+
+    Definition addr_in_region (region: mem_region) (addr: nat): bool :=
+      match region with
+      | MemRegion_Enclave eid =>
+          (enclave_base_nat eid <=? addr) && (addr <? (enclave_max_nat eid))
+      | MemRegion_Shared id =>
+          (shared_base_nat id <=? addr) && (addr <? shared_max_nat id)
+      | MemRegion_Other => false
+      end.
+
+    Definition filter_dram : dram_t -> mem_region -> dram_t :=
+      fun dram region addr =>
+        if addr_in_region region addr then
+          dram addr
+        else None.
+
+
+    (* NOTE: the current representation of memory regions is probably non-ideal... *)
+    Definition get_dram : memory_map -> enclave_config -> dram_t :=
+      fun mem_map enclave_config addr =>
+        let enclave_region := MemRegion_Enclave enclave_config.(eid) in
+        let shared := enclave_config.(shared_regions) in
+        if addr_in_region enclave_region addr then
+          (mem_map enclave_region) addr
+        else if shared Shared01 && addr_in_region (MemRegion_Shared Shared01) addr then
+          (mem_map (MemRegion_Shared Shared01)) addr
+        else if shared Shared02 && addr_in_region (MemRegion_Shared Shared02) addr then
+          (mem_map (MemRegion_Shared Shared02)) addr
+        else if shared Shared03 && addr_in_region (MemRegion_Shared Shared01) addr then
+          (mem_map (MemRegion_Shared Shared03)) addr
+        else if shared Shared12 && addr_in_region (MemRegion_Shared Shared12) addr then
+          (mem_map (MemRegion_Shared Shared12)) addr
+        else if shared Shared13 && addr_in_region (MemRegion_Shared Shared13) addr then
+          (mem_map (MemRegion_Shared Shared13)) addr
+        else if shared Shared23 && addr_in_region (MemRegion_Shared Shared23) addr then
+          (mem_map (MemRegion_Shared Shared23)) addr
+        else None.
+
+    Definition update_regions (config: enclave_config) (dram: dram_t)
+                              (regions: memory_map)
+                              : memory_map :=
+      fun region =>
+        match region with
+        | MemRegion_Enclave _eid =>
+            if enclave_id_beq _eid config.(eid) then
+              filter_dram dram region
+            else regions region
+        | MemRegion_Shared id =>
+            if config.(shared_regions) id then
+              filter_dram dram region
+            else regions region
+        | MemRegion_Other => regions region
+        end.
+
+  End MemoryRegions.
 
 
 End EnclaveInterface.
@@ -1584,10 +1675,6 @@ Module SM_Common.
     End Taint.
 
     Section Spec.
-      Inductive enclave_state_t :=
-      | EnclaveState_Running
-      | EnclaveState_Switching (next_enclave: enclave_config)
-      .
 
       Inductive sm_state_machine :=
       | SmState_Enclave (machine_state: state) (config: enclave_config)
@@ -2066,7 +2153,6 @@ Module Mem_Common.
     Context {initial_private_external_state_t : private_external_state_t}.
 
     Definition koika_state_t : Type := env_t ContextEnv (fun idx: reg_t => R idx).
-    Definition dram_t : Type := nat -> option data_t.
     Definition external_state_t : Type := dram_t * private_external_state_t.
     Definition state : Type := koika_state_t * external_state_t.
 
@@ -2129,85 +2215,6 @@ Module Mem_Common.
 
     End CycleSemantics.
 
-    Section TODO_MOVE.
-      Definition initial_enclave_config0 : enclave_config :=
-        {| eid := Enclave0;
-           shared_regions := fun _ => false
-        |}.
-      Definition initial_enclave_config1 : enclave_config :=
-        {| eid := Enclave1;
-           shared_regions  := fun _ => false
-        |}.
-
-    End TODO_MOVE.
-
-    Section TODO_dram.
-      Definition enclave_base_nat enc_id := Bits.to_nat (enclave_base enc_id).
-      Definition enclave_max_nat enc_id := Bits.to_nat (Bits.plus (enclave_base enc_id)
-                                                                  (enclave_size enc_id)).
-
-      Definition shared_base_nat (id: shared_id) := Bits.to_nat (shared_region_base id).
-      Definition shared_max_nat (id: shared_id) :=
-        Bits.to_nat (Bits.plus (shared_region_base id)
-                               (shared_region_size)).
-
-      Definition memory_map : Type := EnclaveInterface.mem_region -> dram_t.
-
-      Import EnclaveInterface.
-
-      Definition addr_in_region (region: mem_region) (addr: nat): bool :=
-        match region with
-        | MemRegion_Enclave eid =>
-            (enclave_base_nat eid <=? addr) && (addr <? (enclave_max_nat eid))
-        | MemRegion_Shared id =>
-            (shared_base_nat id <=? addr) && (addr <? shared_max_nat id)
-        | MemRegion_Other => false
-        end.
-
-      Definition filter_dram : dram_t -> mem_region -> dram_t :=
-        fun dram region addr =>
-          if addr_in_region region addr then
-            dram addr
-          else None.
-
-      (* NOTE: the current representation of memory regions is probably non-ideal... *)
-      Definition get_dram : memory_map -> enclave_config -> dram_t :=
-        fun mem_map enclave_config addr =>
-          let enclave_region := MemRegion_Enclave enclave_config.(eid) in
-          let shared := enclave_config.(shared_regions) in
-          if addr_in_region enclave_region addr then
-            (mem_map enclave_region) addr
-          else if shared Shared01 && addr_in_region (MemRegion_Shared Shared01) addr then
-            (mem_map (MemRegion_Shared Shared01)) addr
-          else if shared Shared02 && addr_in_region (MemRegion_Shared Shared02) addr then
-            (mem_map (MemRegion_Shared Shared02)) addr
-          else if shared Shared03 && addr_in_region (MemRegion_Shared Shared01) addr then
-            (mem_map (MemRegion_Shared Shared03)) addr
-          else if shared Shared12 && addr_in_region (MemRegion_Shared Shared12) addr then
-            (mem_map (MemRegion_Shared Shared12)) addr
-          else if shared Shared13 && addr_in_region (MemRegion_Shared Shared13) addr then
-            (mem_map (MemRegion_Shared Shared13)) addr
-          else if shared Shared23 && addr_in_region (MemRegion_Shared Shared23) addr then
-            (mem_map (MemRegion_Shared Shared23)) addr
-          else None.
-
-      Definition update_regions (config: enclave_config) (dram: dram_t)
-                                (regions: memory_map)
-                                : memory_map :=
-        fun region =>
-          match region with
-          | MemRegion_Enclave _eid =>
-              if enclave_id_beq _eid config.(eid) then
-                filter_dram dram region
-              else regions region
-          | MemRegion_Shared id =>
-              if config.(shared_regions) id then
-                filter_dram dram region
-              else regions region
-          | MemRegion_Other => regions region
-          end.
-
-    End TODO_dram.
 
     Section Spec.
 
@@ -2236,7 +2243,7 @@ Module Mem_Common.
         }.
 
       Definition initial_regions initial_dram : memory_map :=
-        fun region => filter_dram initial_dram region.
+        fun region => filter_dram enclave_params initial_dram region.
 
       Definition initial_spec_state (initial_dram: dram_t) : spec_state_t :=
         let mem0 := initial_state (initial_regions initial_dram (MemRegion_Enclave Enclave0)) in
@@ -2293,7 +2300,7 @@ Module Mem_Common.
             let ext_st' := get_dram_from_state st' in
             match rew_latest_write output (public purge_reg) (pf_R_ext_purge_reg core) with
             | Some v => if bits_eqb v ENUM_purge_purged
-                       then ((st', SpecSt_Waiting), output, update_regions config ext_st' mem_map)
+                       then ((st', SpecSt_Waiting), output, update_regions enclave_params config ext_st' mem_map)
                        else continue
             | None => continue
             end
@@ -2303,7 +2310,7 @@ Module Mem_Common.
             match rew_latest_write input_log purge_reg (pf_R_ext_purge_reg core), opt_config with
             | Some v, Some config =>
                if bits_eqb v ENUM_purge_restart then
-                 let dram := get_dram mem_map config in
+                 let dram := get_dram enclave_params mem_map config in
                  ((initial_state dram, SpecSt_Running config), output, mem_map)
                else (* don't care *) continue
             | _, _ => continue
