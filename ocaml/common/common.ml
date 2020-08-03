@@ -130,10 +130,10 @@ let rec typ_to_string (tau: typ) =
   | Array_t sg -> array_sig_to_string sg
 and enum_sig_to_string sg =
   Printf.sprintf "enum %s" sg.enum_name
-and struct_field_to_string (nm, typ) =
+and struct_sig_field_to_string (nm, typ) =
   Printf.sprintf "%s: %s" nm (typ_to_string typ)
 and struct_sig_to_string { struct_name; struct_fields } =
-  let fields = List.map struct_field_to_string struct_fields in
+  let fields = List.map struct_sig_field_to_string struct_fields in
   Printf.sprintf "struct %s { %s }" struct_name (String.concat "; " fields)
 and array_sig_to_string { array_type; array_len } =
   Printf.sprintf "array<%s, %d>" (typ_to_string array_type) array_len
@@ -142,6 +142,35 @@ and typ_name (tau: typ) =
   | Enum_t sg -> sg.enum_name
   | Struct_t sg -> sg.struct_name
   | Bits_t _ | Array_t _ -> typ_to_string tau
+
+let rec value_to_string (v: value) =
+  match v with
+   | Bits bs -> bits_to_string bs
+   | Enum (sg, bs) -> enum_to_string sg bs
+   | Struct (sg, fields) -> struct_to_string sg fields
+   | Array (sg, elems) -> array_to_string sg elems
+and bits_to_string bs =
+  Array.map (fun b -> if b then "1" else "0") bs
+  |> Array.to_list |> String.concat ""
+and enum_to_string sg bs =
+  Printf.sprintf "%s::%s" sg.enum_name
+    (match enum_find_field_opt sg bs with
+     | Some s -> s
+     | None -> Printf.sprintf "{%s}" (bits_to_string bs))
+and struct_field_to_string (nm, typ) v =
+  assert (typ = typ_of_value v);
+  Printf.sprintf "%s = %s" nm (value_to_string v)
+and struct_to_string { struct_name; struct_fields } fields =
+  assert (List.length struct_fields = List.length fields);
+  let fields = List.map2 struct_field_to_string struct_fields fields in
+  Printf.sprintf "%s { %s }" struct_name (String.concat "; " fields)
+and array_elem_to_string typ v =
+  assert (typ = typ_of_value v);
+  value_to_string v
+and array_to_string { array_type; array_len } elems =
+  assert (array_len = Array.length elems);
+  let elems = Array.map (array_elem_to_string array_type) elems in
+  Printf.sprintf "[| %s |]" (String.concat "; " (Array.to_list elems))
 
 let rec compare_types tau1 tau2 =
   match tau1, tau2 with
