@@ -20,23 +20,12 @@ struct bram {
     auto addr = last->addr;
     auto dEn = last->byte_en;
     bits<32> current = bits<32>{0};
-
-    if (addr.v == 0x40001000 && dEn.v == 0xf) {
-      int exitcode = last->data.v;
-      if (exitcode == 0) {
-        printf("  [0;32mPASS[0m\n");
-      } else {
-        printf("  [0;31mFAIL[0m (%d)", exitcode);
-      }
-      std::exit(exitcode);
-    } else {
-      current = mem[addr.v >> 2];
-      mem[addr.v >> 2] =
-        ((dEn[2'0_d] ? data : current) & 0x32'000000ff_x) |
-        ((dEn[2'1_d] ? data : current) & 0x32'0000ff00_x) |
-        ((dEn[2'2_d] ? data : current) & 0x32'00ff0000_x) |
-        ((dEn[2'3_d] ? data : current) & 0x32'ff000000_x);
-    }
+    current = mem[addr.v >> 2];
+    mem[addr.v >> 2] =
+      ((dEn[2'0_d] ? data : current) & 0x32'000000ff_x) |
+      ((dEn[2'1_d] ? data : current) & 0x32'0000ff00_x) |
+      ((dEn[2'2_d] ? data : current) & 0x32'00ff0000_x) |
+      ((dEn[2'3_d] ? data : current) & 0x32'ff000000_x);
 
     last.reset();
     return std::optional<struct_mem_resp>{{
@@ -103,6 +92,19 @@ struct extfuns_t {
       fprintf(stderr, led.v ? "☀" : "🌣");
     }
     return current;
+  }
+
+  bits<1> ext_finish(struct_maybe_bits_8 req) {
+    if (req.valid) {
+      bits<8> exitcode = req.data;
+      if (exitcode == 8'0_b) {
+        printf("  [0;32mPASS[0m\n");
+      } else {
+        printf("  [0;31mFAIL[0m (%d)\n", exitcode.v);
+      }
+      std::exit(exitcode.v);
+    }
+    return 1'0_b;
   }
 
   extfuns_t() : dmem{}, imem{}, led{false} {}
