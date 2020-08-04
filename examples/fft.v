@@ -1,4 +1,4 @@
-(*! Computing a FIR (Coq version) !*)
+(*! Computing an FFT !*)
 Require Import Koika.Frontend.
 
 Section KArray.
@@ -229,29 +229,34 @@ Definition twist (stage:nat) (index:nat) : uaction reg_t ext_fn_t :=
   | localSt =>  array_t {| array_type := struct_t complex ; array_len:= points|}
   end.
 
-Infix "+b+" := Bits.app (at level 60).
+  Import VectNotations.
+
+  Definition unpack_complex n :=
+    @value_of_bits (struct_t complex) (Bits.of_N _ n).
+
+  Import VectNotations.
+
   Definition r idx : R idx :=
   match idx with
     (*| localSt => value_of_bits (Bits.of_N (64*points) 4039432 : bits_t (64*points))*)
   | localSt =>
-      vect_cons (value_of_bits (Bits.of_N (64) 1240395430954309: bits (type_sz (struct_t complex))): struct_t complex) ( 
-      vect_cons (value_of_bits (Bits.of_N (64) 4039435493832342: bits (type_sz (struct_t complex))): struct_t complex) ( 
-      vect_cons (value_of_bits (Bits.of_N (64) 2243114035329432: bits (type_sz (struct_t complex))): struct_t complex) ( 
-      vect_cons (value_of_bits (Bits.of_N (64) 2113423124039432: bits (type_sz (struct_t complex))): struct_t complex) ( 
-      vect_cons (value_of_bits (Bits.of_N (64) 1322456664039432: bits (type_sz (struct_t complex))): struct_t complex) ( 
-      vect_cons (value_of_bits (Bits.of_N (64) 4039515233444432: bits (type_sz (struct_t complex))): struct_t complex) ( 
-      vect_cons (value_of_bits (Bits.of_N (64) 4039543289543432: bits (type_sz (struct_t complex))): struct_t complex) ( 
-      vect_cons (value_of_bits (Bits.of_N (64) 4039543289543432: bits (type_sz (struct_t complex))): struct_t complex) ( 
-      vect_cons (value_of_bits (Bits.of_N (64) 4039543289543432: bits (type_sz (struct_t complex))): struct_t complex) ( 
-      vect_cons (value_of_bits (Bits.of_N (64) 4039543289543432: bits (type_sz (struct_t complex))): struct_t complex) ( 
-      vect_cons (value_of_bits (Bits.of_N (64) 4039543289543432: bits (type_sz (struct_t complex))): struct_t complex) ( 
-      vect_cons (value_of_bits (Bits.of_N (64) 4039543289543432: bits (type_sz (struct_t complex))): struct_t complex) ( 
-      vect_cons (value_of_bits (Bits.of_N (64) 4039543289543432: bits (type_sz (struct_t complex))): struct_t complex) ( 
-      vect_cons (value_of_bits (Bits.of_N (64) 4039543289543432: bits (type_sz (struct_t complex))): struct_t complex) ( 
-      vect_cons (value_of_bits (Bits.of_N (64) 4039543289543432: bits (type_sz (struct_t complex))): struct_t complex) ( 
-      vect_cons (value_of_bits (Bits.of_N (64) 4039543289543432: bits (type_sz (struct_t complex))): struct_t complex) (vect_nil
-      ))))))))))))))))
-
+    vect_map unpack_complex
+      [1240395430954309;
+       4039435493832342;
+       2243114035329432;
+       2113423124039432;
+       1322456664039432;
+       4039515233444432;
+       4039543289543432;
+       4039543289543432;
+       4039543289543432;
+       4039543289543432;
+       4039543289543432;
+       4039543289543432;
+       4039543289543432;
+       4039543289543432;
+       4039543289543432;
+       4039543289543432]%N%vect
   end.
 
   Definition testbench_fir : scheduler :=
