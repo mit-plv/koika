@@ -24,7 +24,7 @@ CUTTLESIM_VCD_SCOPES ?= TOP $(mod)
 comma := ,
 cuttlesim_driver := $(basename $(notdir $(CUTTLESIM_DRIVER)))
 cuttlesim_helper := cuttlesim.hpp
-cxx_scopes_arg := '-DSIM_CUTTLESIM_VCD_SCOPES={$(patsubst %,"%"$(comma),$(CUTTLESIM_VCD_SCOPES))}'
+cxx_scopes_arg := '-DSIM_VCD_SCOPES={$(patsubst %,"%"$(comma),$(CUTTLESIM_VCD_SCOPES))}'
 cxx_flags := $(CXXFLAGS) $(CPPFLAGS) $(CUTTLESIM_WARNINGS) $(cxx_scopes_arg)
 
 ifeq (,$(findstring --std,$(cxx_flags)))
