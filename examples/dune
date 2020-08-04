@@ -71,6 +71,30 @@ Extraction \"external_rule.ml\" external_rule.prog."))
 
 
 ;; -*- dune -*-
+(subdir "_objects/fft.v"
+ (rule (write-file "fft_extr.v"
+                   "Require Coq.extraction.Extraction examples.fft.
+Extraction \"fft.ml\" fft.prog."))
+ (coq.extraction
+  (prelude fft_extr)
+  (extracted_modules fft)
+  (theories Koika examples)
+  (flags "-w" "-overriding-logical-loadpath")))
+
+
+;; -*- dune -*-
+(subdir "_objects/fir.v"
+ (rule (write-file "fir_extr.v"
+                   "Require Coq.extraction.Extraction examples.fir.
+Extraction \"fir.ml\" fir.prog."))
+ (coq.extraction
+  (prelude fir_extr)
+  (extracted_modules fir)
+  (theories Koika examples)
+  (flags "-w" "-overriding-logical-loadpath")))
+
+
+;; -*- dune -*-
 (subdir "_objects/function_call.v"
  (rule (write-file "function_call_extr.v"
                    "Require Coq.extraction.Extraction examples.function_call.
