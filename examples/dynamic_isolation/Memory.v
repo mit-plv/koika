@@ -1940,39 +1940,39 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
 
   End Schedule.
 
-  Parameter private_external_state_t : Type.
-  Parameter initial_private_external_state : private_external_state_t.
+  (* Parameter private_external_state_t : Type. *)
+  (* Parameter initial_private_external_state : private_external_state_t. *)
 
-  Definition koika_state_t := @Mem_Common.koika_state_t private_params.
-  Definition external_state_t := @Mem_Common.external_state_t private_external_state_t.
-  Definition initial_external_state (dram: dram_t) : external_state_t :=
-    (@Mem_Common.initial_external_state _ initial_private_external_state dram).
-  Definition state := @Mem_Common.state private_params private_external_state_t.
+  (* Definition koika_state_t := @Mem_Common.koika_state_t private_params. *)
+  (* Definition external_state_t := @Mem_Common.external_state_t private_external_state_t. *)
+  (* Definition initial_external_state (dram: dram_t) : external_state_t := *)
+  (*   (@Mem_Common.initial_external_state _ initial_private_external_state dram). *)
+  (* Definition state := @Mem_Common.state private_params private_external_state_t. *)
 
-  Parameter external_update_function: state -> Log R ContextEnv -> Log R ContextEnv * external_state_t.
+  (* Parameter external_update_function: state -> Log R ContextEnv -> Log R ContextEnv * external_state_t. *)
 
-  Parameter output_correctness : @P_output_correctness private_params External.ext EnclaveParams.params
-                                                       rule_name_t rules schedule
-                                                       private_external_state_t
-                                                       initial_private_external_state
-                                                       external_update_function.
-  Parameter correctness : @P_correctness private_params External.ext EnclaveParams.params
-                                         rule_name_t rules schedule
-                                         private_external_state_t
-                                         initial_private_external_state
-                                         external_update_function.
+  (* Parameter output_correctness : @P_output_correctness private_params External.ext EnclaveParams.params *)
+  (*                                                      rule_name_t rules schedule *)
+  (*                                                      private_external_state_t *)
+  (*                                                      initial_private_external_state *)
+  (*                                                      external_update_function. *)
+  (* Parameter correctness : @P_correctness private_params External.ext EnclaveParams.params *)
+  (*                                        rule_name_t rules schedule *)
+  (*                                        private_external_state_t *)
+  (*                                        initial_private_external_state *)
+  (*                                        external_update_function. *)
 
-  Parameter output_compliance: @P_output_compliance private_params External.ext EnclaveParams.params
-                                                    rule_name_t rules schedule
-                                                    private_external_state_t
-                                                    initial_private_external_state
-                                                    external_update_function.
+  (* Parameter output_compliance: @P_output_compliance private_params External.ext EnclaveParams.params *)
+  (*                                                   rule_name_t rules schedule *)
+  (*                                                   private_external_state_t *)
+  (*                                                   initial_private_external_state *)
+  (*                                                   external_update_function. *)
 
-  Parameter compliance: @P_compliance private_params External.ext EnclaveParams.params
-                                      rule_name_t rules schedule
-                                      private_external_state_t
-                                      initial_private_external_state
-                                      external_update_function.
+  (* Parameter compliance: @P_compliance private_params External.ext EnclaveParams.params *)
+  (*                                     rule_name_t rules schedule *)
+  (*                                     private_external_state_t *)
+  (*                                     initial_private_external_state *)
+  (*                                     external_update_function. *)
 
 
 End WIPMemory.

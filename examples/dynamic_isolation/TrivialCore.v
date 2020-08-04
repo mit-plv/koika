@@ -55,21 +55,21 @@ Module EmptyCore (External: External_sig) (Params: EnclaveParameters) (CoreParam
 
   Instance FiniteType_reg_t : FiniteType reg_t := @Core_Common.FiniteType_reg_t private_params.
 
-  (* TODO: clean up instantiation *)
-  Parameter output_correctness :
-    @Core_Common.P_output_correctness CoreParams.core_id CoreParams.initial_pc
-                                      private_params External.ext
-                                      rule_name_t rules schedule.
-  Parameter correctness : @Core_Common.P_correctness CoreParams.core_id CoreParams.initial_pc
-                                                     private_params External.ext
-                                                     rule_name_t rules schedule.
-  Parameter output_compliance :
-    @Core_Common.P_output_compliance CoreParams.core_id CoreParams.initial_pc
-                                     private_params External.ext
-                                     rule_name_t rules schedule.
+  (* (* TODO: clean up instantiation *) *)
+  (* Parameter output_correctness : *)
+  (*   @Core_Common.P_output_correctness CoreParams.core_id CoreParams.initial_pc *)
+  (*                                     private_params External.ext *)
+  (*                                     rule_name_t rules schedule. *)
+  (* Parameter correctness : @Core_Common.P_correctness CoreParams.core_id CoreParams.initial_pc *)
+  (*                                                    private_params External.ext *)
+  (*                                                    rule_name_t rules schedule. *)
+  (* Parameter output_compliance : *)
+  (*   @Core_Common.P_output_compliance CoreParams.core_id CoreParams.initial_pc *)
+  (*                                    private_params External.ext *)
+  (*                                    rule_name_t rules schedule. *)
 
-  Parameter compliance : @Core_Common.P_compliance CoreParams.core_id CoreParams.initial_pc
-                                                   private_params External.ext
-                                                   rule_name_t rules schedule.
+  (* Parameter compliance : @Core_Common.P_compliance CoreParams.core_id CoreParams.initial_pc *)
+  (*                                                  private_params External.ext *)
+  (*                                                  rule_name_t rules schedule. *)
 
 End EmptyCore.

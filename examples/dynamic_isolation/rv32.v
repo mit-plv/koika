@@ -5,10 +5,10 @@ Require Import dynamic_isolation.Interfaces.
 Require Import dynamic_isolation.Memory.
 Require Import dynamic_isolation.RVCore.
 Require Import dynamic_isolation.TrivialCore.
-Require Import dynamic_isolation.Multicore.
+(* Require Import dynamic_isolation.Multicore. *)
 
 (* TODO: REMOVE *)
-Require Import dynamic_isolation.Util.
+(* Require Import dynamic_isolation.Util. *)
 
 Module Params0 <: CoreParameters.
   Definition core_id := Ob~0.

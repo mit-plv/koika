@@ -762,20 +762,20 @@ Module Type Core_sig (External: External_sig) (Params: EnclaveParameters) (CoreP
   Instance FiniteType_reg_t : FiniteType reg_t := @Core_Common.FiniteType_reg_t private_params.
 
   (* TODO: clean up instantiation *)
-  Parameter output_correctness : @P_output_correctness CoreParams.core_id CoreParams.initial_pc
-                                                       private_params External.ext
-                                                       rule_name_t rules schedule.
-  Parameter correctness : @P_correctness CoreParams.core_id CoreParams.initial_pc
-                                         private_params External.ext
-                                         rule_name_t rules schedule.
+  (* Parameter output_correctness : @P_output_correctness CoreParams.core_id CoreParams.initial_pc *)
+  (*                                                      private_params External.ext *)
+  (*                                                      rule_name_t rules schedule. *)
+  (* Parameter correctness : @P_correctness CoreParams.core_id CoreParams.initial_pc *)
+  (*                                        private_params External.ext *)
+  (*                                        rule_name_t rules schedule. *)
 
-  Parameter output_compliance : @P_output_compliance CoreParams.core_id CoreParams.initial_pc
-                                                     private_params External.ext
-                                                     rule_name_t rules schedule.
+  (* Parameter output_compliance : @P_output_compliance CoreParams.core_id CoreParams.initial_pc *)
+  (*                                                    private_params External.ext *)
+  (*                                                    rule_name_t rules schedule. *)
 
-  Parameter compliance : @P_compliance CoreParams.core_id CoreParams.initial_pc
-                                       private_params External.ext
-                                       rule_name_t rules schedule.
+  (* Parameter compliance : @P_compliance CoreParams.core_id CoreParams.initial_pc *)
+  (*                                      private_params External.ext *)
+  (*                                      rule_name_t rules schedule. *)
 
 End Core_sig.
 
@@ -1111,8 +1111,8 @@ Module SM_Common.
 
   (* SLOW: 10s *)
   (* Slowness mostly comes from autorewrites *)
-  Declare Instance FiniteType_public_reg_t : FiniteType public_reg_t.
-  (* Instance FiniteType_public_reg_t : FiniteType public_reg_t := _. *)
+  (* Declare Instance FiniteType_public_reg_t : FiniteType public_reg_t. *)
+  Instance FiniteType_public_reg_t : FiniteType public_reg_t := _.
   Instance FiniteType_reg_t : FiniteType reg_t := _.
 
   Definition state := env_t ContextEnv (fun idx : reg_t => R idx).
@@ -1532,444 +1532,444 @@ Module SM_Common.
      | DoClk => tc_clk
      end.
 
-    Section Interface.
-      Definition lift_ext_log (log: Log R_public ContextEnv) : Log R ContextEnv :=
-        ContextEnv.(create) (fun reg => match reg return (RLog (R reg)) with
-                                     | public s => ContextEnv.(getenv) log s
-                                     | _ => []
-                                     end).
+  (*   Section Interface. *)
+  (*     Definition lift_ext_log (log: Log R_public ContextEnv) : Log R ContextEnv := *)
+  (*       ContextEnv.(create) (fun reg => match reg return (RLog (R reg)) with *)
+  (*                                    | public s => ContextEnv.(getenv) log s *)
+  (*                                    | _ => [] *)
+  (*                                    end). *)
 
-      Definition proj_log__pub (log: Log R ContextEnv) : Log R_public ContextEnv :=
-        ContextEnv.(create) (fun reg => ContextEnv.(getenv) log (SM_Common.public reg)).
+  (*     Definition proj_log__pub (log: Log R ContextEnv) : Log R_public ContextEnv := *)
+  (*       ContextEnv.(create) (fun reg => ContextEnv.(getenv) log (SM_Common.public reg)). *)
 
-      Definition is_public_log (log: Log R ContextEnv) : Prop :=
-        forall reg, match reg with
-               | public r => True
-               | private r => ContextEnv.(getenv) log reg = []
-               end.
+  (*     Definition is_public_log (log: Log R ContextEnv) : Prop := *)
+  (*       forall reg, match reg with *)
+  (*              | public r => True *)
+  (*              | private r => ContextEnv.(getenv) log reg = [] *)
+  (*              end. *)
 
-    End Interface.
+  (*   End Interface. *)
 
-    Section CycleSemantics.
-      (* Could add ghost state *)
+  (*   Section CycleSemantics. *)
+  (*     (* Could add ghost state *) *)
 
-      Definition impl_output_t : Type := Log R ContextEnv (* * ghost_output *).
+  (*     Definition impl_output_t : Type := Log R ContextEnv (* * ghost_output *). *)
 
-      Record ghost_output :=
-        { ghost_output_config0 : option enclave_config;
-          ghost_output_config1 : option enclave_config
-        }.
+  (*     Record ghost_output := *)
+  (*       { ghost_output_config0 : option enclave_config; *)
+  (*         ghost_output_config1 : option enclave_config *)
+  (*       }. *)
 
-      Record step_io :=
-        { step_input : Log R_public ContextEnv;
-          step_feedback : Log R_public ContextEnv
-        }.
+  (*     Record step_io := *)
+  (*       { step_input : Log R_public ContextEnv; *)
+  (*         step_feedback : Log R_public ContextEnv *)
+  (*       }. *)
 
-      Definition log_t := Log R ContextEnv.
-      Definition input_t := Log R_public ContextEnv.
-      Definition output_t : Type := Log R ContextEnv * ghost_output.
-      Definition feedback_t := Log R_public ContextEnv.
+  (*     Definition log_t := Log R ContextEnv. *)
+  (*     Definition input_t := Log R_public ContextEnv. *)
+  (*     Definition output_t : Type := Log R ContextEnv * ghost_output. *)
+  (*     Definition feedback_t := Log R_public ContextEnv. *)
 
-      (* TODO: need ghost state to interface with the memory module? *)
-      Definition update_function : state -> Log R ContextEnv -> impl_output_t :=
-        fun st log => interp_scheduler_delta st sigma rules log schedule.
+  (*     (* TODO: need ghost state to interface with the memory module? *) *)
+  (*     Definition update_function : state -> Log R ContextEnv -> impl_output_t := *)
+  (*       fun st log => interp_scheduler_delta st sigma rules log schedule. *)
 
-      Definition initial_state (eid0: option enclave_id) (eid1: option enclave_id) (clk: bits_t 1): state :=
-        ContextEnv.(create) (fun reg => match reg return R reg with
-                                     | private enc_data0 =>
-                                         match eid0 with
-                                         | Some id => eid_to_initial_enclave_data id
-                                         | None => value_of_bits Bits.zero
-                                         end
-                                     | private enc_data1 =>
-                                         match eid1 with
-                                         | Some id => eid_to_initial_enclave_data id
-                                         | None => value_of_bits Bits.zero
-                                         end
-                                     | private clk => clk
-                                     | private reg' => r_private reg'
-                                     | public reg' => r_public reg'
-                                     end).
-
-
-      Definition do_step_input__impl (st: state) (ext_input: input_t) : impl_output_t * log_t :=
-         let input := lift_ext_log ext_input in
-         let output := update_function st input in
-         (output, log_app output input).
-
-      Definition do_step__impl (st: state) (step: step_io) : state * impl_output_t :=
-        let '(output, acc) := do_step_input__impl st step.(step_input) in
-        let final := log_app (lift_ext_log step.(step_feedback)) acc in
-        (commit_update st final, output).
-
-      Definition do_steps__impl (steps: list step_io)
-                               : state * list impl_output_t :=
-        fold_left (fun '(st, evs) step =>
-                     let '(st', ev) := do_step__impl st step in
-                     (st', evs ++ [ev]))
-                  steps (initial_state (Some Enclave0) (Some Enclave1) Ob~0, []).
-
-    End CycleSemantics.
-
-    Section Taint.
-
-      Inductive taint_t :=
-      | TaintCore (core_id: ind_core_id)
-      | Bottom.
-
-      Definition private_reg_to_taint (reg: private_reg_t) : taint_t :=
-        match reg with
-        | state0 => TaintCore CoreId0
-        | state1 => TaintCore CoreId1
-        | enc_data0 => TaintCore CoreId0
-        | enc_data1 => TaintCore CoreId1
-        | enc_req0 => TaintCore CoreId0
-        | enc_req1 => TaintCore CoreId1
-        | clk => Bottom
-        end.
-
-      (* Only works for partitioned interfaces right now *)
-      Definition public_reg_to_core_id (reg: public_reg_t) : ind_core_id :=
-        match reg with
-        | fromCore0_IMem st => CoreId0
-        | fromCore0_DMem st => CoreId0
-        | fromCore0_Enc st => CoreId0
-        | toCore0_IMem st => CoreId0
-        | toCore0_DMem st => CoreId0
-        (* Core1 <-> SM *)
-        | fromCore1_IMem st => CoreId1
-        | fromCore1_DMem st => CoreId1
-        | fromCore1_Enc st => CoreId1
-        | toCore1_IMem st => CoreId1
-        | toCore1_DMem st => CoreId1
-        (* SM <-> Mem *)
-        | toMem0_IMem st => CoreId0
-        | toMem0_DMem st => CoreId0
-        | toMem1_IMem st => CoreId1
-        | toMem1_DMem st => CoreId1
-        | fromMem0_IMem st => CoreId0
-        | fromMem0_DMem st => CoreId0
-        | fromMem1_IMem st => CoreId1
-        | fromMem1_DMem st => CoreId1
-        | pc_core0 => CoreId0
-        | pc_core1 => CoreId1
-        | purge_core0 => CoreId0
-        | purge_core1 => CoreId1
-        | purge_mem0 => CoreId0
-        | purge_mem1 => CoreId1
-        end.
+  (*     Definition initial_state (eid0: option enclave_id) (eid1: option enclave_id) (clk: bits_t 1): state := *)
+  (*       ContextEnv.(create) (fun reg => match reg return R reg with *)
+  (*                                    | private enc_data0 => *)
+  (*                                        match eid0 with *)
+  (*                                        | Some id => eid_to_initial_enclave_data id *)
+  (*                                        | None => value_of_bits Bits.zero *)
+  (*                                        end *)
+  (*                                    | private enc_data1 => *)
+  (*                                        match eid1 with *)
+  (*                                        | Some id => eid_to_initial_enclave_data id *)
+  (*                                        | None => value_of_bits Bits.zero *)
+  (*                                        end *)
+  (*                                    | private clk => clk *)
+  (*                                    | private reg' => r_private reg' *)
+  (*                                    | public reg' => r_public reg' *)
+  (*                                    end). *)
 
 
-      Definition public_reg_to_taint (reg: public_reg_t) : taint_t :=
-        let core_id := public_reg_to_core_id reg in
-        TaintCore core_id.
+  (*     Definition do_step_input__impl (st: state) (ext_input: input_t) : impl_output_t * log_t := *)
+  (*        let input := lift_ext_log ext_input in *)
+  (*        let output := update_function st input in *)
+  (*        (output, log_app output input). *)
 
-      Definition reg_to_taint (reg: reg_t) : taint_t :=
-        match reg with
-        | public s => public_reg_to_taint s
-        | private s => private_reg_to_taint s
-        end.
+  (*     Definition do_step__impl (st: state) (step: step_io) : state * impl_output_t := *)
+  (*       let '(output, acc) := do_step_input__impl st step.(step_input) in *)
+  (*       let final := log_app (lift_ext_log step.(step_feedback)) acc in *)
+  (*       (commit_update st final, output). *)
 
-      Scheme Equality for taint_t.
+  (*     Definition do_steps__impl (steps: list step_io) *)
+  (*                              : state * list impl_output_t := *)
+  (*       fold_left (fun '(st, evs) step => *)
+  (*                    let '(st', ev) := do_step__impl st step in *)
+  (*                    (st', evs ++ [ev])) *)
+  (*                 steps (initial_state (Some Enclave0) (Some Enclave1) Ob~0, []). *)
 
-    End Taint.
+  (*   End CycleSemantics. *)
 
-    Section Spec.
+  (*   Section Taint. *)
 
-      Inductive sm_state_machine :=
-      | SmState_Enclave (machine_state: state) (config: enclave_config)
-                        (enclave_state: enclave_state_t)
-      | SmState_Waiting (new: enclave_config).
+  (*     Inductive taint_t := *)
+  (*     | TaintCore (core_id: ind_core_id) *)
+  (*     | Bottom. *)
 
-      Inductive sm_magic_state_machine :=
-      | SmMagicState_Continue (st: sm_state_machine) (ext: Log R ContextEnv) (config: option enclave_config)
-      | SmMagicState_Exit (waiting: enclave_config) (ext: Log R ContextEnv)
-      | SmMagicState_TryToEnter (next_enclave: enclave_config).
+  (*     Definition private_reg_to_taint (reg: private_reg_t) : taint_t := *)
+  (*       match reg with *)
+  (*       | state0 => TaintCore CoreId0 *)
+  (*       | state1 => TaintCore CoreId1 *)
+  (*       | enc_data0 => TaintCore CoreId0 *)
+  (*       | enc_data1 => TaintCore CoreId1 *)
+  (*       | enc_req0 => TaintCore CoreId0 *)
+  (*       | enc_req1 => TaintCore CoreId1 *)
+  (*       | clk => Bottom *)
+  (*       end. *)
 
-      Record iso_machine_t :=
-        { iso_sm0 : sm_state_machine;
-          iso_sm1 : sm_state_machine;
-          turn : bool
-        }.
-
-      Definition filter_public (log: Log R ContextEnv) (core: ind_core_id) : Log R ContextEnv :=
-        ContextEnv.(create) (fun r => match r with
-                                   | private s => []
-                                   | reg => if (taint_t_beq (reg_to_taint reg) (TaintCore core))
-                                              || (taint_t_beq (reg_to_taint reg) Bottom) then
-                                              ContextEnv.(getenv) log reg
-                                           else []
-                                   end).
-
-      (* TODO: normal way of writing this? *)
-      Definition observe_enclave_exit (core_id: ind_core_id) (log: Log R ContextEnv) : bool.
-        refine(
-        let enc_data_reg := match core_id with
-                            | CoreId0 => private enc_data0
-                            | CoreId1 => private enc_data1
-                            end in
-        match rew_latest_write log enc_data_reg _ with
-        | Some v =>
-            let data := EnclaveInterface.extract_enclave_data v in
-            bits_eqb (EnclaveInterface.enclave_data_valid data) Ob~0
-        | None => false
-        end).
-        - destruct core_id; reflexivity.
-      Defined.
-
-      Definition local_output_t : Type := Log R ContextEnv * option enclave_config.
-      Definition spec_output_t : Type := local_output_t * local_output_t.
-
-      Definition spec_state_t := iso_machine_t.
-      Definition initial_spec_state : spec_state_t. Admitted.
-
-      Definition check_for_context_switching (core_id: ind_core_id) (input_log: Log R_public ContextEnv)
-                                             : option EnclaveInterface.enclave_config.
-      Admitted.
-
-      Definition local_core_step (can_switch: bool) (core_id: ind_core_id)
-                                 (config: sm_state_machine)
-                                 (step: step_io)
-                                 : sm_magic_state_machine :=
-        match config with
-        | SmState_Enclave machine enclave enclave_state =>
-            let '(machine', output_log) := do_step__impl machine step in
-            match enclave_state with
-            | EnclaveState_Running =>
-                let enclave_state' :=
-                  match check_for_context_switching core_id step.(step_input) with
-                  | Some next_enclave => EnclaveState_Switching next_enclave
-                  | None => EnclaveState_Running
-                  end in
-                SmMagicState_Continue (SmState_Enclave machine' enclave enclave_state') output_log (Some enclave)
-            | EnclaveState_Switching next_enclave =>
-                if observe_enclave_exit core_id output_log
-                then SmMagicState_Exit next_enclave output_log
-                else SmMagicState_Continue (SmState_Enclave machine' enclave enclave_state) output_log (Some enclave)
-            end
-        | SmState_Waiting next_enclave =>
-            if can_switch
-            then SmMagicState_TryToEnter next_enclave
-            else SmMagicState_Continue config log_empty None
-        end.
-
-      Definition TODO_spin_up_machine (core: ind_core_id) (next: enclave_config) (turn: bool) : state :=
-        match core with
-        | CoreId0 => initial_state (Some next.(eid)) None (if turn then Ob~1 else Ob~0)
-        | CoreId1 => initial_state None (Some next.(eid)) (if turn then Ob~1 else Ob~0)
-        end.
-
-      Definition do_magic_step (core: ind_core_id)
-                               (turn: bool)
-                               (config: sm_magic_state_machine)
-                               (other_cores_enclave: option enclave_config)
-                               : sm_state_machine * Log R ContextEnv * option enclave_config :=
-        match config with
-        | SmMagicState_Continue st obs cur_config => (st, obs, cur_config)
-        | SmMagicState_Exit next_enclave obs =>
-           (SmState_Waiting next_enclave, obs, None)
-        | SmMagicState_TryToEnter next_enclave =>
-            if can_enter_enclave next_enclave other_cores_enclave then
-              let machine := TODO_spin_up_machine core next_enclave turn in
-              let sm_state := SmState_Enclave machine next_enclave EnclaveState_Running in
-              let obs := log_empty in (* TODO *)
-              (sm_state, obs, Some next_enclave)
-             else (SmState_Waiting next_enclave, log_empty, None)
-        end.
-
-      Definition get_enclave_config (st: sm_state_machine) : option enclave_config :=
-        match st with
-        | SmState_Enclave _ config _ => Some config
-        | _ => None
-        end.
-
-      (*
-      Definition iso_step (st: iso_machine_t) (input: Log R ContextEnv) (feedback: Log R ContextEnv)
-                          : iso_machine_t * output_t :=
-        let magic0 := local_core_step (negb st.(turn)) CoreId0 st.(iso_sm0)
-                                      (filter_public input CoreId0) (filter_public feedback CoreId0) in
-        let magic1 := local_core_step st.(turn) CoreId1 st.(iso_sm1)
-                                      (filter_public input CoreId1) (filter_public feedback CoreId1) in
-        let '(iso0', log0) := do_magic_step CoreId0 (negb st.(turn)) magic0 (get_enclave_config st.(iso_sm1)) in
-        let '(iso1', log1) := do_magic_step CoreId1 (negb st.(turn)) magic1 (get_enclave_config st.(iso_sm0)) in
-        let st' := {| iso_sm0 := iso0';
-                      iso_sm1 := iso1';
-                      turn := negb st.(turn)
-                   |} in
-        (st', (log0, log1)). (* TODO: process log0 and log1 *)
-        *)
-
-      Definition do_step_input__spec (spec_st: spec_state_t) (input: Log R_public ContextEnv)
-                                   : spec_output_t.
-      Admitted.
-
-      Definition valid_input (spec_st: spec_state_t) (log: Log R_public ContextEnv) : Prop.
-      Admitted.
-
-      Definition valid_output (spec_st: spec_state_t) (input: Log R_public ContextEnv) (log: spec_output_t) : Prop.
-      Admitted.
-
-      Definition valid_feedback (spec_st: spec_state_t)
-                                (input: Log R_public ContextEnv) (feedback: Log R_public ContextEnv)
-                                : Prop.
-      Admitted.
+  (*     (* Only works for partitioned interfaces right now *) *)
+  (*     Definition public_reg_to_core_id (reg: public_reg_t) : ind_core_id := *)
+  (*       match reg with *)
+  (*       | fromCore0_IMem st => CoreId0 *)
+  (*       | fromCore0_DMem st => CoreId0 *)
+  (*       | fromCore0_Enc st => CoreId0 *)
+  (*       | toCore0_IMem st => CoreId0 *)
+  (*       | toCore0_DMem st => CoreId0 *)
+  (*       (* Core1 <-> SM *) *)
+  (*       | fromCore1_IMem st => CoreId1 *)
+  (*       | fromCore1_DMem st => CoreId1 *)
+  (*       | fromCore1_Enc st => CoreId1 *)
+  (*       | toCore1_IMem st => CoreId1 *)
+  (*       | toCore1_DMem st => CoreId1 *)
+  (*       (* SM <-> Mem *) *)
+  (*       | toMem0_IMem st => CoreId0 *)
+  (*       | toMem0_DMem st => CoreId0 *)
+  (*       | toMem1_IMem st => CoreId1 *)
+  (*       | toMem1_DMem st => CoreId1 *)
+  (*       | fromMem0_IMem st => CoreId0 *)
+  (*       | fromMem0_DMem st => CoreId0 *)
+  (*       | fromMem1_IMem st => CoreId1 *)
+  (*       | fromMem1_DMem st => CoreId1 *)
+  (*       | pc_core0 => CoreId0 *)
+  (*       | pc_core1 => CoreId1 *)
+  (*       | purge_core0 => CoreId0 *)
+  (*       | purge_core1 => CoreId1 *)
+  (*       | purge_mem0 => CoreId0 *)
+  (*       | purge_mem1 => CoreId1 *)
+  (*       end. *)
 
 
-      Definition do_step__spec (spec_st: spec_state_t) (step: step_io)
-                             : spec_state_t * spec_output_t * props_t. Admitted.
+  (*     Definition public_reg_to_taint (reg: public_reg_t) : taint_t := *)
+  (*       let core_id := public_reg_to_core_id reg in *)
+  (*       TaintCore core_id. *)
 
-      Definition do_steps__spec (steps: list step_io)
-                              : spec_state_t * list spec_output_t * list props_t :=
-        fold_left (fun '(st, evs0, props) step =>
-                     let '(st', ev0, prop) := do_step__spec st step in
-                     (st', evs0 ++ [ev0], props ++ [prop]))
-                  steps (initial_spec_state , [], []).
+  (*     Definition reg_to_taint (reg: reg_t) : taint_t := *)
+  (*       match reg with *)
+  (*       | public s => public_reg_to_taint s *)
+  (*       | private s => private_reg_to_taint s *)
+  (*       end. *)
 
-    End Spec.
+  (*     Scheme Equality for taint_t. *)
 
-    Section Correctness.
-      (* needs to include any observable registers *)
-      Definition trace_equivalent (koika_tr: list impl_output_t)
-                                  (spec_tr: list spec_output_t) : Prop.
-      Admitted.
+  (*   End Taint. *)
 
-      Theorem correctness :
-        forall (steps: list step_io)
-          (spec_st: spec_state_t) (spec_tr: list spec_output_t) (props: list props_t)
-          (koika_st: state) (koika_tr: list impl_output_t),
-        valid_inputs props ->
-        valid_feedbacks props ->
-        do_steps__spec steps = (spec_st, spec_tr, props) ->
-        do_steps__impl steps = (koika_st, koika_tr) ->
-        trace_equivalent koika_tr spec_tr.
-      Admitted.
+  (*   Section Spec. *)
 
-      Definition output_log_equivalent (impl_output: impl_output_t) (spec_output: spec_output_t) : Prop :=
-        forall reg, match reg with
-               | SM_Common.public reg' =>
-                   match public_reg_to_core_id reg' with
-                   | CoreId0 => ContextEnv.(getenv) (fst (fst spec_output)) (SM_Common.public reg') =
-                               ContextEnv.(getenv) impl_output (SM_Common.public reg')
-                   | CoreId1 => ContextEnv.(getenv) (fst (snd spec_output)) (SM_Common.public reg') =
-                               ContextEnv.(getenv) impl_output (SM_Common.public reg')
-                   end
-               | _ => True
-               end.
+  (*     Inductive sm_state_machine := *)
+  (*     | SmState_Enclave (machine_state: state) (config: enclave_config) *)
+  (*                       (enclave_state: enclave_state_t) *)
+  (*     | SmState_Waiting (new: enclave_config). *)
 
-      Theorem output_correctness:
-        forall (steps: list step_io)
-          (spec_st: spec_state_t) (spec_tr: list spec_output_t) (props: list props_t)
-          (koika_st: state) (koika_tr: list impl_output_t)
-          (input: Log R_public ContextEnv) (impl_output: impl_output_t) (spec_output: spec_output_t),
-          valid_inputs props ->
-          valid_feedbacks props ->
-          do_steps__spec steps = (spec_st, spec_tr, props) ->
-          do_steps__impl steps = (koika_st, koika_tr) ->
-          valid_input spec_st input ->
-          fst (do_step_input__impl koika_st input) = impl_output ->
-          do_step_input__spec spec_st input = spec_output ->
-          output_log_equivalent impl_output spec_output.
-      Admitted.
+  (*     Inductive sm_magic_state_machine := *)
+  (*     | SmMagicState_Continue (st: sm_state_machine) (ext: Log R ContextEnv) (config: option enclave_config) *)
+  (*     | SmMagicState_Exit (waiting: enclave_config) (ext: Log R ContextEnv) *)
+  (*     | SmMagicState_TryToEnter (next_enclave: enclave_config). *)
 
-    End Correctness.
+  (*     Record iso_machine_t := *)
+  (*       { iso_sm0 : sm_state_machine; *)
+  (*         iso_sm1 : sm_state_machine; *)
+  (*         turn : bool *)
+  (*       }. *)
 
-    Section Compliance.
+  (*     Definition filter_public (log: Log R ContextEnv) (core: ind_core_id) : Log R ContextEnv := *)
+  (*       ContextEnv.(create) (fun r => match r with *)
+  (*                                  | private s => [] *)
+  (*                                  | reg => if (taint_t_beq (reg_to_taint reg) (TaintCore core)) *)
+  (*                                             || (taint_t_beq (reg_to_taint reg) Bottom) then *)
+  (*                                             ContextEnv.(getenv) log reg *)
+  (*                                          else [] *)
+  (*                                  end). *)
 
-      Theorem output_compliance :
-        forall (steps: list step_io)
-          (spec_st: spec_state_t) (spec_tr: list spec_output_t) (props: list props_t)
-          (input: input_t) (output: spec_output_t),
-          valid_inputs props ->
-          valid_feedbacks props ->
-          do_steps__spec steps = (spec_st, spec_tr, props) ->
-          valid_input spec_st input ->
-          do_step_input__spec spec_st input = output ->
-          valid_output spec_st input output.
-      Admitted.
+  (*     (* TODO: normal way of writing this? *) *)
+  (*     Definition observe_enclave_exit (core_id: ind_core_id) (log: Log R ContextEnv) : bool. *)
+  (*       refine( *)
+  (*       let enc_data_reg := match core_id with *)
+  (*                           | CoreId0 => private enc_data0 *)
+  (*                           | CoreId1 => private enc_data1 *)
+  (*                           end in *)
+  (*       match rew_latest_write log enc_data_reg _ with *)
+  (*       | Some v => *)
+  (*           let data := EnclaveInterface.extract_enclave_data v in *)
+  (*           bits_eqb (EnclaveInterface.enclave_data_valid data) Ob~0 *)
+  (*       | None => false *)
+  (*       end). *)
+  (*       - destruct core_id; reflexivity. *)
+  (*     Defined. *)
 
-      Theorem compliance:
-        forall (steps: list step_io)
-          (spec_st: spec_state_t) (spec_tr: list spec_output_t) (props: list props_t),
-        valid_inputs props ->
-        valid_feedbacks props ->
-        do_steps__spec steps = (spec_st, spec_tr, props) ->
-        valid_outputs props.
-      Admitted.
-    End Compliance.
+  (*     Definition local_output_t : Type := Log R ContextEnv * option enclave_config. *)
+  (*     Definition spec_output_t : Type := local_output_t * local_output_t. *)
 
-    Section Lemmas.
+  (*     Definition spec_state_t := iso_machine_t. *)
+  (*     Definition initial_spec_state : spec_state_t. Admitted. *)
 
-      Lemma do_steps__impl_app__state:
-        forall ios io,
-        fst (do_steps__impl (ios ++ [io])) =
-        fst (do_step__impl (fst (do_steps__impl ios)) io).
-      Proof.
-        consider do_steps__impl.
-        intros. rewrite fold_left_app.
-        unfold fold_left at 1.
-        unfold fst. fast_destruct_goal_matches; auto.
-      Qed.
+  (*     Definition check_for_context_switching (core_id: ind_core_id) (input_log: Log R_public ContextEnv) *)
+  (*                                            : option EnclaveInterface.enclave_config. *)
+  (*     Admitted. *)
 
-      Lemma do_step_rel_do_step_input__impl :
-        forall st io,
-        snd (do_step__impl st io) =
-        fst (do_step_input__impl st (io.(step_input))).
-      Proof.
-        consider do_step__impl.
-        intros.
-        destruct_goal_matches.
-      Qed.
+  (*     Definition local_core_step (can_switch: bool) (core_id: ind_core_id) *)
+  (*                                (config: sm_state_machine) *)
+  (*                                (step: step_io) *)
+  (*                                : sm_magic_state_machine := *)
+  (*       match config with *)
+  (*       | SmState_Enclave machine enclave enclave_state => *)
+  (*           let '(machine', output_log) := do_step__impl machine step in *)
+  (*           match enclave_state with *)
+  (*           | EnclaveState_Running => *)
+  (*               let enclave_state' := *)
+  (*                 match check_for_context_switching core_id step.(step_input) with *)
+  (*                 | Some next_enclave => EnclaveState_Switching next_enclave *)
+  (*                 | None => EnclaveState_Running *)
+  (*                 end in *)
+  (*               SmMagicState_Continue (SmState_Enclave machine' enclave enclave_state') output_log (Some enclave) *)
+  (*           | EnclaveState_Switching next_enclave => *)
+  (*               if observe_enclave_exit core_id output_log *)
+  (*               then SmMagicState_Exit next_enclave output_log *)
+  (*               else SmMagicState_Continue (SmState_Enclave machine' enclave enclave_state) output_log (Some enclave) *)
+  (*           end *)
+  (*       | SmState_Waiting next_enclave => *)
+  (*           if can_switch *)
+  (*           then SmMagicState_TryToEnter next_enclave *)
+  (*           else SmMagicState_Continue config log_empty None *)
+  (*       end. *)
 
-      Lemma do_steps__impl_app__trace:
-        forall ios io,
-        snd (do_steps__impl ios) ++ [fst (do_step_input__impl (fst (do_steps__impl ios)) (step_input io) )] =
-        snd (do_steps__impl (ios ++ [io])).
-      Proof.
-        consider do_steps__impl.
-        intros. rewrite fold_left_app.
-        unfold fold_left at 3.
-        fast_destruct_goal_matches.
-        unfold snd.
-        simpl fst at 2.
-        rewrite<-do_step_rel_do_step_input__impl.
-        rewrite_solve.
-      Qed.
+  (*     Definition TODO_spin_up_machine (core: ind_core_id) (next: enclave_config) (turn: bool) : state := *)
+  (*       match core with *)
+  (*       | CoreId0 => initial_state (Some next.(eid)) None (if turn then Ob~1 else Ob~0) *)
+  (*       | CoreId1 => initial_state None (Some next.(eid)) (if turn then Ob~1 else Ob~0) *)
+  (*       end. *)
 
-      Lemma do_steps__spec_app__state:
-        forall ios io,
-        fst (fst (do_steps__spec (ios ++ [io]))) =
-        fst (fst (do_step__spec (fst (fst (do_steps__spec ios))) io)).
-      Proof.
-        intros. consider do_steps__spec.
-        rewrite fold_left_app.
-        unfold fold_left at 1.
-        fast_destruct_goal_matches.
-        unfold fst. rewrite_solve.
-      Qed.
+  (*     Definition do_magic_step (core: ind_core_id) *)
+  (*                              (turn: bool) *)
+  (*                              (config: sm_magic_state_machine) *)
+  (*                              (other_cores_enclave: option enclave_config) *)
+  (*                              : sm_state_machine * Log R ContextEnv * option enclave_config := *)
+  (*       match config with *)
+  (*       | SmMagicState_Continue st obs cur_config => (st, obs, cur_config) *)
+  (*       | SmMagicState_Exit next_enclave obs => *)
+  (*          (SmState_Waiting next_enclave, obs, None) *)
+  (*       | SmMagicState_TryToEnter next_enclave => *)
+  (*           if can_enter_enclave next_enclave other_cores_enclave then *)
+  (*             let machine := TODO_spin_up_machine core next_enclave turn in *)
+  (*             let sm_state := SmState_Enclave machine next_enclave EnclaveState_Running in *)
+  (*             let obs := log_empty in (* TODO *) *)
+  (*             (sm_state, obs, Some next_enclave) *)
+  (*            else (SmState_Waiting next_enclave, log_empty, None) *)
+  (*       end. *)
 
-      Lemma do_step_rel_do_step_input__spec :
-        forall st io,
-        snd (fst (do_step__spec st io)) =
-        do_step_input__spec st (io.(step_input)).
-      Proof.
-      Admitted.
+  (*     Definition get_enclave_config (st: sm_state_machine) : option enclave_config := *)
+  (*       match st with *)
+  (*       | SmState_Enclave _ config _ => Some config *)
+  (*       | _ => None *)
+  (*       end. *)
+
+  (*     (* *)
+  (*     Definition iso_step (st: iso_machine_t) (input: Log R ContextEnv) (feedback: Log R ContextEnv) *)
+  (*                         : iso_machine_t * output_t := *)
+  (*       let magic0 := local_core_step (negb st.(turn)) CoreId0 st.(iso_sm0) *)
+  (*                                     (filter_public input CoreId0) (filter_public feedback CoreId0) in *)
+  (*       let magic1 := local_core_step st.(turn) CoreId1 st.(iso_sm1) *)
+  (*                                     (filter_public input CoreId1) (filter_public feedback CoreId1) in *)
+  (*       let '(iso0', log0) := do_magic_step CoreId0 (negb st.(turn)) magic0 (get_enclave_config st.(iso_sm1)) in *)
+  (*       let '(iso1', log1) := do_magic_step CoreId1 (negb st.(turn)) magic1 (get_enclave_config st.(iso_sm0)) in *)
+  (*       let st' := {| iso_sm0 := iso0'; *)
+  (*                     iso_sm1 := iso1'; *)
+  (*                     turn := negb st.(turn) *)
+  (*                  |} in *)
+  (*       (st', (log0, log1)). (* TODO: process log0 and log1 *) *)
+  (*       *) *)
+
+  (*     Definition do_step_input__spec (spec_st: spec_state_t) (input: Log R_public ContextEnv) *)
+  (*                                  : spec_output_t. *)
+  (*     Admitted. *)
+
+  (*     Definition valid_input (spec_st: spec_state_t) (log: Log R_public ContextEnv) : Prop. *)
+  (*     Admitted. *)
+
+  (*     Definition valid_output (spec_st: spec_state_t) (input: Log R_public ContextEnv) (log: spec_output_t) : Prop. *)
+  (*     Admitted. *)
+
+  (*     Definition valid_feedback (spec_st: spec_state_t) *)
+  (*                               (input: Log R_public ContextEnv) (feedback: Log R_public ContextEnv) *)
+  (*                               : Prop. *)
+  (*     Admitted. *)
 
 
-      Lemma do_steps__spec_app__trace :
-        forall ios io,
-        snd (fst (do_steps__spec ios)) ++ [do_step_input__spec (fst (fst (do_steps__spec ios))) (io.(step_input))] =
-        snd (fst (do_steps__spec (ios ++ [io]))).
-      Proof.
-        intros. consider do_steps__spec.
-        repeat rewrite fold_left_app.
-        unfold fold_left at 3.
-        fast_destruct_goal_matches.
-        rewrite<-do_step_rel_do_step_input__spec.
-        unfold fst; unfold snd.
-        rewrite_solve.
-      Qed.
+  (*     Definition do_step__spec (spec_st: spec_state_t) (step: step_io) *)
+  (*                            : spec_state_t * spec_output_t * props_t. Admitted. *)
 
-    End Lemmas.
+  (*     Definition do_steps__spec (steps: list step_io) *)
+  (*                             : spec_state_t * list spec_output_t * list props_t := *)
+  (*       fold_left (fun '(st, evs0, props) step => *)
+  (*                    let '(st', ev0, prop) := do_step__spec st step in *)
+  (*                    (st', evs0 ++ [ev0], props ++ [prop])) *)
+  (*                 steps (initial_spec_state , [], []). *)
+
+  (*   End Spec. *)
+
+  (*   Section Correctness. *)
+  (*     (* needs to include any observable registers *) *)
+  (*     Definition trace_equivalent (koika_tr: list impl_output_t) *)
+  (*                                 (spec_tr: list spec_output_t) : Prop. *)
+  (*     Admitted. *)
+
+  (*     Theorem correctness : *)
+  (*       forall (steps: list step_io) *)
+  (*         (spec_st: spec_state_t) (spec_tr: list spec_output_t) (props: list props_t) *)
+  (*         (koika_st: state) (koika_tr: list impl_output_t), *)
+  (*       valid_inputs props -> *)
+  (*       valid_feedbacks props -> *)
+  (*       do_steps__spec steps = (spec_st, spec_tr, props) -> *)
+  (*       do_steps__impl steps = (koika_st, koika_tr) -> *)
+  (*       trace_equivalent koika_tr spec_tr. *)
+  (*     Admitted. *)
+
+  (*     Definition output_log_equivalent (impl_output: impl_output_t) (spec_output: spec_output_t) : Prop := *)
+  (*       forall reg, match reg with *)
+  (*              | SM_Common.public reg' => *)
+  (*                  match public_reg_to_core_id reg' with *)
+  (*                  | CoreId0 => ContextEnv.(getenv) (fst (fst spec_output)) (SM_Common.public reg') = *)
+  (*                              ContextEnv.(getenv) impl_output (SM_Common.public reg') *)
+  (*                  | CoreId1 => ContextEnv.(getenv) (fst (snd spec_output)) (SM_Common.public reg') = *)
+  (*                              ContextEnv.(getenv) impl_output (SM_Common.public reg') *)
+  (*                  end *)
+  (*              | _ => True *)
+  (*              end. *)
+
+  (*     Theorem output_correctness: *)
+  (*       forall (steps: list step_io) *)
+  (*         (spec_st: spec_state_t) (spec_tr: list spec_output_t) (props: list props_t) *)
+  (*         (koika_st: state) (koika_tr: list impl_output_t) *)
+  (*         (input: Log R_public ContextEnv) (impl_output: impl_output_t) (spec_output: spec_output_t), *)
+  (*         valid_inputs props -> *)
+  (*         valid_feedbacks props -> *)
+  (*         do_steps__spec steps = (spec_st, spec_tr, props) -> *)
+  (*         do_steps__impl steps = (koika_st, koika_tr) -> *)
+  (*         valid_input spec_st input -> *)
+  (*         fst (do_step_input__impl koika_st input) = impl_output -> *)
+  (*         do_step_input__spec spec_st input = spec_output -> *)
+  (*         output_log_equivalent impl_output spec_output. *)
+  (*     Admitted. *)
+
+  (*   End Correctness. *)
+
+  (*   Section Compliance. *)
+
+  (*     Theorem output_compliance : *)
+  (*       forall (steps: list step_io) *)
+  (*         (spec_st: spec_state_t) (spec_tr: list spec_output_t) (props: list props_t) *)
+  (*         (input: input_t) (output: spec_output_t), *)
+  (*         valid_inputs props -> *)
+  (*         valid_feedbacks props -> *)
+  (*         do_steps__spec steps = (spec_st, spec_tr, props) -> *)
+  (*         valid_input spec_st input -> *)
+  (*         do_step_input__spec spec_st input = output -> *)
+  (*         valid_output spec_st input output. *)
+  (*     Admitted. *)
+
+  (*     Theorem compliance: *)
+  (*       forall (steps: list step_io) *)
+  (*         (spec_st: spec_state_t) (spec_tr: list spec_output_t) (props: list props_t), *)
+  (*       valid_inputs props -> *)
+  (*       valid_feedbacks props -> *)
+  (*       do_steps__spec steps = (spec_st, spec_tr, props) -> *)
+  (*       valid_outputs props. *)
+  (*     Admitted. *)
+  (*   End Compliance. *)
+
+  (*   Section Lemmas. *)
+
+  (*     Lemma do_steps__impl_app__state: *)
+  (*       forall ios io, *)
+  (*       fst (do_steps__impl (ios ++ [io])) = *)
+  (*       fst (do_step__impl (fst (do_steps__impl ios)) io). *)
+  (*     Proof. *)
+  (*       consider do_steps__impl. *)
+  (*       intros. rewrite fold_left_app. *)
+  (*       unfold fold_left at 1. *)
+  (*       unfold fst. fast_destruct_goal_matches; auto. *)
+  (*     Qed. *)
+
+  (*     Lemma do_step_rel_do_step_input__impl : *)
+  (*       forall st io, *)
+  (*       snd (do_step__impl st io) = *)
+  (*       fst (do_step_input__impl st (io.(step_input))). *)
+  (*     Proof. *)
+  (*       consider do_step__impl. *)
+  (*       intros. *)
+  (*       destruct_goal_matches. *)
+  (*     Qed. *)
+
+  (*     Lemma do_steps__impl_app__trace: *)
+  (*       forall ios io, *)
+  (*       snd (do_steps__impl ios) ++ [fst (do_step_input__impl (fst (do_steps__impl ios)) (step_input io) )] = *)
+  (*       snd (do_steps__impl (ios ++ [io])). *)
+  (*     Proof. *)
+  (*       consider do_steps__impl. *)
+  (*       intros. rewrite fold_left_app. *)
+  (*       unfold fold_left at 3. *)
+  (*       fast_destruct_goal_matches. *)
+  (*       unfold snd. *)
+  (*       simpl fst at 2. *)
+  (*       rewrite<-do_step_rel_do_step_input__impl. *)
+  (*       rewrite_solve. *)
+  (*     Qed. *)
+
+  (*     Lemma do_steps__spec_app__state: *)
+  (*       forall ios io, *)
+  (*       fst (fst (do_steps__spec (ios ++ [io]))) = *)
+  (*       fst (fst (do_step__spec (fst (fst (do_steps__spec ios))) io)). *)
+  (*     Proof. *)
+  (*       intros. consider do_steps__spec. *)
+  (*       rewrite fold_left_app. *)
+  (*       unfold fold_left at 1. *)
+  (*       fast_destruct_goal_matches. *)
+  (*       unfold fst. rewrite_solve. *)
+  (*     Qed. *)
+
+  (*     Lemma do_step_rel_do_step_input__spec : *)
+  (*       forall st io, *)
+  (*       snd (fst (do_step__spec st io)) = *)
+  (*       do_step_input__spec st (io.(step_input)). *)
+  (*     Proof. *)
+  (*     Admitted. *)
+
+
+  (*     Lemma do_steps__spec_app__trace : *)
+  (*       forall ios io, *)
+  (*       snd (fst (do_steps__spec ios)) ++ [do_step_input__spec (fst (fst (do_steps__spec ios))) (io.(step_input))] = *)
+  (*       snd (fst (do_steps__spec (ios ++ [io]))). *)
+  (*     Proof. *)
+  (*       intros. consider do_steps__spec. *)
+  (*       repeat rewrite fold_left_app. *)
+  (*       unfold fold_left at 3. *)
+  (*       fast_destruct_goal_matches. *)
+  (*       rewrite<-do_step_rel_do_step_input__spec. *)
+  (*       unfold fst; unfold snd. *)
+  (*       rewrite_solve. *)
+  (*     Qed. *)
+
+  (*   End Lemmas. *)
 
   End Parameterised.
 
@@ -1989,18 +1989,18 @@ Module SecurityMonitor (External: External_sig) (Params: EnclaveParameters)
 
   Definition rules := @SM_Common.rules Params.params External.ext.
 
-  Definition do_step_input__impl := @SM_Common.do_step_input__impl Params.params External.ext.
-  Definition do_step__impl:=
-    @SM_Common.do_step__impl Params.params External.ext.
-  Definition do_steps__impl :=
-    @SM_Common.do_steps__impl Params0.initial_pc Params1.initial_pc Params.params External.ext.
+  (* Definition do_step_input__impl := @SM_Common.do_step_input__impl Params.params External.ext. *)
+  (* Definition do_step__impl:= *)
+  (*   @SM_Common.do_step__impl Params.params External.ext. *)
+  (* Definition do_steps__impl := *)
+  (*   @SM_Common.do_steps__impl Params0.initial_pc Params1.initial_pc Params.params External.ext. *)
 
-  Definition do_step_input__spec :=
-    @SM_Common.do_step_input__spec Params0.initial_pc Params1.initial_pc Params.params External.ext.
-  Definition do_step__spec:=
-    @SM_Common.do_step__spec Params0.initial_pc Params1.initial_pc Params.params External.ext.
-  Definition do_steps__spec:=
-    @SM_Common.do_steps__spec Params0.initial_pc Params1.initial_pc Params.params External.ext.
+  (* Definition do_step_input__spec := *)
+  (*   @SM_Common.do_step_input__spec Params0.initial_pc Params1.initial_pc Params.params External.ext. *)
+  (* Definition do_step__spec:= *)
+  (*   @SM_Common.do_step__spec Params0.initial_pc Params1.initial_pc Params.params External.ext. *)
+  (* Definition do_steps__spec:= *)
+  (*   @SM_Common.do_steps__spec Params0.initial_pc Params1.initial_pc Params.params External.ext. *)
 
 End SecurityMonitor.
 
@@ -2668,38 +2668,38 @@ Module Type Memory_sig (External: External_sig) (EnclaveParams: EnclaveParameter
 
   Parameter schedule : Syntax.scheduler pos_t rule_name_t.
 
-  Parameter private_external_state_t : Type.
-  Parameter initial_private_external_state : private_external_state_t.
+  (* Parameter private_external_state_t : Type. *)
+  (* Parameter initial_private_external_state : private_external_state_t. *)
 
-  Definition koika_state_t := @Mem_Common.koika_state_t private_params.
-  Definition external_state_t := @Mem_Common.external_state_t private_external_state_t.
-  Definition initial_external_state (dram: dram_t) : external_state_t :=
-    (@Mem_Common.initial_external_state _ initial_private_external_state dram).
-  Definition state := @Mem_Common.state private_params private_external_state_t.
+  (* Definition koika_state_t := @Mem_Common.koika_state_t private_params. *)
+  (* Definition external_state_t := @Mem_Common.external_state_t private_external_state_t. *)
+  (* Definition initial_external_state (dram: dram_t) : external_state_t := *)
+  (*   (@Mem_Common.initial_external_state _ initial_private_external_state dram). *)
+  (* Definition state := @Mem_Common.state private_params private_external_state_t. *)
 
-  Parameter external_update_function: state -> Log R ContextEnv -> Log R ContextEnv * external_state_t.
+  (* Parameter external_update_function: state -> Log R ContextEnv -> Log R ContextEnv * external_state_t. *)
 
-  Parameter output_correctness : @P_output_correctness private_params External.ext EnclaveParams.params
-                                                       rule_name_t rules schedule
-                                                       private_external_state_t
-                                                       initial_private_external_state
-                                                       external_update_function.
-  Parameter correctness : @P_correctness private_params External.ext EnclaveParams.params
-                                         rule_name_t rules schedule
-                                         private_external_state_t
-                                         initial_private_external_state
-                                         external_update_function.
-  Parameter output_compliance: @P_output_compliance private_params External.ext EnclaveParams.params
-                                                    rule_name_t rules schedule
-                                                    private_external_state_t
-                                                    initial_private_external_state
-                                                    external_update_function.
+  (* Parameter output_correctness : @P_output_correctness private_params External.ext EnclaveParams.params *)
+  (*                                                      rule_name_t rules schedule *)
+  (*                                                      private_external_state_t *)
+  (*                                                      initial_private_external_state *)
+  (*                                                      external_update_function. *)
+  (* Parameter correctness : @P_correctness private_params External.ext EnclaveParams.params *)
+  (*                                        rule_name_t rules schedule *)
+  (*                                        private_external_state_t *)
+  (*                                        initial_private_external_state *)
+  (*                                        external_update_function. *)
+  (* Parameter output_compliance: @P_output_compliance private_params External.ext EnclaveParams.params *)
+  (*                                                   rule_name_t rules schedule *)
+  (*                                                   private_external_state_t *)
+  (*                                                   initial_private_external_state *)
+  (*                                                   external_update_function. *)
 
-  Parameter compliance: @P_compliance private_params External.ext EnclaveParams.params
-                                      rule_name_t rules schedule
-                                      private_external_state_t
-                                      initial_private_external_state
-                                      external_update_function.
+  (* Parameter compliance: @P_compliance private_params External.ext EnclaveParams.params *)
+  (*                                     rule_name_t rules schedule *)
+  (*                                     private_external_state_t *)
+  (*                                     initial_private_external_state *)
+  (*                                     external_update_function. *)
 End Memory_sig.
 
 Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
@@ -2762,10 +2762,10 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
     _FiniteType_private_reg_t Memory.private_params.
 
   (* SLOW: ~30s *)
-  (* Instance FiniteType_reg_t : FiniteType reg_t := _. *)
-  (* Instance EqDec_reg_t : EqDec reg_t := _. *)
-  Declare Instance FiniteType_reg_t : FiniteType reg_t.
-  Declare Instance EqDec_reg_t : EqDec reg_t.
+  Instance FiniteType_reg_t : FiniteType reg_t := _.
+  Instance EqDec_reg_t : EqDec reg_t := _.
+  (* Declare Instance FiniteType_reg_t : FiniteType reg_t. *)
+  (* Declare Instance EqDec_reg_t : EqDec reg_t. *)
 
   Definition R (idx: reg_t) : type :=
     match idx with

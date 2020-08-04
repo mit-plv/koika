@@ -943,20 +943,20 @@ Module RV32I (EnclaveParams: EnclaveParameters) (CoreParams: CoreParameters)
   (* Instance FiniteType_ext_reg_t : FiniteType external_reg_t := _. *)
   (* Instance FiniteType_reg_t : FiniteType reg_t := _. *)
 
-  Parameter output_correctness : @P_output_correctness CoreParams.core_id CoreParams.initial_pc
-                                                        private_params External.ext
-                                                        rule_name_t rules schedule.
+  (* Parameter output_correctness : @P_output_correctness CoreParams.core_id CoreParams.initial_pc *)
+  (*                                                       private_params External.ext *)
+  (*                                                       rule_name_t rules schedule. *)
 
-  Parameter correctness : @P_correctness CoreParams.core_id CoreParams.initial_pc
-                                         private_params External.ext
-                                         rule_name_t rules schedule.
-  Parameter output_compliance : @P_output_compliance CoreParams.core_id CoreParams.initial_pc
-                                                     private_params External.ext
-                                                     rule_name_t rules schedule.
+  (* Parameter correctness : @P_correctness CoreParams.core_id CoreParams.initial_pc *)
+  (*                                        private_params External.ext *)
+  (*                                        rule_name_t rules schedule. *)
+  (* Parameter output_compliance : @P_output_compliance CoreParams.core_id CoreParams.initial_pc *)
+  (*                                                    private_params External.ext *)
+  (*                                                    rule_name_t rules schedule. *)
 
-  Parameter compliance : @P_compliance CoreParams.core_id CoreParams.initial_pc
-                                       private_params External.ext
-                                       rule_name_t rules schedule.
+  (* Parameter compliance : @P_compliance CoreParams.core_id CoreParams.initial_pc *)
+  (*                                      private_params External.ext *)
+  (*                                      rule_name_t rules schedule. *)
 
 End RV32I.
 
