@@ -3,11 +3,22 @@
 // This toplevel is mostly for simulation, since it assumes the UART module
 // is always ready to transmit.
 module top(input CLK, input RST_N, output uart_wr_valid, output[7:0] uart_wr_data, output LED);
-   wire[69:0] dmem_out;
-   wire[69:0] dmem_arg;
+   wire[34:0] ppp_bookkeeping_arg;
+   wire[20:0] ppp_bookkeeping_out;
 
-   wire[69:0] imem_out;
-   wire[69:0] imem_arg;
+   wire[53:0] cache_imem0_out;
+   wire[70:0] cache_imem0_arg;
+   wire[53:0] cache_imem1_out;
+   wire[70:0] cache_imem1_arg;
+
+   wire[53:0] cache_dmem0_out;
+   wire[70:0] cache_dmem0_arg;
+   wire[53:0] cache_dmem1_out;
+   wire[70:0] cache_dmem1_arg;
+
+   wire[69:0] mainmem_out;
+   wire[69:0] mainmem_arg;
+
 
    wire uart_wr_ready = 1'b1;
 
@@ -23,11 +34,21 @@ module top(input CLK, input RST_N, output uart_wr_valid, output[7:0] uart_wr_dat
 
    rv32 core(.CLK(CLK), .RST_N(RST_N),
 
-             .ext_mem_dmem_arg(dmem_arg),
-             .ext_mem_dmem_out(dmem_out),
+			 .ext_ppp_bookkeeping_arg(ppp_bookkeeping_arg),
+			 .ext_ppp_bookkeeping_out(ppp_bookkeeping_out),
 
-             .ext_mem_imem_arg(imem_arg),
-             .ext_mem_imem_out(imem_out),
+			 .ext_cache_imem0_out(cache_imem0_out),
+			 .ext_cache_imem0_arg(cache_imem0_arg),
+			 .ext_cache_imem1_out(cache_imem1_out),
+			 .ext_cache_imem1_arg(cache_imem1_arg),
+
+			 .ext_cache_dmem0_out(cache_dmem0_out),
+			 .ext_cache_dmem0_arg(cache_dmem0_arg),
+			 .ext_cache_dmem1_out(cache_dmem1_out),
+			 .ext_cache_dmem1_arg(cache_dmem1_arg),
+
+			 .ext_mainmem_out(mainmem_out),
+			 .ext_mainmem_arg(mainmem_arg),
 
              .ext_uart_write_arg({uart_wr_valid, uart_wr_data}),
              .ext_uart_write_out(uart_wr_ready),
@@ -38,8 +59,8 @@ module top(input CLK, input RST_N, output uart_wr_valid, output[7:0] uart_wr_dat
              .ext_led_arg({led_wr_valid, led_wr_data}),
              .ext_led_out(led));
 
-   ext_mem imem(.CLK(CLK), .RST_N(RST_N), .arg(imem_arg), .out(imem_out));
-   ext_mem dmem(.CLK(CLK), .RST_N(RST_N), .arg(dmem_arg), .out(dmem_out));
+   ext_mem mainmem(.CLK(CLK), .RST_N(RST_N), .arg(mainmem_arg), .out(mainmem_out));
+//   ext_mem dmem(.CLK(CLK), .RST_N(RST_N), .arg(dmem_arg), .out(dmem_out));
 
    always @(posedge CLK)
      if (led_wr_valid)
