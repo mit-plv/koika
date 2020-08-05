@@ -488,14 +488,29 @@ Module Cache (Params: CacheParams).
                          ("curIndex", cache_index_t)]
     |}.
 
+  Module FifoExtCacheMemReq <: Fifo.
+    Definition T := struct_t ext_cache_mem_req.
+  End FifoExtCacheMemReq.
+  Module ExtCacheMemReq := Fifo1Bypass FifoExtCacheMemReq.
+
+  Module FifoExtCacheMemResp <: Fifo.
+    Definition T := struct_t ext_cache_mem_resp.
+  End FifoExtCacheMemResp.
+  Module ExtCacheMemResp := Fifo1 FifoExtCacheMemResp.
+
+
   Inductive private_reg_t :=
   | downgradeState
   | requestsQ (state: MemReq.reg_t)
   | responsesQ (state: MemResp.reg_t)
   | MSHR
   | flushState
+  | ext_toRAM (state: ExtCacheMemReq.reg_t)
+  | ext_fromRAM (state: ExtCacheMemResp.reg_t)
   .
 
+  Instance FiniteType_ext_toRAM : FiniteType ExtCacheMemReq.reg_t := _.
+  Instance FiniteType_ext_fromRAM : FiniteType ExtCacheMemResp.reg_t := _.
   Instance FiniteType_private_reg_t : FiniteType private_reg_t := _.
 
   Definition R_private (idx: private_reg_t) : type :=
@@ -505,6 +520,8 @@ Module Cache (Params: CacheParams).
     | responsesQ st => MemResp.R st
     | MSHR => struct_t MSHR_t
     | flushState => struct_t flush_state_t
+    | ext_toRAM st => ExtCacheMemReq.R st
+    | ext_fromRAM st => ExtCacheMemResp.R st
     end.
 
   Definition r_private (idx: private_reg_t) : R_private idx :=
@@ -514,6 +531,8 @@ Module Cache (Params: CacheParams).
     | responsesQ st => MemResp.r st
     | MSHR => value_of_bits (Bits.zero)
     | flushState => value_of_bits (Bits.zero)
+    | ext_toRAM st => ExtCacheMemReq.r st
+    | ext_fromRAM st => ExtCacheMemResp.r st
     end.
 
   Inductive reg_t :=
@@ -584,6 +603,19 @@ Module Cache (Params: CacheParams).
           end
          `
    }}.
+
+  Definition mem (m: External.cache) : uaction reg_t ext_fn_t :=
+    {{
+        let get_ready := (__private__ ext_fromRAM).(ExtCacheMemResp.can_enq)() in
+        let put_request_opt := (__private__ ext_toRAM).(ExtCacheMemReq.peek)() in
+        let put_request := get(put_request_opt, data) in
+        let put_valid := get(put_request_opt, valid) in
+        let mem_out := {memoryBus m}(get_ready, put_valid, put_request) in
+        (when (get_ready && get(mem_out, get_valid)) do
+              (__private__ ext_fromRAM).(ExtCacheMemResp.enq)(get(mem_out, get_response))
+        );
+        (when (put_valid && get(mem_out, put_ready)) do ignore((__private__ ext_toRAM).(ExtCacheMemReq.deq)()))
+    }}.
 
   (* If Store: do nothing in response *)
   (* If Load: send response *)
@@ -866,6 +898,7 @@ Module Cache (Params: CacheParams).
   | Rl_ProcessRequest
   | Rl_SendFillReq
   | Rl_WaitFillResp
+  | Rl_MemBus
   .
 
   Definition rule := rule R Sigma.
@@ -886,6 +919,11 @@ Module Cache (Params: CacheParams).
   Definition tc_waitFillResp_dmem0 := tc_rule R Sigma (WaitFillResp External.dmem0) <: rule.
   Definition tc_waitFillResp_imem1 := tc_rule R Sigma (WaitFillResp External.imem1) <: rule.
   Definition tc_waitFillResp_dmem1 := tc_rule R Sigma (WaitFillResp External.dmem1) <: rule.
+
+  Definition tc_memBus_imem0 := tc_rule R Sigma (mem External.imem0) <: rule.
+  Definition tc_memBus_dmem0 := tc_rule R Sigma (mem External.dmem0) <: rule.
+  Definition tc_memBus_imem1 := tc_rule R Sigma (mem External.imem1) <: rule.
+  Definition tc_memBus_dmem1 := tc_rule R Sigma (mem External.dmem1) <: rule.
 
   Definition rules (rl: rule_name_t) : rule :=
     match rl with
@@ -910,6 +948,13 @@ Module Cache (Params: CacheParams).
         | CacheType_Imem,CoreId1 => tc_waitFillResp_imem1
         | CacheType_Dmem,CoreId0 => tc_waitFillResp_dmem0
         | CacheType_Dmem,CoreId1 => tc_waitFillResp_dmem1
+        end
+    | Rl_MemBus =>
+        match Params._cache_type, Params._core_id with
+        | CacheType_Imem,CoreId0 => tc_memBus_imem0
+        | CacheType_Imem,CoreId1 => tc_memBus_imem1
+        | CacheType_Dmem,CoreId0 => tc_memBus_dmem0
+        | CacheType_Dmem,CoreId1 => tc_memBus_dmem1
         end
     end.
 
@@ -1976,173 +2021,3 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
 
 
 End WIPMemory.
-
-(*
-Module SimpleMemory <: Memory_sig OriginalExternal.
-  Import Common.
-
-  (* TOOD: Silly workaround due to extraction issues: https://github.com/coq/coq/issues/12124 *)
-  Inductive private_reg_t' : Type :=
-  | Foo | Bar .
-
-  Definition private_reg_t := private_reg_t'.
-
-  Definition R_private (idx: private_reg_t) : type :=
-    match idx with
-    | Foo => bits_t 1
-    | Bar => bits_t 1
-    end.
-
-  Definition r_private (idx: private_reg_t) : R_private idx :=
-    match idx with
-    | Foo => Bits.zero
-    | Bar => Bits.zero
-    end.
-
-  Inductive reg_t :=
-  | toIMem0 (state: MemReq.reg_t)
-  | toIMem1 (state: MemReq.reg_t)
-  | toDMem0 (state: MemReq.reg_t)
-  | toDMem1 (state: MemReq.reg_t)
-  | fromIMem0 (state: MemResp.reg_t)
-  | fromIMem1 (state: MemResp.reg_t)
-  | fromDMem0 (state: MemResp.reg_t)
-  | fromDMem1 (state: MemResp.reg_t)
-  | private (r: private_reg_t)
-  .
-
-  Definition R (idx: reg_t) :=
-    match idx with
-    | toIMem0 st => MemReq.R st
-    | toIMem1 st => MemReq.R st
-    | toDMem0 st => MemReq.R st
-    | toDMem1 st => MemReq.R st
-    | fromIMem0 st => MemResp.R st
-    | fromIMem1 st => MemResp.R st
-    | fromDMem0 st => MemResp.R st
-    | fromDMem1 st => MemResp.R st
-    | private st => R_private st
-    end.
-
-  Definition r idx : R idx :=
-    match idx with
-    | toIMem0 st => MemReq.r st
-    | toIMem1 st => MemReq.r st
-    | toDMem0 st => MemReq.r st
-    | toDMem1 st => MemReq.r st
-    | fromIMem0 st => MemResp.r st
-    | fromIMem1 st => MemResp.r st
-    | fromDMem0 st => MemResp.r st
-    | fromDMem1 st => MemResp.r st
-    | private st => r_private st
-    end.
-
-  Definition ext_fn_t := OriginalExternal.ext_fn_t.
-  Definition Sigma := OriginalExternal.Sigma.
-  Definition rule := rule R Sigma.
-  (* Definition sigma := External.sigma. *)
-
-
-  Definition MMIO_UART_ADDRESS := Ob~0~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0.
-  Definition MMIO_LED_ADDRESS  := Ob~0~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1~0~0.
-
-  Import OriginalExternal.
-
-  Definition memoryBus (m: memory) : UInternalFunction reg_t ext_fn_t :=
-    {{ fun memoryBus (get_ready: bits_t 1) (put_valid: bits_t 1) (put_request: struct_t mem_req) : struct_t mem_output =>
-         `match m with
-          | imem =>  {{ extcall (ext_mem imem) (struct mem_input {
-                         get_ready := get_ready;
-                         put_valid := put_valid;
-                         put_request := put_request }) }}
-          | dmem =>  {{ let addr := get(put_request, addr) in
-                       let byte_en := get(put_request, byte_en) in
-                       let is_write := byte_en == Ob~1~1~1~1 in
-
-                       let is_uart := addr == #MMIO_UART_ADDRESS in
-                       let is_uart_read := is_uart && !is_write in
-                       let is_uart_write := is_uart && is_write in
-
-                       let is_led := addr == #MMIO_LED_ADDRESS in
-                       let is_led_write := is_led && is_write in
-
-                       let is_mem := !is_uart && !is_led in
-
-                       if is_uart_write then
-                         let char := get(put_request, data)[|5`d0| :+ 8] in
-                         let may_run := get_ready && put_valid && is_uart_write in
-                         let ready := extcall ext_uart_write (struct (Maybe (bits_t 8)) {
-                           valid := may_run; data := char }) in
-                         struct mem_output { get_valid := may_run && ready;
-                                              put_ready := may_run && ready;
-                                              get_response := struct mem_resp {
-                                                byte_en := byte_en; addr := addr;
-                                                data := |32`d0| } }
-
-                       else if is_uart_read then
-                         let may_run := get_ready && put_valid && is_uart_read in
-                         let opt_char := extcall ext_uart_read (may_run) in
-                         let ready := get(opt_char, valid) in
-                         struct mem_output { get_valid := may_run && ready;
-                                              put_ready := may_run && ready;
-                                              get_response := struct mem_resp {
-                                                byte_en := byte_en; addr := addr;
-                                                data := zeroExtend(get(opt_char, data), 32) } }
-
-                       else if is_led then
-                         let on := get(put_request, data)[|5`d0|] in
-                         let may_run := get_ready && put_valid && is_led_write in
-                         let current := extcall ext_led (struct (Maybe (bits_t 1)) {
-                           valid := may_run; data := on }) in
-                         let ready := Ob~1 in
-                         struct mem_output { get_valid := may_run && ready;
-                                              put_ready := may_run && ready;
-                                              get_response := struct mem_resp {
-                                                byte_en := byte_en; addr := addr;
-                                                data := zeroExtend(current, 32) } }
-
-                       else
-                         extcall (ext_mem dmem) (struct mem_input {
-                           get_ready := get_ready && is_mem;
-                           put_valid := put_valid && is_mem;
-                           put_request := put_request })
-                   }}
-          end` }}.
-
-  (* TODO: not defined for main_mem *)
-  Definition mem (m: memory) : uaction reg_t ext_fn_t :=
-    let fromMem := match m with imem0 => fromIMem0 | dmem0 => fromDMem0 end in
-    let toMem := match m with imem0 => toIMem0 | dmem0 => toDMem0 end in
-    {{
-        let get_ready := fromMem.(MemResp.can_enq)() in
-        let put_request_opt := toMem.(MemReq.peek)() in
-        let put_request := get(put_request_opt, data) in
-        let put_valid := get(put_request_opt, valid) in
-        let mem_out := {memoryBus m}(get_ready, put_valid, put_request) in
-        (when (get_ready && get(mem_out, get_valid)) do fromMem.(MemResp.enq)(get(mem_out, get_response)));
-        (when (put_valid && get(mem_out, put_ready)) do ignore(toMem.(MemReq.deq)()))
-    }}.
-
-  Definition tc_imem := tc_rule R Sigma (mem imem) <: rule.
-  Definition tc_dmem := tc_rule R Sigma (mem dmem) <: rule.
-
-  Inductive rule_name_t' :=
-  | Imem
-  | Dmem
-  .
-
-  Definition rule_name_t := rule_name_t'.
-
-  Definition rules (rl: rule_name_t) : rule :=
-    match rl with
-    | Imem           => tc_imem
-    | Dmem           => tc_dmem
-    end.
-
-  Definition schedule : scheduler :=
-    Imem |> Dmem |> done.
-
-  Instance FiniteType_private_reg_t : FiniteType private_reg_t := _.
-  Instance FiniteType_reg_t : FiniteType reg_t := _.
-End SimpleMemory.
-*)
