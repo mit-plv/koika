@@ -69,24 +69,54 @@ Module External <: External_sig.
                         ("put_ready", bits_t 1);
                         ("get_response", struct_t ext_cache_mem_resp)] |}.
 
-  Definition Bookkeeping_row :=
-    {| struct_name := "Bookkeeping_row";
+  Definition bookkeeping_row :=
+    {| struct_name := "bookkeeping_row";
        struct_fields := [("state", enum_t MSI);
                          ("tag", cache_tag_t)]
     |}.
 
-  Definition cache_type :=
-    {| enum_name := "cache_type";
-       enum_members := vect_of_list ["imem"; "dmem"];
-       enum_bitpatterns := vect_of_list [Ob~0; Ob~1] |}.
+  (* Should be an array but avoiding arrays; fetch all entries at once *)
+  Definition bookkeeping_entry :=
+    {| struct_name := "bookkeeping_entry";
+       struct_fields := [("imem0", struct_t bookkeeping_row);
+                         ("dmem0", struct_t bookkeeping_row);
+                         ("imem1", struct_t bookkeeping_row);
+                         ("dmem1", struct_t bookkeeping_row)
+                        ]
+    |}.
+
+   Definition cache_type :=
+     {| enum_name := "cache_type";
+        enum_members := vect_of_list ["imem"; "dmem"];
+        enum_bitpatterns := vect_of_list [Ob~0; Ob~1] |}.
+
+  Definition single_bookkeeping_entry :=
+    {| struct_name := "single_bookkeeping_entry";
+       struct_fields := [("entry", struct_t bookkeeping_row);
+                         ("core_id", bits_t 1);
+                         ("cache_type", enum_t cache_type)
+                        ]
+    |}.
 
   Definition bookkeeping_input :=
     {| struct_name := "bookkeeping_input";
        struct_fields := [("idx", bits_t log_num_sets);
-                         ("book", maybe (struct_t Bookkeeping_row));
-                         ("core_id", bits_t 1);
-                         ("cache_type", enum_t cache_type)
+                         ("write_entry", maybe (struct_t single_bookkeeping_entry))
                         ]
+    |}.
+
+   Definition ext_bookkeeping_input :=
+     {| struct_name := "ext_bookkeeping_input";
+        struct_fields := [("get_ready", bits_t 1);
+                          ("put_valid", bits_t 1);
+                          ("put_request", struct_t bookkeeping_input)]
+     |}.
+
+  Definition ext_bookkeeping_output :=
+    {| struct_name := "ext_bookkeeping_output";
+       struct_fields := [("get_valid", bits_t 1);
+                         ("put_ready", bits_t 1);
+                         ("get_response", struct_t bookkeeping_entry)]
     |}.
 
   Definition Sigma (fn: ext_fn_t) :=
@@ -96,7 +126,7 @@ Module External <: External_sig.
     | ext_uart_read => {$ bits_t 1 ~> uart_output $}
     | ext_uart_write => {$ uart_input ~> bits_t 1 $}
     | ext_led => {$ led_input ~> bits_t 1 $}
-    | ext_ppp_bookkeeping => {$ struct_t bookkeeping_input ~> maybe (struct_t Bookkeeping_row) $}
+    | ext_ppp_bookkeeping => {$ struct_t ext_bookkeeping_input ~> struct_t ext_bookkeeping_output $}
     end.
 
   Definition ext_fn_specs (fn: ext_fn_t) :=

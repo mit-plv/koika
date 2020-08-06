@@ -20,7 +20,6 @@ Definition post_t := unit.
 Definition var_t := string.
 Definition fn_name_t := string.
 
-
 Module CacheTypes.
   Import Common.
   Import External.
@@ -479,7 +478,7 @@ Module Cache (Params: CacheParams).
 
   (* Temporary reg to track which rule to run, in order to work well with external calls *)
   Definition TODO_state_tracker :=
-    {| enum_name := "TODO_state_tracker";
+    {| enum_name := "TODO_state_tracker_cache";
        enum_members := vect_of_list ["Ready"; "Downgrade1"; "ProcessRequest1"];
        enum_bitpatterns := vect_of_list [Ob~0~0; Ob~0~1; Ob~1~0]
     |}.
@@ -1109,14 +1108,36 @@ Module ProtocolProcessor.
                          ("req", struct_t cache_mem_req)]
     |}.
 
-  Definition num_sets : nat := Nat.shiftl 1 External.log_num_sets.
+  Definition num_sets : nat := pow2 External.log_num_sets.
+
+  Module FifoBookkeepingInput <: Fifo.
+    Definition T := struct_t bookkeeping_input.
+  End FifoBookkeepingInput.
+  Module BookkeepingInput := Fifo1Bypass FifoBookkeepingInput.
+
+  Module FifoBookkeepingOutput <: Fifo.
+    Definition T := struct_t bookkeeping_entry.
+  End FifoBookkeepingOutput.
+  Module BookkeepingOutput := Fifo1Bypass FifoBookkeepingOutput.
+
+  Definition TODO_state_tracker :=
+    {| enum_name := "TODO_state_tracker_ppp";
+       enum_members := vect_of_list ["Ready"; "ReceiveUpgradeReqs1"; "ConfirmDowngrades1"];
+       enum_bitpatterns := vect_of_list [Ob~0~0; Ob~0~1; Ob~1~0]
+    |}.
+
 
   Inductive private_reg_t :=
   | ushr
   | downgrade_tracker
   | bypass
+  | TODO_state (* moderate access to directory *)
+  | ext_toDir (st: BookkeepingInput.reg_t)
+  | ext_fromDir (st: BookkeepingOutput.reg_t)
   .
 
+  Instance FiniteType_ext_toDir : FiniteType BookkeepingInput.reg_t := _.
+  Instance FiniteType_ext_fromDir : FiniteType BookkeepingOutput.reg_t := _.
   Instance FiniteType_private_reg_t : FiniteType private_reg_t := _.
 
   Definition R_private (reg: private_reg_t) : type :=
@@ -1124,6 +1145,9 @@ Module ProtocolProcessor.
     | ushr => struct_t USHR
     | downgrade_tracker => bits_t 4
     | bypass => maybe (data_t)
+    | TODO_state => enum_t TODO_state_tracker
+    | ext_toDir st => BookkeepingInput.R st
+    | ext_fromDir st => BookkeepingOutput.R st
     end.
 
   Definition r_private (reg: private_reg_t) : R_private reg :=
@@ -1131,6 +1155,9 @@ Module ProtocolProcessor.
     | ushr => value_of_bits (Bits.zero)
     | downgrade_tracker => Bits.zero
     | bypass => value_of_bits (Bits.zero)
+    | TODO_state => value_of_bits Bits.zero
+    | ext_toDir st => BookkeepingInput.r st
+    | ext_fromDir st => BookkeepingOutput.r st
     end.
 
   (* TODO: Should be a DDR3_Req or similar, and should parameterise based on DDR3AddrSize/DataSize *)
@@ -1156,9 +1183,40 @@ Module ProtocolProcessor.
   Definition Sigma := Sigma.
   Definition ext_fn_t := ext_fn_t.
 
+  Notation "'__private__' instance " :=
+    (fun reg => private ((instance) reg)) (in custom koika at level 1, instance constr at level 99).
+  Notation "'(' instance ').(' method ')' args" :=
+    (USugar (UCallModule instance _ method args))
+      (in custom koika at level 1, method constr, args custom koika_args at level 99).
+
+  Definition bookkeepingBus : UInternalFunction reg_t ext_fn_t :=
+    {{ fun bookkeepingBus (get_ready: bits_t 1) (put_valid: bits_t 1) (put_request: struct_t bookkeeping_input)
+         : struct_t ext_bookkeeping_output =>
+         extcall ext_ppp_bookkeeping (struct ext_bookkeeping_input {
+                                               get_ready := get_ready;
+                                               put_valid := put_valid;
+                                               put_request := put_request})
+    }}.
+
+  Definition extDir : uaction reg_t ext_fn_t :=
+    {{
+        let get_ready := (__private__ ext_fromDir).(BookkeepingOutput.can_enq)() in
+        let put_request_opt := (__private__ ext_toDir).(BookkeepingInput.peek)() in
+        let put_request := get(put_request_opt, data) in
+        let put_valid := get(put_request_opt, valid) in
+        let mem_out := bookkeepingBus(get_ready, put_valid, put_request) in
+        (when (get_ready && get(mem_out, get_valid)) do
+              (__private__ ext_fromDir).(BookkeepingOutput.enq)(get(mem_out, get_response)));
+        (when (put_valid && get(mem_out, put_ready)) do
+              ignore((__private__ ext_toDir).(BookkeepingInput.deq)()))
+    }}.
+
+
   Definition receive_responses : uaction reg_t ext_fn_t :=
     {{
-        guard(FromRouter.(MessageFifo1.has_resp)());
+        let todo_st := read0(private TODO_state) in
+        guard(FromRouter.(MessageFifo1.has_resp)() &&
+              todo_st == enum TODO_state_tracker { Ready });
         let respFromCore := get(FromRouter.(MessageFifo1.deq)(), resp) in
         let data_opt := get(respFromCore, data) in
         let resp_addr := get(respFromCore,addr) in
@@ -1180,43 +1238,96 @@ Module ProtocolProcessor.
           else pass
         else pass
         );
+        let new_entry := struct single_bookkeeping_entry
+                                { entry := struct bookkeeping_row { state := get(respFromCore, MSI_state);
+                                                                    tag := getTag(resp_addr)
+                                                                  };
+                                  core_id := get(respFromCore, core_id);
+                                  cache_type := get(respFromCore, cache_type)
+                                } in
         let input := struct bookkeeping_input
                             { idx := getIndex(resp_addr);
-                               book := {valid (struct_t Bookkeeping_row)}(
-                                           struct Bookkeeping_row { state := get(respFromCore, MSI_state);
-                                                                     tag := getTag(resp_addr)
-                                                                  });
-                               core_id := get(respFromCore,core_id);
-                               cache_type := get(respFromCore, cache_type)
-                           } in
-        ignore(extcall ext_ppp_bookkeeping (input))
+                              write_entry := {valid (struct_t single_bookkeeping_entry)}(new_entry)
+                            } in
+        (__private__ ext_toDir).(BookkeepingInput.enq)(input)
+
+        (* //caches[idx][core] <= BookkeepingRow {state: resp.state, tag: getTag(resp.addr)}; *)
+
+
+        (* let input := struct bookkeeping_input *)
+        (*                     { idx := getIndex(resp_addr); *)
+        (*                        book := {valid (struct_t Bookkeeping_row)}( *)
+        (*                                    struct Bookkeeping_row { state := get(respFromCore, MSI_state); *)
+        (*                                                              tag := getTag(resp_addr) *)
+        (*                                                           }); *)
+        (*                        core_id := get(respFromCore,core_id); *)
+        (*                        cache_type := get(respFromCore, cache_type); *)
+        (*                        ignore_response := Ob~1 *)
+        (*                    } in *)
+        (* (__private__ ext_toDir).(BookkeepingInput.enq)(input) *)
+        (* ignore(extcall ext_ppp_bookkeeping (input))  *)
         (* TODO: update bookkeeping row/directory *)
     }}.
 
-  Definition get_state : UInternalFunction reg_t ext_fn_t :=
-    {{ fun get_state (core_id: bits_t 1) (cache_type: enum_t cache_type) (index: cache_index_t) (tag: cache_tag_t)
-         : enum_t MSI =>
-         let input := struct bookkeeping_input { idx := index;
-                                                  book := {invalid (struct_t Bookkeeping_row)}();
-                                                  core_id := core_id;
-                                                  cache_type := cache_type
-                                               } in
-         let row_opt := extcall ext_ppp_bookkeeping (input) in
-         if (get(row_opt,valid)) then
-           let row := get(row_opt,data) in
-           if (get(row,tag) == tag) then
-             get(row,state)
-           else
-             enum MSI { I }
-         else
-           fail@(enum_t MSI)
-     }}.
+  (* Definition rule := rule R Sigma. *)
+  (* Definition tc_receiveResp := tc_rule R Sigma receive_responses <: rule. *)
+
+  (* Definition get_state : UInternalFunction reg_t ext_fn_t := *)
+  (*   {{ fun get_state (core_id: bits_t 1) (cache_type: enum_t cache_type) (index: cache_index_t) (tag: cache_tag_t) *)
+  (*        : enum_t MSI => *)
+  (*        let input := struct bookkeeping_input { idx := index; *)
+  (*                                                 book := {invalid (struct_t Bookkeeping_row)}(); *)
+  (*                                                 core_id := core_id; *)
+  (*                                                 cache_type := cache_type *)
+  (*                                              } in *)
+  (*        let row_opt := extcall ext_ppp_bookkeeping (input) in *)
+  (*        if (get(row_opt,valid)) then *)
+  (*          let row := get(row_opt,data) in *)
+  (*          if (get(row,tag) == tag) then *)
+  (*            get(row,state) *)
+  (*          else *)
+  (*            enum MSI { I } *)
+  (*        else *)
+  (*          fail@(enum_t MSI) *)
+  (*    }}. *)
 
   (* Check dmem *)
+  (* Definition has_line : UInternalFunction reg_t ext_fn_t := *)
+  (*   {{ fun has_line (index: cache_index_t) (tag: cache_tag_t) (core_id: bits_t 1): bits_t 1 => *)
+  (*        get_state(core_id, enum cache_type { dmem}, index, tag) == enum MSI { M } *)
+  (*   }}. *)
+
+  Definition get_row_from_entry : UInternalFunction reg_t ext_fn_t :=
+    {{ fun get_row_from_entry (entry: struct_t bookkeeping_entry)
+                            (core_id: bits_t 1) (cache_type: enum_t cache_type)
+                            : struct_t bookkeeping_row =>
+           if ((core_id == Ob~0) && cache_type == enum cache_type {imem}) then
+             get(entry,imem0)
+           else if ((core_id == Ob~0) && cache_type == enum cache_type {dmem}) then
+               get(entry,dmem0)
+           else if ((core_id == Ob~1) && cache_type == enum cache_type {imem}) then
+               get(entry,imem1)
+           else (* if ((core_id == Ob~1) && cache_type == enum cache_type {dmem}) then *)
+               get(entry,dmem0)
+     }}.
+
+  Definition get_state : UInternalFunction reg_t ext_fn_t :=
+    {{ fun get_state (row: struct_t bookkeeping_row) (tag: cache_tag_t) : enum_t MSI =>
+         if (get(row,tag) == tag) then
+           get(row,state)
+         else
+           enum MSI { I }
+     }}.
+
+
   Definition has_line : UInternalFunction reg_t ext_fn_t :=
-    {{ fun has_line (index: cache_index_t) (tag: cache_tag_t) (core_id: bits_t 1): bits_t 1 =>
-         get_state(core_id, enum cache_type { dmem}, index, tag) == enum MSI { M }
+    {{ fun has_line (entry: struct_t bookkeeping_entry) (index: cache_index_t)
+                  (tag: cache_tag_t) (core_id: bits_t 1): bits_t 1 =>
+         (* Only dmem should(?) have line *)
+         let row := get_row_from_entry(entry, core_id, enum cache_type {dmem}) in
+         get_state (row,tag) == enum MSI {M}
     }}.
+
 
   Definition cache_encoding : UInternalFunction reg_t ext_fn_t :=
     {{ fun cache_encoding (core_id: bits_t 1) (cache_ty: enum_t cache_type) : bits_t 2 =>
@@ -1224,11 +1335,12 @@ Module ProtocolProcessor.
     }}.
 
   Definition compute_downgrade_tracker : UInternalFunction reg_t ext_fn_t :=
-    {{ fun compute_downgrade_tracker (index: cache_index_t) (tag: cache_tag_t) : bits_t 4 =>
-         let core0_imem := get_state(Ob~0, enum cache_type { imem }, index, tag) in
-         let core0_dmem := get_state(Ob~0, enum cache_type { dmem }, index, tag) in
-         let core1_imem := get_state(Ob~1, enum cache_type { imem }, index, tag) in
-         let core1_dmem := get_state(Ob~1, enum cache_type { dmem }, index, tag) in
+    {{ fun compute_downgrade_tracker (entry: struct_t bookkeeping_entry)
+                                   (tag: cache_tag_t) : bits_t 4 =>
+         let core0_imem := get_state (get(entry,imem0), tag) in
+         let core0_dmem := get_state (get(entry,dmem0), tag) in
+         let core1_imem := get_state (get(entry,imem1), tag) in
+         let core1_dmem := get_state (get(entry,dmem1), tag) in
          (core1_dmem != enum MSI { I }) ++
          (core1_imem != enum MSI { I }) ++
          (core0_dmem != enum MSI { I }) ++
@@ -1286,67 +1398,142 @@ Module ProtocolProcessor.
    *     else issue memory request
    *   (core is then given state M)
    *)
-  Definition receive_upgrade_requests: uaction reg_t ext_fn_t :=
-    {{
-        let ushr := read0(private ushr) in
-        guard (!FromRouter.(MessageFifo1.has_resp)() &&
-                FromRouter.(MessageFifo1.has_req)() &&
-                (get(ushr, state) == enum USHR_state { Ready })
-              );
-        let req := get(FromRouter.(MessageFifo1.deq)(),req) in
+  Definition receive_upgrade_requests0 : uaction reg_t ext_fn_t :=
+    {{ let ushr := read0(private ushr) in
+       guard (!FromRouter.(MessageFifo1.has_resp)() &&
+               FromRouter.(MessageFifo1.has_req)() &&
+               (get(ushr, state) == enum USHR_state { Ready }) &&
+               read0(private TODO_state) == enum TODO_state_tracker { Ready }
+             );
+        let maybe_req := FromRouter.(MessageFifo1.peek)() in
+        let req := get(get(maybe_req, data),req) in
         let addr := get(req,addr) in
-
-        let tag := getTag(addr) in
         let index := getIndex(addr) in
-        let core_id := get(req,core_id) in
-        let other_core_has_line := has_line(index, tag, !core_id) in
-        write0(private bypass, {invalid (data_t)}());
-        (* Load *)
-        if (get(req,MSI_state) == enum MSI { S }) then
-          write0(private ushr, struct USHR { state := enum USHR_state { Confirming };
-                                               req := req });
-          if (other_core_has_line) then
-            (* Parent !get(req,core_id) has the line, issue downgrade to S *)
-            ToRouter.(MessageFifo1.enq_req)(struct cache_mem_req { core_id := !core_id;
-                                                                    cache_type := enum cache_type { dmem };
-                                                                    addr := addr;
-                                                                    MSI_state := enum MSI { S }
-                                                                 })
-          else
-            (* No one has the line, request from memory *)
-            ToMem.(MemReq.enq)(struct mem_req { byte_en := Ob~0~0~0~0;
-                                                 addr := addr;
-                                                 data := |32`d0| })
-        (* Store *)
-        else if (get(req,MSI_state) == enum MSI { M }) then
-          (when (!other_core_has_line &&
-                  (get_state(core_id, get(req,cache_type), index, tag) == enum MSI { I })
-                ) do
-            (* Request line from main memory *)
-            ToMem.(MemReq.enq)(struct mem_req { byte_en := Ob~0~0~0~0;
-                                                 addr := addr;
-                                                 data := |32`d0| }));
-          (* For all lines that are M/S, downgrade to I: it's either the case that
-           * there is one M core (others I), or mix of S/I cores *)
-          let downgrade_tracker :=
-              set_invalid_at_cache(compute_downgrade_tracker(index, tag),
-                                   core_id, get(req, cache_type)) in
-          let tracker2 := do_downgrade_from_tracker(addr, downgrade_tracker) in
-          write0(private downgrade_tracker, tracker2);
-          if (tracker2 == |4`d0|) then
-            (* done issuing downgrade requests *)
-            write0(private ushr, struct USHR { state := enum USHR_state { Downgrading };
-                                                 req := req })
-          else
-            write0(private ushr, struct USHR { state := enum USHR_state { Confirming };
-                                                 req := req })
-        else pass (* Should not happen? Could do fail for ease of debugging *)
+        (__private__ ext_toDir).(BookkeepingInput.enq)(struct bookkeeping_input
+                                           { idx := index;
+                                             write_entry := {invalid (struct_t single_bookkeeping_entry)}()
+                                           });
+        write0(private TODO_state, enum TODO_state_tracker {ReceiveUpgradeReqs1})
     }}.
+
+  Definition receive_upgrade_requests1 : uaction reg_t ext_fn_t :=
+    {{ guard(read0(private TODO_state) == enum TODO_state_tracker { ReceiveUpgradeReqs1 });
+       write0(private TODO_state, enum TODO_state_tracker { Ready });
+       let req := get(FromRouter.(MessageFifo1.deq)(),req) in
+       let addr := get(req,addr) in
+       let tag := getTag(addr) in
+       let index := getIndex(addr) in
+       let core_id := get(req,core_id) in
+
+       let entry := (__private__ ext_fromDir).(BookkeepingOutput.deq)() in
+       let other_core_has_line := has_line(entry, index, tag, !core_id) in
+       write0(private bypass, {invalid (data_t)}());
+       (* Load *)
+       if (get(req,MSI_state) == enum MSI { S }) then
+         write0(private ushr, struct USHR { state := enum USHR_state { Confirming };
+                                              req := req });
+         if (other_core_has_line) then
+           (* Parent !get(req,core_id) has the line, issue downgrade to S *)
+           ToRouter.(MessageFifo1.enq_req)(struct cache_mem_req { core_id := !core_id;
+                                                                   cache_type := enum cache_type { dmem };
+                                                                   addr := addr;
+                                                                   MSI_state := enum MSI { S }
+                                                                })
+         else
+           (* No one has the line, request from memory *)
+           ToMem.(MemReq.enq)(struct mem_req { byte_en := Ob~0~0~0~0;
+                                                addr := addr;
+                                                data := |32`d0| })
+       (* Store *)
+       else if (get(req,MSI_state) == enum MSI { M }) then
+         (when (!other_core_has_line &&
+                 get_state(get_row_from_entry(entry, core_id, get(req,cache_type)), tag) == enum MSI {I}
+                 (* (get_state(core_id, get(req,cache_type), index, tag) == enum MSI { I }) *)
+               ) do
+           (* Request line from main memory *)
+           ToMem.(MemReq.enq)(struct mem_req { byte_en := Ob~0~0~0~0;
+                                                addr := addr;
+                                                data := |32`d0| }));
+         (* For all lines that are M/S, downgrade to I: it's either the case that
+          * there is one M core (others I), or mix of S/I cores *)
+         let downgrade_tracker :=
+             set_invalid_at_cache(compute_downgrade_tracker(entry, tag), core_id, get(req, cache_type)) in
+             (* set_invalid_at_cache(compute_downgrade_tracker(index, tag), *)
+             (*                      core_id, get(req, cache_type)) in *)
+         let tracker2 := do_downgrade_from_tracker(addr, downgrade_tracker) in
+         write0(private downgrade_tracker, tracker2);
+         if (tracker2 == |4`d0|) then
+           (* done issuing downgrade requests *)
+           write0(private ushr, struct USHR { state := enum USHR_state { Downgrading };
+                                                req := req })
+         else
+           write0(private ushr, struct USHR { state := enum USHR_state { Confirming };
+                                                req := req })
+       else pass (* Should not happen? Could do fail for ease of debugging *)
+    }}.
+
+  (* Definition receive_upgrade_requests: uaction reg_t ext_fn_t := *)
+  (*   {{ *)
+  (*       let ushr := read0(private ushr) in *)
+  (*       guard (!FromRouter.(MessageFifo1.has_resp)() && *)
+  (*               FromRouter.(MessageFifo1.has_req)() && *)
+  (*               (get(ushr, state) == enum USHR_state { Ready }) *)
+  (*             ); *)
+  (*       let req := get(FromRouter.(MessageFifo1.deq)(),req) in *)
+  (*       let addr := get(req,addr) in *)
+
+  (*       let tag := getTag(addr) in *)
+  (*       let index := getIndex(addr) in *)
+  (*       let core_id := get(req,core_id) in *)
+  (*       let other_core_has_line := has_line(index, tag, !core_id) in *)
+  (*       write0(private bypass, {invalid (data_t)}()); *)
+  (*       (* Load *) *)
+  (*       if (get(req,MSI_state) == enum MSI { S }) then *)
+  (*         write0(private ushr, struct USHR { state := enum USHR_state { Confirming }; *)
+  (*                                              req := req }); *)
+  (*         if (other_core_has_line) then *)
+  (*           (* Parent !get(req,core_id) has the line, issue downgrade to S *) *)
+  (*           ToRouter.(MessageFifo1.enq_req)(struct cache_mem_req { core_id := !core_id; *)
+  (*                                                                   cache_type := enum cache_type { dmem }; *)
+  (*                                                                   addr := addr; *)
+  (*                                                                   MSI_state := enum MSI { S } *)
+  (*                                                                }) *)
+  (*         else *)
+  (*           (* No one has the line, request from memory *) *)
+  (*           ToMem.(MemReq.enq)(struct mem_req { byte_en := Ob~0~0~0~0; *)
+  (*                                                addr := addr; *)
+  (*                                                data := |32`d0| }) *)
+  (*       (* Store *) *)
+  (*       else if (get(req,MSI_state) == enum MSI { M }) then *)
+  (*         (when (!other_core_has_line && *)
+  (*                 (get_state(core_id, get(req,cache_type), index, tag) == enum MSI { I }) *)
+  (*               ) do *)
+  (*           (* Request line from main memory *) *)
+  (*           ToMem.(MemReq.enq)(struct mem_req { byte_en := Ob~0~0~0~0; *)
+  (*                                                addr := addr; *)
+  (*                                                data := |32`d0| })); *)
+  (*         (* For all lines that are M/S, downgrade to I: it's either the case that *)
+  (*          * there is one M core (others I), or mix of S/I cores *) *)
+  (*         let downgrade_tracker := *)
+  (*             set_invalid_at_cache(compute_downgrade_tracker(index, tag), *)
+  (*                                  core_id, get(req, cache_type)) in *)
+  (*         let tracker2 := do_downgrade_from_tracker(addr, downgrade_tracker) in *)
+  (*         write0(private downgrade_tracker, tracker2); *)
+  (*         if (tracker2 == |4`d0|) then *)
+  (*           (* done issuing downgrade requests *) *)
+  (*           write0(private ushr, struct USHR { state := enum USHR_state { Downgrading }; *)
+  (*                                                req := req }) *)
+  (*         else *)
+  (*           write0(private ushr, struct USHR { state := enum USHR_state { Confirming }; *)
+  (*                                                req := req }) *)
+  (*       else pass (* Should not happen? Could do fail for ease of debugging *) *)
+  (*   }}. *)
 
   Definition issue_downgrades: uaction reg_t ext_fn_t :=
     {{
         let ushr := read0(private ushr) in
-        guard(get(ushr, state) == enum USHR_state { Downgrading });
+        guard(get(ushr, state) == enum USHR_state { Downgrading } &&
+              read0(private TODO_state) == enum TODO_state_tracker { Ready });
         let req := get(ushr,req) in
         let tracker := read0(private downgrade_tracker) in
         let tracker2 := do_downgrade_from_tracker(get(req,addr), tracker) in
@@ -1356,15 +1543,32 @@ Module ProtocolProcessor.
                                                  req := req })))
     }}.
 
-  Definition dummy_cache_mem_req : struct_t cache_mem_req := value_of_bits (Bits.zero).
-
-  Definition confirm_downgrades: uaction reg_t ext_fn_t :=
+  Definition confirm_downgrades0: uaction reg_t ext_fn_t :=
     {{ let ushr := read0(private ushr) in
-       guard(get(ushr, state) == enum USHR_state { Confirming });
+       guard(get(ushr, state) == enum USHR_state { Confirming } &&
+             read0(private TODO_state) == enum TODO_state_tracker { Ready });
        let req := get(ushr,req) in
        let addr := get(req,addr) in
-       (* Either load req, or store req and all states are invalid other than core's *)
-       let states := compute_downgrade_tracker (getIndex(addr), getTag(addr)) in
+       let index := getIndex(addr) in
+        (__private__ ext_toDir).(BookkeepingInput.enq)(struct bookkeeping_input
+                                           { idx := index;
+                                             write_entry := {invalid (struct_t single_bookkeeping_entry)}()
+                                           });
+        write0(private TODO_state, enum TODO_state_tracker {ConfirmDowngrades1})
+    }}.
+
+  (* Definition rule := rule R Sigma. *)
+  (* Definition tc_confirmDowngrades0 := tc_rule R Sigma confirm_downgrades0 <: rule. *)
+
+  Definition confirm_downgrades1: uaction reg_t ext_fn_t :=
+    {{ guard(read0(private TODO_state) == enum TODO_state_tracker { ConfirmDowngrades1});
+       let ushr := read0(private ushr) in
+       write0(private TODO_state, enum TODO_state_tracker {Ready});
+       let req := get(ushr,req) in
+       let addr := get(req,addr) in
+       let index := getIndex(addr) in
+       let entry := (__private__ ext_fromDir).(BookkeepingOutput.deq)() in
+       let states := compute_downgrade_tracker(entry, getTag(addr)) in
        let states2 := set_invalid_at_cache(states, get(req,core_id),get(req,cache_type)) in
        if ((get(req, MSI_state) == enum MSI { S }) ||
            states2 == Ob~0~0~0~0) then
@@ -1388,20 +1592,93 @@ Module ProtocolProcessor.
                                                MSI_state := get(req, MSI_state);
                                                data := data
                                             });
-         let input := struct bookkeeping_input
+        let new_entry := struct single_bookkeeping_entry
+                                { entry := struct bookkeeping_row { state := get(req, MSI_state);
+                                                                    tag := getTag(addr)
+                                                                  };
+                                  core_id := get(req, core_id);
+                                  cache_type := get(req, cache_type)
+                                } in
+        let input := struct bookkeeping_input
                             { idx := getIndex(addr);
-                               book := {valid (struct_t Bookkeeping_row)}(
-                                           struct Bookkeeping_row { state := get(req, MSI_state);
-                                                                     tag := getTag(addr)
-                                                                  });
-                               core_id := get(req,core_id);
-                               cache_type := get(req, cache_type)
-                           } in
-         ignore(extcall ext_ppp_bookkeeping (input));
+                              write_entry := {valid (struct_t single_bookkeeping_entry)}(new_entry)
+                            } in
+
+         (* let input := struct bookkeeping_input *)
+         (*                    { idx := getIndex(addr); *)
+         (*                       book := {valid (struct_t Bookkeeping_row)}( *)
+         (*                                   struct Bookkeeping_row { state := get(req, MSI_state); *)
+         (*                                                             tag := getTag(addr) *)
+         (*                                                          }); *)
+         (*                       core_id := get(req,core_id); *)
+         (*                       cache_type := get(req, cache_type) *)
+         (*                   } in *)
+         (__private__ ext_toDir).(BookkeepingInput.enq)(input);
+         (* ignore(extcall ext_ppp_bookkeeping (input)); *)
          write0(private ushr, struct USHR { state := enum USHR_state { Ready };
-                                              req := `UConst dummy_cache_mem_req` })
+                                              req := `UConst (tau := struct_t cache_mem_req) (value_of_bits Bits.zero)` })
        else pass
     }}.
+
+
+  (* Definition confirm_downgrades: uaction reg_t ext_fn_t := *)
+  (*   {{ let ushr := read0(private ushr) in *)
+  (*      guard(get(ushr, state) == enum USHR_state { Confirming } && *)
+  (*            read0(private TODO_state) == enum TODO_state_tracker { Ready }); *)
+  (*      let req := get(ushr,req) in *)
+  (*      let addr := get(req,addr) in *)
+  (*      (* Either load req, or store req and all states are invalid other than core's *) *)
+  (*      let states := compute_downgrade_tracker (getIndex(addr), getTag(addr)) in *)
+  (*      let states2 := set_invalid_at_cache(states, get(req,core_id),get(req,cache_type)) in *)
+  (*      if ((get(req, MSI_state) == enum MSI { S }) || *)
+  (*          states2 == Ob~0~0~0~0) then *)
+  (*        let data := {invalid (data_t)}() in *)
+  (*        let bypass_opt := read1(private bypass) in *)
+  (*        ( *)
+  (*          (* if (getState(addr,child) != I) then *) *)
+  (*        if (states[cache_encoding(get(req,core_id), get(req,cache_type))]) then *)
+  (*           pass (* (data = invalid) *) *)
+  (*        else if (get(bypass_opt,valid)) then *)
+  (*             set data := bypass_opt *)
+  (*        else *)
+  (*          let resp := FromMem.(MemResp.deq)() in *)
+  (*          set data := {valid data_t} (get(resp, data)) *)
+  (*        ); *)
+  (*        (* Parent sending response to child *) *)
+  (*        ToRouter.(MessageFifo1.enq_resp)( *)
+  (*                     struct cache_mem_resp { core_id := get(req, core_id); *)
+  (*                                              cache_type := get(req, cache_type); *)
+  (*                                              addr := addr; *)
+  (*                                              MSI_state := get(req, MSI_state); *)
+  (*                                              data := data *)
+  (*                                           }); *)
+  (*       let new_entry := struct single_bookkeeping_entry *)
+  (*                               { entry := struct bookkeeping_row { state := get(req, MSI_state); *)
+  (*                                                                   tag := getTag(addr) *)
+  (*                                                                 }; *)
+  (*                                 core_id := get(req, core_id); *)
+  (*                                 cache_type := get(req, cache_type) *)
+  (*                               } in *)
+  (*       let input := struct bookkeeping_input *)
+  (*                           { idx := getIndex(addr); *)
+  (*                             write_entry := {valid (struct_t single_bookkeeping_entry)}(new_entry) *)
+  (*                           } in *)
+
+  (*        (* let input := struct bookkeeping_input *) *)
+  (*        (*                    { idx := getIndex(addr); *) *)
+  (*        (*                       book := {valid (struct_t Bookkeeping_row)}( *) *)
+  (*        (*                                   struct Bookkeeping_row { state := get(req, MSI_state); *) *)
+  (*        (*                                                             tag := getTag(addr) *) *)
+  (*        (*                                                          }); *) *)
+  (*        (*                       core_id := get(req,core_id); *) *)
+  (*        (*                       cache_type := get(req, cache_type) *) *)
+  (*        (*                   } in *) *)
+  (*        (__private__ ext_toDir).(BookkeepingInput.enq)(input); *)
+  (*        (* ignore(extcall ext_ppp_bookkeeping (input)); *) *)
+  (*        write0(private ushr, struct USHR { state := enum USHR_state { Ready }; *)
+  (*                                             req := `UConst (tau := struct_t cache_mem_req) (value_of_bits Bits.zero)` }) *)
+  (*      else pass *)
+  (*   }}. *)
 
   (*
   Definition forward_req: uaction reg_t empty_ext_fn_t :=
@@ -1443,27 +1720,39 @@ Module ProtocolProcessor.
 
   Inductive rule_name_t :=
   | Rl_ReceiveResp
-  | Rl_ReceiveUpgradeReqs
+  | Rl_ReceiveUpgradeReqs0
+  | Rl_ReceiveUpgradeReqs1
   | Rl_IssueDowngrades
-  | Rl_ConfirmDowngrades.
+  | Rl_ConfirmDowngrades0
+  | Rl_ConfirmDowngrades1
+  | Rl_ExtDir
+  .
 
   Definition rule := rule R Sigma.
 
   Definition tc_receiveResp := tc_rule R Sigma receive_responses <: rule.
-  Definition tc_receiveUpgradeReqs := tc_rule R Sigma receive_upgrade_requests <: rule.
+  Definition tc_receiveUpgradeReqs0 := tc_rule R Sigma receive_upgrade_requests0 <: rule.
+  Definition tc_receiveUpgradeReqs1 := tc_rule R Sigma receive_upgrade_requests1 <: rule.
   Definition tc_issueDowngrades := tc_rule R Sigma issue_downgrades <: rule.
-  Definition tc_confirmDowngrades := tc_rule R Sigma confirm_downgrades <: rule.
+  Definition tc_confirmDowngrades0 := tc_rule R Sigma confirm_downgrades0 <: rule.
+  Definition tc_confirmDowngrades1 := tc_rule R Sigma confirm_downgrades1 <: rule.
+  Definition tc_extDir := tc_rule R Sigma extDir <: rule.
 
   Definition rules (rl: rule_name_t) : rule :=
     match rl with
     | Rl_ReceiveResp => tc_receiveResp
-    | Rl_ReceiveUpgradeReqs => tc_receiveUpgradeReqs
+    | Rl_ReceiveUpgradeReqs0 => tc_receiveUpgradeReqs0
+    | Rl_ReceiveUpgradeReqs1 => tc_receiveUpgradeReqs1
     | Rl_IssueDowngrades => tc_issueDowngrades
-    | Rl_ConfirmDowngrades => tc_confirmDowngrades
+    | Rl_ConfirmDowngrades0 => tc_confirmDowngrades0
+    | Rl_ConfirmDowngrades1 => tc_confirmDowngrades1
+    | Rl_ExtDir => tc_extDir
     end.
 
   Definition schedule : Syntax.scheduler pos_t rule_name_t :=
-    Rl_ReceiveResp |> Rl_ReceiveUpgradeReqs |> Rl_IssueDowngrades |> Rl_ConfirmDowngrades |> done.
+    Rl_ReceiveResp |> Rl_ReceiveUpgradeReqs0 |> Rl_ReceiveUpgradeReqs1
+                   |> Rl_IssueDowngrades |> Rl_ConfirmDowngrades0 |> Rl_ConfirmDowngrades1
+                   |> Rl_ExtDir |> done.
 
 End ProtocolProcessor.
 
