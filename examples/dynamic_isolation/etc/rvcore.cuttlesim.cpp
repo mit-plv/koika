@@ -79,12 +79,14 @@ struct sram {
   int core_id;
 
   std::optional<struct_ext_cache_mem_resp> get(bool enable) {
-    if (!enable || !last.has_value() || get_core_done (core_id))
+    if (!last.has_value() || get_core_done (core_id) ||
+		(!enable && !(bool)(last->ignore_response)))
       return std::nullopt;
     auto data = last->data;
     auto tag = last->tag;
     auto index = last->index;
     auto newFlag = last->MSI;
+	auto ignoreResponse = last->ignore_response;
     //auto addr = last->addr;
     auto dEn = last->byte_en;
     bits<32> addr = (prims::widen<32>(tag) << 14) | (prims::widen<32>(index) << 2);
@@ -94,6 +96,7 @@ struct sram {
 #if MEM_DEBUG
     printf("Core %d; Req: dEn 0x%x; data 0x%x; tag: 0x%x; index: 0x%x; addr:0x%x; flag_valid: %d; flag: %d\n", core_id, dEn.v, data.v, tag.v, index.v, addr.v, newFlag.valid, newFlag.data);
 #endif // MEM_DEBUG
+
     if ((addr.v == 0x40001000 || addr.v == 0x80001000) && dEn.v == 0xf) {
       int exitcode = last->data.v;
       if (exitcode == 0) {
@@ -134,9 +137,11 @@ struct sram {
     printf("Core %d; Resp: tag: 0x%x; data: 0x%x; MSI_state: %d\n", core_id, current.tag.v, current.data.v, current.flag);
 #endif // MEM_DEBUG
 
-    return std::optional<struct_ext_cache_mem_resp>{
-        struct_ext_cache_mem_resp{.row = current}
-      };
+    return ignoreResponse ? std::nullopt :
+		                    std::optional<struct_ext_cache_mem_resp>{
+                              struct_ext_cache_mem_resp{.row = current}
+                            };
+
   }
 
   bool put(std::optional<struct_ext_cache_mem_req> req) {
@@ -148,8 +153,8 @@ struct sram {
   }
 
   struct_cache_mem_output getput(struct_cache_mem_input req) {
-    bool put_ready = put(req.put_valid ? std::optional<struct_ext_cache_mem_req>{req.put_request} : std::nullopt);
     std::optional<struct_ext_cache_mem_resp> get_response = get(bool(req.get_ready));
+    bool put_ready = put(req.put_valid ? std::optional<struct_ext_cache_mem_req>{req.put_request} : std::nullopt);
     return struct_cache_mem_output{
       .get_valid = bits<1>{get_response.has_value()},
       .put_ready = bits<1>{put_ready},
@@ -157,9 +162,11 @@ struct sram {
     };
   }
 
+  /*
   void read_elf(const std::string& elf_fpath) {
     elf_load(reinterpret_cast<uint32_t*>(mem.get()), elf_fpath.c_str());
   }
+  */
 
   // Use new … instead of make_unique to avoid 0-initialization
   sram(int id) : mem{std::make_unique<struct_cache_row[]>(SRAM_SIZE)}, last{}, core_id{id} {}
