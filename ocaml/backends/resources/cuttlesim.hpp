@@ -117,9 +117,13 @@ using sbits_t = std::conditional_t<size <=  8, std::int8_t,
                 std::conditional_t<size <= 64, std::int64_t,
                                    wsbits_t<size>>>>>;
 
+/// # Implementation of Kôika primitives
+
 namespace prims {
   using bitwidth = std::size_t;
   using size_t = std::size_t;
+
+  /// ## Utility functions
 
   template<typename T>
   T __attribute__((noreturn)) unreachable() {
@@ -130,6 +134,8 @@ namespace prims {
     if (!condition) { unreachable<void>(); }
   }
 
+  /// ## Array type (array<T, len>)
+
   template<typename T, size_t len>
   struct array : public std::array<T, len> { // Inherit to be able to overload ‘==’
     // https://stackoverflow.com/questions/24280521/
@@ -138,6 +144,8 @@ namespace prims {
     // NOLINTNEXTLINE(google-explicit-constructor)
     array(Args&&... args) : std::array<T, len>({std::forward<Args>(args)...}) {}
   };
+
+  /// ## Bitvector type (bits<n>)
 
   template <bitwidth sz> struct bits;
   // https://stackoverflow.com/questions/4660123/
@@ -152,7 +160,7 @@ namespace prims {
     static constexpr bitwidth size = sz;
 #endif
 
-    /// Representation invariant
+    /// ### Representation invariant
 
     static constexpr bitwidth padding_width() noexcept {
       // making this a function avoids polluting GDB's output
@@ -171,7 +179,7 @@ namespace prims {
       assume(v <= bitmask());
     }
 
-    /// Casts
+    /// ### Casts
 
     sbits_t<sz> to_sbits() const {
       sbits_t<sz> sx; // FIXME does this work with multiprecision?
@@ -196,14 +204,14 @@ namespace prims {
       return of_sbits(sx) >> bits<sz>::padding_width();
     }
 
-    /// Constants
+    /// ### Constants
 
     // Not constexpr because of ::bitmask
     static bits<sz> ones() {
       return bits<sz>::mk(bits<sz>::bitmask());
     }
 
-    /// Member functions
+    /// ### Member functions
 
     explicit operator bool() const {
       invariant(); // Knowing this invariant helps GCC generate better code
@@ -230,7 +238,7 @@ namespace prims {
     // https://stackoverflow.com/questions/4660123/
     friend std::ostream& operator<<<sz>(std::ostream& os, const bits<sz>& bs);
 
-    /// Constructors
+    /// ### Constructors
 
     template<typename T>
     static constexpr bits<sz> mk(T arg) {
@@ -238,25 +246,31 @@ namespace prims {
     }
   };
 
+  /// ## Special case for 0-bit bitvectors (bits<0>)
+
   template<>
   struct bits<0> {
     bits_t<0> v = 0;
 
-    /// Representation invariant
+    /// ### Representation invariant
+
     static constexpr bitwidth padding_width() noexcept { return std::numeric_limits<bits_t<0>>::digits; }
     static bits_t<0> bitmask() noexcept { return 0; }
     void invariant() const noexcept { assume(v == 0); }
 
-    /// Casts
+    /// ### Casts
+
     sbits_t<0> to_sbits() const { return 0; };
     static bits<0> of_sbits(sbits_t<0>) { return {}; }
     sbits_t<0> to_shifted_sbits() const { return 0; }
     static bits<0> of_shifted_sbits(sbits_t<0>) { return {}; }
 
-    /// Constants
+    /// ### Constants
+
     static bits<0> ones() { return {}; }
 
-    /// Member functions
+    /// ### Member functions
+
     explicit operator bool() const { return false; }
     explicit operator bits_t<0>() const { return 0; }
     template<bitwidth idx_sz> bits<1>
@@ -272,12 +286,17 @@ namespace prims {
     template<bitwidth shift_sz> bits<0>& operator>>=(bits<shift_sz>) { return *this; }
     friend std::ostream& operator<<<0>(std::ostream& os, const bits<0>& bs);
 
-    /// Constructors
+    /// ### Constructors
+
     template<typename T> static constexpr bits<0> mk(T /*arg*/) { return {}; }
   };
 
+  /// ## Unit type
+
   using unit = bits<0>;
   static const _unused unit tt{};
+
+  /// ## Bitvector literals
 
   namespace literal_parsing {
     template<uint base, char c>
@@ -452,7 +471,7 @@ namespace prims {
     }
   } // namespace literals
 
-  /// Functions on bits
+  /// ## Bit- and array-manipulation functions
 
   template<bitwidth sz>
   static bits<sz> mask(bits<sz> arg) {
@@ -698,6 +717,8 @@ namespace prims {
   template<bitwidth sz> template<bitwidth shift_sz>
   bits<sz>& bits<sz>::operator>>=(const bits<shift_sz> shift) { return (*this = *this >> shift); }
 
+  /// ## Display functions
+
   enum fmtstyle { full, hex, dec, bin };
 
   struct fmtopts {
@@ -739,12 +760,14 @@ namespace prims {
     return tt;
   }
 
+  /// ## Other primitives
+
   template<typename T>
   unit ignore(const T /*unused*/) {
     return tt;
   }
 
-  /// Type info
+  /// ## Type info
 
   template<typename T> struct type_info;
 
@@ -756,7 +779,7 @@ namespace prims {
     static constexpr bitwidth size{len * type_info<T>::size};
   };
 
-  /// Packing and unpacking
+  /// ## Packing and unpacking
 
   // Forward-declared; our compiler defines one instance per struct and enum.
   // Unpack needs to be structs to get return-type polymorphism through explicit
@@ -769,7 +792,7 @@ namespace prims {
     return _unpack<T, sz>::unpack(bs);
   }
 
-  /// Bits packing and unpacking (no-op, but needed by array packing/unpacking)
+  /// ### Bits packing and unpacking (no-op, but needed by array packing/unpacking)
 
   template<bitwidth sz>
   static bits<sz> pack(const bits<sz> val) {
@@ -784,7 +807,7 @@ namespace prims {
     }
   };
 
-  /// Array packing and unpacking
+  /// ### Array packing and unpacking
 
   template<typename T, size_t len>
   static bits<type_info<array<T, len>>::size> pack(const array<T, len>& val) {
@@ -816,6 +839,10 @@ namespace prims {
     }
   };
 
+  /// ## Printing
+
+  /// ### Bitvector-printing functions
+
 #ifndef SIM_MINIMAL
   // This convenience function creates a string from an object
   template<typename T>
@@ -830,8 +857,6 @@ namespace prims {
   std::ostream& fmt(std::ostream& os, const T& val) {
     return fmt(os, val, default_fmtopts);
   }
-
-  /// Bits printing functions:
 
   enum class prefixes { sized, plain, minimal };
 
@@ -897,7 +922,7 @@ namespace prims {
     return fmt(os, bs);
   }
 
-  /// Array printing functions
+  /// ### Array printing functions
 
   namespace internal {
     template<typename T>
@@ -953,6 +978,8 @@ namespace prims {
 
 #ifndef SIM_MINIMAL
 namespace cuttlesim {
+  /// # VCD traces
+
   namespace vcd {
     using namespace std::chrono;
     using strs = std::initializer_list<std::string>;
@@ -995,6 +1022,8 @@ namespace cuttlesim {
     }
   }
 
+  /// # Randomization
+
   namespace internal {
     std::size_t gen_seed() {
       if (char* seed = std::getenv("SIM_RANDOMIZED")) {
@@ -1009,11 +1038,18 @@ namespace cuttlesim {
 } // namespace cuttlesim
 #endif // #ifndef SIM_MINIMAL
 
+/// # ‘using …’ statements
+
 using prims::array;
 using prims::unit;
 using prims::bits;
 using namespace prims::literals;
+
+/// # Read-write sets
+
 namespace cuttlesim {
+  /// ## Registers
+
   struct reg_rwset {
     bool w0 : 1;
 
@@ -1031,6 +1067,8 @@ namespace cuttlesim {
 
     reg_rwset() : w0{} {}
   };
+
+  /// ## Wires
 
   struct wire_rwset {
     bool r1 : 1;
@@ -1050,6 +1088,8 @@ namespace cuttlesim {
 
     wire_rwset() : r1{}, w0{} {}
   };
+
+  /// ## EHRs
 
   struct ehr_rwset {
     bool r1 : 1; // FIXME does adding :1 always help?
@@ -1079,6 +1119,8 @@ namespace cuttlesim {
     // Removing this constructor causes Collatz's performance to drop 5x with GCC
     ehr_rwset() : r1{}, w0{}, w1{} {}
   };
+
+  /// ## Read and write functions
 
   template<typename T, typename rwset>
   [[nodiscard]] bool read0(T* target, const T rL, rwset& rwl, const rwset rwL) {
@@ -1120,7 +1162,11 @@ namespace cuttlesim {
   void write_fast(T& rl, const T val) {
     rl = val;
   }
+} // namespace cuttlesim
 
+/// # Unused datastructures for fast read-write set tracking
+
+namespace cuttlesim {
   struct offsets {
     std::size_t state_offset;
     std::size_t state_sz;
@@ -1145,6 +1191,15 @@ namespace cuttlesim {
 
     stack() : sz{0} {}
   };
+}
+
+/// # Driver
+
+namespace cuttlesim {
+  // The particular way the drivers below are written ensures that the compiler
+  // can optimize as much as possible.  If these functions returned a copy of
+  // the full simulator state instead, the compiler would not be able to
+  // optimize read-write sets away.
 
   using ull = unsigned long long int;
   template <typename simulator, typename... Args>
@@ -1165,6 +1220,8 @@ namespace cuttlesim {
   init_and_trace(std::string fname, ull ncycles, Args&&... args) {
     simulator(std::forward<Args>(args)...).trace(fname, ncycles);
   }
+
+  /// ## Command-line interface
 
   struct params {
     bool trace;
@@ -1197,6 +1254,8 @@ namespace cuttlesim {
     }
   };
 
+  /// ## int main()
+
   template<typename simulator, typename... Args>
   static _unused int main(int argc, char **argv, Args&&... args) {
     auto params = params::of_cli(argc, argv);
@@ -1218,6 +1277,10 @@ namespace cuttlesim {
 #endif
 } // namespace cuttlesim
 
+/// # Macros
+
+/// ## Utilities
+
 #define PASTE_ARGS_2(x0, x1) x0##_##x1
 #define PASTE_ARGS_3(x0, x1, x2) x0##_##x1##_##x2
 #define PASTE_ARGS_4(x0, x1, x2, x3) x0##_##x1##_##x2##_##x3
@@ -1228,6 +1291,8 @@ namespace cuttlesim {
 // Using __VA_ARGS__ in DECL_FN and WRITE* macros lets us parse things like
 // WRITE0(reg, struct_xyz{a, b}) and DECL_FN(xyz, array<int, 4>).
 // See https://stackoverflow.com/questions/29578902/.
+
+/// ## Function and rule declarations
 
 #define DECL_FN(fname, ...) \
   using PASTE_EXPANDED_3(ti_fn, RULE_NAME, fname) = __VA_ARGS__;
@@ -1241,6 +1306,8 @@ namespace cuttlesim {
 #define DEF_RULE(rl) RULE_DECL(bool, rule, rl)
 #define DEF_RESET(rl) RULE_DECL(void, reset, rl)
 #define DEF_COMMIT(rl) RULE_DECL(void, commit, rl)
+
+/// ## Read, write, and fail
 
 #define FAIL() \
   { PASTE_EXPANDED_2(reset, RULE_NAME)(); return false; }
@@ -1279,6 +1346,8 @@ namespace cuttlesim {
   log.state.reg = (val)
 #define WRITE1_FAST(reg, val) \
   log.state.reg = (val)
+
+/// ## Alternative implementations of read, write, and fail
 
 #define FAIL_DL() \
   { dlog.apply(log, Log); return false; }
