@@ -246,12 +246,6 @@ module Util = struct
     { reg_name = string_of_coq_string (pkg.koika_reg_names.show0 r);
       reg_init }
 
-  let action_footprint all_registers a =
-    let m = Hashtbl.create 25 in
-    List.iter (fun (r, _) -> Hashtbl.replace m r ()) (Extr.action_footprint a);
-    (* Filter instead of returning m's keys to preserver order *)
-    List.filter (Hashtbl.mem m) all_registers
-
   let interp_arithmetic a =
     match Extr.action_type a, Extr.interp_arithmetic a with
     | Some tau, Some v -> Some (value_of_extr_value tau v)
@@ -277,15 +271,19 @@ module Util = struct
         (rule_names: rule_name_t list)
         (rules: rule_name_t -> ('pos_t, 'var_t, fn_name_t, reg_t, 'ext_fn_t) Extr.rule)
         (scheduler: ('pos_t, rule_name_t) Extr.scheduler)
-      : (rule_name_t -> ('pos_t, 'var_t, fn_name_t, reg_t, 'fn_t) Extr.annotated_rule)
+      : (rule_name_t -> reg_t -> Extr.register_history)
+        * (rule_name_t -> ('pos_t, 'var_t, fn_name_t, reg_t, 'fn_t) Extr.annotated_rule)
         * (reg_t -> Extr.register_kind) =
     (* Taking in a list of rules allows us to ensure that we annotate all rules,
        not just those mentioned in the scheduler. *)
+    (* FIXME: this works only for linear schedulers *)
     let rEnv = contextEnv registers in
     let rlEnv = contextEnv rule_names in
-    let rule_env, kinds = Extr.compute_register_histories _R rEnv rlEnv rules scheduler in
-    ((fun (rl: rule_name_t) -> snd (Extr.getenv rlEnv rule_env rl)),
-     (fun (r: reg_t) -> Extr.getenv rEnv kinds r))
+    let (reg_histories, annotated_rules), classified_registers =
+      Extr.compute_register_histories _R rEnv rlEnv rules scheduler in
+    ((fun (rl: rule_name_t) (r: reg_t) -> Extr.getenv rEnv (Extr.getenv rlEnv reg_histories rl) r),
+     (fun (rl: rule_name_t) -> Extr.getenv rlEnv annotated_rules rl),
+     (fun (r: reg_t) -> Extr.getenv rEnv classified_registers r))
 
   let may_fail_without_revert registers histories =
     Extr.may_fail_without_revert (contextEnv registers) histories

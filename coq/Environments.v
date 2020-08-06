@@ -461,6 +461,23 @@ Proof.
   unfold zip; rewrite getenv_create; reflexivity.
 Qed.
 
+Definition unzip {K} (E: Env K) {V1 V2: esig K} (ev: E.(env_t) (fun k => V1 k * V2 k)%type)
+  : (E.(env_t) V1 * E.(env_t) V2) :=
+  (E.(create) (fun k => fst (E.(getenv) ev k)),
+   E.(create) (fun k => snd (E.(getenv) ev k))).
+
+Lemma getenv_unzip_1 {K} (E: Env K) {V1 V2: esig K} (ev: E.(env_t) (fun k => V1 k * V2 k)%type) k :
+  E.(getenv) (fst (unzip E ev)) k = fst (E.(getenv) ev k).
+Proof.
+  unfold unzip; cbn; rewrite getenv_create; reflexivity.
+Qed.
+
+Lemma getenv_unzip_2 {K} (E: Env K) {V1 V2: esig K} (ev: E.(env_t) (fun k => V1 k * V2 k)%type) k :
+  E.(getenv) (snd (unzip E ev)) k = snd (E.(getenv) ev k).
+Proof.
+  unfold unzip; cbn; rewrite getenv_create; reflexivity.
+Qed.
+
 Definition map2 {K} (E: Env K) {V1 V2 V3: esig K} (fn: forall k, V1 k -> V2 k -> V3 k)
            (ev1: E.(env_t) V1) (ev2: E.(env_t) V2)
   : E.(env_t) V3 :=

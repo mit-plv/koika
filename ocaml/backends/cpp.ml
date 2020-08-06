@@ -2,6 +2,8 @@
 open Common
 module Extr = Cuttlebone.Extr
 
+let debug = false
+
 (* #line pragmas make the C++ code harder to read, and they cover too-large a
    scope (in particular, the last #line pragma in a program overrides positions
    for all subsequent code, while we'd want to use the C++ positions for these
@@ -19,7 +21,7 @@ let use_offsets_in_dynamic_log = false
 type ('pos_t, 'var_t, 'fn_name_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_rule_t = {
     rl_external: bool;
     rl_name: 'rule_name_t;
-    rl_footprint: 'reg_t array;
+    rl_reg_histories: 'reg_t -> Extr.register_history;
     rl_body: (('pos_t, 'reg_t) Extr.register_annotation,
               'var_t, 'fn_name_t, 'reg_t, 'ext_fn_t) Extr.rule;
   }
@@ -670,15 +672,16 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
       nl ());
     p "#include \"%s\"" cuttlesim_hpp_fname in
 
-  let reg_sig_w_kind r =
-    (hpp.cpp_register_kinds r, hpp.cpp_register_sigs r) in
+  let iter_registers f regs =
+    let sigs = Array.map hpp.cpp_register_sigs regs in
+    Array.iter f sigs in
 
-  let iter_registers_with_kinds f regs =
-    Array.iter (fun r -> f (reg_sig_w_kind r)) regs in
-
-  let iter_all_registers =
+  let iter_all_registers = (* Note the late binding of ‘f’ *)
     let sigs = Array.map hpp.cpp_register_sigs hpp.cpp_registers in
     fun f -> Array.iter f sigs in
+
+  let reg_sig_w_kind r =
+    (hpp.cpp_register_kinds r, hpp.cpp_register_sigs r) in
 
   let iter_all_registers_with_kind =
     let sigs = Array.map reg_sig_w_kind hpp.cpp_registers in
@@ -827,11 +830,45 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
     let p_rule (rule: (pos_t, var_t, fn_name_t, rule_name_t, reg_t, ext_fn_t) cpp_rule_t) =
       gensym_reset ();
 
-      let footprint_sz =
-        Array.length rule.rl_footprint in
+      let filter_registers_by_history cond =
+        List.filter (fun reg -> cond reg (rule.rl_reg_histories reg))
+          (Array.to_list hpp.cpp_registers)
+        |> Array.of_list in
 
-      let large_footprint =
-        5 * footprint_sz > 4 * Array.length hpp.cpp_registers in
+      let rwset_footprint =
+        (* No need to save or reset a register's read-write set if it's only
+           read at port 0, or if it's a value (i.e. a register for which reads
+           and writes cannot fail in any rule, in which case we don't generate a
+           read-write set at all). *)
+        filter_registers_by_history (fun reg { hr1; hw0; hw1; _ } ->
+            hpp.cpp_register_kinds reg <> Value &&
+            Extr.(hr1 <> TFalse || hw0 <> TFalse || hw1 <> TFalse)) in
+
+      let rwdata_footprint =
+        (* No need to save or reset a register's data if it's only read *)
+        filter_registers_by_history (fun _reg { hw0; hw1; _ } ->
+            Extr.(hw0 <> TFalse || hw1 <> TFalse)) in
+
+      if debug then (
+        let debug_footprint name fp =
+          Printf.printf "Footprints for %s in %s:\n"
+            name (hpp.cpp_rule_names rule.rl_name);
+          Array.iter (fun r ->
+              let nm = (hpp.cpp_register_sigs r).reg_name in
+              let rfp = rule.rl_reg_histories r in
+              let pr = function
+                | Extr.TTrue -> "true"
+                | Extr.TFalse -> "false"
+                | Extr.TUnknown -> "?" in
+              Printf.printf "  %s: {r0=%s; r1=%s; w0=%s; w1=%s; cf=%s}\n" nm
+                (pr rfp.hr0) (pr rfp.hr1) (pr rfp.hw0) (pr rfp.hw1) (pr rfp.hcf))
+            fp in
+
+        debug_footprint "rwset" rwset_footprint;
+        debug_footprint "rwdata" rwdata_footprint);
+
+      let large_footprint footprint = (* FIXME should be tweaked based on the speed of memset *)
+        5 * Array.length footprint > 4 * Array.length hpp.cpp_registers in
 
       let rule_max_log_size =
         Extr.rule_max_log_size rule.rl_body in
@@ -840,7 +877,8 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
         (* LATER: Refine this criterion based on rule_max_log_size; at the moment
            this measure isn't precise enough to be truly useful, because it
            overestimates log sizes in imperative switches. *)
-        use_dynamic_logs && footprint_sz > 10 in
+        use_dynamic_logs && (Array.length rwdata_footprint > 10 ||
+                              Array.length rwset_footprint > 10) in
 
       let dl_suffix =
         if use_dynamic_log
@@ -855,24 +893,26 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
           sprintf "READ%d%s" pt (rw_suffix reg) in
       let write reg pt = sprintf "WRITE%d%s" pt (rw_suffix reg) in
 
-      let p_copy exclude_values field src dst =
+      let p_copy field src dst footprint =
         let src = sprintf "%s.%s" src field in
         let dst = sprintf "%s.%s" dst field in
-        iter_registers_with_kinds (function
-            | (Value, _) when exclude_values -> ()
-            | (_, { reg_name; _ }) ->
-               p "%s.%s = %s.%s;" dst reg_name src reg_name)
-          rule.rl_footprint in
+        if large_footprint footprint then
+          p "%s = %s;" dst src
+        else
+          iter_registers (fun { reg_name; _ } ->
+              p "%s.%s = %s.%s;" dst reg_name src reg_name)
+            footprint in
 
-      let p_reset () =
-        if large_footprint then p "log = Log;"
-        else (p_copy false "state" "Log" "log";
-              p_copy true "rwset" "Log" "log") in
+      let p_commit_reset src dst =
+        if large_footprint rwdata_footprint &&
+             large_footprint rwset_footprint then
+          p "%s = %s;" dst src
+        else (
+          p_copy "state" src dst rwdata_footprint;
+          p_copy "rwset" src dst rwset_footprint) in
 
-      let p_commit () =
-        if large_footprint then p "Log = log;"
-        else (p_copy false "state" "log" "Log";
-              p_copy true "rwset" "log" "Log") in
+      let p_reset () = p_commit_reset "Log" "log" in
+      let p_commit () = p_commit_reset "log" "Log" in
 
       let p_declare_target = function
         | VarTarget ({ tau; declared = false; name } as ti) ->
@@ -1466,15 +1506,14 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
   let buf_hpp = with_output_to_buffer p_hpp in
   (buf_hpp, buf_cpp)
 
-let cpp_rule_of_action all_regs (rl_name, (kind, rl_body)) =
-  let rl_footprint =
-    Array.of_list (Cuttlebone.Util.action_footprint all_regs rl_body) in
-  { rl_external = kind = `ExternalRule; rl_name; rl_body; rl_footprint }
+let cpp_rule_of_action reg_histories (rl_name, (kind, rl_body)) =
+  { rl_external = kind = `ExternalRule; rl_name; rl_body;
+    rl_reg_histories = reg_histories rl_name }
 
 let input_of_compile_unit (cu: 'f Cuttlebone.Compilation.compile_unit) =
   let rulemap r =
     snd (List.assoc r cu.c_rules) in
-  let annotated_rules, register_kinds =
+  let reg_histories, annotated_rules, register_kinds =
     Cuttlebone.Util.compute_register_histories
       Cuttlebone.Compilation._R cu.c_registers
       (List.map fst cu.c_rules) rulemap cu.c_scheduler in
@@ -1489,7 +1528,7 @@ let input_of_compile_unit (cu: 'f Cuttlebone.Compilation.compile_unit) =
     cpp_fn_names = (fun x -> x);
     cpp_rule_names = (fun ?prefix:_ rl -> rl);
     cpp_scheduler = cu.c_scheduler;
-    cpp_rules = List.map (cpp_rule_of_action cu.c_registers << swap_body) cu.c_rules;
+    cpp_rules = List.map (cpp_rule_of_action reg_histories << swap_body) cu.c_rules;
     cpp_registers = Array.of_list cu.c_registers;
     cpp_register_sigs = (fun r -> r);
     cpp_register_kinds = register_kinds;
@@ -1497,10 +1536,9 @@ let input_of_compile_unit (cu: 'f Cuttlebone.Compilation.compile_unit) =
     cpp_extfuns = cu.c_cpp_preamble; }
 
 let cpp_rule_of_koika_package_rule (kp: _ Extr.koika_package_t)
-      (annotated_rules: 'rn -> _) (rn: 'rn) =
+      (reg_histories: 'rn -> 'rg -> _) (annotated_rules: 'rn -> _) (rn: 'rn) =
   let kind rn = if kp.koika_rule_external rn then `ExternalRule else `InternalRule in
-  cpp_rule_of_action kp.koika_reg_finite.finite_elements
-    (rn, (kind rn, annotated_rules rn))
+  cpp_rule_of_action reg_histories (rn, (kind rn, annotated_rules rn))
 
 let input_of_sim_package
       (kp: ('pos_t, 'var_t, 'fn_name_t, 'rule_name_t, 'reg_t, 'ext_fn_t) Extr.koika_package_t)
@@ -1508,7 +1546,7 @@ let input_of_sim_package
     : ('pos_t, 'var_t, 'fn_name_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_input_t =
   let rule_names =
     Extr.scheduler_rules kp.koika_scheduler |> Cuttlebone.Util.dedup in
-  let annotated_rules, register_kinds =
+  let reg_histories, annotated_rules, register_kinds =
     Cuttlebone.Util.compute_register_histories
       kp.koika_reg_types kp.koika_reg_finite.finite_elements
       rule_names kp.koika_rules kp.koika_scheduler in
@@ -1523,7 +1561,7 @@ let input_of_sim_package
     cpp_rule_names = (fun ?prefix:_ rn ->
       Cuttlebone.Util.string_of_coq_string (kp.koika_rule_names.show0 rn));
     cpp_scheduler = kp.koika_scheduler;
-    cpp_rules = List.map (cpp_rule_of_koika_package_rule kp annotated_rules) rule_names;
+    cpp_rules = List.map (cpp_rule_of_koika_package_rule kp reg_histories annotated_rules) rule_names;
     cpp_registers = Array.of_list registers;
     cpp_register_sigs = Cuttlebone.Util.reg_sigs_of_koika_package kp;
     cpp_register_kinds = register_kinds;

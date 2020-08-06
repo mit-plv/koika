@@ -356,13 +356,16 @@ Section TypedSyntaxFunctions.
         TypedSyntax.action register_annotation var_t fn_name_t R Sigma [] unit_t.
 
       Definition compute_register_histories
-        : RLEnv.(env_t) (fun _ => (reg_history_map * annotated_rule)%type) *
+        : RLEnv.(env_t) (fun _ => reg_history_map) *
+          RLEnv.(env_t) (fun _ => annotated_rule) *
           REnv.(env_t) (fun _ => register_kind) :=
         let rule_env := RLEnv.(create) (fun rl => annotate_rule_register_histories (rules rl)) in
-        let per_rule := fun rl => fst (RLEnv.(getenv) rule_env rl) in
-        let reg_histories := compute_scheduler_register_histories per_rule s in
-        let kinds := classify_registers reg_histories in
-        (rule_env, kinds).
+        let (reg_histories_per_rule, annotated_rules) :=
+            unzip RLEnv rule_env in
+        let reg_histories :=
+            compute_scheduler_register_histories (RLEnv.(getenv) reg_histories_per_rule) s in
+        let classified_registers := classify_registers reg_histories in
+        ((reg_histories_per_rule, annotated_rules), classified_registers).
 
       Definition may_fail_without_revert (histories: reg_history_map) :=
         let ok h :=

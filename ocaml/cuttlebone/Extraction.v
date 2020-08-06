@@ -25,7 +25,6 @@ Extraction "extr.ml"
            TypedSyntaxFunctions.scheduler_rules
            TypedSyntaxFunctions.action_mentions_var
            TypedSyntaxFunctions.member_mentions_shadowed_binding
-           TypedSyntaxFunctions.action_footprint
            TypedSyntaxFunctions.returns_zero
            TypedSyntaxFunctions.is_pure
            TypedSyntaxFunctions.is_tt
