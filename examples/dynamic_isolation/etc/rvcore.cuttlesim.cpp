@@ -33,41 +33,62 @@ void set_core_done(int core_id) {
 }
 
 struct bookkeeping {
-  std::array<std::array<struct_Bookkeeping_row, 4>, NUM_SETS> container;
+  std::array<struct_bookkeeping_entry, NUM_SETS> container;
+  std::optional<struct_bookkeeping_input> last;
 
-  int encode_cache (bits<1> core_id, enum_cache_type cache_type) {
-	  return (2 * core_id.v + (cache_type == enum_cache_type::dmem ? 1 : 0));
-  }
-
-  struct_Bookkeeping_row get(bits<1> core_id, enum_cache_type cache_type, bits<12> idx) {
-	  return container[idx.v][encode_cache(core_id, cache_type)];
-  }
-
-  void set(bits<1> core_id, enum_cache_type cache_type, bits<12> idx, struct_Bookkeeping_row row) {
-
+  void update(bits<1> core_id, enum_cache_type cache_type, bits<12> idx, struct_bookkeeping_row row) {
 #if MEM_DEBUG
 	printf("Set core %d, cache %d, idx 0x%x, tag 0x%x, state %d\n", core_id.v, cache_type, idx.v, row.tag.v, row.state);
-
 #endif // MEM_DEBUG
-	container[idx.v][encode_cache(core_id,cache_type)] = row;
+	if (core_id.v == 0) {
+	  if (cache_type == enum_cache_type::imem) {
+		container[idx.v].imem0 = row;
+	  } else {
+		container[idx.v].dmem0 = row;
+	  }
+    } else {
+	  if (cache_type == enum_cache_type::imem) {
+		container[idx.v].imem1 = row;
+	  } else {
+		container[idx.v].dmem1 = row;
+	  }
+    }
   }
 
-  struct_maybe_Bookkeeping_row getset(struct_bookkeeping_input input) {
-	if (input.book.valid) {
-	  set(input.core_id, input.cache_type, input.idx, input.book.data);
-	  return struct_maybe_Bookkeeping_row {
-	    .valid = bits<1>{false},
-        .data =	struct_Bookkeeping_row {
-				  .state = enum_MSI::I,
-                  .tag = bits<18>{0}
-                }
-      };
-    } else {
-	  return struct_maybe_Bookkeeping_row {
-	    .valid = bits<1>{true},
-        .data =	get(input.core_id, input.cache_type, input.idx)
-      };
-    }
+  std::optional<struct_bookkeeping_entry> get(bool enable) {
+	if (!last.has_value() || (!enable && !(last->write_entry.valid)))
+	  return std::nullopt;
+	auto write_entry = last->write_entry;
+	auto index = last->idx;
+	auto write_data = write_entry.data;
+
+	if (write_entry.valid) { // write
+	  update(write_data.core_id, write_data.cache_type, index, write_data.entry);
+	  last.reset();
+	  return std::nullopt;
+	} else { // Read
+	  last.reset();
+	  return std::optional<struct_bookkeeping_entry>{container[index.v]};
+	}
+  }
+
+  bool put(std::optional<struct_bookkeeping_input> req) {
+    if (!req.has_value() || last.has_value())
+      return false;
+
+    last = *req;
+    return true;
+  }
+
+
+  struct_ext_bookkeeping_output getput(struct_ext_bookkeeping_input req) {
+    std::optional<struct_bookkeeping_entry> get_response = get(bool(req.get_ready));
+    bool put_ready = put(req.put_valid ? std::optional<struct_bookkeeping_input>{req.put_request} : std::nullopt);
+	return struct_ext_bookkeeping_output{
+	  .get_valid = bits<1>{get_response.has_value()},
+	  .put_ready = bits<1>{put_ready},
+	  .get_response = get_response.value_or(struct_bookkeeping_entry{})
+	};
   }
 
   bookkeeping() : container{} {}
@@ -305,8 +326,8 @@ struct extfuns_t {
     return current;
   }
 
-  struct_maybe_Bookkeeping_row ext_ppp_bookkeeping(struct_bookkeeping_input req) {
-	return ppp_bookkeeping.getset(req);
+  struct_ext_bookkeeping_output ext_ppp_bookkeeping(struct_ext_bookkeeping_input req) {
+	return ppp_bookkeeping.getput(req);
   }
 
   extfuns_t() : dmem0{sram(0)}, dmem1{sram(1)}, imem0{sram(0)}, imem1{sram(1)},
