@@ -141,7 +141,7 @@ Module MessageFifo1.
          else if has_req() then
            let req_opt := reqQueue.(CacheMemReq.peek)() in
            let msg := struct cache_mem_msg { type := enum cache_mem_msg_tag { Req };
-                                             resp := get(req_opt, data)
+                                             req := get(req_opt, data)
                                            } in
            {valid (struct_t cache_mem_msg)}(msg)
          else
@@ -477,6 +477,13 @@ Module Cache (Params: CacheParams).
                          ("req", struct_t mem_req)
                         ] |}.
 
+  (* Temporary reg to track which rule to run, in order to work well with external calls *)
+  Definition TODO_state_tracker :=
+    {| enum_name := "TODO_state_tracker";
+       enum_members := vect_of_list ["Ready"; "Downgrade1"; "ProcessRequest1"];
+       enum_bitpatterns := vect_of_list [Ob~0~0; Ob~0~1; Ob~1~0]
+    |}.
+
   Definition flush_status :=
     {| enum_name := "flush_status";
        enum_members := vect_of_list ["Ready"; "Flushing"; "Flushed"];
@@ -500,7 +507,7 @@ Module Cache (Params: CacheParams).
 
 
   Inductive private_reg_t :=
-  | downgradeState
+  | TODO_state
   | requestsQ (state: MemReq.reg_t)
   | responsesQ (state: MemResp.reg_t)
   | MSHR
@@ -515,7 +522,7 @@ Module Cache (Params: CacheParams).
 
   Definition R_private (idx: private_reg_t) : type :=
     match idx with
-    | downgradeState => bits_t 1
+    | TODO_state => enum_t TODO_state_tracker
     | requestsQ st => MemReq.R st
     | responsesQ st => MemResp.R st
     | MSHR => struct_t MSHR_t
@@ -526,7 +533,7 @@ Module Cache (Params: CacheParams).
 
   Definition r_private (idx: private_reg_t) : R_private idx :=
     match idx with
-    | downgradeState => Ob~0
+    | TODO_state => value_of_bits (Bits.zero)
     | requestsQ st => MemReq.r st
     | responsesQ st => MemResp.r st
     | MSHR => value_of_bits (Bits.zero)
@@ -619,7 +626,8 @@ Module Cache (Params: CacheParams).
 
   (* If Store: do nothing in response *)
   (* If Load: send response *)
-  Definition hit (mem: External.cache): UInternalFunction reg_t ext_fn_t :=
+  (* Enqs to extToRAM *)
+  Definition hit : UInternalFunction reg_t ext_fn_t :=
     {{ fun hit (req: struct_t mem_req) (row: struct_t cache_row) (write_on_load: bits_t 1): enum_t mshr_tag =>
          let new_state := enum mshr_tag { Ready } in
          (
@@ -635,9 +643,11 @@ Module Cache (Params: CacheParams).
                                          tag := getTag(get(req,addr));
                                          index := getIndex(get(req,addr));
                                          data := get(row,data);
-                                         MSI := {valid (enum_t MSI)}(get(row,flag))
+                                         MSI := {valid (enum_t MSI)}(get(row,flag));
+                                         ignore_response := Ob~1
                                       } in
-               ignore({memoryBus mem}(Ob~1, Ob~1, cache_req))
+               (__private__ ext_toRAM).(ExtCacheMemReq.enq)(cache_req)
+               (* ignore({memoryBus mem}(Ob~1, Ob~1, cache_req)); *)
              else pass
          else (* TODO: commit data *)
            if (get(row,flag) == enum MSI { M }) then
@@ -646,9 +656,11 @@ Module Cache (Params: CacheParams).
                                        tag := getTag(get(req,addr));
                                        index := getIndex(get(req,addr));
                                        data := get(req,data);
-                                       MSI := {valid (enum_t MSI)}(enum MSI { M })
+                                       MSI := {valid (enum_t MSI)}(enum MSI { M });
+                                       ignore_response := Ob~1
                                     } in
-             ignore({memoryBus mem}(Ob~1, Ob~1, cache_req));
+             (__private__ ext_toRAM).(ExtCacheMemReq.enq)(cache_req);
+             (* ignore({memoryBus mem}(Ob~1, Ob~1, cache_req)); *)
              (__private__ responsesQ).(MemResp.enq)(
                struct mem_resp { addr := get(req, addr);
                                   data := |32`d0|;
@@ -660,57 +672,113 @@ Module Cache (Params: CacheParams).
          new_state
     }}.
 
-  Definition dummy_ext_cache_mem_req : struct_t ext_cache_mem_req := value_of_bits (Bits.zero).
-
-  Definition downgrade (mem: External.cache): uaction reg_t ext_fn_t :=
-    {{
-        if (fromMem.(MessageFifo1.not_empty)() &&
-            !fromMem.(MessageFifo1.has_resp)()) then
-          write0(private downgradeState, Ob~1);
-          let req := get(fromMem.(MessageFifo1.deq)(), req) in
-          let index := getIndex(get(req,addr)) in
-          let tag := getTag(get(req,addr)) in
-          let cache_req := struct ext_cache_mem_req { byte_en := Ob~0~0~0~0;
-                                                       tag := tag;
-                                                       index := index;
-                                                       data := |32`d0|;
-                                                       MSI := {invalid (enum_t MSI)}() } in
-          guard (!toMem.(MessageFifo1.has_resp)());
-          let cache_output := {memoryBus mem}(Ob~1, Ob~1, cache_req) in
-          guard ((get(cache_output, get_valid)));
-          let row := get(get(cache_output, get_response),row) in
-          if (get(row,tag) == tag &&
-              ((get(req, MSI_state) == enum MSI { I } && get(row, flag) != enum MSI { I }) ||
-               (get(req, MSI_state) == enum MSI { S } && get(row, flag) == enum MSI { M }))) then
-            let data_opt := (if get(row,flag) == enum MSI { M }
-                             then {valid data_t}(get(row,data))
-                             else {invalid data_t}()) in
-            toMem.(MessageFifo1.enq_resp)(struct cache_mem_resp { core_id := (#core_id);
-                                                                   cache_type := (`UConst (cache_type)`);
-                                                                   addr := tag ++ index ++ (Ob~0~0);
-                                                                   MSI_state := get(req, MSI_state);
-                                                                   data := data_opt
-                                                                });
-            let cache_req := struct ext_cache_mem_req { byte_en := |4`d0|;
-                                                         tag := tag;
-                                                         index := index;
-                                                         data := |32`d0|;
-                                                         MSI := {valid (enum_t MSI)}(get(req, MSI_state))
-                                                      } in
-           ignore({memoryBus mem}(Ob~1, Ob~1, cache_req))
-          else pass
-        else
-          write0(private downgradeState, Ob~0)
+  Definition downgrade0 : uaction reg_t ext_fn_t :=
+    {{ let TODO_st := read0(private TODO_state) in
+       guard(TODO_st == enum TODO_state_tracker { Ready });
+       if (fromMem.(MessageFifo1.not_empty)() &&
+           !fromMem.(MessageFifo1.has_resp)()) then
+         let maybe_req := fromMem.(MessageFifo1.peek)() in
+         let req := get(get(maybe_req, data),req) in
+         let index := getIndex(get(req,addr)) in
+         let tag := getTag(get(req,addr)) in
+         let cache_req := struct ext_cache_mem_req { byte_en := Ob~0~0~0~0;
+                                                     tag := tag;
+                                                     index := index;
+                                                     data := |32`d0|;
+                                                     MSI := {invalid (enum_t MSI)}();
+                                                     ignore_response := Ob~0
+                                                   } in
+         (* guard (!toMem.(MessageFifo1.has_resp)()); (* Why? *) *)
+         (__private__ ext_toRAM).(ExtCacheMemReq.enq)(cache_req);
+         write0(private TODO_state, enum TODO_state_tracker { Downgrade1 })
+       else fail
     }}.
 
+  Definition downgrade1: uaction reg_t ext_fn_t :=
+    {{ let TODO_st := read0(private TODO_state) in
+       guard(TODO_st == enum TODO_state_tracker {Downgrade1});
+       guard (fromMem.(MessageFifo1.not_empty)() && !fromMem.(MessageFifo1.has_resp)());
+       let req := get(fromMem.(MessageFifo1.deq)(), req) in
+       let index := getIndex(get(req,addr)) in
+       let tag := getTag(get(req,addr)) in
+       let cache_output := (__private__ ext_fromRAM).(ExtCacheMemResp.deq)() in
+       let row := get(cache_output,row) in
+       if (get(row,tag) == tag &&
+           ((get(req, MSI_state) == enum MSI { I } && get(row, flag) != enum MSI { I }) ||
+            (get(req, MSI_state) == enum MSI { S } && get(row, flag) == enum MSI { M }))) then
+         let data_opt := (if get(row,flag) == enum MSI { M }
+                          then {valid data_t}(get(row,data))
+                          else {invalid data_t}()) in
+         toMem.(MessageFifo1.enq_resp)(struct cache_mem_resp { core_id := (#core_id);
+                                                                cache_type := (`UConst (cache_type)`);
+                                                                addr := tag ++ index ++ (Ob~0~0);
+                                                                MSI_state := get(req, MSI_state);
+                                                                data := data_opt
+                                                             });
+         let cache_req := struct ext_cache_mem_req { byte_en := |4`d0|;
+                                                      tag := tag;
+                                                      index := index;
+                                                      data := |32`d0|;
+                                                      MSI := {valid (enum_t MSI)}(get(req, MSI_state));
+                                                      ignore_response := Ob~1
+                                                   } in
+         (__private__ ext_toRAM).(ExtCacheMemReq.enq)(cache_req);
+         write0(private TODO_state, enum TODO_state_tracker {Ready})
+       else pass
+    }}.
 
-  (* TOOD: for now, just assume miss and skip cache and forward to memory *)
-  Definition process_request (mem: External.cache): uaction reg_t ext_fn_t :=
+  (* Definition downgrade (mem: External.cache): uaction reg_t ext_fn_t := *)
+  (*   {{ *)
+  (*       if (fromMem.(MessageFifo1.not_empty)() && *)
+  (*           !fromMem.(MessageFifo1.has_resp)()) then *)
+  (*         let req := get(fromMem.(MessageFifo1.deq)(), req) in *)
+  (*         let index := getIndex(get(req,addr)) in *)
+  (*         let tag := getTag(get(req,addr)) in *)
+  (*         let cache_req := struct ext_cache_mem_req { byte_en := Ob~0~0~0~0; *)
+  (*                                                     tag := tag; *)
+  (*                                                     index := index; *)
+  (*                                                     data := |32`d0|; *)
+  (*                                                     MSI := {invalid (enum_t MSI)}() } in *)
+  (*         guard (!toMem.(MessageFifo1.has_resp)()); (* Why? *) *)
+  (*         (__private__ extToMem)(ExtCacheMemReq.enq)(cache_req) *)
+
+  (*         let cache_output := {memoryBus mem}(Ob~1, Ob~1, cache_req) in *)
+  (*         guard ((get(cache_output, get_valid))); *)
+  (*         let row := get(get(cache_output, get_response),row) in *)
+  (*         if (get(row,tag) == tag && *)
+  (*             ((get(req, MSI_state) == enum MSI { I } && get(row, flag) != enum MSI { I }) || *)
+  (*              (get(req, MSI_state) == enum MSI { S } && get(row, flag) == enum MSI { M }))) then *)
+  (*           let data_opt := (if get(row,flag) == enum MSI { M } *)
+  (*                            then {valid data_t}(get(row,data)) *)
+  (*                            else {invalid data_t}()) in *)
+  (*           toMem.(MessageFifo1.enq_resp)(struct cache_mem_resp { core_id := (#core_id); *)
+  (*                                                                  cache_type := (`UConst (cache_type)`); *)
+  (*                                                                  addr := tag ++ index ++ (Ob~0~0); *)
+  (*                                                                  MSI_state := get(req, MSI_state); *)
+  (*                                                                  data := data_opt *)
+  (*                                                               }); *)
+  (*           let cache_req := struct ext_cache_mem_req { byte_en := |4`d0|; *)
+  (*                                                        tag := tag; *)
+  (*                                                        index := index; *)
+  (*                                                        data := |32`d0|; *)
+  (*                                                        MSI := {valid (enum_t MSI)}(get(req, MSI_state)) *)
+  (*                                                     } in *)
+  (*          ignore({memoryBus mem}(Ob~1, Ob~1, cache_req)) *)
+  (*         else pass *)
+  (*       else *)
+  (*         write0(private downgradeState, Ob~0) *)
+  (*   }}. *)
+
+  Definition process_request0 : uaction reg_t ext_fn_t :=
     {{
         let mshr := read0(private MSHR) in
-        let downgrade_state := read1(private downgradeState) in
-        guard((get(mshr,mshr_tag) == enum mshr_tag { Ready }) && !downgrade_state);
-        let req := (__private__ requestsQ).(MemReq.deq)() in
+        let TODO_st := read0(private TODO_state) in
+        guard((get(mshr,mshr_tag) == enum mshr_tag { Ready }) &&
+              TODO_st == enum TODO_state_tracker { Ready });
+        let maybe_req := (__private__ requestsQ).(MemReq.peek)() in
+        guard(get(maybe_req,valid));
+        let req := get(maybe_req,data) in
+        (* let req := (__private__ requestsQ).(MemReq.deq)() in *)
         let addr := get(req,addr) in
         let tag := getTag(addr) in
         let index := getIndex(addr) in
@@ -719,16 +787,28 @@ Module Cache (Params: CacheParams).
                                                      tag := tag;
                                                      index := index;
                                                      data := get(req,data);
-                                                     MSI := {invalid (enum_t MSI)}()
+                                                     MSI := {invalid (enum_t MSI)}();
+                                                     ignore_response := Ob~0
                                                   } in
-        guard((__private__ responsesQ).(MemResp.can_enq)());
-        guard(!toMem.(MessageFifo1.has_resp)());
-        let cache_output := {memoryBus mem}(Ob~1, Ob~1, cache_req) in
-        guard ((get(cache_output, get_valid)));
-        let row := get(get(cache_output, get_response), row) in
+        (__private__ ext_toRAM).(ExtCacheMemReq.enq)(cache_req);
+        write0(private TODO_state, enum TODO_state_tracker { ProcessRequest1 })
+   }}.
+
+  Definition process_request1 : uaction reg_t ext_fn_t :=
+    {{
+        let TODO_st := read0(private TODO_state) in
+        guard(read0(private TODO_state) == enum TODO_state_tracker { ProcessRequest1 });
+        write0(private TODO_state, enum TODO_state_tracker { Ready });
+        let req := (__private__ requestsQ).(MemReq.deq)() in
+        let addr := get(req,addr) in
+        let tag := getTag(addr) in
+        let index := getIndex(addr) in
+        let cache_output := (__private__ ext_fromRAM).(ExtCacheMemResp.deq)() in
+        let row := get(cache_output , row) in
         let inCache := ((get(row,tag) == tag) && (get(row,flag) != enum MSI { I } )) in
         if (inCache) then
-          let newMSHR := {hit mem}(req, row, Ob~0) in
+          (* Here byte_en = 0b~0~0~0~0 and write_on_load = Ob~0), so no contention to access the cache *)
+          let newMSHR := hit(req, row, Ob~0) in (* Ready *)
           write0(private MSHR, struct MSHR_t { mshr_tag := newMSHR;
                                                  req := req
                                               })
@@ -748,14 +828,68 @@ Module Cache (Params: CacheParams).
                                                          tag := |18`d0|;
                                                          index := index;
                                                          data := |32`d0|;
-                                                         MSI := {valid (enum_t MSI)}(enum MSI { I }) } in
-            ignore({memoryBus mem}(Ob~1, Ob~1, cache_req))
+                                                         MSI := {valid (enum_t MSI)}(enum MSI { I });
+                                                         ignore_response := Ob~1
+                                                      } in
+            (__private__ ext_toRAM).(ExtCacheMemReq.enq)(cache_req)
           ));
           write0(private MSHR, struct MSHR_t { mshr_tag := enum mshr_tag { SendFillReq };
                                                  req := req
-                                              })
-        )
+                                              }))
     }}.
+
+  (* TOOD: for now, just assume miss and skip cache and forward to memory *)
+  (* Definition process_request (mem: External.cache): uaction reg_t ext_fn_t := *)
+  (*   {{ *)
+  (*       let mshr := read0(private MSHR) in *)
+  (*       let downgrade_state := read1(private downgradeState) in *)
+  (*       guard((get(mshr,mshr_tag) == enum mshr_tag { Ready }) && !downgrade_state); *)
+  (*       let req := (__private__ requestsQ).(MemReq.deq)() in *)
+  (*       let addr := get(req,addr) in *)
+  (*       let tag := getTag(addr) in *)
+  (*       let index := getIndex(addr) in *)
+  (*       (* No offset because single element cache oops *) *)
+  (*       let cache_req := struct ext_cache_mem_req { byte_en := Ob~0~0~0~0; *)
+  (*                                                    tag := tag; *)
+  (*                                                    index := index; *)
+  (*                                                    data := get(req,data); *)
+  (*                                                    MSI := {invalid (enum_t MSI)}() *)
+  (*                                                 } in *)
+  (*       guard((__private__ responsesQ).(MemResp.can_enq)()); *)
+  (*       guard(!toMem.(MessageFifo1.has_resp)()); *)
+  (*       let cache_output := {memoryBus mem}(Ob~1, Ob~1, cache_req) in *)
+  (*       guard ((get(cache_output, get_valid))); *)
+  (*       let row := get(get(cache_output, get_response), row) in *)
+  (*       let inCache := ((get(row,tag) == tag) && (get(row,flag) != enum MSI { I } )) in *)
+  (*       if (inCache) then *)
+  (*         let newMSHR := {hit mem}(req, row, Ob~0) in *)
+  (*         write0(private MSHR, struct MSHR_t { mshr_tag := newMSHR; *)
+  (*                                                req := req *)
+  (*                                             }) *)
+  (*         (* miss *) *)
+  (*       else ( *)
+  (*         (when (get(row,flag) != enum MSI { I }) do ((* tags unequal; need to downgrade *) *)
+  (*           let data_opt := (if get(row,flag) == enum MSI { M } *)
+  (*                            then {valid data_t}(get(row,data)) *)
+  (*                            else {invalid data_t}()) in *)
+  (*           toMem.(MessageFifo1.enq_resp)(struct cache_mem_resp { core_id := (#core_id); *)
+  (*                                                                  cache_type := (`UConst (cache_type)`); *)
+  (*                                                                  addr := get(row,tag) ++ index ++ Ob~0~0; *)
+  (*                                                                  MSI_state := enum MSI { I }; *)
+  (*                                                                  data := data_opt }); *)
+  (*             (* TODO: should this be a write *) *)
+  (*           let cache_req := struct ext_cache_mem_req { byte_en := |4`d0|; *)
+  (*                                                        tag := |18`d0|; *)
+  (*                                                        index := index; *)
+  (*                                                        data := |32`d0|; *)
+  (*                                                        MSI := {valid (enum_t MSI)}(enum MSI { I }) } in *)
+  (*           ignore({memoryBus mem}(Ob~1, Ob~1, cache_req)) *)
+  (*         )); *)
+  (*         write0(private MSHR, struct MSHR_t { mshr_tag := enum mshr_tag { SendFillReq }; *)
+  (*                                                req := req *)
+  (*                                             }) *)
+  (*       ) *)
+  (*   }}. *)
 
 
   Definition byte_en_to_msi_state : UInternalFunction reg_t empty_ext_fn_t :=
@@ -769,8 +903,8 @@ Module Cache (Params: CacheParams).
   Definition SendFillReq : uaction reg_t ext_fn_t :=
     {{
         let mshr := read0(private MSHR) in
-        let downgrade_state := read1(private downgradeState) in
-        guard(get(mshr,mshr_tag) == enum mshr_tag { SendFillReq } && !downgrade_state);
+        guard(read0(private TODO_state) == enum TODO_state_tracker { Ready });
+        guard(get(mshr,mshr_tag) == enum mshr_tag { SendFillReq });
         let mshr_req := get(mshr,req) in
         toMem.(MessageFifo1.enq_req)(
                   struct cache_mem_req { core_id := (#core_id);
@@ -786,21 +920,22 @@ Module Cache (Params: CacheParams).
                                             })
     }}.
 
-  Definition WaitFillResp (mem: External.cache): uaction reg_t ext_fn_t :=
+  Definition WaitFillResp : uaction reg_t ext_fn_t :=
     {{
         let mshr := read0(private MSHR) in
-        let downgrade_state := read1(private downgradeState) in
+        (* let downgrade_state := read1(private downgradeState) in *)
         guard(get(mshr,mshr_tag) == enum mshr_tag { WaitFillResp }
-              && !downgrade_state
+              (* && !downgrade_state *)
               && fromMem.(MessageFifo1.has_resp)());
         let resp := get(fromMem.(MessageFifo1.deq)(),resp) in
 
         let req := get(mshr, req) in
         let row := struct cache_row { tag := getTag(get(req, addr));
-                                       data := {fromMaybe data_t}(|32`d0|, get(resp,data));
-                                       flag := get(resp, MSI_state)
+                                      data := {fromMaybe data_t}(|32`d0|, get(resp,data));
+                                      flag := get(resp, MSI_state)
                                     } in
-        ignore({hit mem}(req, row, Ob~1));
+        ignore(hit(req, row, Ob~1));
+        (* ignore({hit mem}(req, row, Ob~1)); *)
         (* write to Mem *)
         write0(private MSHR, struct MSHR_t { mshr_tag := enum mshr_tag { Ready };
                                                req := (`UConst dummy_mem_req`)
@@ -894,8 +1029,10 @@ Module Cache (Params: CacheParams).
     *)
 
   Inductive rule_name_t :=
-  | Rl_Downgrade
-  | Rl_ProcessRequest
+  | Rl_Downgrade0
+  | Rl_Downgrade1
+  | Rl_ProcessRequest0
+  | Rl_ProcessRequest1
   | Rl_SendFillReq
   | Rl_WaitFillResp
   | Rl_MemBus
@@ -904,21 +1041,27 @@ Module Cache (Params: CacheParams).
   Definition rule := rule R Sigma.
 
   (* NOTE: type-checking with unbound memory doesn't fail fast *)
-  Definition tc_downgrade_imem0 := tc_rule R Sigma (downgrade External.imem0) <: rule.
-  Definition tc_downgrade_dmem0 := tc_rule R Sigma (downgrade External.dmem0) <: rule.
-  Definition tc_downgrade_imem1 := tc_rule R Sigma (downgrade External.imem1) <: rule.
-  Definition tc_downgrade_dmem1 := tc_rule R Sigma (downgrade External.dmem1) <: rule.
+  (* Definition tc_downgrade_imem0 := tc_rule R Sigma (downgrade External.imem0) <: rule. *)
+  (* Definition tc_downgrade_dmem0 := tc_rule R Sigma (downgrade External.dmem0) <: rule. *)
+  (* Definition tc_downgrade_imem1 := tc_rule R Sigma (downgrade External.imem1) <: rule. *)
+  (* Definition tc_downgrade_dmem1 := tc_rule R Sigma (downgrade External.dmem1) <: rule. *)
+  Definition tc_downgrade0 := tc_rule R Sigma downgrade0 <: rule.
+  Definition tc_downgrade1 := tc_rule R Sigma downgrade1 <: rule.
 
-  Definition tc_processRequest_imem0 := tc_rule R Sigma (process_request External.imem0) <: rule.
-  Definition tc_processRequest_dmem0 := tc_rule R Sigma (process_request External.dmem0) <: rule.
-  Definition tc_processRequest_imem1 := tc_rule R Sigma (process_request External.imem1) <: rule.
-  Definition tc_processRequest_dmem1 := tc_rule R Sigma (process_request External.dmem1) <: rule.
+  Definition tc_processRequest0 := tc_rule R Sigma process_request0 <: rule.
+  Definition tc_processRequest1 := tc_rule R Sigma process_request1 <: rule.
+
+  (* Definition tc_processRequest_imem0 := tc_rule R Sigma (process_request External.imem0) <: rule. *)
+  (* Definition tc_processRequest_dmem0 := tc_rule R Sigma (process_request External.dmem0) <: rule. *)
+  (* Definition tc_processRequest_imem1 := tc_rule R Sigma (process_request External.imem1) <: rule. *)
+  (* Definition tc_processRequest_dmem1 := tc_rule R Sigma (process_request External.dmem1) <: rule. *)
 
   Definition tc_sendFillReq := tc_rule R Sigma (SendFillReq) <: rule.
-  Definition tc_waitFillResp_imem0 := tc_rule R Sigma (WaitFillResp External.imem0) <: rule.
-  Definition tc_waitFillResp_dmem0 := tc_rule R Sigma (WaitFillResp External.dmem0) <: rule.
-  Definition tc_waitFillResp_imem1 := tc_rule R Sigma (WaitFillResp External.imem1) <: rule.
-  Definition tc_waitFillResp_dmem1 := tc_rule R Sigma (WaitFillResp External.dmem1) <: rule.
+  Definition tc_waitFillResp := tc_rule R Sigma (WaitFillResp) <: rule.
+  (* Definition tc_waitFillResp_imem0 := tc_rule R Sigma (WaitFillResp External.imem0) <: rule. *)
+  (* Definition tc_waitFillResp_dmem0 := tc_rule R Sigma (WaitFillResp External.dmem0) <: rule. *)
+  (* Definition tc_waitFillResp_imem1 := tc_rule R Sigma (WaitFillResp External.imem1) <: rule. *)
+  (* Definition tc_waitFillResp_dmem1 := tc_rule R Sigma (WaitFillResp External.dmem1) <: rule. *)
 
   Definition tc_memBus_imem0 := tc_rule R Sigma (mem External.imem0) <: rule.
   Definition tc_memBus_dmem0 := tc_rule R Sigma (mem External.dmem0) <: rule.
@@ -927,28 +1070,12 @@ Module Cache (Params: CacheParams).
 
   Definition rules (rl: rule_name_t) : rule :=
     match rl with
-    | Rl_Downgrade =>
-        match Params._cache_type, Params._core_id with
-        | CacheType_Imem,CoreId0 => tc_downgrade_imem0
-        | CacheType_Imem,CoreId1 => tc_downgrade_imem1
-        | CacheType_Dmem,CoreId0 => tc_downgrade_dmem0
-        | CacheType_Dmem,CoreId1 => tc_downgrade_dmem1
-        end
-    | Rl_ProcessRequest =>
-        match Params._cache_type, Params._core_id with
-        | CacheType_Imem,CoreId0 => tc_processRequest_imem0
-        | CacheType_Imem,CoreId1 => tc_processRequest_imem1
-        | CacheType_Dmem,CoreId0 => tc_processRequest_dmem0
-        | CacheType_Dmem,CoreId1 => tc_processRequest_dmem1
-        end
+    | Rl_Downgrade0 => tc_downgrade0
+    | Rl_Downgrade1 => tc_downgrade1
+    | Rl_ProcessRequest0 => tc_processRequest0
+    | Rl_ProcessRequest1 => tc_processRequest1
     | Rl_SendFillReq => tc_sendFillReq
-    | Rl_WaitFillResp =>
-        match Params._cache_type, Params._core_id with
-        | CacheType_Imem,CoreId0 => tc_waitFillResp_imem0
-        | CacheType_Imem,CoreId1 => tc_waitFillResp_imem1
-        | CacheType_Dmem,CoreId0 => tc_waitFillResp_dmem0
-        | CacheType_Dmem,CoreId1 => tc_waitFillResp_dmem1
-        end
+    | Rl_WaitFillResp => tc_waitFillResp
     | Rl_MemBus =>
         match Params._cache_type, Params._core_id with
         | CacheType_Imem,CoreId0 => tc_memBus_imem0
@@ -959,7 +1086,9 @@ Module Cache (Params: CacheParams).
     end.
 
   Definition schedule : Syntax.scheduler pos_t rule_name_t :=
-    Rl_Downgrade |> Rl_ProcessRequest |> Rl_SendFillReq |> Rl_WaitFillResp |> done.
+    Rl_Downgrade0 |> Rl_Downgrade1 |> Rl_ProcessRequest0 |> Rl_ProcessRequest1
+                  |> Rl_SendFillReq |> Rl_WaitFillResp
+                  |> Rl_MemBus |> done.
 
 End Cache.
 

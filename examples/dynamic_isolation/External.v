@@ -42,7 +42,10 @@ Module External <: External_sig.
                          ("tag", cache_tag_t);
                          ("index", cache_index_t);
                          ("data", bits_t 32);
-                         ("MSI", maybe (enum_t MSI))] |}.
+                         ("MSI", maybe (enum_t MSI));
+                         ("ignore_response", bits_t 1)
+                        ]
+    |}.
 
   Definition cache_mem_input :=
     {| struct_name := "cache_mem_input";
