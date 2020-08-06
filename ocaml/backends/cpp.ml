@@ -256,9 +256,11 @@ let cpp_ext_funcall f a =
      pass a class implementing those functions as a template argument.  An
      other approach would have made external functions virtual methods, but
      then they couldn't have been templated functions. *)
-  (* The ‘.template’ part ensures that ‘extfuns.xyz<p>()’ is not parsed as a
-     comparison. *)
-  sprintf "extfuns.template %s(%s)" f a
+  (* Originally, the call was written as ‘extfuns.template %s()’to ensure that
+     ‘extfuns.xyz<p>()’ would not parsed as a comparison, but clang rejects this
+     for non-templated functions in version 10.  Users will have to declare
+     their function names to be ‘template xyz<p>’ instead of ‘xyz<p>’ *)
+  sprintf "extfuns.%s(%s)" f a
 
 let cpp_bits1_fn_name (f: Extr.PrimTyped.fbits1) =
   match f with
