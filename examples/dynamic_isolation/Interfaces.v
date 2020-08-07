@@ -2707,7 +2707,7 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
                (Core0: Core_sig External EnclaveParams Params0)
                (Core1: Core_sig External EnclaveParams Params1)
                (Memory: Memory_sig External EnclaveParams).
-  Module SM := SecurityMonitor External EnclaveParams Params0 Params1.
+  (* Module SM := SecurityMonitor External EnclaveParams Params0 Params1. *)
 
   Import Common.
 
@@ -3025,6 +3025,251 @@ Module Machine (External: External_sig) (EnclaveParams: EnclaveParameters)
 
     End Schedule.
 End Machine.
+
+Module MachineWithoutSM
+               (External: External_sig) (EnclaveParams: EnclaveParameters)
+               (Params0: CoreParameters) (Params1: CoreParameters)
+               (Core0: Core_sig External EnclaveParams Params0)
+               (Core1: Core_sig External EnclaveParams Params1)
+               (Memory: Memory_sig External EnclaveParams).
+
+  Import Common.
+
+  Inductive reg_t : Type :=
+  | core_id0
+  | core_id1
+  (* State purging *)
+  | purge_core0
+  | purge_core1
+  | purge_mem0
+  | purge_mem1
+  (* Program counter? Doesn't /need/ to be here, but let's us avoid reasoning about Core code *)
+  | pc0
+  | pc1
+  (* Register files *)
+  | core0_rf (state: Rf.reg_t)
+  | core1_rf (state: Rf.reg_t)
+  (* Core0 <-> Mem *)
+  | CoreToMem0_IMem (state: MemReq.reg_t)
+  | CoreToMem0_DMem (state: MemReq.reg_t)
+  | MemToCore0_IMem (state: MemResp.reg_t)
+  | MemToCore0_DMem (state: MemResp.reg_t)
+  | DUMMY_Enc0 (state: EnclaveReq.reg_t) (* Ignored *)
+  (* Core1 <-> Mem *)
+  | CoreToMem1_IMem (state: MemReq.reg_t)
+  | CoreToMem1_DMem (state: MemReq.reg_t)
+  | MemToCore1_IMem (state: MemResp.reg_t)
+  | MemToCore1_DMem (state: MemResp.reg_t)
+  | DUMMY_Enc1 (state: EnclaveReq.reg_t) (* Ignored *)
+  (* Private registers *)
+  | Core0_private (state: _private_reg_t Core0.private_params)
+  | Core1_private (state: _private_reg_t Core1.private_params)
+  | Mem_private (state: _private_reg_t Memory.private_params)
+  .
+
+  (* TODO: fix finite types *)
+  Instance FiniteType_core0_private : FiniteType (_private_reg_t Core0.private_params) :=
+    _FiniteType_private_reg_t Core0.private_params.
+  Instance FiniteType_core1_private : FiniteType (_private_reg_t Core1.private_params) :=
+    _FiniteType_private_reg_t Core1.private_params.
+  Instance FiniteType_mem_private : FiniteType (_private_reg_t Memory.private_params) :=
+    _FiniteType_private_reg_t Memory.private_params.
+
+  (* SLOW *)
+  Instance FiniteType_reg_t : FiniteType reg_t := _.
+  Instance EqDec_reg_t : EqDec reg_t := _.
+  (* Declare Instance FiniteType_reg_t : FiniteType reg_t. *)
+  (* Declare Instance EqDec_reg_t : EqDec reg_t. *)
+
+  Definition R (idx: reg_t) : type :=
+    match idx with
+    | core_id0 => bits_t 1
+    | core_id1 => bits_t 1
+    (* State purging*)
+    | purge_core0 => enum_t purge_state
+    | purge_core1 => enum_t purge_state
+    | purge_mem0 => enum_t purge_state
+    | purge_mem1 => enum_t purge_state
+    | pc0 => bits_t 32
+    | pc1 => bits_t 32
+    (* Register files *)
+    | core0_rf st => Rf.R st
+    | core1_rf st => Rf.R st
+    (* Core0 <-> Mem *)
+    | CoreToMem0_IMem st => MemReq.R st
+    | CoreToMem0_DMem st => MemReq.R st
+    | MemToCore0_IMem st => MemResp.R st
+    | MemToCore0_DMem st => MemResp.R st
+    | DUMMY_Enc0 st => EnclaveReq.R st
+    (* Core1 <-> Mem *)
+    | CoreToMem1_IMem st => MemReq.R st
+    | CoreToMem1_DMem st => MemReq.R st
+    | MemToCore1_IMem st => MemResp.R st
+    | MemToCore1_DMem st => MemResp.R st
+    | DUMMY_Enc1 st => EnclaveReq.R st
+    (* Private registers *)
+    | Core0_private st => (_R_private Core0.private_params) st
+    | Core1_private st => (_R_private Core1.private_params) st
+    | Mem_private st => (_R_private Memory.private_params) st
+    end.
+
+  Definition r (idx: reg_t) : R idx :=
+    match idx with
+    | core_id0 => Params0.core_id
+    | core_id1 => Params1.core_id
+    (* Purge state *)
+    | purge_core0 => value_of_bits (Bits.zero)
+    | purge_core1 => value_of_bits (Bits.zero)
+    | purge_mem0 => value_of_bits (Bits.zero)
+    | purge_mem1 => value_of_bits (Bits.zero)
+    | pc0 => Params0.initial_pc
+    | pc1 => Params1.initial_pc
+    (* Register files *)
+    | core0_rf st => Rf.r st
+    | core1_rf st => Rf.r st
+    (* Core0 <-> Mem *)
+    | CoreToMem0_IMem st => MemReq.r st
+    | CoreToMem0_DMem st => MemReq.r st
+    | MemToCore0_IMem st => MemResp.r st
+    | MemToCore0_DMem st => MemResp.r st
+    | DUMMY_Enc0 st => EnclaveReq.r st
+    (* Core1 <-> Mem *)
+    | CoreToMem1_IMem st => MemReq.r st
+    | CoreToMem1_DMem st => MemReq.r st
+    | MemToCore1_IMem st => MemResp.r st
+    | MemToCore1_DMem st => MemResp.r st
+    | DUMMY_Enc1 st => EnclaveReq.r st
+    (* Private registers *)
+    | Core0_private st => (_r_private Core0.private_params) st
+    | Core1_private st => (_r_private Core1.private_params) st
+    | Mem_private st => (_r_private Memory.private_params) st
+    end.
+
+    Inductive rule_name_t :=
+    | Core0Rule (r: Core0.rule_name_t)
+    | Core1Rule (r: Core1.rule_name_t)
+    | MemRule  (r: Memory.rule_name_t)
+    .
+
+    Definition ext_fn_t := _ext_fn_t External.ext.
+    Definition Sigma := _Sigma External.ext.
+    Definition rule := rule R Sigma.
+    Definition sigma := _sigma External.ext.
+
+    Definition FnLift_id : RLift _ ext_fn_t ext_fn_t Sigma Sigma := ltac:(lift_auto).
+
+    Section Core0_Lift.
+
+      Definition core0_public_lift (reg: Core_Common.public_reg_t) : reg_t :=
+        match reg with
+        | Core_Common.core_id => core_id0
+        | Core_Common.toIMem s => CoreToMem0_IMem s
+        | Core_Common.toDMem s => CoreToMem0_DMem s
+        | Core_Common.toSMEnc s => DUMMY_Enc0 s
+        | Core_Common.fromIMem s => MemToCore0_IMem s
+        | Core_Common.fromDMem s => MemToCore0_DMem s
+        | Core_Common.rf s => core0_rf s
+        | Core_Common.pc => pc0
+        | Core_Common.purge => purge_core0
+        end.
+
+      Definition core0_lift (reg: Core0.reg_t) : reg_t :=
+        match reg with
+        | Core_Common.public s => core0_public_lift s
+        | Core_Common.private s => Core0_private s
+        end.
+
+      Definition Lift_core0 : RLift _ Core0.reg_t reg_t Core0.R R := ltac:(mk_rlift core0_lift).
+    End Core0_Lift.
+
+    Section Core1_Lift.
+
+      Definition core1_public_lift (reg: Core_Common.public_reg_t) : reg_t :=
+        match reg with
+        | Core_Common.core_id => core_id1
+        | Core_Common.toIMem s => CoreToMem1_IMem s
+        | Core_Common.toDMem s => CoreToMem1_DMem s
+        | Core_Common.toSMEnc s => DUMMY_Enc1 s
+        | Core_Common.fromIMem s => MemToCore1_IMem s
+        | Core_Common.fromDMem s => MemToCore1_DMem s
+        | Core_Common.rf s => core1_rf s
+        | Core_Common.pc => pc1
+        | Core_Common.purge => purge_core1
+        end.
+
+      Definition core1_lift (reg: Core1.reg_t) : reg_t :=
+        match reg with
+        | Core_Common.public s => core1_public_lift s
+        | Core_Common.private s => Core1_private s
+        end.
+
+      Definition Lift_core1 : RLift _ Core1.reg_t reg_t Core1.R R := ltac:(mk_rlift core1_lift).
+    End Core1_Lift.
+
+    Section Mem_Lift.
+
+      Definition mem_public_lift (reg: @Mem_Common.public_reg_t) : reg_t :=
+        match reg with
+        | Mem_Common.toIMem0 st => CoreToMem0_IMem st
+        | Mem_Common.toIMem1 st => CoreToMem1_IMem st
+        | Mem_Common.toDMem0 st => CoreToMem0_DMem st
+        | Mem_Common.toDMem1 st => CoreToMem1_DMem st
+        | Mem_Common.fromIMem0 st => MemToCore0_IMem st
+        | Mem_Common.fromIMem1 st => MemToCore1_IMem st
+        | Mem_Common.fromDMem0 st => MemToCore0_DMem st
+        | Mem_Common.fromDMem1 st => MemToCore1_DMem st
+        | Mem_Common.purge0 => purge_mem0
+        | Mem_Common.purge1 => purge_mem1
+        end.
+
+      Definition mem_lift (reg: Memory.reg_t) : reg_t :=
+        match reg with
+        | Mem_Common.public st => mem_public_lift st
+        | Mem_Common.private st => Mem_private st
+        end.
+
+      Definition Lift_mem : RLift _ Memory.reg_t reg_t Memory.R R := ltac:(mk_rlift mem_lift).
+
+    End Mem_Lift.
+
+    Section Rules.
+      Definition core0_rule_name_lift (rl: Core0.rule_name_t) : rule_name_t :=
+        Core0Rule rl.
+      Definition core1_rule_name_lift (rl: Core1.rule_name_t) : rule_name_t :=
+        Core1Rule rl.
+      Definition mem_rule_name_lift (rl: Memory.rule_name_t) : rule_name_t :=
+        MemRule rl.
+
+      Definition lifted_core0_rules (rl: Core0.rule_name_t) : rule :=
+        lift_rule Lift_core0 FnLift_id (Core0.rules rl).
+      Definition lifted_core1_rules (rl: Core1.rule_name_t) : rule :=
+        lift_rule Lift_core1 FnLift_id (Core1.rules rl).
+      Definition lifted_mem_rules (rl: Memory.rule_name_t) : rule :=
+        lift_rule Lift_mem FnLift_id (Memory.rules rl).
+
+      Definition rules (rl: rule_name_t) : rule :=
+        match rl with
+        | Core0Rule r => lifted_core0_rules r
+        | Core1Rule r => lifted_core1_rules r
+        | MemRule r => lifted_mem_rules r
+        end.
+
+    End Rules.
+
+    Section Schedule.
+
+      Definition lifted_core0_schedule := lift_scheduler core0_rule_name_lift Core0.schedule.
+      Definition lifted_core1_schedule := lift_scheduler core1_rule_name_lift Core1.schedule.
+      Definition lifted_mem_schedule := lift_scheduler mem_rule_name_lift Memory.schedule.
+
+      Definition schedule :=
+        lifted_core0_schedule ||> lifted_core1_schedule ||> lifted_mem_schedule.
+
+    End Schedule.
+
+End MachineWithoutSM.
+
+
   (*
   Section Taint.
     Inductive taint_t :=
