@@ -827,7 +827,7 @@ The following list shows the current state of the repo:
    - |examples/conflicts_modular.v|_: Understanding conflicts and forwarding, with modules
    - |examples/datatypes.v|_: Using structures, enums, and arrays
    - |examples/external_rule.v|_: Calling external (verilog) modules from |koika|
-   - |examples/fft.v|_: Computing a FIR (Coq version)
+   - |examples/fft.v|_: Computing an FFT
    - |examples/fir.v|_: Computing a FIR (Coq version)
    - |examples/function_call.v|_: Calling external functions
    - |examples/gcd_machine.v|_: Computing GCDs

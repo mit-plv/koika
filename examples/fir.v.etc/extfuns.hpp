@@ -1,4 +1,4 @@
-/*! C++ implementation of external functions for the function_call example !*/
+/*! C++ implementation of external functions for the fir example !*/
 
 #ifndef _EXTFUNS_HPP
 #define _EXTFUNS_HPP

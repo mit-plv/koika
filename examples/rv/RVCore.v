@@ -513,7 +513,8 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
   | ext_mem (m: memory)
   | ext_uart_read
   | ext_uart_write
-  | ext_led.
+  | ext_led
+  | ext_finish.
 
   Definition mem_input :=
     {| struct_name := "mem_input";
@@ -528,9 +529,10 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
                         ("get_response", struct_t mem_resp)] |}.
 
 
-  Definition led_input := maybe (bits_t 1).
   Definition uart_input := maybe (bits_t 8).
   Definition uart_output := maybe (bits_t 8).
+  Definition led_input := maybe (bits_t 1).
+  Definition finish_input := maybe (bits_t 8).
 
   Definition Sigma (fn: ext_fn_t) :=
     match fn with
@@ -538,6 +540,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
     | ext_uart_read => {$ bits_t 1 ~> uart_output $}
     | ext_uart_write => {$ uart_input ~> bits_t 1 $}
     | ext_led => {$ led_input ~> bits_t 1 $}
+    | ext_finish => {$ finish_input ~> bits_t 1 $}
     end.
 
   Definition fetch : uaction reg_t ext_fn_t :=
@@ -733,6 +736,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
 
   Definition MMIO_UART_ADDRESS := Ob~0~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0.
   Definition MMIO_LED_ADDRESS  := Ob~0~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1~0~0.
+  Definition MMIO_EXIT_ADDRESS := Ob~0~1~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~1~0~0~0~0~0~0~0~0~0~0~0~0.
 
   Definition memoryBus (m: memory) : UInternalFunction reg_t ext_fn_t :=
     {{ fun memoryBus (get_ready: bits_t 1) (put_valid: bits_t 1) (put_request: struct_t mem_req) : struct_t mem_output =>
@@ -752,7 +756,10 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
                       let is_led := addr == #MMIO_LED_ADDRESS in
                       let is_led_write := is_led && is_write in
 
-                      let is_mem := !is_uart && !is_led in
+                      let is_finish := addr == #MMIO_EXIT_ADDRESS in
+                      let is_finish_write := is_finish && is_write in
+
+                      let is_mem := !is_uart && !is_led && !is_finish in
 
                       if is_uart_write then
                         let char := get(put_request, data)[|5`d0| :+ 8] in
@@ -786,7 +793,17 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
                                             get_response := struct mem_resp {
                                               byte_en := byte_en; addr := addr;
                                               data := zeroExtend(current, 32) } }
-
+                      else if is_finish then
+                        let char := get(put_request, data)[|5`d0| :+ 8] in
+                        let may_run := get_ready && put_valid && is_finish_write in
+                        let response := extcall ext_finish (struct (Maybe (bits_t 8)) {
+                          valid := may_run; data := char }) in
+                        let ready := Ob~1 in
+                        struct mem_output { get_valid := may_run && ready;
+                                            put_ready := may_run && ready;
+                                            get_response := struct mem_resp {
+                                              byte_en := byte_en; addr := addr;
+                                              data := zeroExtend(response, 32) } }
                       else
                         extcall (ext_mem m) (struct mem_input {
                           get_ready := get_ready && is_mem;
@@ -856,6 +873,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
     | ext_uart_write => {| ef_name := "ext_uart_write"; ef_internal := false |}
     | ext_uart_read => {| ef_name := "ext_uart_read"; ef_internal := false |}
     | ext_led => {| ef_name := "ext_led"; ef_internal := false |}
+    | ext_finish => {| ef_name := "ext_finish"; ef_internal := true |}
     end.
 
   Instance FiniteType_toIMem : FiniteType MemReq.reg_t := _.

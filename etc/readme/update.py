@@ -23,6 +23,9 @@ HEADER_RE = {
     '.py': SHELL_HEADER_RE,
 }
 KNOWN_EXTENSIONS = HEADER_RE.keys()
+SPECIAL_FILES = {
+    'etc/configure': SHELL_HEADER_RE
+}
 
 class File:
     def __init__(self, fpath):
@@ -39,7 +42,7 @@ class File:
                 headers = [next(f), next(f)]
         except FileNotFoundError:
             headers = []
-        header_re = HEADER_RE[os.path.splitext(fpath)[1]]
+        header_re = SPECIAL_FILES.get(fpath) or HEADER_RE[os.path.splitext(fpath)[1]]
         for h in headers:
             m = header_re.match(EMACS_LINE_RE.sub("", h))
             if m:
@@ -133,7 +136,7 @@ def collect_files():
         if f in EXCLUDED:
             # print(f"README.rst: Skipping excluded file {f}")
             EXCLUDED.remove(f)
-        elif os.path.splitext(f)[1] in KNOWN_EXTENSIONS:
+        elif os.path.splitext(f)[1] in KNOWN_EXTENSIONS or f in SPECIAL_FILES:
             yield File(f)
     if EXCLUDED:
         print(f"README.rst: Some excluded files are not in the repo: {EXCLUDED}")

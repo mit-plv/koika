@@ -13,7 +13,6 @@ module memory(input  CLK,
               output put_ready,
               output [`MEM_OP_SIZE - 1:0] get_response);
    parameter ADDRESS_WIDTH = 14;
-   parameter IO_ADDRESS = `REQ_ADDR_WIDTH'h40000000;
    parameter EXIT_ADDRESS = `REQ_ADDR_WIDTH'h40001000;
 
    reg has_request;
@@ -91,17 +90,6 @@ module memory(input  CLK,
    wire get_wf = get_valid && get_ready;
 
    always @(posedge CLK) begin
-`ifdef SIMULATION
-      if (put_wf && put_request_addr == EXIT_ADDRESS) begin
-         if (put_request_data == 0)
-    	   $fwrite(32'h80000002, "  [0;32mPASS[0m\n");
-    	 else
-    	   $fwrite(32'h80000002, "  [0;31mFAIL[0m (%0d)\n", last_request_data);
-
-         $finish(1'b1);
-      end
-`endif
-
       if (RST_N == 1) begin
          if (has_request) begin
             mem[addr] <= compute_update(compute_mask(last_request_byte_en), last_request_data, data);

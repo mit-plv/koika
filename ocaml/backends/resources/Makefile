@@ -24,7 +24,7 @@ CUTTLESIM_VCD_SCOPES ?= TOP $(mod)
 comma := ,
 cuttlesim_driver := $(basename $(notdir $(CUTTLESIM_DRIVER)))
 cuttlesim_helper := cuttlesim.hpp
-cxx_scopes_arg := '-DSIM_CUTTLESIM_VCD_SCOPES={$(patsubst %,"%"$(comma),$(CUTTLESIM_VCD_SCOPES))}'
+cxx_scopes_arg := '-DSIM_VCD_SCOPES={$(patsubst %,"%"$(comma),$(CUTTLESIM_VCD_SCOPES))}'
 cxx_flags := $(CXXFLAGS) $(CPPFLAGS) $(CUTTLESIM_WARNINGS) $(cxx_scopes_arg)
 
 ifeq (,$(findstring --std,$(cxx_flags)))
@@ -415,11 +415,11 @@ help:
 	@echo '        Package name passed to nextpnr.'
 	@echo '      FPGA_PCF = $(FPGA_PCF)'
 	@echo '        Physical contraints file passed to nextpnr.'
-	@echo '      FPGA_YOSYS_FLAGS = ?(FPGA_YOSYS_FLAGS)'
+	@echo '      FPGA_YOSYS_FLAGS = $(FPGA_YOSYS_FLAGS)'
 	@echo '        Flags passed to Yosys for FPGA synthesis.'
-	@echo '      FPGA_YOSYS_OPTS = ?(FPGA_YOSYS_OPTS)'
+	@echo '      FPGA_YOSYS_OPTS = $(FPGA_YOSYS_OPTS)'
 	@echo '        Additional flags passed to Yosys.'
-	@echo '      FPGA_YOSYS_LIBDIRS = ?(FPGA_YOSYS_LIBDIRS)'
+	@echo '      FPGA_YOSYS_LIBDIRS = $(FPGA_YOSYS_LIBDIRS)'
 	@echo '        Directories passed as -libdir to the hierarchy command of Yosys'
 
 
