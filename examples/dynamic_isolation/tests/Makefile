@@ -10,13 +10,18 @@ c_rv32i_sources := $(wildcard unit/*.c) $(wildcard integ/*.c)
 asm_rv32i_stems := $(patsubst %.S,$(build)/rv32i/%,$(asm_rv32i_sources))
 c_rv32i_stems := $(patsubst %.c,$(build)/rv32i/%,$(c_rv32i_sources))
 
+asm_rv32i_no_sm_sources := $(wildcard riscv_tests/rv32ui/*.S) $(wildcard riscv_tests/rv32um/*.S) $(wildcard unit/*.S)
+c_rv32i_no_sm_sources := $(wildcard unit/*.c) $(wildcard integ/*.c)
+asm_rv32i_no_sm_stems := $(patsubst %.S,$(build)/rv32i_no_sm/%,$(asm_rv32i_no_sm_sources))
+c_rv32i_no_sm_stems := $(patsubst %.c,$(build)/rv32i_no_sm/%,$(c_rv32i_no_sm_sources))
+
 asm_multicore_sources := $(wildcard password_manager/*.S)
 asm_multicore_stems := $(patsubst %.S,$(build)/multicore/%,$(asm_multicore_sources))
 
 c_multicore_sources := $(wildcard password_manager/*.c)
 c_multicore_stems := $(patsubst %.c,$(build)/multicore/%,$(c_multicore_sources))
 
-stems := $(c_rv32i_stems) $(asm_rv32i_stems) # $(c_multicore_stems) $(asm_multicore_stems)
+stems := $(c_rv32i_stems) $(asm_rv32i_stems) $(asm_rv32i_no_sm_stems) $(c_rv32i_no_sm_stems) # $(c_multicore_stems) $(asm_multicore_stems)
 rv32_targets := $(stems:=.rv32)
 vmh_targets := $(stems:=.vmh)
 dump_targets := $(stems:=.dump)
@@ -33,21 +38,28 @@ cc32i_c = $(cc) -T$(build)/rv32i/singlecore_link_c.ld -mabi=ilp32
 cc32i_rv32 = $(cc) -T$(build)/rv32i/singlecore_link_rv32.ld -mabi=ilp32
 #cc32e = $(cc) -T$(build)/rv32e/link.ld -DRV32E -mabi=ilp32e -march=rv32e
 #cc32m = $(cc) -T$(build)/multicore/multicore_link.ld -mabi=ilp32
+cc32i_no_sm_c = $(cc) -T$(build)/rv32i_no_sm/singlecore_link_c.ld -mabi=ilp32
+cc32i_no_sm_rv32 = $(cc) -T$(build)/rv32i_no_sm/singlecore_link_rv32.ld -mabi=ilp32
+
 
 multicore_targets := $(build)/multicore/basic.rv32 $(build)/multicore/password_manager/pwd_manager.rv32
 all: $(rv32_targets) $(vmh_targets) $(dump_targets) $(multicore_targets);
 
 
 dirpatterns := %/rv32i/ %/rv32i/riscv_tests/rv32ui/ %/rv32i/riscv_tests/rv32um/ %/rv32i/unit/ %/rv32i/integ/ %/rv32e/ %/rv32e/unit/ %/rv32e/integ/ 
+no_sm_dirpatterns := %/rv32i_no_sm/ %/rv32i_no_sm/riscv_tests/rv32ui/ %/rv32i_no_sm/riscv_tests/rv32um/ %/rv32i_no_sm/unit/ %/rv32i_no_sm/integ/
 
 multicore_dirpatterns := %/multicore/ %/multicore/riscv_tests/rv32ui/ %/multicore/riscv_tests/rv32um/ %/multicore/unit/ %/multicore/integ/ %/multicore/password_manager/
 
 dirs := $(patsubst \%%,$(build)%,$(dirpatterns))
-
+no_sm_dirs := $(patsubst \%%,$(build)%,$(no_sm_dirpatterns))
 multicore_dirs := $(patsubst \%%,$(build)%,$(multicore_dirpatterns))
 
 $(dirpatterns):
 	mkdir -p $(dirs)
+
+$(no_sm_dirpatterns):
+	mkdir -p $(no_sm_dirs)
 
 $(multicore_dirpatterns):
 	mkdir -p $(multicore_dirs)
@@ -59,22 +71,40 @@ $(build)/rv32i/singlecore_init.o: singlecore_init.S | $(dirs)
 	$(cc) -march=rv32i -c $< -o $@
 $(build)/rv32i/singlecore_init_rv32.o: singlecore_init_rv32.S | $(dirs)
 	$(cc) -march=rv32i -c $< -o $@
-
-
 $(build)/rv32i/singlecore_link_%.ld: singlecore_link_%.ld | $(dirs)
 	$(cc) -E -x c $< | grep -v '^#' > $@
-
 $(build)/rv32i/singlecore_mmio%.o: singlecore_mmio%.c | $(dirs)
 	$(cc) -march=rv32i -c $< -o $@
 $(build)/rv32i/dummy_core1.o: dummy_core1.c | $(dirs)
 	$(cc) -march=rv32i -c $< -o $@
 
-
-$(build)/rv32i/%.rv32: %.S $(build)/rv32i/singlecore_init.o $(build)/rv32i/singlecore_mmio0.o $(build)/rv32i/singlecore_mmio1.o $(build)/rv32i/dummy_core1.o $(build)/rv32i/singlecore_link_rv32.ld | $(dirs)
+$(build)/rv32i/%.rv32: %.S $(build)/rv32i/singlecore_init_rv32.o $(build)/rv32i/singlecore_mmio0.o $(build)/rv32i/singlecore_mmio1.o $(build)/rv32i/dummy_core1.o $(build)/rv32i/singlecore_link_rv32.ld | $(dirs)
 	$(cc32i_rv32) -L_build/rv32i -march=$(call iarch,$<) singlecore_init_rv32.S $< -o $@
 
 $(build)/rv32i/%.rv32: %.c $(build)/rv32i/singlecore_init.o $(build)/rv32i/singlecore_mmio0.o $(build)/rv32i/singlecore_mmio1.o $(build)/rv32i/dummy_core1.o $(build)/rv32i/singlecore_link_c.ld | $(dirs)
 	$(cc32i_c) -L_build/rv32i -march=$(call iarch,$<) singlecore_init.S singlecore_mmio0.c $< -o $@
+
+
+$(build)/rv32i_no_sm/singlecore_init.o: singlecore_init.S | $(no_sm_dirs)
+	$(cc) -march=rv32i -c $< -o $@
+$(build)/rv32i_no_sm/singlecore_init_rv32.o: singlecore_init_rv32.S | $(no_sm_dirs)
+	$(cc) -march=rv32i -c $< -o $@
+$(build)/rv32i_no_sm/singlecore_link_%.ld: singlecore_link_%.ld | $(no_sm_dirs)
+	$(cc) -E -x c $< | grep -v '^#' > $@
+$(build)/rv32i_no_sm/singlecore_mmio%.o: singlecore_mmio%.c | $(no_sm_dirs)
+	$(cc) -march=rv32i -c $< -o $@
+$(build)/rv32i_no_sm/dummy_core1.o: dummy_core1.c | $(no_sm_dirs)
+	$(cc) -march=rv32i -c $< -o $@
+
+$(build)/rv32i_no_sm/%.rv32: %.S $(build)/rv32i_no_sm/singlecore_init_rv32.o $(build)/rv32i_no_sm/singlecore_mmio0.o $(build)/rv32i_no_sm/singlecore_mmio1.o $(build)/rv32i_no_sm/dummy_core1.o $(build)/rv32i_no_sm/singlecore_link_rv32.ld | $(no_sm_dirs)
+	$(cc32i_no_sm_rv32) -L_build/rv32i_no_sm -march=$(call iarch,$<) singlecore_init_rv32.S $< -o $@
+
+$(build)/rv32i_no_sm/%.rv32: %.c $(build)/rv32i_no_sm/singlecore_init.o $(build)/rv32i_no_sm/singlecore_mmio0.o $(build)/rv32i_no_sm/singlecore_mmio1.o $(build)/rv32i_no_sm/dummy_core1.o $(build)/rv32i_no_sm/singlecore_link_c.ld | $(no_sm_dirs)
+	$(cc32i_no_sm_c) -L_build/rv32i_no_sm -march=$(call iarch,$<) singlecore_init.S singlecore_mmio0.c $< -o $@
+
+
+
+
 
 $(build)/multicore/multicore_init.o: multicore_init.S | $(multicore_dirs)
 	$(cc) -march=rv32i -c $< -o $@
