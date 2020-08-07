@@ -3,18 +3,18 @@
 // This toplevel is mostly for simulation, since it assumes the UART module
 // is always ready to transmit.
 module top(input CLK, input RST_N, output uart_wr_valid, output[7:0] uart_wr_data, output LED);
-   wire[34:0] ppp_bookkeeping_arg;
-   wire[20:0] ppp_bookkeeping_out;
+   wire[36:0] ppp_bookkeeping_arg;
+   wire[81:0] ppp_bookkeeping_out;
 
+   wire[71:0] cache_imem0_arg;
    wire[53:0] cache_imem0_out;
-   wire[70:0] cache_imem0_arg;
+   wire[71:0] cache_imem1_arg;
    wire[53:0] cache_imem1_out;
-   wire[70:0] cache_imem1_arg;
 
+   wire[71:0] cache_dmem0_arg;
    wire[53:0] cache_dmem0_out;
-   wire[70:0] cache_dmem0_arg;
+   wire[71:0] cache_dmem1_arg;
    wire[53:0] cache_dmem1_out;
-   wire[70:0] cache_dmem1_arg;
 
    wire[69:0] mainmem_out;
    wire[69:0] mainmem_arg;
@@ -37,18 +37,18 @@ module top(input CLK, input RST_N, output uart_wr_valid, output[7:0] uart_wr_dat
 			 .ext_ppp_bookkeeping_arg(ppp_bookkeeping_arg),
 			 .ext_ppp_bookkeeping_out(ppp_bookkeeping_out),
 
-			 .ext_cache_imem0_out(cache_imem0_out),
 			 .ext_cache_imem0_arg(cache_imem0_arg),
-			 .ext_cache_imem1_out(cache_imem1_out),
+			 .ext_cache_imem0_out(cache_imem0_out),
 			 .ext_cache_imem1_arg(cache_imem1_arg),
+			 .ext_cache_imem1_out(cache_imem1_out),
 
-			 .ext_cache_dmem0_out(cache_dmem0_out),
 			 .ext_cache_dmem0_arg(cache_dmem0_arg),
-			 .ext_cache_dmem1_out(cache_dmem1_out),
+			 .ext_cache_dmem0_out(cache_dmem0_out),
 			 .ext_cache_dmem1_arg(cache_dmem1_arg),
+			 .ext_cache_dmem1_out(cache_dmem1_out),
 
-			 .ext_mainmem_out(mainmem_out),
 			 .ext_mainmem_arg(mainmem_arg),
+			 .ext_mainmem_out(mainmem_out),
 
              .ext_uart_write_arg({uart_wr_valid, uart_wr_data}),
              .ext_uart_write_out(uart_wr_ready),
@@ -60,7 +60,10 @@ module top(input CLK, input RST_N, output uart_wr_valid, output[7:0] uart_wr_dat
              .ext_led_out(led));
 
    ext_mem mainmem(.CLK(CLK), .RST_N(RST_N), .arg(mainmem_arg), .out(mainmem_out));
-//   ext_mem dmem(.CLK(CLK), .RST_N(RST_N), .arg(dmem_arg), .out(dmem_out));
+   ext_cache imem0(.CLK(CLK), .RST_N(RST_N), .arg(cache_imem0_arg), .out(cache_imem0_out));
+   ext_cache dmem0(.CLK(CLK), .RST_N(RST_N), .arg(cache_dmem0_arg), .out(cache_dmem0_out));
+   ext_cache imem1(.CLK(CLK), .RST_N(RST_N), .arg(cache_imem1_arg), .out(cache_imem1_out));
+   ext_cache dmem1(.CLK(CLK), .RST_N(RST_N), .arg(cache_dmem1_arg), .out(cache_dmem1_out));
 
    always @(posedge CLK)
      if (led_wr_valid)
