@@ -8,6 +8,8 @@ int getchar0() {
 
 void __attribute__((noreturn)) exit0(int code) {
   *STOP_ADDR = code;
+  while (1) {
+  }
   __builtin_unreachable();
 }
 

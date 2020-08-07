@@ -32,6 +32,10 @@ void set_core_done(int core_id) {
   }
 }
 
+bool finished() {
+  return core0_done && core1_done;
+}
+
 struct bookkeeping {
   std::array<struct_bookkeeping_entry, NUM_SETS> container;
   std::optional<struct_bookkeeping_input> last;
@@ -100,8 +104,7 @@ struct sram {
   int core_id;
 
   std::optional<struct_ext_cache_mem_resp> get(bool enable) {
-    if (!last.has_value() || get_core_done (core_id) ||
-		(!enable && !(bool)(last->ignore_response)))
+    if (!last.has_value() || (!enable && !(bool)(last->ignore_response)))
       return std::nullopt;
     auto data = last->data;
     auto tag = last->tag;
@@ -128,9 +131,10 @@ struct sram {
       set_core_done(core_id);
       printf("Core %d done\n", core_id);
 
-      if (core0_done && core1_done) {
+      if (finished()) {
         std::exit(exitcode);
       } else {
+        last.reset();
         return std::nullopt;
       }
     } else {
@@ -159,7 +163,7 @@ struct sram {
 #endif // MEM_DEBUG
 
     return ignoreResponse ? std::nullopt :
-		                    std::optional<struct_ext_cache_mem_resp>{
+     		                    std::optional<struct_ext_cache_mem_resp>{
                               struct_ext_cache_mem_resp{.row = current}
                             };
 

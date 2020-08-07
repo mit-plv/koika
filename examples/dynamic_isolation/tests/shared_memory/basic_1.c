@@ -13,13 +13,18 @@ int read_msg1() {
 int putchar1(int c);
 
 int main1() {
+  for (int i = 0; i < 500; i++) {
+  }
   int msg = read_msg1();
+  putchar1(msg);
+  /*
   putchar1('a');
-  while (msg != 42) {
+  while (msg != 'X') {
     msg = read_msg1();
   }
   putchar1('b');
-  write_msg1(43);
+  write_msg1('Y');
   putchar1('c');
+  */
   return 0;
 }

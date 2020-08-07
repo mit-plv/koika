@@ -13,18 +13,20 @@ int putchar0(int c);
 
 int main0() {
   int msg;
-  write_msg0(42);
+  write_msg0('X');
+  
+  /*
   putchar0('A');
-
-  while ((msg = read_msg0()) == 42) {
+  while ((msg = read_msg0()) == 'X') {
   }
   putchar0('B');
   
-  if (msg == 43) {
+  if (msg == 'Y') {
     putchar0('C');
   } else {
     putchar0(msg);
  }
+ */
   
   return 0;
 }
