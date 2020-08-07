@@ -472,7 +472,7 @@ module Verilog : RTLBackend = struct
     (name, init, snd (p_node out min_int node))
 
   let p_root_decl out (name, init, _) =
-    p_decl out "reg" (Array.length init) name ~expr:(string_of_bits init)
+    p_decl out "reg" (Array.length init) (name^ " /* verilator public */ ") ~expr:(string_of_bits init)
 
   let sp_pin (name, (direction, sz)) =
     let typ = sp_type (match direction with
