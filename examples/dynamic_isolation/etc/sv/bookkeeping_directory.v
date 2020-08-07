@@ -64,9 +64,9 @@ module bookkeeping_directory (input CLK,
    assign {entry_imem0, entry_dmem0, entry_imem1, entry_dmem1} = entry;
 
    wire [`ROW_SIZE - 1:0] 	 new_entry_imem0 = (last_request_core_id == 0 && last_request_cache_type == 0) ? last_request_write_entry_row : entry_imem0;
-   wire [`ROW_SIZE - 1:0] 	 new_entry_dmem0 = (last_request_core_id == 0 && last_request_cache_type == 1) ? last_request_write_entry_row : entry_imem0;
-   wire [`ROW_SIZE - 1:0] 	 new_entry_imem1 = (last_request_core_id == 1 && last_request_cache_type == 0) ? last_request_write_entry_row : entry_imem0;
-   wire [`ROW_SIZE - 1:0] 	 new_entry_dmem1 = (last_request_core_id == 1 && last_request_cache_type == 1) ? last_request_write_entry_row : entry_imem0;
+   wire [`ROW_SIZE - 1:0] 	 new_entry_dmem0 = (last_request_core_id == 0 && last_request_cache_type == 1) ? last_request_write_entry_row : entry_dmem0;
+   wire [`ROW_SIZE - 1:0] 	 new_entry_imem1 = (last_request_core_id == 1 && last_request_cache_type == 0) ? last_request_write_entry_row : entry_imem1;
+   wire [`ROW_SIZE - 1:0] 	 new_entry_dmem1 = (last_request_core_id == 1 && last_request_cache_type == 1) ? last_request_write_entry_row : entry_dmem1;
 
    assign get_ready = RST_N && (has_request && !last_request_write_entry_valid);
    assign put_ready = RST_N && (get_valid || !has_request || last_request_write_entry_valid);
