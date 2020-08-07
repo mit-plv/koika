@@ -23,5 +23,7 @@ int main(int argc, char **argv) {
     tb->eval();
     tb->CLK = 0;
     tb->eval();
-  } exit(EXIT_SUCCESS);
+  }
+  printf("%d", tb->rd);
+  exit(EXIT_SUCCESS);
 }

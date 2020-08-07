@@ -5,8 +5,12 @@ typedef  4 T;
 Integer t = valueOf(T);
 typedef 8 NI ;
 typedef TMul#(NI,2) NO;
+interface Peak;
+	method Vector#(T,Bit#(NO)) rd();
+endinterface	
 
-module mkFir();
+
+module mkFir(Peak);
   Reg#(Vector#(T, Bit#(NO))) q <- mkReg(?);
   Reg#(Bit#(NI)) x <- mkReg(0);
 
@@ -35,6 +39,10 @@ module mkFir();
 
     x<= (x+9)%19;
   endrule
+  
+  method Vector#(T, Bit#(NO)) rd();
+  	return q;
+  endmethod
 endmodule
 
  

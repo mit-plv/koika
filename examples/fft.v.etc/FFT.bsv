@@ -91,8 +91,11 @@ function Vector#(FFT_POINTS, ComplexSample) stage_ft(TwiddleTable twiddles, Bit#
     end
     return stage_out;
 endfunction
+interface Peak;
+	method Vector#(FFT_POINTS, ComplexSample) rd();
+endinterface	
 
-module mkCombinationalFFT();
+module mkCombinationalFFT(Peak);
 
   // Statically generate the twiddle factors table.
   TwiddleTable twiddles = genTwiddles();
@@ -117,5 +120,8 @@ module mkCombinationalFFT();
    itself <= stage_data[valueof(FFT_LOG_POINTS)];
 //   $display(fshow(itself));
   endrule
+  method Vector#(FFT_POINTS, ComplexSample) rd();
+  	return itself;
+  endmethod
 endmodule
 
