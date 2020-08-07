@@ -241,8 +241,7 @@ Definition twist (stage:nat) (index:nat) : uaction reg_t ext_fn_t :=
     (*| localSt => value_of_bits (Bits.of_N (64*points) 4039432 : bits_t (64*points))*)
   | localSt =>
     vect_map unpack_complex
-      [039543289543432;
-       4039543289543432;
+      [ 4039543289543432;
        4039543289543432;
        4039543289543432;
        4039543289543432;
