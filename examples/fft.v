@@ -47,7 +47,7 @@ Section FFT.
   Definition complex :=
   {| struct_name := "complex";
      struct_fields :=
-       [ ("re", bits_t 32); ("im", bits_t 32) ] |}.
+       [  ("re", bits_t 32); ("im", bits_t 32)  ] |}.
 
   Definition log_points := 4.
   Definition points := pow2 log_points.
@@ -234,12 +234,12 @@ Infix "+b+" := Bits.app (at level 60).
   match idx with
     (*| localSt => value_of_bits (Bits.of_N (64*points) 4039432 : bits_t (64*points))*)
   | localSt =>
-      vect_cons (value_of_bits (Bits.of_N (64) 1240395430954309: bits (type_sz (struct_t complex))): struct_t complex) ( 
-      vect_cons (value_of_bits (Bits.of_N (64) 4039435493832342: bits (type_sz (struct_t complex))): struct_t complex) ( 
-      vect_cons (value_of_bits (Bits.of_N (64) 2243114035329432: bits (type_sz (struct_t complex))): struct_t complex) ( 
-      vect_cons (value_of_bits (Bits.of_N (64) 2113423124039432: bits (type_sz (struct_t complex))): struct_t complex) ( 
-      vect_cons (value_of_bits (Bits.of_N (64) 1322456664039432: bits (type_sz (struct_t complex))): struct_t complex) ( 
-      vect_cons (value_of_bits (Bits.of_N (64) 4039515233444432: bits (type_sz (struct_t complex))): struct_t complex) ( 
+      vect_cons (value_of_bits (Bits.of_N (64) 4039543289543432: bits (type_sz (struct_t complex))): struct_t complex) ( 
+      vect_cons (value_of_bits (Bits.of_N (64) 4039543289543432: bits (type_sz (struct_t complex))): struct_t complex) ( 
+      vect_cons (value_of_bits (Bits.of_N (64) 4039543289543432: bits (type_sz (struct_t complex))): struct_t complex) ( 
+      vect_cons (value_of_bits (Bits.of_N (64) 4039543289543432: bits (type_sz (struct_t complex))): struct_t complex) ( 
+      vect_cons (value_of_bits (Bits.of_N (64) 4039543289543432: bits (type_sz (struct_t complex))): struct_t complex) ( 
+      vect_cons (value_of_bits (Bits.of_N (64) 4039543289543432: bits (type_sz (struct_t complex))): struct_t complex) ( 
       vect_cons (value_of_bits (Bits.of_N (64) 4039543289543432: bits (type_sz (struct_t complex))): struct_t complex) ( 
       vect_cons (value_of_bits (Bits.of_N (64) 4039543289543432: bits (type_sz (struct_t complex))): struct_t complex) ( 
       vect_cons (value_of_bits (Bits.of_N (64) 4039543289543432: bits (type_sz (struct_t complex))): struct_t complex) ( 
