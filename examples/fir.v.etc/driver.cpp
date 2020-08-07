@@ -1,5 +1,5 @@
 #include <stdlib.h>
-#include "VmkCombinationalFFT.h"
+#include "VmkFir.h"
 #include "verilated.h"
 
 int main(int argc, char **argv) {
@@ -7,7 +7,7 @@ int main(int argc, char **argv) {
   Verilated::commandArgs(argc, argv);
 
   // Create an instance of our module under test
-  VmkCombinationalFFT *tb = new VmkCombinationalFFT;
+  VmkFir *tb = new VmkFir;
     tb->RST_N= 1;
     tb->eval();
  
