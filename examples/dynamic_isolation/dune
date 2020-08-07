@@ -19,3 +19,15 @@ Extraction \"rv32i.ml\" rv32i.prog."))
   (extracted_modules rv32i)
   (theories Koika dynamic_isolation)
   (flags "-w" "-overriding-logical-loadpath")))
+
+
+;; -*- dune -*-
+(subdir "_objects/rv32i_no_sm.v"
+ (rule (write-file "rv32i_no_sm_extr.v"
+                   "Require Coq.extraction.Extraction dynamic_isolation.rv32i_no_sm.
+Extraction \"rv32i_no_sm.ml\" rv32i_no_sm.prog."))
+ (coq.extraction
+  (prelude rv32i_no_sm_extr)
+  (extracted_modules rv32i_no_sm)
+  (theories Koika dynamic_isolation)
+  (flags "-w" "-overriding-logical-loadpath")))
