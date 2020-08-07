@@ -64,6 +64,7 @@ module top(input CLK, input RST_N, output uart_wr_valid, output[7:0] uart_wr_dat
    ext_cache dmem0(.CLK(CLK), .RST_N(RST_N), .arg(cache_dmem0_arg), .out(cache_dmem0_out));
    ext_cache imem1(.CLK(CLK), .RST_N(RST_N), .arg(cache_imem1_arg), .out(cache_imem1_out));
    ext_cache dmem1(.CLK(CLK), .RST_N(RST_N), .arg(cache_dmem1_arg), .out(cache_dmem1_out));
+   ext_bookkeeping bookkeeping_dir (.CLK(CLK), .RST_N(RST_N), .arg(ppp_bookkeeping_arg), .out(ppp_bookkeeping_out));
 
    always @(posedge CLK)
      if (led_wr_valid)
