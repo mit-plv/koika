@@ -32,6 +32,15 @@ module top(input CLK, input RST_N, output uart_wr_valid, output[7:0] uart_wr_dat
    reg led = 1'b0;
    assign LED = led;
 
+   // TODO: for simulation, replace with external call
+   reg core0_done = 1'b0;
+   reg core1_done = 1'b0;
+
+   wire imem0_finish;
+   wire dmem0_finish;
+   wire imem1_finish;
+   wire dmem1_finish;
+
    rv32 core(.CLK(CLK), .RST_N(RST_N),
 
 			 .ext_ppp_bookkeeping_arg(ppp_bookkeeping_arg),
@@ -60,10 +69,10 @@ module top(input CLK, input RST_N, output uart_wr_valid, output[7:0] uart_wr_dat
              .ext_led_out(led));
 
    ext_mem mainmem(.CLK(CLK), .RST_N(RST_N), .arg(mainmem_arg), .out(mainmem_out));
-   ext_cache imem0(.CLK(CLK), .RST_N(RST_N), .arg(cache_imem0_arg), .out(cache_imem0_out));
-   ext_cache dmem0(.CLK(CLK), .RST_N(RST_N), .arg(cache_dmem0_arg), .out(cache_dmem0_out));
-   ext_cache imem1(.CLK(CLK), .RST_N(RST_N), .arg(cache_imem1_arg), .out(cache_imem1_out));
-   ext_cache dmem1(.CLK(CLK), .RST_N(RST_N), .arg(cache_dmem1_arg), .out(cache_dmem1_out));
+   ext_cache imem0(.CLK(CLK), .RST_N(RST_N), .arg(cache_imem0_arg), .out(cache_imem0_out), .finish(imem0_finish));
+   ext_cache dmem0(.CLK(CLK), .RST_N(RST_N), .arg(cache_dmem0_arg), .out(cache_dmem0_out), .finish(dmem0_finish));
+   ext_cache imem1(.CLK(CLK), .RST_N(RST_N), .arg(cache_imem1_arg), .out(cache_imem1_out), .finish(imem1_finish));
+   ext_cache dmem1(.CLK(CLK), .RST_N(RST_N), .arg(cache_dmem1_arg), .out(cache_dmem1_out), .finish(dmem1_finish));
    ext_bookkeeping bookkeeping_dir (.CLK(CLK), .RST_N(RST_N), .arg(ppp_bookkeeping_arg), .out(ppp_bookkeeping_out));
 
    always @(posedge CLK)
@@ -72,6 +81,13 @@ module top(input CLK, input RST_N, output uart_wr_valid, output[7:0] uart_wr_dat
 
 `ifdef SIMULATION
    always @(posedge CLK) begin
+	  core0_done <= core0_done || dmem0_finish;
+	  core1_done <= core1_done || dmem1_finish;
+
+	  if (core0_done && core1_done) begin
+		 $finish(1'b1);
+	  end
+
       if (led_wr_valid) begin
         if (led_wr_data)
           $fwrite(32'h80000002, "☀");

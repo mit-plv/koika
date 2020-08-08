@@ -19,11 +19,14 @@ module cache(input                          CLK,
 			 input [`CACHE_REQ_SIZE - 1:0] 	put_request,
 			 output 						get_ready,
 			 output 						put_ready,
-			 output [`CACHE_ROW_SIZE - 1:0] get_response);
+			 output [`CACHE_ROW_SIZE - 1:0] get_response,
+			 output 						finish);
    parameter EXIT_ADDRESS0 = 32'h40001000;
    parameter EXIT_ADDRESS1 = 32'h80001000;
    reg has_request;
    reg [`CACHE_REQ_SIZE - 1:0] last_request;
+   reg 						   finished;
+
 
 `define CACHE_NUM_SETS (1 << `CACHE_INDEX_WIDTH)
    reg [`CACHE_ROW_SIZE - 1:0] mem[`CACHE_NUM_SETS - 1:0];
@@ -104,16 +107,27 @@ module cache(input                          CLK,
 
    wire put_wf = put_valid && put_ready;
    wire get_wf = get_valid && get_ready;
+   assign finish = finished;
 
    always @(posedge CLK) begin
 `ifdef SIMULATION
+	  /*
+	  if (put_wf) begin
+		 $display("req: dEn: %h; tag: %h; index: %h; data:%h; msi_valid: %h; msi_data: %h\n", put_request_byte_en, put_request_tag, put_request_index, put_request_data, put_request_msi_valid, put_request_msi_data);
+	  end
+
+	  if (has_request) begin
+		 $display("resp: index %h, tag %h, data %h, msi %h\n", last_request_index, new_row_tag, new_row_data, new_row_msi);
+	  end
+	   */
+
       if (put_wf && (put_request_addr == EXIT_ADDRESS0 || put_request_addr == EXIT_ADDRESS1)) begin
          if (put_request_data == 0)
     	   $fwrite(32'h80000002, "  [0;32mPASS[0m\n");
     	 else
     	   $fwrite(32'h80000002, "  [0;31mFAIL[0m (%0d)\n", last_request_data);
-		 // TODO
-         $finish(1'b1);
+		 finished <= 1'b1;
+         // $finish(1'b1);
       end
 `endif
 
@@ -126,7 +140,7 @@ module cache(input                          CLK,
 			last_request <= put_request;
 		 end
 
-		 has_request <= put_wf || (has_request && (!get_wf || !last_request_ignore_response));
+		 has_request <= put_wf || (has_request && (!get_wf && !last_request_ignore_response));
       end else begin // if (RST_N == 1)
 		 has_request <= 1'b0;
       end

@@ -86,7 +86,7 @@ module bookkeeping_directory (input CLK,
 			last_request <= put_request;
 		 end
 
-		 has_request <= put_wf || (has_request && (!get_wf || !last_request_write_entry_valid));
+		 has_request <= put_wf || (has_request && (!get_wf && !last_request_write_entry_valid));
       end else begin // if (RST_N == 1)
 		 has_request <= 1'b0;
       end

@@ -1,7 +1,7 @@
 // -*- verilog -*-
 
 /*! Wrapper used to connect the cache model with Kôika !*/
-module ext_cache(input CLK, input RST_N, input[71:0] arg, output[53:0] out);
+module ext_cache(input CLK, input RST_N, input[71:0] arg, output[53:0] out, output finish);
 
    wire get_valid;
    wire put_valid;
@@ -16,5 +16,6 @@ module ext_cache(input CLK, input RST_N, input[71:0] arg, output[53:0] out);
 
    cache m(.CLK(CLK), .RST_N(RST_N),
 		   .get_valid(get_valid), .put_valid(put_valid), .put_request(put_request),
-		   .get_ready(get_ready), .put_ready(put_ready), .get_response(get_response));
+		   .get_ready(get_ready), .put_ready(put_ready), .get_response(get_response),
+		   .finish(finish));
 endmodule
