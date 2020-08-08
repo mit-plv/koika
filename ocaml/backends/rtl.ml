@@ -6,9 +6,19 @@ open Cuttlebone.Graphs
 
 open Printf
 
+(** Whether to print the circuits being compiled to Verilog. *)
 let debug = false
+
+(** By default, circuit annotations are used to generate signal names; if this
+    flag is set to [true] they are also used to generate comments. *)
 let add_debug_annotations = false
-let omit_reset_line = false
+
+(** Whether the design should have an always block resetting the registers to
+    their initial value if the RST_N signal is low. *)
+let include_reset_line = true
+
+(** Whether external rules should be implemented as internally-instantiated
+    modules or exposed as wires of the current module. *)
 let compile_bundles_internally = false
 
 type node_metadata =
@@ -457,7 +467,7 @@ module Verilog : RTLBackend = struct
 
   let p_always_block out roots =
     fprintf out "	always @(posedge CLK) begin\n";
-    if omit_reset_line then
+    if not include_reset_line then
       p_root_net out roots
     else begin
         fprintf out "		if (!RST_N) begin\n";
