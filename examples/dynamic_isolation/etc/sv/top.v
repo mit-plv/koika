@@ -2,7 +2,7 @@
 /*! Verilog wrapper for the Kôika core (for use in simulation) !*/
 // This toplevel is mostly for simulation, since it assumes the UART module
 // is always ready to transmit.
-module top(input CLK, input RST_N, output uart_wr_valid, output[7:0] uart_wr_data, output LED);
+module top(input CLK, input RST_N, output uart_wr_valid0, output[7:0] uart_wr_data0, output LED0, output uart_wr_valid1, output[7:0] uart_wr_data1, output LED1);
    wire[36:0] ppp_bookkeeping_arg;
    wire[81:0] ppp_bookkeeping_out;
 
@@ -20,17 +20,30 @@ module top(input CLK, input RST_N, output uart_wr_valid, output[7:0] uart_wr_dat
    wire[69:0] mainmem_arg;
 
 
-   wire uart_wr_ready = 1'b1;
+   wire uart_wr_ready0 = 1'b1;
 
-   wire uart_rd_valid = 1'b0;
-   wire[7:0] uart_rd_data = 8'b0;
-   wire uart_rd_ready;
+   wire uart_rd_valid0 = 1'b0;
+   wire[7:0] uart_rd_data0 = 8'b0;
+   wire uart_rd_ready0;
 
-   wire led_wr_valid;
-   wire led_wr_data;
+   wire led_wr_valid0;
+   wire led_wr_data0;
 
-   reg led = 1'b0;
-   assign LED = led;
+   reg led0 = 1'b0;
+   assign LED0 = led0;
+
+   wire uart_wr_ready1 = 1'b1;
+
+   wire uart_rd_valid1 = 1'b0;
+   wire[7:0] uart_rd_data1 = 8'b0;
+   wire uart_rd_ready1;
+
+   wire led_wr_valid1;
+   wire led_wr_data1;
+
+   reg led1 = 1'b0;
+   assign LED1 = led1;
+
 
    // TODO: for simulation, replace with external call
    reg core0_done = 1'b0;
@@ -59,14 +72,24 @@ module top(input CLK, input RST_N, output uart_wr_valid, output[7:0] uart_wr_dat
 			 .ext_mainmem_arg(mainmem_arg),
 			 .ext_mainmem_out(mainmem_out),
 
-             .ext_uart_write_arg({uart_wr_valid, uart_wr_data}),
-             .ext_uart_write_out(uart_wr_ready),
+             .ext_uart_write0_arg({uart_wr_valid0, uart_wr_data0}),
+             .ext_uart_write0_out(uart_wr_ready0),
 
-             .ext_uart_read_arg(uart_rd_ready),
-             .ext_uart_read_out({uart_rd_valid, uart_rd_data}),
+             .ext_uart_read0_arg(uart_rd_ready0),
+             .ext_uart_read0_out({uart_rd_valid0, uart_rd_data0}),
 
-             .ext_led_arg({led_wr_valid, led_wr_data}),
-             .ext_led_out(led));
+             .ext_led0_arg({led_wr_valid0, led_wr_data0}),
+             .ext_led0_out(led0),
+
+			 .ext_uart_write1_arg({uart_wr_valid1, uart_wr_data1}),
+             .ext_uart_write1_out(uart_wr_ready1),
+
+             .ext_uart_read1_arg(uart_rd_ready1),
+             .ext_uart_read1_out({uart_rd_valid1, uart_rd_data1}),
+
+             .ext_led1_arg({led_wr_valid1, led_wr_data1}),
+             .ext_led1_out(led1)
+			);
 
    ext_mem mainmem(.CLK(CLK), .RST_N(RST_N), .arg(mainmem_arg), .out(mainmem_out));
    ext_cache imem0(.CLK(CLK), .RST_N(RST_N), .arg(cache_imem0_arg), .out(cache_imem0_out), .finish(imem0_finish));
@@ -76,8 +99,12 @@ module top(input CLK, input RST_N, output uart_wr_valid, output[7:0] uart_wr_dat
    ext_bookkeeping bookkeeping_dir (.CLK(CLK), .RST_N(RST_N), .arg(ppp_bookkeeping_arg), .out(ppp_bookkeeping_out));
 
    always @(posedge CLK)
-     if (led_wr_valid)
-       led <= led_wr_data;
+     if (led_wr_valid0)
+       led0 <= led_wr_data0;
+
+   always @(posedge CLK)
+     if (led_wr_valid1)
+       led1 <= led_wr_data1;
 
 `ifdef SIMULATION
    always @(posedge CLK) begin
@@ -88,14 +115,24 @@ module top(input CLK, input RST_N, output uart_wr_valid, output[7:0] uart_wr_dat
 		 $finish(1'b1);
 	  end
 
-      if (led_wr_valid) begin
-        if (led_wr_data)
+      if (led_wr_valid0) begin
+        if (led_wr_data0)
           $fwrite(32'h80000002, "☀");
         else
           $fwrite(32'h80000002, "🌣");
       end
-      if (uart_wr_ready && uart_wr_valid)
-        $fwrite(32'h80000002, "%c", uart_wr_data);
+      if (uart_wr_ready0 && uart_wr_valid0)
+        $fwrite(32'h80000002, "%c", uart_wr_data0);
+
+	  if (led_wr_valid1) begin
+        if (led_wr_data1)
+          $fwrite(32'h80000002, "☀");
+        else
+          $fwrite(32'h80000002, "🌣");
+      end
+      if (uart_wr_ready1 && uart_wr_valid1)
+        $fwrite(32'h80000002, "%c", uart_wr_data1);
+
    end
 `endif
 endmodule
