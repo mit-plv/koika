@@ -21,6 +21,11 @@ let include_reset_line = true
     modules or exposed as wires of the current module. *)
 let compile_bundles_internally = false
 
+(** Whether to add a /* verilator public */ declaration to all registers; this
+    is in line with what Cuttlesim does.  The performance penalty seems to be in
+    the order of a few percents. *)
+let verilator_public_registers = true
+
 type node_metadata =
   { shared: bool; circuit: circuit' }
 
@@ -482,7 +487,11 @@ module Verilog : RTLBackend = struct
     (name, init, snd (p_node out min_int node))
 
   let p_root_decl out (name, init, _) =
-    p_decl out "reg" (Array.length init) (name^ " /* verilator public */ ") ~expr:(string_of_bits init)
+    let name =
+      if verilator_public_registers then
+        name ^ " /* verilator public */"
+      else name in
+    p_decl out "reg" (Array.length init) name ~expr:(string_of_bits init)
 
   let sp_pin (name, (direction, sz)) =
     let typ = sp_type (match direction with
