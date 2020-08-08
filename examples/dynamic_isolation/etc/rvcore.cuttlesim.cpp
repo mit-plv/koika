@@ -320,21 +320,21 @@ struct extfuns_t {
     return mainmem.getput(req);
   }
 
-  bits<1> ext_uart_write(struct_maybe_bits_8 req) {
+  bits<1> ext_uart_write0(struct_maybe_bits_8 req) {
     if (req.valid) {
       putchar(static_cast<char>(req.data.v));
     }
     return req.valid;
   }
 
-  struct_maybe_bits_8 ext_uart_read(bits<1> req) {
+  struct_maybe_bits_8 ext_uart_read0(bits<1> req) {
     bool valid = req.v;
     return struct_maybe_bits_8 {
       .valid = bits<1>{valid},
       .data = bits<8>{(bits_t<8>)(valid ? getchar() : 0)} };
   }
 
-  bits<1> ext_led(struct_maybe_bits_1 req) {
+  bits<1> ext_led0(struct_maybe_bits_1 req) {
     bits<1> current = led;
     if (req.valid) {
       led = req.data;
@@ -342,6 +342,30 @@ struct extfuns_t {
     }
     return current;
   }
+
+  bits<1> ext_uart_write1(struct_maybe_bits_8 req) {
+    if (req.valid) {
+      putchar(static_cast<char>(req.data.v));
+    }
+    return req.valid;
+  }
+
+  struct_maybe_bits_8 ext_uart_read1(bits<1> req) {
+    bool valid = req.v;
+    return struct_maybe_bits_8 {
+      .valid = bits<1>{valid},
+      .data = bits<8>{(bits_t<8>)(valid ? getchar() : 0)} };
+  }
+
+  bits<1> ext_led1(struct_maybe_bits_1 req) {
+    bits<1> current = led;
+    if (req.valid) {
+      led = req.data;
+      fprintf(stderr, led.v ? "☀" : "🌣");
+    }
+    return current;
+  }
+
 
   struct_ext_bookkeeping_output ext_ppp_bookkeeping(struct_ext_bookkeeping_input req) {
 	return ppp_bookkeeping.getput(req);
