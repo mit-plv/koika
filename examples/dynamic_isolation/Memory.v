@@ -2061,7 +2061,7 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
          : maybe (struct_t mem_output) =>
          `match m with
           | (imem0 | imem1) => {{ {invalid (struct_t mem_output) }() }}
-          | (dmem0 | dmem1) => {{
+          | dmem0    => {{
                       let addr := get(put_request, addr) in
                       let byte_en := get(put_request, byte_en) in
                       let is_write := byte_en == Ob~1~1~1~1 in
@@ -2074,11 +2074,11 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
                       let is_led_write := is_led && is_write in
 
                       let is_mem := !is_uart && !is_led in
-
+                      (* TODO: enforce one call per cycle! *)
                       if is_uart_write then
                         let char := get(put_request, data)[|5`d0| :+ 8] in
                         let may_run := get_ready && put_valid && is_uart_write in
-                        let ready := extcall ext_uart_write (struct (Maybe (bits_t 8)) {
+                        let ready := extcall ext_uart_write0 (struct (Maybe (bits_t 8)) {
                           valid := may_run; data := char }) in
                         {valid (struct_t mem_output)}(
                           struct mem_output { get_valid := may_run && ready;
@@ -2089,7 +2089,7 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
 
                       else if is_uart_read then
                         let may_run := get_ready && put_valid && is_uart_read in
-                        let opt_char := extcall ext_uart_read (may_run) in
+                        let opt_char := extcall ext_uart_read0 (may_run) in
                         let ready := get(opt_char, valid) in
                         {valid (struct_t mem_output)}(
                           struct mem_output { get_valid := may_run && ready;
@@ -2101,7 +2101,7 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
                       else if is_led then
                         let on := get(put_request, data)[|5`d0|] in
                         let may_run := get_ready && put_valid && is_led_write in
-                        let current := extcall ext_led (struct (Maybe (bits_t 1)) {
+                        let current := extcall ext_led0 (struct (Maybe (bits_t 1)) {
                           valid := may_run; data := on }) in
                         let ready := Ob~1 in
                         {valid (struct_t mem_output)}(
@@ -2114,6 +2114,60 @@ Module WIPMemory <: Memory_sig External EnclaveParams.
                       else
                         {invalid (struct_t mem_output)}()
                    }}
+          | dmem1 => {{
+                      let addr := get(put_request, addr) in
+                      let byte_en := get(put_request, byte_en) in
+                      let is_write := byte_en == Ob~1~1~1~1 in
+
+                      let is_uart := addr == #MMIO_UART_ADDRESS in
+                      let is_uart_read := is_uart && !is_write in
+                      let is_uart_write := is_uart && is_write in
+
+                      let is_led := addr == #MMIO_LED_ADDRESS in
+                      let is_led_write := is_led && is_write in
+
+                      let is_mem := !is_uart && !is_led in
+                      (* TODO: enforce one call per cycle! *)
+                      if is_uart_write then
+                        let char := get(put_request, data)[|5`d0| :+ 8] in
+                        let may_run := get_ready && put_valid && is_uart_write in
+                        let ready := extcall ext_uart_write1 (struct (Maybe (bits_t 8)) {
+                          valid := may_run; data := char }) in
+                        {valid (struct_t mem_output)}(
+                          struct mem_output { get_valid := may_run && ready;
+                                               put_ready := may_run && ready;
+                                               get_response := struct mem_resp {
+                                                 byte_en := byte_en; addr := addr;
+                                                 data := |32`d0| } })
+
+                      else if is_uart_read then
+                        let may_run := get_ready && put_valid && is_uart_read in
+                        let opt_char := extcall ext_uart_read1 (may_run) in
+                        let ready := get(opt_char, valid) in
+                        {valid (struct_t mem_output)}(
+                          struct mem_output { get_valid := may_run && ready;
+                                               put_ready := may_run && ready;
+                                               get_response := struct mem_resp {
+                                                 byte_en := byte_en; addr := addr;
+                                                 data := zeroExtend(get(opt_char, data), 32) } })
+
+                      else if is_led then
+                        let on := get(put_request, data)[|5`d0|] in
+                        let may_run := get_ready && put_valid && is_led_write in
+                        let current := extcall ext_led1 (struct (Maybe (bits_t 1)) {
+                          valid := may_run; data := on }) in
+                        let ready := Ob~1 in
+                        {valid (struct_t mem_output)}(
+                          struct mem_output { get_valid := may_run && ready;
+                                               put_ready := may_run && ready;
+                                               get_response := struct mem_resp {
+                                                 byte_en := byte_en; addr := addr;
+                                                 data := zeroExtend(current, 32) } })
+
+                      else
+                        {invalid (struct_t mem_output)}()
+                   }}
+
           end` }} .
 
   Section SystemRules.

@@ -12,9 +12,12 @@ Module External <: External_sig.
   Inductive ext_fn_t' :=
   | ext_cache (c: cache)
   | ext_mainmem
-  | ext_uart_read
-  | ext_uart_write
-  | ext_led
+  | ext_uart_read0
+  | ext_uart_write0
+  | ext_led0
+  | ext_uart_read1
+  | ext_uart_write1
+  | ext_led1
   | ext_ppp_bookkeeping
   .
 
@@ -123,9 +126,12 @@ Module External <: External_sig.
     match fn with
     | ext_cache _ => {$ struct_t cache_mem_input ~> struct_t cache_mem_output $}
     | ext_mainmem => {$ struct_t mem_input ~> struct_t mem_output $}
-    | ext_uart_read => {$ bits_t 1 ~> uart_output $}
-    | ext_uart_write => {$ uart_input ~> bits_t 1 $}
-    | ext_led => {$ led_input ~> bits_t 1 $}
+    | ext_uart_read0 => {$ bits_t 1 ~> uart_output $}
+    | ext_uart_write0 => {$ uart_input ~> bits_t 1 $}
+    | ext_led0 => {$ led_input ~> bits_t 1 $}
+    | ext_uart_read1 => {$ bits_t 1 ~> uart_output $}
+    | ext_uart_write1 => {$ uart_input ~> bits_t 1 $}
+    | ext_led1 => {$ led_input ~> bits_t 1 $}
     | ext_ppp_bookkeeping => {$ struct_t ext_bookkeeping_input ~> struct_t ext_bookkeeping_output $}
     end.
 
@@ -136,9 +142,12 @@ Module External <: External_sig.
     | ext_cache imem1 => {| ef_name := "ext_cache_imem1"; ef_internal := false |}
     | ext_cache dmem1 => {| ef_name := "ext_cache_dmem1"; ef_internal := false |}
     | ext_mainmem => {| ef_name := "ext_mainmem"; ef_internal := false |}
-    | ext_uart_write => {| ef_name := "ext_uart_write"; ef_internal := false |}
-    | ext_uart_read => {| ef_name := "ext_uart_read"; ef_internal := false |}
-    | ext_led => {| ef_name := "ext_led"; ef_internal := false |}
+    | ext_uart_write0 => {| ef_name := "ext_uart_write0"; ef_internal := false |}
+    | ext_uart_read0 => {| ef_name := "ext_uart_read0"; ef_internal := false |}
+    | ext_led0 => {| ef_name := "ext_led0"; ef_internal := false |}
+    | ext_uart_write1 => {| ef_name := "ext_uart_write1"; ef_internal := false |}
+    | ext_uart_read1 => {| ef_name := "ext_uart_read1"; ef_internal := false |}
+    | ext_led1 => {| ef_name := "ext_led1"; ef_internal := false |}
     | ext_ppp_bookkeeping => {| ef_name := "ext_ppp_bookkeeping"; ef_internal := false |}
     end.
 
@@ -149,9 +158,12 @@ Module External <: External_sig.
     match fn with
     | ext_cache _ => fun _ => value_of_bits Bits.zero
     | ext_mainmem => fun _ => value_of_bits Bits.zero
-    | ext_uart_write => fun _ => value_of_bits Bits.zero
-    | ext_uart_read => fun _ => value_of_bits Bits.zero
-    | ext_led => fun _ => value_of_bits Bits.zero
+    | ext_uart_write0 => fun _ => value_of_bits Bits.zero
+    | ext_uart_read0 => fun _ => value_of_bits Bits.zero
+    | ext_led0 => fun _ => value_of_bits Bits.zero
+    | ext_uart_write1 => fun _ => value_of_bits Bits.zero
+    | ext_uart_read1 => fun _ => value_of_bits Bits.zero
+    | ext_led1 => fun _ => value_of_bits Bits.zero
     | ext_ppp_bookkeeping => fun _ => value_of_bits Bits.zero
     end.
 
