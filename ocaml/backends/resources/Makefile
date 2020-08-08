@@ -95,7 +95,17 @@ LLDB_FLAGS ?=
 lldb: $(cuttlesim_driver).debug
 	lldb $(LLDB_FLAGS) -- $(sim_invoke_debug)
 
-.PHONY: gdb lldb
+RR_RECORD_FLAGS ?=
+RR_REPLAY_FLAGS ?=
+
+$(cuttlesim_driver).rr $(cuttlesim_driver).rr/: $(cuttlesim_driver).debug
+	rm -fr "$@"
+	rr record --output-trace-dir "$@" $(RR_RECORD_FLAGS) -- $(cuttlesim_driver).debug $(sim_args)
+
+rr: $(cuttlesim_driver).rr/
+	rr replay $(RR_REPLAY_FLAGS) "$<"
+
+.PHONY: gdb lldb rr
 
 # Profiling
 # =========
@@ -135,6 +145,7 @@ clean-cuttlesim:
 	rm -f $(cuttlesim_driver).vcd
 	rm -f $(cuttlesim_driver).perf.data
 	rm -f $(cuttlesim_driver).callgrind
+	rm -fr $(cuttlesim_driver).rr
 	rm -f *.gcov
 
 #############
@@ -311,6 +322,10 @@ help:
 	@echo '        Run $(cuttlesim_driver).debug under GDB'
 	@echo '      lldb:'
 	@echo '        Run $(cuttlesim_driver).debug under LLDB'
+	@echo '      $(cuttlesim_driver).rr:'
+	@echo '        Record execution of $(cuttlesim_driver).debug using rr'
+	@echo '      rr:'
+	@echo '        Replay rr trace of $(cuttlesim_driver).debug'
 	@echo '    Profiling'
 	@echo '      $(cuttlesim_driver).perf.data:'
 	@echo '        ‘perf’ profile of $(cuttlesim_driver).perf'
@@ -384,6 +399,10 @@ help:
 	@echo '        Additional command-line options passed to GDB'
 	@echo '      LLDB_FLAGS = $(LLDB_FLAGS)'
 	@echo '        Command-line arguments passed to LLDB'
+	@echo '      RR_RECORD_FLAGS = $(RR_RECORD_FLAGS)'
+	@echo '        Command-line arguments passed to rr record'
+	@echo '      RR_REPLAY_FLAGS = $(RR_REPLAY_FLAGS)'
+	@echo '        Command-line arguments passed to rr replay'
 	@echo '      PERF_FLAGS = $(PERF_FLAGS)'
 	@echo '        Command-line arguments passed to perf'
 	@echo '  Verilator'
