@@ -1308,7 +1308,7 @@ Module ProtocolProcessor.
            else if ((core_id == Ob~1) && cache_type == enum cache_type {imem}) then
                get(entry,imem1)
            else (* if ((core_id == Ob~1) && cache_type == enum cache_type {dmem}) then *)
-               get(entry,dmem0)
+               get(entry,dmem1)
      }}.
 
   Definition get_state : UInternalFunction reg_t ext_fn_t :=
@@ -1361,14 +1361,14 @@ Module ProtocolProcessor.
                                                                     addr := addr;
                                                                     MSI_state := enum MSI { I }
                                                                  });
-            tracker[|2`d1|:+3] ++ Ob~0
+            Ob~0 ++ tracker[|2`d1|:+3]
           else if (tracker[|2`d1|]) then
             ToRouter.(MessageFifo1.enq_req)(struct cache_mem_req { core_id := Ob~0;
                                                                     cache_type := enum cache_type { dmem };
                                                                     addr := addr;
                                                                     MSI_state := enum MSI { I }
                                                                  });
-            tracker[|2`d2|:+2] ++ Ob~0~0
+            Ob~0~0 ++ tracker[|2`d2|:+2]
           else if (tracker[|2`d2|]) then
             ToRouter.(MessageFifo1.enq_req)(struct cache_mem_req { core_id := Ob~1;
                                                                     cache_type := enum cache_type { imem };
@@ -1376,7 +1376,7 @@ Module ProtocolProcessor.
                                                                     MSI_state := enum MSI { I }
                                                                  });
 
-            tracker[|2`d3|] ++ Ob~0~0~0
+            Ob~0~0~0 ++ tracker[|2`d3|]
           else if (tracker[|2`d3|]) then
             ToRouter.(MessageFifo1.enq_req)(struct cache_mem_req { core_id := Ob~1;
                                                                     cache_type := enum cache_type { dmem };
@@ -1431,7 +1431,7 @@ Module ProtocolProcessor.
        (* Load *)
        if (get(req,MSI_state) == enum MSI { S }) then
          write0(private ushr, struct USHR { state := enum USHR_state { Confirming };
-                                              req := req });
+                                            req := req });
          if (other_core_has_line) then
            (* Parent !get(req,core_id) has the line, issue downgrade to S *)
            ToRouter.(MessageFifo1.enq_req)(struct cache_mem_req { core_id := !core_id;
@@ -1464,10 +1464,10 @@ Module ProtocolProcessor.
          write0(private downgrade_tracker, tracker2);
          if (tracker2 == |4`d0|) then
            (* done issuing downgrade requests *)
-           write0(private ushr, struct USHR { state := enum USHR_state { Downgrading };
+           write0(private ushr, struct USHR { state := enum USHR_state { Confirming };
                                                 req := req })
          else
-           write0(private ushr, struct USHR { state := enum USHR_state { Confirming };
+           write0(private ushr, struct USHR { state := enum USHR_state { Downgrading };
                                                 req := req })
        else pass (* Should not happen? Could do fail for ease of debugging *)
     }}.
@@ -1569,8 +1569,8 @@ Module ProtocolProcessor.
        let index := getIndex(addr) in
        let entry := (__private__ ext_fromDir).(BookkeepingOutput.deq)() in
        let states := compute_downgrade_tracker(entry, getTag(addr)) in
-       set states := set_invalid_at_cache(states, get(req,core_id),get(req,cache_type));
-       if ((get(req, MSI_state) == enum MSI { S }) || states == Ob~0~0~0~0) then (
+       let states2 := set_invalid_at_cache(states, get(req,core_id),get(req,cache_type)) in
+       if ((get(req, MSI_state) == enum MSI { S }) || states2 == Ob~0~0~0~0) then (
          let data := {invalid (data_t)}() in
          let bypass_opt := read1(private bypass) in
          if (!(states[cache_encoding(get(req,core_id), get(req,cache_type))]

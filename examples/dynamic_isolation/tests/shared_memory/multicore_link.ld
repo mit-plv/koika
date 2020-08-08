@@ -21,7 +21,7 @@ MEMORY {
 
 SECTIONS
 {
-
+   /* TODO: fix this */
   .text.init0 : { *(.text.init0) } > mem0
   .text.core0 : { *_0.o(.text .text.*) } > mem0
   .text.mmio0 : { multicore_mmio0.o(.text .text.*) } > mem0 
