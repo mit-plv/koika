@@ -48,9 +48,9 @@ Inductive ext_fn_t :=
 
 
 Section Fir.
-        Definition T := 4.
-        Definition  NI := 8.
-  Definition  NO := 2*NI.
+  Definition T := 4.
+  Definition NI := 8.
+  Definition NO := 2 * NI.
   Inductive reg_t := q | x.
 
   Definition Sigma (fn: ext_fn_t) :=
@@ -145,32 +145,25 @@ Section Fir.
 
   Definition external (r: rule_name_t) := false.
 
-Definition ext_fn_names (fn: ext_fn_t) :=
-  match fn with
-  | mod19 => "mod19"
-  end.
-
-
-Definition ext_fn_specs fn :=
-  match fn with
-  | mod19 => {| ef_name := "mod19";
-                            ef_internal := true |}
-  end.
-
-  Definition package :=
-    {| ip_koika := {| koika_reg_types := R;
-                     koika_reg_init := r;
-                     koika_ext_fn_types := Sigma;
-                     koika_rules := rules;
-                     koika_rule_external := external;
-                     koika_scheduler := testbench_fir;
-                     koika_module_name := "fir" |};
+Definition package :=
+  {| ip_koika := {| koika_reg_types := R;
+                   koika_reg_init := r;
+                   koika_ext_fn_types := Sigma;
+                   koika_rules := rules;
+                   koika_rule_external := external;
+                   koika_scheduler := testbench_fir;
+                   koika_module_name := "fir" |};
      ip_sim :=
-       {| sp_ext_fn_names := ext_fn_names;
-          sp_extfuns := Some "#include ""extfuns.hpp""" |};
+       {| sp_ext_fn_specs fn :=
+            match fn with
+            | mod19 => {| efs_name := "mod19"; efs_method := false |}
+            end;
+          sp_prelude := Some "#include ""extfuns.hpp""" |};
 
-     ip_verilog := {| vp_ext_fn_specs := ext_fn_specs |} |}.
- }
+     ip_verilog := {| vp_ext_fn_specs fn :=
+                       match fn with
+                       | mod19 => {| efr_name := "mod19"; efr_internal := true |}
+                       end |} |}.
 End Fir.
 
 Definition prog := Interop.Backends.register package.

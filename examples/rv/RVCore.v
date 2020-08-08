@@ -866,16 +866,6 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
     | _ => ""
     end.
 
-  Definition rv_ext_fn_specs (fn: ext_fn_t) :=
-    match fn with
-    | ext_mem imem => {| ef_name := "ext_mem_imem"; ef_internal := false |}
-    | ext_mem dmem => {| ef_name := "ext_mem_dmem"; ef_internal := false |}
-    | ext_uart_write => {| ef_name := "ext_uart_write"; ef_internal := false |}
-    | ext_uart_read => {| ef_name := "ext_uart_read"; ef_internal := false |}
-    | ext_led => {| ef_name := "ext_led"; ef_internal := false |}
-    | ext_finish => {| ef_name := "ext_finish"; ef_internal := true |}
-    end.
-
   Instance FiniteType_toIMem : FiniteType MemReq.reg_t := _.
   Instance FiniteType_fromIMem : FiniteType MemResp.reg_t := _.
   Instance FiniteType_toDMem : FiniteType MemReq.reg_t := _.
@@ -893,6 +883,20 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
   Existing Instance Multiplier.Show_reg_t.
   Instance Show_reg_t : Show reg_t := _.
   Instance Show_ext_fn_t : Show ext_fn_t := _.
+
+  Definition rv_ext_fn_sim_specs fn :=
+    {| efs_name := show fn;
+       efs_method := match fn with
+                    | ext_finish => true
+                    | _ => false
+                    end |}.
+
+  Definition rv_ext_fn_rtl_specs fn :=
+    {| efr_name := show fn;
+       efr_internal := match fn with
+                      | ext_finish => true
+                      | _ => false
+                      end |}.
 End RV32Core.
 
 Inductive rv_rules_t :=
@@ -915,10 +919,11 @@ Module Type Core.
   Parameter Sigma : _ext_fn_t -> ExternalSignature.
   Parameter r : forall reg, R reg.
   Parameter rv_rules : rv_rules_t -> rule R Sigma.
-  Parameter rv_ext_fn_specs : _ext_fn_t -> ext_fn_spec.
   Parameter FiniteType_reg_t : FiniteType _reg_t.
   Parameter Show_reg_t : Show _reg_t.
   Parameter Show_ext_fn_t : Show _ext_fn_t.
+  Parameter rv_ext_fn_sim_specs : _ext_fn_t -> ext_fn_sim_spec.
+  Parameter rv_ext_fn_rtl_specs : _ext_fn_t -> ext_fn_rtl_spec.
 End Core.
 
 Module RV32IParams <: RVParams.

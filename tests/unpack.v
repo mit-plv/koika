@@ -63,10 +63,10 @@ Definition package :=
                    koika_scheduler := sched;
                    koika_module_name := "unpack" |};
 
-     ip_sim := {| sp_ext_fn_names := empty_ext_fn_names;
-                 sp_extfuns := None |};
+     ip_sim := {| sp_ext_fn_specs := empty_ext_fn_props;
+                 sp_prelude := None |};
 
-     ip_verilog := {| vp_ext_fn_specs := empty_ext_fn_specs |} |}.
+     ip_verilog := {| vp_ext_fn_specs := empty_ext_fn_props |} |}.
 
 Definition prog := Interop.Backends.register package.
 Extraction "unpack.ml" prog.

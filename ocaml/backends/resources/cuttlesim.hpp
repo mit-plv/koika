@@ -67,6 +67,7 @@ static inline void _sim_assert_fn(const char* repr,
 #define _noinline
 #endif
 
+#define _noreturn __attribute__((noreturn))
 #define _unlikely(b) __builtin_expect((b), 0)
 
 #define MULTIPRECISION_THRESHOLD 64
@@ -126,7 +127,7 @@ namespace prims {
   /// ## Utility functions
 
   template<typename T>
-  T __attribute__((noreturn)) unreachable() {
+  T _noreturn unreachable() {
     __builtin_unreachable();
   }
 
@@ -1034,7 +1035,7 @@ namespace cuttlesim {
     }
   }
 
-  std::size_t random_seed = internal::gen_seed();
+  static _unused std::size_t random_seed = internal::gen_seed();
 } // namespace cuttlesim
 #endif // #ifndef SIM_MINIMAL
 
@@ -1193,6 +1194,46 @@ namespace cuttlesim {
   };
 }
 
+/// # API
+
+namespace cuttlesim {
+  enum exit_info {
+    exit_info_none = 0b00,
+    // TODO: exit_info_time  = 0b01,
+    exit_info_state = 0b10
+  };
+
+  struct sim_metadata {
+    bool finished;
+    int exit_code;
+    int exit_config;
+
+    sim_metadata() :
+      finished{false},
+      exit_code{0},
+      exit_config{exit_info_state}
+    {}
+  };
+
+  template<typename state_t>
+  struct snapshot_t {
+    state_t state;
+#ifndef SIM_MINIMAL
+    sim_metadata meta;
+
+    int report() {
+      if (meta.exit_config & exit_info_state)
+        state.dump();
+      return meta.exit_code;
+    }
+
+    snapshot_t(state_t _state, sim_metadata _meta) : state(_state), meta(_meta) {}
+#else
+    snapshot_t(state_t _state, sim_metadata _meta) : state(_state) {}
+#endif
+  };
+}
+
 /// # Driver
 
 namespace cuttlesim {
@@ -1203,14 +1244,14 @@ namespace cuttlesim {
 
   using ull = unsigned long long int;
   template <typename simulator, typename... Args>
-  _flatten __attribute__((noinline)) typename simulator::state_t
+  _flatten __attribute__((noinline)) typename simulator::snapshot_t
   init_and_run(ull ncycles, Args&&... args) noexcept {
     return simulator(std::forward<Args>(args)...).run(ncycles).snapshot();
   }
 
 #ifndef SIM_MINIMAL
   template <typename simulator, typename... Args>
-  _flatten static __attribute__((noinline)) typename simulator::state_t
+  _flatten static __attribute__((noinline)) typename simulator::snapshot_t
   init_and_run_randomized(ull ncycles, Args&&... args) noexcept {
     return simulator(std::forward<Args>(args)...).run_randomized(ncycles).snapshot();
   }
@@ -1267,9 +1308,9 @@ namespace cuttlesim {
     if (params.trace) {
       init_and_trace<simulator>(params.vcd_fpath, params.ncycles, std::forward<Args>(args)...);
     } else if (std::getenv("SIM_RANDOMIZED")) {
-      init_and_run_randomized<simulator>(params.ncycles, std::forward<Args>(args)...).dump();
+      std::exit(init_and_run_randomized<simulator>(params.ncycles, std::forward<Args>(args)...).report());
     } else {
-      init_and_run<simulator>(params.ncycles, std::forward<Args>(args)...).dump();
+      std::exit(init_and_run<simulator>(params.ncycles, std::forward<Args>(args)...).report());
     }
 
     return 0;

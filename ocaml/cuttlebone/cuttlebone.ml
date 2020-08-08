@@ -663,11 +663,11 @@ module Graphs = struct
                      (Compilation.opt kp.koika_reg_types kp.koika_ext_fn_types)) in
       fun r -> Extr.getenv cp.cp_reg_Env cp.cp_circuits r in
     let di_fn_specs f =
-      let fn_spec = vp.vp_ext_fn_specs f in
-      let fn_name = Util.string_of_coq_string fn_spec.ef_name in
       let fn_sig = kp.koika_ext_fn_types f in
-      (Util.ffi_sig_of_extr_external_sig fn_name fn_sig,
-       if fn_spec.ef_internal then `Internal else `External) in
+      let spec = vp.vp_ext_fn_specs f in
+      let name = Util.string_of_coq_string spec.efr_name in
+      (Util.ffi_sig_of_extr_external_sig name fn_sig,
+       if spec.efr_internal then `Internal else `External) in
     dedup_circuit
       { di_regs;
         di_reg_sigs = Util.reg_sigs_of_koika_package kp;

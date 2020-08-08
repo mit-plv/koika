@@ -25,7 +25,7 @@ Module Package (C: Core).
 
   Definition package :=
     {| ip_koika := koika_package;
-       ip_sim := {| sp_ext_fn_names fn := show fn;
-                   sp_extfuns := None |};
-       ip_verilog := {| vp_ext_fn_specs := rv_ext_fn_specs |} |}.
+       ip_sim := {| sp_ext_fn_specs := rv_ext_fn_sim_specs;
+                   sp_prelude := None |};
+       ip_verilog := {| vp_ext_fn_specs := rv_ext_fn_rtl_specs |} |}.
 End Package.

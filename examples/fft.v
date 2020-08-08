@@ -291,10 +291,10 @@ Definition twist (stage:nat) (index:nat) : uaction reg_t ext_fn_t :=
                      koika_scheduler := testbench_fir;
                      koika_module_name := "fft" |};
 
-       ip_sim := {| sp_ext_fn_names := empty_ext_fn_names;
-                   sp_extfuns := None |};
+       ip_sim := {| sp_ext_fn_specs := empty_ext_fn_props;
+                   sp_prelude := None |};
 
-       ip_verilog := {| vp_ext_fn_specs := empty_ext_fn_specs |} |}.
+       ip_verilog := {| vp_ext_fn_specs := empty_ext_fn_props |} |}.
 End FFT.
 
 Definition prog := Interop.Backends.register package.

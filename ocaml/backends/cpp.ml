@@ -41,7 +41,7 @@ type ('pos_t, 'var_t, 'fn_name_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_input_t =
     cpp_registers: 'reg_t array;
     cpp_register_sigs: 'reg_t -> reg_signature;
     cpp_register_kinds: 'reg_t -> Extr.register_kind;
-    cpp_ext_sigs: 'ext_fn_t -> ffi_signature;
+    cpp_ext_sigs: 'ext_fn_t -> (ffi_signature * [`Function | `Method]);
 
     cpp_extfuns: string option;
   }
@@ -140,8 +140,8 @@ module Mangling = struct
   let mangle_register_sig r =
     { r with reg_name = mangle_name r.reg_name }
 
-  let mangle_function_sig f =
-    { f with ffi_name = mangle_name f.ffi_name }
+  let mangle_function_sig (f, kind) =
+    { f with ffi_name = mangle_name f.ffi_name }, kind
 
   let default v = function
     | Some v' -> v'
@@ -251,7 +251,7 @@ let assert_bits (tau: typ) =
   | Bits_t sz -> sz
   | _ -> failwith "Expecting bits, not struct or enum"
 
-let cpp_ext_funcall f a =
+let cpp_ext_funcall f (kind: [`Function | `Method]) a =
   (* The current implementation of external functions requires the client to
      pass a class implementing those functions as a template argument.  An
      other approach would have made external functions virtual methods, but
@@ -260,7 +260,7 @@ let cpp_ext_funcall f a =
      ‘extfuns.xyz<p>()’ would not parsed as a comparison, but clang rejects this
      for non-templated functions in version 10.  Users will have to declare
      their function names to be ‘template xyz<p>’ instead of ‘xyz<p>’ *)
-  sprintf "extfuns.%s(%s)" f a
+  sprintf "extfuns.%s(%s%s)" f (if kind = `Method then "*this, " else "") a
 
 let cpp_bits1_fn_name (f: Extr.PrimTyped.fbits1) =
   match f with
@@ -746,6 +746,9 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
           nl ();
           p_state_methods ()) in
 
+    let p_snapshot_t () =
+      p "using snapshot_t = cuttlesim::snapshot_t<state_t>;" in
+
     let p_reg_name_t () =
       let p_decl_rwset_register r =
         p "%s," r.reg_name in
@@ -880,7 +883,7 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
            this measure isn't precise enough to be truly useful, because it
            overestimates log sizes in imperative switches. *)
         use_dynamic_logs && (Array.length rwdata_footprint > 10 ||
-                              Array.length rwset_footprint > 10) in
+                               Array.length rwset_footprint > 10) in
 
       let dl_suffix =
         if use_dynamic_log
@@ -892,7 +895,7 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
       let rw_suffix reg =
         if hpp.cpp_register_kinds reg = Value then "_FAST" else dl_suffix in
       let read reg pt =
-          sprintf "READ%d%s" pt (rw_suffix reg) in
+        sprintf "READ%d%s" pt (rw_suffix reg) in
       let write reg pt = sprintf "WRITE%d%s" pt (rw_suffix reg) in
 
       let p_copy field src dst footprint =
@@ -1064,10 +1067,10 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
         List.rev bindings, body in
 
       let package_intfun fn argspec tau body =
-      { Extr.int_name = hpp.cpp_fn_names fn;
-        Extr.int_argspec = argspec;
-        Extr.int_retSig = tau;
-        Extr.int_body = body } in
+        { Extr.int_name = hpp.cpp_fn_names fn;
+          Extr.int_argspec = argspec;
+          Extr.int_retSig = tau;
+          Extr.int_body = body } in
 
       (* Table mapping function objects to unique names.  This is reset for each
          rules, because each implementation of a function is specific to one
@@ -1170,11 +1173,11 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
            let a2 = p_action false pos (gensym_target (Cuttlebone.Util.argType 2 fsig 1) "y") a2 in
            p_assign_impure target (taint [a1; a2] (p_binop target fn (must_value a1) (must_value a2)))
         | Extr.ExternalCall (_, fn, a) ->
-           let ffi = hpp.cpp_ext_sigs fn in
+           let (ffi, kind) = hpp.cpp_ext_sigs fn in
            let a = p_action false pos (gensym_target ffi.ffi_argtype "x") a in
            Hashtbl.replace program_info.pi_ext_funcalls ffi ();
            (* See ‘Read’ case for why returning just ImpureExpr isn't safe *)
-           let expr = cpp_ext_funcall ffi.ffi_name (must_value a) in
+           let expr = cpp_ext_funcall ffi.ffi_name kind (must_value a) in
            p_assign_impure target (ImpureExpr expr)
         | Extr.InternalCall (_, tau, fn, argspec, rev_args, body) ->
            let fn_name = match snd (lookup_intfun fn argspec tau body) with
@@ -1205,7 +1208,7 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
              res
           | (const, action) :: branches ->
              p_scoped (sprintf "case %s:" (sp_value ~immediate:true const))
-                      (fun () -> p_assign_and_ignore target (p_action true pos target action));
+               (fun () -> p_assign_and_ignore target (p_action true pos target action));
              p "break;";
              loop branches in
         let varname = hpp.cpp_var_names var in
@@ -1243,11 +1246,11 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
       let p_rule_body () =
         p_special_fn "RULE" (fun () ->
             if use_dynamic_log then (p "dynamic_log_t<%d> dlog{};" rule_max_log_size; nl ());
-          (try
-            p_assign_and_ignore NoTarget (p_action true Pos.Unknown NoTarget rule.rl_body);
-           with Failure msg ->
-             let msg = sprintf "In %s: %s" rule_name_unprefixed msg in
-             Printexc.raise_with_backtrace (Failure msg) (Printexc.get_raw_backtrace ()));
+            (try
+               p_assign_and_ignore NoTarget (p_action true Pos.Unknown NoTarget rule.rl_body);
+             with Failure msg ->
+               let msg = sprintf "In %s: %s" rule_name_unprefixed msg in
+               Printexc.raise_with_backtrace (Failure msg) (Printexc.get_raw_backtrace ()));
             nl ();
             p "%s();" commit) in
 
@@ -1333,7 +1336,7 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
     let p_constructor () =
       p_fn ~typ:"explicit" ~name:hpp.cpp_classname
         ~args:"const state_t init = initial_state()"
-        ~annot:" : log(init), Log(init), extfuns{}"
+        ~annot:" : log(init), Log(init), extfuns{}, meta{}"
         (fun () -> p "reset(init);") in
 
     let rec p_scheduler pos s =
@@ -1376,7 +1379,10 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
       sprintf "_flatten %s&" hpp.cpp_classname in
 
     let p_cycle_loop pbody =
-      p_scoped "for (std::uint_fast64_t cycle_id = 0; cycle_id < ncycles; cycle_id++)" pbody in
+      p_scoped "for (std::uint_fast64_t cycle_id = 0;
+                cycle_id < ncycles && !meta.finished;
+                cycle_id++)"
+        pbody in
 
     let p_run () =
       p_fn ~typ:run_typ ~name:"run" ~args:"std::uint_fast64_t ncycles" (fun () ->
@@ -1388,9 +1394,17 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
           p_cycle_loop (fun () -> p "cycle_randomized();"; p "strobe(cycle_id);");
           p "return *this;") in
 
+    let p_finish () =
+      p_fn ~typ:"void" ~name:"finish"
+        ~args:"cuttlesim::exit_info exit_config, int exit_code" (fun () ->
+          p "meta.finished = true;";
+          p "meta.exit_config = exit_config;";
+          p "meta.exit_code = exit_code;") in
+
     let p_snapshot () =
-      p_fn ~typ:"state_t" ~name:"snapshot" (fun () ->
-          p "return Log.snapshot();") in
+      p_fn ~typ:"snapshot_t" ~name:"snapshot" (fun () ->
+          (* Return by value to allow snapshots to outlive their simulation. *)
+          p "return snapshot_t(Log.snapshot(), meta);") in
 
     let p_trace () =
       p_ifnminimal (fun () ->
@@ -1399,11 +1413,11 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
               p "std::ofstream vcd;";
               p "vcd.open(fname);";
               p "state_t::vcd_header(vcd);";
-              p "state_t latest = snapshot();";
+              p "state_t latest = Log.snapshot();";
               p "latest.vcd_dumpvars(vcd, latest, true);";
               p_cycle_loop (fun () ->
                   p "cycle();";
-                  p "state_t current = snapshot();";
+                  p "state_t current = Log.snapshot();";
                   p "vcd << '#' << cycle_id << std::endl;";
                   p "current.vcd_dumpvars(vcd, latest, false);";
                   p "latest = current;";
@@ -1413,6 +1427,8 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
     p_sim_class (fun () ->
         p "public:";
         p_state_t ();
+        nl ();
+        p_snapshot_t ();
         nl ();
 
         p "protected:";
@@ -1426,6 +1442,7 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
         p "log_t log;";
         p "log_t Log;";
         p "extfuns_t extfuns;";
+        p "cuttlesim::sim_metadata meta;";
         nl ();
         p_ifnminimal (fun () ->
             p "std::default_random_engine rng{};";
@@ -1454,6 +1471,8 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
             nl ();
             p_run_randomized ());
         nl ();
+        p_finish ();
+        nl ();
         p_snapshot ();
         nl ();
         p_trace ();
@@ -1480,7 +1499,7 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
     let typ = cpp_type_of_type ffi_rettype in
     p_comment "%s %s(%s);" typ ffi_name (sp_arg ffi_argtype) in
 
-  let sp_extfuns_stub () =
+  let sp_prelude_stub () =
     with_output_to_buffer (fun () ->
         p_scoped "class extfuns" ~terminator:";" (fun () ->
             p "public:";
@@ -1495,7 +1514,7 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
       | Some cpp -> cpp
       | None -> if Hashtbl.length program_info.pi_ext_funcalls = 0
                 then "struct extfuns {};"
-                else Buffer.contents (sp_extfuns_stub ()) in
+                else Buffer.contents (sp_prelude_stub ()) in
 
     let markers =
       [("__CUTTLEC_MODULE_NAME__", hpp.cpp_module_name);
@@ -1546,33 +1565,37 @@ let input_of_sim_package
       (kp: ('pos_t, 'var_t, 'fn_name_t, 'rule_name_t, 'reg_t, 'ext_fn_t) Extr.koika_package_t)
       (sp: ('ext_fn_t) Extr.sim_package_t)
     : ('pos_t, 'var_t, 'fn_name_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_input_t =
+  let open Cuttlebone in
   let rule_names =
-    Extr.scheduler_rules kp.koika_scheduler |> Cuttlebone.Util.dedup in
+    Extr.scheduler_rules kp.koika_scheduler |> Util.dedup in
   let reg_histories, annotated_rules, register_kinds =
-    Cuttlebone.Util.compute_register_histories
+    Util.compute_register_histories
       kp.koika_reg_types kp.koika_reg_finite.finite_elements
       rule_names kp.koika_rules kp.koika_scheduler in
-  let classname = Cuttlebone.Util.string_of_coq_string kp.koika_module_name in
-  let ext_fn_name f = Cuttlebone.Util.string_of_coq_string (sp.sp_ext_fn_names f) in
+  let classname = Util.string_of_coq_string kp.koika_module_name in
+  let ext_fn_sigs f =
+    let spec = sp.sp_ext_fn_specs f in
+    let name = Util.string_of_coq_string spec.efs_name in
+    let fsig = Util.ffi_sig_of_extr_external_sig name (kp.koika_ext_fn_types f) in
+    let kind = if spec.efs_method then `Method else `Function in
+    (fsig, kind) in
   let registers = kp.koika_reg_finite.finite_elements in
   { cpp_classname = classname;
     cpp_module_name = classname;
     cpp_pos_of_pos = (fun _ -> Pos.Unknown);
-    cpp_var_names = (fun x -> Cuttlebone.Util.string_of_coq_string (kp.koika_var_names.show0 x));
-    cpp_fn_names = (fun x -> Cuttlebone.Util.string_of_coq_string (kp.koika_fn_names.show0 x));
+    cpp_var_names = (fun x -> Util.string_of_coq_string (kp.koika_var_names.show0 x));
+    cpp_fn_names = (fun x -> Util.string_of_coq_string (kp.koika_fn_names.show0 x));
     cpp_rule_names = (fun ?prefix:_ rn ->
-      Cuttlebone.Util.string_of_coq_string (kp.koika_rule_names.show0 rn));
+      Util.string_of_coq_string (kp.koika_rule_names.show0 rn));
     cpp_scheduler = kp.koika_scheduler;
     cpp_rules = List.map (cpp_rule_of_koika_package_rule kp reg_histories annotated_rules) rule_names;
     cpp_registers = Array.of_list registers;
-    cpp_register_sigs = Cuttlebone.Util.reg_sigs_of_koika_package kp;
+    cpp_register_sigs = Util.reg_sigs_of_koika_package kp;
     cpp_register_kinds = register_kinds;
-    cpp_ext_sigs =
-      (fun f -> Cuttlebone.Util.ffi_sig_of_extr_external_sig
-                  (ext_fn_name f) (kp.koika_ext_fn_types f));
-    cpp_extfuns = (match sp.sp_extfuns with
+    cpp_ext_sigs = ext_fn_sigs;
+    cpp_extfuns = (match sp.sp_prelude with
                    | None -> None
-                   | Some s -> Some (Cuttlebone.Util.string_of_coq_string s)); }
+                   | Some s -> Some (Util.string_of_coq_string s)); }
 
 let clang_format fname =
   let style = "-style={BasedOnStyle: llvm, ColumnLimit: 100}" in

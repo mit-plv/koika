@@ -94,10 +94,10 @@ Module GCDMachine.
                      koika_scheduler := bring;
                      koika_module_name := "gcd_machine" |};
 
-       ip_sim := {| sp_ext_fn_names := empty_ext_fn_names;
-                   sp_extfuns := None |};
+       ip_sim := {| sp_ext_fn_specs := empty_ext_fn_props;
+                   sp_prelude := None |};
 
-       ip_verilog := {| vp_ext_fn_specs := empty_ext_fn_specs; |} |}.
+       ip_verilog := {| vp_ext_fn_specs := empty_ext_fn_props; |} |}.
 End GCDMachine.
 
 Definition prog := Interop.Backends.register GCDMachine.package.

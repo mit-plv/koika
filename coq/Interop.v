@@ -4,9 +4,11 @@ Require Import
         Koika.Syntax Koika.TypedSyntax Koika.Lowering Koika.CircuitGeneration Koika.Compiler.
 Require Export Koika.Primitives.
 
-Record ext_fn_spec :=
-  { ef_name: string;
-    ef_internal: bool }.
+Record ext_fn_rtl_spec :=
+  { efr_name: string; efr_internal: bool }.
+
+Record ext_fn_sim_spec :=
+  { efs_name: string; efs_method: bool }.
 
 Inductive empty_ext_fn_t :=.
 Definition empty_Sigma (fn: empty_ext_fn_t)
@@ -17,10 +19,8 @@ Definition empty_CSigma (fn: empty_ext_fn_t)
   : CExternalSignature := lower_Sigma empty_Sigma fn.
 Definition empty_csigma fn
   : CSig_denote (empty_CSigma fn) := lower_sigma empty_sigma fn.
-Definition empty_ext_fn_names (fn: empty_ext_fn_t)
-  : string := match fn with end.
-Definition empty_ext_fn_specs (fn: empty_ext_fn_t)
-  : ext_fn_spec := match fn with end.
+Definition empty_ext_fn_props {A} (fn: empty_ext_fn_t)
+  : A := match fn with end.
 
 Instance Lift_empty {A} : Lift empty_ext_fn_t A :=
   fun fn => match fn with end.
@@ -108,23 +108,28 @@ Section Packages.
 
   Record verilog_package_t :=
     {
-      (** [vp_ext_fn_specs]: A map from custom function names to Verilog
-          function specifications (names, and whether they should be implemented
-          using internal or external modules). *)
-      vp_ext_fn_specs: forall fn: ext_fn_t, ext_fn_spec;
+      (** [vp_ext_fn_specs]: A map from custom functions to Verilog specs.  The
+          ‘internal’ part indicates whether calls to the function will become
+          internal module instantiations (true) or input/output wires (false),
+          and the ‘name’ part is used as to construct wire or module names. *)
+      vp_ext_fn_specs: forall fn: ext_fn_t, ext_fn_rtl_spec;
     }.
 
   Record sim_package_t :=
     {
-      (** [sp_ext_fn_names]: A map from custom function names to C++ function
-          names. *)
-      sp_ext_fn_names: forall fn: ext_fn_t, string;
+      (** [vp_ext_fn_names]: A map from custom functions to C++ specs.  The
+          ‘method’ part indicates whether calls to a function need a pointer to
+          the current simulator (this is useful if the function needs to mutate
+          simulator internals).  The ‘name’ part is a C++ function name,
+          possibly prefixed with “template” if the function is templated.  *)
+      sp_ext_fn_specs: forall fn: ext_fn_t, ext_fn_sim_spec;
 
-      (** [sp_extfuns]: A piece of C++ code implementing the custom external
+      (** [sp_prelude]: A piece of C++ code implementing the custom external
           functions used by the program.  This is only needed if [ext_fn_t] is
           non-empty.  It should implement a class called 'extfuns', with public
-          functions named consistently with [sp_ext_fn_names] **)
-      sp_extfuns: option string
+          functions named consistently with [sp_ext_fn_specs].  It can also be a
+          simple #include. **)
+      sp_prelude: option string
     }.
 End Packages.
 

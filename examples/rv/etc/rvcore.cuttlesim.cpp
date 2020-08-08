@@ -94,7 +94,8 @@ struct extfuns_t {
     return current;
   }
 
-  bits<1> ext_finish(struct_maybe_bits_8 req) {
+  template<typename simulator>
+  bits<1> ext_finish(simulator& sim, struct_maybe_bits_8 req) {
     if (req.valid) {
       bits<8> exitcode = req.data;
       if (exitcode == 8'0_b) {
@@ -102,7 +103,7 @@ struct extfuns_t {
       } else {
         printf("  [0;31mFAIL[0m (%d)\n", exitcode.v);
       }
-      std::exit(exitcode.v);
+      sim.finish(cuttlesim::exit_info_none, exitcode.v);
     }
     return 1'0_b;
   }
@@ -186,7 +187,7 @@ public:
 };
 
 #ifdef SIM_MINIMAL
-template simulator::state_t cuttlesim::init_and_run<simulator>(unsigned long long);
+template rv_core::snapshot_t cuttlesim::init_and_run<rv_core>(unsigned long long, std::string&);
 #else
 int main(int argc, char** argv) {
   if (argc <= 1) {

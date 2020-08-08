@@ -47,11 +47,15 @@ Definition sched_circuits :=
 Definition sched_circuits_result :=
   tc_compute (interp_circuits (ContextEnv.(create) r) sigma sched_circuits).
 
-Definition cpp_ext_fn_names fn := match fn with f0 => "cpp_f0" end.
+Definition cpp_ext_fn_names fn :=
+  match fn with
+  | f0 => {| efs_name := "cpp_f0";
+            efs_method := false |}
+  end.
 Definition verilog_ext_fn_specs fn :=
   match fn with
-  | f0 => {| ef_name := "verilog_f0";
-            ef_internal := true |}
+  | f0 => {| efr_name := "verilog_f0";
+            efr_internal := true |}
   end.
 
 Definition package :=
@@ -63,8 +67,8 @@ Definition package :=
                    koika_scheduler := sched;
                    koika_module_name := "extcall" |};
 
-     ip_sim := {| sp_ext_fn_names := cpp_ext_fn_names;
-                 sp_extfuns := Some "class extfuns {
+     ip_sim := {| sp_ext_fn_specs := cpp_ext_fn_specs;
+                 sp_prelude := Some "class extfuns {
 public:
   bits<3> cpp_f0(const bits<3> arg) {
     return ~arg;

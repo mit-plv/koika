@@ -107,8 +107,8 @@ Module UART.
 
   Definition ext_fn_specs (fn : ext_fn_t) :=
     match fn with
-    | ext_read_byte => {| ef_name := "read_byte"; ef_internal := false |}
-    | ext_write_bit => {| ef_name := "write_bit"; ef_internal := false |}
+    | ext_read_byte => {| efr_name := "read_byte"; efr_internal := false |}
+    | ext_write_bit => {| efr_name := "write_bit"; efr_internal := false |}
     end.
 
   Definition package :=
@@ -120,8 +120,8 @@ Module UART.
                      koika_scheduler := uart;
                      koika_module_name := "uart" |};
 
-       ip_sim := {| sp_ext_fn_names := show;
-                   sp_extfuns := None |};
+       ip_sim := {| sp_ext_fn_specs fn := {| efs_name := show fn; efs_method := false |};
+                   sp_prelude := None |};
 
        ip_verilog := {| vp_ext_fn_specs := ext_fn_specs |} |}.
 End UART.
