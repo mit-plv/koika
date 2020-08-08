@@ -396,7 +396,7 @@ Module MessageRouter.
 
   Definition coreToMem : uaction reg_t empty_ext_fn_t :=
     {{ let tiebreaker := read0(private routerTieBreaker) in
-       (* Search for requests, starting with tieBreaker *)
+       (* Search for responses, starting with tieBreaker *)
        let msg_opt := searchResponses (tiebreaker) in
        if (get(msg_opt, valid)) then
          (* enqueue *)
@@ -1569,54 +1569,48 @@ Module ProtocolProcessor.
        let index := getIndex(addr) in
        let entry := (__private__ ext_fromDir).(BookkeepingOutput.deq)() in
        let states := compute_downgrade_tracker(entry, getTag(addr)) in
-       let states2 := set_invalid_at_cache(states, get(req,core_id),get(req,cache_type)) in
-       if ((get(req, MSI_state) == enum MSI { S }) ||
-           states2 == Ob~0~0~0~0) then
+       set states := set_invalid_at_cache(states, get(req,core_id),get(req,cache_type));
+       if ((get(req, MSI_state) == enum MSI { S }) || states == Ob~0~0~0~0) then (
          let data := {invalid (data_t)}() in
          let bypass_opt := read1(private bypass) in
-         (
-           (* if (getState(addr,child) != I) then *)
-         if (states[cache_encoding(get(req,core_id), get(req,cache_type))]) then
-            pass (* (data = invalid) *)
-         else if (get(bypass_opt,valid)) then
-              set data := bypass_opt
-         else
-           let resp := FromMem.(MemResp.deq)() in
-           set data := {valid data_t} (get(resp, data))
-         );
-         (* Parent sending response to child *)
-         ToRouter.(MessageFifo1.enq_resp)(
-                      struct cache_mem_resp { core_id := get(req, core_id);
-                                               cache_type := get(req, cache_type);
-                                               addr := addr;
-                                               MSI_state := get(req, MSI_state);
-                                               data := data
-                                            });
-        let new_entry := struct single_bookkeeping_entry
-                                { entry := struct bookkeeping_row { state := get(req, MSI_state);
-                                                                    tag := getTag(addr)
-                                                                  };
-                                  core_id := get(req, core_id);
-                                  cache_type := get(req, cache_type)
-                                } in
-        let input := struct bookkeeping_input
-                            { idx := getIndex(addr);
-                              write_entry := {valid (struct_t single_bookkeeping_entry)}(new_entry)
-                            } in
-
-         (* let input := struct bookkeeping_input *)
-         (*                    { idx := getIndex(addr); *)
-         (*                       book := {valid (struct_t Bookkeeping_row)}( *)
-         (*                                   struct Bookkeeping_row { state := get(req, MSI_state); *)
-         (*                                                             tag := getTag(addr) *)
-         (*                                                          }); *)
-         (*                       core_id := get(req,core_id); *)
-         (*                       cache_type := get(req, cache_type) *)
-         (*                   } in *)
-         (__private__ ext_toDir).(BookkeepingInput.enq)(input);
-         (* ignore(extcall ext_ppp_bookkeeping (input)); *)
-         write0(private ushr, struct USHR { state := enum USHR_state { Ready };
-                                              req := `UConst (tau := struct_t cache_mem_req) (value_of_bits Bits.zero)` })
+         if (!(states[cache_encoding(get(req,core_id), get(req,cache_type))]
+               || get(bypass_opt,valid)
+               || FromMem.(MemResp.can_deq)())) then
+           (* Not finished downgrading; try again *)
+           pass
+         else (
+           (
+             (* if (getState(addr,child) != I) then *)
+           if (states[cache_encoding(get(req,core_id), get(req,cache_type))]) then
+              pass (* (data = invalid) *)
+           else if (get(bypass_opt,valid)) then
+                set data := bypass_opt
+           else
+             let resp := FromMem.(MemResp.deq)() in
+             set data := {valid data_t} (get(resp, data))
+           );
+           (* Parent sending response to child *)
+           ToRouter.(MessageFifo1.enq_resp)(
+                        struct cache_mem_resp { core_id := get(req, core_id);
+                                                 cache_type := get(req, cache_type);
+                                                 addr := addr;
+                                                 MSI_state := get(req, MSI_state);
+                                                 data := data
+                                              });
+           let new_entry := struct single_bookkeeping_entry
+                                   { entry := struct bookkeeping_row { state := get(req, MSI_state);
+                                                                       tag := getTag(addr)
+                                                                     };
+                                     core_id := get(req, core_id);
+                                     cache_type := get(req, cache_type)
+                                   } in
+           let input := struct bookkeeping_input
+                               { idx := getIndex(addr);
+                                 write_entry := {valid (struct_t single_bookkeeping_entry)}(new_entry)
+                               } in
+           (__private__ ext_toDir).(BookkeepingInput.enq)(input);
+           write0(private ushr, struct USHR { state := enum USHR_state { Ready };
+                                              req := `UConst (tau := struct_t cache_mem_req) (value_of_bits Bits.zero)` })))
        else pass
     }}.
 

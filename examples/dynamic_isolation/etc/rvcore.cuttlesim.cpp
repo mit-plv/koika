@@ -59,6 +59,15 @@ struct bookkeeping {
     }
   }
 
+  void print_entry(int index, struct_bookkeeping_entry entry) {
+	printf("Index: 0x%x, Entry[imem0:(0x%x,%d),dmem0:(0x%x,%d),imem1:(0x%x,%d),dmem1:(0x%x,%d)]\n",
+		           index,
+				   entry.imem0.tag.v, entry.imem0.state,
+				   entry.dmem0.tag.v, entry.dmem0.state,
+				   entry.imem1.tag.v, entry.imem1.state,
+				   entry.dmem1.tag.v, entry.dmem1.state);
+  }
+
   std::optional<struct_bookkeeping_entry> get(bool enable) {
 	if (!last.has_value() || (!enable && !(last->write_entry.valid)))
 	  return std::nullopt;
@@ -72,6 +81,10 @@ struct bookkeeping {
 	  return std::nullopt;
 	} else { // Read
 	  last.reset();
+#if MEM_DEBUG
+	  print_entry(index.v, container[index.v]);
+#endif // MEM_DEBUG
+
 	  return std::optional<struct_bookkeeping_entry>{container[index.v]};
 	}
   }
