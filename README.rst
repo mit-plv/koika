@@ -789,9 +789,12 @@ The following list shows the current state of the repo:
    - |coq/PrimitiveProperties.v|_: Equations showing how to implement functions on structures and arrays as bitfuns
    - |coq/ProgramTactics.v|_: Tactics for proving user-defined circuits
 
+``etc/``
+   - |etc/configure|_: Generate dune files for examples/ and tests/
+
 ``examples/``
    ``fir.v.etc/``
-      - |examples/fir.v.etc/extfuns.hpp|_: C++ implementation of external functions for the function_call example
+      - |examples/fir.v.etc/extfuns.hpp|_: C++ implementation of external functions for the fir example
 
    ``rv/``
       ``etc/``
@@ -990,6 +993,8 @@ The following list shows the current state of the repo:
 .. _coq/Types.v: coq/Types.v
 .. |coq/Vect.v| replace:: ``Vect.v``
 .. _coq/Vect.v: coq/Vect.v
+.. |etc/configure| replace:: ``configure``
+.. _etc/configure: etc/configure
 .. |examples/collatz.lv| replace:: ``collatz.lv``
 .. _examples/collatz.lv: examples/collatz.lv
 .. |examples/collatz.v| replace:: ``collatz.v``
