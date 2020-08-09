@@ -13,6 +13,9 @@ module ext_mem(input CLK, input RST_N, input[69:0] arg, output[69:0] out);
 
 `ifndef MEM_ADDRESS_WIDTH
  `define MEM_ADDRESS_WIDTH 16
+   initial $fwrite(32'h80000002,
+                   "MEM_ADDRESS_WIDTH unset, defaulting to %d",
+                   `MEM_ADDRESS_WIDTH);
 `endif
 
    memory #(.ADDRESS_WIDTH(`MEM_ADDRESS_WIDTH))
