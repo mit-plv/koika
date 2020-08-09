@@ -162,9 +162,13 @@ VERILATOR_FLAGS ?=
 VERILATOR_TOP ?= $(mod).v
 VERILATOR_DRIVER ?= $(shell pwd)/$(mod).verilator.cpp
 VERILATOR_WARNINGS ?= -Wall -Wno-fatal
-VERILATOR_OPT_FLAGS ?= --x-assign fast --x-initial fast --noassert
-VERILATOR_TRACE_FLAGS ?=
 VERILATOR_PREFIX ?= V$(verilator_top)
+VERILATOR_OPT_CFLAGS ?= $(CUTTLESIM_OPT_FLAGS) $(if $(filter g++,$(CXX)),-flto,)
+VERILATOR_OPT_LDFLAGS ?= $(VERILATOR_OPT_CFLAGS)
+VERILATOR_TRACE_CFLAGS ?= $(VERILATOR_OPT_CFLAGS)
+VERILATOR_TRACE_LDFLAGS ?= $(VERILATOR_OPT_LDFLAGS)
+VERILATOR_OPT_FLAGS ?= --x-assign fast --x-initial fast --noassert -CFLAGS '$(VERILATOR_OPT_CFLAGS)' -LDFLAGS '$(VERILATOR_OPT_LDFLAGS)'
+VERILATOR_TRACE_FLAGS ?= -CFLAGS '$(VERILATOR_TRACE_CFLAGS)' -LDFLAGS '$(VERILATOR_TRACE_LDFLAGS)'
 
 ifeq ($(CXX),g++)
 verilator_compiler_flags := --compiler gcc
@@ -192,10 +196,10 @@ $(verilator_tracedir)/$(verilator_prefix).mk: $(verilator_deps)
 
 # $(verilator_deps) because verilator doesn't always update its Makefiles
 $(verilator_optdir)/$(verilator_prefix): $(verilator_optdir)/$(verilator_prefix).mk $(verilator_deps)
-	+$(MAKE) OPT="-O3" -C $(verilator_optdir) -f $(verilator_prefix).mk $(verilator_prefix)
+	+$(MAKE) -C $(verilator_optdir) -f $(verilator_prefix).mk $(verilator_prefix)
 
 $(verilator_tracedir)/$(verilator_prefix): $(verilator_tracedir)/$(verilator_prefix).mk $(verilator_deps)
-	+$(MAKE) OPT="-g" -C $(verilator_tracedir) -f $(verilator_prefix).mk $(verilator_prefix)
+	+$(MAKE) -C $(verilator_tracedir) -f $(verilator_prefix).mk $(verilator_prefix)
 
 $(verilator_optdir)/$(verilator_prefix).xml: $(verilator_deps)
 	verilator $(VERILATOR_WARNINGS) $(verilator_prefix_flag) -xml-only --bbox-sys --Mdir $(verilator_optdir) $(VERILATOR_TOP)
