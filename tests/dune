@@ -12,6 +12,18 @@
 
 
 ;; -*- dune -*-
+(subdir "_objects/cross_cycle.v"
+ (rule (write-file "cross_cycle_extr.v"
+                   "Require Coq.extraction.Extraction tests.cross_cycle.
+Extraction \"cross_cycle.ml\" cross_cycle.prog."))
+ (coq.extraction
+  (prelude cross_cycle_extr)
+  (extracted_modules cross_cycle)
+  (theories Koika tests)
+  (flags "-w" "-overriding-logical-loadpath")))
+
+
+;; -*- dune -*-
 (subdir "_objects/double_write.v"
  (rule (write-file "double_write_extr.v"
                    "Require Coq.extraction.Extraction tests.double_write.
