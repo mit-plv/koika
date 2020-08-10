@@ -2,6 +2,9 @@
 
 /*! Wrapper used to connect the cache model with Kôika !*/
 module ext_cache(input CLK, input RST_N, input[71:0] arg, output[53:0] out, output finish);
+   parameter CORE_ID = 3;
+   parameter CACHE_TY = 3;
+
 
    wire get_valid;
    wire put_valid;
@@ -14,7 +17,9 @@ module ext_cache(input CLK, input RST_N, input[71:0] arg, output[53:0] out, outp
    assign out = {get_ready, put_ready, get_response};
 
 
-   cache m(.CLK(CLK), .RST_N(RST_N),
+   cache #(.CORE_ID(CORE_ID),
+		   .CACHE_TY(CACHE_TY))
+	 m(.CLK(CLK), .RST_N(RST_N),
 		   .get_valid(get_valid), .put_valid(put_valid), .put_request(put_request),
 		   .get_ready(get_ready), .put_ready(put_ready), .get_response(get_response),
 		   .finish(finish));

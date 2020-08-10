@@ -1,4 +1,4 @@
-static int* const SHARED_ADDR = (int*)0x00412340;
+static int* const SHARED_ADDR = (int*)0x00031234;
 
 int write_msg0(int c) {
   *SHARED_ADDR = c;
@@ -14,7 +14,6 @@ int putchar0(int c);
 int main0() {
   int msg;
   write_msg0('X');
- 
   while ((msg = read_msg0()) == 'X') {
   }
  

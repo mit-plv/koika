@@ -81,16 +81,28 @@ module memory(input  CLK,
    wire[ADDRESS_WIDTH - 1:0] addr = translate_address(last_request_addr);
    wire[`REQ_DATA_WIDTH - 1:0] data = mem[addr];
 
-   assign get_ready = RST_N && has_request;
-   assign put_ready = RST_N && (get_valid || !has_request);
+   assign get_ready = RST_N && (has_request && last_request_byte_en == 4'b0000);
+   assign put_ready = RST_N && (get_valid || !has_request || last_request_byte_en != 4'b000);
 
    wire[`REQ_DATA_WIDTH - 1:0] get_response_data = last_request_byte_en == 4'b0000 ? data : 0;
    assign get_response = {last_request_byte_en, last_request_addr, get_response_data};
 
    wire put_wf = put_valid && put_ready;
    wire get_wf = get_valid && get_ready;
+   wire[`REQ_DATA_WIDTH - 1:0] new_v = compute_update(compute_mask(last_request_byte_en), last_request_data, data);
 
    always @(posedge CLK) begin
+`ifdef SIMULATION
+	  if (put_wf) begin
+		 $display("mem req: dEn: %h; addr: %h; data: %h ", put_request_byte_en, put_request_addr, put_request_data);
+
+	  end
+	  if (has_request && get_wf) begin
+		 $display("mem resp: dEn %h, raw_addr %h, addr %h, response_data %h, data %h, new_v %h", last_request_byte_en, last_request_addr, addr, get_response_data, data, new_v);
+	  end
+
+ `endif
+/*
 `ifdef SIMULATION
       if (put_wf && put_request_addr == EXIT_ADDRESS) begin
          if (put_request_data == 0)
@@ -101,9 +113,12 @@ module memory(input  CLK,
          $finish(1'b1);
       end
 `endif
+ */
 
       if (RST_N == 1) begin
          if (has_request) begin
+			$display("Write addr: %h, new_v %h", addr, new_v);
+
             mem[addr] <= compute_update(compute_mask(last_request_byte_en), last_request_data, data);
          end
 
@@ -111,7 +126,7 @@ module memory(input  CLK,
             last_request <= put_request;
          end
 
-         has_request <= put_wf || (has_request && !get_wf);
+         has_request <= put_wf || (has_request && !get_wf && last_request_byte_en == 4'b0000);
       end else begin
          has_request <= 1'b0;
       end

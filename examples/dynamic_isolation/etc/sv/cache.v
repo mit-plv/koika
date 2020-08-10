@@ -23,6 +23,9 @@ module cache(input                          CLK,
 			 output 						finish);
    parameter EXIT_ADDRESS0 = 32'h40001000;
    parameter EXIT_ADDRESS1 = 32'h80001000;
+   parameter CORE_ID = 3;
+   parameter CACHE_TY = 3;
+
    reg has_request;
    reg [`CACHE_REQ_SIZE - 1:0] last_request;
    reg 						   finished;
@@ -111,18 +114,17 @@ module cache(input                          CLK,
 
    always @(posedge CLK) begin
 `ifdef SIMULATION
-	  /*
 	  if (put_wf) begin
-		 $display("req: dEn: %h; tag: %h; index: %h; data:%h; msi_valid: %h; msi_data: %h\n", put_request_byte_en, put_request_tag, put_request_index, put_request_data, put_request_msi_valid, put_request_msi_data);
+		 $display("req: core %d cache %d; dEn: %h; addr: %h, tag: %h; index: %h; data:%h; msi_valid: %h; msi_data: %h", CORE_ID, CACHE_TY, put_request_byte_en, put_request_addr, put_request_tag, put_request_index, put_request_data, put_request_msi_valid, put_request_msi_data);
 	  end
 
 	  if (has_request) begin
-		 $display("resp: index %h, tag %h, data %h, msi %h\n", last_request_index, new_row_tag, new_row_data, new_row_msi);
+		 $display("resp: core %d cache %d; addr: %h, index %h, current[tag %h, data%h, msi %h], new[tag %h, data %h, msi %h]", CORE_ID, CACHE_TY, last_request_addr, last_request_index, current_row_tag, current_row_data, current_row_msi, new_row_tag, new_row_data, new_row_msi);
 	  end
-	   */
 
-      if (put_wf && (put_request_addr == EXIT_ADDRESS0 || put_request_addr == EXIT_ADDRESS1)) begin
-         if (put_request_data == 0)
+      if (has_request && (last_request_addr == EXIT_ADDRESS0 || last_request_addr == EXIT_ADDRESS1)
+		              && last_request_byte_en == 4'b1111) begin
+         if (last_request_data == 0)
     	   $fwrite(32'h80000002, "  [0;32mPASS[0m\n");
     	 else
     	   $fwrite(32'h80000002, "  [0;31mFAIL[0m (%0d)\n", last_request_data);
@@ -132,7 +134,7 @@ module cache(input                          CLK,
 `endif
 
       if (RST_N == 1) begin
-		 if (has_request) begin
+		 if (has_request && !(last_request_addr == EXIT_ADDRESS0 || last_request_addr == EXIT_ADDRESS1)) begin
 			mem[last_request_index] <= {new_row_tag, new_row_data, new_row_msi};
 		 end
 

@@ -41,7 +41,8 @@ cc32i_rv32 = $(cc) -T$(build)/rv32i/singlecore_link_rv32.ld -mabi=ilp32
 cc32i_no_sm_c = $(cc) -T$(build)/rv32i_no_sm/singlecore_link_c.ld -mabi=ilp32
 cc32i_no_sm_rv32 = $(cc) -T$(build)/rv32i_no_sm/singlecore_link_rv32.ld -mabi=ilp32
 
-shared_memory_targets := $(build)/rv32i_no_sm/shared_memory/basic.rv32
+shared_memory_targets := $(build)/rv32i_no_sm/shared_memory/basic.rv32 $(build)/rv32i_no_sm/shared_memory/basic.vmh $(build)/rv32i_no_sm/shared_memory/basic.dump
+
 multicore_targets := $(build)/multicore/basic.rv32 $(build)/multicore/password_manager/pwd_manager.rv32
 all: $(rv32_targets) $(vmh_targets) $(dump_targets) $(multicore_targets) $(shared_memory_targets)
 
@@ -170,7 +171,7 @@ $(build)/%.dump: $(build)/%.o
 	$(objdump) $< > $@
 
 $(build)/%.vmh: $(build)/%.rv32 $(elf2hex)
-	$(elf2hex) $< 0 64K 4 $@
+	$(elf2hex) $< 0 1024K 4 $@
 
 clean:
 	rm -rf $(build)

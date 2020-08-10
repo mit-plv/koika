@@ -77,6 +77,17 @@ module bookkeeping_directory (input CLK,
    wire get_wf = get_valid && get_ready;
 
    always @(posedge CLK) begin
+
+`ifdef SIMULATION
+
+	  if (put_wf && put_request_write_entry_valid) begin
+		 $display("SET idx: %h; core: %h; cache: %h; valid: %h; row %h", put_request_idx, put_request_core_id, put_request_cache_type, put_request_write_entry_valid, put_request_write_entry_row);
+	  end
+
+	   if (put_wf && !put_request_write_entry_valid) begin
+		 $display("GET idx: %h; core: %h; cache: %h", put_request_idx, put_request_core_id, put_request_cache_type);
+	  end
+`endif
       if (RST_N == 1) begin
 		 if (has_request && last_request_write_entry_valid) begin
 			mem[last_request_idx] <= {new_entry_imem0, new_entry_dmem0, new_entry_imem1, new_entry_dmem1};

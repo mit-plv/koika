@@ -91,12 +91,17 @@ module top(input CLK, input RST_N, output uart_wr_valid0, output[7:0] uart_wr_da
              .ext_led1_out(led1)
 			);
 
-   ext_mem mainmem(.CLK(CLK), .RST_N(RST_N), .arg(mainmem_arg), .out(mainmem_out));
-   ext_cache imem0(.CLK(CLK), .RST_N(RST_N), .arg(cache_imem0_arg), .out(cache_imem0_out), .finish(imem0_finish));
-   ext_cache dmem0(.CLK(CLK), .RST_N(RST_N), .arg(cache_dmem0_arg), .out(cache_dmem0_out), .finish(dmem0_finish));
-   ext_cache imem1(.CLK(CLK), .RST_N(RST_N), .arg(cache_imem1_arg), .out(cache_imem1_out), .finish(imem1_finish));
-   ext_cache dmem1(.CLK(CLK), .RST_N(RST_N), .arg(cache_dmem1_arg), .out(cache_dmem1_out), .finish(dmem1_finish));
    ext_bookkeeping bookkeeping_dir (.CLK(CLK), .RST_N(RST_N), .arg(ppp_bookkeeping_arg), .out(ppp_bookkeeping_out));
+   ext_mem mainmem(.CLK(CLK), .RST_N(RST_N), .arg(mainmem_arg), .out(mainmem_out));
+   ext_cache #(.CORE_ID(0), .CACHE_TY(0))
+             imem0(.CLK(CLK), .RST_N(RST_N), .arg(cache_imem0_arg), .out(cache_imem0_out), .finish(imem0_finish));
+   ext_cache #(.CORE_ID(0), .CACHE_TY(1))
+	         dmem0(.CLK(CLK), .RST_N(RST_N), .arg(cache_dmem0_arg), .out(cache_dmem0_out), .finish(dmem0_finish));
+   ext_cache #(.CORE_ID(1), .CACHE_TY(0))
+             imem1(.CLK(CLK), .RST_N(RST_N), .arg(cache_imem1_arg), .out(cache_imem1_out), .finish(imem1_finish));
+   ext_cache #(.CORE_ID(1), .CACHE_TY(1))
+             dmem1(.CLK(CLK), .RST_N(RST_N), .arg(cache_dmem1_arg), .out(cache_dmem1_out), .finish(dmem1_finish));
+
 
    always @(posedge CLK)
      if (led_wr_valid0)
@@ -108,8 +113,8 @@ module top(input CLK, input RST_N, output uart_wr_valid0, output[7:0] uart_wr_da
 
 `ifdef SIMULATION
    always @(posedge CLK) begin
-	  core0_done <= core0_done || dmem0_finish;
-	  core1_done <= core1_done || dmem1_finish;
+	  core0_done <= core0_done || dmem0_finish || imem0_finish;
+	  core1_done <= core1_done || dmem1_finish || imem1_finish;
 
 	  if (core0_done && core1_done) begin
 		 $finish(1'b1);
