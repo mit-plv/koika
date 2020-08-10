@@ -1383,10 +1383,10 @@ namespace cuttlesim {
   Log.state.reg
 #define READ1_FAST(reg) \
   log.state.reg
-#define WRITE0_FAST(reg, val) \
-  log.state.reg = (val)
-#define WRITE1_FAST(reg, val) \
-  log.state.reg = (val)
+#define WRITE0_FAST(reg, ...) \
+  log.state.reg = (__VA_ARGS__)
+#define WRITE1_FAST(reg, ...) \
+  log.state.reg = (__VA_ARGS__)
 
 /// ## Alternative implementations of read, write, and fail
 
