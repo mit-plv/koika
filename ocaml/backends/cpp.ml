@@ -1166,11 +1166,13 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
         | Extr.Unop (_, fn, a) ->
            let fsig = Extr.PrimSignatures.coq_Sigma1 fn in
            let a = p_action false pos (gensym_target (Cuttlebone.Util.argType 1 fsig 0) "x") a in
+           register_subtypes program_info (Cuttlebone.Util.retSig fsig);
            p_assign_impure target (taint [a] (p_unop fn (must_value a)))
         | Extr.Binop (_, fn, a1, a2) ->
            let fsig = Extr.PrimSignatures.coq_Sigma2 fn in
            let a1 = p_action false pos (maybe_gensym_target target (Cuttlebone.Util.argType 2 fsig 0) "x") a1 in
            let a2 = p_action false pos (gensym_target (Cuttlebone.Util.argType 2 fsig 1) "y") a2 in
+           register_subtypes program_info (Cuttlebone.Util.retSig fsig);
            p_assign_impure target (taint [a1; a2] (p_binop target fn (must_value a1) (must_value a2)))
         | Extr.ExternalCall (_, fn, a) ->
            let (ffi, kind) = hpp.cpp_ext_sigs fn in
