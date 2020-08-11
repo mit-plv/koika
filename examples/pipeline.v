@@ -109,12 +109,12 @@ Definition package :=
                    koika_module_name := "pipeline" |};
 
      ip_sim := {| sp_ext_fn_specs fn :=
-                   {| efs_name := ext_fn_names;
+                   {| efs_name := ext_fn_names fn;
                       efs_method := false |};
                  sp_prelude := Some cpp_extfuns |};
 
      ip_verilog := {| vp_ext_fn_specs fn :=
-                       {| efr_name := ext_fn_names;
+                       {| efr_name := ext_fn_names fn;
                           efr_internal := true |} |} |}.
 
 Definition prog := Interop.Backends.register package.
