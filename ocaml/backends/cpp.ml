@@ -1333,6 +1333,8 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
     let p_reset () =
       p_fn ~typ:"void" ~name:"reset" ~args:"const state_t init = initial_state()" (fun () ->
           p "log = Log = log_t(init);";
+          p "extfuns = {};";
+          p "meta = {};";
           p_ifnminimal (fun () -> p "rng.seed(cuttlesim::random_seed);")) in
 
     let p_constructor () =
