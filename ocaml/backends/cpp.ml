@@ -728,9 +728,13 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
           r.reg_name r.reg_name r.reg_name in
       let p_vcd_dumpvars () =
         p_fn ~typ:"void" ~name:"vcd_dumpvars"
-          ~args:(sprintf "%s, %s, %s" "_unused std::ostream& os"
-                   "const state_t& previous" "const bool force")
+          ~args:(sprintf "%s, %s, %s, %s"
+                   "std::uint_fast64_t cycle_id"
+                   "_unused std::ostream& os"
+                   "const state_t& previous"
+                   "const bool force")
           ~annot:" const" (fun () ->
+            p "os << '#' << cycle_id << std::endl;";
             iter_all_registers p_dumpvar) in
 
       p_ifnminimal (fun () ->
@@ -1418,12 +1422,11 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
               p "vcd.open(fname);";
               p "state_t::vcd_header(vcd);";
               p "state_t latest = Log.snapshot();";
-              p "latest.vcd_dumpvars(vcd, latest, true);";
+              p "latest.vcd_dumpvars(0, vcd, latest, true);";
               p_cycle_loop (fun () ->
                   p "cycle();";
                   p "state_t current = Log.snapshot();";
-                  p "vcd << '#' << cycle_id << std::endl;";
-                  p "current.vcd_dumpvars(vcd, latest, false);";
+                  p "current.vcd_dumpvars(cycle_id, vcd, latest, false);";
                   p "latest = current;";
                   p "strobe(cycle_id);");
               p "return *this;")) in
