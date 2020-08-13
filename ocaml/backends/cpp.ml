@@ -1355,33 +1355,39 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
          p "%s();" (hpp.cpp_rule_names rl_name);
          p_scheduler pos s
       | Extr.Try (rl_name, s1, s2) ->
-         p_scoped (sprintf "if (%s())" (hpp.cpp_rule_names rl_name)) (fun () -> p_scheduler pos s1);
+         p_scoped (sprintf "if (%s())" (hpp.cpp_rule_names rl_name)) (fun () ->
+             p_scheduler pos s1);
          p_scoped "else" (fun () -> p_scheduler pos s2)
       | Extr.SPos (pos, s) ->
          p_scheduler (hpp.cpp_pos_of_pos pos) s in
 
     let p_strobe () =
-      p "virtual void strobe(std::uint_fast64_t _unused ncycles) const {}" in
+      p "_virtual void strobe() const {}" in
+
+    let p_cycle_function pscheduler =
+      p "meta.cycle_id++;";
+      p "log.rwset = Log.rwset = rwset_t{};";
+      pscheduler ();
+      p "strobe();" in
 
     let p_cycle () =
       p_fn ~typ:"void" ~name:"cycle" (fun () ->
-          p "log.rwset = Log.rwset = rwset_t{};";
-          p_scheduler Pos.Unknown hpp.cpp_scheduler) in
+          p_cycle_function (fun () ->
+              p_scheduler Pos.Unknown hpp.cpp_scheduler)) in
 
     let p_cycle_randomized () =
-      let has_rules = hpp.cpp_rules <> [] in
       let nrules = List.length hpp.cpp_rules in
       let prefix = sprintf "%s::" hpp.cpp_classname in
       p "typedef bool (%s*rule_ptr)();" prefix;
       p_fn ~typ:"void" ~name:"cycle_randomized" (fun () ->
-          p "log.rwset = Log.rwset = rwset_t{};";
-          if has_rules then
-            let decl = sprintf "static constexpr rule_ptr rules[%d]" nrules in
-            p_scoped decl ~terminator:";" (fun () ->
-                iter_sep (fun () -> p ",") (fun { rl_name; _ } ->
-                    pr "&%s%s" prefix (hpp.cpp_rule_names rl_name))
-                  hpp.cpp_rules);
-            p "(this->*rules[uniform(rng)])();") in
+          p_cycle_function (fun () ->
+              if nrules > 0 then
+                let decl = sprintf "static constexpr rule_ptr rules[%d]" nrules in
+                p_scoped decl ~terminator:";" (fun () ->
+                    iter_sep (fun () -> p ",") (fun { rl_name; _ } ->
+                        pr "&%s%s" prefix (hpp.cpp_rule_names rl_name))
+                      hpp.cpp_rules);
+                p "(this->*rules[uniform(rng)])();")) in
 
     let run_typ =
       sprintf "_flatten %s&" hpp.cpp_classname in
@@ -1392,14 +1398,9 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
                 cycle_id++)"
         pbody in
 
-    let p_run () =
-      p_fn ~typ:run_typ ~name:"run" ~args:"std::uint_fast64_t ncycles" (fun () ->
-          p_cycle_loop (fun () -> p "cycle();"; p_ifnminimal (fun () -> p "strobe(cycle_id);"));
-          p "return *this;") in
-
-    let p_run_randomized () =
-      p_fn ~typ:run_typ ~name:"run_randomized" ~args:"std::uint_fast64_t ncycles" (fun () ->
-          p_cycle_loop (fun () -> p "cycle_randomized();"; p "strobe(cycle_id);");
+    let p_run name cycle =
+      p_fn ~typ:run_typ ~name ~args:"std::uint_fast64_t ncycles" (fun () ->
+          p_cycle_loop (fun () -> p "%s();" cycle);
           p "return *this;") in
 
     let p_finish () =
@@ -1414,22 +1415,19 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
           (* Return by value to allow snapshots to outlive their simulation. *)
           p "return snapshot_t(Log.snapshot(), meta);") in
 
-    let p_trace () =
-      p_ifnminimal (fun () ->
-          p_fn ~typ:run_typ ~name:"trace"
-            ~args:"std::string fname, std::uint_fast64_t ncycles" (fun () ->
-              p "std::ofstream vcd;";
-              p "vcd.open(fname);";
-              p "state_t::vcd_header(vcd);";
-              p "state_t latest = Log.snapshot();";
-              p "latest.vcd_dumpvars(0, vcd, latest, true);";
-              p_cycle_loop (fun () ->
-                  p "cycle();";
-                  p "state_t current = Log.snapshot();";
-                  p "current.vcd_dumpvars(cycle_id, vcd, latest, false);";
-                  p "latest = current;";
-                  p "strobe(cycle_id);");
-              p "return *this;")) in
+    let p_trace name cycle =
+      p_fn ~typ:run_typ ~name
+        ~args:"std::string fname, std::uint_fast64_t ncycles" (fun () ->
+          p "std::ofstream vcd(fname);";
+          p "state_t::vcd_header(vcd);";
+          p "state_t latest = Log.snapshot();";
+          p "latest.vcd_dumpvars(0, vcd, latest, true);";
+          p_cycle_loop (fun () ->
+              p "%s();" cycle;
+              p "state_t current = Log.snapshot();";
+              p "current.vcd_dumpvars(cycle_id, vcd, latest, false);";
+              p "latest = current;");
+          p "return *this;") in
 
     p_sim_class (fun () ->
         p "public:";
@@ -1460,30 +1458,30 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
         nl ();
 
         p "public:";
+        p_finish ();
+        nl ();
+        p_snapshot ();
+        nl ();
         p_initial_state ();
         nl ();
         p_reset ();
         nl ();
         p_constructor ();
         nl ();
+        p_strobe ();
+        nl ();
         p_cycle ();
         nl ();
-        p_ifnminimal (fun () ->
-            p_strobe ());
-        nl ();
-        p_run ();
+        p_run "run" "cycle";
         nl ();
         p_ifnminimal (fun () ->
             p_cycle_randomized ();
             nl ();
-            p_run_randomized ());
-        nl ();
-        p_finish ();
-        nl ();
-        p_snapshot ();
-        nl ();
-        p_trace ();
-        nl ()) in
+            p_run "run_randomized" "cycle_randomized";
+            nl ();
+            p_trace "trace" "cycle";
+            nl ();
+            p_trace "trace_randomized" "cycle_randomized")) in
 
   let with_output_to_buffer (pbody: unit -> unit) =
     let buf = set_buffer (Buffer.create 4096) in

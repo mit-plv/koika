@@ -49,6 +49,12 @@ static inline void _sim_assert_fn(const char* repr,
 #define _unoptimized
 #endif
 
+#ifndef SIM_MINIMAL
+#define _virtual virtual
+#else
+#define _virtual
+#endif
+
 #if defined(SIM_MINIMAL) && defined(SIM_KEEP_DISPLAY)
 #define _display_unoptimized _unoptimized
 #else
@@ -1207,6 +1213,7 @@ namespace cuttlesim {
     bool finished;
     int exit_code;
     int exit_config;
+    std::uint_fast64_t cycle_id;
 
     sim_metadata() :
       finished{false},
