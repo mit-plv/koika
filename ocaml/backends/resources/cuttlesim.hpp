@@ -67,10 +67,12 @@ static inline void _sim_assert_fn(const char* repr,
 #define _flatten
 #endif
 
-#ifdef SIM_NOINLINE
-#define _noinline __attribute__((noinline))
+#if defined(SIM_NOINLINE)
+#define _inline __attribute__((noinline))
+#elif defined(SIM_ALWAYS_INLINE)
+#define _inline __attribute__((always_inline))
 #else
-#define _noinline
+#define _inline
 #endif
 
 #define _noreturn __attribute__((noreturn))
@@ -1349,7 +1351,7 @@ namespace cuttlesim {
   bool PASTE_EXPANDED_3(fn, RULE_NAME, fname)(__VA_ARGS__) noexcept
 
 #define RULE_DECL(ret_type, name, rl) \
-  _noinline ret_type PASTE_ARGS_2(name, rl)() noexcept
+  _inline ret_type PASTE_ARGS_2(name, rl)() noexcept
 
 #define DEF_RULE(rl) RULE_DECL(bool, rule, rl)
 #define DEF_RESET(rl) RULE_DECL(void, reset, rl)
