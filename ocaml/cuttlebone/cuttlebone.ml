@@ -220,7 +220,7 @@ module Util = struct
     let sbit b =
       if b then "1" else "0" in
     let zerop bs =
-      Array.length bs > 0 && Array.for_all (fun b -> b = false) bs in
+      Array.for_all (fun b -> b = false) bs in
     let bitstring =
       if zerop bs then "0"
       else let bits = List.rev_map sbit (Array.to_list bs) in
