@@ -16,7 +16,7 @@ CUTTLESIM_DRIVER ?= $(mod).cpp
 CUTTLESIM_OPT_FLAGS ?= __CUTTLEC_CXX_OPT_FLAGS__
 CUTTLESIM_TRACE_FLAGS ?= -DSIM_TRACE $(CUTTLESIM_OPT_FLAGS)
 CUTTLESIM_DEBUG_FLAGS ?= -O0 -ggdb3
-CUTTLESIM_PERF_FLAGS ?= -DSIM_NOINLINE $(CUTTLESIM_OPT_FLAGS) $(CUTTLESIM_DEBUG_FLAGS)
+CUTTLESIM_PERF_FLAGS ?= $(CUTTLESIM_OPT_FLAGS) -ggdb3
 CUTTLESIM_COV_FLAGS ?= $(CUTTLESIM_DEBUG_FLAGS)
 CUTTLESIM_S_FLAGS ?= -DSIM_MINIMAL -fverbose-asm
 CUTTLESIM_WARNINGS ?= __CUTTLEC_CXX_WARNINGS__
@@ -386,7 +386,7 @@ help:
 	@echo '      CUTTLESIM_DEBUG_FLAGS = $(CUTTLESIM_DEBUG_FLAGS)'
 	@echo '        C++ compiler flags used in debug mode'
 	@echo '      CUTTLESIM_PERF_FLAGS = $(CUTTLESIM_PERF_FLAGS)'
-	@echo '        C++ compiler flags used in perf mode'
+	@echo '        C++ compiler flags used in perf mode (consider -DSIM_NOINLINE -Og)'
 	@echo '      CUTTLESIM_COV_FLAGS = $(CUTTLESIM_COV_FLAGS)'
 	@echo '        C++ compiler flags used in coverage mode'
 	@echo '      CUTTLESIM_S_FLAGS = $(CUTTLESIM_S_FLAGS)'
