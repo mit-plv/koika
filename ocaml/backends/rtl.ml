@@ -283,7 +283,8 @@ module Verilog : RTLBackend = struct
     p_stmt out 1 "assign %s = %s" name expr
 
   let sp_type kind sz =
-    if sz = 1 then kind else sprintf "%s[%d:0]" kind (pred sz)
+    (* if sz = 1 then kind else *) (* Printing wires as [0:0] allows slicing into them *)
+    sprintf "%s[%d:0]" kind (pred sz)
 
   let p_decl out kind sz ?expr name =
     let typ = sp_type kind sz in
