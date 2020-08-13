@@ -1341,6 +1341,21 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
           p "meta = {};";
           p_ifnminimal (fun () -> p "rng.seed(cuttlesim::random_seed);")) in
 
+    let p_finish () =
+      p_fn ~typ:"void" ~name:"finish"
+        ~args:"cuttlesim::exit_info exit_config, int exit_code" (fun () ->
+          p "meta.finished = true;";
+          p "meta.exit_config = exit_config;";
+          p "meta.exit_code = exit_code;");
+      nl();
+      p_fn ~typ:"bool" ~name:"finished" (fun () ->
+          p "return meta.finished;") in
+
+    let p_snapshot () =
+      p_fn ~typ:"snapshot_t" ~name:"snapshot" (fun () ->
+          (* Return by value to allow snapshots to outlive their simulation. *)
+          p "return snapshot_t(Log.snapshot(), meta);") in
+
     let p_constructor () =
       p_fn ~typ:"explicit" ~name:hpp.cpp_classname
         ~args:"const state_t init = initial_state()"
@@ -1402,18 +1417,6 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
       p_fn ~typ:run_typ ~name ~args:"std::uint_fast64_t ncycles" (fun () ->
           p_cycle_loop (fun () -> p "%s();" cycle);
           p "return *this;") in
-
-    let p_finish () =
-      p_fn ~typ:"void" ~name:"finish"
-        ~args:"cuttlesim::exit_info exit_config, int exit_code" (fun () ->
-          p "meta.finished = true;";
-          p "meta.exit_config = exit_config;";
-          p "meta.exit_code = exit_code;") in
-
-    let p_snapshot () =
-      p_fn ~typ:"snapshot_t" ~name:"snapshot" (fun () ->
-          (* Return by value to allow snapshots to outlive their simulation. *)
-          p "return snapshot_t(Log.snapshot(), meta);") in
 
     let p_trace name cycle =
       p_fn ~typ:run_typ ~name
