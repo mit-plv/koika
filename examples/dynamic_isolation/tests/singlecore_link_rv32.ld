@@ -6,7 +6,7 @@ _ADDRESS_WIDTH = 16; /* 256kiB of memory, 64kiB of stack */
 _MEMSIZE = (1 << _ADDRESS_WIDTH) * 4;
 _MIN_STACK_SIZE = (1 << _ADDRESS_WIDTH);
 
-_ORIGIN1 = 0x00100000;
+_ORIGIN1 = 0x00010000;
 _fstack0 = _MEMSIZE - 4;
 _fstack1 = _ORIGIN1 + (_MEMSIZE - 4);
 
@@ -14,7 +14,7 @@ _MEMSIZE = (1 << _ADDRESS_WIDTH) * 4;
 _MIN_STACK_SIZE = (1 << _ADDRESS_WIDTH);
 _fstack = _MEMSIZE - 4;
 
-_ORIGIN2 = 0x00200000;
+_ORIGIN2 = 0x00020000;
 
 MEMORY {
   mem0 (rx) : ORIGIN = 0x0, LENGTH = _MEMSIZE - _MIN_STACK_SIZE

@@ -93,6 +93,7 @@ module memory(input  CLK,
 
    always @(posedge CLK) begin
 `ifdef SIMULATION
+/*
 	  if (put_wf) begin
 		 $display("mem req: dEn: %h; addr: %h; data: %h ", put_request_byte_en, put_request_addr, put_request_data);
 
@@ -100,6 +101,7 @@ module memory(input  CLK,
 	  if (has_request && get_wf) begin
 		 $display("mem resp: dEn %h, raw_addr %h, addr %h, response_data %h, data %h, new_v %h", last_request_byte_en, last_request_addr, addr, get_response_data, data, new_v);
 	  end
+    */
 
  `endif
 /*
@@ -117,7 +119,7 @@ module memory(input  CLK,
 
       if (RST_N == 1) begin
          if (has_request) begin
-			$display("Write addr: %h, new_v %h", addr, new_v);
+//			$display("Write addr: %h, new_v %h", addr, new_v);
 
             mem[addr] <= compute_update(compute_mask(last_request_byte_en), last_request_data, data);
          end

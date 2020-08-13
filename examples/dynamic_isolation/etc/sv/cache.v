@@ -114,6 +114,7 @@ module cache(input                          CLK,
 
    always @(posedge CLK) begin
 `ifdef SIMULATION
+/*
 	  if (put_wf) begin
 		 $display("req: core %d cache %d; dEn: %h; addr: %h, tag: %h; index: %h; data:%h; msi_valid: %h; msi_data: %h", CORE_ID, CACHE_TY, put_request_byte_en, put_request_addr, put_request_tag, put_request_index, put_request_data, put_request_msi_valid, put_request_msi_data);
 	  end
@@ -121,6 +122,7 @@ module cache(input                          CLK,
 	  if (has_request) begin
 		 $display("resp: core %d cache %d; addr: %h, index %h, current[tag %h, data%h, msi %h], new[tag %h, data %h, msi %h]", CORE_ID, CACHE_TY, last_request_addr, last_request_index, current_row_tag, current_row_data, current_row_msi, new_row_tag, new_row_data, new_row_msi);
 	  end
+    */
 
       if (has_request && (last_request_addr == EXIT_ADDRESS0 || last_request_addr == EXIT_ADDRESS1)
 		              && last_request_byte_en == 4'b1111) begin
