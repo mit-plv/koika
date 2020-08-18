@@ -272,7 +272,7 @@ module Util = struct
         (rules: rule_name_t -> ('pos_t, 'var_t, fn_name_t, reg_t, 'ext_fn_t) Extr.rule)
         (scheduler: ('pos_t, rule_name_t) Extr.scheduler)
       : (rule_name_t -> reg_t -> Extr.register_history)
-        * (rule_name_t -> ('pos_t, 'var_t, fn_name_t, reg_t, 'fn_t) Extr.annotated_rule)
+        * (rule_name_t -> ('pos_t, 'var_t, fn_name_t, reg_t, 'ext_fn_t) Extr.annotated_rule)
         * (reg_t -> Extr.register_kind) =
     (* Taking in a list of rules allows us to ensure that we annotate all rules,
        not just those mentioned in the scheduler. *)

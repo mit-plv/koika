@@ -1561,7 +1561,7 @@ let input_of_compile_unit (cu: 'f Cuttlebone.Compilation.compile_unit) =
     cpp_registers = Array.of_list cu.c_registers;
     cpp_register_sigs = (fun r -> r);
     cpp_register_kinds = register_kinds;
-    cpp_ext_sigs = (fun f -> f);
+    cpp_ext_sigs = (fun f -> f, `Function); (* FIXME add syntax for methods *)
     cpp_extfuns = cu.c_cpp_preamble; }
 
 let cpp_rule_of_koika_package_rule (kp: _ Extr.koika_package_t)
