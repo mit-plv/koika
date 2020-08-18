@@ -339,6 +339,7 @@ namespace prims {
 
     template <uint base, uint64_t max, uint64_t num>
     constexpr uint64_t parse_u64() noexcept {
+      static_assert(max >= num, "Overflow in literal parsing");
       return num;
     }
 
