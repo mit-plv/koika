@@ -5,6 +5,8 @@ Require Import Coq.Lists.List.
 Require Import Koika.Std.
 Require Import rv.RVEncoding.
 Require Import rv.Scoreboard.
+Require Import rv.Btb.
+Require Import rv.Bht.
 Require Import rv.Multiplier.
 
 Section RV32Helpers.
@@ -314,7 +316,7 @@ Section RV32Helpers.
                           :: ("taken" , bits_t 1)
                           :: nil |}.
 
-  Definition execControl32 : UInternalFunction reg_t empty_ext_fn_t :=
+  Definition execControl32 bht_update_hook : UInternalFunction reg_t empty_ext_fn_t :=
     {{
         fun execControl32 (inst    : bits_t 32)
           (rs1_val : bits_t 32)
@@ -350,6 +352,7 @@ Section RV32Helpers.
                              | #funct3_BGEU => !(rs1_val < rs2_val)
                              return default: Ob~0
                              end);
+                 `bht_update_hook`;
                  if (taken) then
                    set nextPC := (pc + imm_val)
                  else
@@ -380,7 +383,8 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
     {| struct_name := "fetch_bookkeeping";
        struct_fields := [("pc"    , bits_t 32);
                          ("ppc"   , bits_t 32);
-                         ("epoch" , bits_t 1)] |}.
+                         ("epoch" , bits_t 1);
+                         ("depoch" , bits_t 1)] |}.
 
   Definition decode_bookkeeping :=
     {| struct_name := "decode_bookkeeping";
@@ -448,6 +452,20 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
   End ScoreboardParams.
   Module Scoreboard := Scoreboard ScoreboardParams.
 
+  Module BhtParams <: Bht_sig.
+    Definition idx_sz := 8.
+    Definition addr := 32.
+  End BhtParams.
+  Module Bht := Bht BhtParams.
+
+  Module BtbParams <: Btb_sig.
+    Definition idx_sz := 6.
+    Definition tag := (32-8).
+    Definition addr := 32.
+  End BtbParams.
+  Module Btb := Btb BtbParams.
+
+
   (* Declare state *)
   Inductive reg_t :=
   | toIMem (state: MemReq.reg_t)
@@ -461,10 +479,14 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
   | rf (state: Rf.reg_t)
   | mulState (state: Multiplier.reg_t)
   | scoreboard (state: Scoreboard.reg_t)
+  | bht (state: Bht.reg_t)
+  | btb (state: Btb.reg_t)
   | cycle_count
   | instr_count
   | pc
-  | epoch.
+  | epoch
+  | depoch
+.
 
   (* State type *)
   Definition R idx :=
@@ -479,11 +501,14 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
     | e2w r => fromExecute.R r
     | rf r => Rf.R r
     | scoreboard r => Scoreboard.R r
+    | bht r => Bht.R r
+    | btb r => Btb.R r
     | mulState r => Multiplier.R r
     | pc => bits_t 32
     | cycle_count => bits_t 32
     | instr_count => bits_t 32
     | epoch => bits_t 1
+    | depoch => bits_t 1
     end.
 
   (* Initial values *)
@@ -499,11 +524,14 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
     | d2e s => fromDecode.r s
     | e2w s => fromExecute.r s
     | scoreboard s => Scoreboard.r s
+    | bht r => Bht.r r
+    | btb r => Btb.r r
     | mulState s => Multiplier.r s
     | pc => Bits.zero
     | cycle_count => Bits.zero
     | instr_count => Bits.zero
     | epoch => Bits.zero
+    | depoch => Bits.zero
     end.
 
   (* External functions, used to model memory *)
@@ -550,13 +578,16 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
                               byte_en := |4`d0|; (* Load *)
                               addr := pc;
                               data := |32`d0| } in
+        (* let newPC := pc + |32`d4| in *)
+        let newPC :=  btb.(Btb.predPc)(pc) in
         let fetch_bookkeeping := struct fetch_bookkeeping {
                                           pc := pc;
-                                          ppc := pc + |32`d4|;
-                                          epoch := read1(epoch)
+                                          ppc := newPC;
+                                          epoch := read1(epoch);
+                                          depoch := read1(depoch)
                                         } in
         toIMem.(MemReq.enq)(req);
-        write1(pc, pc + |32`d4|);
+        write1(pc, newPC);
         f2d.(fromFetch.enq)(fetch_bookkeeping)
     }}.
 
@@ -582,7 +613,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
         let instr := get(instr,data) in
         let fetched_bookkeeping := f2dprim.(waitFromFetch.deq)() in
         let decodedInst := decode_fun(instr) in
-        when (get(fetched_bookkeeping, epoch) == read1(epoch)) do
+        when ((get(fetched_bookkeeping, epoch) == read1(epoch)) && (get(fetched_bookkeeping, depoch) == read1(depoch))) do
              (let rs1_idx := get(getFields(instr), rs1) in
              let rs2_idx := get(getFields(instr), rs2) in
              let score1 := scoreboard.(Scoreboard.search)(sliceReg(rs1_idx)) in
@@ -593,14 +624,24 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
                   scoreboard.(Scoreboard.insert)(sliceReg(rd_idx)));
              let rs1 := rf.(Rf.read_1)(sliceReg(rs1_idx)) in
              let rs2 := rf.(Rf.read_1)(sliceReg(rs2_idx)) in
+             let imm := getImmediate(decodedInst) in
+             let isControl := instr[|5`d4| :+ 3] == Ob~1~1~0 in
+             let isJAL     := (instr[|5`d2|] == Ob~1) && (instr[|5`d3|] == Ob~1) in
+             let isJALR    := (instr[|5`d2|] == Ob~1) && (instr[|5`d3|] == Ob~0) in
+	     let temp_ppcDP := (if isControl && !isJAL && !isJALR then bht.(Bht.ppcDP)(get(fetched_bookkeeping,pc), imm + get(fetched_bookkeeping,pc)) else get(fetched_bookkeeping, ppc)) in
+	     let ppcDP := (if isJAL then imm + get(fetched_bookkeeping,pc) else temp_ppcDP) in
+	     (when (ppcDP != get(fetched_bookkeeping,ppc)) do
+               (write0(depoch, read0(depoch)+Ob~1);
+               write0(pc, ppcDP)));
              let decode_bookkeeping := struct decode_bookkeeping {
                                                 pc    := get(fetched_bookkeeping, pc);
-                                                ppc   := get(fetched_bookkeeping, ppc);
+                                                ppc   := ppcDP;
                                                 epoch := get(fetched_bookkeeping, epoch);
                                                 dInst := decodedInst;
                                                 rval1 := rs1;
                                                 rval2 := rs2
                                               } in
+
              d2e.(fromDecode.enq)(decode_bookkeeping))
     }}.
 
@@ -635,6 +676,8 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
     }}.
 
   Definition execute : uaction reg_t ext_fn_t :=
+    let execControl32 := execControl32 ({{bht.(Bht.update)(pc, taken)}}) in
+    (* let execControl32 := execControl32 ({{pass}}) in *)
     {{
         let decoded_bookkeeping := d2e.(fromDecode.deq)() in
         if get(decoded_bookkeeping, epoch) == read0(epoch) then
@@ -683,11 +726,11 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
                pass;
              let controlResult := execControl32(fInst, rs1_val, rs2_val, imm, pc) in
              let nextPc := get(controlResult,nextPC) in
-             if nextPc != get(decoded_bookkeeping, ppc) then
+             (when (nextPc != get(decoded_bookkeeping, ppc)) do (
                write0(epoch, read0(epoch)+Ob~1);
-               write0(pc, nextPc)
-             else
-               pass;
+               write0(pc, nextPc);
+               btb.(Btb.update)(pc,nextPc)
+              ));
              let execute_bookkeeping := struct execute_bookkeeping {
                                                  isUnsigned := isUnsigned;
                                                  size := size;
@@ -874,6 +917,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
   Instance FiniteType_d2e : FiniteType fromDecode.reg_t := _.
   Instance FiniteType_e2w : FiniteType fromExecute.reg_t := _.
 
+
   Instance Show_rf : Show (Rf.reg_t) :=
     {| show '(Rf.rData v) := rv_register_name v |}.
 
@@ -970,7 +1014,45 @@ Module RV32I <: Core.
   Instance FiniteType_rf : FiniteType Rf.reg_t := _.
   Instance FiniteType_scoreboard_rf : FiniteType Scoreboard.Rf.reg_t := _.
   Instance FiniteType_scoreboard : FiniteType Scoreboard.reg_t := _.
+
+  Instance FiniteType_btb_targets : FiniteType Btb.Targets.reg_t := _.
+  Instance FiniteType_btb_tags : FiniteType Btb.Tags.reg_t := _.
+  Instance FiniteType_btb_valid : FiniteType Btb.Valid.reg_t := _.
+  Instance FiniteType_btb : FiniteType Btb.reg_t := _.
+
+  Instance FiniteType_bht_targets : FiniteType Bht.Dirs.reg_t := _.
+  Instance FiniteType_bht : FiniteType Bht.reg_t := _.
+  Instance FiniteType_f2dprim : FiniteType waitFromFetch.reg_t := _.
+  Instance FiniteType_mulState : FiniteType Multiplier.reg_t := _.
   Instance FiniteType_reg_t : FiniteType reg_t := _.
+(*   unshelve econstructor. *)
+(*   2:{ *)
+(*     exact (List.map toIMem (@finite_elements _ FiniteType_toIMem) ++ *)
+(*   List.map fromIMem (@finite_elements _ FiniteType_fromIMem) ++ *)
+(*   List.map toDMem (@finite_elements _ FiniteType_toDMem) ++ *)
+(* List.map   fromDMem (@finite_elements _ FiniteType_fromDMem) ++ *)
+(* List.map   f2d (@finite_elements _ FiniteType_f2d) ++ *)
+(* List.map   f2dprim (@finite_elements _ FiniteType_f2dprim) ++ *)
+(* List.map   d2e (@finite_elements _ FiniteType_d2e) ++ *)
+(* List.map   e2w (@finite_elements _ FiniteType_e2w) ++ *)
+(* List.map   rf (@finite_elements _ FiniteType_rf) ++ *)
+(* List.map   mulState (@finite_elements _ FiniteType_mulState) ++ *)
+(* List.map   scoreboard (@finite_elements _ FiniteType_scoreboard) ++ *)
+(* List.map   bht (@finite_elements _ FiniteType_bht) ++ *)
+(* List.map   btb (@finite_elements _ FiniteType_btb) ++ *)
+(* [ cycle_count ] ++ *)
+(* [ instr_count ] ++ *)
+(* [ pc ] ++ *)
+(* [ epoch ] ++ *)
+(* [ depoch ]). *)
+(* } *)
+(*  2:{ *)
+(*    cbv - [nth_error]. *)
+(*    intro a; destruct a. *)
+(*     exact ( *)
+(*   intros X. *)
+(*   destruct X. *)
+(*   20:{ *)
 End RV32I.
 
 Module RV32EParams <: RVParams.
@@ -1010,6 +1092,13 @@ Module RV32E <: Core.
   Instance FiniteType_rf : FiniteType Rf.reg_t := _.
   Instance FiniteType_scoreboard_rf : FiniteType Scoreboard.Rf.reg_t := _.
   Instance FiniteType_scoreboard : FiniteType Scoreboard.reg_t := _.
+  Instance FiniteType_btb_targets : FiniteType Btb.Targets.reg_t := _.
+  Instance FiniteType_btb_tags : FiniteType Btb.Tags.reg_t := _.
+  Instance FiniteType_btb_valid : FiniteType Btb.Valid.reg_t := _.
+  Instance FiniteType_btb : FiniteType Btb.reg_t := _.
+
+  Instance FiniteType_bht_targets : FiniteType Bht.Dirs.reg_t := _.
+  Instance FiniteType_bht : FiniteType Bht.reg_t := _.
   Instance FiniteType_reg_t : FiniteType reg_t := _.
 End RV32E.
 
