@@ -645,7 +645,7 @@ module Graphs = struct
     dedup_circuit
       { di_regs = cu.c_registers;
         di_reg_sigs = (fun r -> r);
-        di_fn_specs = (fun fn -> (fn, `Internal));
+        di_fn_specs = (fun fn -> (fn, `Internal)); (* FIXME add syntax in LV for `External *)
         di_rule_names = (fun rln -> rln);
         di_rule_external = externalp;
         di_circuits = circuits;
