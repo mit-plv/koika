@@ -60,7 +60,16 @@ Definition package :=
 
      ip_sim := {| sp_ext_fn_specs fn := {| efs_name := show fn;
                                          efs_method := false |};
-                 sp_prelude := None |};
+                 sp_prelude := Some "class extfuns {
+public:
+  bits<32> extA(const bits<32> arg) {
+    return arg | 32'1_b;
+  }
+
+  bits<32> extB(const bits<32> arg) {
+    return arg & 32'1_b;
+  }
+};" |};
 
      ip_verilog := {| vp_ext_fn_specs fn := {| efr_name := show fn;
                                              efr_internal := true |} |} |}.
