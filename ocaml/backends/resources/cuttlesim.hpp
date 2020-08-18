@@ -1388,7 +1388,7 @@ namespace cuttlesim {
   { (*__fn_ret) = val; return true; }
 #define CALL_FN(fname, ...) \
   ({ PASTE_EXPANDED_3(ti_fn, RULE_NAME, fname) tmp; \
-     FAIL_UNLESS(PASTE_EXPANDED_3(fn, RULE_NAME, fname)(&tmp,##__VA_ARGS__)); \
+     FAIL_UNLESS(PASTE_EXPANDED_3(fn, RULE_NAME, fname)(tmp,##__VA_ARGS__)); \
      tmp; })
 #define COMMIT() \
   { PASTE_EXPANDED_2(commit, RULE_NAME)(); return true; }
