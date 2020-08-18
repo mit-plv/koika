@@ -144,6 +144,18 @@ Extraction \"switches.ml\" switches.prog."))
 
 
 ;; -*- dune -*-
+(subdir "_objects/trivial_state_machine.v"
+ (rule (write-file "trivial_state_machine_extr.v"
+                   "Require Coq.extraction.Extraction tests.trivial_state_machine.
+Extraction \"trivial_state_machine.ml\" trivial_state_machine.prog."))
+ (coq.extraction
+  (prelude trivial_state_machine_extr)
+  (extracted_modules trivial_state_machine)
+  (theories Koika tests)
+  (flags "-w" "-overriding-logical-loadpath")))
+
+
+;; -*- dune -*-
 (subdir "_objects/unpack.v"
  (rule (write-file "unpack_extr.v"
                    "Require Coq.extraction.Extraction tests.unpack.

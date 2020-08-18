@@ -875,9 +875,13 @@ The following list shows the current state of the repo:
    - |ocaml/registry.ml|_: Stub used to load |koika| programs extracted from Coq into cuttlec
 
 ``tests/``
+   ``trivial_state_machine.etc/``
+      - |tests/trivial_state_machine.etc/stm.v|_: Cleaned-up state machine example
+
    - |tests/arrays.lv|_: Unit tests for array functions
    - |tests/bigint.lv|_: Computations with large bitvectors (the simulator uses boost for >64 bits)
    - |tests/comparisons.lv|_: Unit tests for comparison operators
+   - |tests/cross_cycle.v|_: Cross-cycle optimization in Cuttlesim models
    - |tests/datatypes.lv|_: Simple uses of structs and enums
    - |tests/double_write.v|_: Double-write detection and prevention
    - |tests/errors.1.lv|_: Syntax and typing errors in LV
@@ -896,6 +900,7 @@ The following list shows the current state of the repo:
    - |tests/struct_init.v|_: Structure initialization
    - |tests/switches.v|_: Test various forms of switches
    - |tests/taint_analysis.lv|_: Unit tests to ensure that impure functions are not optimized out
+   - |tests/trivial_state_machine.v|_: Trivial state machine
    - |tests/unpack.v|_: Structure unpacking
 
 
@@ -1113,6 +1118,8 @@ The following list shows the current state of the repo:
 .. _tests/bigint.lv: tests/bigint.lv
 .. |tests/comparisons.lv| replace:: ``comparisons.lv``
 .. _tests/comparisons.lv: tests/comparisons.lv
+.. |tests/cross_cycle.v| replace:: ``cross_cycle.v``
+.. _tests/cross_cycle.v: tests/cross_cycle.v
 .. |tests/datatypes.lv| replace:: ``datatypes.lv``
 .. _tests/datatypes.lv: tests/datatypes.lv
 .. |tests/double_write.v| replace:: ``double_write.v``
@@ -1149,6 +1156,10 @@ The following list shows the current state of the repo:
 .. _tests/switches.v: tests/switches.v
 .. |tests/taint_analysis.lv| replace:: ``taint_analysis.lv``
 .. _tests/taint_analysis.lv: tests/taint_analysis.lv
+.. |tests/trivial_state_machine.etc/stm.v| replace:: ``stm.v``
+.. _tests/trivial_state_machine.etc/stm.v: tests/trivial_state_machine.etc/stm.v
+.. |tests/trivial_state_machine.v| replace:: ``trivial_state_machine.v``
+.. _tests/trivial_state_machine.v: tests/trivial_state_machine.v
 .. |tests/unpack.v| replace:: ``unpack.v``
 .. _tests/unpack.v: tests/unpack.v
 .. end repo architecture
