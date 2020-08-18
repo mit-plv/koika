@@ -3,6 +3,7 @@ Require Import Koika.Frontend.
 Require Import Coq.Lists.List.
 
 Require Import Koika.Std.
+Require Import rv.FiniteType.
 Require Import rv.RVEncoding.
 Require Import rv.Scoreboard.
 Require Import rv.Btb.
@@ -1024,7 +1025,7 @@ Module RV32I <: Core.
   Instance FiniteType_bht : FiniteType Bht.reg_t := _.
   Instance FiniteType_f2dprim : FiniteType waitFromFetch.reg_t := _.
   Instance FiniteType_mulState : FiniteType Multiplier.reg_t := _.
-  Instance FiniteType_reg_t : FiniteType reg_t := _.
+  Instance FiniteType_reg_t : FiniteType reg_t := _. (* ~60 seconds *)
 (*   unshelve econstructor. *)
 (*   2:{ *)
 (*     exact (List.map toIMem (@finite_elements _ FiniteType_toIMem) ++ *)
