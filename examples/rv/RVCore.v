@@ -614,7 +614,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
         let instr := get(instr,data) in
         let fetched_bookkeeping := f2dprim.(waitFromFetch.deq)() in
         let decodedInst := decode_fun(instr) in
-        when ((get(fetched_bookkeeping, epoch) == read1(epoch)) && (get(fetched_bookkeeping, depoch) == read1(depoch))) do
+        when ((get(fetched_bookkeeping, epoch) == read1(epoch)) && (get(fetched_bookkeeping, depoch) == read0(depoch))) do
              (let rs1_idx := get(getFields(instr), rs1) in
              let rs2_idx := get(getFields(instr), rs2) in
              let score1 := scoreboard.(Scoreboard.search)(sliceReg(rs1_idx)) in
