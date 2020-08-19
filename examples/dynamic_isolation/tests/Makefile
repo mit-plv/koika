@@ -21,7 +21,11 @@ asm_multicore_stems := $(patsubst %.S,$(build)/multicore/%,$(asm_multicore_sourc
 c_multicore_sources := $(wildcard password_manager/*.c)
 c_multicore_stems := $(patsubst %.c,$(build)/multicore/%,$(c_multicore_sources))
 
-stems := $(c_rv32i_stems) $(asm_rv32i_stems) $(asm_rv32i_no_sm_stems) $(c_rv32i_no_sm_stems) # $(c_multicore_stems) $(asm_multicore_stems)
+# TODO: fix file naming
+c_multicore_no_sm_sources := $(wildcard multicore_no_sm/*/basic_0.c)
+c_multicore_no_sm_stems := $(patsubst %_0.c,$(build)/rv32i_no_sm/%,$(c_multicore_no_sm_sources))
+
+stems := $(c_rv32i_stems) $(asm_rv32i_stems) $(asm_rv32i_no_sm_stems) $(c_rv32i_no_sm_stems) $(c_multicore_no_sm_stems)
 rv32_targets := $(stems:=.rv32)
 vmh_targets := $(stems:=.vmh)
 dump_targets := $(stems:=.dump)
@@ -41,17 +45,18 @@ cc32i_rv32 = $(cc) -T$(build)/rv32i/singlecore_link_rv32.ld -mabi=ilp32
 cc32i_no_sm_c = $(cc) -T$(build)/rv32i_no_sm/singlecore_link_c.ld -mabi=ilp32
 cc32i_no_sm_rv32 = $(cc) -T$(build)/rv32i_no_sm/singlecore_link_rv32.ld -mabi=ilp32
 
-shared_memory_targets := $(build)/rv32i_no_sm/shared_memory/basic.rv32 $(build)/rv32i_no_sm/shared_memory/basic.vmh $(build)/rv32i_no_sm/shared_memory/basic.dump
 
-sandbox_targets := $(build)/rv32i_no_sm/sandbox/basic.rv32 $(build)/rv32i_no_sm/sandbox/basic.vmh $(build)/rv32i_no_sm/sandbox/basic.dump
 
+#shared_memory_targets := $(build)/rv32i_no_sm/shared_memory/basic.rv32 $(build)/rv32i_no_sm/shared_memory/basic.vmh $(build)/rv32i_no_sm/shared_memory/basic.dump
+#sandbox_targets := $(build)/rv32i_no_sm/sandbox/basic.rv32 $(build)/rv32i_no_sm/sandbox/basic.vmh $(build)/rv32i_no_sm/sandbox/basic.dump
 
 multicore_targets := $(build)/multicore/basic.rv32 $(build)/multicore/password_manager/pwd_manager.rv32
-all: $(rv32_targets) $(vmh_targets) $(dump_targets) $(multicore_targets) $(shared_memory_targets) $(sandbox_targets)
+all: $(rv32_targets) $(vmh_targets) $(dump_targets) #$(multicore_targets) $(shared_memory_targets) $(sandbox_targets)
 
 
 dirpatterns := %/rv32i/ %/rv32i/riscv_tests/rv32ui/ %/rv32i/riscv_tests/rv32um/ %/rv32i/unit/ %/rv32i/integ/ %/rv32e/ %/rv32e/unit/ %/rv32e/integ/ 
-no_sm_dirpatterns := %/rv32i_no_sm/ %/rv32i_no_sm/riscv_tests/rv32ui/ %/rv32i_no_sm/riscv_tests/rv32um/ %/rv32i_no_sm/unit/ %/rv32i_no_sm/integ/ %/rv32i_no_sm/shared_memory/ %/rv32i_no_sm/sandbox/
+no_sm_dirpatterns := %/rv32i_no_sm/ %/rv32i_no_sm/riscv_tests/rv32ui/ %/rv32i_no_sm/riscv_tests/rv32um/ %/rv32i_no_sm/unit/ %/rv32i_no_sm/integ/ %/rv32i_no_sm/multicore_no_sm/sandbox %/rv32i_no_sm/multicore_no_sm/shared_memory %/rv32i_no_sm/multicore_no_sm/primes %/rv32i_no_sm/multicore_no_sm/morse
+#%/rv32i_no_sm/shared_memory/ %/rv32i_no_sm/sandbox/ %/rv32i_no_sm/multicore_no_sm/sandbox %/rv32i_no_sm/multicore_no_sm/shared_memory
 
 multicore_dirpatterns := %/multicore/ %/multicore/riscv_tests/rv32ui/ %/multicore/riscv_tests/rv32um/ %/multicore/unit/ %/multicore/integ/ %/multicore/password_manager/
 
@@ -107,25 +112,35 @@ $(build)/rv32i_no_sm/%.rv32: %.c $(build)/rv32i_no_sm/singlecore_init.o $(build)
 	$(cc32i_no_sm_c) -L_build/rv32i_no_sm -march=$(call iarch,$<) singlecore_init.S singlecore_mmio0.c $< -o $@
 
 
-$(build)/rv32i_no_sm/shared_memory/multicore_init.o: shared_memory/multicore_init.S | $(no_sm_dirs)
+#$(build)/rv32i_no_sm/shared_memory/multicore_init.o: shared_memory/multicore_init.S | $(no_sm_dirs)
+#	$(cc) -march=rv32i -c $< -o $@
+#$(build)/rv32i_no_sm/shared_memory/multicore_link.ld: shared_memory/multicore_link.ld | $(no_sm_dirs)
+#	$(cc) -E -x c $< | grep -v '^#' > $@
+#$(build)/rv32i_no_sm/shared_memory/multicore_mmio%.o: shared_memory/multicore_mmio%.c | $(no_sm_dirs)
+#	$(cc) -march=rv32i -c $< -o $@
+
+$(build)/rv32i_no_sm/multicore_no_sm/multicore_init.o: multicore_no_sm/multicore_init.S | $(no_sm_dirs)
 	$(cc) -march=rv32i -c $< -o $@
-$(build)/rv32i_no_sm/shared_memory/multicore_link.ld: shared_memory/multicore_link.ld | $(no_sm_dirs)
+$(build)/rv32i_no_sm/multicore_no_sm/multicore_link.ld: multicore_no_sm/multicore_link.ld | $(no_sm_dirs)
 	$(cc) -E -x c $< | grep -v '^#' > $@
-$(build)/rv32i_no_sm/shared_memory/multicore_mmio%.o: shared_memory/multicore_mmio%.c | $(no_sm_dirs)
+$(build)/rv32i_no_sm/multicore_no_sm/multicore_mmio%.o: multicore_no_sm/multicore_mmio%.c | $(no_sm_dirs)
 	$(cc) -march=rv32i -c $< -o $@
 
-$(build)/rv32i_no_sm/shared_memory/%.rv32: shared_memory/%_0.c shared_memory/%_1.c $(build)/rv32i_no_sm/shared_memory/multicore_init.o $(build)/rv32i_no_sm/shared_memory/multicore_mmio0.o $(build)/rv32i_no_sm/shared_memory/multicore_mmio1.o $(build)/rv32i_no_sm/shared_memory/multicore_link.ld | $(no_sm_dirs)
-	$(cc) -T$(build)/rv32i_no_sm/shared_memory/multicore_link.ld -mabi=ilp32 -L_build/rv32i_no_sm/shared_memory -march=$(call iarch,$<) shared_memory/multicore_init.S $< $(word 2, $^) -o $@
+$(build)/rv32i_no_sm/multicore_no_sm/%.rv32: multicore_no_sm/%_0.c multicore_no_sm/%_1.c $(build)/rv32i_no_sm/multicore_no_sm/multicore_init.o $(build)/rv32i_no_sm/multicore_no_sm/multicore_mmio0.o $(build)/rv32i_no_sm/multicore_no_sm/multicore_mmio1.o $(build)/rv32i_no_sm/multicore_no_sm/multicore_link.ld | $(no_sm_dirs)
+	$(cc) -T$(build)/rv32i_no_sm/multicore_no_sm/multicore_link.ld -mabi=ilp32 -L$(build)/rv32i_no_sm/multicore_no_sm -march=$(call iarch,$<) multicore_no_sm/multicore_init.S $< $(word 2, $^) -o $@
 
-$(build)/rv32i_no_sm/sandbox/multicore_init.o: sandbox/multicore_init.S | $(no_sm_dirs)
-	$(cc) -march=rv32i -c $< -o $@
-$(build)/rv32i_no_sm/sandbox/multicore_link.ld: sandbox/multicore_link.ld | $(no_sm_dirs)
-	$(cc) -E -x c $< | grep -v '^#' > $@
-$(build)/rv32i_no_sm/sandbox/multicore_mmio%.o: sandbox/multicore_mmio%.c | $(no_sm_dirs)
-	$(cc) -march=rv32i -c $< -o $@
+#$(build)/rv32i_no_sm/shared_memory/%.rv32: shared_memory/%_0.c shared_memory/%_1.c $(build)/rv32i_no_sm/shared_memory/multicore_init.o $(build)/rv32i_no_sm/shared_memory/multicore_mmio0.o $(build)/rv32i_no_sm/shared_memory/multicore_mmio1.o $(build)/rv32i_no_sm/shared_memory/multicore_link.ld | $(no_sm_dirs)
+#	$(cc) -T$(build)/rv32i_no_sm/shared_memory/multicore_link.ld -mabi=ilp32 -L_build/rv32i_no_sm/shared_memory -march=$(call iarch,$<) shared_memory/multicore_init.S $< $(word 2, $^) -o $@
 
-$(build)/rv32i_no_sm/sandbox/%.rv32: sandbox/%_0.c sandbox/%_1.c $(build)/rv32i_no_sm/sandbox/multicore_init.o $(build)/rv32i_no_sm/sandbox/multicore_mmio0.o $(build)/rv32i_no_sm/sandbox/multicore_mmio1.o $(build)/rv32i_no_sm/sandbox/multicore_link.ld | $(no_sm_dirs)
-	$(cc) -T$(build)/rv32i_no_sm/sandbox/multicore_link.ld -mabi=ilp32 -L_build/rv32i_no_sm/sandbox -march=$(call iarch,$<) sandbox/multicore_init.S $< $(word 2, $^) -o $@
+#$(build)/rv32i_no_sm/sandbox/multicore_init.o: sandbox/multicore_init.S | $(no_sm_dirs)
+#	$(cc) -march=rv32i -c $< -o $@
+#$(build)/rv32i_no_sm/sandbox/multicore_link.ld: sandbox/multicore_link.ld | $(no_sm_dirs)
+#	$(cc) -E -x c $< | grep -v '^#' > $@
+#$(build)/rv32i_no_sm/sandbox/multicore_mmio%.o: sandbox/multicore_mmio%.c | $(no_sm_dirs)
+#	$(cc) -march=rv32i -c $< -o $@
+
+#$(build)/rv32i_no_sm/sandbox/%.rv32: sandbox/%_0.c sandbox/%_1.c $(build)/rv32i_no_sm/sandbox/multicore_init.o $(build)/rv32i_no_sm/sandbox/multicore_mmio0.o $(build)/rv32i_no_sm/sandbox/multicore_mmio1.o $(build)/rv32i_no_sm/sandbox/multicore_link.ld | $(no_sm_dirs)
+#	$(cc) -T$(build)/rv32i_no_sm/sandbox/multicore_link.ld -mabi=ilp32 -L_build/rv32i_no_sm/sandbox -march=$(call iarch,$<) sandbox/multicore_init.S $< $(word 2, $^) -o $@
 
 
 
@@ -137,46 +152,46 @@ $(build)/rv32i_no_sm/sandbox/%.rv32: sandbox/%_0.c sandbox/%_1.c $(build)/rv32i_
 #	$(cc) -march=rv32i -c $< -o $@
 
 
-$(build)/multicore/multicore_init.o: multicore_init.S | $(multicore_dirs)
-	$(cc) -march=rv32i -c $< -o $@
+#$(build)/multicore/multicore_init.o: multicore_init.S | $(multicore_dirs)
+#	$(cc) -march=rv32i -c $< -o $@
 
-$(build)/multicore/multicore_link.ld: multicore_link.ld | $(multicore_dirs)
-	$(cc) -E -x c $< | grep -v '^#' > $@
-
-$(build)/multicore/%.o: %.c | $(multicore_dirs)
-	$(cc) -march=rv32i -c $< -o $@
-
-$(build)/multicore/basic_core0.o: basic_core0.c | $(multicore_dirs)
-	$(cc) -march=rv32i -c $< -o $@
-
-$(build)/multicore/basic_core1.o: basic_core1.c | $(multicore_dirs)
-	$(cc) -march=rv32i -c $< -o $@
-
-$(build)/multicore/multicore_mmio%.o: multicore_mmio%.c | $(multicore_dirs)
-	$(cc) -march=rv32i -c $< -o $@
-
-
-$(build)/multicore/basic.rv32: $(build)/multicore/basic_core0.o $(build)/multicore/basic_core1.o $(build)/multicore/multicore_init.o $(build)/multicore/multicore_mmio0.o $(build)/multicore/multicore_mmio1.o $(build)/multicore/multicore_link.ld | $(multicore_dirs)
-	cd $(build)/multicore; $(cc) -Tmulticore_link.ld -mabi=ilp32 -march=rv32i multicore_init.o multicore_mmio0.o multicore_mmio1.o basic_core0.o basic_core1.o -o basic.rv32
-
+#$(build)/multicore/multicore_link.ld: multicore_link.ld | $(multicore_dirs)
+#	$(cc) -E -x c $< | grep -v '^#' > $@
 #
-# TODO: generalize
-pwd_mngr_dir := $(build)/multicore/password_manager
-
-$(pwd_mngr_dir)/link.ld: password_manager/link.ld | $(multicore_dirs)
-	$(cc) -E -x c $< | grep -v '^#' > $@
-
-$(pwd_mngr_dir)/multicore_mmio%.o: multicore_mmio%.c | $(multicore_dirs)
-	$(cc) -march=rv32i -c $< -o $@
-
-$(pwd_mngr_dir)/%.o: password_manager/%.c | $(multicore_dirs)
-	$(cc) -march=rv32i -c $< -o $@
-
-$(pwd_mngr_dir)/%.o: password_manager/%.S | $(multicore_dirs)
-	$(cc) -march=rv32i -c $< -o $@
-
-$(pwd_mngr_dir)/pwd_manager.rv32: $(pwd_mngr_dir)/init_enclave0.o $(pwd_mngr_dir)/init_enclave1.o $(pwd_mngr_dir)/enclave0.o $(pwd_mngr_dir)/null.o $(pwd_mngr_dir)/null.o $(pwd_mngr_dir)/enclave2_bootloader.o $(pwd_mngr_dir)/enclave2.o $(pwd_mngr_dir)/multicore_mmio0.o $(pwd_mngr_dir)/multicore_mmio1.o $(pwd_mngr_dir)/multicore_mmio2.o $(pwd_mngr_dir)/link.ld | $(multicore_dirs)
-	cd $(build)/multicore/password_manager; $(cc) -Tlink.ld -mabi=ilp32 -march=rv32i init_enclave0.o enclave0.o init_enclave1.o null.o enclave2_bootloader.o enclave2.o multicore_mmio0.o multicore_mmio1.o multicore_mmio2.o -o pwd_manager.rv32
+#$(build)/multicore/%.o: %.c | $(multicore_dirs)
+#	$(cc) -march=rv32i -c $< -o $@
+#
+#$(build)/multicore/basic_core0.o: basic_core0.c | $(multicore_dirs)
+#	$(cc) -march=rv32i -c $< -o $@
+#
+#$(build)/multicore/basic_core1.o: basic_core1.c | $(multicore_dirs)
+#	$(cc) -march=rv32i -c $< -o $@
+#
+#$(build)/multicore/multicore_mmio%.o: multicore_mmio%.c | $(multicore_dirs)
+#	$(cc) -march=rv32i -c $< -o $@
+#
+#
+#$(build)/multicore/basic.rv32: $(build)/multicore/basic_core0.o $(build)/multicore/basic_core1.o $(build)/multicore/multicore_init.o $(build)/multicore/multicore_mmio0.o $(build)/multicore/multicore_mmio1.o $(build)/multicore/multicore_link.ld | $(multicore_dirs)
+#	cd $(build)/multicore; $(cc) -Tmulticore_link.ld -mabi=ilp32 -march=rv32i multicore_init.o multicore_mmio0.o multicore_mmio1.o basic_core0.o basic_core1.o -o basic.rv32
+#
+##
+## TODO: generalize
+#pwd_mngr_dir := $(build)/multicore/password_manager
+#
+#$(pwd_mngr_dir)/link.ld: password_manager/link.ld | $(multicore_dirs)
+#	$(cc) -E -x c $< | grep -v '^#' > $@
+#
+#$(pwd_mngr_dir)/multicore_mmio%.o: multicore_mmio%.c | $(multicore_dirs)
+#	$(cc) -march=rv32i -c $< -o $@
+#
+#$(pwd_mngr_dir)/%.o: password_manager/%.c | $(multicore_dirs)
+#	$(cc) -march=rv32i -c $< -o $@
+#
+#$(pwd_mngr_dir)/%.o: password_manager/%.S | $(multicore_dirs)
+#	$(cc) -march=rv32i -c $< -o $@
+#
+#$(pwd_mngr_dir)/pwd_manager.rv32: $(pwd_mngr_dir)/init_enclave0.o $(pwd_mngr_dir)/init_enclave1.o $(pwd_mngr_dir)/enclave0.o $(pwd_mngr_dir)/null.o $(pwd_mngr_dir)/null.o $(pwd_mngr_dir)/enclave2_bootloader.o $(pwd_mngr_dir)/enclave2.o $(pwd_mngr_dir)/multicore_mmio0.o $(pwd_mngr_dir)/multicore_mmio1.o $(pwd_mngr_dir)/multicore_mmio2.o $(pwd_mngr_dir)/link.ld | $(multicore_dirs)
+#	cd $(build)/multicore/password_manager; $(cc) -Tlink.ld -mabi=ilp32 -march=rv32i init_enclave0.o enclave0.o init_enclave1.o null.o enclave2_bootloader.o enclave2.o multicore_mmio0.o multicore_mmio1.o multicore_mmio2.o -o pwd_manager.rv32
 
 
 $(build)/%.dump: $(build)/%.rv32

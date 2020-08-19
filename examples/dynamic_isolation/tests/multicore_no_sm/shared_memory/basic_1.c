@@ -9,10 +9,35 @@ int read_msg1() {
   return *SHARED_ADDR;
 }
 
+#define NUM_ITERS 1000
+#define WAIT_TIME 50
 
 int putchar1(int c);
 
 int main1() {
+  int msg;
+  int expected = 0;
+
+  for (int i = 0; i < WAIT_TIME; i++ ){
+  }
+
+  while (expected < NUM_ITERS) {
+    while ((msg = read_msg1()) != expected) {
+      for (int i = 0; i< WAIT_TIME; i++) {
+      }
+    }
+    write_msg1(++expected);   
+    putchar1('*');
+    expected++;
+  }
+  
+}
+
+/*
+int main1() {
+  int msg;
+
+
   for (int i = 0; i < 100; i++ ){
   }
   int msg = read_msg1();
@@ -32,3 +57,4 @@ int main1() {
   }
   return 0;
 }
+*/
