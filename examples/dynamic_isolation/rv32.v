@@ -57,8 +57,8 @@ Module Package_rv32i.
 
   Definition package :=
     {| ip_koika := koika_package;
-       ip_sim := {| sp_ext_fn_names fn := show fn;
-                   sp_extfuns := None |};
+       ip_sim := {| sp_ext_fn_specs fn := {| efs_name := show fn; efs_method := false |};
+                    sp_prelude := None |};
        ip_verilog := {| vp_ext_fn_specs := Common._ext_fn_specs External.ext |} |}.
 
 End Package_rv32i.
@@ -81,8 +81,8 @@ Module Package_rv32i_no_sm.
 
   Definition package :=
     {| ip_koika := koika_package;
-       ip_sim := {| sp_ext_fn_names fn := show fn;
-                   sp_extfuns := None |};
+       ip_sim := {| sp_ext_fn_specs fn := {| efs_name := show fn; efs_method := false |};
+                    sp_prelude := None |};
        ip_verilog := {| vp_ext_fn_specs := Common._ext_fn_specs External.ext |} |}.
 
 End Package_rv32i_no_sm.

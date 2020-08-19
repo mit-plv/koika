@@ -816,7 +816,7 @@ Module Type Machine_t.
   Parameter r : forall reg, R reg.
   Parameter rule_name_t : Type.
   Parameter rules : rule_name_t -> rule R Sigma.
-  Parameter ext_fn_specs : _ext_fn_t -> ext_fn_spec.
+  Parameter ext_fn_specs : _ext_fn_t -> ext_fn_rtl_spec.
   Parameter FiniteType_reg_t : FiniteType _reg_t.
   Parameter Show_reg_t : Show _reg_t.
   Parameter Show_ext_fn_t : Show _ext_fn_t.

@@ -204,7 +204,7 @@ Module Common.
     { _ext_fn_t : Type
     ; _Sigma : _ext_fn_t -> ExternalSignature
     ; _sigma :  (forall fn: _ext_fn_t, Sig_denote (_Sigma fn))
-    ; _ext_fn_specs : _ext_fn_t -> ext_fn_spec
+    ; _ext_fn_specs : _ext_fn_t -> ext_fn_rtl_spec
     }.
 
   Record private_module_sig :=

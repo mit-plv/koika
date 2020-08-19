@@ -135,20 +135,21 @@ Module External <: External_sig.
     | ext_ppp_bookkeeping => {$ struct_t ext_bookkeeping_input ~> struct_t ext_bookkeeping_output $}
     end.
 
+  (* replace with "show" *)
   Definition ext_fn_specs (fn: ext_fn_t) :=
     match fn with
-    | ext_cache imem0 => {| ef_name := "ext_cache_imem0"; ef_internal := false |}
-    | ext_cache dmem0 => {| ef_name := "ext_cache_dmem0"; ef_internal := false |}
-    | ext_cache imem1 => {| ef_name := "ext_cache_imem1"; ef_internal := false |}
-    | ext_cache dmem1 => {| ef_name := "ext_cache_dmem1"; ef_internal := false |}
-    | ext_mainmem => {| ef_name := "ext_mainmem"; ef_internal := false |}
-    | ext_uart_write0 => {| ef_name := "ext_uart_write0"; ef_internal := false |}
-    | ext_uart_read0 => {| ef_name := "ext_uart_read0"; ef_internal := false |}
-    | ext_led0 => {| ef_name := "ext_led0"; ef_internal := false |}
-    | ext_uart_write1 => {| ef_name := "ext_uart_write1"; ef_internal := false |}
-    | ext_uart_read1 => {| ef_name := "ext_uart_read1"; ef_internal := false |}
-    | ext_led1 => {| ef_name := "ext_led1"; ef_internal := false |}
-    | ext_ppp_bookkeeping => {| ef_name := "ext_ppp_bookkeeping"; ef_internal := false |}
+    | ext_cache imem0 => {| efr_name := "ext_cache_imem0"; efr_internal := false |}
+    | ext_cache dmem0 => {| efr_name := "ext_cache_dmem0"; efr_internal := false |}
+    | ext_cache imem1 => {| efr_name := "ext_cache_imem1"; efr_internal := false |}
+    | ext_cache dmem1 => {| efr_name := "ext_cache_dmem1"; efr_internal := false |}
+    | ext_mainmem => {| efr_name := "ext_mainmem"; efr_internal := false |}
+    | ext_uart_write0 => {| efr_name := "ext_uart_write0"; efr_internal := false |}
+    | ext_uart_read0 => {| efr_name := "ext_uart_read0"; efr_internal := false |}
+    | ext_led0 => {| efr_name := "ext_led0"; efr_internal := false |}
+    | ext_uart_write1 => {| efr_name := "ext_uart_write1"; efr_internal := false |}
+    | ext_uart_read1 => {| efr_name := "ext_uart_read1"; efr_internal := false |}
+    | ext_led1 => {| efr_name := "ext_led1"; efr_internal := false |}
+    | ext_ppp_bookkeeping => {| efr_name := "ext_ppp_bookkeeping"; efr_internal := false |}
     end.
 
   Instance Show_ext_fn_t : Show ext_fn_t := _.
