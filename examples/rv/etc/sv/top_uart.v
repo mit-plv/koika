@@ -52,11 +52,15 @@ module top_uart(input CLK, input RST_N, output LED, input uart_line_in, output u
      if (led_wr_valid)
        led <= led_wr_data;
 
+`ifndef STDERR
+ `define STDERR 32'h80000002
+`endif
+
 `ifdef SIMULATION
    wire uart_wr_valid = uart_wr_opt_byte[8];
    always @(posedge CLK) begin
       if (uart_wr_ready && uart_wr_valid)
-        $fwrite(32'h80000002, "%c", uart_wr_opt_byte[7:0]);
+        $fwrite(`STDERR, "%c", uart_wr_opt_byte[7:0]);
    end
 `endif
 endmodule

@@ -18,6 +18,9 @@ module memory(input  CLK,
    reg has_request;
    reg [`MEM_OP_SIZE - 1:0] last_request;
 
+`ifndef STDERR
+ `define STDERR 32'h80000002
+`endif
 `define MEMSIZE (1 << ADDRESS_WIDTH)
    reg [`REQ_DATA_WIDTH - 1:0] mem[`MEMSIZE - 1:0];
 
@@ -30,7 +33,7 @@ module memory(input  CLK,
          // the ‘mem’ array is larger than the image stored in ‘filename’.
          $readmemh(filename, mem, 0);
       end else begin
-         $fwrite(32'h80000002, "ERROR: No memory image loaded. Use +VMH=<path> to load one\n");
+         $fwrite(`STDERR, "ERROR: No memory image loaded. Use +VMH=<path> to load one\n");
          $finish(1'b1);
       end
    end

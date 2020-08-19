@@ -11,9 +11,13 @@ module ext_mem(input CLK, input RST_N, input[69:0] arg, output[69:0] out);
    wire [67:0] get_response;
    assign out = {get_ready, put_ready, get_response};
 
+`ifndef STDERR
+ `define STDERR 32'h80000002
+`endif
+
 `ifndef MEM_ADDRESS_WIDTH
  `define MEM_ADDRESS_WIDTH 16
-   initial $fwrite(32'h80000002,
+   initial $fwrite(`STDERR,
                    "MEM_ADDRESS_WIDTH unset, defaulting to %d",
                    `MEM_ADDRESS_WIDTH);
 `endif
