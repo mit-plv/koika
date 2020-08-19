@@ -810,10 +810,13 @@ The following list shows the current state of the repo:
             - |examples/rv/etc/sv/top_ice40_usb.v|_: Verilog wrapper for the |koika| core (for use in FPGA synthesis, with a USB interface)
             - |examples/rv/etc/sv/top_uart.v|_: Verilog wrapper for the |koika| core with a UART interface
 
+         - |examples/rv/etc/cvc64.sh|_: Simulate the core with CVC
          - |examples/rv/etc/elf.hpp|_: Support for loading ELF files
+         - |examples/rv/etc/iverilog.sh|_: Simulate the core with Icarus Verilog
          - |examples/rv/etc/rvcore.cuttlesim.cpp|_: C++ driver for rv32i simulation with Cuttlesim
          - |examples/rv/etc/rvcore.pyverilator.py|_: Python driver for C++ simulation with Verilator
          - |examples/rv/etc/rvcore.verilator.cpp|_: C++ driver for rv32 simulation with Verilator
+         - |examples/rv/etc/testbench.v|_: Testbench used with CVC and Icarus Verilog
 
       - |examples/rv/Multiplier.v|_: Implementation of a multiplier module
       - |examples/rv/MultiplierCorrectness.v|_: Proof of correctness of the multiplier module
@@ -1036,8 +1039,12 @@ The following list shows the current state of the repo:
 .. _examples/rv/RVEncoding.v: examples/rv/RVEncoding.v
 .. |examples/rv/Scoreboard.v| replace:: ``Scoreboard.v``
 .. _examples/rv/Scoreboard.v: examples/rv/Scoreboard.v
+.. |examples/rv/etc/cvc64.sh| replace:: ``cvc64.sh``
+.. _examples/rv/etc/cvc64.sh: examples/rv/etc/cvc64.sh
 .. |examples/rv/etc/elf.hpp| replace:: ``elf.hpp``
 .. _examples/rv/etc/elf.hpp: examples/rv/etc/elf.hpp
+.. |examples/rv/etc/iverilog.sh| replace:: ``iverilog.sh``
+.. _examples/rv/etc/iverilog.sh: examples/rv/etc/iverilog.sh
 .. |examples/rv/etc/nangate45/synth.sh| replace:: ``synth.sh``
 .. _examples/rv/etc/nangate45/synth.sh: examples/rv/etc/nangate45/synth.sh
 .. |examples/rv/etc/rvcore.cuttlesim.cpp| replace:: ``rvcore.cuttlesim.cpp``
@@ -1060,6 +1067,8 @@ The following list shows the current state of the repo:
 .. _examples/rv/etc/sv/top_ice40_usb.v: examples/rv/etc/sv/top_ice40_usb.v
 .. |examples/rv/etc/sv/top_uart.v| replace:: ``top_uart.v``
 .. _examples/rv/etc/sv/top_uart.v: examples/rv/etc/sv/top_uart.v
+.. |examples/rv/etc/testbench.v| replace:: ``testbench.v``
+.. _examples/rv/etc/testbench.v: examples/rv/etc/testbench.v
 .. |examples/rv/rv32.v| replace:: ``rv32.v``
 .. _examples/rv/rv32.v: examples/rv/rv32.v
 .. |examples/rv/rv32e.v| replace:: ``rv32e.v``
