@@ -21,7 +21,16 @@ module memory(input  CLK,
 `ifndef STDERR
  `define STDERR 32'h80000002
 `endif
-`define MEMSIZE (1 << ADDRESS_WIDTH)
+
+`ifdef BROKEN_READMEMH
+ // The implementation of $readmemh in CVC is broken.  It only loads one entry
+ // if both endpoints of the file's range are not specified, and it complains
+ // about the final address if it corresponds to the final index.
+ `define MEMSIZE (1 << ADDRESS_WIDTH) + 1
+`else
+ `define MEMSIZE (1 << ADDRESS_WIDTH)
+`endif
+
    reg [`REQ_DATA_WIDTH - 1:0] mem[`MEMSIZE - 1:0];
 
 `ifdef BRAM_RUNTIME_INIT
@@ -29,9 +38,9 @@ module memory(input  CLK,
    initial
      begin : init_rom_block
       if ($value$plusargs("VMH=%s", filename)) begin
-         // Omitting the last argument to ‘$readmemh’ prevents complaints when
-         // the ‘mem’ array is larger than the image stored in ‘filename’.
-         $readmemh(filename, mem, 0);
+         // Omitting the last argument to ‘$readmemh’ would prevent complaints
+         // when the ‘mem’ array is larger than the image stored in ‘filename’.
+         $readmemh(filename, mem, 0, `MEMSIZE - 1);
       end else begin
          $fwrite(`STDERR, "ERROR: No memory image loaded. Use +VMH=<path> to load one\n");
          $finish(1'b1);
@@ -46,7 +55,7 @@ module memory(input  CLK,
  `endif
    initial
      begin : init_rom_block
-        $readmemh(`MEM_FILENAME, mem, 0);
+        $readmemh(`MEM_FILENAME, mem, 0, `MEMSIZE - 1);
      end
 `endif
 
