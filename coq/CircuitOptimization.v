@@ -497,6 +497,11 @@ Section CircuitOptimizer.
                  | _ => fun c0 => c0
                  end
         end
+      | CNot c =>
+        match unannot c with
+        | CNot c' => fun _ => c'
+        | _ => fun c0 => c0
+        end
       | CBinop (Concat sz1 sz2) c1 c2 =>
         match eq_dec sz1 0, eq_dec sz2 0 with
         | left pr, _ => fun _ => rew <- [fun sz => circuit (sz2 + sz)] pr in rew <- plus_0_r sz2 in c2
@@ -533,7 +538,7 @@ Section CircuitOptimizer.
           destruct (interp_circuit cr csigma c) as [ [ | ] [] ]
         | _ => rewrite vect_app_nil
         | _ => apply eq_rect_eqdec_irrel
-        | _ => eauto using slice_full, slice_concat_l, slice_concat_r
+        | _ => eauto using slice_full, slice_concat_l, slice_concat_r, Bits.neg_involutive
         end.
       unfold opt_simplify; intros; destruct (unannot c) eqn:? ;
         try destruct fn; repeat simpl_t.

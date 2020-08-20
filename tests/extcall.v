@@ -47,7 +47,7 @@ Definition sched_circuits :=
 Definition sched_circuits_result :=
   tc_compute (interp_circuits (ContextEnv.(create) r) sigma sched_circuits).
 
-Definition cpp_ext_fn_names fn :=
+Definition cpp_ext_fn_specs fn :=
   match fn with
   | f0 => {| efs_name := "cpp_f0";
             efs_method := false |}

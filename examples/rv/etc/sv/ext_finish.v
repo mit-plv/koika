@@ -8,13 +8,17 @@ module ext_finish(input wire CLK, input wire RST_N, input wire[8:0] arg, output 
    assign {finish, exitcode} = arg;
    assign out = 1'b0;
 
+`ifndef STDERR
+ `define STDERR 32'h80000002
+`endif
+
 `ifdef SIMULATION
    always @(posedge CLK)
      if (finish) begin
         if (exitcode == 0)
-    	  $fwrite(32'h80000002, "  [0;32mPASS[0m\n");
+    	  $fwrite(`STDERR, "  [0;32mPASS[0m\n");
     	else
-    	  $fwrite(32'h80000002, "  [0;31mFAIL[0m (%0d)\n", exitcode);
+    	  $fwrite(`STDERR, "  [0;31mFAIL[0m (%0d)\n", exitcode);
         $finish();
      end
 `endif

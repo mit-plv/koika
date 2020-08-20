@@ -45,16 +45,20 @@ module top(input CLK, input RST_N, output uart_wr_valid, output[7:0] uart_wr_dat
      if (led_wr_valid)
        led <= led_wr_data;
 
+`ifndef STDERR
+ `define STDERR 32'h80000002
+`endif
+
 `ifdef SIMULATION
    always @(posedge CLK) begin
       if (led_wr_valid) begin
-        if (led_wr_data)
-          $fwrite(32'h80000002, "☀");
-        else
-          $fwrite(32'h80000002, "🌣");
+         if (led_wr_data)
+           $fwrite(`STDERR, "☀");
+         else
+           $fwrite(`STDERR, "🌣");
       end
       if (uart_wr_ready && uart_wr_valid)
-        $fwrite(32'h80000002, "%c", uart_wr_data);
+        $fwrite(`STDERR, "%c", uart_wr_data);
    end
 `endif
 endmodule

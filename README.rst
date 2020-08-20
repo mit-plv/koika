@@ -810,10 +810,13 @@ The following list shows the current state of the repo:
             - |examples/rv/etc/sv/top_ice40_usb.v|_: Verilog wrapper for the |koika| core (for use in FPGA synthesis, with a USB interface)
             - |examples/rv/etc/sv/top_uart.v|_: Verilog wrapper for the |koika| core with a UART interface
 
+         - |examples/rv/etc/cvc64.sh|_: Simulate the core with CVC
          - |examples/rv/etc/elf.hpp|_: Support for loading ELF files
+         - |examples/rv/etc/iverilog.sh|_: Simulate the core with Icarus Verilog
          - |examples/rv/etc/rvcore.cuttlesim.cpp|_: C++ driver for rv32i simulation with Cuttlesim
          - |examples/rv/etc/rvcore.pyverilator.py|_: Python driver for C++ simulation with Verilator
          - |examples/rv/etc/rvcore.verilator.cpp|_: C++ driver for rv32 simulation with Verilator
+         - |examples/rv/etc/testbench.v|_: Testbench used with CVC and Icarus Verilog
 
       - |examples/rv/Multiplier.v|_: Implementation of a multiplier module
       - |examples/rv/MultiplierCorrectness.v|_: Proof of correctness of the multiplier module
@@ -875,9 +878,13 @@ The following list shows the current state of the repo:
    - |ocaml/registry.ml|_: Stub used to load |koika| programs extracted from Coq into cuttlec
 
 ``tests/``
+   ``trivial_state_machine.etc/``
+      - |tests/trivial_state_machine.etc/stm.v|_: Cleaned-up state machine example
+
    - |tests/arrays.lv|_: Unit tests for array functions
    - |tests/bigint.lv|_: Computations with large bitvectors (the simulator uses boost for >64 bits)
    - |tests/comparisons.lv|_: Unit tests for comparison operators
+   - |tests/cross_cycle.v|_: Cross-cycle optimization in Cuttlesim models
    - |tests/datatypes.lv|_: Simple uses of structs and enums
    - |tests/double_write.v|_: Double-write detection and prevention
    - |tests/errors.1.lv|_: Syntax and typing errors in LV
@@ -896,6 +903,7 @@ The following list shows the current state of the repo:
    - |tests/struct_init.v|_: Structure initialization
    - |tests/switches.v|_: Test various forms of switches
    - |tests/taint_analysis.lv|_: Unit tests to ensure that impure functions are not optimized out
+   - |tests/trivial_state_machine.v|_: Trivial state machine
    - |tests/unpack.v|_: Structure unpacking
 
 
@@ -1031,8 +1039,12 @@ The following list shows the current state of the repo:
 .. _examples/rv/RVEncoding.v: examples/rv/RVEncoding.v
 .. |examples/rv/Scoreboard.v| replace:: ``Scoreboard.v``
 .. _examples/rv/Scoreboard.v: examples/rv/Scoreboard.v
+.. |examples/rv/etc/cvc64.sh| replace:: ``cvc64.sh``
+.. _examples/rv/etc/cvc64.sh: examples/rv/etc/cvc64.sh
 .. |examples/rv/etc/elf.hpp| replace:: ``elf.hpp``
 .. _examples/rv/etc/elf.hpp: examples/rv/etc/elf.hpp
+.. |examples/rv/etc/iverilog.sh| replace:: ``iverilog.sh``
+.. _examples/rv/etc/iverilog.sh: examples/rv/etc/iverilog.sh
 .. |examples/rv/etc/nangate45/synth.sh| replace:: ``synth.sh``
 .. _examples/rv/etc/nangate45/synth.sh: examples/rv/etc/nangate45/synth.sh
 .. |examples/rv/etc/rvcore.cuttlesim.cpp| replace:: ``rvcore.cuttlesim.cpp``
@@ -1055,6 +1067,8 @@ The following list shows the current state of the repo:
 .. _examples/rv/etc/sv/top_ice40_usb.v: examples/rv/etc/sv/top_ice40_usb.v
 .. |examples/rv/etc/sv/top_uart.v| replace:: ``top_uart.v``
 .. _examples/rv/etc/sv/top_uart.v: examples/rv/etc/sv/top_uart.v
+.. |examples/rv/etc/testbench.v| replace:: ``testbench.v``
+.. _examples/rv/etc/testbench.v: examples/rv/etc/testbench.v
 .. |examples/rv/rv32.v| replace:: ``rv32.v``
 .. _examples/rv/rv32.v: examples/rv/rv32.v
 .. |examples/rv/rv32e.v| replace:: ``rv32e.v``
@@ -1113,6 +1127,8 @@ The following list shows the current state of the repo:
 .. _tests/bigint.lv: tests/bigint.lv
 .. |tests/comparisons.lv| replace:: ``comparisons.lv``
 .. _tests/comparisons.lv: tests/comparisons.lv
+.. |tests/cross_cycle.v| replace:: ``cross_cycle.v``
+.. _tests/cross_cycle.v: tests/cross_cycle.v
 .. |tests/datatypes.lv| replace:: ``datatypes.lv``
 .. _tests/datatypes.lv: tests/datatypes.lv
 .. |tests/double_write.v| replace:: ``double_write.v``
@@ -1149,6 +1165,10 @@ The following list shows the current state of the repo:
 .. _tests/switches.v: tests/switches.v
 .. |tests/taint_analysis.lv| replace:: ``taint_analysis.lv``
 .. _tests/taint_analysis.lv: tests/taint_analysis.lv
+.. |tests/trivial_state_machine.etc/stm.v| replace:: ``stm.v``
+.. _tests/trivial_state_machine.etc/stm.v: tests/trivial_state_machine.etc/stm.v
+.. |tests/trivial_state_machine.v| replace:: ``trivial_state_machine.v``
+.. _tests/trivial_state_machine.v: tests/trivial_state_machine.v
 .. |tests/unpack.v| replace:: ``unpack.v``
 .. _tests/unpack.v: tests/unpack.v
 .. end repo architecture
