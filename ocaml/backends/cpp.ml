@@ -1613,7 +1613,7 @@ let clang_format fname =
 let flags_standard =
   ["--std=c++14"]
 let flags_opt =
-  ["-O3"; "-U_FORTIFY_SOURCE"; "-D_FORTIFY_SOURCE=0"; "-fno-stack-protector"]
+  ["-O3"; "-march=native"; "-U_FORTIFY_SOURCE"; "-D_FORTIFY_SOURCE=0"; "-fno-stack-protector"]
 let flags_warnings =
   ["-Wall"; "-Wextra"]
 
