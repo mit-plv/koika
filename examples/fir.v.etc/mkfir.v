@@ -28,7 +28,7 @@
   `define BSV_RESET_EDGE negedge
 `endif
 
-module mkFir(CLK,
+module mkfir(CLK,
 	     RST_N,
 
 	     rd,
@@ -107,5 +107,5 @@ module mkFir(CLK,
   end
   `endif // BSV_NO_INITIAL_BLOCKS
   // synopsys translate_on
-endmodule  // mkFir
+endmodule  // mkfir
 

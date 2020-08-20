@@ -73,10 +73,10 @@ public:
 
 template<typename Dut>
 class KoikaToplevel : public Toplevel<Dut> {
+protected:
   using Toplevel<Dut>::dut;
   using Toplevel<Dut>::cycle;
 
-protected:
   // Change CLK to the name of your clock signal
   void clock(bool up) {
     dut.CLK = up;

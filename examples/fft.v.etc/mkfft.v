@@ -28,7 +28,7 @@
   `define BSV_RESET_EDGE negedge
 `endif
 
-module mkCombinationalFFT(CLK,
+module mkfft(CLK,
 			  RST_N,
 
 			  rd,
@@ -3154,5 +3154,6 @@ module mkCombinationalFFT(CLK,
   end
   `endif // BSV_NO_INITIAL_BLOCKS
   // synopsys translate_on
-endmodule  // mkCombinationalFFT
 
+   final $display("%01024x", rd);
+endmodule  // mkfft

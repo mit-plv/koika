@@ -10,7 +10,7 @@ interface Peak;
 endinterface	
 
 
-module mkFir(Peak);
+module mkfir(Peak);
   Reg#(Vector#(T, Bit#(NO))) q <- mkReg(?);
   Reg#(Bit#(NI)) x <- mkReg(0);
 
