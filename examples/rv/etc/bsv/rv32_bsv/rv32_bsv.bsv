@@ -8,11 +8,14 @@ import ConfigReg::*;
 import Glue_types::*;
 import SpecialFIFOs::*;
 import RF::*;
+import Bht::*;
+import Btb::*;
 
 typedef struct {
    Bit#(32) pc;
    Bit#(32) ppc;
    Bit#(1) epoch;
+   Bit#(1) depoch;
    } Fetch_bookkeeping deriving (Bits,Eq,FShow);
 
 typedef struct {
@@ -49,26 +52,32 @@ module rv32_bsv(RVIfc);
     FIFO#(Decode_bookkeeping) fromDecode <- mkLFIFO;
     FIFO#(Execute_bookkeeping) fromExecute <- mkLFIFO;
     Rf rf <- mkRf;
+    Bht#(8) bht <- mkBht;
+    Btb#(6) btb <- mkBtb;
 
-    Ehr#(2,Bit#(32)) pc <- mkEhr(32'h00000000);
+    Ehr#(3,Bit#(32)) pc <- mkEhr(32'h00000000);
     Ehr#(2,Bit#(1)) epoch <- mkEhr(0);
+    Ehr#(2,Bit#(1)) depoch <- mkEhr(0);
 
     Reg#(Bit#(32)) instr_count <- mkReg(0);
 
     Scoreboard scoreboard <- mkScoreboard;
-    Bool debug = False;
+    Bool debug = False ;
 
     rule fetch;
 	    if(debug) $display("Fetch %x", pc[1]);
-	    let newpc = pc[1];
+	    let newpc = pc[2];
         let req = Mem {byte_en : 0,
 			   addr : newpc,
 			   data : 0};
+        let ppc = btb.predPc(newpc);
         let fetch_bookkeeping = Fetch_bookkeeping {pc : newpc,
-						   ppc : newpc + 4,
-						   epoch : epoch[1]};
+						   ppc : ppc,
+						   epoch : epoch[1],
+						   depoch : depoch[1]
+                   };
         toImem.enq(req);
-        pc[1] <= newpc + 4;
+        pc[2] <= ppc;
         fromFetch.enq(fetch_bookkeeping);
     endrule
 
@@ -85,7 +94,7 @@ module rv32_bsv(RVIfc);
          let fetched_bookkeeping = fromFetchprim.first();
 	//let fetched_bookkeeping = fromFetch.first();
         let decodedInst = decodeInst(instr);
-        if (fetched_bookkeeping.epoch == epoch[1]) begin
+        if (fetched_bookkeeping.epoch == epoch[1] && fetched_bookkeeping.depoch == depoch[0]) begin
             let rs1_idx = getInstFields(instr).rs1;
             let rs2_idx = getInstFields(instr).rs2;
             let score1 = scoreboard.search(rs1_idx);
@@ -101,6 +110,17 @@ module rv32_bsv(RVIfc);
 		end
 		let rs1 = rf.read1(rs1_idx);
 		let rs2 = rf.read2(rs2_idx);
+             let imm = getImmediate(decodedInst) ;
+             let isControl = instr[6:4] == 'b110 ;
+             let isJAL     = (instr[2] == 1) && (instr[3] == 1);
+             let isJALR    = (instr[2] == 1) && (instr[3] == 0); 
+	     let temp_ppcDP = (isControl && !isJAL && !isJALR) ? (bht.predBranch(fetched_bookkeeping.pc)? imm + fetched_bookkeeping.pc: fetched_bookkeeping.pc + 4) : fetched_bookkeeping.ppc ;
+	     let ppcDP =  (isJAL)? imm + fetched_bookkeeping.pc: temp_ppcDP;
+         if (ppcDP != fetched_bookkeeping.ppc) begin
+               depoch[0]<= depoch[0]+1;
+               pc[1] <= ppcDP;
+         end
+
 		let decode_bookkeeping = Decode_bookkeeping {
                                                 pc    : fetched_bookkeeping.pc,
                                                 ppc   : fetched_bookkeeping.ppc,
@@ -169,6 +189,7 @@ module rv32_bsv(RVIfc);
 		if (!(nextPc == decoded_bookkeeping.ppc)) begin
 		    if(debug) $display("[Execute] Misprediction redirect %x", nextPc);
 		    epoch[0] <= epoch[0] + 1;
+            btb.update(pc[0],nextPc);
 		    pc[0] <= nextPc;
 		end
 		let execute_bookkeeping = Execute_bookkeeping {
