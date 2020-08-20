@@ -82,7 +82,7 @@ module ResolvedAST = struct
     | Write of port_t * reg_signature locd * uaction locd
     | Unop of { fn: (Extr.PrimUntyped.ufn1) locd; arg: uaction locd }
     | Binop of { fn: (Extr.PrimUntyped.ufn2) locd; a1: uaction locd; a2: uaction locd }
-    | ExternalCall of { fn: (ffi_signature) locd; arg: uaction locd }
+    | ExternalCall of { fn: ffi_signature locd; arg: uaction locd }
     | InternalCall of { fn: uaction locd internal_function; args: uaction locd list }
     | Sugar of usugar
   and usugar =

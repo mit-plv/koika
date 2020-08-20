@@ -95,7 +95,7 @@ interface Peak;
 	method Vector#(FFT_POINTS, ComplexSample) rd();
 endinterface	
 
-module mkCombinationalFFT(Peak);
+module mkfft(Peak);
 
   // Statically generate the twiddle factors table.
   TwiddleTable twiddles = genTwiddles();

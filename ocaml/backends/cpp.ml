@@ -1312,11 +1312,11 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
           sprintf "%s %s" (cpp_type_of_type tau) (hpp.cpp_var_names nm) in
         let ret_tau = Cuttlebone.Util.typ_of_extr_type intf.Extr.int_retSig in
         let ret_type = cpp_type_of_type ret_tau in
-        let ret_arg = sprintf "%s %s" ret_type "*_ret" in
+        let ret_arg = sprintf "%s %s" ret_type "&_ret" in
         let args = String.concat ", " @@ name :: ret_arg :: List.map sp_arg intf.Extr.int_argspec in
         p "DECL_FN(%s, %s)" name ret_type;
         p_special_fn "FN" ~args (fun () ->
-            let target = VarTarget { tau = ret_tau; declared = true; name = "(*_ret)" } in
+            let target = VarTarget { tau = ret_tau; declared = true; name = "_ret" } in
             p_assign_and_ignore target (p_action true pos target intf.int_body);
             p "return true;") in
 
@@ -1561,7 +1561,7 @@ let input_of_compile_unit (cu: 'f Cuttlebone.Compilation.compile_unit) =
     cpp_registers = Array.of_list cu.c_registers;
     cpp_register_sigs = (fun r -> r);
     cpp_register_kinds = register_kinds;
-    cpp_ext_sigs = (fun f -> f);
+    cpp_ext_sigs = (fun f -> f, `Function); (* FIXME add syntax for methods *)
     cpp_extfuns = cu.c_cpp_preamble; }
 
 let cpp_rule_of_koika_package_rule (kp: _ Extr.koika_package_t)

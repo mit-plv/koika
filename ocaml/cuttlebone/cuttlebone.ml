@@ -272,7 +272,7 @@ module Util = struct
         (rules: rule_name_t -> ('pos_t, 'var_t, fn_name_t, reg_t, 'ext_fn_t) Extr.rule)
         (scheduler: ('pos_t, rule_name_t) Extr.scheduler)
       : (rule_name_t -> reg_t -> Extr.register_history)
-        * (rule_name_t -> ('pos_t, 'var_t, fn_name_t, reg_t, 'fn_t) Extr.annotated_rule)
+        * (rule_name_t -> ('pos_t, 'var_t, fn_name_t, reg_t, 'ext_fn_t) Extr.annotated_rule)
         * (reg_t -> Extr.register_kind) =
     (* Taking in a list of rules allows us to ensure that we annotate all rules,
        not just those mentioned in the scheduler. *)
@@ -645,7 +645,7 @@ module Graphs = struct
     dedup_circuit
       { di_regs = cu.c_registers;
         di_reg_sigs = (fun r -> r);
-        di_fn_specs = (fun fn -> (fn, `Internal));
+        di_fn_specs = (fun fn -> (fn, `Internal)); (* FIXME add syntax in LV for `External *)
         di_rule_names = (fun rln -> rln);
         di_rule_external = externalp;
         di_circuits = circuits;

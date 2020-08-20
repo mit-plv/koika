@@ -112,7 +112,7 @@ struct extfuns_t {
 };
 
 class rv_core final : public module_rv32<extfuns_t> {
-  void strobe(std::uint_fast64_t _unused ncycles) const {
+  void strobe() const {
 #if defined(SIM_STROBE) && !defined(SIM_MINIMAL)
     std::cout << "# " << ncycles << std::endl;
     std::cout << "pc = " << Log.state.pc << std::endl;

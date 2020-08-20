@@ -339,6 +339,7 @@ namespace prims {
 
     template <uint base, uint64_t max, uint64_t num>
     constexpr uint64_t parse_u64() noexcept {
+      static_assert(max >= num, "Overflow in literal parsing");
       return num;
     }
 
@@ -1387,7 +1388,7 @@ namespace cuttlesim {
   { (*__fn_ret) = val; return true; }
 #define CALL_FN(fname, ...) \
   ({ PASTE_EXPANDED_3(ti_fn, RULE_NAME, fname) tmp; \
-     FAIL_UNLESS(PASTE_EXPANDED_3(fn, RULE_NAME, fname)(&tmp,##__VA_ARGS__)); \
+     FAIL_UNLESS(PASTE_EXPANDED_3(fn, RULE_NAME, fname)(tmp,##__VA_ARGS__)); \
      tmp; })
 #define COMMIT() \
   { PASTE_EXPANDED_2(commit, RULE_NAME)(); return true; }

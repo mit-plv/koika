@@ -939,7 +939,7 @@ Hint Rewrite
      andb_true_l (** true && b -> b *)
      negb_orb (** negb (b || c) -> negb b && negb c *)
      negb_andb (** negb (b && c) -> negb b || negb c *)
-     negb_involutive (** negb( (negb b) -> b *)
+     negb_involutive (** negb (negb b) -> b *)
   : bool_simpl.
 Ltac bool_simpl :=
   autorewrite with bool_simpl in *.
@@ -1354,6 +1354,10 @@ Module Bits.
     Fixpoint or_ones_r {sz} (bs: bits sz) {struct sz}:
       Bits.or bs (Bits.ones _) = Bits.ones _.
     Proof. unfold or in *; t_map sz bs. Defined.
+
+    Fixpoint neg_involutive {sz} (bs: bits sz) {struct sz}:
+      Bits.neg (Bits.neg bs) = bs.
+    Proof. unfold neg in *; t_map sz bs. Defined.
   End Binops.
 End Bits.
 
