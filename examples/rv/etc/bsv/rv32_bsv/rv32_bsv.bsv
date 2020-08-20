@@ -71,6 +71,7 @@ module rv32_bsv(RVIfc);
 			   addr : newpc,
 			   data : 0};
         let ppc = btb.predPc(newpc);
+       // let ppc = newpc+4;// btb.predPc(newpc);
         let fetch_bookkeeping = Fetch_bookkeeping {pc : newpc,
 						   ppc : ppc,
 						   epoch : epoch[1],
@@ -95,35 +96,35 @@ module rv32_bsv(RVIfc);
 	//let fetched_bookkeeping = fromFetch.first();
         let decodedInst = decodeInst(instr);
         if (fetched_bookkeeping.epoch == epoch[1] && fetched_bookkeeping.depoch == depoch[0]) begin
-            let rs1_idx = getInstFields(instr).rs1;
-            let rs2_idx = getInstFields(instr).rs2;
-            let score1 = scoreboard.search(rs1_idx);
+        let rs1_idx = getInstFields(instr).rs1;
+        let rs2_idx = getInstFields(instr).rs2;
+        let score1 = scoreboard.search(rs1_idx);
 	    let score2 = scoreboard.search(rs2_idx);
 	    if (score1 == 0 && score2 == 0) begin
-		if(debug) $display("[Decode] Right path: ", fshow(decodedInst));
+		if (debug) $display("[Decode] Right path: ", fshow(decodedInst));
 		//fromFetch.deq();
 		fromFetchprim.deq();
 		fromImem.deq();
 		if (decodedInst.valid_rd) begin
-                    let rd_idx = getInstFields(instr).rd;
-                    scoreboard.insert(rd_idx);
+             let rd_idx = getInstFields(instr).rd;
+             scoreboard.insert(rd_idx);
 		end
 		let rs1 = rf.read1(rs1_idx);
 		let rs2 = rf.read2(rs2_idx);
-             let imm = getImmediate(decodedInst) ;
-             let isControl = instr[6:4] == 'b110 ;
-             let isJAL     = (instr[2] == 1) && (instr[3] == 1);
-             let isJALR    = (instr[2] == 1) && (instr[3] == 0); 
-	     let temp_ppcDP = (isControl && !isJAL && !isJALR) ? (bht.predBranch(fetched_bookkeeping.pc)? imm + fetched_bookkeeping.pc: fetched_bookkeeping.pc + 4) : fetched_bookkeeping.ppc ;
-	     let ppcDP =  (isJAL)? imm + fetched_bookkeeping.pc: temp_ppcDP;
-         if (ppcDP != fetched_bookkeeping.ppc) begin
-               depoch[0]<= depoch[0]+1;
-               pc[1] <= ppcDP;
-         end
+        let imm = getImmediate(decodedInst);
+        let isControl = instr[6:4] == 'b110 ;
+        let isJAL     = (instr[2] == 1) && (instr[3] == 1);
+        let isJALR    = (instr[2] == 1) && (instr[3] == 0); 
+	    let temp_ppcDP = (isControl && !isJAL && !isJALR) ? (bht.predBranch(fetched_bookkeeping.pc)? imm + fetched_bookkeeping.pc: fetched_bookkeeping.pc + 4) : fetched_bookkeeping.ppc ;
+	    let ppcDP =  (isJAL)? imm + fetched_bookkeeping.pc: temp_ppcDP;
+        if (ppcDP != fetched_bookkeeping.ppc) begin
+              depoch[0]<= depoch[0]+1;
+              pc[1] <= ppcDP;
+        end
 
 		let decode_bookkeeping = Decode_bookkeeping {
                                                 pc    : fetched_bookkeeping.pc,
-                                                ppc   : fetched_bookkeeping.ppc,
+                                                ppc   : temp_ppcDP,
                                                 epoch : fetched_bookkeeping.epoch,
                                                 dInst : decodedInst,
                                                 rval1 : rs1,
@@ -182,10 +183,17 @@ module rv32_bsv(RVIfc);
 		    toDmem.enq(req);
 		end
 		else if (isControlInst(dInst)) begin
-                    data = ipc + 4;    // (* For jump and link *)
+                       data = ipc + 4;    // (* For jump and link *)
 		end
 		let controlResult = execControl32(fInst, rs1_val, rs2_val, imm, ipc);
 		let nextPc = controlResult.nextPC;
+        Bool isControl = fInst[6:4] == 3'b110;
+        let isJAL     = (fInst[2] == 1) && (fInst[3] == 1);
+        let isJALR    = (fInst[2] == 1) && (fInst[3] == 0); 
+        if (isControl && !isJAL && !isJALR) begin
+            bht.update(pc[0], nextPc);
+        end
+
 		if (!(nextPc == decoded_bookkeeping.ppc)) begin
 		    if(debug) $display("[Execute] Misprediction redirect %x", nextPc);
 		    epoch[0] <= epoch[0] + 1;
