@@ -8,8 +8,8 @@ Module Type Bht_sig.
   Parameter idx_sz:nat.
   Parameter addr:nat.
 End Bht_sig.
-Definition write_style := @SequentialSwitchTt var_t.
-Definition read_style (nbits: nat) := @OrTreeSwitch var_t nbits.
+Definition write_style := @NestedSwitch var_t.
+Definition read_style (nbits: nat) := @NestedSwitch var_t.
 
 Module Bht (s:Bht_sig).
   Import s.

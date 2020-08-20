@@ -10,8 +10,8 @@ Module Type Btb_sig.
   Parameter addr:nat.
 End Btb_sig.
 
-Definition write_style := @SequentialSwitchTt var_t.
-Definition read_style (nbits: nat) := @OrTreeSwitch var_t nbits.
+Definition write_style := @NestedSwitch var_t.
+Definition read_style (nbits: nat) := @NestedSwitch var_t.
 
 Module Btb (s:Btb_sig).
   Import s.
@@ -82,6 +82,7 @@ Module Btb (s:Btb_sig).
   (* Interesting point: the btb should almost never conflict even though it is not an ehr.
      We should investigate that. Indeed the wrong path instruction won't be seen that cycle! *)
 
+                       (* if ((lookup_tag == lookup_tag) && lookup_valid) *)
   Definition predPc: UInternalFunction reg_t empty_ext_fn_t :=
     {{
         fun predPc (pc: bits_t addr) : bits_t addr =>
@@ -89,7 +90,7 @@ Module Btb (s:Btb_sig).
         let tag := getTag(pc) in
         let lookup_tag := tags.(Tags.read_0)(index) in
         let lookup_valid := valid.(Valid.read_0)(index) in
-        if ((lookup_tag == lookup_tag) && lookup_valid)
+        if ((lookup_tag == tag) && lookup_valid)
         then
            targets.(Targets.read_0)(index)
         else (* Need to check that this would work wihtout the parenthesis, that is we fixed the prirority problem *)

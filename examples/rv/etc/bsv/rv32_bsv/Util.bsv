@@ -1,4 +1,5 @@
-
+typedef 32 AddrSz;
+typedef Bit#(AddrSz) Addr ;
 typedef struct {
     Bit#(7) opcode;
     Bit#(3) funct3;

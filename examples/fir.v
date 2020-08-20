@@ -134,7 +134,7 @@ Section Fir.
             Ob~0~0~0~0~0~0~1~1;
             Ob~0~0~0~0~0~1~0~0]))` in
     let bla := feed(X, W) in
-    write0(x, X + |8`d9|)
+    write0(x, extcall mod19 (X + |8`d9|))
   }}.
   (* Typechecking  *)
   Definition rules :=
