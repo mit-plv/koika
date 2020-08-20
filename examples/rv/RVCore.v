@@ -3,6 +3,7 @@ Require Import Koika.Frontend.
 Require Import Coq.Lists.List.
 
 Require Import Koika.Std.
+Require Import rv.FiniteType.
 Require Import rv.RVEncoding.
 Require Import rv.Scoreboard.
 Require Import rv.Btb.
@@ -613,7 +614,7 @@ Module RV32Core (RVP: RVParams) (Multiplier: MultiplierInterface).
         let instr := get(instr,data) in
         let fetched_bookkeeping := f2dprim.(waitFromFetch.deq)() in
         let decodedInst := decode_fun(instr) in
-        when ((get(fetched_bookkeeping, epoch) == read1(epoch)) && (get(fetched_bookkeeping, depoch) == read1(depoch))) do
+        when ((get(fetched_bookkeeping, epoch) == read1(epoch)) && (get(fetched_bookkeeping, depoch) == read0(depoch))) do
              (let rs1_idx := get(getFields(instr), rs1) in
              let rs2_idx := get(getFields(instr), rs2) in
              let score1 := scoreboard.(Scoreboard.search)(sliceReg(rs1_idx)) in
@@ -1024,7 +1025,7 @@ Module RV32I <: Core.
   Instance FiniteType_bht : FiniteType Bht.reg_t := _.
   Instance FiniteType_f2dprim : FiniteType waitFromFetch.reg_t := _.
   Instance FiniteType_mulState : FiniteType Multiplier.reg_t := _.
-  Instance FiniteType_reg_t : FiniteType reg_t := _.
+  Instance FiniteType_reg_t : FiniteType reg_t := _. (* ~60 seconds *)
 (*   unshelve econstructor. *)
 (*   2:{ *)
 (*     exact (List.map toIMem (@finite_elements _ FiniteType_toIMem) ++ *)
