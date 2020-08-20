@@ -10,16 +10,16 @@ twiddleGen:
 
 fftbsim:
 	mkdir -p bscdir
-	bsc -simdir $(build_dir) -bdir $(build_dir) -sim -O -Xc++ -O3 -Xc -O3 -g mkCombinationalFFT -p +:$(build_dir) -u FFT.bsv
-	bsc -simdir $(build_dir) -bdir $(build_dir) -sim -O -Xc++ -O3 -Xc -O3 -e mkCombinationalFFT
+	bsc -simdir $(build_dir) -bdir $(build_dir) -sim -O -Xc++ -O3 -Xc -O3 -g mkfft -p +:$(build_dir) -u FFT.bsv
+	bsc -simdir $(build_dir) -bdir $(build_dir) -sim -O -Xc++ -O3 -Xc -O3 -e mkfft
 
 
 fftverilog:
 	mkdir -p bscdir
-	bsc -vdir $(build_dir)  -u  -g mkCombinationalFFT -verilog -p +:$(build_dir) -u FFT.bsv
-	verilator -y $(VERILOG_BSV) -O3 -CFLAGS -O3 -cc bscdir/mkCombinationalFFT.v	
-	cd obj_dir; make -f VmkCombinationalFFT.mk; cd ..
-	g++ -O3 -I obj_dir -I/usr/share/verilator/include driver.cpp /usr/share/verilator/include/verilated.cpp -o module obj_dir/VmkCombinationalFFT__ALL.a
+	bsc -vdir $(build_dir)  -u  -g mkfft -verilog -p +:$(build_dir) -u FFT.bsv
+	verilator -y $(VERILOG_BSV) -O3 -CFLAGS -O3 -cc bscdir/mkfft.v	
+	cd obj_dir; make -f Vmkfft.mk; cd ..
+	g++ -O3 -I obj_dir -I/usr/share/verilator/include driver.cpp /usr/share/verilator/include/verilated.cpp -o module obj_dir/Vmkfft__ALL.a
 
 clean:
 	rm -rf *.bo
