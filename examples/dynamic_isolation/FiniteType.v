@@ -14,6 +14,8 @@ Module FiniteTypeHelpers.
   Hint Constructors NoDup : FT_helpers.
   Hint Rewrite app_nil_r : FT_helpers.
 
+  Import List.
+
   Program Fixpoint increasing_lists (l: list (list nat)) {measure (length l)} : Prop :=
     match l with
     | [] => True
