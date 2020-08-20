@@ -11,7 +11,7 @@ bit[31:0] instructions[8] = '{
   32'b11000001011111000110001001111001
 };
 
-module fetch_instr(input wire CLK,
+module fetch_instr(input wire CLK, input wire RST_N,
                    input wire[2:0] arg,
                    output wire[31:0] out);
    assign out = instructions[arg];
