@@ -103,6 +103,72 @@ Section correct.
   Arguments wp_action {pos_t var_t fn_name_t} {reg_t ext_fn_t} {R Sigma} {REnv} r sigma
             {sig tau} _ !_ _ /.
 
+  Arguments interp_scheduler_cps {pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t}%type_scope {R Sigma}%function_scope {REnv} r (sigma rules)%function_scope !s / {A}%type_scope k : assert.
+  Arguments interp_rule_cps {pos_t var_t fn_name_t reg_t ext_fn_t}%type_scope {R Sigma}%function_scope {REnv} r sigma%function_scope !rl / {A}%type_scope k log : assert.
+
+  Arguments wp_scheduler {pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t}%type_scope {R Sigma}%function_scope {REnv} r (sigma rules)%function_scope !s / post : assert.
+
+  Lemma scheduler_correct :
+    exists l', interp_scheduler r sigma rls pipeline = l'.
+  Proof.
+    unfold pipeline.
+    (* unfold interp_scheduler, interp_scheduler', interp_rule; simpl. *)
+    (* rewrite <- interp_scheduler_cps_correct; simpl. *)
+    apply wp_scheduler_correct.
+    simpl.
+    Arguments logentry_app {T}%type_scope !l1 !l2 /: assert.
+    simpl.
+    destruct (Bits.single (getenv ContextEnv r queue_invalid)); simpl.
+    all: eexists; reflexivity.
+  Qed.
+
+  Arguments wp_cycle {pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t}%type_scope {R Sigma}%function_scope {REnv} r (sigma rules)%function_scope !s / post : assert.
+
+  Notation "env .[ idx ]" := (getenv ContextEnv env idx) (at level 1, format "env .[ idx ]").
+  (* FIXME remove these notations *)
+  Notation "0b0" := {| vhd := false; vtl := _vect_nil |}.
+  Notation "0b1" := {| vhd := true; vtl := _vect_nil |}.
+
+  Arguments may_read /.
+  Arguments may_write /.
+
+  Lemma cycle_correct :
+    forall (init: ContextEnv.(env_t) R),
+    exists l', Logs.commit_update init (TypedSemantics.interp_scheduler init sigma rls pipeline) = l'.
+  Proof.
+    intros; unfold pipeline.
+    Time unfold TypedSemantics.interp_scheduler, TypedSemantics.interp_scheduler', TypedSemantics.interp_rule; simpl. (* 11s *)
+  Abort.
+
+  Lemma cycle_correct :
+    forall (init: ContextEnv.(env_t) R),
+    exists l', CompactLogs.commit_update init (CompactSemantics.interp_scheduler init sigma rls pipeline) = l'.
+  Proof.
+    intros; unfold pipeline.
+    Time unfold CompactSemantics.interp_scheduler, CompactSemantics.interp_scheduler', CompactSemantics.interp_rule; simpl. (* 17s *)
+  Abort.
+
+  Lemma cycle_correct :
+    forall (init: ContextEnv.(env_t) R),
+    exists l', CompactLogs.commit_update init (CompactSemantics.interp_scheduler init sigma rls pipeline) = l'.
+  Proof.
+    intros; unfold pipeline.
+    apply wp_cycle_correct.
+    Time simpl. (* 0.6s *)
+
+    destruct (Bits.single init.[queue_invalid]); simpl.
+    - (* Initialization: nothing in the queue yet *)
+      eexists; reflexivity.
+    - (* Steady state: queue remains full *)
+      eexists; reflexivity.
+  Qed.
+
+
+
+
+
+
+
   Lemma doG_correct :
     Bits.single (ContextEnv.(getenv) r queue_invalid) = false ->
     (* ContextEnv.(getenv) r queue_data = (sigma F) (ContextEnv.(getenv) r output_buffer) -> *)
@@ -134,6 +200,7 @@ Section correct.
            (*   end *)
            end.
 
+  (* FIXME *)
   Arguments may_read0 /.
   Arguments may_read1 /.
   Arguments may_write0 /.
@@ -168,49 +235,7 @@ Section correct.
     eexists; split; reflexivity.
   Qed.
 
-  Arguments interp_scheduler_cps {pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t}%type_scope {R Sigma}%function_scope {REnv} r (sigma rules)%function_scope !s / {A}%type_scope k : assert.
-  Arguments interp_rule_cps {pos_t var_t fn_name_t reg_t ext_fn_t}%type_scope {R Sigma}%function_scope {REnv} r sigma%function_scope !rl / {A}%type_scope k log : assert.
 
-  Arguments wp_scheduler {pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t}%type_scope {R Sigma}%function_scope {REnv} r (sigma rules)%function_scope !s / post : assert.
-
-  Lemma scheduler_correct :
-    exists l', interp_scheduler r sigma rls pipeline = l'.
-  Proof.
-    unfold pipeline.
-    (* unfold interp_scheduler, interp_scheduler', interp_rule; simpl. *)
-    (* rewrite <- interp_scheduler_cps_correct; simpl. *)
-    apply wp_scheduler_correct.
-    simpl.
-    Arguments logentry_app {T}%type_scope !l1 !l2 /: assert.
-    simpl.
-    destruct (Bits.single (getenv ContextEnv r queue_invalid)); simpl.
-    all: eexists; reflexivity.
-  Qed.
-
-  Arguments wp_cycle {pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t}%type_scope {R Sigma}%function_scope {REnv} r (sigma rules)%function_scope !s / post : assert.
-
-  Notation "env .[ idx ]" := (getenv ContextEnv env idx) (at level 1, format "env .[ idx ]").
-  (* FIXME remove these notations *)
-  Notation "0b0" := {| vhd := false; vtl := _vect_nil |}.
-  Notation "0b1" := {| vhd := true; vtl := _vect_nil |}.
-
-  Lemma cycle_correct :
-    forall (init: ContextEnv.(env_t) R),
-    exists l', commit_update init (interp_scheduler init sigma rls pipeline) = l'.
-  Proof.
-    intros; unfold pipeline.
-    (* Compare this: unfold interp_scheduler, interp_scheduler', interp_rule; simpl. *)
-    apply wp_cycle_correct.
-    Time simpl.
-
-    destruct (Bits.single init.[queue_invalid]); simpl.
-    - (* Initialization: nothing in the queue yet *)
-      eexists; reflexivity.
-    - (* Steady state: queue remains full *)
-      eexists; reflexivity.
-  Qed.
-
-    Arguments interp_rule_cps
 Definition external (r: rule_name_t) := false.
 
 Definition circuits :=
