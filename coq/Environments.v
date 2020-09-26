@@ -440,8 +440,8 @@ Proof.
 Qed.
 
 Definition update {K} (E: Env K) {V: esig K}
-           (ev: E.(env_t) V) (k: K) (fn: forall k, V k -> V k) : E.(env_t) V :=
-  E.(putenv) ev k (fn k (E.(getenv) ev k)).
+           (ev: E.(env_t) V) (k: K) (fn: V k -> V k) : E.(env_t) V :=
+  E.(putenv) ev k (fn (E.(getenv) ev k)).
 
 Definition map {K} (E: Env K) {V1 V2: esig K} (fn: forall k, V1 k -> V2 k)
            (ev1: E.(env_t) V1) : E.(env_t) V2 :=

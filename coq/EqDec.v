@@ -67,3 +67,11 @@ Proof.
     + reflexivity.
   - congruence.
 Qed.
+
+Lemma beq_dec_refl {A} {EQ: EqDec A}:
+  forall a, beq_dec a a = true.
+Proof.
+  intros.
+  unfold beq_dec.
+  rewrite eq_dec_refl; reflexivity.
+Qed.

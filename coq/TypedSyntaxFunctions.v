@@ -96,8 +96,8 @@ Section TypedSyntaxFunctions.
              List.fold_left
                (fun (rbr: reg_rules_map) '(reg, evt_port) =>
                   match evt_port with
-                  | (TRWRead, P1) => update REnv rbr reg (fun _ rr => rr_add_read1 rr rl)
-                  | (TRWWrite, P0) => update REnv rbr reg (fun _ rr => rr_add_write0 rr rl)
+                  | (TRWRead, P1) => update REnv rbr reg (fun rr => rr_add_read1 rr rl)
+                  | (TRWWrite, P0) => update REnv rbr reg (fun rr => rr_add_write0 rr rl)
                   | _ => rbr
                   end)
                action_footprint rbr)
@@ -211,7 +211,7 @@ Section TypedSyntaxFunctions.
       end.
 
     Definition update_map lenv reg (evt: event_t) :=
-      Environments.update REnv lenv reg (fun _ l => update_history l evt).
+      Environments.update REnv lenv reg (fun l => update_history l evt).
 
     Fixpoint annotate_action_register_histories
              {sig tau} (env: reg_history_map)

@@ -69,8 +69,8 @@ Section LoweredSyntaxFunctions.
              List.fold_left
                (fun (rbr: reg_rules_map) '(reg, evt_port) =>
                   match evt_port with
-                  | (LRWRead, P1) => update REnv rbr reg (fun _ rr => rr_add_read1 rr rl)
-                  | (LRWWrite, P0) => update REnv rbr reg (fun _ rr => rr_add_write0 rr rl)
+                  | (LRWRead, P1) => update REnv rbr reg (fun rr => rr_add_read1 rr rl)
+                  | (LRWWrite, P0) => update REnv rbr reg (fun rr => rr_add_write0 rr rl)
                   | _ => rbr
                   end)
                action_footprint rbr)
