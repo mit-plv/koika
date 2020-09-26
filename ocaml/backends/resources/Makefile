@@ -171,10 +171,10 @@ VERILATOR_TRACE_LDFLAGS ?= $(VERILATOR_OPT_LDFLAGS)
 VERILATOR_OPT_FLAGS ?= --x-assign fast --x-initial fast --noassert -O3 -CFLAGS '$(VERILATOR_OPT_CFLAGS)' -LDFLAGS '$(VERILATOR_OPT_LDFLAGS)'
 VERILATOR_TRACE_FLAGS ?= -CFLAGS '$(VERILATOR_TRACE_CFLAGS)' -LDFLAGS '$(VERILATOR_TRACE_LDFLAGS)'
 
-ifeq ($(CXX),g++)
-verilator_compiler_flags := --compiler gcc
-else ifeq ($(CXX),clang++)
+ifneq (,$(findstring clang,$(CXX)))
 verilator_compiler_flags := --compiler clang -CFLAGS -fPIC
+else ifneq (,$(findstring g++,$(CXX)))
+verilator_compiler_flags := --compiler gcc
 else
 verilator_compiler_flags :=
 endif
