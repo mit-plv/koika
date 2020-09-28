@@ -24,7 +24,6 @@ Section CPS.
   Definition acontext (sig argspec: tsig var_t) :=
     context (fun k_tau => action sig (snd k_tau)) argspec.
 
-  (* Cool trick: generalizing the return types simplifies the correctness proof a lot *)
   Definition action_continuation A sig tau := option (Log * tau * (tcontext sig)) -> A.
   Definition rule_continuation A := option Log -> A.
   Definition scheduler_continuation A := Log -> A.
@@ -44,7 +43,12 @@ Section CPS.
   (* FIXME monad *)
 
   Section Action.
-    Fixpoint interp_action_cps {sig tau} {A} (L: Log) (a: action sig tau) (k: action_continuation A sig tau) : action_interpreter A sig :=
+    Fixpoint interp_action_cps
+             {sig tau} {A}
+             (L: Log)
+             (a: action sig tau)
+             (k: action_continuation A sig tau)
+    : action_interpreter A sig :=
       let cps {sig tau} a k := @interp_action_cps sig tau A L a k in
       match a in TypedSyntax.action _ _ _ _ _ ts tau return (action_continuation A ts tau -> action_interpreter A ts)  with
       | Fail tau => fun k Gamma l => k None
