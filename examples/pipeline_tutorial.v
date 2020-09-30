@@ -154,12 +154,6 @@ Section Streams.
     - rewrite Heq; apply IH.
   Qed.
 
-  Lemma coiterate_pointwise' {A} (f g: A -> A):
-    (forall x, f x = g x) ->
-    forall init: A,
-      eq (coiterate f init) (coiterate g init).
-  Admitted.
-
   Lemma coiterate_pointwise_inv {A} (f g: A -> A) (inv: A -> Prop):
     (forall x, inv x -> inv (g x)) -> (* Use g because that's usually the simpler one *)
     (forall x, inv x -> f x = g x) ->
@@ -172,14 +166,6 @@ Section Streams.
     - reflexivity.
     - rewrite Heq; auto.
   Qed.
-
-  Lemma coiterate_pointwise_inv' {A} (f g: A -> A) (inv: A -> Prop):
-    forall init: A,
-      (forall x, inv x -> f x = g x) ->
-      inv (init) ->
-      (forall x, inv x -> inv (g x)) ->
-      eq (coiterate f init) (coiterate g init).
-  Admitted.
 
   Lemma map_eqn {A B} (f: A -> B) (s: Streams.Stream A) :
     Streams.map f s =
@@ -197,47 +183,17 @@ Section Streams.
   Proof. reflexivity. Qed.
 End Streams.
 
-Arguments wp_action {pos_t var_t fn_name_t} {reg_t ext_fn_t} {R Sigma} {REnv} r sigma
-          {sig tau} _ !_ _ /.
-
-Arguments interp_cycle_cps {pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t}%type_scope {R Sigma}%function_scope {REnv} r (sigma rules)%function_scope !s / {A}%type_scope k : assert.
-Arguments interp_scheduler_cps {pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t}%type_scope {R Sigma}%function_scope {REnv} r (sigma rules)%function_scope !s / {A}%type_scope k : assert.
-Arguments interp_rule_cps {pos_t var_t fn_name_t reg_t ext_fn_t}%type_scope {R Sigma}%function_scope {REnv} r sigma%function_scope !rl / {A}%type_scope k log : assert.
-
-Arguments wp_scheduler {pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t}%type_scope {R Sigma}%function_scope {REnv} r (sigma rules)%function_scope !s / post : assert.
-
-Arguments interp_cycle: simpl never.
 Arguments id _ _ / : assert.
 
-Declare Custom Entry context_mapping.
-
-Notation "x  ->  y" :=
-  (CtxCons x y CtxEmpty)
-    (in custom context_mapping at level 80,
-        x constr at level 0, y constr at level 80,
-        no associativity).
-
-Notation "x  ->  y ;  z" :=
-  (CtxCons x y z)
-    (in custom context_mapping at level 80,
-        x constr at level 0, y constr at level 80,
-        z custom context_mapping at level 80,
-        right associativity).
-
-Notation "#{  x  }#" := (x) (at level 0, x custom context_mapping at level 200) : context.
 Arguments env_t: simpl never.
 Arguments vect: simpl never.
 
-Arguments wp_cycle {pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t}%type_scope {R Sigma}%function_scope {REnv} r (sigma rules)%function_scope !s / post : assert.
-
-Notation "env .[ idx ]" := (getenv ContextEnv env idx) (at level 1, format "env .[ idx ]").
 (* FIXME remove these notations *)
 Notation "0b0" := {| vhd := false; vtl := _vect_nil |}.
 Notation "0b1" := {| vhd := true; vtl := _vect_nil |}.
 
 Arguments may_read /.
 Arguments may_write /.
-Arguments logentry_app {T}%type_scope !l1 !l2 /: assert.
 
 Opaque interp_cycle.
 
