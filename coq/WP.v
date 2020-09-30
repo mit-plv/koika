@@ -388,3 +388,48 @@ Section CPS.
     Qed.
   End WP.
 End CPS.
+
+Arguments interp_action_cps
+          {pos_t var_t fn_name_t reg_t ext_fn_t}
+          {R Sigma} {REnv} r sigma
+          {sig tau} L !a / A k.
+
+Arguments interp_rule_cps
+          {pos_t var_t fn_name_t reg_t ext_fn_t}
+          {R Sigma} {REnv} r sigma
+          !rl / {A} k.
+
+Arguments interp_scheduler_cps
+          {pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t}
+          {R Sigma} {REnv} r sigma
+          rules !s / {A} k : assert.
+
+Arguments interp_cycle_cps
+          {pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t}
+          {R Sigma} {REnv} r sigma
+          rules !s / {A} k : assert.
+
+Arguments wp_action
+          {pos_t var_t fn_name_t reg_t ext_fn_t}
+          {R Sigma} {REnv} r sigma
+          {sig tau} L !a post / Gamma action_log : assert.
+
+Arguments wp_rule
+          {pos_t var_t fn_name_t reg_t ext_fn_t}
+          {R Sigma} {REnv} r sigma
+          !rl / post.
+
+Arguments wp_scheduler
+          {pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t}
+          {R Sigma} {REnv} r sigma
+          rules !s / post : assert.
+
+Arguments wp_cycle
+          {pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t}
+          {R Sigma} {REnv} r sigma
+          rules !s / post : assert.
+
+Arguments wp_scheduler
+          {pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t}
+          {R Sigma} {REnv} r (sigma rules)
+          !s / post : assert.
