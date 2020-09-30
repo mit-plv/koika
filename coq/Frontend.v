@@ -31,10 +31,22 @@ Notation "'write0' v" := (LE LogWrite P0 v) (at level 10, only printing) : log_e
 Notation "'write1' v" := (LE LogWrite P1 v) (at level 10, only printing) : log_entries.
 
 Declare Scope context.
-Notation "∅" :=
-  (CtxEmpty) (at level 80, only printing) : context.
-Notation "[ x  ↦  y ]  ::  tl" :=
-  (CtxCons x y tl) (at level 80, right associativity, only printing) : context.
+Declare Custom Entry context_mapping.
+
+Notation "x  ->  y" :=
+  (CtxCons x y CtxEmpty)
+    (in custom context_mapping at level 80,
+        x constr at level 0, y constr at level 80,
+        no associativity).
+
+Notation "x  ->  y ;  z" :=
+  (CtxCons x y z)
+    (in custom context_mapping at level 80,
+        x constr at level 0, y constr at level 80,
+        z custom context_mapping at level 80,
+        right associativity).
+
+Notation "#{  x  }#" := (x) (at level 0, x custom context_mapping at level 200) : context.
 
 (* FIXME *)
 Declare Scope bits_printing.

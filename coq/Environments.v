@@ -516,3 +516,5 @@ Definition ContextEnv {K} {FT: FiniteType K}: Env K.
   - intros; apply cassoc_creplace_eq.
   - intros; apply cassoc_creplace_neq_k; eassumption.
 Defined.
+
+Notation "env .[ idx ]" := (getenv ContextEnv env idx) (at level 1, format "env .[ idx ]").
