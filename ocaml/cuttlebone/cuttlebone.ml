@@ -391,6 +391,7 @@ module Compilation = struct
     (* let equivb _ c1 c2 = c1 == c2 in *)
     let equivb = extr_circuit_incomplete_equivb in
     let cR, cSigma = lower_R _R, lower_Sigma _Sigma in
+    (* fun _sz c -> c *)
     (lco_all_iterated cR cSigma equivb 10).lco_fn
 
   let compile (cu: 'f compile_unit) : (reg_signature -> compiled_circuit) =
