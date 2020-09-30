@@ -24,7 +24,8 @@ Section CPS.
   Definition acontext (sig argspec: tsig var_t) :=
     context (fun k_tau => action sig (snd k_tau)) argspec.
 
-  Definition action_continuation A sig tau := option (Log * tau * (tcontext sig)) -> A.
+  Definition interp_continuation A sig R := option (Log * R * (tcontext sig)) -> A.
+  Definition action_continuation A sig tau := interp_continuation A sig (type_denote tau).
   Definition rule_continuation A := option Log -> A.
   Definition scheduler_continuation A := Log -> A.
   Definition cycle_continuation A := REnv.(env_t) R -> A.
@@ -43,13 +44,46 @@ Section CPS.
   (* FIXME monad *)
 
   Section Action.
+    Section Args.
+      Context (interp_action_cps:
+                 forall {sig: tsig var_t} {tau}
+                   (a: action sig tau)
+                   {A} (k: action_continuation A sig tau),
+                 action_interpreter A sig).
+
+      Fixpoint interp_args'_cps
+               {sig: tsig var_t}
+               {argspec: tsig var_t}
+               (args: acontext sig argspec)
+               {A} (k: interp_continuation A sig (tcontext argspec))
+        : action_interpreter A sig :=
+        match args in context _ argspec return interp_continuation A sig (tcontext argspec) -> action_interpreter A sig with
+        | CtxEmpty => fun k Gamma l => k (Some (l, CtxEmpty, Gamma))
+        | @CtxCons _ _ argspec k_tau arg args =>
+          fun k =>
+            interp_args'_cps
+              args
+              (fun res =>
+                 match res with
+                 | Some (l, ctx, Gamma) =>
+                   interp_action_cps _ _ arg _
+                                     (fun res =>
+                                        match res with
+                                        | Some (l, v, Gamma) => k (Some (l, CtxCons k_tau v ctx, Gamma))
+                                        | None => k None
+                                        end) Gamma l
+                 | None => k None
+                 end)
+        end k.
+    End Args.
+
     Fixpoint interp_action_cps
-             {sig tau} {A}
+             {sig tau}
              (L: Log)
              (a: action sig tau)
-             (k: action_continuation A sig tau)
+             {A} (k: action_continuation A sig tau)
     : action_interpreter A sig :=
-      let cps {sig tau} a k := @interp_action_cps sig tau A L a k in
+      let cps {sig tau} a {A} k := @interp_action_cps sig tau L a A k in
       match a in TypedSyntax.action _ _ _ _ _ ts tau return (action_continuation A ts tau -> action_interpreter A ts)  with
       | Fail tau => fun k Gamma l => k None
       | Var m => fun k Gamma l => k (Some (l, cassoc m Gamma, Gamma))
@@ -174,7 +208,21 @@ Section CPS.
                        k (Some (l, (sigma fn) v, Gamma))
                      | None => k None
                      end)
-      | InternalCall fn args body => fun k Gamma l => __magic__
+      | InternalCall fn args body =>
+        fun k =>
+          interp_args'_cps (@cps) args
+                           (fun res =>
+                              match res with
+                              | Some (l, argvals, Gamma) =>
+                                cps body (fun res =>
+                                            match res with
+                                            | Some (l, v, _) =>
+                                              k (Some (l, v, Gamma))
+                                            | None => k None
+                                            end)
+                                    argvals l
+                              | None => k None
+                              end)
       | APos pos a => fun k => cps a k
       end k.
 
@@ -215,6 +263,24 @@ Section CPS.
       interp_scheduler'_cps s k log_empty.
   End Scheduler.
 
+  Section Args.
+    Context (IHa : forall (sig : tsig var_t) (tau : type) (L : Log) (a : action sig tau) (A : Type) (k : option (Log * tau * tcontext sig) -> A)
+                     (Gamma : tcontext sig) (l : Log), interp_action_cps L a k Gamma l = k (interp_action r sigma Gamma L l a)).
+
+    Lemma interp_args'_cps_correct :
+      forall L {sig} {argspec} args Gamma l {A} (k: interp_continuation A sig (tcontext argspec)),
+      interp_args'_cps (fun sig tau a A k => interp_action_cps L a k) args k Gamma l =
+      k (interp_args r sigma Gamma L l args).
+    Proof.
+      induction args; cbn; intros.
+      - reflexivity.
+      - rewrite IHargs.
+        destruct (interp_args r sigma Gamma L l args) as [((?, ?), ?) | ]; cbn; try reflexivity.
+        rewrite IHa.
+        destruct (interp_action r sigma _ L _ _) as [((?, ?), ?) | ]; cbn; reflexivity.
+    Defined.
+  End Args.
+
   Lemma interp_action_cps_correct:
     forall {sig: tsig var_t}
       {tau}
@@ -226,16 +292,16 @@ Section CPS.
       interp_action_cps L a k Gamma l =
       k (interp_action r sigma Gamma L l a).
   Proof.
-    induction a; cbn; intros.
+    fix IHa 4; destruct a; cbn; intros.
     all: repeat match goal with
                 | _ => progress simpl
                 | [ H: context[_ = _] |- _ ] => rewrite H
                 | [  |- context[interp_action] ] => destruct interp_action as [((?, ?), ?) | ]
                 | [  |- context[match ?x with _ => _ end] ] => destruct x
-                | _ => reflexivity
+                | _ => rewrite interp_args'_cps_correct
+                | _ => reflexivity || assumption
                 end.
-    admit.
-  Admitted.
+  Qed.
 
   Lemma interp_action_cps_correct_rev:
     forall {sig: tsig var_t}
@@ -261,7 +327,6 @@ Section CPS.
     rewrite interp_action_cps_correct.
     destruct interp_action as [((?, ?), ?) | ]; reflexivity.
   Qed.
-
 
   Lemma interp_rule_cps_correct_rev:
     forall (L: Log)
