@@ -143,6 +143,18 @@ Extraction \"pipeline.ml\" pipeline.prog."))
 
 
 ;; -*- dune -*-
+(subdir "_objects/pipeline_tutorial.v"
+ (rule (write-file "pipeline_tutorial_extr.v"
+                   "Require Coq.extraction.Extraction examples.pipeline_tutorial.
+Extraction \"pipeline_tutorial.ml\" pipeline_tutorial.prog."))
+ (coq.extraction
+  (prelude pipeline_tutorial_extr)
+  (extracted_modules pipeline_tutorial)
+  (theories Koika examples)
+  (flags "-w" "-overriding-logical-loadpath")))
+
+
+;; -*- dune -*-
 (subdir "_objects/uart.v"
  (rule (write-file "uart_extr.v"
                    "Require Coq.extraction.Extraction examples.uart.

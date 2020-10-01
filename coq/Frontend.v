@@ -20,6 +20,8 @@ Require Export
 Notation compile_scheduler :=
   (compile_scheduler opt_constprop).
 
+Notation lower_r := Lowering.lower_r.
+
 Class DummyPos pos_t := { dummy_pos: pos_t }.
 Instance DummyPos_path : DummyPos path := {| dummy_pos := PThis |}.
 Instance DummyPos_unit : DummyPos unit := {| dummy_pos := tt |}.
@@ -33,13 +35,13 @@ Notation "'write1' v" := (LE LogWrite P1 v) (at level 10, only printing) : log_e
 Declare Scope context.
 Declare Custom Entry context_mapping.
 
-Notation "x  ->  y" :=
+Notation "x  =>  y" :=
   (CtxCons x y CtxEmpty)
     (in custom context_mapping at level 80,
         x constr at level 0, y constr at level 80,
         no associativity).
 
-Notation "x  ->  y ;  z" :=
+Notation "x  =>  y ;  z" :=
   (CtxCons x y z)
     (in custom context_mapping at level 80,
         x constr at level 0, y constr at level 80,

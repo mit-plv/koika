@@ -99,3 +99,8 @@ Arguments logentry_app {T} !l1 !l2 /: assert.
 
 Definition Log {reg_t} R REnv := @_Log reg_t (fun idx => type_denote (R idx)) REnv.
 Definition CLog {reg_t} R REnv := @_Log reg_t (fun idx => Bits.bits (R idx)) REnv.
+
+Arguments may_read0 {reg_t R REnv} !sched_log !idx /.
+Arguments may_read1 {reg_t R REnv} !sched_log !idx /.
+Arguments may_write0 {reg_t R REnv} !sched_log !rule_log !idx / : simpl nomatch.
+Arguments may_write1 {reg_t R REnv} !sched_log !rule_log !idx / : simpl nomatch.
