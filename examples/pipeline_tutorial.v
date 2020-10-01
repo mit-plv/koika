@@ -148,8 +148,6 @@ Here is an infinite stream capturing the initial state of the system and all sna
 Definition system_states :=
   Streams.coiterate (TypedSemantics.interp_cycle sigma rules pipeline) r.
 
-(* FIXME move me *)
-
 (*|
 Forcing this infinite stream simulates the whole system directly inside Coq: for example, we can easily extract the first few inputs that the system processes, and the first few outputs that it produces:
 
@@ -351,15 +349,14 @@ Proving this characterization is just a matter of abstract interpretation:
 We start by unfolding the inner call to ``interp_cycle``, which yields a characterization that branches on ``r.[queue_empty]``:
 |*)
 
-      rewrite (interp_cycle_cps_correct_rev r); simpl.
+      abstract_simpl r.
 
 (*|
 Then we do a case split on ``r.[queue_empty]``, and we use abstract interpretation again to show that both ases lead to the same result:
 |*)
 
       destruct (Bits.single r.[queue_empty]); simpl.
-      all: rewrite interp_cycle_cps_correct_rev; simpl;
-        reflexivity.
+      all: reflexivity.
     Qed.
 
 (*|
@@ -387,7 +384,7 @@ The proof is a two-induction (captured by the ``Div2.ind_0_1_SS`` lemma); it tel
       rewrite !iterate_S_acc, phi2_correct.
       revert n; apply Div2.ind_0_1_SS; simpl.
       - reflexivity.
-      - unfold cycle; rewrite interp_cycle_cps_correct_rev; reflexivity.
+      - unfold cycle; reflexivity.
       - intros n IH; simpl in IH; rewrite IH; reflexivity.
     Qed.
 
@@ -405,12 +402,13 @@ And this is enough to complete our proof!  We'll manually match up the first two
 
       apply Streams.ntheq_eqst; intros [ | [ | n ] ]; simpl;
         unfold spec_inputs; rewrite ?Streams.Str_nth_0, ?Streams.Str_nth_S, ?Streams.Str_nth_map, ?Streams.Str_nth_coiterate.
+
       - (* Initial state *)
         simpl.
         reflexivity.
       - (* After one cycle *)
         simpl.
-        rewrite interp_cycle_cps_correct_rev; simpl.
+        abstract_simpl.
         rewrite Hqueue_empty; reflexivity.
       - (* After two cycles *)
         rewrite phi_iterated_correct.
@@ -418,152 +416,6 @@ And this is enough to complete our proof!  We'll manually match up the first two
         reflexivity.
     Qed.
   End Proofs.
-
-  Section Experiments.
-    Context (r: ContextEnv.(env_t) R).
-    Import CompactSemantics.
-
-    Lemma cycle_correct :
-      forall (init: ContextEnv.(env_t) R),
-      exists l', Logs.commit_update init (TypedSemantics.interp_scheduler init sigma rules pipeline) = l'.
-    Proof.
-      intros; unfold pipeline.
-      Fail Timeout 1 Time unfold TypedSemantics.interp_scheduler, TypedSemantics.interp_scheduler', TypedSemantics.interp_rule; simpl. (* 11s *)
-    Abort.
-
-    Lemma cycle_correct :
-      forall (init: ContextEnv.(env_t) R),
-      exists l', CompactLogs.commit_update init (interp_scheduler init sigma rules pipeline) = l'.
-    Proof.
-      intros; unfold pipeline.
-      Fail Timeout 1 Time unfold interp_scheduler, interp_scheduler', interp_rule; simpl. (* 10-15s *)
-    Abort.
-
-    (* FIXME things get slower if I let Coq infer the R *)
-
-    Lemma cycle_correct :
-      forall (init: ContextEnv.(env_t) R),
-      exists l', CompactSemantics.interp_cycle (R := R) sigma rules pipeline init = l'.
-    Proof.
-      intros; unfold pipeline.
-      apply wp_cycle_correct.
-      Time simpl. (* 0.6s *)
-
-      destruct (Bits.single init.[queue_empty]); simpl.
-      - (* Initialization: nothing in the queue yet *)
-        eexists; reflexivity.
-      - (* Steady state: queue remains full *)
-        eexists; reflexivity.
-    Qed.
-
-    Lemma scheduler_correct :
-      exists l', CompactSemantics.interp_scheduler r sigma rules pipeline = l'.
-    Proof.
-      unfold pipeline.
-      (* unfold interp_scheduler, interp_scheduler', interp_rule; simpl. *)
-      (* rewrite <- interp_scheduler_cps_correct; simpl. *)
-      apply wp_scheduler_correct.
-      Time simpl.
-      destruct (Bits.single (getenv ContextEnv r queue_empty)); simpl.
-      all: eexists; reflexivity.
-    Qed.
-
-    Lemma scheduler_correct' :
-      (interp_scheduler r sigma rules pipeline).[input_buffer].(lwrite1) = None.
-    Proof.
-      unfold pipeline.
-      (* unfold CompactSemantics.interp_scheduler, CompactSemantics.interp_scheduler', CompactSemantics.interp_rule; simpl. *)
-      (* rewrite <- interp_scheduler_cps_correct; simpl. *)
-      apply wp_scheduler_correct.
-      Time simpl.
-      destruct (Bits.single (getenv ContextEnv r queue_empty)); simpl.
-      all: eexists; reflexivity.
-    Qed.
-
-    Lemma doG_correct :
-      Bits.single (r.[queue_empty]) = false ->
-      exists l,
-        CompactSemantics.interp_rule r sigma log_empty (rules doG) = Some l /\
-        l.[queue_empty].(lwrite0) = Some Ob~1.
-    (* FIXME: which style is better; exists or match? *)
-    (* match CompactSemantics.interp_rule r sigma log_empty (rules doG) with *)
-    (* | Some l => *)
-    (*   l.[queue_empty] = [LE LogWrite P0 Ob~1; LE LogRead P0 tt] *)
-    (* | None => False *)
-    (* end. *)
-    Proof.
-      intros Hvalid.
-      unfold CompactSemantics.interp_rule.
-      (* Time simpl.  rewrite Hvalid; simpl; eexists; split; reflexivity. *)
-      apply wp_action_correct.
-      Time simpl; rewrite Hvalid; simpl; eexists; split; reflexivity.
-    Qed.
-
-    Arguments vect_cons: simpl never.
-    Arguments env_t : simpl never.
-
-    Ltac autorew :=
-      (* The variant below isn't enough, because primitive projections are weird *)
-      (* | [ H: ?a = _ |- _ ] => *)
-      (*   match goal with (* Merging the two matches together results in a 20x slowdown *) *)
-      (*   | [  |- context[a] ] => rewrite !H *)
-      (*   end *)
-      repeat match goal with
-             | [ H: ?a = ?a' |- context[match ?b with _ => _ end] ] =>
-               unify a b; replace b with a' by assumption
-             end.               (* FIXME doesn't work here *)
-
-    Arguments may_read0 /.
-    Arguments may_write0 /.
-    Arguments may_read1 /.
-    Arguments may_write1 /.
-
-    Lemma doF_correct :
-      forall l,
-        let l_input_buffer := l.[input_buffer] in
-        let l_queue_empty := l.[queue_empty] in
-        let l_queue_data := l.[queue_data] in
-        l_input_buffer.(lwrite0) = None ->
-        l_input_buffer.(lwrite1) = None ->
-        l_input_buffer.(lread1) = false ->
-        l_queue_data.(lread1) = false ->
-        l_queue_data.(lwrite0) = None ->
-        l_queue_data.(lwrite1) = None ->
-        l_queue_empty.(lwrite1) = None ->
-        l_queue_empty.(lwrite0) = Some Ob~1 ->
-        (* r.[queue_data] = (sigma F) (r.[output_buffer]) -> *)
-        exists l',
-          CompactSemantics.interp_rule (R := R) r sigma l (rules doF) = Some l'.
-    Proof.
-      intros.
-      unfold CompactSemantics.interp_rule.
-      (* rewrite interp_action_cps_correct_rev. *)
-      (* simpl. *)
-      apply wp_action_correct.
-      Time simpl.
-      Time autorew.
-      simpl.
-      eexists; reflexivity.
-    Qed.
-
-    (* Compact encoding of preconditions *)
-    Lemma doF_correct' :
-      forall qd0 ob qe0 qe1 ib0,
-        let l :=
-            #{ input_buffer => {| lread0 := ib0; lread1 := false; lwrite0 := None; lwrite1 := None |};
-               queue_empty => {| lread0 := qe0; lread1 := qe1; lwrite0 := Some Ob~1; lwrite1 := None |};
-               queue_data => {| lread0 := qd0; lread1 := false; lwrite0 := None; lwrite1 := None |};
-               output_buffer => ob }# in
-        exists l', CompactSemantics.interp_rule r sigma l (rules doF) = Some l'.
-    Proof.
-      intros.
-      unfold CompactSemantics.interp_rule.
-      apply wp_action_correct.
-      Time simpl.
-      (* Nothing to rewrite! *)
-      eexists; reflexivity.
-    Qed.
-  End Experiments.
 End Correctness.
 
 (*|

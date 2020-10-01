@@ -15,7 +15,9 @@ Require Export
         Koika.DeriveShow
         Koika.BitTactics
         Koika.ProgramTactics
+        Koika.CPS
         Koika.ExtractionSetup.
+Require Koika.CompactSemantics.
 
 Notation compile_scheduler :=
   (compile_scheduler opt_constprop).
@@ -235,3 +237,12 @@ Notation tc_rules R Sigma actions :=
 Notation tc_compute t :=
   ltac:(let t := tc_eval_body t in
         exact t) (only parsing).
+
+Tactic Notation "wpgen" :=
+  apply wp_cycle_correct; simpl.
+
+Tactic Notation "abstract_simpl" constr(r) :=
+  rewrite (interp_cycle_cps_correct_rev r); simpl.
+
+Tactic Notation "abstract_simpl" :=
+  rewrite (interp_cycle_cps_correct_rev); simpl.
