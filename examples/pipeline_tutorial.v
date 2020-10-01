@@ -221,7 +221,7 @@ Definition circuits :=
   compile_scheduler rules external pipeline.
 
 (*|
-For printing circuits, we don't recomment using Coq's ``Compute``: our representation of circuits uses physical equality to track shared subcircuits, but Coq's printer doesn't respect sharing when printing, and hence generated circuits look giant.  Instead, we recommend looking at the generated Verilog or Dot graphs (use ``make examples/_objects/pipeline.v``).
+For printing circuits, we don't recomment using Coq's ``Compute``: our representation of circuits uses physical equality to track shared subcircuits, but Coq's printer doesn't respect sharing when printing, and hence generated circuits look giant.  Instead, we recommend looking at the generated Verilog or Dot graphs (use ``make examples/_objects/pipeline_tutorial.v/`` in the repository's root and navigate to ``examples/_objects/pipeline_tutorial.v/pipeline_tutorial.v`` to see the generated Verilog code, which uses internally instantiated modules for F and G and signature wires for ``nextInput``).
 
 We can, however, easily compute the results produced by a circuit, either after one cycle:
 |*)
@@ -463,7 +463,11 @@ Definition package :=
 
      ip_verilog := {| vp_ext_fn_specs fn :=
                        {| efr_name := ext_fn_names fn;
-                          efr_internal := true |} |} |}.
+                          efr_internal :=
+                            match fn with
+                            | F | G => true
+                            | nextInput => false
+                            end |} |} |}.
 
 (*|
 This last bit registers our program, which allows the build system to locate it:
