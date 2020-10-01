@@ -131,8 +131,8 @@ EXCLUDED = {
     "examples/rv/tests/elf2hex/ElfFile.hpp",
     "examples/rv/tests/elf2hex/elf2hex.cpp",
     "examples/rv/tests/run.sh",
-    "tests/trivial_state_machine.etc/extA.v",
-    "tests/trivial_state_machine.etc/extB.v",
+    "tests/trivial_state_machine.etc/fA.v",
+    "tests/trivial_state_machine.etc/fB.v",
 }
 
 def collect_files():

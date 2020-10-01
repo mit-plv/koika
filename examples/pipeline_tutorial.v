@@ -1,4 +1,4 @@
-(*! Simple arithmetic (commented) !*)
+(*! Tutorial: Simple arithmetic pipeline !*)
 Require Import Koika.Frontend.
 
 (*|

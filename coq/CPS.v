@@ -1,3 +1,5 @@
+(*! Language | Continuation-passing semantics and weakest precondition calculus !*)
+
 Require Import CompactSemantics.
 Require Import Magic.
 

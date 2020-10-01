@@ -1,4 +1,4 @@
-(*! Language | Semantics of typed Kôika programs !*)
+(*! Language | Semantics of typed Kôika programs with compact logs !*)
 Require Export Koika.Common Koika.Environments Koika.CompactLogs Koika.Syntax Koika.TypedSyntax.
 
 Section Interp.

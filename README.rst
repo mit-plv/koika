@@ -752,6 +752,9 @@ The following list shows the current state of the repo:
       - |coq/Interop.v|_: Exporting |koika| programs for use with the cuttlec command-line tool
 
    (Language)
+      - |coq/CPS.v|_: Continuation-passing semantics and weakest precondition calculus
+      - |coq/CompactLogs.v|_: Alternative implementation of logs
+      - |coq/CompactSemantics.v|_: Semantics of typed |koika| programs with compact logs
       - |coq/Logs.v|_: Logs of reads and writes
       - |coq/LoweredSemantics.v|_: Semantics of Lowered |koika| programs
       - |coq/LoweredSyntax.v|_: Lowered ASTs (weakly-typed)
@@ -793,8 +796,13 @@ The following list shows the current state of the repo:
    - |etc/configure|_: Generate dune files for examples/ and tests/
 
 ``examples/``
+   ``fft.v.etc/``
+      - |examples/fft.v.etc/mkfft_verilator.cpp|_: Default driver for |koika| programs compiled to C++ using Verilator
+
    ``fir.v.etc/``
       - |examples/fir.v.etc/extfuns.hpp|_: C++ implementation of external functions for the fir example
+      - |examples/fir.v.etc/mkfir_verilator.cpp|_: Default driver for |koika| programs compiled to C++ using Verilator
+      - |examples/fir.v.etc/mod19.v|_: Verilog implementation of external functions for the  fir example
 
    ``rv/``
       ``etc/``
@@ -841,6 +849,7 @@ The following list shows the current state of the repo:
    - |examples/pipeline.v|_: Building simple pipelines
    - |examples/uart.v|_: UART transmitter
    - |examples/vector.v|_: Representing vectors of registers using Coq inductives
+   - |examples/wps.v|_: Tutorial: Simple arithmetic pipeline
 
 ``ocaml/``
    ``backends/``
@@ -909,6 +918,8 @@ The following list shows the current state of the repo:
 
 .. |coq/BitTactics.v| replace:: ``BitTactics.v``
 .. _coq/BitTactics.v: coq/BitTactics.v
+.. |coq/CPS.v| replace:: ``CPS.v``
+.. _coq/CPS.v: coq/CPS.v
 .. |coq/CircuitGeneration.v| replace:: ``CircuitGeneration.v``
 .. _coq/CircuitGeneration.v: coq/CircuitGeneration.v
 .. |coq/CircuitOptimization.v| replace:: ``CircuitOptimization.v``
@@ -921,6 +932,10 @@ The following list shows the current state of the repo:
 .. _coq/CircuitSyntax.v: coq/CircuitSyntax.v
 .. |coq/Common.v| replace:: ``Common.v``
 .. _coq/Common.v: coq/Common.v
+.. |coq/CompactLogs.v| replace:: ``CompactLogs.v``
+.. _coq/CompactLogs.v: coq/CompactLogs.v
+.. |coq/CompactSemantics.v| replace:: ``CompactSemantics.v``
+.. _coq/CompactSemantics.v: coq/CompactSemantics.v
 .. |coq/Compiler.v| replace:: ``Compiler.v``
 .. _coq/Compiler.v: coq/Compiler.v
 .. |coq/CompilerCorrectness/CircuitCorrectness.v| replace:: ``CircuitCorrectness.v``
@@ -1017,10 +1032,20 @@ The following list shows the current state of the repo:
 .. _examples/external_rule.v: examples/external_rule.v
 .. |examples/fft.v| replace:: ``fft.v``
 .. _examples/fft.v: examples/fft.v
+.. |examples/fft.v.etc/mkfft.v| replace:: ``mkfft.v``
+.. _examples/fft.v.etc/mkfft.v: examples/fft.v.etc/mkfft.v
+.. |examples/fft.v.etc/mkfft_verilator.cpp| replace:: ``mkfft_verilator.cpp``
+.. _examples/fft.v.etc/mkfft_verilator.cpp: examples/fft.v.etc/mkfft_verilator.cpp
 .. |examples/fir.v| replace:: ``fir.v``
 .. _examples/fir.v: examples/fir.v
 .. |examples/fir.v.etc/extfuns.hpp| replace:: ``extfuns.hpp``
 .. _examples/fir.v.etc/extfuns.hpp: examples/fir.v.etc/extfuns.hpp
+.. |examples/fir.v.etc/mkfir.v| replace:: ``mkfir.v``
+.. _examples/fir.v.etc/mkfir.v: examples/fir.v.etc/mkfir.v
+.. |examples/fir.v.etc/mkfir_verilator.cpp| replace:: ``mkfir_verilator.cpp``
+.. _examples/fir.v.etc/mkfir_verilator.cpp: examples/fir.v.etc/mkfir_verilator.cpp
+.. |examples/fir.v.etc/mod19.v| replace:: ``mod19.v``
+.. _examples/fir.v.etc/mod19.v: examples/fir.v.etc/mod19.v
 .. |examples/function_call.v| replace:: ``function_call.v``
 .. _examples/function_call.v: examples/function_call.v
 .. |examples/gcd_machine.v| replace:: ``gcd_machine.v``
@@ -1079,6 +1104,8 @@ The following list shows the current state of the repo:
 .. _examples/uart.v: examples/uart.v
 .. |examples/vector.v| replace:: ``vector.v``
 .. _examples/vector.v: examples/vector.v
+.. |examples/wps.v| replace:: ``wps.v``
+.. _examples/wps.v: examples/wps.v
 .. |ocaml/backends/coq.ml| replace:: ``coq.ml``
 .. _ocaml/backends/coq.ml: ocaml/backends/coq.ml
 .. |ocaml/backends/cpp.ml| replace:: ``cpp.ml``

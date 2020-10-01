@@ -1,4 +1,4 @@
-(*! Language | Logs of reads and writes !*)
+(*! Language | Alternative implementation of logs !*)
 Require Export Koika.Common Koika.Environments Koika.Syntax Koika.TypedSyntax.
 
 Section Logs.
