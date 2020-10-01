@@ -1277,6 +1277,31 @@ Module Bits.
       lift_comparison Bits.to_2cZ Z.compare is_ge bs1 bs2.
   End Comparisons.
 
+  Section Slices.
+    Definition slice {sz} (offset: nat) (width: nat) (bs: bits sz) : bits width :=
+      vect_extend_end_firstn (vect_firstn width (vect_skipn offset bs)) false.
+
+    Lemma slice_subst_cast :
+      forall sz width offset,
+        Nat.min sz (Nat.min offset sz + (width + (sz - (offset + width)))) = sz.
+    Proof.
+      induction sz, width, offset; cbn; auto using Min.min_idempotent.
+      - f_equal; apply (IHsz 0 offset).
+      - f_equal; apply (IHsz width 0).
+      - f_equal; apply (IHsz (S width) offset).
+    Defined.
+
+    Definition slice_subst {sz}
+               (offset: nat)
+               (width: nat)
+               (bs: bits sz)
+               (v: bits width) : bits sz :=
+      let head := vect_firstn offset bs in
+      let tail := vect_skipn (offset + width) bs in
+      rew (slice_subst_cast sz width offset) in
+          (vect_firstn sz (vect_app head (vect_app v tail))).
+  End Slices.
+
   Section Properties.
     Lemma single_cons :
       forall bs, cons (single bs) nil = bs.

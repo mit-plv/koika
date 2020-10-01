@@ -351,29 +351,6 @@ Module BitFuns.
   Definition _neq {tau} {EQ: EqDec tau} (v1 v2: tau) :=
     Ob~(negb (beq_dec v1 v2)).
 
-  Definition slice {sz} (offset: nat) (width: nat) (bs: bits sz) :=
-    vect_extend_end_firstn (vect_firstn width (vect_skipn offset bs)) false.
-
-  Lemma slice_subst_cast :
-    forall sz width offset,
-      Nat.min sz (Nat.min offset sz + (width + (sz - (offset + width)))) = sz.
-  Proof.
-    induction sz, width, offset; cbn; auto using Min.min_idempotent.
-    - f_equal; apply (IHsz 0 offset).
-    - f_equal; apply (IHsz width 0).
-    - f_equal; apply (IHsz (S width) offset).
-  Defined.
-
-  Definition slice_subst {sz}
-             (offset: nat)
-             (width: nat)
-             (bs: bits sz)
-             (v: bits width) : bits sz :=
-    let head := vect_firstn offset bs in
-    let tail := vect_skipn (offset + width) bs in
-    ltac:(rewrite <- (slice_subst_cast sz width offset);
-            exact (vect_firstn sz (vect_app head (vect_app v tail)))).
-
   Fixpoint get_field fields
            (v: struct_denote fields)
            (idx: index (List.length fields))
@@ -406,7 +383,7 @@ Module CircuitPrimSpecs.
     | ZExtL sz width => fun bs => Bits.extend_end bs width false
     | ZExtR sz width => fun bs => Bits.extend_beginning bs width false
     | Repeat sz times => fun bs => Bits.repeat times bs
-    | Slice _ offset width => slice offset width
+    | Slice _ offset width => Bits.slice offset width
     | Lowered (DisplayBits _) => fun bs => Ob
     | Lowered (IgnoreBits _) => fun bs => Ob
     end.
@@ -414,8 +391,8 @@ Module CircuitPrimSpecs.
   Definition sigma2 (fn: PrimTyped.fbits2) : CSig_denote (CircuitSignatures.CSigma2 fn) :=
     match fn with
     | Sel _ => sel
-    | SliceSubst _ offset width => slice_subst offset width
-    | IndexedSlice _ width => fun bs offset => slice (Bits.to_nat offset) width bs
+    | SliceSubst _ offset width => Bits.slice_subst offset width
+    | IndexedSlice _ width => fun bs offset => Bits.slice (Bits.to_nat offset) width bs
     | And _ => Bits.and
     | Or _ => Bits.or
     | Xor _ => Bits.xor
