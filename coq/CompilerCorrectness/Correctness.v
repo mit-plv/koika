@@ -28,14 +28,13 @@ Section Thm.
                    (rwdata (rule_name_t := rule_name_t) CR CSigma)
                    (lower_sigma sigma))).
 
-
   Section Standalone.
     Context (s: Syntax.scheduler pos_t rule_name_t).
     Context (rules: rule_name_t -> TypedSyntax.rule pos_t var_t fn_name_t R Sigma).
     Context (external: rule_name_t -> bool).
 
     Theorem compiler_correct:
-      let spec_results := TypedSemantics.interp_cycle r sigma rules s in
+      let spec_results := TypedSemantics.interp_cycle sigma rules s r in
       let circuits := compile_scheduler lco rules external s in
       forall reg,
         interp_circuit cr csigma (ContextEnv.(getenv) circuits reg) =

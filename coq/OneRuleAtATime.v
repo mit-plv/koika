@@ -50,14 +50,8 @@ Section Proof.
     | None => None
     end.
 
-  Definition update_one r rl: option (REnv.(env_t) R) :=
-    let/opt r := r in
-    let log := @interp_scheduler'
-                pos_t var_t fn_name_t rule_name_t
-                reg_t ext_fn_t
-                 R Sigma REnv r sigma rules
-                log_empty (Try rl Done Done) in
-    Some (commit_update r log).
+  Definition interp_oraat r rl: REnv.(env_t) R :=
+    interp_cycle sigma rules (Try rl Done Done) r.
 
   Ltac set_forallb_fns :=
     repeat match goal with
@@ -136,6 +130,8 @@ Section Proof.
   Qed.
 
   Create HintDb oraat.
+  Hint Unfold interp_cycle : oraat.
+  Hint Unfold interp_oraat : oraat.
   Hint Unfold interp_rule : oraat.
 
   Ltac t_step :=
@@ -214,7 +210,7 @@ Section Proof.
   Lemma OneRuleAtATime':
     forall s rs r' l0,
       interp_scheduler_trace_and_update l0 s = Some (rs, r') ->
-      List.fold_left (update_one) rs (Some (commit_update r l0)) = Some r'.
+      List.fold_left interp_oraat rs (commit_update r l0) = r'.
   Proof.
     induction s; cbn;
       unfold interp_scheduler_trace_and_update; cbn.
@@ -285,7 +281,7 @@ Section Proof.
       interp_scheduler r sigma rules s = log ->
       exists rs,
         (forall rl, List.In rl rs -> List.In rl (scheduler_rules s)) /\
-        List.fold_left update_one rs (Some r) = Some (commit_update r log).
+        List.fold_left interp_oraat rs r = commit_update r log.
   Proof.
     intros * H.
     apply interp_scheduler_trace_correct in H; destruct H as (rs & H).

@@ -9,8 +9,6 @@ Section Interp.
   Context {Sigma: ext_fn_t -> CExternalSignature}.
 
   Context {REnv: Env reg_t}.
-  Context (r: REnv.(env_t) (fun idx => bits (R idx))).
-  Context (sigma: forall f, CSig_denote (Sigma f)).
 
   Notation Log := (CLog R REnv).
 
@@ -22,6 +20,9 @@ Section Interp.
     context Bits.bits sig.
 
   Section Action.
+    Context (r: REnv.(env_t) (fun idx => bits (R idx))).
+    Context (sigma: forall f, CSig_denote (Sigma f)).
+
     Fixpoint interp_action
              {sig: lsig}
              {sz}
@@ -92,14 +93,16 @@ Section Interp.
   End Action.
 
   Section Scheduler.
+    Context (r: REnv.(env_t) (fun idx => bits (R idx))).
+    Context (sigma: forall f, CSig_denote (Sigma f)).
     Context (rules: rule_name_t -> rule).
 
     Fixpoint interp_scheduler'
              (sched_log: Log)
              (s: scheduler)
              {struct s} :=
-      let interp_try r s1 s2 :=
-          match interp_rule sched_log (rules r) with
+      let interp_try rl s1 s2 :=
+          match interp_rule r sigma sched_log (rules rl) with
           | Some l => interp_scheduler' (log_app l sched_log) s1
           | None => interp_scheduler' sched_log s2
           end in
@@ -112,8 +115,9 @@ Section Interp.
 
     Definition interp_scheduler (s: scheduler) :=
       interp_scheduler' log_empty s.
-
-    Definition interp_cycle (s: scheduler) :=
-      commit_update r (interp_scheduler s).
   End Scheduler.
+
+  Definition interp_cycle (sigma: forall f, CSig_denote (Sigma f)) (rules: rule_name_t -> rule)
+             (s: scheduler) (r: REnv.(env_t) (fun idx => bits (R idx))) :=
+      commit_update r (interp_scheduler r sigma rules s).
 End Interp.

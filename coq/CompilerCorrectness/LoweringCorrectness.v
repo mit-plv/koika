@@ -484,8 +484,8 @@ Section LoweringCorrectness.
 
   Theorem cycle_lowering_correct:
     forall s,
-      LoweredSemantics.interp_cycle lr lsigma (fun r => lrules r) s =
-      lower_r (TypedSemantics.interp_cycle r sigma rules s).
+      LoweredSemantics.interp_cycle lsigma (fun r => lrules r) s lr =
+      lower_r (TypedSemantics.interp_cycle sigma rules s r).
   Proof.
     unfold TypedSemantics.interp_cycle, LoweredSemantics.interp_cycle; intros.
     rewrite scheduler_lowering_correct.

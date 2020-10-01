@@ -9,8 +9,6 @@ Section CPS.
   Context {Sigma: ext_fn_t -> ExternalSignature}.
 
   Context {REnv: Env reg_t}.
-  Context (r: REnv.(env_t) R).
-  Context (sigma: forall f, Sig_denote (Sigma f)).
 
   Notation Log := (Log R REnv).
 
@@ -44,6 +42,9 @@ Section CPS.
   (* FIXME monad *)
 
   Section Action.
+    Context (r: REnv.(env_t) R).
+    Context (sigma: forall f, Sig_denote (Sigma f)).
+
     Section Args.
       Context (interp_action_cps:
                  forall {sig: tsig var_t} {tau}
@@ -236,15 +237,17 @@ Section CPS.
   End Action.
 
   Section Scheduler.
+    Context (r: REnv.(env_t) R).
+    Context (sigma: forall f, Sig_denote (Sigma f)).
     Context (rules: rule_name_t -> rule).
 
     Fixpoint interp_scheduler'_cps
              (s: scheduler)
              {A} (k: scheduler_continuation A)
              {struct s} : interpreter A :=
-      let interp_try r s1 s2 : interpreter A :=
+      let interp_try rl s1 s2 : interpreter A :=
           fun L =>
-            interp_rule_cps (rules r)
+            interp_rule_cps r sigma (rules rl)
                             (fun res =>
                                match res with
                                | Some l => interp_scheduler'_cps s1 k (log_app l L)
@@ -263,133 +266,15 @@ Section CPS.
       interp_scheduler'_cps s k log_empty.
   End Scheduler.
 
-  Section Args.
-    Context (IHa : forall (sig : tsig var_t) (tau : type) (L : Log) (a : action sig tau) (A : Type) (k : option (Log * tau * tcontext sig) -> A)
-                     (Gamma : tcontext sig) (l : Log), interp_action_cps L a k Gamma l = k (interp_action r sigma Gamma L l a)).
-
-    Lemma interp_args'_cps_correct :
-      forall L {sig} {argspec} args Gamma l {A} (k: interp_continuation A sig (tcontext argspec)),
-      interp_args'_cps (fun sig tau a A k => interp_action_cps L a k) args k Gamma l =
-      k (interp_args r sigma Gamma L l args).
-    Proof.
-      induction args; cbn; intros.
-      - reflexivity.
-      - rewrite IHargs.
-        destruct (interp_args r sigma Gamma L l args) as [((?, ?), ?) | ]; cbn; try reflexivity.
-        rewrite IHa.
-        destruct (interp_action r sigma _ L _ _) as [((?, ?), ?) | ]; cbn; reflexivity.
-    Defined.
-  End Args.
-
-  Lemma interp_action_cps_correct:
-    forall {sig: tsig var_t}
-      {tau}
-      (L: Log)
-      (a: action sig tau)
-      {A} (k: _ -> A)
-      (Gamma: tcontext sig)
-      (l: Log),
-      interp_action_cps L a k Gamma l =
-      k (interp_action r sigma Gamma L l a).
-  Proof.
-    fix IHa 4; destruct a; cbn; intros.
-    all: repeat match goal with
-                | _ => progress simpl
-                | [ H: context[_ = _] |- _ ] => rewrite H
-                | [  |- context[interp_action] ] => destruct interp_action as [((?, ?), ?) | ]
-                | [  |- context[match ?x with _ => _ end] ] => destruct x
-                | _ => rewrite interp_args'_cps_correct
-                | _ => reflexivity || assumption
-                end.
-  Qed.
-
-  Lemma interp_action_cps_correct_rev:
-    forall {sig: tsig var_t}
-      {tau}
-      (L: Log)
-      (a: action sig tau)
-      (Gamma: tcontext sig)
-      (l: Log),
-      interp_action r sigma Gamma L l a =
-      interp_action_cps L a id Gamma l.
-  Proof.
-    intros; rewrite interp_action_cps_correct; reflexivity.
-  Qed.
-
-  Lemma interp_rule_cps_correct:
-    forall (L: Log)
-      (a: rule)
-      {A} (k: _ -> A),
-      interp_rule_cps a k L =
-      k (interp_rule r sigma L a).
-  Proof.
-    unfold interp_rule, interp_rule_cps; intros.
-    rewrite interp_action_cps_correct.
-    destruct interp_action as [((?, ?), ?) | ]; reflexivity.
-  Qed.
-
-  Lemma interp_rule_cps_correct_rev:
-    forall (L: Log)
-      (a: rule),
-      interp_rule r sigma L a =
-      interp_rule_cps a id L.
-  Proof.
-    intros; rewrite interp_rule_cps_correct; reflexivity.
-  Qed.
-
-  Lemma interp_scheduler'_cps_correct:
-    forall (rules: rule_name_t -> rule)
-      (s: scheduler)
-      (L: Log)
-      {A} (k: _ -> A),
-      interp_scheduler'_cps rules s k L =
-      k (interp_scheduler' r sigma rules L s).
-  Proof.
-    induction s; cbn; intros.
-    all: repeat match goal with
-                | _ => progress simpl
-                | _ => rewrite interp_rule_cps_correct
-                | [ H: context[_ = _] |- _ ] => rewrite H
-                | [  |- context[interp_rule] ] => destruct interp_action as [((?, ?), ?) | ]
-                | [  |- context[match ?x with _ => _ end] ] => destruct x
-                | _ => reflexivity
-                end.
-  Qed.
-
-  Lemma interp_scheduler_cps_correct:
-    forall (rules: rule_name_t -> rule)
-      (s: scheduler)
-      {A} (k: _ -> A),
-      interp_scheduler_cps rules s k =
-      k (interp_scheduler r sigma rules s).
-  Proof.
-    intros; apply interp_scheduler'_cps_correct.
-  Qed.
-
-  Definition interp_cycle_cps (rules: rule_name_t -> rule) (s: scheduler) {A} (k: _ -> A) :=
-    interp_scheduler_cps rules s (fun L => k (commit_update r L)).
-
-  Lemma interp_cycle_cps_correct:
-    forall (rules: rule_name_t -> rule)
-      (s: scheduler)
-      {A} (k: _ -> A),
-      interp_cycle_cps rules s k =
-      k (interp_cycle r sigma rules s).
-  Proof.
-    unfold interp_cycle, interp_cycle_cps; intros; rewrite interp_scheduler_cps_correct.
-    reflexivity.
-  Qed.
-
-  Lemma interp_cycle_cps_correct_rev:
-    forall (rules: rule_name_t -> rule)
-      (s: scheduler),
-      interp_cycle r sigma rules s =
-      interp_cycle_cps rules s id.
-  Proof.
-    intros; rewrite interp_cycle_cps_correct; reflexivity.
-  Qed.
+  Definition interp_cycle_cps (sigma: forall f, Sig_denote (Sigma f)) (rules: rule_name_t -> rule)
+             (s: scheduler) (r: REnv.(env_t) R)
+             {A} (k: _ -> A) :=
+    interp_scheduler_cps r sigma rules s (fun L => k (commit_update r L)).
 
   Section WP.
+    Context (r: REnv.(env_t) R).
+    Context (sigma: forall f, Sig_denote (Sigma f)).
+
     Definition action_precondition := action_interpreter Prop.
     Definition action_postcondition := action_continuation Prop.
     Definition precondition := interpreter Prop.
@@ -398,61 +283,191 @@ Section CPS.
     Definition cycle_postcondition := cycle_continuation Prop.
 
     Definition wp_action {sig tau} (L: Log) (a: action sig tau) (post: action_postcondition sig tau) : action_precondition sig :=
-      interp_action_cps L a post.
+      interp_action_cps r sigma L a post.
 
     Definition wp_rule (rl: rule) (post: rule_postcondition) : precondition :=
-      interp_rule_cps rl post.
+      interp_rule_cps r sigma rl post.
 
     Definition wp_scheduler (rules: rule_name_t -> rule) (s: scheduler) (post: scheduler_postcondition) : Prop :=
-      interp_scheduler_cps rules s post.
+      interp_scheduler_cps r sigma rules s post.
 
-    Definition wp_cycle (rules: rule_name_t -> rule) (s: scheduler) (post: cycle_postcondition) : Prop :=
-      interp_cycle_cps rules s post.
+    Definition wp_cycle (rules: rule_name_t -> rule) (s: scheduler) r (post: cycle_postcondition) : Prop :=
+      interp_cycle_cps sigma rules s r post.
+  End WP.
 
-    Lemma wp_action_correct:
+  Section Proofs.
+    Context (r: REnv.(env_t) R).
+    Context (sigma: forall f, Sig_denote (Sigma f)).
+
+    Section Args.
+      Context (IHa : forall (sig : tsig var_t) (tau : type) (L : Log) (a : action sig tau) (A : Type) (k : option (Log * tau * tcontext sig) -> A)
+                       (Gamma : tcontext sig) (l : Log), interp_action_cps r sigma L a k Gamma l = k (interp_action r sigma Gamma L l a)).
+
+      Lemma interp_args'_cps_correct :
+        forall L {sig} {argspec} args Gamma l {A} (k: interp_continuation A sig (tcontext argspec)),
+          interp_args'_cps (fun sig tau a A k => interp_action_cps r sigma L a k) args k Gamma l =
+          k (interp_args r sigma Gamma L l args).
+      Proof.
+        induction args; cbn; intros.
+        - reflexivity.
+        - rewrite IHargs.
+          destruct (interp_args r sigma Gamma L l args) as [((?, ?), ?) | ]; cbn; try reflexivity.
+          rewrite IHa.
+          destruct (interp_action r sigma _ L _ _) as [((?, ?), ?) | ]; cbn; reflexivity.
+      Defined.
+    End Args.
+
+    Lemma interp_action_cps_correct:
       forall {sig: tsig var_t}
         {tau}
-        (Gamma: tcontext sig)
         (L: Log)
-        (l: Log)
         (a: action sig tau)
-        (post: action_postcondition sig tau),
-        wp_action L a post Gamma l <->
-        post (interp_action r sigma Gamma L l a).
+        {A} (k: _ -> A)
+        (Gamma: tcontext sig)
+        (l: Log),
+        interp_action_cps r sigma L a k Gamma l =
+        k (interp_action r sigma Gamma L l a).
     Proof.
-      intros; unfold wp_action; rewrite interp_action_cps_correct; reflexivity.
+      fix IHa 4; destruct a; cbn; intros.
+      all: repeat match goal with
+                  | _ => progress simpl
+                  | [ H: context[_ = _] |- _ ] => rewrite H
+                  | [  |- context[interp_action] ] => destruct interp_action as [((?, ?), ?) | ]
+                  | [  |- context[match ?x with _ => _ end] ] => destruct x
+                  | _ => rewrite interp_args'_cps_correct
+                  | _ => reflexivity || assumption
+                  end.
     Qed.
 
-    Lemma wp_rule_correct:
+    Lemma interp_action_cps_correct_rev:
+      forall {sig: tsig var_t}
+        {tau}
+        (L: Log)
+        (a: action sig tau)
+        (Gamma: tcontext sig)
+        (l: Log),
+        interp_action r sigma Gamma L l a =
+        interp_action_cps r sigma L a id Gamma l.
+    Proof.
+      intros; rewrite interp_action_cps_correct; reflexivity.
+    Qed.
+
+    Lemma interp_rule_cps_correct:
       forall (L: Log)
-        (rl: rule)
-        (post: rule_postcondition),
-        wp_rule rl post L <->
-        post (interp_rule r sigma L rl).
+        (a: rule)
+        {A} (k: _ -> A),
+        interp_rule_cps r sigma a k L =
+        k (interp_rule r sigma L a).
     Proof.
-      intros; unfold wp_rule; rewrite interp_rule_cps_correct; reflexivity.
+      unfold interp_rule, interp_rule_cps; intros.
+      rewrite interp_action_cps_correct.
+      destruct interp_action as [((?, ?), ?) | ]; reflexivity.
     Qed.
 
-    Lemma wp_scheduler_correct:
-      forall (rules: rule_name_t -> rule)
-        (s: scheduler)
-        (post: scheduler_postcondition),
-        wp_scheduler rules s post <->
-        post (interp_scheduler r sigma rules s).
+    Lemma interp_rule_cps_correct_rev:
+      forall (L: Log)
+        (a: rule),
+        interp_rule r sigma L a =
+        interp_rule_cps r sigma a id L.
     Proof.
-      intros; unfold wp_scheduler; rewrite interp_scheduler_cps_correct; reflexivity.
+      intros; rewrite interp_rule_cps_correct; reflexivity.
     Qed.
 
-    Lemma wp_cycle_correct:
+    Lemma interp_scheduler'_cps_correct:
       forall (rules: rule_name_t -> rule)
         (s: scheduler)
-        (post: cycle_postcondition),
-        wp_cycle rules s post <->
-        post (interp_cycle r sigma rules s).
+        (L: Log)
+        {A} (k: _ -> A),
+        interp_scheduler'_cps r sigma rules s k L =
+        k (interp_scheduler' r sigma rules L s).
     Proof.
-      intros; unfold wp_cycle; rewrite interp_cycle_cps_correct; reflexivity.
+      induction s; cbn; intros.
+      all: repeat match goal with
+                  | _ => progress simpl
+                  | _ => rewrite interp_rule_cps_correct
+                  | [ H: context[_ = _] |- _ ] => rewrite H
+                  | [  |- context[interp_rule] ] => destruct interp_action as [((?, ?), ?) | ]
+                  | [  |- context[match ?x with _ => _ end] ] => destruct x
+                  | _ => reflexivity
+                  end.
     Qed.
-  End WP.
+
+    Lemma interp_scheduler_cps_correct:
+      forall (rules: rule_name_t -> rule)
+        (s: scheduler)
+        {A} (k: _ -> A),
+        interp_scheduler_cps r sigma rules s k =
+        k (interp_scheduler r sigma rules s).
+    Proof.
+      intros; apply interp_scheduler'_cps_correct.
+    Qed.
+
+    Lemma interp_cycle_cps_correct:
+      forall (rules: rule_name_t -> rule)
+        (s: scheduler)
+        {A} (k: _ -> A),
+        interp_cycle_cps sigma rules s r k =
+        k (interp_cycle sigma rules s r).
+    Proof.
+      unfold interp_cycle, interp_cycle_cps; intros; rewrite interp_scheduler_cps_correct.
+      reflexivity.
+    Qed.
+
+    Lemma interp_cycle_cps_correct_rev:
+      forall (rules: rule_name_t -> rule)
+        (s: scheduler),
+        interp_cycle sigma rules s r =
+        interp_cycle_cps sigma rules s r id.
+    Proof.
+      intros; rewrite interp_cycle_cps_correct; reflexivity.
+    Qed.
+
+    Section WP.
+      Lemma wp_action_correct:
+        forall {sig: tsig var_t}
+          {tau}
+          (Gamma: tcontext sig)
+          (L: Log)
+          (l: Log)
+          (a: action sig tau)
+          (post: action_postcondition sig tau),
+          wp_action r sigma L a post Gamma l <->
+          post (interp_action r sigma Gamma L l a).
+      Proof.
+        intros; unfold wp_action; rewrite interp_action_cps_correct; reflexivity.
+      Qed.
+
+      Lemma wp_rule_correct:
+        forall (L: Log)
+          (rl: rule)
+          (post: rule_postcondition),
+          wp_rule r sigma rl post L <->
+          post (interp_rule r sigma L rl).
+      Proof.
+        intros; unfold wp_rule; rewrite interp_rule_cps_correct; reflexivity.
+      Qed.
+
+      Lemma wp_scheduler_correct:
+        forall (rules: rule_name_t -> rule)
+          (s: scheduler)
+          (post: scheduler_postcondition),
+          wp_scheduler r sigma rules s post <->
+          post (interp_scheduler r sigma rules s).
+      Proof.
+        intros; unfold wp_scheduler; rewrite interp_scheduler_cps_correct; reflexivity.
+      Qed.
+
+      Lemma wp_cycle_correct:
+        forall (rules: rule_name_t -> rule)
+          (s: scheduler)
+          (post: cycle_postcondition),
+          wp_cycle sigma rules s r post <->
+          post (interp_cycle sigma rules s r).
+      Proof.
+        intros; unfold wp_cycle; rewrite interp_cycle_cps_correct; reflexivity.
+      Qed.
+    End WP.
+  End Proofs.
 End CPS.
 
 Arguments interp_action_cps
@@ -472,8 +487,8 @@ Arguments interp_scheduler_cps
 
 Arguments interp_cycle_cps
           {pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t}
-          {R Sigma} {REnv} r sigma
-          rules !s / {A} k : assert.
+          {R Sigma} {REnv} sigma
+          rules !s r / {A} k : assert.
 
 Arguments wp_action
           {pos_t var_t fn_name_t reg_t ext_fn_t}
@@ -492,10 +507,5 @@ Arguments wp_scheduler
 
 Arguments wp_cycle
           {pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t}
-          {R Sigma} {REnv} r sigma
-          rules !s / post : assert.
-
-Arguments wp_scheduler
-          {pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t}
-          {R Sigma} {REnv} r (sigma rules)
-          !s / post : assert.
+          {R Sigma} {REnv} sigma
+          rules !s r / post : assert.

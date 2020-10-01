@@ -33,12 +33,11 @@ Section EndToEnd.
     compile_scheduler' opt cr (fun rl => lower_action (rules rl)) external s.
 
   Context {REnv: Env reg_t}.
-  Context (r: REnv.(env_t) R).
   Context (sigma: forall f, Sig_denote (Sigma f)).
 
   Definition interp_circuits
-             (circuits: register_update_circuitry rule_name_t CR CSigma REnv) :=
-    let cr := lower_r r in
+             (circuits: register_update_circuitry rule_name_t CR CSigma REnv)
+             (cr: REnv.(env_t) (fun r => bits (CR r))) :=
     let csigma := lower_sigma sigma in
     Environments.map REnv (fun _ c => interp_circuit cr csigma c) circuits.
 End EndToEnd.

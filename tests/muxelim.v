@@ -82,7 +82,7 @@ Definition sched_circuits :=
   compile_scheduler rules external sched.
 
 Definition sched_circuits_result :=
-  tc_compute (interp_circuits (ContextEnv.(create) r) empty_sigma sched_circuits).
+  tc_compute (interp_circuits empty_sigma sched_circuits (lower_r (ContextEnv.(create) r))).
 
 Definition package :=
   {| ip_koika := {| koika_reg_types := R;

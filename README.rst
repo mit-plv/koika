@@ -509,7 +509,7 @@ For instance, in the following example, our theorem guarantees that ``circuits_r
      compile_scheduler rules is_external collatz.
 
    Definition circuits_result :=
-     tc_compute (interp_circuits (ContextEnv.(create) r) empty_sigma circuits).
+     tc_compute (interp_circuits empty_sigma circuits (lower_r (ContextEnv.(create) r))).
 
 .. _cuttlesim:
 

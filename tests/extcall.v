@@ -45,7 +45,7 @@ Definition sched_circuits :=
   compile_scheduler rules external sched.
 
 Definition sched_circuits_result :=
-  tc_compute (interp_circuits (ContextEnv.(create) r) sigma sched_circuits).
+  tc_compute (interp_circuits sigma sched_circuits (lower_r (ContextEnv.(create) r))).
 
 Definition cpp_ext_fn_specs fn :=
   match fn with

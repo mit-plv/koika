@@ -37,7 +37,7 @@ Definition circuits :=
   compile_scheduler rules external sched.
 
 Definition circuits_result :=
-  tc_compute (interp_circuits cr empty_sigma circuits).
+  tc_compute (interp_circuits empty_sigma circuits (lower_r cr)).
 
 Definition package :=
   {| ip_koika := {| koika_reg_types := R;

@@ -84,7 +84,7 @@ Definition interp_result :=
   tc_compute (commit_update cr (interp_scheduler cr empty_sigma rules sched)).
 
 Definition circuits_result :=
-  tc_compute (interp_circuits cr empty_sigma circuits).
+  tc_compute (interp_circuits empty_sigma circuits (lower_r cr)).
 
 Definition package :=
   {| ip_koika := {| koika_reg_types := R;

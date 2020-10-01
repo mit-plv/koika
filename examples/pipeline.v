@@ -75,7 +75,7 @@ Definition circuits :=
   compile_scheduler rules external pipeline.
 
 Definition circuits_result sigma :=
-  interp_circuits (ContextEnv.(create) r) sigma circuits.
+  interp_circuits sigma circuits (lower_r (ContextEnv.(create) r)).
 
 Definition cpp_extfuns := "class extfuns {
 public:

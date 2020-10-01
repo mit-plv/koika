@@ -70,7 +70,7 @@ Module Collatz.
     compile_scheduler rules external collatz.
 
   Definition circuits_result :=
-    tc_compute (interp_circuits (ContextEnv.(create) r) empty_sigma circuits).
+    tc_compute (interp_circuits empty_sigma circuits (lower_r (ContextEnv.(create) r))).
 
   Example test: circuits_result = Environments.map _ (fun _ => bits_of_value) result :=
     eq_refl.
