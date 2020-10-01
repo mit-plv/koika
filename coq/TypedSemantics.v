@@ -145,6 +145,9 @@ Section Interp.
 
     Definition interp_scheduler (s: scheduler) :=
       interp_scheduler' log_empty s.
+
+    Definition interp_cycle (s: scheduler) :=
+      commit_update r (interp_scheduler s).
   End Scheduler.
 End Interp.
 

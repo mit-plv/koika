@@ -481,4 +481,16 @@ Section LoweringCorrectness.
     unfold TypedSemantics.interp_scheduler; intros.
     rewrite <- scheduler_lowering_correct', <- log_equiv_empty; reflexivity.
   Qed.
+
+  Theorem cycle_lowering_correct:
+    forall s,
+      LoweredSemantics.interp_cycle lr lsigma (fun r => lrules r) s =
+      lower_r (TypedSemantics.interp_cycle r sigma rules s).
+  Proof.
+    unfold TypedSemantics.interp_cycle, LoweredSemantics.interp_cycle; intros.
+    rewrite scheduler_lowering_correct.
+    unfold lower_r, lower_log;
+      rewrite SemanticProperties.commit_update_log_map_values;
+      reflexivity.
+  Qed.
 End LoweringCorrectness.

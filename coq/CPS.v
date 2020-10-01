@@ -369,15 +369,12 @@ Section CPS.
   Definition interp_cycle_cps (rules: rule_name_t -> rule) (s: scheduler) {A} (k: _ -> A) :=
     interp_scheduler_cps rules s (fun L => k (commit_update r L)).
 
-  Definition interp_cycle (rules: rule_name_t -> rule) (s: scheduler) :=
-    commit_update r (interp_scheduler r sigma rules s).
-
   Lemma interp_cycle_cps_correct:
     forall (rules: rule_name_t -> rule)
       (s: scheduler)
       {A} (k: _ -> A),
       interp_cycle_cps rules s k =
-      k (interp_cycle rules s).
+      k (interp_cycle r sigma rules s).
   Proof.
     unfold interp_cycle, interp_cycle_cps; intros; rewrite interp_scheduler_cps_correct.
     reflexivity.
@@ -386,7 +383,7 @@ Section CPS.
   Lemma interp_cycle_cps_correct_rev:
     forall (rules: rule_name_t -> rule)
       (s: scheduler),
-      interp_cycle rules s =
+      interp_cycle r sigma rules s =
       interp_cycle_cps rules s id.
   Proof.
     intros; rewrite interp_cycle_cps_correct; reflexivity.
@@ -451,7 +448,7 @@ Section CPS.
         (s: scheduler)
         (post: cycle_postcondition),
         wp_cycle rules s post <->
-        post (interp_cycle rules s).
+        post (interp_cycle r sigma rules s).
     Proof.
       intros; unfold wp_cycle; rewrite interp_cycle_cps_correct; reflexivity.
     Qed.

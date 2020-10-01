@@ -35,7 +35,7 @@ Section Thm.
     Context (external: rule_name_t -> bool).
 
     Theorem compiler_correct:
-      let spec_results := commit_update r (TypedSemantics.interp_scheduler r sigma rules s) in
+      let spec_results := TypedSemantics.interp_cycle r sigma rules s in
       let circuits := compile_scheduler lco rules external s in
       forall reg,
         interp_circuit cr csigma (ContextEnv.(getenv) circuits reg) =
