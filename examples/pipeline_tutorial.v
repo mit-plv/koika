@@ -8,9 +8,9 @@ Require Import Koika.Frontend.
 
 In this file we model a simple arithmetic pipeline with two functions `f` and `g`::
 
-  input --(f)--> queue --(g)--> output
+  input ---(f)--> queue ---(g)--> output
 
-For simplicity, ``input`` and ``output`` will be registers, and we'll update ``input`` at the end of each cycle using an external function ``NextInput`` (think of it as an oracle).
+For simplicity, ``input`` and ``output`` will be registers, and we'll update ``input`` at the end of each cycle using an external function ``next_input`` (think of it as an oracle).
 
 Our system will have two rules: ``doF`` and ``doG``, each corresponding to one step of the pipeline.
 
@@ -27,10 +27,10 @@ We start by defining the system using inductive types to declare its registers a
 |*)
 
 Inductive reg_t :=
-| input_buffer (** The data source: inputs are read from this register *)
+| input_buffer (** The data source (from which we read inputs) *)
 | queue_empty (** A flag indicating whether the queue is empty *)
 | queue_data (** The data stored in the queue *)
-| output_buffer. (** The data sink: outputs are written to this register *)
+| output_buffer. (** The data sink (into which we write outputs) *)
 
 Definition R r :=
   match r with
@@ -41,7 +41,7 @@ Definition R r :=
   end.
 
 Inductive ext_fn_t :=
-| NextInput (** This function computes the next element of the input stream. **)
+| NextInput (** ``NextInput`` steps through the input stream. **)
 | F
 | G.
 
@@ -87,7 +87,7 @@ Inductive rule_name_t :=
 | doF
 | doG.
 
-Definition rules :=
+Definition rules : rule_name_t -> rule R Sigma :=
   Eval vm_compute in
     tc_rules R Sigma
              (fun rl => match rl with
@@ -108,12 +108,12 @@ That's it, we've defined our program!  There are a few things we can do with it 
 Running our program
 ===================
 
-Kôika's semantics are deterministic, so we can simply run the program using the interpreter.  For this we need to define two provide two additional pieces: the value of the registers at the beginning of the cycle (``r``), and a model of the external functions (``sigma``).
+Kôika's semantics are deterministic, so we can simply run the program using the interpreter.  For this we need to define two provide two additional pieces: the value of the registers at the beginning of the cycle (``r``), and a model of the external functions (``σ``).
 
 For the registers, we start with an empty queue, the input set to 32'd1, and the output set to 32'd0.  The notation ``#{ reg => val #}`` indicates that register ``reg`` maps to value ``val``.  Notations like ``Ob~1~0~0~1`` denote bitstring constants: for example, ``Ob~0~1~1`` is the Kôika equivalent of ``3'b011`` in Verilog.
 |*)
 
-(** [reg_t] is finite; we need to know this to construct register maps. *)
+(** We need [reg_t] to be finite to construct register maps. *)
 Instance FiniteType_reg_t : FiniteType reg_t := _.
 
 Definition r : ContextEnv.(env_t) R :=
@@ -123,14 +123,14 @@ Definition r : ContextEnv.(env_t) R :=
      output_buffer => Bits.of_nat 32 0 }#.
 
 (*|
-For the external functions, we take something simple: ``f`` multiplies its input by 5, ``g`` adds one to its input, and ``nextInput`` models the sequence of odd numbers ``1, 3, 5, 7, 9, …``:
+For the external functions, we take something simple: ``f`` multiplies its input by 5, ``g`` adds one to its input, and ``next_input`` models the sequence of odd numbers ``1, 3, 5, 7, 9, …``:
 |*)
 
-Definition sigma fn : Sig_denote (Sigma fn) :=
+Definition σ fn : Sig_denote (Sigma fn) :=
   match fn with
-  | NextInput => fun x => Bits.plus x (Bits.of_nat _ 2)
-  | F         => fun x => Bits.slice 0 32 (Bits.mul x (Bits.of_nat 32 5))
-  | G         => fun x => Bits.plus x (Bits.of_nat _ 1)
+  | NextInput => fun x => x +b (Bits.of_nat 32 2)
+  | F         => fun x => Bits.slice 0 32 (x *b (Bits.of_nat 32 5))
+  | G         => fun x => x +b (Bits.of_nat 32 1)
   end.
 
 (*|
@@ -139,38 +139,47 @@ In the first step of execution ``doG`` does not execute and ``doF`` reads 1 from
 The function ``interp_cycle`` computes this update: it returns a map of register values.
 |*)
 
-Compute (interp_cycle sigma rules pipeline r).
+Compute (interp_cycle σ rules pipeline r). (* .unfold *)
 
 (*|
 Here is an infinite stream capturing the initial state of the system and all snapshots of the system after each execution:
 |*)
 
 Definition system_states :=
-  Streams.coiterate (TypedSemantics.interp_cycle sigma rules pipeline) r.
+  Streams.coiterate (interp_cycle σ rules pipeline) r.
 
 (*|
 Forcing this infinite stream simulates the whole system directly inside Coq: for example, we can easily extract the first few inputs that the system processes, and the first few outputs that it produces:
 
-- Inputs (1; 3; 5; 7; 9; …):
+- Inputs (``1``; ``3``; ``5``; ``7``; ``9``; ``…``):
   ..
 |*)
 
-Compute (Streams.firstn 5 (Streams.map (fun r => r.[input_buffer]) system_states)).
-Compute (Streams.firstn 5 (Streams.map (fun r => @Bits.to_nat 32 r.[input_buffer]) system_states)).
+Compute (Streams.firstn 5
+           (Streams.map (fun r => r.[input_buffer])
+                        system_states)). (* .unfold *)
+Compute (Streams.firstn 5
+           (Streams.map (fun r => @Bits.to_nat 32 r.[input_buffer])
+                        system_states)). (* .unfold *)
 
 (*|
-- Outputs (1 * 5 + 1 = 6; 3 * 5 + 1 = 16; 5 * 5 + 1 = 26; …); the first two zeros correspond pipeline's initial lag (the first 0 is the initial state; the second, the result of running one cycle; after that, the output is updated at every cycle):
+- Outputs (``1 * 5 + 1 = 6``; ``3 * 5 + 1 = 16``; ``5 * 5 + 1 = 26``; ``…``); the first two zeros correspond pipeline's initial lag (the first 0 is the initial state; the second, the result of running one cycle; after that, the output is updated at every cycle):
   ..
 |*)
 
-Compute (Streams.firstn 5 (Streams.map (fun r => r.[output_buffer]) system_states)).
-Compute (Streams.firstn 5 (Streams.map (fun r => @Bits.to_nat 32 r.[output_buffer]) system_states)).
+Compute (Streams.firstn 5
+           (Streams.map (fun r => r.[output_buffer])
+                        system_states)). (* .unfold *)
+Compute (Streams.firstn 5
+           (Streams.map (fun r => @Bits.to_nat 32 r.[output_buffer])
+                        system_states)). (* .unfold *)
 
 (*|
 Simulating this way is convenient for exploring small bits of code; for large designs, we have a compiler that generates optimized (but readable!) C++ that simulates Kôika designs 4 to 5 orders of magnitude faster than running directly in Coq does (a small example like this one runs hundreds of millions of simulated cycles per second in C++, and thousands in Coq):
 |*)
 
-Time Compute (@Bits.to_nat 32 (Streams.Str_nth 1000 system_states).[output_buffer]).
+Time Compute (@Bits.to_nat 32
+             (Streams.Str_nth 1000 system_states).[output_buffer]). (* .unfold *)
 
 (*|
 Running individual rules
@@ -182,29 +191,29 @@ We can also simulate at finer granularity: for example, here is what happens for
   ..
 |*)
 
-Compute (TypedSemantics.interp_rule r sigma log_empty (rules doG)).
+Compute (interp_rule r σ log_empty (rules doG)). (* .unfold *)
 
 (*|
 - ``doF`` succeeds and updates the queue and the input buffer:
   ..
 |*)
 
-Compute (TypedSemantics.interp_rule r sigma log_empty (rules doF)).
+Compute (interp_rule r σ log_empty (rules doF)). (* .unfold *)
 
 (*|
 In later cycles (here, cycle 3), ``doG`` succeeds as well and writes 1 to (port 0 of) ``queue_empty``…
 |*)
 
 Compute (let r := Streams.Str_nth 3 system_states in
-         TypedSemantics.interp_rule r sigma log_empty (rules doG)).
+         interp_rule r σ log_empty (rules doG)). (* .unfold *)
 
 (*|
 … and ``doF`` sets (port 1 of) ``queue_empty`` back to 0 as it refills the queue:
 |*)
 
 Compute (let r := Streams.Str_nth 3 system_states in
-         let logG := TypedSemantics.interp_rule r sigma log_empty (rules doG) in
-         TypedSemantics.interp_rule r sigma (must logG) (rules doF)).
+         let logG := interp_rule r σ log_empty (rules doG) in
+         interp_rule r σ (must logG) (rules doF)). (* .unfold *)
 
 (*|
 Generating circuits
@@ -213,30 +222,34 @@ Generating circuits
 Generating a circuit is just a matter of calling the compiler, which is a Gallina function too:
 |*)
 
-(** ``external`` is an escape latch used to inject arbitrary Verilog into a
-    design; we don't use it here **)
+(** ``external`` is an escape hatch used to inject arbitrary Verilog
+    into a design; we don't use it here **)
 Definition external (r: rule_name_t) := false.
 
 Definition circuits :=
   compile_scheduler rules external pipeline.
 
 (*|
-For printing circuits, we don't recomment using Coq's ``Compute``: our representation of circuits uses physical equality to track shared subcircuits, but Coq's printer doesn't respect sharing when printing, and hence generated circuits look giant.  Instead, we recommend looking at the generated Verilog or Dot graphs (use ``make examples/_objects/pipeline_tutorial.v/`` in the repository's root and navigate to ``examples/_objects/pipeline_tutorial.v/pipeline_tutorial.v`` to see the generated Verilog code, which uses internally instantiated modules for F and G and signature wires for ``nextInput``).
+For printing circuits, we don't recomment using Coq's ``Compute``: our representation of circuits uses physical equality to track shared subcircuits, but Coq's printer doesn't respect sharing when printing, and hence generated circuits look giant.  Instead, we recommend looking at the generated Verilog or Dot graphs (use ``make examples/_objects/pipeline_tutorial.v/`` in the repository's root and navigate to ``examples/_objects/pipeline_tutorial.v/pipeline_tutorial.v`` to see the generated Verilog code, which uses internally instantiated modules for ``F`` and ``G`` and signature wires for ``NextInput``).
 
 We can, however, easily compute the results produced by a circuit, either after one cycle:
 |*)
 
-Compute (interp_circuits sigma circuits (lower_r r)).
+Compute (interp_circuits σ circuits (lower_r r)). (* .unfold *)
 
 (*|
 … or after multiple cycles:
 |*)
 
 Definition circuit_states :=
-  Streams.coiterate (interp_circuits sigma circuits) (lower_r r).
+  Streams.coiterate (interp_circuits σ circuits) (lower_r r).
 
-Compute (Streams.firstn 5 (Streams.map (fun r => r.[output_buffer]) circuit_states)).
-Compute (Streams.firstn 5 (Streams.map (fun r => @Bits.to_nat 32 r.[output_buffer]) circuit_states)).
+Compute (Streams.firstn 5
+           (Streams.map (fun r => r.[output_buffer])
+                        circuit_states)). (* .unfold *)
+Compute (Streams.firstn 5
+           (Streams.map (fun r => @Bits.to_nat 32 r.[output_buffer])
+                        circuit_states)). (* .unfold *)
 
 (*|
 Proving properties
@@ -251,12 +264,14 @@ Require Koika.CompactSemantics.
 Section Correctness.
 
 (*|
-We start by quantifying over ``sigma``, the model of external functions.  This matters because we want to prove our design correct regarless of the concrete functions that we plug in:
+We start by quantifying over ``σ``, the model of external functions.  This matters because we want to prove our design correct regarless of the concrete functions that we plug in:
 |*)
 
-  Context (sigma: forall f, Sig_denote (Sigma f)).
+  Context (σ: forall f, Sig_denote (Sigma f)).
 
 (*|
+With this definition, ``sigma F: bits_t 32 → bits_t 32`` is the model of `f`, ``sigma G`` is the model of `g`, and ``sigma NextInput`` is the model of the `next_input` oracle.
+
 .. coq:: none
 |*)
 
@@ -268,8 +283,8 @@ We start by quantifying over ``sigma``, the model of external functions.  This m
   Opaque CompactSemantics.interp_cycle.
 
   (* FIXME remove these notations *)
-  Notation "1'b0" := {| vhd := false; vtl := _vect_nil |}.
-  Notation "1'b1" := {| vhd := true; vtl := _vect_nil |}.
+  Notation "0b0" := {| vhd := false; vtl := _vect_nil |}.
+  Notation "0b1" := {| vhd := true; vtl := _vect_nil |}.
 
   Import StreamNotations.
 
@@ -281,35 +296,39 @@ Let's start by stating a specification that will rule both kinds of bugs.  In th
     Context (r: ContextEnv.(env_t) R).
 
 (*|
-Here is the stream of inputs consumed by the spec: we just iterate ``nextInput`` on the original value ``r.[input_buffer]``.
+Here is the stream of inputs consumed by the spec: we just iterate ``NextInput`` on the original value ``r.[input_buffer]``.
 |*)
 
     Definition spec_inputs :=
-      Streams.coiterate (sigma NextInput) r.[input_buffer].
+      Streams.coiterate (σ NextInput) r.[input_buffer].
 
 (*|
 Here is the expected stream of outputs, which we call “observations”.  We only expect outputs to start becoming available after completing two cycles, so we simply state that the value in ``output_buffer`` should be unchanged until then:
 |*)
 
     Definition spec_observations :=
-      let composed x := sigma G (sigma F x) in
-      r.[output_buffer] ::: r.[output_buffer] ::: Streams.map composed spec_inputs.
+      let composed x := σ G (σ F x) in
+      r.[output_buffer] ::: (* Initial value *)
+      r.[output_buffer] ::: (* Unchanged after one cycle *)
+      Streams.map composed spec_inputs. (* Actual outputs *)
 
 (*|
 Here is the actual stream of states produced by the implementation, which we previously called “system_states”.  Note that we use the ``CompactSemantics`` module, which uses a more explicit representation of logs that plays more smoothly with abstract interpretation (instead of storing lists of events, it stores a record indicating whether we'ver read or written at port 0 and 1).
 
-FIXME: use regular semantics and introduce compact ones in the proof.
+.. FIXME: use regular semantics and introduce compact ones in the proof.
 |*)
 
     Definition impl_trace : Streams.Stream (ContextEnv.(env_t) R) :=
-      Streams.coiterate (CompactSemantics.interp_cycle (R := R) sigma rules pipeline) r.
+      Streams.coiterate
+        (CompactSemantics.interp_cycle σ rules pipeline)
+        r.
 
 (*|
 Finally, here is the actual stream of observations produced by the implementation:
 |*)
 
     Definition impl_observations :=
-      Streams.map (fun r: ContextEnv.(env_t) R => r.[output_buffer]) impl_trace.
+      Streams.map (fun r => r.[output_buffer]) impl_trace.
   End Spec.
 
 (*|
@@ -323,18 +342,18 @@ This definition captures what it means to execute one cycle:
 |*)
 
     Definition cycle (r: ContextEnv.(env_t) R) :=
-      CompactSemantics.interp_cycle (R := R) sigma rules pipeline r.
+      CompactSemantics.interp_cycle σ rules pipeline r.
 
 (*|
-Here is our two-cycle characterization: if we execute our circuit twice, ``input_buffer`` takes two steps of ``nextInput``, ``queue_empty`` becomes false (regardless of where we start, the queue will be filled). ``queue_data`` contains ``f`` of the input updated by the first cycle, and ``output`` buffer contains the correct output.
+Here is our two-cycle characterization: if we execute our circuit twice, ``input_buffer`` takes two steps of ``NextInput``, ``queue_empty`` becomes false (regardless of where we start, the queue will be filled). ``queue_data`` contains ``f`` of the input updated by the first cycle, and ``output`` buffer contains the correct output.
 |*)
 
     Definition phi2 (r: ContextEnv.(env_t) R)
       : ContextEnv.(env_t) R :=
-      #{ input_buffer => sigma NextInput (sigma NextInput r.[input_buffer]);
+      #{ input_buffer => σ NextInput (σ NextInput r.[input_buffer]);
          queue_empty => Ob~0;
-         queue_data => sigma F (sigma NextInput r.[input_buffer]);
-         output_buffer => sigma G (sigma F r.[input_buffer]) }#.
+         queue_data => σ F (σ NextInput r.[input_buffer]);
+         output_buffer => σ G (σ F r.[input_buffer]) }#.
 
 (*|
 Proving this characterization is just a matter of abstract interpretation:
@@ -349,13 +368,15 @@ Proving this characterization is just a matter of abstract interpretation:
 We start by unfolding the inner call to ``interp_cycle``, which yields a characterization that branches on ``r.[queue_empty]``:
 |*)
 
-      abstract_simpl r.
+      abstract_simpl r. (* .unfold *)
 
 (*|
-Then we do a case split on ``r.[queue_empty]``, and we use abstract interpretation again to show that both ases lead to the same result:
+There are three cases: ``negb (Bits.single r.[queue_empty])``, in which both ``doG`` and ``doF`` execute; ``Bits.single r.[queue_empty]``, in which only ``doF`` executes; and an impossible third case in which neither rule would have executed.
+
+To explore these cases we do a case split on ``r.[queue_empty]``, and simplify to show that they lead to the same result:
 |*)
 
-      destruct (Bits.single r.[queue_empty]); simpl.
+      destruct (Bits.single r.[queue_empty]); abstract_simpl. (* .unfold *)
       all: reflexivity.
     Qed.
 
@@ -366,10 +387,11 @@ With this done, we can now prove a stronger characterization that holds for any 
     Definition phi_iterated n
                (r: ContextEnv.(env_t) R)
       : ContextEnv.(env_t) R :=
-      #{ input_buffer => iterate (S (S n)) (sigma NextInput) r.[input_buffer];
+      let input := r.[input_buffer] in
+      #{ input_buffer => iterate (S (S n)) (σ NextInput) input;
          queue_empty => Ob~0;
-         queue_data => sigma F (iterate (S n) (sigma NextInput) r.[input_buffer]);
-         output_buffer => sigma G (sigma F (iterate n (sigma NextInput) r.[input_buffer])) }#.
+         queue_data => σ F (iterate (S n) (σ NextInput) input);
+         output_buffer => σ G (σ F (iterate n (σ NextInput) input)) }#.
 
 (*|
 The proof is a two-induction (captured by the ``Div2.ind_0_1_SS`` lemma); it tells us what the registers contain after ``n + 2`` cycles of the pipeline:
@@ -382,14 +404,14 @@ The proof is a two-induction (captured by the ``Div2.ind_0_1_SS`` lemma); it tel
     Proof.
       intros r n.
       rewrite !iterate_S_acc, phi2_correct.
-      revert n; apply Div2.ind_0_1_SS; simpl.
+      revert n; apply Div2.ind_0_1_SS; simpl. (* .unfold *)
       - reflexivity.
       - unfold cycle; reflexivity.
       - intros n IH; simpl in IH; rewrite IH; reflexivity.
     Qed.
 
 (*|
-And this is enough to complete our proof!  We'll manually match up the first two states, then use our characterization:
+And this is enough to complete our proof!  We'll manually match up the first two states, then use our characterization.  We need to assume that the queue is empty to begin with, otherwise we'd start producing unexpected output in the first cycle;  this hypothesis comes into play when matching up the second element of the traces.
 |*)
 
     Theorem correct_pipeline:
@@ -401,16 +423,20 @@ And this is enough to complete our proof!  We'll manually match up the first two
       unfold impl_observations, spec_observations, impl_trace.
 
       apply Streams.ntheq_eqst; intros [ | [ | n ] ]; simpl;
-        unfold spec_inputs; rewrite ?Streams.Str_nth_0, ?Streams.Str_nth_S, ?Streams.Str_nth_map, ?Streams.Str_nth_coiterate.
+        unfold spec_inputs;
+        rewrite ?Streams.Str_nth_0, ?Streams.Str_nth_S,
+                ?Streams.Str_nth_map, ?Streams.Str_nth_coiterate.
 
-      - (* Initial state *)
+      - (* Initial state *) (* .unfold *)
         simpl.
         reflexivity.
-      - (* After one cycle *)
+
+      - (* After one cycle *) (* .unfold *)
         simpl.
         abstract_simpl.
         rewrite Hqueue_empty; reflexivity.
-      - (* After two cycles *)
+
+      - (* After two cycles *) (* .unfold *)
         rewrite phi_iterated_correct.
         simpl.
         reflexivity.
@@ -422,7 +448,7 @@ End Correctness.
 Extracting to Verilog and C++
 =============================
 
-For this final piece, we need to specify which C++ and Verilog functions ``F``, ``G``, and ``nextInput`` correspond to; we do so by constructing a ``package``, which contains all relevant information:
+For this final piece, we need to specify which C++ and Verilog functions ``F``, ``G``, and ``NextInput`` correspond to; we do so by constructing a ``package``, which contains all relevant information:
 |*)
 
 Definition cpp_extfuns := "class extfuns {
@@ -466,7 +492,7 @@ Definition package :=
                           efr_internal :=
                             match fn with
                             | F | G => true
-                            | nextInput => false
+                            | NextInput => false
                             end |} |} |}.
 
 (*|
