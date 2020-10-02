@@ -14,7 +14,7 @@ For simplicity, ``input`` and ``output`` will be registers, and we'll update ``i
 
 Our system will have two rules: ``doF`` and ``doG``, each corresponding to one step of the pipeline.
 
-All that follows is parametrized on a register size ``sz``, set to 32 bits by default.
+All that follows is parameterized on a register size ``sz``, set to 32 bits by default.
 |*)
 
 Definition sz := pow2 5.
@@ -53,7 +53,7 @@ Definition Sigma (fn: ext_fn_t) : ExternalSignature :=
   end.
 
 (*|
-Then we declare the rules of the system.  Notice how ``doG`` writes at port 0 and ``doF`` reads at port 1.  This is because we're building a pipelined queue, not a bypassing one, so we expect clients to pull first and push second.  Notice also that each rule is implicitly "guarded"; that is, if ``doF`` can't push into the queue because ``doG`` is lagging, or if there's no data ready for ``doG`` to
+Then we declare the rules of the system.  Notice how ``doG`` writes at port 0 and ``doF`` reads at port 1.  This is because we're building a pipelined queue, not a bypassing one, so we expect clients to pull first and push second.  Notice also that each rule is "guarded" by a call to ``fail``; that is, if ``doF`` can't push into the queue because ``doG`` is lagging then ``doF`` won't run at all, and if there's no data ready for ``doG`` to consume because ``doF`` isn't keeping up then ``doG`` won't run.
 |*)
 
 Definition _doF : uaction _ _ :=
@@ -230,7 +230,7 @@ Definition circuits :=
   compile_scheduler rules external pipeline.
 
 (*|
-For printing circuits, we don't recomment using Coq's ``Compute``: our representation of circuits uses physical equality to track shared subcircuits, but Coq's printer doesn't respect sharing when printing, and hence generated circuits look giant.  Instead, we recommend looking at the generated Verilog or Dot graphs (use ``make examples/_objects/pipeline_tutorial.v/`` in the repository's root and navigate to ``examples/_objects/pipeline_tutorial.v/pipeline_tutorial.v`` to see the generated Verilog code, which uses internally instantiated modules for ``F`` and ``G`` and signature wires for ``NextInput``).
+For printing circuits, we don't recommend using Coq's ``Compute``: our representation of circuits uses physical equality to track shared subcircuits, but Coq's printer doesn't respect sharing when printing, and hence generated circuits look giant.  Instead, we recommend looking at the generated Verilog or Dot graphs (use ``make examples/_objects/pipeline_tutorial.v/`` in the repository's root and navigate to ``examples/_objects/pipeline_tutorial.v/pipeline_tutorial.v`` to see the generated Verilog code, which uses internally instantiated modules for ``F`` and ``G`` and signature wires for ``NextInput``).
 
 We can, however, easily compute the results produced by a circuit, either after one cycle:
 |*)
@@ -255,16 +255,16 @@ Compute (Streams.firstn 5
 Proving properties
 ==================
 
-The compiler is proven correct, so we know that runnign a circuit will always produce the same results as running the original Kôika design.  But we haven't proved anything yet about our Kôika design, so it could be full of bugs.  Here we're interested in ruling out two types of bugs: function correctness bugs and timing bugs.
+The compiler is proven correct, so we know that running a circuit will always produce the same results as running the original Kôika design.  But we haven't proved anything yet about our Kôika design, so it could be full of bugs.  Here we're interested in ruling out two types of bugs: function correctness bugs and timing bugs.
 
-The first class of bugs would cause our design to compute something different from `g ∘ f`.  The second class of bug would cause it to stuffer or lag, taking more than one cycle to produce each output.
+The first class of bugs would cause our design to compute something different from `g ∘ f`.  The second class of bug would cause it to stutter or lag, taking more than one cycle to produce each output.
 |*)
 
 Require Koika.CompactSemantics.
 Section Correctness.
 
 (*|
-We start by quantifying over ``σ``, the model of external functions.  This matters because we want to prove our design correct regarless of the concrete functions that we plug in:
+We start by quantifying over ``σ``, the model of external functions.  This matters because we want to prove our design correct regardless of the concrete functions that we plug in:
 |*)
 
   Context (σ: forall f, Sig_denote (Sigma f)).
@@ -289,7 +289,7 @@ With this definition, ``sigma F: bits_t 32 → bits_t 32`` is the model of `f`, 
   Import StreamNotations.
 
 (*|
-Let's start by stating a specification that will rule both kinds of bugs.  In this example we completely characterize the pipeline (we have examples that use weaker characterizations such as invariants, but we haven't written a tutorial for them yet).  Note how we quantify over ``r``: as we'll see later, our design will work for any strating state, as long as the queue starts empty.
+Let's start by stating a specification that will rule both kinds of bugs.  In this example we completely characterize the pipeline (we have examples that use weaker characterizations such as invariants, but we haven't written a tutorial for them yet).  Note how we quantify over ``r``: as we'll see later, our design will work for any starting state, as long as the queue starts empty.
 |*)
 
   Section Spec.
@@ -313,7 +313,7 @@ Here is the expected stream of outputs, which we call “observations”.  We on
       Streams.map composed spec_inputs. (* Actual outputs *)
 
 (*|
-Here is the actual stream of states produced by the implementation, which we previously called “system_states”.  Note that we use the ``CompactSemantics`` module, which uses a more explicit representation of logs that plays more smoothly with abstract interpretation (instead of storing lists of events, it stores a record indicating whether we'ver read or written at port 0 and 1).
+Here is the actual stream of states produced by the implementation, which we previously called “system_states”.  Note that we use the ``CompactSemantics`` module, which uses a more explicit representation of logs that plays more smoothly with abstract interpretation (instead of storing lists of events, it stores a record indicating whether we've read or written at port 0 and 1).
 
 .. FIXME: use regular semantics and introduce compact ones in the proof.
 |*)
