@@ -1400,11 +1400,28 @@ Hint Rewrite
   : bool_simpl.
 
 Declare Scope bits.
+
 Notation bits n := (Bits.bits n).
 Notation "bs '~' b" := (Bits.cons b bs) (at level 7, left associativity, format "bs '~' b") : bits.
 Notation "bs '~' 0" := (Bits.cons false bs) (at level 7, left associativity, format "bs '~' 0") : bits.
 Notation "bs '~' 1" := (Bits.cons true bs) (at level 7, left associativity, format "bs '~' 1") : bits.
 Notation "'Ob'" := Bits.nil (at level 7) : bits. (* https://github.com/coq/coq/issues/12370 *)
+
+Infix "+b" := Bits.plus (at level 50, left associativity): bits.
+Infix "-b" := Bits.minus (at level 50, left associativity): bits .
+Infix "*b" := Bits.mul (at level 40, left associativity): bits .
+Infix ">>b" := Bits.lsr (at level 30, no associativity): bits .
+Infix ">>>b" := Bits.asr (at level 30, no associativity): bits .
+Infix "<<b" := Bits.lsl (at level 30, no associativity): bits .
+Infix "<?b" := Bits.unsigned_lt (at level 70, no associativity): bits.
+Infix "<=?b" := Bits.unsigned_le (at level 70, no associativity): bits.
+Infix ">?b" := Bits.unsigned_gt (at level 70, no associativity): bits.
+Infix ">=?b" := Bits.unsigned_ge (at level 70, no associativity): bits.
+Infix "<?sb" := Bits.signed_lt (at level 70, no associativity): bits.
+Infix "<=?sb" := Bits.signed_le (at level 70, no associativity): bits.
+Infix ">?sb" := Bits.signed_gt (at level 70, no associativity): bits.
+Infix ">=?sb" := Bits.signed_ge (at level 70, no associativity): bits.
+
 Global Open Scope bits.
 
 Fixpoint z_range start len :=
