@@ -1,0 +1,1446 @@
+-*- mode: compilation; default-directory: "~/documents/mit/plv/koika/etc/" -*-
+Comint started at Wed Aug 19 18:43:05
+
+./bench.sh 
++ SIMS='cuttlesim verilator verilator-bluespec'
++ bench_comb collatz 100000000 cuttlesim verilator verilator-bluespec
++ for simulator in ${@:3}
++ bench_comb_1 g++-10 cuttlesim collatz 100000000
++ compiler=g++-10
++ simulator=cuttlesim
++ design=collatz
++ cycles=100000000
+++ realpath ../examples/_objects/collatz.v/
++ base=/home/clement/documents/mit/plv/koika/examples/_objects/collatz.v
++ b='bench g++-10 cuttlesim collatz'
++ make -C /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v clean
+make: Entering directory '/home/clement/documents/mit/plv/koika/examples/_objects/collatz.v'
+rm -rf obj_dir.opt
+rm -rf obj_dir.trace
+rm -f collatz.verilator.vcd
+rm -f collatz.opt
+rm -f collatz.debug
+rm -f collatz.perf
+rm -f collatz.cov
+rm -f collatz.s
+rm -f collatz.out
+rm -f collatz.vcd
+rm -f collatz.perf.data
+rm -f collatz.callgrind
+rm -fr collatz.rr
+rm -f *.gcov
+rm -f collatz.json
+rm -f collatz.json.log
+rm -f collatz.asc
+rm -f collatz.bin
+rm -f collatz.rpt
+rm -f collatz.json.v
+make: Leaving directory '/home/clement/documents/mit/plv/koika/examples/_objects/collatz.v'
++ case $simulator in
++ make CXX=g++-10 -C /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v collatz.opt
+make: Entering directory '/home/clement/documents/mit/plv/koika/examples/_objects/collatz.v'
+g++-10   -Wall -Wextra '-DSIM_VCD_SCOPES={"TOP", "collatz",}' --std=c++14 -O3 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector collatz.cpp -o "collatz.opt"
+make: Leaving directory '/home/clement/documents/mit/plv/koika/examples/_objects/collatz.v'
++ bench g++-10 cuttlesim collatz /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v/collatz.opt 100000000
++ compiler=g++-10
++ simulator=cuttlesim
++ input=collatz
++ export 'TIMEFORMAT=>> g++-10	cuttlesim	collatz	real: %3R	user: %3U	sys: %3S'
++ TIMEFORMAT='>> g++-10	cuttlesim	collatz	real: %3R	user: %3U	sys: %3S'
++ echo '<< cuttlesim collatz'
+<< cuttlesim collatz
+++ seq 1 10
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v/collatz.opt 100000000
+r0 = 16'b0000000000000100 (0x4, 4)
+>> g++-10	cuttlesim	collatz	real: 0.100	user: 0.100	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v/collatz.opt 100000000
+r0 = 16'b0000000000000100 (0x4, 4)
+>> g++-10	cuttlesim	collatz	real: 0.102	user: 0.101	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v/collatz.opt 100000000
+r0 = 16'b0000000000000100 (0x4, 4)
+>> g++-10	cuttlesim	collatz	real: 0.100	user: 0.101	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v/collatz.opt 100000000
+r0 = 16'b0000000000000100 (0x4, 4)
+>> g++-10	cuttlesim	collatz	real: 0.104	user: 0.103	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v/collatz.opt 100000000
+r0 = 16'b0000000000000100 (0x4, 4)
+>> g++-10	cuttlesim	collatz	real: 0.101	user: 0.101	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v/collatz.opt 100000000
+r0 = 16'b0000000000000100 (0x4, 4)
+>> g++-10	cuttlesim	collatz	real: 0.102	user: 0.102	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v/collatz.opt 100000000
+r0 = 16'b0000000000000100 (0x4, 4)
+>> g++-10	cuttlesim	collatz	real: 0.101	user: 0.100	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v/collatz.opt 100000000
+r0 = 16'b0000000000000100 (0x4, 4)
+>> g++-10	cuttlesim	collatz	real: 0.102	user: 0.102	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v/collatz.opt 100000000
+r0 = 16'b0000000000000100 (0x4, 4)
+>> g++-10	cuttlesim	collatz	real: 0.102	user: 0.102	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v/collatz.opt 100000000
+r0 = 16'b0000000000000100 (0x4, 4)
+>> g++-10	cuttlesim	collatz	real: 0.104	user: 0.098	sys: 0.004
++ for simulator in ${@:3}
++ bench_comb_1 g++-10 verilator collatz 100000000
++ compiler=g++-10
++ simulator=verilator
++ design=collatz
++ cycles=100000000
+++ realpath ../examples/_objects/collatz.v/
++ base=/home/clement/documents/mit/plv/koika/examples/_objects/collatz.v
++ b='bench g++-10 verilator collatz'
++ make -C /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v clean
+make: Entering directory '/home/clement/documents/mit/plv/koika/examples/_objects/collatz.v'
+rm -rf obj_dir.opt
+rm -rf obj_dir.trace
+rm -f collatz.verilator.vcd
+rm -f collatz.opt
+rm -f collatz.debug
+rm -f collatz.perf
+rm -f collatz.cov
+rm -f collatz.s
+rm -f collatz.out
+rm -f collatz.vcd
+rm -f collatz.perf.data
+rm -f collatz.callgrind
+rm -fr collatz.rr
+rm -f *.gcov
+rm -f collatz.json
+rm -f collatz.json.log
+rm -f collatz.asc
+rm -f collatz.bin
+rm -f collatz.rpt
+rm -f collatz.json.v
+make: Leaving directory '/home/clement/documents/mit/plv/koika/examples/_objects/collatz.v'
++ case $simulator in
++ make CXX=g++-10 -C /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v obj_dir.opt/Vcollatz
+make: Entering directory '/home/clement/documents/mit/plv/koika/examples/_objects/collatz.v'
+verilator  -Wall -Wno-fatal -CFLAGS "-I /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v" --prefix Vcollatz --cc --exe  --Mdir obj_dir.opt --x-assign fast --x-initial fast --noassert -O3 -CFLAGS '-O3 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector ' -LDFLAGS '-O3 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector ' /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v/collatz.verilator.cpp collatz.v
+make -C obj_dir.opt -f Vcollatz.mk Vcollatz
+make[1]: Entering directory '/home/clement/documents/mit/plv/koika/examples/_objects/collatz.v/obj_dir.opt'
+g++-10  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -I /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v -O3 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector   -c -o collatz.o /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v/collatz.verilator.cpp
+g++-10  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -I /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v -O3 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector   -c -o verilated.o /usr/local/share/verilator/include/verilated.cpp
+g++-10  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -I /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v -O3 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector   -c -o verilated_dpi.o /usr/local/share/verilator/include/verilated_dpi.cpp
+/usr/bin/perl /usr/local/share/verilator/bin/verilator_includer -DVL_INCLUDE_OPT=include Vcollatz.cpp Vcollatz_collatz.cpp > Vcollatz__ALLcls.cpp
+g++-10  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -I /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v -O3 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector   -c -o Vcollatz__ALLcls.o Vcollatz__ALLcls.cpp
+/usr/bin/perl /usr/local/share/verilator/bin/verilator_includer -DVL_INCLUDE_OPT=include Vcollatz__Dpi.cpp Vcollatz__Syms.cpp > Vcollatz__ALLsup.cpp
+g++-10  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -I /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v -O3 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector   -c -o Vcollatz__ALLsup.o Vcollatz__ALLsup.cpp
+ar -cr Vcollatz__ALL.a Vcollatz__ALLcls.o Vcollatz__ALLsup.o
+ranlib Vcollatz__ALL.a
+g++    collatz.o verilated.o verilated_dpi.o Vcollatz__ALL.a   -O3 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector  -o Vcollatz -lm -lstdc++ 
+make[1]: Leaving directory '/home/clement/documents/mit/plv/koika/examples/_objects/collatz.v/obj_dir.opt'
+make: Leaving directory '/home/clement/documents/mit/plv/koika/examples/_objects/collatz.v'
++ bench g++-10 verilator collatz /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v/obj_dir.opt/Vcollatz 100000000
++ compiler=g++-10
++ simulator=verilator
++ input=collatz
++ export 'TIMEFORMAT=>> g++-10	verilator	collatz	real: %3R	user: %3U	sys: %3S'
++ TIMEFORMAT='>> g++-10	verilator	collatz	real: %3R	user: %3U	sys: %3S'
++ echo '<< verilator collatz'
+<< verilator collatz
+++ seq 1 10
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v/obj_dir.opt/Vcollatz 100000000
+>> g++-10	verilator	collatz	real: 0.544	user: 0.537	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v/obj_dir.opt/Vcollatz 100000000
+>> g++-10	verilator	collatz	real: 0.545	user: 0.544	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v/obj_dir.opt/Vcollatz 100000000
+>> g++-10	verilator	collatz	real: 0.541	user: 0.534	sys: 0.004
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v/obj_dir.opt/Vcollatz 100000000
+>> g++-10	verilator	collatz	real: 0.552	user: 0.547	sys: 0.004
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v/obj_dir.opt/Vcollatz 100000000
+>> g++-10	verilator	collatz	real: 0.550	user: 0.541	sys: 0.004
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v/obj_dir.opt/Vcollatz 100000000
+>> g++-10	verilator	collatz	real: 0.549	user: 0.549	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v/obj_dir.opt/Vcollatz 100000000
+>> g++-10	verilator	collatz	real: 0.552	user: 0.551	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v/obj_dir.opt/Vcollatz 100000000
+>> g++-10	verilator	collatz	real: 0.544	user: 0.544	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v/obj_dir.opt/Vcollatz 100000000
+>> g++-10	verilator	collatz	real: 0.539	user: 0.531	sys: 0.004
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v/obj_dir.opt/Vcollatz 100000000
+>> g++-10	verilator	collatz	real: 0.557	user: 0.557	sys: 0.000
++ for simulator in ${@:3}
++ bench_comb_1 g++-10 verilator-bluespec collatz 100000000
++ compiler=g++-10
++ simulator=verilator-bluespec
++ design=collatz
++ cycles=100000000
+++ realpath ../examples/_objects/collatz.v/
++ base=/home/clement/documents/mit/plv/koika/examples/_objects/collatz.v
++ b='bench g++-10 verilator-bluespec collatz'
++ make -C /home/clement/documents/mit/plv/koika/examples/_objects/collatz.v clean
+make: Entering directory '/home/clement/documents/mit/plv/koika/examples/_objects/collatz.v'
+rm -rf obj_dir.opt
+rm -rf obj_dir.trace
+rm -f collatz.verilator.vcd
+rm -f collatz.opt
+rm -f collatz.debug
+rm -f collatz.perf
+rm -f collatz.cov
+rm -f collatz.s
+rm -f collatz.out
+rm -f collatz.vcd
+rm -f collatz.perf.data
+rm -f collatz.callgrind
+rm -fr collatz.rr
+rm -f *.gcov
+rm -f collatz.json
+rm -f collatz.json.log
+rm -f collatz.asc
+rm -f collatz.bin
+rm -f collatz.rpt
+rm -f collatz.json.v
+make: Leaving directory '/home/clement/documents/mit/plv/koika/examples/_objects/collatz.v'
++ case $simulator in
++ bench_comb fir 10000000 cuttlesim verilator verilator-bluespec
++ for simulator in ${@:3}
++ bench_comb_1 g++-10 cuttlesim fir 10000000
++ compiler=g++-10
++ simulator=cuttlesim
++ design=fir
++ cycles=10000000
+++ realpath ../examples/_objects/fir.v/
++ base=/home/clement/documents/mit/plv/koika/examples/_objects/fir.v
++ b='bench g++-10 cuttlesim fir'
++ make -C /home/clement/documents/mit/plv/koika/examples/_objects/fir.v clean
+make: Entering directory '/home/clement/documents/mit/plv/koika/examples/_objects/fir.v'
+rm -rf obj_dir.opt
+rm -rf obj_dir.trace
+rm -f fir.verilator.vcd
+rm -f fir.opt
+rm -f fir.debug
+rm -f fir.perf
+rm -f fir.cov
+rm -f fir.s
+rm -f fir.out
+rm -f fir.vcd
+rm -f fir.perf.data
+rm -f fir.callgrind
+rm -fr fir.rr
+rm -f *.gcov
+rm -f fir.json
+rm -f fir.json.log
+rm -f fir.asc
+rm -f fir.bin
+rm -f fir.rpt
+rm -f fir.json.v
+make: Leaving directory '/home/clement/documents/mit/plv/koika/examples/_objects/fir.v'
++ case $simulator in
++ make CXX=g++-10 -C /home/clement/documents/mit/plv/koika/examples/_objects/fir.v fir.opt
+make: Entering directory '/home/clement/documents/mit/plv/koika/examples/_objects/fir.v'
+g++-10   -Wall -Wextra '-DSIM_VCD_SCOPES={"TOP", "fir",}' --std=c++14 -O3 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector fir.cpp -o "fir.opt"
+In file included from fir.cpp:2:
+fir.hpp: In instantiation of ‘bool module_fir<extfuns_t>::rule_tb() [with extfuns_t = extfuns]’:
+fir.hpp:219:5:   required from ‘void module_fir<extfuns_t>::cycle() [with extfuns_t = extfuns]’
+fir.hpp:225:7:   required from ‘module_fir<extfuns_t>& module_fir<extfuns_t>::run(uint_fast64_t) [with extfuns_t = extfuns; uint_fast64_t = long unsigned int]’
+cuttlesim.hpp:1258:54:   required from ‘typename simulator::snapshot_t cuttlesim::init_and_run(cuttlesim::ull, Args&& ...) [with simulator = simulator; Args = {}; typename simulator::snapshot_t = cuttlesim::snapshot_t<module_fir<extfuns>::state_t>; cuttlesim::ull = long long unsigned int]’
+cuttlesim.hpp:1328:44:   required from ‘int cuttlesim::main(int, char**, Args&& ...) [with simulator = simulator; Args = {}]’
+fir.cpp:10:79:   required from here
+fir.hpp:174:14: warning: variable ‘bla’ set but not used [-Wunused-but-set-variable]
+  174 |     bits<16> bla = CALL_FN(feed_0, X, W);
+      |              ^~~
+make: Leaving directory '/home/clement/documents/mit/plv/koika/examples/_objects/fir.v'
++ bench g++-10 cuttlesim fir /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/fir.opt 10000000
++ compiler=g++-10
++ simulator=cuttlesim
++ input=fir
++ export 'TIMEFORMAT=>> g++-10	cuttlesim	fir	real: %3R	user: %3U	sys: %3S'
++ TIMEFORMAT='>> g++-10	cuttlesim	fir	real: %3R	user: %3U	sys: %3S'
++ echo '<< cuttlesim fir'
+<< cuttlesim fir
+++ seq 1 10
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/fir.opt 10000000
+q = [16'x0; 16'x1dc; 16'x31d; 16'x7967]
+x = 8'b10000000 (0x80, 128)
+>> g++-10	cuttlesim	fir	real: 0.010	user: 0.010	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/fir.opt 10000000
+q = [16'x0; 16'x1dc; 16'x31d; 16'x7967]
+x = 8'b10000000 (0x80, 128)
+>> g++-10	cuttlesim	fir	real: 0.009	user: 0.009	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/fir.opt 10000000
+q = [16'x0; 16'x1dc; 16'x31d; 16'x7967]
+x = 8'b10000000 (0x80, 128)
+>> g++-10	cuttlesim	fir	real: 0.012	user: 0.012	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/fir.opt 10000000
+q = [16'x0; 16'x1dc; 16'x31d; 16'x7967]
+x = 8'b10000000 (0x80, 128)
+>> g++-10	cuttlesim	fir	real: 0.010	user: 0.010	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/fir.opt 10000000
+q = [16'x0; 16'x1dc; 16'x31d; 16'x7967]
+x = 8'b10000000 (0x80, 128)
+>> g++-10	cuttlesim	fir	real: 0.010	user: 0.010	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/fir.opt 10000000
+q = [16'x0; 16'x1dc; 16'x31d; 16'x7967]
+x = 8'b10000000 (0x80, 128)
+>> g++-10	cuttlesim	fir	real: 0.011	user: 0.011	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/fir.opt 10000000
+q = [16'x0; 16'x1dc; 16'x31d; 16'x7967]
+x = 8'b10000000 (0x80, 128)
+>> g++-10	cuttlesim	fir	real: 0.012	user: 0.012	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/fir.opt 10000000
+q = [16'x0; 16'x1dc; 16'x31d; 16'x7967]
+x = 8'b10000000 (0x80, 128)
+>> g++-10	cuttlesim	fir	real: 0.009	user: 0.009	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/fir.opt 10000000
+q = [16'x0; 16'x1dc; 16'x31d; 16'x7967]
+x = 8'b10000000 (0x80, 128)
+>> g++-10	cuttlesim	fir	real: 0.009	user: 0.004	sys: 0.004
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/fir.opt 10000000
+q = [16'x0; 16'x1dc; 16'x31d; 16'x7967]
+x = 8'b10000000 (0x80, 128)
+>> g++-10	cuttlesim	fir	real: 0.009	user: 0.006	sys: 0.003
++ for simulator in ${@:3}
++ bench_comb_1 g++-10 verilator fir 10000000
++ compiler=g++-10
++ simulator=verilator
++ design=fir
++ cycles=10000000
+++ realpath ../examples/_objects/fir.v/
++ base=/home/clement/documents/mit/plv/koika/examples/_objects/fir.v
++ b='bench g++-10 verilator fir'
++ make -C /home/clement/documents/mit/plv/koika/examples/_objects/fir.v clean
+make: Entering directory '/home/clement/documents/mit/plv/koika/examples/_objects/fir.v'
+rm -rf obj_dir.opt
+rm -rf obj_dir.trace
+rm -f fir.verilator.vcd
+rm -f fir.opt
+rm -f fir.debug
+rm -f fir.perf
+rm -f fir.cov
+rm -f fir.s
+rm -f fir.out
+rm -f fir.vcd
+rm -f fir.perf.data
+rm -f fir.callgrind
+rm -fr fir.rr
+rm -f *.gcov
+rm -f fir.json
+rm -f fir.json.log
+rm -f fir.asc
+rm -f fir.bin
+rm -f fir.rpt
+rm -f fir.json.v
+make: Leaving directory '/home/clement/documents/mit/plv/koika/examples/_objects/fir.v'
++ case $simulator in
++ make CXX=g++-10 -C /home/clement/documents/mit/plv/koika/examples/_objects/fir.v obj_dir.opt/Vfir
+make: Entering directory '/home/clement/documents/mit/plv/koika/examples/_objects/fir.v'
+verilator  -Wall -Wno-fatal -CFLAGS "-I /home/clement/documents/mit/plv/koika/examples/_objects/fir.v" --prefix Vfir --cc --exe  --Mdir obj_dir.opt --x-assign fast --x-initial fast --noassert -O3 -CFLAGS '-O3 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector ' -LDFLAGS '-O3 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector ' /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/fir.verilator.cpp fir.v
+%Warning-WIDTH: fir.v:8: Operator ASSIGNW expects 64 bits on the Assign RHS, but Assign RHS's REPLICATE generates 40 bits.
+                       : ... In instance fir
+ wire[63:0] _1 = {{{8'b11111110 * x, 8'b11111111 * x}, 8'b00000011 * x}, _0};
+               ^
+                ... Use "/* verilator lint_off WIDTH */" and lint_on around source to disable this message.
+%Warning-UNUSED: fir.v:8: Bits of signal are not used: '_1'[15:0]
+                        : ... In instance fir
+ wire[63:0] _1 = {{{8'b11111110 * x, 8'b11111111 * x}, 8'b00000011 * x}, _0};
+            ^~
+%Warning-UNUSED: fir.v:9: Bits of signal are not used: '_2'[15:0]
+                        : ... In instance fir
+ wire[63:0] _2 = {{{q[48 +: 16] + _0, q[32 +: 16] + _1[16 +: 16]}, q[16 +: 16] + _1[32 +: 16]}, q[0 +: 16] + _1[48 +: 16]};
+            ^~
+make -C obj_dir.opt -f Vfir.mk Vfir
+make[1]: Entering directory '/home/clement/documents/mit/plv/koika/examples/_objects/fir.v/obj_dir.opt'
+g++-10  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -I /home/clement/documents/mit/plv/koika/examples/_objects/fir.v -O3 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector   -c -o fir.o /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/fir.verilator.cpp
+g++-10  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -I /home/clement/documents/mit/plv/koika/examples/_objects/fir.v -O3 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector   -c -o verilated.o /usr/local/share/verilator/include/verilated.cpp
+g++-10  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -I /home/clement/documents/mit/plv/koika/examples/_objects/fir.v -O3 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector   -c -o verilated_dpi.o /usr/local/share/verilator/include/verilated_dpi.cpp
+/usr/bin/perl /usr/local/share/verilator/bin/verilator_includer -DVL_INCLUDE_OPT=include Vfir.cpp Vfir_fir.cpp > Vfir__ALLcls.cpp
+g++-10  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -I /home/clement/documents/mit/plv/koika/examples/_objects/fir.v -O3 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector   -c -o Vfir__ALLcls.o Vfir__ALLcls.cpp
+/usr/bin/perl /usr/local/share/verilator/bin/verilator_includer -DVL_INCLUDE_OPT=include Vfir__Dpi.cpp Vfir__Syms.cpp > Vfir__ALLsup.cpp
+g++-10  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -I /home/clement/documents/mit/plv/koika/examples/_objects/fir.v -O3 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector   -c -o Vfir__ALLsup.o Vfir__ALLsup.cpp
+ar -cr Vfir__ALL.a Vfir__ALLcls.o Vfir__ALLsup.o
+ranlib Vfir__ALL.a
+g++    fir.o verilated.o verilated_dpi.o Vfir__ALL.a   -O3 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector  -o Vfir -lm -lstdc++ 
+make[1]: Leaving directory '/home/clement/documents/mit/plv/koika/examples/_objects/fir.v/obj_dir.opt'
+make: Leaving directory '/home/clement/documents/mit/plv/koika/examples/_objects/fir.v'
++ bench g++-10 verilator fir /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/obj_dir.opt/Vfir 10000000
++ compiler=g++-10
++ simulator=verilator
++ input=fir
++ export 'TIMEFORMAT=>> g++-10	verilator	fir	real: %3R	user: %3U	sys: %3S'
++ TIMEFORMAT='>> g++-10	verilator	fir	real: %3R	user: %3U	sys: %3S'
++ echo '<< verilator fir'
+<< verilator fir
+++ seq 1 10
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/obj_dir.opt/Vfir 10000000
+>> g++-10	verilator	fir	real: 0.082	user: 0.082	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/obj_dir.opt/Vfir 10000000
+>> g++-10	verilator	fir	real: 0.084	user: 0.084	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/obj_dir.opt/Vfir 10000000
+>> g++-10	verilator	fir	real: 0.083	user: 0.083	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/obj_dir.opt/Vfir 10000000
+>> g++-10	verilator	fir	real: 0.083	user: 0.083	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/obj_dir.opt/Vfir 10000000
+>> g++-10	verilator	fir	real: 0.084	user: 0.084	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/obj_dir.opt/Vfir 10000000
+>> g++-10	verilator	fir	real: 0.091	user: 0.090	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/obj_dir.opt/Vfir 10000000
+>> g++-10	verilator	fir	real: 0.086	user: 0.085	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/obj_dir.opt/Vfir 10000000
+>> g++-10	verilator	fir	real: 0.086	user: 0.080	sys: 0.004
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/obj_dir.opt/Vfir 10000000
+>> g++-10	verilator	fir	real: 0.082	user: 0.082	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/obj_dir.opt/Vfir 10000000
+>> g++-10	verilator	fir	real: 0.082	user: 0.078	sys: 0.004
++ for simulator in ${@:3}
++ bench_comb_1 g++-10 verilator-bluespec fir 10000000
++ compiler=g++-10
++ simulator=verilator-bluespec
++ design=fir
++ cycles=10000000
+++ realpath ../examples/_objects/fir.v/
++ base=/home/clement/documents/mit/plv/koika/examples/_objects/fir.v
++ b='bench g++-10 verilator-bluespec fir'
++ make -C /home/clement/documents/mit/plv/koika/examples/_objects/fir.v clean
+make: Entering directory '/home/clement/documents/mit/plv/koika/examples/_objects/fir.v'
+rm -rf obj_dir.opt
+rm -rf obj_dir.trace
+rm -f fir.verilator.vcd
+rm -f fir.opt
+rm -f fir.debug
+rm -f fir.perf
+rm -f fir.cov
+rm -f fir.s
+rm -f fir.out
+rm -f fir.vcd
+rm -f fir.perf.data
+rm -f fir.callgrind
+rm -fr fir.rr
+rm -f *.gcov
+rm -f fir.json
+rm -f fir.json.log
+rm -f fir.asc
+rm -f fir.bin
+rm -f fir.rpt
+rm -f fir.json.v
+make: Leaving directory '/home/clement/documents/mit/plv/koika/examples/_objects/fir.v'
++ case $simulator in
++ bench_comb fft 10000000 cuttlesim verilator verilator-bluespec
++ for simulator in ${@:3}
++ bench_comb_1 g++-10 cuttlesim fft 10000000
++ compiler=g++-10
++ simulator=cuttlesim
++ design=fft
++ cycles=10000000
+++ realpath ../examples/_objects/fft.v/
++ base=/home/clement/documents/mit/plv/koika/examples/_objects/fft.v
++ b='bench g++-10 cuttlesim fft'
++ make -C /home/clement/documents/mit/plv/koika/examples/_objects/fft.v clean
+make: Entering directory '/home/clement/documents/mit/plv/koika/examples/_objects/fft.v'
+rm -rf obj_dir.opt
+rm -rf obj_dir.trace
+rm -f fft.verilator.vcd
+rm -f fft.opt
+rm -f fft.debug
+rm -f fft.perf
+rm -f fft.cov
+rm -f fft.s
+rm -f fft.out
+rm -f fft.vcd
+rm -f fft.perf.data
+rm -f fft.callgrind
+rm -fr fft.rr
+rm -f *.gcov
+rm -f fft.json
+rm -f fft.json.log
+rm -f fft.asc
+rm -f fft.bin
+rm -f fft.rpt
+rm -f fft.json.v
+make: Leaving directory '/home/clement/documents/mit/plv/koika/examples/_objects/fft.v'
++ case $simulator in
++ make CXX=g++-10 -C /home/clement/documents/mit/plv/koika/examples/_objects/fft.v fft.opt
+make: Entering directory '/home/clement/documents/mit/plv/koika/examples/_objects/fft.v'
+g++-10   -Wall -Wextra '-DSIM_VCD_SCOPES={"TOP", "fft",}' --std=c++14 -O3 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector fft.cpp -o "fft.opt"
+In file included from fft.hpp:10,
+                 from fft.cpp:2:
+cuttlesim.hpp:87:102: note: ‘#pragma message: Bignum truncation is broken in Boost < 1.68; if you run into issues, try upgrading.’
+   87 | #pragma message("Bignum truncation is broken in Boost < 1.68; if you run into issues, try upgrading.")
+      |                                                                                                      ^
+make: Leaving directory '/home/clement/documents/mit/plv/koika/examples/_objects/fft.v'
++ bench g++-10 cuttlesim fft /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/fft.opt 10000000
++ compiler=g++-10
++ simulator=cuttlesim
++ input=fft
++ export 'TIMEFORMAT=>> g++-10	cuttlesim	fft	real: %3R	user: %3U	sys: %3S'
++ TIMEFORMAT='>> g++-10	cuttlesim	fft	real: %3R	user: %3U	sys: %3S'
++ echo '<< cuttlesim fft'
+<< cuttlesim fft
+++ seq 1 10
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/fft.opt 10000000
+localSt = [complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }]
+>> g++-10	cuttlesim	fft	real: 0.378	user: 0.370	sys: 0.004
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/fft.opt 10000000
+localSt = [complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }]
+>> g++-10	cuttlesim	fft	real: 0.405	user: 0.401	sys: 0.004
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/fft.opt 10000000
+localSt = [complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }]
+>> g++-10	cuttlesim	fft	real: 0.372	user: 0.372	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/fft.opt 10000000
+localSt = [complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }]
+>> g++-10	cuttlesim	fft	real: 0.377	user: 0.372	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/fft.opt 10000000
+localSt = [complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }]
+>> g++-10	cuttlesim	fft	real: 0.373	user: 0.373	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/fft.opt 10000000
+localSt = [complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }]
+>> g++-10	cuttlesim	fft	real: 0.372	user: 0.372	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/fft.opt 10000000
+localSt = [complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }]
+>> g++-10	cuttlesim	fft	real: 0.383	user: 0.382	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/fft.opt 10000000
+localSt = [complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }]
+>> g++-10	cuttlesim	fft	real: 0.374	user: 0.374	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/fft.opt 10000000
+localSt = [complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }]
+>> g++-10	cuttlesim	fft	real: 0.377	user: 0.377	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/fft.opt 10000000
+localSt = [complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }; complex { .re = 32'x0; .im = 32'x0; }]
+>> g++-10	cuttlesim	fft	real: 0.386	user: 0.386	sys: 0.000
++ for simulator in ${@:3}
++ bench_comb_1 g++-10 verilator fft 10000000
++ compiler=g++-10
++ simulator=verilator
++ design=fft
++ cycles=10000000
+++ realpath ../examples/_objects/fft.v/
++ base=/home/clement/documents/mit/plv/koika/examples/_objects/fft.v
++ b='bench g++-10 verilator fft'
++ make -C /home/clement/documents/mit/plv/koika/examples/_objects/fft.v clean
+make: Entering directory '/home/clement/documents/mit/plv/koika/examples/_objects/fft.v'
+rm -rf obj_dir.opt
+rm -rf obj_dir.trace
+rm -f fft.verilator.vcd
+rm -f fft.opt
+rm -f fft.debug
+rm -f fft.perf
+rm -f fft.cov
+rm -f fft.s
+rm -f fft.out
+rm -f fft.vcd
+rm -f fft.perf.data
+rm -f fft.callgrind
+rm -fr fft.rr
+rm -f *.gcov
+rm -f fft.json
+rm -f fft.json.log
+rm -f fft.asc
+rm -f fft.bin
+rm -f fft.rpt
+rm -f fft.json.v
+make: Leaving directory '/home/clement/documents/mit/plv/koika/examples/_objects/fft.v'
++ case $simulator in
++ make CXX=g++-10 -C /home/clement/documents/mit/plv/koika/examples/_objects/fft.v obj_dir.opt/Vfft
+make: Entering directory '/home/clement/documents/mit/plv/koika/examples/_objects/fft.v'
+verilator  -Wall -Wno-fatal -CFLAGS "-I /home/clement/documents/mit/plv/koika/examples/_objects/fft.v" --prefix Vfft --cc --exe  --Mdir obj_dir.opt --x-assign fast --x-initial fast --noassert -O3 -CFLAGS '-O3 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector ' -LDFLAGS '-O3 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector ' /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/fft.verilator.cpp fft.v
+%Warning-UNUSED: fft.v:8: Bits of signal are not used: '_2'[63:48,15:0]
+                        : ... In instance fft
+ wire[63:0] _2 = _1[32 +: 32] * 32'b00000000000000010000000000000000;
+            ^~
+                 ... Use "/* verilator lint_off UNUSED */" and lint_on around source to disable this message.
+%Warning-UNUSED: fft.v:9: Bits of signal are not used: '_3'[63:48,15:0]
+                        : ... In instance fft
+ wire[63:0] _3 = 32'b0 * _1[0 +: 32];
+            ^~
+%Warning-UNUSED: fft.v:11: Bits of signal are not used: '_4'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _4 = _1[32 +: 32] * 32'b0;
+            ^~
+%Warning-UNUSED: fft.v:12: Bits of signal are not used: '_5'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _5 = _1[0 +: 32] * 32'b00000000000000010000000000000000;
+            ^~
+%Warning-UNUSED: fft.v:16: Bits of signal are not used: '_8'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _8 = _7[32 +: 32] * 32'b00000000000000010000000000000000;
+            ^~
+%Warning-UNUSED: fft.v:17: Bits of signal are not used: '_9'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _9 = 32'b0 * _7[0 +: 32];
+            ^~
+%Warning-UNUSED: fft.v:19: Bits of signal are not used: '_10'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _10 = _7[32 +: 32] * 32'b0;
+            ^~~
+%Warning-UNUSED: fft.v:20: Bits of signal are not used: '_11'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _11 = _7[0 +: 32] * 32'b00000000000000010000000000000000;
+            ^~~
+%Warning-UNUSED: fft.v:24: Bits of signal are not used: '_14'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _14 = _13[32 +: 32] * 32'b00000000000000010000000000000000;
+            ^~~
+%Warning-UNUSED: fft.v:25: Bits of signal are not used: '_15'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _15 = 32'b0 * _13[0 +: 32];
+            ^~~
+%Warning-UNUSED: fft.v:27: Bits of signal are not used: '_16'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _16 = _13[32 +: 32] * 32'b0;
+            ^~~
+%Warning-UNUSED: fft.v:28: Bits of signal are not used: '_17'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _17 = _13[0 +: 32] * 32'b00000000000000010000000000000000;
+            ^~~
+%Warning-UNUSED: fft.v:32: Bits of signal are not used: '_20'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _20 = _19[32 +: 32] * 32'b00000000000000010000000000000000;
+            ^~~
+%Warning-UNUSED: fft.v:33: Bits of signal are not used: '_21'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _21 = 32'b0 * _19[0 +: 32];
+            ^~~
+%Warning-UNUSED: fft.v:35: Bits of signal are not used: '_22'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _22 = _19[32 +: 32] * 32'b0;
+            ^~~
+%Warning-UNUSED: fft.v:36: Bits of signal are not used: '_23'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _23 = _19[0 +: 32] * 32'b00000000000000010000000000000000;
+            ^~~
+%Warning-UNUSED: fft.v:40: Bits of signal are not used: '_26'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _26 = _25[32 +: 32] * 32'b00000000000000010000000000000000;
+            ^~~
+%Warning-UNUSED: fft.v:41: Bits of signal are not used: '_27'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _27 = 32'b0 * _25[0 +: 32];
+            ^~~
+%Warning-UNUSED: fft.v:43: Bits of signal are not used: '_28'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _28 = _25[32 +: 32] * 32'b0;
+            ^~~
+%Warning-UNUSED: fft.v:44: Bits of signal are not used: '_29'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _29 = _25[0 +: 32] * 32'b00000000000000010000000000000000;
+            ^~~
+%Warning-UNUSED: fft.v:48: Bits of signal are not used: '_32'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _32 = _31[32 +: 32] * 32'b00000000000000010000000000000000;
+            ^~~
+%Warning-UNUSED: fft.v:49: Bits of signal are not used: '_33'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _33 = 32'b0 * _31[0 +: 32];
+            ^~~
+%Warning-UNUSED: fft.v:51: Bits of signal are not used: '_34'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _34 = _31[32 +: 32] * 32'b0;
+            ^~~
+%Warning-UNUSED: fft.v:52: Bits of signal are not used: '_35'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _35 = _31[0 +: 32] * 32'b00000000000000010000000000000000;
+            ^~~
+%Warning-UNUSED: fft.v:56: Bits of signal are not used: '_38'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _38 = _37[32 +: 32] * 32'b00000000000000010000000000000000;
+            ^~~
+%Warning-UNUSED: fft.v:57: Bits of signal are not used: '_39'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _39 = 32'b0 * _37[0 +: 32];
+            ^~~
+%Warning-UNUSED: fft.v:59: Bits of signal are not used: '_40'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _40 = _37[32 +: 32] * 32'b0;
+            ^~~
+%Warning-UNUSED: fft.v:60: Bits of signal are not used: '_41'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _41 = _37[0 +: 32] * 32'b00000000000000010000000000000000;
+            ^~~
+%Warning-UNUSED: fft.v:64: Bits of signal are not used: '_44'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _44 = _43[32 +: 32] * 32'b00000000000000010000000000000000;
+            ^~~
+%Warning-UNUSED: fft.v:65: Bits of signal are not used: '_45'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _45 = 32'b0 * _43[0 +: 32];
+            ^~~
+%Warning-UNUSED: fft.v:67: Bits of signal are not used: '_46'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _46 = _43[32 +: 32] * 32'b0;
+            ^~~
+%Warning-UNUSED: fft.v:68: Bits of signal are not used: '_47'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _47 = _43[0 +: 32] * 32'b00000000000000010000000000000000;
+            ^~~
+%Warning-UNUSED: fft.v:71: Bits of signal are not used: '_49'[63:0]
+                         : ... In instance fft
+%Warning-UNUSED: fft.v:73: Bits of signal are not used: '_var_out0'[127:0]
+                         : ... In instance fft
+ wire[1023:0] _var_out0 = {960'b0, _48};
+              ^~~~~~~~~
+%Warning-UNUSED: fft.v:74: Bits of signal are not used: '_var_out1'[191:128]
+                         : ... In instance fft
+ wire[1023:0] _var_out1 = {{_var_out0[128 +: 896], _49[128 +: 64]}, _48};
+              ^~~~~~~~~
+%Warning-UNUSED: fft.v:75: Bits of signal are not used: '_var_out2'[255:192]
+                         : ... In instance fft
+ wire[1023:0] _var_out2 = {{_var_out1[192 +: 832], _49[256 +: 64]}, _var_out1[0 +: 128]};
+              ^~~~~~~~~
+%Warning-UNUSED: fft.v:76: Bits of signal are not used: '_var_out3'[319:256]
+                         : ... In instance fft
+ wire[1023:0] _var_out3 = {{_var_out2[256 +: 768], _49[384 +: 64]}, _var_out2[0 +: 192]};
+              ^~~~~~~~~
+%Warning-UNUSED: fft.v:77: Bits of signal are not used: '_var_out4'[383:320]
+                         : ... In instance fft
+ wire[1023:0] _var_out4 = {{_var_out3[320 +: 704], _49[512 +: 64]}, _var_out3[0 +: 256]};
+              ^~~~~~~~~
+%Warning-UNUSED: fft.v:78: Bits of signal are not used: '_var_out5'[447:384]
+                         : ... In instance fft
+ wire[1023:0] _var_out5 = {{_var_out4[384 +: 640], _49[640 +: 64]}, _var_out4[0 +: 320]};
+              ^~~~~~~~~
+%Warning-UNUSED: fft.v:79: Bits of signal are not used: '_var_out6'[511:448]
+                         : ... In instance fft
+ wire[1023:0] _var_out6 = {{_var_out5[448 +: 576], _49[768 +: 64]}, _var_out5[0 +: 384]};
+              ^~~~~~~~~
+%Warning-UNUSED: fft.v:80: Bits of signal are not used: '_var_out7'[575:512]
+                         : ... In instance fft
+ wire[1023:0] _var_out7 = {{_var_out6[512 +: 512], _49[896 +: 64]}, _var_out6[0 +: 448]};
+              ^~~~~~~~~
+%Warning-UNUSED: fft.v:81: Bits of signal are not used: '_var_out8'[639:576]
+                         : ... In instance fft
+ wire[1023:0] _var_out8 = {{_var_out7[576 +: 448], _49[64 +: 64]}, _var_out7[0 +: 512]};
+              ^~~~~~~~~
+%Warning-UNUSED: fft.v:82: Bits of signal are not used: '_var_out9'[703:640]
+                         : ... In instance fft
+ wire[1023:0] _var_out9 = {{_var_out8[640 +: 384], _49[192 +: 64]}, _var_out8[0 +: 576]};
+              ^~~~~~~~~
+%Warning-UNUSED: fft.v:83: Bits of signal are not used: '_var_out10'[767:704]
+                         : ... In instance fft
+ wire[1023:0] _var_out10 = {{_var_out9[704 +: 320], _49[320 +: 64]}, _var_out9[0 +: 640]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:84: Bits of signal are not used: '_var_out11'[831:768]
+                         : ... In instance fft
+ wire[1023:0] _var_out11 = {{_var_out10[768 +: 256], _49[448 +: 64]}, _var_out10[0 +: 704]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:85: Bits of signal are not used: '_var_out12'[895:832]
+                         : ... In instance fft
+ wire[1023:0] _var_out12 = {{_var_out11[832 +: 192], _49[576 +: 64]}, _var_out11[0 +: 768]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:86: Bits of signal are not used: '_var_out13'[959:896]
+                         : ... In instance fft
+ wire[1023:0] _var_out13 = {{_var_out12[896 +: 128], _49[704 +: 64]}, _var_out12[0 +: 832]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:87: Bits of signal are not used: '_var_out14'[1023:960]
+                         : ... In instance fft
+ wire[1023:0] _var_out14 = {{_var_out13[960 +: 64], _49[832 +: 64]}, _var_out13[0 +: 896]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:88: Bits of signal are not used: '_var_out15'[1023:960]
+                         : ... In instance fft
+ wire[1023:0] _var_out15 = {_50, _var_out14[0 +: 960]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:90: Bits of signal are not used: '_52'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _52 = _51[32 +: 32] * 32'b00000000000000010000000000000000;
+            ^~~
+%Warning-UNUSED: fft.v:91: Bits of signal are not used: '_53'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _53 = 32'b0 * _51[0 +: 32];
+            ^~~
+%Warning-UNUSED: fft.v:93: Bits of signal are not used: '_54'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _54 = _51[32 +: 32] * 32'b0;
+            ^~~
+%Warning-UNUSED: fft.v:94: Bits of signal are not used: '_55'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _55 = _51[0 +: 32] * 32'b00000000000000010000000000000000;
+            ^~~
+%Warning-UNUSED: fft.v:98: Bits of signal are not used: '_58'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _58 = _57[32 +: 32] * 32'b00000000000000010000000000000000;
+            ^~~
+%Warning-UNUSED: fft.v:99: Bits of signal are not used: '_59'[63:48,15:0]
+                         : ... In instance fft
+ wire[63:0] _59 = 32'b0 * _57[0 +: 32];
+            ^~~
+%Warning-UNUSED: fft.v:101: Bits of signal are not used: '_60'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _60 = _57[32 +: 32] * 32'b0;
+            ^~~
+%Warning-UNUSED: fft.v:102: Bits of signal are not used: '_61'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _61 = _57[0 +: 32] * 32'b00000000000000010000000000000000;
+            ^~~
+%Warning-UNUSED: fft.v:106: Bits of signal are not used: '_64'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _64 = _63[32 +: 32] * 32'b00000000000000010000000000000000;
+            ^~~
+%Warning-UNUSED: fft.v:107: Bits of signal are not used: '_65'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _65 = 32'b0 * _63[0 +: 32];
+            ^~~
+%Warning-UNUSED: fft.v:109: Bits of signal are not used: '_66'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _66 = _63[32 +: 32] * 32'b0;
+            ^~~
+%Warning-UNUSED: fft.v:110: Bits of signal are not used: '_67'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _67 = _63[0 +: 32] * 32'b00000000000000010000000000000000;
+            ^~~
+%Warning-UNUSED: fft.v:114: Bits of signal are not used: '_70'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _70 = _69[32 +: 32] * 32'b00000000000000010000000000000000;
+            ^~~
+%Warning-UNUSED: fft.v:115: Bits of signal are not used: '_71'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _71 = 32'b0 * _69[0 +: 32];
+            ^~~
+%Warning-UNUSED: fft.v:117: Bits of signal are not used: '_72'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _72 = _69[32 +: 32] * 32'b0;
+            ^~~
+%Warning-UNUSED: fft.v:118: Bits of signal are not used: '_73'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _73 = _69[0 +: 32] * 32'b00000000000000010000000000000000;
+            ^~~
+%Warning-UNUSED: fft.v:122: Bits of signal are not used: '_76'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _76 = _75[32 +: 32] * 32'b0;
+            ^~~
+%Warning-UNUSED: fft.v:123: Bits of signal are not used: '_77'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _77 = 32'b11111111111111110000000000000000 * _75[0 +: 32];
+            ^~~
+%Warning-UNUSED: fft.v:125: Bits of signal are not used: '_78'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _78 = _75[32 +: 32] * 32'b11111111111111110000000000000000;
+            ^~~
+%Warning-UNUSED: fft.v:126: Bits of signal are not used: '_79'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _79 = _75[0 +: 32] * 32'b0;
+            ^~~
+%Warning-UNUSED: fft.v:130: Bits of signal are not used: '_82'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _82 = _81[32 +: 32] * 32'b0;
+            ^~~
+%Warning-UNUSED: fft.v:131: Bits of signal are not used: '_83'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _83 = 32'b11111111111111110000000000000000 * _81[0 +: 32];
+            ^~~
+%Warning-UNUSED: fft.v:133: Bits of signal are not used: '_84'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _84 = _81[32 +: 32] * 32'b11111111111111110000000000000000;
+            ^~~
+%Warning-UNUSED: fft.v:134: Bits of signal are not used: '_85'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _85 = _81[0 +: 32] * 32'b0;
+            ^~~
+%Warning-UNUSED: fft.v:138: Bits of signal are not used: '_88'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _88 = _87[32 +: 32] * 32'b0;
+            ^~~
+%Warning-UNUSED: fft.v:139: Bits of signal are not used: '_89'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _89 = 32'b11111111111111110000000000000000 * _87[0 +: 32];
+            ^~~
+%Warning-UNUSED: fft.v:141: Bits of signal are not used: '_90'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _90 = _87[32 +: 32] * 32'b11111111111111110000000000000000;
+            ^~~
+%Warning-UNUSED: fft.v:142: Bits of signal are not used: '_91'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _91 = _87[0 +: 32] * 32'b0;
+            ^~~
+%Warning-UNUSED: fft.v:146: Bits of signal are not used: '_94'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _94 = _93[32 +: 32] * 32'b0;
+            ^~~
+%Warning-UNUSED: fft.v:147: Bits of signal are not used: '_95'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _95 = 32'b11111111111111110000000000000000 * _93[0 +: 32];
+            ^~~
+%Warning-UNUSED: fft.v:149: Bits of signal are not used: '_96'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _96 = _93[32 +: 32] * 32'b11111111111111110000000000000000;
+            ^~~
+%Warning-UNUSED: fft.v:150: Bits of signal are not used: '_97'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _97 = _93[0 +: 32] * 32'b0;
+            ^~~
+%Warning-UNUSED: fft.v:153: Bits of signal are not used: '_99'[63:0]
+                          : ... In instance fft
+%Warning-UNUSED: fft.v:155: Bits of signal are not used: '_var_out16'[127:0]
+                          : ... In instance fft
+ wire[1023:0] _var_out16 = {960'b0, _98};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:156: Bits of signal are not used: '_var_out17'[191:128]
+                          : ... In instance fft
+ wire[1023:0] _var_out17 = {{_var_out16[128 +: 896], _99[128 +: 64]}, _98};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:157: Bits of signal are not used: '_var_out18'[255:192]
+                          : ... In instance fft
+ wire[1023:0] _var_out18 = {{_var_out17[192 +: 832], _99[256 +: 64]}, _var_out17[0 +: 128]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:158: Bits of signal are not used: '_var_out19'[319:256]
+                          : ... In instance fft
+ wire[1023:0] _var_out19 = {{_var_out18[256 +: 768], _99[384 +: 64]}, _var_out18[0 +: 192]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:159: Bits of signal are not used: '_var_out20'[383:320]
+                          : ... In instance fft
+ wire[1023:0] _var_out20 = {{_var_out19[320 +: 704], _99[512 +: 64]}, _var_out19[0 +: 256]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:160: Bits of signal are not used: '_var_out21'[447:384]
+                          : ... In instance fft
+ wire[1023:0] _var_out21 = {{_var_out20[384 +: 640], _99[640 +: 64]}, _var_out20[0 +: 320]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:161: Bits of signal are not used: '_var_out22'[511:448]
+                          : ... In instance fft
+ wire[1023:0] _var_out22 = {{_var_out21[448 +: 576], _99[768 +: 64]}, _var_out21[0 +: 384]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:162: Bits of signal are not used: '_var_out23'[575:512]
+                          : ... In instance fft
+ wire[1023:0] _var_out23 = {{_var_out22[512 +: 512], _99[896 +: 64]}, _var_out22[0 +: 448]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:163: Bits of signal are not used: '_var_out24'[639:576]
+                          : ... In instance fft
+ wire[1023:0] _var_out24 = {{_var_out23[576 +: 448], _99[64 +: 64]}, _var_out23[0 +: 512]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:164: Bits of signal are not used: '_var_out25'[703:640]
+                          : ... In instance fft
+ wire[1023:0] _var_out25 = {{_var_out24[640 +: 384], _99[192 +: 64]}, _var_out24[0 +: 576]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:165: Bits of signal are not used: '_var_out26'[767:704]
+                          : ... In instance fft
+ wire[1023:0] _var_out26 = {{_var_out25[704 +: 320], _99[320 +: 64]}, _var_out25[0 +: 640]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:166: Bits of signal are not used: '_var_out27'[831:768]
+                          : ... In instance fft
+ wire[1023:0] _var_out27 = {{_var_out26[768 +: 256], _99[448 +: 64]}, _var_out26[0 +: 704]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:167: Bits of signal are not used: '_var_out28'[895:832]
+                          : ... In instance fft
+ wire[1023:0] _var_out28 = {{_var_out27[832 +: 192], _99[576 +: 64]}, _var_out27[0 +: 768]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:168: Bits of signal are not used: '_var_out29'[959:896]
+                          : ... In instance fft
+ wire[1023:0] _var_out29 = {{_var_out28[896 +: 128], _99[704 +: 64]}, _var_out28[0 +: 832]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:169: Bits of signal are not used: '_var_out30'[1023:960]
+                          : ... In instance fft
+ wire[1023:0] _var_out30 = {{_var_out29[960 +: 64], _99[832 +: 64]}, _var_out29[0 +: 896]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:170: Bits of signal are not used: '_var_out31'[1023:960]
+                          : ... In instance fft
+ wire[1023:0] _var_out31 = {_100, _var_out30[0 +: 960]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:172: Bits of signal are not used: '_102'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _102 = _101[32 +: 32] * 32'b00000000000000010000000000000000;
+            ^~~~
+%Warning-UNUSED: fft.v:173: Bits of signal are not used: '_103'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _103 = 32'b0 * _101[0 +: 32];
+            ^~~~
+%Warning-UNUSED: fft.v:175: Bits of signal are not used: '_104'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _104 = _101[32 +: 32] * 32'b0;
+            ^~~~
+%Warning-UNUSED: fft.v:176: Bits of signal are not used: '_105'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _105 = _101[0 +: 32] * 32'b00000000000000010000000000000000;
+            ^~~~
+%Warning-UNUSED: fft.v:180: Bits of signal are not used: '_108'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _108 = _107[32 +: 32] * 32'b00000000000000010000000000000000;
+            ^~~~
+%Warning-UNUSED: fft.v:181: Bits of signal are not used: '_109'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _109 = 32'b0 * _107[0 +: 32];
+            ^~~~
+%Warning-UNUSED: fft.v:183: Bits of signal are not used: '_110'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _110 = _107[32 +: 32] * 32'b0;
+            ^~~~
+%Warning-UNUSED: fft.v:184: Bits of signal are not used: '_111'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _111 = _107[0 +: 32] * 32'b00000000000000010000000000000000;
+            ^~~~
+%Warning-UNUSED: fft.v:188: Bits of signal are not used: '_114'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _114 = _113[32 +: 32] * 32'b00000000000000001011010100000100;
+            ^~~~
+%Warning-UNUSED: fft.v:189: Bits of signal are not used: '_115'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _115 = 32'b11111111111111110100101011111011 * _113[0 +: 32];
+            ^~~~
+%Warning-UNUSED: fft.v:191: Bits of signal are not used: '_116'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _116 = _113[32 +: 32] * 32'b11111111111111110100101011111011;
+            ^~~~
+%Warning-UNUSED: fft.v:192: Bits of signal are not used: '_117'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _117 = _113[0 +: 32] * 32'b00000000000000001011010100000100;
+            ^~~~
+%Warning-UNUSED: fft.v:196: Bits of signal are not used: '_120'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _120 = _119[32 +: 32] * 32'b00000000000000001011010100000100;
+            ^~~~
+%Warning-UNUSED: fft.v:197: Bits of signal are not used: '_121'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _121 = 32'b11111111111111110100101011111011 * _119[0 +: 32];
+            ^~~~
+%Warning-UNUSED: fft.v:199: Bits of signal are not used: '_122'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _122 = _119[32 +: 32] * 32'b11111111111111110100101011111011;
+            ^~~~
+%Warning-UNUSED: fft.v:200: Bits of signal are not used: '_123'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _123 = _119[0 +: 32] * 32'b00000000000000001011010100000100;
+            ^~~~
+%Warning-UNUSED: fft.v:204: Bits of signal are not used: '_126'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _126 = _125[32 +: 32] * 32'b0;
+            ^~~~
+%Warning-UNUSED: fft.v:205: Bits of signal are not used: '_127'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _127 = 32'b11111111111111110000000000000000 * _125[0 +: 32];
+            ^~~~
+%Warning-UNUSED: fft.v:207: Bits of signal are not used: '_128'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _128 = _125[32 +: 32] * 32'b11111111111111110000000000000000;
+            ^~~~
+%Warning-UNUSED: fft.v:208: Bits of signal are not used: '_129'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _129 = _125[0 +: 32] * 32'b0;
+            ^~~~
+%Warning-UNUSED: fft.v:212: Bits of signal are not used: '_132'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _132 = _131[32 +: 32] * 32'b0;
+            ^~~~
+%Warning-UNUSED: fft.v:213: Bits of signal are not used: '_133'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _133 = 32'b11111111111111110000000000000000 * _131[0 +: 32];
+            ^~~~
+%Warning-UNUSED: fft.v:215: Bits of signal are not used: '_134'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _134 = _131[32 +: 32] * 32'b11111111111111110000000000000000;
+            ^~~~
+%Warning-UNUSED: fft.v:216: Bits of signal are not used: '_135'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _135 = _131[0 +: 32] * 32'b0;
+            ^~~~
+%Warning-UNUSED: fft.v:220: Bits of signal are not used: '_138'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _138 = _137[32 +: 32] * 32'b11111111111111110100101011111011;
+            ^~~~
+%Warning-UNUSED: fft.v:221: Bits of signal are not used: '_139'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _139 = 32'b11111111111111110100101011111011 * _137[0 +: 32];
+            ^~~~
+%Warning-UNUSED: fft.v:223: Bits of signal are not used: '_140'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _140 = _137[32 +: 32] * 32'b11111111111111110100101011111011;
+            ^~~~
+%Warning-UNUSED: fft.v:224: Bits of signal are not used: '_141'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _141 = _137[0 +: 32] * 32'b11111111111111110100101011111011;
+            ^~~~
+%Warning-UNUSED: fft.v:228: Bits of signal are not used: '_144'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _144 = _143[32 +: 32] * 32'b11111111111111110100101011111011;
+            ^~~~
+%Warning-UNUSED: fft.v:229: Bits of signal are not used: '_145'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _145 = 32'b11111111111111110100101011111011 * _143[0 +: 32];
+            ^~~~
+%Warning-UNUSED: fft.v:231: Bits of signal are not used: '_146'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _146 = _143[32 +: 32] * 32'b11111111111111110100101011111011;
+            ^~~~
+%Warning-UNUSED: fft.v:232: Bits of signal are not used: '_147'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _147 = _143[0 +: 32] * 32'b11111111111111110100101011111011;
+            ^~~~
+%Warning-UNUSED: fft.v:235: Bits of signal are not used: '_149'[63:0]
+                          : ... In instance fft
+%Warning-UNUSED: fft.v:237: Bits of signal are not used: '_var_out32'[127:0]
+                          : ... In instance fft
+ wire[1023:0] _var_out32 = {960'b0, _148};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:238: Bits of signal are not used: '_var_out33'[191:128]
+                          : ... In instance fft
+ wire[1023:0] _var_out33 = {{_var_out32[128 +: 896], _149[128 +: 64]}, _148};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:239: Bits of signal are not used: '_var_out34'[255:192]
+                          : ... In instance fft
+ wire[1023:0] _var_out34 = {{_var_out33[192 +: 832], _149[256 +: 64]}, _var_out33[0 +: 128]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:240: Bits of signal are not used: '_var_out35'[319:256]
+                          : ... In instance fft
+ wire[1023:0] _var_out35 = {{_var_out34[256 +: 768], _149[384 +: 64]}, _var_out34[0 +: 192]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:241: Bits of signal are not used: '_var_out36'[383:320]
+                          : ... In instance fft
+ wire[1023:0] _var_out36 = {{_var_out35[320 +: 704], _149[512 +: 64]}, _var_out35[0 +: 256]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:242: Bits of signal are not used: '_var_out37'[447:384]
+                          : ... In instance fft
+ wire[1023:0] _var_out37 = {{_var_out36[384 +: 640], _149[640 +: 64]}, _var_out36[0 +: 320]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:243: Bits of signal are not used: '_var_out38'[511:448]
+                          : ... In instance fft
+ wire[1023:0] _var_out38 = {{_var_out37[448 +: 576], _149[768 +: 64]}, _var_out37[0 +: 384]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:244: Bits of signal are not used: '_var_out39'[575:512]
+                          : ... In instance fft
+ wire[1023:0] _var_out39 = {{_var_out38[512 +: 512], _149[896 +: 64]}, _var_out38[0 +: 448]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:245: Bits of signal are not used: '_var_out40'[639:576]
+                          : ... In instance fft
+ wire[1023:0] _var_out40 = {{_var_out39[576 +: 448], _149[64 +: 64]}, _var_out39[0 +: 512]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:246: Bits of signal are not used: '_var_out41'[703:640]
+                          : ... In instance fft
+ wire[1023:0] _var_out41 = {{_var_out40[640 +: 384], _149[192 +: 64]}, _var_out40[0 +: 576]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:247: Bits of signal are not used: '_var_out42'[767:704]
+                          : ... In instance fft
+ wire[1023:0] _var_out42 = {{_var_out41[704 +: 320], _149[320 +: 64]}, _var_out41[0 +: 640]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:248: Bits of signal are not used: '_var_out43'[831:768]
+                          : ... In instance fft
+ wire[1023:0] _var_out43 = {{_var_out42[768 +: 256], _149[448 +: 64]}, _var_out42[0 +: 704]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:249: Bits of signal are not used: '_var_out44'[895:832]
+                          : ... In instance fft
+ wire[1023:0] _var_out44 = {{_var_out43[832 +: 192], _149[576 +: 64]}, _var_out43[0 +: 768]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:250: Bits of signal are not used: '_var_out45'[959:896]
+                          : ... In instance fft
+ wire[1023:0] _var_out45 = {{_var_out44[896 +: 128], _149[704 +: 64]}, _var_out44[0 +: 832]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:251: Bits of signal are not used: '_var_out46'[1023:960]
+                          : ... In instance fft
+ wire[1023:0] _var_out46 = {{_var_out45[960 +: 64], _149[832 +: 64]}, _var_out45[0 +: 896]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:252: Bits of signal are not used: '_var_out47'[1023:960]
+                          : ... In instance fft
+ wire[1023:0] _var_out47 = {_150, _var_out46[0 +: 960]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:254: Bits of signal are not used: '_152'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _152 = _151[32 +: 32] * 32'b00000000000000010000000000000000;
+            ^~~~
+%Warning-UNUSED: fft.v:255: Bits of signal are not used: '_153'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _153 = 32'b0 * _151[0 +: 32];
+            ^~~~
+%Warning-UNUSED: fft.v:257: Bits of signal are not used: '_154'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _154 = _151[32 +: 32] * 32'b0;
+            ^~~~
+%Warning-UNUSED: fft.v:258: Bits of signal are not used: '_155'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _155 = _151[0 +: 32] * 32'b00000000000000010000000000000000;
+            ^~~~
+%Warning-UNUSED: fft.v:262: Bits of signal are not used: '_158'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _158 = _157[32 +: 32] * 32'b00000000000000001110110010000011;
+            ^~~~
+%Warning-UNUSED: fft.v:263: Bits of signal are not used: '_159'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _159 = 32'b11111111111111111001111000001000 * _157[0 +: 32];
+            ^~~~
+%Warning-UNUSED: fft.v:265: Bits of signal are not used: '_160'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _160 = _157[32 +: 32] * 32'b11111111111111111001111000001000;
+            ^~~~
+%Warning-UNUSED: fft.v:266: Bits of signal are not used: '_161'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _161 = _157[0 +: 32] * 32'b00000000000000001110110010000011;
+            ^~~~
+%Warning-UNUSED: fft.v:270: Bits of signal are not used: '_164'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _164 = _163[32 +: 32] * 32'b00000000000000001011010100000100;
+            ^~~~
+%Warning-UNUSED: fft.v:271: Bits of signal are not used: '_165'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _165 = 32'b11111111111111110100101011111011 * _163[0 +: 32];
+            ^~~~
+%Warning-UNUSED: fft.v:273: Bits of signal are not used: '_166'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _166 = _163[32 +: 32] * 32'b11111111111111110100101011111011;
+            ^~~~
+%Warning-UNUSED: fft.v:274: Bits of signal are not used: '_167'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _167 = _163[0 +: 32] * 32'b00000000000000001011010100000100;
+            ^~~~
+%Warning-UNUSED: fft.v:278: Bits of signal are not used: '_170'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _170 = _169[32 +: 32] * 32'b00000000000000000110000111110111;
+            ^~~~
+%Warning-UNUSED: fft.v:279: Bits of signal are not used: '_171'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _171 = 32'b11111111111111110001001101111101 * _169[0 +: 32];
+            ^~~~
+%Warning-UNUSED: fft.v:281: Bits of signal are not used: '_172'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _172 = _169[32 +: 32] * 32'b11111111111111110001001101111101;
+            ^~~~
+%Warning-UNUSED: fft.v:282: Bits of signal are not used: '_173'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _173 = _169[0 +: 32] * 32'b00000000000000000110000111110111;
+            ^~~~
+%Warning-UNUSED: fft.v:286: Bits of signal are not used: '_176'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _176 = _175[32 +: 32] * 32'b0;
+            ^~~~
+%Warning-UNUSED: fft.v:287: Bits of signal are not used: '_177'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _177 = 32'b11111111111111110000000000000000 * _175[0 +: 32];
+            ^~~~
+%Warning-UNUSED: fft.v:289: Bits of signal are not used: '_178'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _178 = _175[32 +: 32] * 32'b11111111111111110000000000000000;
+            ^~~~
+%Warning-UNUSED: fft.v:290: Bits of signal are not used: '_179'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _179 = _175[0 +: 32] * 32'b0;
+            ^~~~
+%Warning-UNUSED: fft.v:294: Bits of signal are not used: '_182'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _182 = _181[32 +: 32] * 32'b11111111111111111001111000001000;
+            ^~~~
+%Warning-UNUSED: fft.v:295: Bits of signal are not used: '_183'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _183 = 32'b11111111111111110001001101111101 * _181[0 +: 32];
+            ^~~~
+%Warning-UNUSED: fft.v:297: Bits of signal are not used: '_184'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _184 = _181[32 +: 32] * 32'b11111111111111110001001101111101;
+            ^~~~
+%Warning-UNUSED: fft.v:298: Bits of signal are not used: '_185'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _185 = _181[0 +: 32] * 32'b11111111111111111001111000001000;
+            ^~~~
+%Warning-UNUSED: fft.v:302: Bits of signal are not used: '_188'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _188 = _187[32 +: 32] * 32'b11111111111111110100101011111011;
+            ^~~~
+%Warning-UNUSED: fft.v:303: Bits of signal are not used: '_189'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _189 = 32'b11111111111111110100101011111011 * _187[0 +: 32];
+            ^~~~
+%Warning-UNUSED: fft.v:305: Bits of signal are not used: '_190'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _190 = _187[32 +: 32] * 32'b11111111111111110100101011111011;
+            ^~~~
+%Warning-UNUSED: fft.v:306: Bits of signal are not used: '_191'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _191 = _187[0 +: 32] * 32'b11111111111111110100101011111011;
+            ^~~~
+%Warning-UNUSED: fft.v:310: Bits of signal are not used: '_194'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _194 = _193[32 +: 32] * 32'b11111111111111110001001101111101;
+            ^~~~
+%Warning-UNUSED: fft.v:311: Bits of signal are not used: '_195'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _195 = 32'b11111111111111111001111000001000 * _193[0 +: 32];
+            ^~~~
+%Warning-UNUSED: fft.v:313: Bits of signal are not used: '_196'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _196 = _193[32 +: 32] * 32'b11111111111111111001111000001000;
+            ^~~~
+%Warning-UNUSED: fft.v:314: Bits of signal are not used: '_197'[63:48,15:0]
+                          : ... In instance fft
+ wire[63:0] _197 = _193[0 +: 32] * 32'b11111111111111110001001101111101;
+            ^~~~
+%Warning-UNUSED: fft.v:317: Bits of signal are not used: '_199'[63:0]
+                          : ... In instance fft
+%Warning-UNUSED: fft.v:318: Bits of signal are not used: '_var_out48'[127:0]
+                          : ... In instance fft
+ wire[1023:0] _var_out48 = {960'b0, _198};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:319: Bits of signal are not used: '_var_out49'[191:128]
+                          : ... In instance fft
+ wire[1023:0] _var_out49 = {{_var_out48[128 +: 896], _199[128 +: 64]}, _198};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:320: Bits of signal are not used: '_var_out50'[255:192]
+                          : ... In instance fft
+ wire[1023:0] _var_out50 = {{_var_out49[192 +: 832], _199[256 +: 64]}, _var_out49[0 +: 128]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:321: Bits of signal are not used: '_var_out51'[319:256]
+                          : ... In instance fft
+ wire[1023:0] _var_out51 = {{_var_out50[256 +: 768], _199[384 +: 64]}, _var_out50[0 +: 192]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:322: Bits of signal are not used: '_var_out52'[383:320]
+                          : ... In instance fft
+ wire[1023:0] _var_out52 = {{_var_out51[320 +: 704], _199[512 +: 64]}, _var_out51[0 +: 256]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:323: Bits of signal are not used: '_var_out53'[447:384]
+                          : ... In instance fft
+ wire[1023:0] _var_out53 = {{_var_out52[384 +: 640], _199[640 +: 64]}, _var_out52[0 +: 320]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:324: Bits of signal are not used: '_var_out54'[511:448]
+                          : ... In instance fft
+ wire[1023:0] _var_out54 = {{_var_out53[448 +: 576], _199[768 +: 64]}, _var_out53[0 +: 384]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:325: Bits of signal are not used: '_var_out55'[575:512]
+                          : ... In instance fft
+ wire[1023:0] _var_out55 = {{_var_out54[512 +: 512], _199[896 +: 64]}, _var_out54[0 +: 448]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:326: Bits of signal are not used: '_var_out56'[639:576]
+                          : ... In instance fft
+ wire[1023:0] _var_out56 = {{_var_out55[576 +: 448], _199[64 +: 64]}, _var_out55[0 +: 512]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:327: Bits of signal are not used: '_var_out57'[703:640]
+                          : ... In instance fft
+ wire[1023:0] _var_out57 = {{_var_out56[640 +: 384], _199[192 +: 64]}, _var_out56[0 +: 576]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:328: Bits of signal are not used: '_var_out58'[767:704]
+                          : ... In instance fft
+ wire[1023:0] _var_out58 = {{_var_out57[704 +: 320], _199[320 +: 64]}, _var_out57[0 +: 640]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:329: Bits of signal are not used: '_var_out59'[831:768]
+                          : ... In instance fft
+ wire[1023:0] _var_out59 = {{_var_out58[768 +: 256], _199[448 +: 64]}, _var_out58[0 +: 704]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:330: Bits of signal are not used: '_var_out60'[895:832]
+                          : ... In instance fft
+ wire[1023:0] _var_out60 = {{_var_out59[832 +: 192], _199[576 +: 64]}, _var_out59[0 +: 768]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:331: Bits of signal are not used: '_var_out61'[959:896]
+                          : ... In instance fft
+ wire[1023:0] _var_out61 = {{_var_out60[896 +: 128], _199[704 +: 64]}, _var_out60[0 +: 832]};
+              ^~~~~~~~~~
+%Warning-UNUSED: fft.v:332: Bits of signal are not used: '_var_out62'[1023:960]
+                          : ... In instance fft
+ wire[1023:0] _var_out62 = {{_var_out61[960 +: 64], _199[832 +: 64]}, _var_out61[0 +: 896]};
+              ^~~~~~~~~~
+make -C obj_dir.opt -f Vfft.mk Vfft
+make[1]: Entering directory '/home/clement/documents/mit/plv/koika/examples/_objects/fft.v/obj_dir.opt'
+g++-10  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -I /home/clement/documents/mit/plv/koika/examples/_objects/fft.v -O3 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector   -c -o fft.o /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/fft.verilator.cpp
+g++-10  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -I /home/clement/documents/mit/plv/koika/examples/_objects/fft.v -O3 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector   -c -o verilated.o /usr/local/share/verilator/include/verilated.cpp
+g++-10  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -I /home/clement/documents/mit/plv/koika/examples/_objects/fft.v -O3 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector   -c -o verilated_dpi.o /usr/local/share/verilator/include/verilated_dpi.cpp
+/usr/bin/perl /usr/local/share/verilator/bin/verilator_includer -DVL_INCLUDE_OPT=include Vfft.cpp Vfft_fft.cpp > Vfft__ALLcls.cpp
+g++-10  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -I /home/clement/documents/mit/plv/koika/examples/_objects/fft.v -O3 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector   -c -o Vfft__ALLcls.o Vfft__ALLcls.cpp
+/usr/bin/perl /usr/local/share/verilator/bin/verilator_includer -DVL_INCLUDE_OPT=include Vfft__Dpi.cpp Vfft__Syms.cpp > Vfft__ALLsup.cpp
+g++-10  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -I /home/clement/documents/mit/plv/koika/examples/_objects/fft.v -O3 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector   -c -o Vfft__ALLsup.o Vfft__ALLsup.cpp
+ar -cr Vfft__ALL.a Vfft__ALLcls.o Vfft__ALLsup.o
+ranlib Vfft__ALL.a
+g++    fft.o verilated.o verilated_dpi.o Vfft__ALL.a   -O3 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector  -o Vfft -lm -lstdc++ 
+make[1]: Leaving directory '/home/clement/documents/mit/plv/koika/examples/_objects/fft.v/obj_dir.opt'
+make: Leaving directory '/home/clement/documents/mit/plv/koika/examples/_objects/fft.v'
++ bench g++-10 verilator fft /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/obj_dir.opt/Vfft 10000000
++ compiler=g++-10
++ simulator=verilator
++ input=fft
++ export 'TIMEFORMAT=>> g++-10	verilator	fft	real: %3R	user: %3U	sys: %3S'
++ TIMEFORMAT='>> g++-10	verilator	fft	real: %3R	user: %3U	sys: %3S'
++ echo '<< verilator fft'
+<< verilator fft
+++ seq 1 10
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/obj_dir.opt/Vfft 10000000
+>> g++-10	verilator	fft	real: 2.888	user: 2.851	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/obj_dir.opt/Vfft 10000000
+>> g++-10	verilator	fft	real: 2.833	user: 2.832	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/obj_dir.opt/Vfft 10000000
+>> g++-10	verilator	fft	real: 2.831	user: 2.829	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/obj_dir.opt/Vfft 10000000
+>> g++-10	verilator	fft	real: 2.931	user: 2.931	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/obj_dir.opt/Vfft 10000000
+>> g++-10	verilator	fft	real: 2.816	user: 2.812	sys: 0.004
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/obj_dir.opt/Vfft 10000000
+>> g++-10	verilator	fft	real: 2.914	user: 2.891	sys: 0.012
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/obj_dir.opt/Vfft 10000000
+>> g++-10	verilator	fft	real: 2.824	user: 2.824	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/obj_dir.opt/Vfft 10000000
+>> g++-10	verilator	fft	real: 2.819	user: 2.815	sys: 0.004
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/obj_dir.opt/Vfft 10000000
+>> g++-10	verilator	fft	real: 2.827	user: 2.826	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/obj_dir.opt/Vfft 10000000
+>> g++-10	verilator	fft	real: 2.872	user: 2.854	sys: 0.004
++ for simulator in ${@:3}
++ bench_comb_1 g++-10 verilator-bluespec fft 10000000
++ compiler=g++-10
++ simulator=verilator-bluespec
++ design=fft
++ cycles=10000000
+++ realpath ../examples/_objects/fft.v/
++ base=/home/clement/documents/mit/plv/koika/examples/_objects/fft.v
++ b='bench g++-10 verilator-bluespec fft'
++ make -C /home/clement/documents/mit/plv/koika/examples/_objects/fft.v clean
+make: Entering directory '/home/clement/documents/mit/plv/koika/examples/_objects/fft.v'
+rm -rf obj_dir.opt
+rm -rf obj_dir.trace
+rm -f fft.verilator.vcd
+rm -f fft.opt
+rm -f fft.debug
+rm -f fft.perf
+rm -f fft.cov
+rm -f fft.s
+rm -f fft.out
+rm -f fft.vcd
+rm -f fft.perf.data
+rm -f fft.callgrind
+rm -fr fft.rr
+rm -f *.gcov
+rm -f fft.json
+rm -f fft.json.log
+rm -f fft.asc
+rm -f fft.bin
+rm -f fft.rpt
+rm -f fft.json.v
+make: Leaving directory '/home/clement/documents/mit/plv/koika/examples/_objects/fft.v'
++ case $simulator in
++ SIMS='cuttlesim verilator'
+
+Comint finished at Wed Aug 19 18:44:08

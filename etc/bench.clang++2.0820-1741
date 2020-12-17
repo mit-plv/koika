@@ -1,0 +1,943 @@
++ SIMS='cuttlesim verilator-koika'
++ bench_compilers rv32e primes cuttlesim verilator-koika
++ for compiler in "clang++-10" "g++-10"
++ for simulator in ${@:3}
++ bench_rv_1 /home/clement/documents/mit/plv/koika/examples/rv clang++-10 cuttlesim rv32e primes
++ root=/home/clement/documents/mit/plv/koika/examples/rv
++ compiler=clang++-10
++ simulator=cuttlesim
++ design=rv32e
++ test=primes
+++ realpath bench/verilator.sh
++ verilator=/home/clement/documents/mit/plv/koika/etc/bench/verilator.sh
+++ realpath /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/
++ base=/home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v
+++ realpath /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/../../tests/_build/rv32e/integ/
++ tests=/home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ
++ b='bench clang++-10 cuttlesim rv32e-primes'
++ make -C /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v clean
+make: Entering directory '/home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v'
+rm -rf obj_dir.opt
+rm -rf obj_dir.trace
+rm -f rvcore.verilator.vcd
+rm -f rvcore.cuttlesim.opt
+rm -f rvcore.cuttlesim.debug
+rm -f rvcore.cuttlesim.perf
+rm -f rvcore.cuttlesim.cov
+rm -f rvcore.cuttlesim.s
+rm -f rvcore.cuttlesim.out
+rm -f rvcore.cuttlesim.vcd
+rm -f rvcore.cuttlesim.perf.data
+rm -f rvcore.cuttlesim.callgrind
+rm -fr rvcore.cuttlesim.rr
+rm -f *.gcov
+rm -f top_ice40_usb.json
+rm -f top_ice40_usb.json.log
+rm -f top_ice40_usb.asc
+rm -f top_ice40_usb.bin
+rm -f top_ice40_usb.rpt
+rm -f top_ice40_usb.json.v
+make: Leaving directory '/home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v'
++ case $simulator in
++ make CXX=clang++-10 -C /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v rvcore.cuttlesim.opt
+make: Entering directory '/home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v'
+clang++-10 --std=c++17  -Wall -Wextra '-DSIM_VCD_SCOPES={"TOP", "top", "rv_core",}' -O3 -march=native -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector rvcore.cuttlesim.cpp -o "rvcore.cuttlesim.opt"
+In file included from rvcore.cuttlesim.cpp:5:
+In file included from ./rv32.hpp:10:
+./cuttlesim.hpp:87:9: warning: Bignum truncation is broken in Boost < 1.68; if you run into issues, try upgrading. [-W#pragma-messages]
+#pragma message("Bignum truncation is broken in Boost < 1.68; if you run into issues, try upgrading.")
+        ^
+In file included from rvcore.cuttlesim.cpp:5:
+./rv32.hpp:1670:38: warning: unused parameter 'op1' [-Wunused-parameter]
+  DEF_FN(enq_2, unit &_ret, bits<32> op1, bits<32> op2) {
+                                     ^
+./rv32.hpp:1670:52: warning: unused parameter 'op2' [-Wunused-parameter]
+  DEF_FN(enq_2, unit &_ret, bits<32> op1, bits<32> op2) {
+                                                   ^
+3 warnings generated.
+make: Leaving directory '/home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v'
++ bench clang++-10 cuttlesim rv32e-primes /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/rvcore.cuttlesim.opt /home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.rv32 -1
++ compiler=clang++-10
++ simulator=cuttlesim
++ input=rv32e-primes
++ export 'TIMEFORMAT=>> clang++-10	cuttlesim	rv32e-primes	real: %3R	user: %3U	sys: %3S'
++ TIMEFORMAT='>> clang++-10	cuttlesim	rv32e-primes	real: %3R	user: %3U	sys: %3S'
++ echo '<< cuttlesim rv32e-primes'
+<< cuttlesim rv32e-primes
+++ seq 1 10
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/rvcore.cuttlesim.opt /home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.rv32 -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> clang++-10	cuttlesim	rv32e-primes	real: 2.757	user: 2.757	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/rvcore.cuttlesim.opt /home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.rv32 -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> clang++-10	cuttlesim	rv32e-primes	real: 2.765	user: 2.761	sys: 0.004
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/rvcore.cuttlesim.opt /home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.rv32 -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> clang++-10	cuttlesim	rv32e-primes	real: 2.769	user: 2.765	sys: 0.004
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/rvcore.cuttlesim.opt /home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.rv32 -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> clang++-10	cuttlesim	rv32e-primes	real: 2.821	user: 2.820	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/rvcore.cuttlesim.opt /home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.rv32 -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> clang++-10	cuttlesim	rv32e-primes	real: 2.818	user: 2.804	sys: 0.008
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/rvcore.cuttlesim.opt /home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.rv32 -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> clang++-10	cuttlesim	rv32e-primes	real: 2.712	user: 2.707	sys: 0.004
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/rvcore.cuttlesim.opt /home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.rv32 -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> clang++-10	cuttlesim	rv32e-primes	real: 2.799	user: 2.794	sys: 0.004
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/rvcore.cuttlesim.opt /home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.rv32 -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> clang++-10	cuttlesim	rv32e-primes	real: 2.722	user: 2.703	sys: 0.004
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/rvcore.cuttlesim.opt /home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.rv32 -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> clang++-10	cuttlesim	rv32e-primes	real: 2.749	user: 2.712	sys: 0.016
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/rvcore.cuttlesim.opt /home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.rv32 -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> clang++-10	cuttlesim	rv32e-primes	real: 2.693	user: 2.693	sys: 0.000
++ for simulator in ${@:3}
++ bench_rv_1 /home/clement/documents/mit/plv/koika/examples/rv clang++-10 verilator-koika rv32e primes
++ root=/home/clement/documents/mit/plv/koika/examples/rv
++ compiler=clang++-10
++ simulator=verilator-koika
++ design=rv32e
++ test=primes
+++ realpath bench/verilator.sh
++ verilator=/home/clement/documents/mit/plv/koika/etc/bench/verilator.sh
+++ realpath /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/
++ base=/home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v
+++ realpath /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/../../tests/_build/rv32e/integ/
++ tests=/home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ
++ b='bench clang++-10 verilator-koika rv32e-primes'
++ make -C /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v clean
+make: Entering directory '/home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v'
+rm -rf obj_dir.opt
+rm -rf obj_dir.trace
+rm -f rvcore.verilator.vcd
+rm -f rvcore.cuttlesim.opt
+rm -f rvcore.cuttlesim.debug
+rm -f rvcore.cuttlesim.perf
+rm -f rvcore.cuttlesim.cov
+rm -f rvcore.cuttlesim.s
+rm -f rvcore.cuttlesim.out
+rm -f rvcore.cuttlesim.vcd
+rm -f rvcore.cuttlesim.perf.data
+rm -f rvcore.cuttlesim.callgrind
+rm -fr rvcore.cuttlesim.rr
+rm -f *.gcov
+rm -f top_ice40_usb.json
+rm -f top_ice40_usb.json.log
+rm -f top_ice40_usb.asc
+rm -f top_ice40_usb.bin
+rm -f top_ice40_usb.rpt
+rm -f top_ice40_usb.json.v
+make: Leaving directory '/home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v'
++ case $simulator in
++ make CXX=clang++-10 -C /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v obj_dir.opt/Vtop
+make: Entering directory '/home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v'
+verilator +define+MEM_ADDRESS_WIDTH=10 +define+BRAM_RUNTIME_INIT+SIMULATION -CFLAGS -DVL_USER_FINISH -Wno-fatal -CFLAGS "-I /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v" --prefix Vtop --cc --exe --compiler clang -CFLAGS -fPIC --Mdir obj_dir.opt --x-assign fast --x-initial fast --noassert -O3 -CFLAGS '-O3 -march=native -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector ' -LDFLAGS '-O3 -march=native -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector ' rvcore.verilator.cpp top.v
+make -C obj_dir.opt -f Vtop.mk Vtop
+make[1]: Entering directory '/home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/obj_dir.opt'
+clang++-10  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -DVL_USER_FINISH -I /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v -fPIC -O3 -march=native -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector   -c -o rvcore.o ../rvcore.verilator.cpp
+warning: unknown warning option '-Wno-unused-but-set-variable'; did you mean '-Wno-unused-const-variable'? [-Wunknown-warning-option]
+1 warning generated.
+clang++-10  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -DVL_USER_FINISH -I /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v -fPIC -O3 -march=native -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector   -c -o verilated.o /usr/local/share/verilator/include/verilated.cpp
+warning: unknown warning option '-Wno-unused-but-set-variable'; did you mean '-Wno-unused-const-variable'? [-Wunknown-warning-option]
+1 warning generated.
+clang++-10  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -DVL_USER_FINISH -I /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v -fPIC -O3 -march=native -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector   -c -o verilated_dpi.o /usr/local/share/verilator/include/verilated_dpi.cpp
+warning: unknown warning option '-Wno-unused-but-set-variable'; did you mean '-Wno-unused-const-variable'? [-Wunknown-warning-option]
+1 warning generated.
+/usr/bin/perl /usr/local/share/verilator/bin/verilator_includer -DVL_INCLUDE_OPT=include Vtop.cpp Vtop_top.cpp Vtop_rv32.cpp > Vtop__ALLcls.cpp
+clang++-10  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -DVL_USER_FINISH -I /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v -fPIC -O3 -march=native -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector   -c -o Vtop__ALLcls.o Vtop__ALLcls.cpp
+warning: unknown warning option '-Wno-unused-but-set-variable'; did you mean '-Wno-unused-const-variable'? [-Wunknown-warning-option]
+1 warning generated.
+/usr/bin/perl /usr/local/share/verilator/bin/verilator_includer -DVL_INCLUDE_OPT=include Vtop__Dpi.cpp Vtop__Syms.cpp > Vtop__ALLsup.cpp
+clang++-10  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -DVL_USER_FINISH -I /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v -fPIC -O3 -march=native -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector   -c -o Vtop__ALLsup.o Vtop__ALLsup.cpp
+warning: unknown warning option '-Wno-unused-but-set-variable'; did you mean '-Wno-unused-const-variable'? [-Wunknown-warning-option]
+1 warning generated.
+ar -cr Vtop__ALL.a Vtop__ALLcls.o Vtop__ALLsup.o
+ranlib Vtop__ALL.a
+g++    rvcore.o verilated.o verilated_dpi.o Vtop__ALL.a   -O3 -march=native -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector  -o Vtop -lm -lstdc++ 
+make[1]: Leaving directory '/home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/obj_dir.opt'
+make: Leaving directory '/home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v'
++ bench clang++-10 verilator-koika rv32e-primes /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/obj_dir.opt/Vtop +VMH=/home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.vmh -1
++ compiler=clang++-10
++ simulator=verilator-koika
++ input=rv32e-primes
++ export 'TIMEFORMAT=>> clang++-10	verilator-koika	rv32e-primes	real: %3R	user: %3U	sys: %3S'
++ TIMEFORMAT='>> clang++-10	verilator-koika	rv32e-primes	real: %3R	user: %3U	sys: %3S'
++ echo '<< verilator-koika rv32e-primes'
+<< verilator-koika rv32e-primes
+++ seq 1 10
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/obj_dir.opt/Vtop +VMH=/home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.vmh -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> clang++-10	verilator-koika	rv32e-primes	real: 6.352	user: 6.351	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/obj_dir.opt/Vtop +VMH=/home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.vmh -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> clang++-10	verilator-koika	rv32e-primes	real: 6.345	user: 6.334	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/obj_dir.opt/Vtop +VMH=/home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.vmh -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> clang++-10	verilator-koika	rv32e-primes	real: 6.290	user: 6.285	sys: 0.004
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/obj_dir.opt/Vtop +VMH=/home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.vmh -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> clang++-10	verilator-koika	rv32e-primes	real: 6.251	user: 6.243	sys: 0.008
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/obj_dir.opt/Vtop +VMH=/home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.vmh -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> clang++-10	verilator-koika	rv32e-primes	real: 6.290	user: 6.289	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/obj_dir.opt/Vtop +VMH=/home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.vmh -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> clang++-10	verilator-koika	rv32e-primes	real: 6.331	user: 6.301	sys: 0.004
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/obj_dir.opt/Vtop +VMH=/home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.vmh -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> clang++-10	verilator-koika	rv32e-primes	real: 6.274	user: 6.273	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/obj_dir.opt/Vtop +VMH=/home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.vmh -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> clang++-10	verilator-koika	rv32e-primes	real: 6.348	user: 6.315	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/obj_dir.opt/Vtop +VMH=/home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.vmh -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> clang++-10	verilator-koika	rv32e-primes	real: 6.298	user: 6.283	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/obj_dir.opt/Vtop +VMH=/home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.vmh -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> clang++-10	verilator-koika	rv32e-primes	real: 6.348	user: 6.343	sys: 0.004
++ for compiler in "clang++-10" "g++-10"
++ for simulator in ${@:3}
++ bench_rv_1 /home/clement/documents/mit/plv/koika/examples/rv g++-10 cuttlesim rv32e primes
++ root=/home/clement/documents/mit/plv/koika/examples/rv
++ compiler=g++-10
++ simulator=cuttlesim
++ design=rv32e
++ test=primes
+++ realpath bench/verilator.sh
++ verilator=/home/clement/documents/mit/plv/koika/etc/bench/verilator.sh
+++ realpath /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/
++ base=/home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v
+++ realpath /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/../../tests/_build/rv32e/integ/
++ tests=/home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ
++ b='bench g++-10 cuttlesim rv32e-primes'
++ make -C /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v clean
+make: Entering directory '/home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v'
+rm -rf obj_dir.opt
+rm -rf obj_dir.trace
+rm -f rvcore.verilator.vcd
+rm -f rvcore.cuttlesim.opt
+rm -f rvcore.cuttlesim.debug
+rm -f rvcore.cuttlesim.perf
+rm -f rvcore.cuttlesim.cov
+rm -f rvcore.cuttlesim.s
+rm -f rvcore.cuttlesim.out
+rm -f rvcore.cuttlesim.vcd
+rm -f rvcore.cuttlesim.perf.data
+rm -f rvcore.cuttlesim.callgrind
+rm -fr rvcore.cuttlesim.rr
+rm -f *.gcov
+rm -f top_ice40_usb.json
+rm -f top_ice40_usb.json.log
+rm -f top_ice40_usb.asc
+rm -f top_ice40_usb.bin
+rm -f top_ice40_usb.rpt
+rm -f top_ice40_usb.json.v
+make: Leaving directory '/home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v'
++ case $simulator in
++ make CXX=g++-10 -C /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v rvcore.cuttlesim.opt
+make: Entering directory '/home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v'
+g++-10 --std=c++17  -Wall -Wextra '-DSIM_VCD_SCOPES={"TOP", "top", "rv_core",}' -O3 -march=native -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector rvcore.cuttlesim.cpp -o "rvcore.cuttlesim.opt"
+In file included from rv32.hpp:10,
+                 from rvcore.cuttlesim.cpp:5:
+cuttlesim.hpp:87:102: note: ‘#pragma message: Bignum truncation is broken in Boost < 1.68; if you run into issues, try upgrading.’
+   87 | #pragma message("Bignum truncation is broken in Boost < 1.68; if you run into issues, try upgrading.")
+      |                                                                                                      ^
+make: Leaving directory '/home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v'
++ bench g++-10 cuttlesim rv32e-primes /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/rvcore.cuttlesim.opt /home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.rv32 -1
++ compiler=g++-10
++ simulator=cuttlesim
++ input=rv32e-primes
++ export 'TIMEFORMAT=>> g++-10	cuttlesim	rv32e-primes	real: %3R	user: %3U	sys: %3S'
++ TIMEFORMAT='>> g++-10	cuttlesim	rv32e-primes	real: %3R	user: %3U	sys: %3S'
++ echo '<< cuttlesim rv32e-primes'
+<< cuttlesim rv32e-primes
+++ seq 1 10
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/rvcore.cuttlesim.opt /home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.rv32 -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> g++-10	cuttlesim	rv32e-primes	real: 2.534	user: 2.534	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/rvcore.cuttlesim.opt /home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.rv32 -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> g++-10	cuttlesim	rv32e-primes	real: 2.452	user: 2.447	sys: 0.004
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/rvcore.cuttlesim.opt /home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.rv32 -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> g++-10	cuttlesim	rv32e-primes	real: 2.410	user: 2.407	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/rvcore.cuttlesim.opt /home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.rv32 -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> g++-10	cuttlesim	rv32e-primes	real: 2.413	user: 2.412	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/rvcore.cuttlesim.opt /home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.rv32 -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> g++-10	cuttlesim	rv32e-primes	real: 2.433	user: 2.405	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/rvcore.cuttlesim.opt /home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.rv32 -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> g++-10	cuttlesim	rv32e-primes	real: 2.435	user: 2.431	sys: 0.004
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/rvcore.cuttlesim.opt /home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.rv32 -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> g++-10	cuttlesim	rv32e-primes	real: 2.435	user: 2.424	sys: 0.004
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/rvcore.cuttlesim.opt /home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.rv32 -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> g++-10	cuttlesim	rv32e-primes	real: 2.483	user: 2.479	sys: 0.004
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/rvcore.cuttlesim.opt /home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.rv32 -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> g++-10	cuttlesim	rv32e-primes	real: 2.455	user: 2.440	sys: 0.004
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/rvcore.cuttlesim.opt /home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.rv32 -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> g++-10	cuttlesim	rv32e-primes	real: 2.447	user: 2.446	sys: 0.000
++ for simulator in ${@:3}
++ bench_rv_1 /home/clement/documents/mit/plv/koika/examples/rv g++-10 verilator-koika rv32e primes
++ root=/home/clement/documents/mit/plv/koika/examples/rv
++ compiler=g++-10
++ simulator=verilator-koika
++ design=rv32e
++ test=primes
+++ realpath bench/verilator.sh
++ verilator=/home/clement/documents/mit/plv/koika/etc/bench/verilator.sh
+++ realpath /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/
++ base=/home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v
+++ realpath /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/../../tests/_build/rv32e/integ/
++ tests=/home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ
++ b='bench g++-10 verilator-koika rv32e-primes'
++ make -C /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v clean
+make: Entering directory '/home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v'
+rm -rf obj_dir.opt
+rm -rf obj_dir.trace
+rm -f rvcore.verilator.vcd
+rm -f rvcore.cuttlesim.opt
+rm -f rvcore.cuttlesim.debug
+rm -f rvcore.cuttlesim.perf
+rm -f rvcore.cuttlesim.cov
+rm -f rvcore.cuttlesim.s
+rm -f rvcore.cuttlesim.out
+rm -f rvcore.cuttlesim.vcd
+rm -f rvcore.cuttlesim.perf.data
+rm -f rvcore.cuttlesim.callgrind
+rm -fr rvcore.cuttlesim.rr
+rm -f *.gcov
+rm -f top_ice40_usb.json
+rm -f top_ice40_usb.json.log
+rm -f top_ice40_usb.asc
+rm -f top_ice40_usb.bin
+rm -f top_ice40_usb.rpt
+rm -f top_ice40_usb.json.v
+make: Leaving directory '/home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v'
++ case $simulator in
++ make CXX=g++-10 -C /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v obj_dir.opt/Vtop
+make: Entering directory '/home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v'
+verilator +define+MEM_ADDRESS_WIDTH=10 +define+BRAM_RUNTIME_INIT+SIMULATION -CFLAGS -DVL_USER_FINISH -Wno-fatal -CFLAGS "-I /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v" --prefix Vtop --cc --exe --compiler gcc --Mdir obj_dir.opt --x-assign fast --x-initial fast --noassert -O3 -CFLAGS '-O3 -march=native -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector ' -LDFLAGS '-O3 -march=native -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector ' rvcore.verilator.cpp top.v
+make -C obj_dir.opt -f Vtop.mk Vtop
+make[1]: Entering directory '/home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/obj_dir.opt'
+g++-10  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -DVL_USER_FINISH -I /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v -O3 -march=native -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector   -c -o rvcore.o ../rvcore.verilator.cpp
+g++-10  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -DVL_USER_FINISH -I /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v -O3 -march=native -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector   -c -o verilated.o /usr/local/share/verilator/include/verilated.cpp
+g++-10  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -DVL_USER_FINISH -I /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v -O3 -march=native -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector   -c -o verilated_dpi.o /usr/local/share/verilator/include/verilated_dpi.cpp
+/usr/bin/perl /usr/local/share/verilator/bin/verilator_includer -DVL_INCLUDE_OPT=include Vtop.cpp Vtop_top.cpp Vtop_rv32.cpp > Vtop__ALLcls.cpp
+g++-10  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -DVL_USER_FINISH -I /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v -O3 -march=native -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector   -c -o Vtop__ALLcls.o Vtop__ALLcls.cpp
+/usr/bin/perl /usr/local/share/verilator/bin/verilator_includer -DVL_INCLUDE_OPT=include Vtop__Dpi.cpp Vtop__Syms.cpp > Vtop__ALLsup.cpp
+g++-10  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -DVL_USER_FINISH -I /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v -O3 -march=native -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector   -c -o Vtop__ALLsup.o Vtop__ALLsup.cpp
+ar -cr Vtop__ALL.a Vtop__ALLcls.o Vtop__ALLsup.o
+ranlib Vtop__ALL.a
+g++    rvcore.o verilated.o verilated_dpi.o Vtop__ALL.a   -O3 -march=native -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector  -o Vtop -lm -lstdc++ 
+make[1]: Leaving directory '/home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/obj_dir.opt'
+make: Leaving directory '/home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v'
++ bench g++-10 verilator-koika rv32e-primes /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/obj_dir.opt/Vtop +VMH=/home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.vmh -1
++ compiler=g++-10
++ simulator=verilator-koika
++ input=rv32e-primes
++ export 'TIMEFORMAT=>> g++-10	verilator-koika	rv32e-primes	real: %3R	user: %3U	sys: %3S'
++ TIMEFORMAT='>> g++-10	verilator-koika	rv32e-primes	real: %3R	user: %3U	sys: %3S'
++ echo '<< verilator-koika rv32e-primes'
+<< verilator-koika rv32e-primes
+++ seq 1 10
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/obj_dir.opt/Vtop +VMH=/home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.vmh -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> g++-10	verilator-koika	rv32e-primes	real: 6.994	user: 6.993	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/obj_dir.opt/Vtop +VMH=/home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.vmh -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> g++-10	verilator-koika	rv32e-primes	real: 7.064	user: 7.035	sys: 0.008
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/obj_dir.opt/Vtop +VMH=/home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.vmh -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> g++-10	verilator-koika	rv32e-primes	real: 6.845	user: 6.845	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/obj_dir.opt/Vtop +VMH=/home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.vmh -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> g++-10	verilator-koika	rv32e-primes	real: 6.933	user: 6.924	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/obj_dir.opt/Vtop +VMH=/home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.vmh -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> g++-10	verilator-koika	rv32e-primes	real: 6.871	user: 6.856	sys: 0.008
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/obj_dir.opt/Vtop +VMH=/home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.vmh -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> g++-10	verilator-koika	rv32e-primes	real: 6.967	user: 6.887	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/obj_dir.opt/Vtop +VMH=/home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.vmh -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> g++-10	verilator-koika	rv32e-primes	real: 6.923	user: 6.915	sys: 0.008
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/obj_dir.opt/Vtop +VMH=/home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.vmh -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> g++-10	verilator-koika	rv32e-primes	real: 6.997	user: 6.938	sys: 0.004
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/obj_dir.opt/Vtop +VMH=/home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.vmh -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> g++-10	verilator-koika	rv32e-primes	real: 6.931	user: 6.823	sys: 0.036
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/rv/_objects/rv32e.v/obj_dir.opt/Vtop +VMH=/home/clement/documents/mit/plv/koika/examples/rv/tests/_build/rv32e/integ/primes.vmh -1
+  +++-+*+---+-+---+-+---+----
+  *+-+-----+---+-+---+-----+-
+  ----+-+-----+---+-+-----+--
+  -+-----+-------+---+-+---+-
+  +---+-------------+---+----
+  -+-+---------+-+-----+-----
+  +---+-----+-----+-+--------
+  -+-+---+-+-----------+-----
+  ---&--+---+-+---+-----+-+--
+  -------+-----+-----+-----+-
+  +-----+---+-+&--------+----
+  ---------+---+-+---+-------
+  ------+-----+---------+-+--
+  [0;32mPASS[0m
+>> g++-10	verilator-koika	rv32e-primes	real: 6.920	user: 6.920	sys: 0.000
++ exit

@@ -1,0 +1,200 @@
+-*- mode: compilation; default-directory: "~/documents/mit/plv/koika/etc/" -*-
+Comint started at Thu Aug 20 00:36:29
+
+./bench.sh 
++ SIMS='cuttlesim verilator verilator-bluespec'
++ SIMS=verilator-bluespec
++ bench_comb fir 1000000000 verilator-bluespec
++ for simulator in ${@:3}
++ bench_comb_1 g++-10 verilator-bluespec fir 1000000000
++ compiler=g++-10
++ simulator=verilator-bluespec
++ design=fir
++ cycles=1000000000
+++ realpath ../examples/_objects/fir.v/
++ base=/home/clement/documents/mit/plv/koika/examples/_objects/fir.v
+++ realpath bench/verilator.sh
++ verilator=/home/clement/documents/mit/plv/koika/etc/bench/verilator.sh
++ bsv=mkfir
++ b='bench g++-10 verilator-bluespec fir'
++ make -C /home/clement/documents/mit/plv/koika/examples/_objects/fir.v clean
+make: Entering directory '/home/clement/documents/mit/plv/koika/examples/_objects/fir.v'
+rm -rf obj_dir.opt
+rm -rf obj_dir.trace
+rm -f fir.verilator.vcd
+rm -f fir.opt
+rm -f fir.debug
+rm -f fir.perf
+rm -f fir.cov
+rm -f fir.s
+rm -f fir.out
+rm -f fir.vcd
+rm -f fir.perf.data
+rm -f fir.callgrind
+rm -fr fir.rr
+rm -f *.gcov
+rm -f fir.json
+rm -f fir.json.log
+rm -f fir.asc
+rm -f fir.bin
+rm -f fir.rpt
+rm -f fir.json.v
+make: Leaving directory '/home/clement/documents/mit/plv/koika/examples/_objects/fir.v'
++ case $simulator in
++ cd /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/
++ /home/clement/documents/mit/plv/koika/etc/bench/verilator.sh mkfir
+make: Entering directory '/home/clement/documents/mit/plv/koika/examples/_objects/fir.v/bsv.obj_dir.opt'
+g++  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -DVL_USER_FINISH -O3 -march=native -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector -flto   -c -o mkfir_verilator.o ../mkfir_verilator.cpp
+../mkfir_verilator.cpp: In member function ‘void TB::run(uint64_t)’:
+../mkfir_verilator.cpp:11:14: warning: format ‘%d’ expects argument of type ‘int’, but argument 2 has type ‘QData’ {aka ‘long unsigned int’} [-Wformat=]
+   11 |     printf("%d", dut.rd);
+      |             ~^   ~~~~~~
+      |              |       |
+      |              int     QData {aka long unsigned int}
+      |             %ld
+g++  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -DVL_USER_FINISH -O3 -march=native -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector -flto   -c -o verilated.o /usr/local/share/verilator/include/verilated.cpp
+/usr/bin/perl /usr/local/share/verilator/bin/verilator_includer -DVL_INCLUDE_OPT=include Vmkfir.cpp > Vmkfir__ALLcls.cpp
+g++  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -DVL_USER_FINISH -O3 -march=native -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector -flto   -c -o Vmkfir__ALLcls.o Vmkfir__ALLcls.cpp
+/usr/bin/perl /usr/local/share/verilator/bin/verilator_includer -DVL_INCLUDE_OPT=include Vmkfir__Syms.cpp > Vmkfir__ALLsup.cpp
+g++  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -DVL_USER_FINISH -O3 -march=native -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector -flto   -c -o Vmkfir__ALLsup.o Vmkfir__ALLsup.cpp
+ar -cr Vmkfir__ALL.a Vmkfir__ALLcls.o Vmkfir__ALLsup.o
+ranlib Vmkfir__ALL.a
+g++    mkfir_verilator.o verilated.o Vmkfir__ALL.a   -O3 -march=native -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector -flto  -o Vmkfir -lm -lstdc++ 
+make: Leaving directory '/home/clement/documents/mit/plv/koika/examples/_objects/fir.v/bsv.obj_dir.opt'
++ bench g++-10 verilator-bluespec fir /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/bsv.obj_dir.opt/Vmkfir 1000000000
++ compiler=g++-10
++ simulator=verilator-bluespec
++ input=fir
++ export 'TIMEFORMAT=>> g++-10	verilator-bluespec	fir	real: %3R	user: %3U	sys: %3S'
++ TIMEFORMAT='>> g++-10	verilator-bluespec	fir	real: %3R	user: %3U	sys: %3S'
++ echo '<< verilator-bluespec fir'
+<< verilator-bluespec fir
+++ seq 1 10
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/bsv.obj_dir.opt/Vmkfir 1000000000
+>> g++-10	verilator-bluespec	fir	real: 9.799	user: 9.794	sys: 0.004
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/bsv.obj_dir.opt/Vmkfir 1000000000
+>> g++-10	verilator-bluespec	fir	real: 7.572	user: 7.570	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/bsv.obj_dir.opt/Vmkfir 1000000000
+>> g++-10	verilator-bluespec	fir	real: 7.557	user: 7.552	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/bsv.obj_dir.opt/Vmkfir 1000000000
+>> g++-10	verilator-bluespec	fir	real: 7.606	user: 7.606	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/bsv.obj_dir.opt/Vmkfir 1000000000
+>> g++-10	verilator-bluespec	fir	real: 7.563	user: 7.539	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/bsv.obj_dir.opt/Vmkfir 1000000000
+>> g++-10	verilator-bluespec	fir	real: 7.602	user: 7.601	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/bsv.obj_dir.opt/Vmkfir 1000000000
+>> g++-10	verilator-bluespec	fir	real: 7.611	user: 7.595	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/bsv.obj_dir.opt/Vmkfir 1000000000
+>> g++-10	verilator-bluespec	fir	real: 7.560	user: 7.559	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/bsv.obj_dir.opt/Vmkfir 1000000000
+>> g++-10	verilator-bluespec	fir	real: 7.692	user: 7.691	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fir.v/bsv.obj_dir.opt/Vmkfir 1000000000
+>> g++-10	verilator-bluespec	fir	real: 7.603	user: 7.603	sys: 0.000
++ bench_comb fft 30000000 verilator-bluespec
++ for simulator in ${@:3}
++ bench_comb_1 g++-10 verilator-bluespec fft 30000000
++ compiler=g++-10
++ simulator=verilator-bluespec
++ design=fft
++ cycles=30000000
+++ realpath ../examples/_objects/fft.v/
++ base=/home/clement/documents/mit/plv/koika/examples/_objects/fft.v
+++ realpath bench/verilator.sh
++ verilator=/home/clement/documents/mit/plv/koika/etc/bench/verilator.sh
++ bsv=mkfft
++ b='bench g++-10 verilator-bluespec fft'
++ make -C /home/clement/documents/mit/plv/koika/examples/_objects/fft.v clean
+make: Entering directory '/home/clement/documents/mit/plv/koika/examples/_objects/fft.v'
+rm -rf obj_dir.opt
+rm -rf obj_dir.trace
+rm -f fft.verilator.vcd
+rm -f fft.opt
+rm -f fft.debug
+rm -f fft.perf
+rm -f fft.cov
+rm -f fft.s
+rm -f fft.out
+rm -f fft.vcd
+rm -f fft.perf.data
+rm -f fft.callgrind
+rm -fr fft.rr
+rm -f *.gcov
+rm -f fft.json
+rm -f fft.json.log
+rm -f fft.asc
+rm -f fft.bin
+rm -f fft.rpt
+rm -f fft.json.v
+make: Leaving directory '/home/clement/documents/mit/plv/koika/examples/_objects/fft.v'
++ case $simulator in
++ cd /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/
++ /home/clement/documents/mit/plv/koika/etc/bench/verilator.sh mkfft
+make: Entering directory '/home/clement/documents/mit/plv/koika/examples/_objects/fft.v/bsv.obj_dir.opt'
+g++  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -DVL_USER_FINISH -O3 -march=native -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector -flto   -c -o mkfft_verilator.o ../mkfft_verilator.cpp
+../mkfft_verilator.cpp: In member function ‘void TB::run(uint64_t)’:
+../mkfft_verilator.cpp:11:14: warning: format ‘%d’ expects argument of type ‘int’, but argument 2 has type ‘WData*’ {aka ‘unsigned int*’} [-Wformat=]
+   11 |     printf("%d", dut.rd);
+      |             ~^   ~~~~~~
+      |              |       |
+      |              int     WData* {aka unsigned int*}
+      |             %n
+g++  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -DVL_USER_FINISH -O3 -march=native -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector -flto   -c -o verilated.o /usr/local/share/verilator/include/verilated.cpp
+/usr/bin/perl /usr/local/share/verilator/bin/verilator_includer -DVL_INCLUDE_OPT=include Vmkfft.cpp > Vmkfft__ALLcls.cpp
+g++  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -DVL_USER_FINISH -O3 -march=native -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector -flto   -c -o Vmkfft__ALLcls.o Vmkfft__ALLcls.cpp
+/usr/bin/perl /usr/local/share/verilator/bin/verilator_includer -DVL_INCLUDE_OPT=include Vmkfft__Syms.cpp > Vmkfft__ALLsup.cpp
+g++  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow     -DVL_USER_FINISH -O3 -march=native -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector -flto   -c -o Vmkfft__ALLsup.o Vmkfft__ALLsup.cpp
+ar -cr Vmkfft__ALL.a Vmkfft__ALLcls.o Vmkfft__ALLsup.o
+ranlib Vmkfft__ALL.a
+g++    mkfft_verilator.o verilated.o Vmkfft__ALL.a   -O3 -march=native -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector -flto  -o Vmkfft -lm -lstdc++ 
+make: Leaving directory '/home/clement/documents/mit/plv/koika/examples/_objects/fft.v/bsv.obj_dir.opt'
++ bench g++-10 verilator-bluespec fft /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/bsv.obj_dir.opt/Vmkfft 30000000
++ compiler=g++-10
++ simulator=verilator-bluespec
++ input=fft
++ export 'TIMEFORMAT=>> g++-10	verilator-bluespec	fft	real: %3R	user: %3U	sys: %3S'
++ TIMEFORMAT='>> g++-10	verilator-bluespec	fft	real: %3R	user: %3U	sys: %3S'
++ echo '<< verilator-bluespec fft'
+<< verilator-bluespec fft
+++ seq 1 10
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/bsv.obj_dir.opt/Vmkfft 30000000
+-1707000884>> g++-10	verilator-bluespec	fft	real: 14.006	user: 13.999	sys: 0.004
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/bsv.obj_dir.opt/Vmkfft 30000000
+>> g++-10	verilator-bluespec	fft	real: 14.362	user: 14.361	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/bsv.obj_dir.opt/Vmkfft 30000000
+-518742132>> g++-10	verilator-bluespec	fft	real: 13.915	user: 13.877	sys: 0.012
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/bsv.obj_dir.opt/Vmkfft 30000000
+-1587879412>> g++-10	verilator-bluespec	fft	real: 14.063	user: 14.009	sys: 0.020
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/bsv.obj_dir.opt/Vmkfft 30000000
+-1127040884>> g++-10	verilator-bluespec	fft	real: 14.054	user: 14.049	sys: 0.004
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/bsv.obj_dir.opt/Vmkfft 30000000
+>> g++-10	verilator-bluespec	fft	real: 14.049	user: 13.946	sys: 0.020
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/bsv.obj_dir.opt/Vmkfft 30000000
+>> g++-10	verilator-bluespec	fft	real: 13.952	user: 13.950	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/bsv.obj_dir.opt/Vmkfft 30000000
+>> g++-10	verilator-bluespec	fft	real: 13.958	user: 13.958	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/bsv.obj_dir.opt/Vmkfft 30000000
+>> g++-10	verilator-bluespec	fft	real: 14.068	user: 14.067	sys: 0.000
++ for _ in $(seq 1 $REPEAT)
++ /home/clement/documents/mit/plv/koika/examples/_objects/fft.v/bsv.obj_dir.opt/Vmkfft 30000000
+>> g++-10	verilator-bluespec	fft	real: 14.048	user: 14.040	sys: 0.004
+
+Comint finished at Thu Aug 20 00:40:13
