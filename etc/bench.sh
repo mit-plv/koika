@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-REPEAT=10
+REPEAT=1
 GCC=g++-9
 
 bench() {
