@@ -3,7 +3,7 @@
 build := _build
 elf2hex := elf2hex/elf2hex
 
-asm_rv32i_sources := $(wildcard riscv_tests/rv32ui/*.S) $(wildcard riscv_tests/rv32um/*.S) $(wildcard unit/*.S)
+asm_rv32i_sources := $(wildcard riscv_tests/rv32ui/*.S) $(wildcard unit/*.S)
 c_rv32i_sources := $(wildcard unit/*.c) $(wildcard integ/*.c)
 c_rv32e_sources := $(filter-out $(wildcard integ/rvbench_*),$(c_rv32i_sources))
 
