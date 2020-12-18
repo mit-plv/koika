@@ -3,7 +3,7 @@
 build := _build
 elf2hex := elf2hex/elf2hex
 
-asm_rv32i_sources := $(wildcard riscv_tests/rv32ui/*.S) $(wildcard riscv_tests/rv32um/*.S) $(wildcard unit/*.S)
+asm_rv32i_sources := $(wildcard riscv_tests/rv32ui/*.S) $(wildcard unit/*.S)
 c_rv32i_sources := $(wildcard unit/*.c) $(wildcard integ/*.c)
 c_rv32e_sources := $(filter-out $(wildcard integ/rvbench_*),$(c_rv32i_sources))
 
@@ -23,7 +23,7 @@ RISCVOBJDUMP32_ARGS := --disassemble --source --full-contents
 
 cc := $(RISCVCC32) $(RISCVCC32_ARGS)
 objdump := $(RISCVOBJDUMP32) $(RISCVOBJDUMP32_ARGS)
-iarch = $(if $(findstring riscv_tests/rv32ui,$1),rv32i,rv32im)
+iarch = $(if $(findstring riscv_tests/rv32ui,$1),rv32i,rv32i)
 cc32i = $(cc) -T$(build)/rv32i/link.ld -mabi=ilp32
 cc32e = $(cc) -T$(build)/rv32e/link.ld -DRV32E -mabi=ilp32e -march=rv32e
 

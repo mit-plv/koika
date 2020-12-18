@@ -938,7 +938,8 @@ Module Mul32Params <: Multiplier_sig.
 End Mul32Params.
 
 Module RV32I <: Core.
-  Module Multiplier := ShiftAddMultiplier Mul32Params.
+  (* Module Multiplier := ShiftAddMultiplier Mul32Params. *)
+  Module Multiplier := DummyMultiplier Mul32Params.
   Include (RV32Core RV32IParams Multiplier).
 
   Definition _reg_t := reg_t.
