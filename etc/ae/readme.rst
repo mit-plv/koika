@@ -30,7 +30,7 @@ Artifact check-list (meta-information)
 -  **How much time is needed to complete experiments (approximately)?:** 2h
 -  **Publicly available?:** https://github.com/mit-plv/koika/tree/asplos2021
 -  **Code licenses (if publicly available)?:** GNU GPL v3
--  **Archived (provide DOI)?:** `10.5281/zenodo.4342101 <https://doi.org/10.5281/zenodo.4342101>`__
+-  **Archived (provide DOI)?:** `10.5281/zenodo.4342100 <https://doi.org/10.5281/zenodo.4342100>`__
 
 Description
 -----------
@@ -43,7 +43,7 @@ https://github.com/mit-plv/koika/blob/asplos2021/etc/ae/readme.rst.
 
 Before proceeding, we recommend skimming through Kôika’s `README <https://github.com/mit-plv/koika/tree/asplos2021>`__, which should help you get a better sense of how everything fits together. If you are curious about rule-based hardware languages, you may also want to skim through the `original Kôika paper <https://pit-claudel.fr/clement/papers/koika-PLDI20.pdf>`__. Both of these steps are optional.
 
-To get started, download the artifact VM on `Zenodo <https://doi.org/10.5281/zenodo.4342101>`__ and import the OVA virtual machine into VirtualBox.  Start the VM, and log in with username ``ubuntu`` (no password).  On some versions of VirtualBox booting can lead to a blank screen; in that case, resize the VirtualBox window to force a redraw.
+To get started, download the artifact VM on `Zenodo <https://doi.org/10.5281/zenodo.4342100>`__ and import the OVA virtual machine into VirtualBox.  Start the VM, and log in with username ``ubuntu`` (no password).  On some versions of VirtualBox booting can lead to a blank screen; in that case, resize the VirtualBox window to force a redraw.
 
 All data and scripts are in ``~/cuttlesim`` in the VM.  All code is public and hosted on GitHub at `<https://github.com/mit-plv/koika>`__ in the ``asplos2021`` branch; if you run into trouble, please feel free to open issues anonymously on the issue tracker!
 
