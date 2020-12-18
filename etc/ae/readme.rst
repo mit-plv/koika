@@ -1,0 +1,113 @@
+Artifact Appendix
+=================
+
+Abstract
+--------
+
+Kôika is a high-level hardware design language. This paper is about Cuttlesim, a simulator for Kôika designs. Typical hardware simulators like Verilator start from circuits, but Cuttlesim is different: it works by compiling Kôika hardware designs to C++ directly, through a new pipeline that does not use Kôika’s circuit compiler.
+
+Our artifact is an easy-to-run distribution of Kôika and Cuttlesim and of the hardware designs used in the evaluation section of our paper. It is packaged as a virtual machine, built using a simple setup script that pulls from the main ``koika`` repo.
+
+Our artifact provides evidence to answer the three questions in the Evaluation section, including reproducing all graphs:
+
+-  Q1: Can Cuttlesim models run faster than a state-of-the-art Verilog simulator?
+-  Q2: Is Cuttlesim’s advantage only due to Kôika’s compiler generating inefficient Verilog circuits?
+-  Q3: How sensitive is Cuttlesim’s performance to external factors, especially compiler choices and tool versions?
+
+Artifact check-list (meta-information)
+--------------------------------------
+
+-  **Algorithm:** Static analyses & compilation of Kôika programs
+-  **Program:** Custom-written Kôika & Bluespec designs
+-  **Compilation:** Coq >= 8.10, OCaml >= 4.07, GCC 9 & 10, Clang 10, Verilator 4
+-  **Run-time environment:** GNU/Linux
+-  **Hardware:** Typical x86-64 box
+-  **Metrics:** Run time
+-  **Output:** Performance plots
+-  **Experiments:** Run the benchmarking scripts
+-  **How much disk space required (approximately)?:** 6GB (local build + dependencies) or 12GB (VM)
+-  **How much time is needed to prepare workflow (approximately)?:** 1h (local build) or 2min (VM)
+-  **How much time is needed to complete experiments (approximately)?:** 2h
+-  **Publicly available?:** https://github.com/mit-plv/koika/tree/asplos2021
+-  **Code licenses (if publicly available)?:** GNU GPL v3
+-  **Archived (provide DOI)?:** `10.5281/zenodo.4342101 <https://doi.org/10.5281/zenodo.4342101>`__
+
+Description
+-----------
+
+Thanks for reviewing our artifact! It can be reviewed in two ways: by running everything locally on your own (GNU/Linux, x86-64) machine, or using a pre-built VM. These instructions focus on the VM approach, but you can use the same 60-line `setup script <https://github.com/mit-plv/koika/blob/asplos2021/etc/ae/setup.sh>`__  to set up a local environment.
+
+**These instructions are also available in a plain-text file to make it easier to copy and paste commands:**
+
+https://github.com/mit-plv/koika/blob/asplos2021/etc/ae/readme.rst.
+
+Before proceeding, we recommend skimming through Kôika’s `README <https://github.com/mit-plv/koika/tree/asplos2021>`__, which should help you get a better sense of how everything fits together. If you are curious about rule-based hardware languages, you may also want to skim through the `original Kôika paper <https://pit-claudel.fr/clement/papers/koika-PLDI20.pdf>`__. Both of these steps are optional.
+
+To get started, download the artifact VM on `Zenodo <https://doi.org/10.5281/zenodo.4342101>`__ and import the OVA virtual machine into VirtualBox.  Start the VM, and log in with username ``ubuntu`` (no password).  On some versions of VirtualBox booting can lead to a blank screen; in that case, resize the VirtualBox window to force a redraw.
+
+All data and scripts are in ``~/cuttlesim`` in the VM.  All code is public and hosted on GitHub at `<https://github.com/mit-plv/koika>`__ in the ``asplos2021`` branch; if you run into trouble, please feel free to open issues anonymously on the issue tracker!
+
+Warming up
+----------
+
+While this section is optional, it will help you get a sense for what Cuttlesim does.  We will look at a trivial design computing terms of the Collatz sequence, compile it, and run it with Cuttlesim and Verilator.
+
+Navigate to ``~/cuttlesim/koika/examples`` and open ``collatz.v`` in Emacs.  This is a Coq file, as Kôika is a Coq EDSL (annoyingly, Coq files have the same extension as Verilog files), and the VM includes a pre-configured Emacs installation.  It includes a definition of the design's state (``reg_t`` with one register ``r0`` of type ``bits_t 16``, initialized to the value 18), and two rules ``divide`` and ``multiply``; comments inside the file give more details about the example.
+
+Now run ``make _objects/collatz.v/``.  This will compile the example to Verilog (using the original Kôika compiler) and C++ (using our new compiler).  Browse to ``_objects/collatz.v/`` and open ``collatz.v``.  This is a (very short!) Verilog file, implementing bypassing from ``divide`` to ``multiply`` as expected.  Compiler optimizations make the file tiny, which is great for circuit performance, but not so good for mapping each signal back to the original Kôika design for debugging.  Instead, open ``collatz.hpp`` and skip to ``DEF_RULE(divide) {``.  This is the cycle-accurate C++ model generated by Cuttlesim.  There is one class method per rule, plus one class method ``void cycle()`` which implements the scheduler.  Notice how the syntax and structure of the C++ code mirrors the original Kôika syntax.
+
+In a terminal in ``_objects/collatz.v/``, run the following commands::
+
+   make NCYCLES=150 collatz.run
+   make NCYCLES=150 collatz.verilator.run
+
+The first one will run the *C++ model* built by Cuttlesim; the second will run the *circuit* built by Kôika using Verilator, an open source hardware simulator.  Cuttlesim prints ``r0 = 16'b0000000000000100 (0x4, 4)``: the value ``4`` is the result of the Collatz system reaching one, then multiplying by 3 and adding 1.  With 151 cycles, the output would be ``2`` (4 divided by 2, then multiply wouldn't run as ``2`` is even).  Now try both with ``NCYCLES=1000000000``.  Despite the heavy optimizations that made the Verilog circuit tiny, Cuttlesim is still about 4 times faster than Verilator.
+
+If you are curious, you can run ``make gdb`` to step through the design interactively (try ``break module_collatz<extfuns>::cycle()`` and ``run`` to stop at an interesting point), getting line-by-line step-through debugging, or you can run ``make NCYCLES=150 collatz.hpp.gcov`` and open the resulting coverage file to see that ``divide`` ran at every cycle but ``multiply`` failed every other cycle (``75:  108:      FAIL_FAST();``) -- no hardware counters needed!
+
+Finally, let's simulate a larger design.  Navigate to ``examples/rv/`` and run ``make core`` to compile a RISCV core.  Then run ``make verilator-tests`` to run example programs and unit tests with Verilator, and ``make cuttlesim-tests`` to run the same tests with Cuttlesim, which should be about twice as fast.
+
+If you want to see more Kôika in action, we recommend reading through the literate example in ``pipeline_tutorial.v`` (or see a rendered version of it at `<https://people.csail.mit.edu/cpitcla/links/2020-10-koika-pipeline-tutorial/pipeline_tutorial.html>`__).  To explore Cuttlesim further, you can run ``make help`` in ``examples/_objects/collatz.v/`` or ``examples/rv/_objects/rv32i.v/`` to see a complete list of simulation targets and their documentation.
+
+Experiment workflow
+-------------------
+
+Each experiment consists of compiling a Kôika design to C++, running it using Cuttlesim or Verilator, and comparing the results. All experiments are conveniently packaged as a single script ``etc/bench.sh``.
+
+All dependencies in the VM are pre-compiled.  If you want to rerun the builds (it takes ~30 minutes), run the following commands.  There are four designs to compile (the RV32i and RV32e variants of our processor, plus the enhanced branch predictor variant and the multicore variant)::
+
+   cd ~/cuttlesim/koika/examples/rv; make DUT=rv32i; make DUT=rv32e
+   cd ~/cuttlesim/koika_bthom-bp/examples/rv; make DUT=rv32i
+   cd ~/cuttlesim/koika_sim-multicore/examples/dynamic_isolation/; make DUT=rv32i_no_sm
+
+   ln -f -s ~/cuttlesim/koika_bthom-bp/examples/rv/_objects/rv32i.v/ \
+       ~/cuttlesim/koika/examples/rv/_objects/rv32i-bp.v
+   ln -f -s ~/cuttlesim/koika_sim-multicore/examples/dynamic_isolation/_objects/rv32i_no_sm.v/ \
+       ~/cuttlesim/koika/examples/rv/_objects/rv32i-mc.v
+
+Then, navigate to ``~/cuttlesim/koika/etc/`` and run ``./bench.sh`` in a terminal, redirecting its output to a file::
+
+   ./bench.sh 2>&1 | tee bench-results
+
+(if you are curious, that script should be pretty readable; it mostly just runs the ``make cuttlesim`` and ``make verilator`` targets for each of the examples that the paper discusses).
+
+Once this completes, run ``./summarize.py bench-results`` to generate plots.
+
+The default script runs only one iteration of each measurement, to make sure that it completes reasonably quickly (it should take 10 to 20 minutes).  Change ``REPEAT=1`` at the beginning of the file to ``REPEAT=5`` or ``REPEAT=10`` to improve precision (we ran it with ``REPEAT=10`` for the plots in the paper.  In the output, lines starting with ``<<`` indicate that a new test has started running, and lines starting with ``>>`` record the output of a single repeat of a given test.
+
+Evaluation and expected results
+-------------------------------
+
+Running ``etc/summarize.py`` will produce four plots in ``~/cuttlesim/koika/etc/bench/``:
+
+- ``etc/bench/cuttlesim-verilator-cps.pdf`` (Figure 1)
+- ``etc/bench/cuttlesim-verilator-wall.pdf`` (Figure 1)
+- ``etc/bench/koika-bluespec-verilator-wall.pdf`` (Figure 2)
+- ``etc/bench/cuttlesim-verilator-wall-gcc-clang.pdf`` (Figure 3)
+
+These four plots correspond to those included in the evaluation section of the paper.  Of course, some variability in the results is expected, especially when running inside a VM, but the results of the paper should be very robust.  For best results, we generated the figures used in the paper by running locally on a desktop machine, with CPU frequency scaling disabled.
+
+Exploring and extending
+-----------------------
+
+Thanks for reviewing this artifact!  If you are interested in further exploration, you can compile each example in the ``examples/`` folder with ``make _objects/example_name/``.  Running ``make help`` in the resulting directory will offer a collection of conveniently set-up targets exposing all the tools that we commonly use, like VCD file generation, GCOV instrumentation, GDB and LLDB debugging, performance profiling, etc.

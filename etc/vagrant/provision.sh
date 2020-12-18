@@ -20,6 +20,7 @@ echo '* apt-get update'
 apt-get -y update >> $LOGFILE 2>&1
 echo '* apt-get install (needs to download about 150MB of archives)'
 apt-get -y install \
+        build-essential gcc make perl \
 		pkg-config make patch unzip git aspcud curl emacs \
 		autoconf libgmp-dev m4 opam python3 python3-pip yosys \
 		gcc gdb clang clang-format libboost-dev verilator python3.6-tk \
@@ -69,7 +70,7 @@ sudo su $USERNAME <<-EOF
 	echo '* GCC setup'
 	mkdir -p ~/.local/bin/ >> $LOGFILE 2>&1
 	(cd ~/.local/bin/ && tar -xzf /tmp/riscv.tgz) >> $LOGFILE 2>&1
-	echo 'PATH=~/.local/bin/xPacks/riscv-none-embed-gcc/8.3.0-1.1/:\$PATH' >> ~/.profile
+	echo 'PATH=~/.local/bin/xPacks/riscv-none-embed-gcc/8.3.0-1.1/bin/:\$PATH' >> ~/.profile
 	echo '* PyVerilator'
 	pip3 install --user git+https://github.com/csail-csg/pyverilator >> $LOGFILE 2>&1
 

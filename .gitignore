@@ -38,3 +38,6 @@ _opam/
 _objects/
 .nia.cache
 .lia.cache
+
+etc/ae/latex.sh
+etc/ae/readme.tex
