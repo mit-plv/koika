@@ -1438,11 +1438,11 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
           p "std::ofstream vcd(fname);";
           p "state_t::vcd_header(vcd);";
           p "state_t latest = Log.snapshot();";
-          p "latest.vcd_dumpvars(0, vcd, latest, true);";
+          p "latest.vcd_dumpvars(meta.cycle_id, vcd, latest, true);";
           p_cycle_loop (fun () ->
               p "%s();" cycle;
               p "state_t current = Log.snapshot();";
-              p "current.vcd_dumpvars(cycle_id, vcd, latest, false);";
+              p "current.vcd_dumpvars(meta.cycle_id, vcd, latest, false);";
               p "latest = current;");
           p "return *this;") in
 
