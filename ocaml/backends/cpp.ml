@@ -678,9 +678,11 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
     let sigs = Array.map hpp.cpp_register_sigs regs in
     Array.iter f sigs in
 
-  let iter_all_registers = (* Note the late binding of ‘f’ *)
-    let sigs = Array.map hpp.cpp_register_sigs hpp.cpp_registers in
-    fun f -> Array.iter f sigs in
+  let all_register_sigs =
+    Array.map hpp.cpp_register_sigs hpp.cpp_registers in
+
+  let iter_all_registers f =
+    Array.iter f all_register_sigs in
 
   let reg_sig_w_kind r =
     (hpp.cpp_register_kinds r, hpp.cpp_register_sigs r) in
@@ -737,12 +739,30 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
             p "os << '#' << cycle_id << std::endl;";
             iter_all_registers p_dumpvar) in
 
+      let p_readvar i r =
+        let hdr = if i == 0 then "if" else "else if" in
+        p_scoped (sprintf "%s (var == \"%s\")" hdr r.reg_name) (fun () ->
+            let tau = reg_type r in
+            p "%s = prims::unpack<%s>(bits<%d>::of_str(val));"
+              r.reg_name (cpp_type_of_type tau) (typ_sz tau)) in
+      let p_vcd_readvars () =
+        p_fn ~typ:"std::uint_fast64_t" ~name:"vcd_readvars"
+          ~args:"_unused std::istream& is" (fun () ->
+            p "std::string var{}, val{};";
+            p "std::uint_fast64_t cycle_id = std::numeric_limits<std::uint_fast64_t>::max();";
+            p "cuttlesim::vcd::read_header(is);";
+            p_scoped "while (cuttlesim::vcd::readvar(is, cycle_id, var, val))" (fun () ->
+                Array.iteri p_readvar all_register_sigs);
+            p "return cycle_id;") in
+
       p_ifnminimal (fun () ->
           p_dump ();
           nl ();
           p_vcd_header ();
           nl ();
-          p_vcd_dumpvars ()) in
+          p_vcd_dumpvars ();
+          nl ();
+          p_vcd_readvars ()) in
 
     let p_state_t () =
       p_scoped "struct state_t" ~terminator:";" (fun () ->

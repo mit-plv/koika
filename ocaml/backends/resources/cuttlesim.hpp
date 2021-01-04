@@ -252,6 +252,16 @@ namespace prims {
     static constexpr bits<sz> mk(T arg) {
       return bits{static_cast<bits_t<sz>>(arg)};
     }
+
+    static bits<sz> of_str(const std::string& str) {
+      bits<sz> out{};
+      std::size_t len = str.length();
+      for (std::size_t pos = std::max(len, sz) - sz; pos < len; pos++) {
+        if (str[pos] == '1')
+          out |= bits<sz>{1} << len - pos - 1;
+      }
+      return out;
+    }
   };
 
   /// ## Special case for 0-bit bitvectors (bits<0>)
@@ -1028,6 +1038,34 @@ namespace cuttlesim {
         internal::bits_fmt(os, pack(val), fmtstyle::bin, prefixes::minimal);
         os << " " << name << '\n';
       }
+    }
+
+    static _unused bool read_header(std::istream& is) {
+      std::string line{};
+      while (std::getline(is, line)) {
+        if (line.rfind("$dumpvars", 0) == 0)
+          return true;
+      }
+      return false;
+    }
+
+    static _unused bool readvar(std::istream& is, std::uint_fast64_t& cycle_id, std::string& name, std::string& val) {
+      std::string line;
+      while (std::getline(is, line)) {
+        if (line == "")
+          continue;
+
+        std::istringstream ls(line);
+        if (line[0] == '#') {
+          ls.ignore(1, '#');
+          ls >> cycle_id;
+          continue;
+        }
+
+        ls >> val >> name;
+        return true;
+      }
+      return false;
     }
   }
 
