@@ -881,16 +881,6 @@ namespace prims {
 
   namespace internal {
     template<bitwidth sz>
-    static std::string decode_bitstring(bits<sz> val) {
-      std::string s{};
-      for (bitwidth pos = 0; pos < sz; pos += 8) {
-        bits<8> c = prims::truncate<8>(val >> pos);
-        s.push_back(static_cast<char>(c.v));
-      }
-      return s;
-    }
-
-    template<bitwidth sz>
     static std::ostream& bits_fmt(std::ostream& os, const bits<sz>& val,
                                   const fmtstyle style, const prefixes prefix) {
       if (prefix == prefixes::sized) {
