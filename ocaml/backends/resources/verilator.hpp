@@ -48,15 +48,15 @@ protected:
   }
 
 public:
-  void run(uint64_t ncycles) {
+  void run(std::uint_fast64_t ncycles) {
     reset();
-    for (uint64_t cid = 0; !Verilated::gotFinish() && cid < ncycles; cid++) {
+    for (std::uint_fast64_t cid = 0; !Verilated::gotFinish() && cid < ncycles; cid++) {
       cycle();
     }
   }
 
 #ifdef TRACE
-  void trace(uint64_t ncycles, char* vcdpath) {
+  void trace(std::uint_fast64_t ncycles, char* vcdpath) {
     Verilated::traceEverOn(true);
     tfp = new VerilatedVcdC{};
     dut.trace(tfp, 99);
