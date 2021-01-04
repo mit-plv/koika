@@ -155,6 +155,18 @@ Extraction \"pipeline_tutorial.ml\" pipeline_tutorial.prog."))
 
 
 ;; -*- dune -*-
+(subdir "_objects/save_restore.v"
+ (rule (write-file "save_restore_extr.v"
+                   "Require Coq.extraction.Extraction examples.save_restore.
+Extraction \"save_restore.ml\" save_restore.prog."))
+ (coq.extraction
+  (prelude save_restore_extr)
+  (extracted_modules save_restore)
+  (theories Koika examples)
+  (flags "-w" "-overriding-logical-loadpath")))
+
+
+;; -*- dune -*-
 (subdir "_objects/uart.v"
  (rule (write-file "uart_extr.v"
                    "Require Coq.extraction.Extraction examples.uart.
