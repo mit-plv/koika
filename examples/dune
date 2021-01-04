@@ -47,6 +47,18 @@ Extraction \"conflicts_modular.ml\" conflicts_modular.prog."))
 
 
 ;; -*- dune -*-
+(subdir "_objects/cosimulation.v"
+ (rule (write-file "cosimulation_extr.v"
+                   "Require Coq.extraction.Extraction examples.cosimulation.
+Extraction \"cosimulation.ml\" cosimulation.prog."))
+ (coq.extraction
+  (prelude cosimulation_extr)
+  (extracted_modules cosimulation)
+  (theories Koika examples)
+  (flags "-w" "-overriding-logical-loadpath")))
+
+
+;; -*- dune -*-
 (subdir "_objects/datatypes.v"
  (rule (write-file "datatypes_extr.v"
                    "Require Coq.extraction.Extraction examples.datatypes.
