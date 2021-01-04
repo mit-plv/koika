@@ -1354,13 +1354,6 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
                   p ".%s = %s," rn.reg_name (sp_value rn.reg_init)));
           p "return init;") in
 
-    let p_reset () =
-      p_fn ~typ:"void" ~name:"reset" ~args:"const state_t init = initial_state()" (fun () ->
-          p "log = Log = log_t(init);";
-          p "extfuns = {};";
-          p "meta = {};";
-          p_ifnminimal (fun () -> p "rng.seed(cuttlesim::random_seed);")) in
-
     let p_finish () =
       p_fn ~typ:"void" ~name:"finish"
         ~args:"cuttlesim::exit_info exit_config, int exit_code" (fun () ->
@@ -1380,7 +1373,8 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
       p_fn ~typ:"explicit" ~name:hpp.cpp_classname
         ~args:"const state_t init = initial_state()"
         ~annot:" : log(init), Log(init), extfuns{}, meta{}"
-        (fun () -> p "reset(init);") in
+        (fun () -> p_ifnminimal (fun () ->
+                       p "rng.seed(cuttlesim::random_seed);")) in
 
     let rec p_scheduler pos s =
       p_pos pos;
@@ -1486,8 +1480,6 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
         p_snapshot ();
         nl ();
         p_initial_state ();
-        nl ();
-        p_reset ();
         nl ();
         p_constructor ();
         nl ();
