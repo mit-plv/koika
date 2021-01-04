@@ -1372,7 +1372,7 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
           p "return meta.finished;") in
 
     let p_snapshot () =
-      p_fn ~typ:"snapshot_t" ~name:"snapshot" (fun () ->
+      p_fn ~typ:"snapshot_t" ~name:"snapshot" ~annot:" const" (fun () ->
           (* Return by value to allow snapshots to outlive their simulation. *)
           p "return snapshot_t(Log.snapshot(), meta);") in
 
