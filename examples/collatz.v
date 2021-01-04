@@ -49,8 +49,6 @@ Module Collatz.
   Definition collatz : scheduler :=
     divide |> multiply |> done.
 
-  Definition cr := ContextEnv.(create) r.
-
   (*! Rules are written in an untyped language, so we need to typecheck them: !*)
   Definition rules :=
     tc_rules R empty_Sigma
@@ -60,6 +58,8 @@ Module Collatz.
                     end).
 
   (*! And now we can compute results: uncomment the ``Print`` commands below to show results. !*)
+
+  Definition cr := ContextEnv.(create) r.
 
   Definition divide_result :=
     tc_compute (interp_action cr empty_sigma CtxEmpty log_empty log_empty
