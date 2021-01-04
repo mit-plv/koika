@@ -1,3 +1,4 @@
+/*! Custom Cuttlesim driver that implements a Kôika extfun using a Verilator model !*/
 #include "cosimulation.hpp"
 #include "blackbox.obj_dir.opt/Vblackbox.h"
 #include <verilated.h>

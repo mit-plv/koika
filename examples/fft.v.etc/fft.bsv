@@ -1,5 +1,5 @@
+/*! A Bluespec implementation of the fft.v example !*/
 // Adapted from MIT 6.375 it is not actually an FFT because the bitReverse has been removed
-
 
 import ClientServer::*;
 import Complex::*;

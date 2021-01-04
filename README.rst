@@ -793,16 +793,27 @@ The following list shows the current state of the repo:
    - |coq/ProgramTactics.v|_: Tactics for proving user-defined circuits
 
 ``etc/``
+   ``vagrant/``
+      - |etc/vagrant/provision.sh|_: Set up a Vagrant VM for |koika| development
+
    - |etc/configure|_: Generate dune files for examples/ and tests/
 
 ``examples/``
+   ``cosimulation.v.etc/``
+      - |examples/cosimulation.v.etc/blackbox.v|_: Blackbox verilog module (a simple one-cycle delay) used to demonstrate Cuttlesim+Verilator cosimulation
+      - |examples/cosimulation.v.etc/cosimulation.cpp|_: Custom Cuttlesim driver that implements a |koika| extfun using a Verilator model
+
    ``fft.v.etc/``
-      - |examples/fft.v.etc/mkfft_verilator.cpp|_: Default driver for |koika| programs compiled to C++ using Verilator
+      - |examples/fft.v.etc/fft.bsv|_: A Bluespec implementation of the fft.v example
 
    ``fir.v.etc/``
       - |examples/fir.v.etc/extfuns.hpp|_: C++ implementation of external functions for the fir example
-      - |examples/fir.v.etc/mkfir_verilator.cpp|_: Default driver for |koika| programs compiled to C++ using Verilator
+      - |examples/fir.v.etc/fir.bsv|_: A Bluespec implementation of the fir.v example
       - |examples/fir.v.etc/mod19.v|_: Verilog implementation of external functions for the  fir example
+
+   ``function_call.v.etc/``
+      - |examples/function_call.v.etc/extfuns.hpp|_: C++ implementation of external functions for the function_call example
+      - |examples/function_call.v.etc/fetch_instr.v|_: Verilog implementation of external functions for the function_call example
 
    ``rv/``
       ``etc/``
@@ -826,6 +837,8 @@ The following list shows the current state of the repo:
          - |examples/rv/etc/rvcore.verilator.cpp|_: C++ driver for rv32 simulation with Verilator
          - |examples/rv/etc/testbench.v|_: Testbench used with CVC and Icarus Verilog
 
+      ``tests/``
+
       - |examples/rv/Multiplier.v|_: Implementation of a multiplier module
       - |examples/rv/MultiplierCorrectness.v|_: Proof of correctness of the multiplier module
       - |examples/rv/RVCore.v|_: Implementation of our RISC-V core
@@ -835,10 +848,15 @@ The following list shows the current state of the repo:
       - |examples/rv/rv32e.v|_: Pipelined instantiation of an RV32E core
       - |examples/rv/rv32i.v|_: Pipelined instantiation of an RV32I core
 
+   ``uart.v.etc/``
+      - |examples/uart.v.etc/top.v|_: UART testbench
+      - |examples/uart.v.etc/uart.verilator.cpp|_: Verilator driver for the UART testbench
+
    - |examples/collatz.lv|_: Computing terms of the Collatz sequence (Lispy Verilog version)
    - |examples/collatz.v|_: Computing terms of the Collatz sequence (Coq version)
    - |examples/conflicts.v|_: Understanding conflicts and forwarding
    - |examples/conflicts_modular.v|_: Understanding conflicts and forwarding, with modules
+   - |examples/cosimulation.v|_: Using black-box Verilog models (combining Cuttlesim and Verilator)
    - |examples/datatypes.v|_: Using structures, enums, and arrays
    - |examples/external_rule.v|_: Calling external (verilog) modules from |koika|
    - |examples/fft.v|_: Computing an FFT
@@ -847,9 +865,10 @@ The following list shows the current state of the repo:
    - |examples/gcd_machine.v|_: Computing GCDs
    - |examples/method_call.v|_: Calling methods of internal modules
    - |examples/pipeline.v|_: Building simple pipelines
+   - |examples/pipeline_tutorial.v|_: Tutorial: Simple arithmetic pipeline
+   - |examples/save_restore.v|_: Save and restore simulation state
    - |examples/uart.v|_: UART transmitter
    - |examples/vector.v|_: Representing vectors of registers using Coq inductives
-   - |examples/wps.v|_: Tutorial: Simple arithmetic pipeline
 
 ``ocaml/``
    ``backends/``
@@ -1018,6 +1037,8 @@ The following list shows the current state of the repo:
 .. _coq/Vect.v: coq/Vect.v
 .. |etc/configure| replace:: ``configure``
 .. _etc/configure: etc/configure
+.. |etc/vagrant/provision.sh| replace:: ``provision.sh``
+.. _etc/vagrant/provision.sh: etc/vagrant/provision.sh
 .. |examples/collatz.lv| replace:: ``collatz.lv``
 .. _examples/collatz.lv: examples/collatz.lv
 .. |examples/collatz.v| replace:: ``collatz.v``
@@ -1026,34 +1047,44 @@ The following list shows the current state of the repo:
 .. _examples/conflicts.v: examples/conflicts.v
 .. |examples/conflicts_modular.v| replace:: ``conflicts_modular.v``
 .. _examples/conflicts_modular.v: examples/conflicts_modular.v
+.. |examples/cosimulation.v| replace:: ``cosimulation.v``
+.. _examples/cosimulation.v: examples/cosimulation.v
+.. |examples/cosimulation.v.etc/blackbox.v| replace:: ``blackbox.v``
+.. _examples/cosimulation.v.etc/blackbox.v: examples/cosimulation.v.etc/blackbox.v
+.. |examples/cosimulation.v.etc/cosimulation.cpp| replace:: ``cosimulation.cpp``
+.. _examples/cosimulation.v.etc/cosimulation.cpp: examples/cosimulation.v.etc/cosimulation.cpp
 .. |examples/datatypes.v| replace:: ``datatypes.v``
 .. _examples/datatypes.v: examples/datatypes.v
 .. |examples/external_rule.v| replace:: ``external_rule.v``
 .. _examples/external_rule.v: examples/external_rule.v
 .. |examples/fft.v| replace:: ``fft.v``
 .. _examples/fft.v: examples/fft.v
-.. |examples/fft.v.etc/mkfft.v| replace:: ``mkfft.v``
-.. _examples/fft.v.etc/mkfft.v: examples/fft.v.etc/mkfft.v
-.. |examples/fft.v.etc/mkfft_verilator.cpp| replace:: ``mkfft_verilator.cpp``
-.. _examples/fft.v.etc/mkfft_verilator.cpp: examples/fft.v.etc/mkfft_verilator.cpp
+.. |examples/fft.v.etc/fft.bsv| replace:: ``fft.bsv``
+.. _examples/fft.v.etc/fft.bsv: examples/fft.v.etc/fft.bsv
 .. |examples/fir.v| replace:: ``fir.v``
 .. _examples/fir.v: examples/fir.v
 .. |examples/fir.v.etc/extfuns.hpp| replace:: ``extfuns.hpp``
 .. _examples/fir.v.etc/extfuns.hpp: examples/fir.v.etc/extfuns.hpp
-.. |examples/fir.v.etc/mkfir.v| replace:: ``mkfir.v``
-.. _examples/fir.v.etc/mkfir.v: examples/fir.v.etc/mkfir.v
+.. |examples/fir.v.etc/fir.bsv| replace:: ``fir.bsv``
+.. _examples/fir.v.etc/fir.bsv: examples/fir.v.etc/fir.bsv
 .. |examples/fir.v.etc/mkfir_verilator.cpp| replace:: ``mkfir_verilator.cpp``
 .. _examples/fir.v.etc/mkfir_verilator.cpp: examples/fir.v.etc/mkfir_verilator.cpp
 .. |examples/fir.v.etc/mod19.v| replace:: ``mod19.v``
 .. _examples/fir.v.etc/mod19.v: examples/fir.v.etc/mod19.v
 .. |examples/function_call.v| replace:: ``function_call.v``
 .. _examples/function_call.v: examples/function_call.v
+.. |examples/function_call.v.etc/extfuns.hpp| replace:: ``extfuns.hpp``
+.. _examples/function_call.v.etc/extfuns.hpp: examples/function_call.v.etc/extfuns.hpp
+.. |examples/function_call.v.etc/fetch_instr.v| replace:: ``fetch_instr.v``
+.. _examples/function_call.v.etc/fetch_instr.v: examples/function_call.v.etc/fetch_instr.v
 .. |examples/gcd_machine.v| replace:: ``gcd_machine.v``
 .. _examples/gcd_machine.v: examples/gcd_machine.v
 .. |examples/method_call.v| replace:: ``method_call.v``
 .. _examples/method_call.v: examples/method_call.v
 .. |examples/pipeline.v| replace:: ``pipeline.v``
 .. _examples/pipeline.v: examples/pipeline.v
+.. |examples/pipeline_tutorial.v| replace:: ``pipeline_tutorial.v``
+.. _examples/pipeline_tutorial.v: examples/pipeline_tutorial.v
 .. |examples/rv/Multiplier.v| replace:: ``Multiplier.v``
 .. _examples/rv/Multiplier.v: examples/rv/Multiplier.v
 .. |examples/rv/MultiplierCorrectness.v| replace:: ``MultiplierCorrectness.v``
@@ -1100,12 +1131,18 @@ The following list shows the current state of the repo:
 .. _examples/rv/rv32e.v: examples/rv/rv32e.v
 .. |examples/rv/rv32i.v| replace:: ``rv32i.v``
 .. _examples/rv/rv32i.v: examples/rv/rv32i.v
+.. |examples/rv/tests/run.sh| replace:: ``run.sh``
+.. _examples/rv/tests/run.sh: examples/rv/tests/run.sh
+.. |examples/save_restore.v| replace:: ``save_restore.v``
+.. _examples/save_restore.v: examples/save_restore.v
 .. |examples/uart.v| replace:: ``uart.v``
 .. _examples/uart.v: examples/uart.v
+.. |examples/uart.v.etc/top.v| replace:: ``top.v``
+.. _examples/uart.v.etc/top.v: examples/uart.v.etc/top.v
+.. |examples/uart.v.etc/uart.verilator.cpp| replace:: ``uart.verilator.cpp``
+.. _examples/uart.v.etc/uart.verilator.cpp: examples/uart.v.etc/uart.verilator.cpp
 .. |examples/vector.v| replace:: ``vector.v``
 .. _examples/vector.v: examples/vector.v
-.. |examples/wps.v| replace:: ``wps.v``
-.. _examples/wps.v: examples/wps.v
 .. |ocaml/backends/coq.ml| replace:: ``coq.ml``
 .. _ocaml/backends/coq.ml: ocaml/backends/coq.ml
 .. |ocaml/backends/cpp.ml| replace:: ``cpp.ml``

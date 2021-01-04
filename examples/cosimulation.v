@@ -1,4 +1,4 @@
-(*! Using black-box models !*)
+(*! Using black-box Verilog models (combining Cuttlesim and Verilator) !*)
 Require Import Koika.Frontend.
 
 Module CoSimulation.

@@ -1,4 +1,5 @@
-/*! Default driver for Kôika programs compiled to C++ using Verilator !*/
+// A Verilator driver for the Bluespec implementation of the fir.v example
+// Derived from ocaml/backends/resources/verilator.cpp
 #include "verilator.hpp"
 #include "Vmkfir.h"
 

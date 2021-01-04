@@ -1,3 +1,4 @@
+/*! A Bluespec implementation of the fir.v example !*/
 // Ported from Koika for evaluation purposes
 import Vector::*;
 
