@@ -96,6 +96,18 @@ Extraction \"muxelim.ml\" muxelim.prog."))
 
 
 ;; -*- dune -*-
+(subdir "_objects/read1_write1_check.v"
+ (rule (write-file "read1_write1_check_extr.v"
+                   "Require Coq.extraction.Extraction tests.read1_write1_check.
+Extraction \"read1_write1_check.ml\" read1_write1_check.prog."))
+ (coq.extraction
+  (prelude read1_write1_check_extr)
+  (extracted_modules read1_write1_check)
+  (theories Koika tests)
+  (flags "-w" "-overriding-logical-loadpath")))
+
+
+;; -*- dune -*-
 (subdir "_objects/register_file_bypassing.v"
  (rule (write-file "register_file_bypassing_extr.v"
                    "Require Coq.extraction.Extraction tests.register_file_bypassing.

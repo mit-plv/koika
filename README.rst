@@ -837,8 +837,6 @@ The following list shows the current state of the repo:
          - |examples/rv/etc/rvcore.verilator.cpp|_: C++ driver for rv32 simulation with Verilator
          - |examples/rv/etc/testbench.v|_: Testbench used with CVC and Icarus Verilog
 
-      ``tests/``
-
       - |examples/rv/Multiplier.v|_: Implementation of a multiplier module
       - |examples/rv/MultiplierCorrectness.v|_: Proof of correctness of the multiplier module
       - |examples/rv/RVCore.v|_: Implementation of our RISC-V core
@@ -924,6 +922,7 @@ The following list shows the current state of the repo:
    - |tests/mul.lv|_: Computations involving multiplication
    - |tests/muxelim.v|_: Sanity check for mux-elimination optimization
    - |tests/name_mangling.lv|_: Unit tests for name mangling
+   - |tests/read1_write1_check.v|_: Detect and reject programs that call read1 after write1 in simulation
    - |tests/register_file_bypassing.v|_: Ensure that area is reasonable when bypasses don't need extra tracking
    - |tests/shadowing.lv|_: Unit tests for name shadowing
    - |tests/shifts.v|_: Regression test for signed shifts
@@ -1067,8 +1066,6 @@ The following list shows the current state of the repo:
 .. _examples/fir.v.etc/extfuns.hpp: examples/fir.v.etc/extfuns.hpp
 .. |examples/fir.v.etc/fir.bsv| replace:: ``fir.bsv``
 .. _examples/fir.v.etc/fir.bsv: examples/fir.v.etc/fir.bsv
-.. |examples/fir.v.etc/mkfir_verilator.cpp| replace:: ``mkfir_verilator.cpp``
-.. _examples/fir.v.etc/mkfir_verilator.cpp: examples/fir.v.etc/mkfir_verilator.cpp
 .. |examples/fir.v.etc/mod19.v| replace:: ``mod19.v``
 .. _examples/fir.v.etc/mod19.v: examples/fir.v.etc/mod19.v
 .. |examples/function_call.v| replace:: ``function_call.v``
@@ -1131,8 +1128,6 @@ The following list shows the current state of the repo:
 .. _examples/rv/rv32e.v: examples/rv/rv32e.v
 .. |examples/rv/rv32i.v| replace:: ``rv32i.v``
 .. _examples/rv/rv32i.v: examples/rv/rv32i.v
-.. |examples/rv/tests/run.sh| replace:: ``run.sh``
-.. _examples/rv/tests/run.sh: examples/rv/tests/run.sh
 .. |examples/save_restore.v| replace:: ``save_restore.v``
 .. _examples/save_restore.v: examples/save_restore.v
 .. |examples/uart.v| replace:: ``uart.v``
@@ -1215,6 +1210,8 @@ The following list shows the current state of the repo:
 .. _tests/muxelim.v: tests/muxelim.v
 .. |tests/name_mangling.lv| replace:: ``name_mangling.lv``
 .. _tests/name_mangling.lv: tests/name_mangling.lv
+.. |tests/read1_write1_check.v| replace:: ``read1_write1_check.v``
+.. _tests/read1_write1_check.v: tests/read1_write1_check.v
 .. |tests/register_file_bypassing.v| replace:: ``register_file_bypassing.v``
 .. _tests/register_file_bypassing.v: tests/register_file_bypassing.v
 .. |tests/shadowing.lv| replace:: ``shadowing.lv``
