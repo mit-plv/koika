@@ -1,4 +1,5 @@
 /*! Preamble shared by all Kôika programs compiled to C++ using Verilator !*/
+#include <cstdint>
 #include "verilated.h"
 
 #ifdef TRACE
@@ -11,7 +12,7 @@ template<typename Dut>
 class Toplevel {
 protected:
   Dut dut;
-  uint64_t time;
+  std::uint64_t time;
 
 #ifdef TRACE
   VerilatedVcdC* tfp{};
@@ -93,7 +94,7 @@ public:
 
 struct cli_arguments {
   char* vcd_fpath;
-  uint64_t ncycles;
+  std::uint64_t ncycles;
 
   cli_arguments(int argc, char** argv) : vcd_fpath(nullptr), ncycles(UINT64_MAX) {
     int offset = 1;
@@ -106,7 +107,7 @@ struct cli_arguments {
     }
 
     if (offset < argc) {
-      ncycles = static_cast<uint64_t>(std::strtoull(argv[offset], nullptr, 10));
+      ncycles = static_cast<std::uint64_t>(std::strtoull(argv[offset], nullptr, 10));
     }
   }
 };

@@ -347,15 +347,15 @@ namespace prims {
       }
     }
 
-    template <uint base, uint64_t max, uint64_t num>
-    constexpr uint64_t parse_u64() noexcept {
+    template <uint base, std::uint64_t max, std::uint64_t num>
+    constexpr std::uint64_t parse_u64() noexcept {
       static_assert(max >= num, "Overflow in literal parsing");
       return num;
     }
 
-    template <uint base, uint64_t max, uint64_t num, char c, char... cs>
-    constexpr uint64_t parse_u64() noexcept {
-      const uint64_t digit = parse_digit<base, c>();
+    template <uint base, std::uint64_t max, std::uint64_t num, char c, char... cs>
+    constexpr std::uint64_t parse_u64() noexcept {
+      const std::uint64_t digit = parse_digit<base, c>();
       static_assert((max - digit) / base >= num, "Overflow in literal parsing");
       return parse_u64<base, max, base * num + digit, cs...>();
     }
@@ -374,7 +374,7 @@ namespace prims {
     template <uint base, bitwidth sz, char... cs>
     struct parse_number<parser::u64, base, sz, cs...> {
       // Not using bits<sz>::bitmask because it isn't constexpr
-      static constexpr uint64_t max = std::numeric_limits<bits_t<sz>>::max() >> bits<sz>::padding_width();
+      static constexpr std::uint64_t max = std::numeric_limits<bits_t<sz>>::max() >> bits<sz>::padding_width();
       static constexpr bits_t<sz> v = parse_u64<base, max, 0, cs...>();
     };
 
