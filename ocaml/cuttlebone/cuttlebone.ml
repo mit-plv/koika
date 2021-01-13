@@ -288,6 +288,9 @@ module Util = struct
   let may_fail_without_revert registers histories =
     Extr.may_fail_without_revert (contextEnv registers) histories
 
+  let need_data0_and_data1 registers action =
+    Extr.find_read1s_after_write1s (contextEnv registers) action
+
   let unop_to_str =
     let open Extr.PrimTyped in
     function

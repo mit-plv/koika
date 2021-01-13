@@ -30,6 +30,7 @@ Extraction "extr.ml"
            TypedSyntaxFunctions.is_tt
            TypedSyntaxFunctions.action_type
            TypedSyntaxFunctions.interp_arithmetic
+           TypedSyntaxFunctions.find_read1s_after_write1s
            TypedSyntaxFunctions.classify_registers
            TypedSyntaxFunctions.compute_register_histories
            TypedSyntaxFunctions.may_fail_without_revert

@@ -364,8 +364,12 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
   let cpp_enumerator_name = cpp_enumerator_name program_info in
   let cpp_const_init = cpp_const_init program_info in
 
+  let reg_list =
+    Array.to_list hpp.cpp_registers in
   let may_fail_fast =
-    Cuttlebone.Util.may_fail_without_revert (Array.to_list hpp.cpp_registers) in
+    Cuttlebone.Util.may_fail_without_revert reg_list in
+  let needs_data0_and_data1 =
+    Cuttlebone.Util.need_data0_and_data1 reg_list in
 
   let rec iter_sep sep body = function
     | [] -> ()
@@ -863,6 +867,22 @@ let compile (type pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
         List.filter (fun reg -> cond reg (rule.rl_reg_histories reg))
           (Array.to_list hpp.cpp_registers)
         |> Array.of_list in
+
+      (* Check for registers that would require keeping track of data0 and data1
+         separately, and issue a warning if there are any. *)
+      let _ =
+        match needs_data0_and_data1  rule.rl_body with
+        | [] -> ()
+        | conflicts ->
+           let names = List.map (fun r -> (hpp.cpp_register_sigs r).reg_name) conflicts |> String.concat ", " in
+           Printf.eprintf "Rule %s reads registers [%s] at port 1 \
+after writing to them at port 1.
+These reads should observe the old value of the registers, but \
+implementing this in simulation causes unnecessary performance issues.
+If you actually want to observe the old values, use let bindings to save \
+them before writing to the registers.\n"
+             (hpp.cpp_rule_names rule.rl_name)
+             names in
 
       let rwset_footprint =
         (* No need to save or reset a register's read-write set if it's only

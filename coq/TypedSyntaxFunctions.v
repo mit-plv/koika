@@ -549,4 +549,53 @@ Section TypedSyntaxFunctions.
          | APos p e => action_size e
          | _ => 0
          end)%N.
+
+  Record rd1_wr1_acc_t :=
+    { acc_wr1: REnv.(env_t) (fun _ => bool);
+      acc_conflicts: REnv.(env_t) (fun _ => bool) }.
+
+  Definition join_rd1_wr1_env_t (e1 e2: REnv.(env_t) (fun _ => bool)) :=
+    Environments.map2 REnv (fun r b1 b2 => b1 || b2) e1 e2.
+
+  Fixpoint find_read1s_after_write1s' {sig tau} (acc: rd1_wr1_acc_t) (a: action sig tau) {struct a} :=
+      match a with
+      | Fail _ | Var _ | Const _ | Read P0 _ | Write P0 _ _ => acc
+      | Assign m ex => find_read1s_after_write1s' acc ex
+      | Seq r1 r2 => find_read1s_after_write1s' (find_read1s_after_write1s' acc r1) r2
+      | Bind var ex body => find_read1s_after_write1s' (find_read1s_after_write1s' acc ex) body
+      | If cond tbranch fbranch =>
+        let acc := find_read1s_after_write1s' acc cond in
+        let tacc := find_read1s_after_write1s' acc tbranch in
+        let facc := find_read1s_after_write1s' acc fbranch in
+        {| acc_wr1 := join_rd1_wr1_env_t tacc.(acc_wr1) facc.(acc_wr1);
+           acc_conflicts := join_rd1_wr1_env_t tacc.(acc_conflicts) facc.(acc_conflicts) |}
+      | Read P1 idx =>
+        {| acc_wr1 := acc.(acc_wr1);
+           acc_conflicts :=
+             REnv.(putenv) acc.(acc_conflicts) idx
+                           (REnv.(getenv) acc.(acc_conflicts) idx ||
+                            REnv.(getenv) acc.(acc_wr1) idx) |}
+      | Write P1 idx value =>
+        {| acc_wr1 := REnv.(putenv) acc.(acc_wr1) idx true;
+           acc_conflicts := acc.(acc_conflicts) |}
+      | Unop fn arg1 =>
+        find_read1s_after_write1s' acc arg1
+      | Binop fn arg1 arg2 =>
+        let acc := find_read1s_after_write1s' acc arg1 in
+        find_read1s_after_write1s' acc arg2
+      | ExternalCall fn arg =>
+        find_read1s_after_write1s' acc arg
+      | InternalCall fn args body =>
+        let acc := cfoldr (fun _ _ arg acc => find_read1s_after_write1s' acc arg) args acc in
+        find_read1s_after_write1s' acc body
+      | APos _ a => find_read1s_after_write1s' acc a
+      end.
+
+  Definition find_read1s_after_write1s {sig tau} (a: action sig tau) :=
+    let acc := find_read1s_after_write1s'
+                {| acc_wr1 := REnv.(create) (fun _ => false);
+                   acc_conflicts := REnv.(create) (fun _ => false) |} a in
+    Environments.fold_right REnv
+      (fun r (conflicted: bool) acc => if conflicted then r :: acc else acc)
+      acc.(acc_conflicts) [].
 End TypedSyntaxFunctions.

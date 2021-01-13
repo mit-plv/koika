@@ -52,3 +52,5 @@ Extraction Implicit TypedSyntaxFunctions.action_type [R Sigma sig tau].
 Extraction Implicit TypedSyntaxFunctions.interp_arithmetic [R Sigma sig tau].
 Extraction Implicit LoweredSyntaxFunctions.action_footprint [R Sigma sig tau].
 Extraction Implicit LoweredSyntaxFunctions.action_footprint' [R Sigma sig tau].
+Extraction Implicit TypedSyntaxFunctions.find_read1s_after_write1s' [R Sigma sig tau].
+Extraction Implicit TypedSyntaxFunctions.find_read1s_after_write1s [R Sigma sig tau].
