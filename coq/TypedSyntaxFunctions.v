@@ -40,12 +40,12 @@ Section TypedSyntaxFunctions.
       | Bind var ex body => action_footprint' (action_footprint' acc ex) body
       | If cond tbranch fbranch => action_footprint' (action_footprint' (action_footprint' acc cond) tbranch) fbranch
       | Read port idx => (idx, (TRWRead, port)) :: acc
-      | Write port idx value => action_footprint' ((idx, (TRWWrite, port)) :: acc) value
+      | Write port idx value => (idx, (TRWWrite, port)) :: action_footprint' acc value
       | Unop fn arg1 => action_footprint' acc arg1
       | Binop fn arg1 arg2 => action_footprint' (action_footprint' acc arg1) arg2
       | ExternalCall fn arg => action_footprint' acc arg
       | InternalCall fn args body =>
-        let acc := cfoldl (fun _ arg acc => action_footprint' acc arg) args acc in
+        let acc := cfoldr (fun _ _ arg acc => action_footprint' acc arg) args acc in
         action_footprint' acc body
       | APos _ a => action_footprint' acc a
       end.
