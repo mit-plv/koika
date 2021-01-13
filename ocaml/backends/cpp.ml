@@ -46,6 +46,9 @@ type ('pos_t, 'var_t, 'fn_name_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_input_t =
     cpp_extfuns: string option;
   }
 
+type cpp_output_t =
+  { co_classname: string; co_hpp: Buffer.t; co_cpp: Buffer.t }
+
 let sprintf = Printf.sprintf
 let fprintf = Printf.fprintf
 
@@ -1565,7 +1568,9 @@ them before writing to the registers.\n"
 
   let buf_cpp = with_output_to_buffer p_cpp in
   let buf_hpp = with_output_to_buffer p_hpp in
-  (buf_hpp, buf_cpp)
+  { co_classname = hpp.cpp_classname;
+    co_hpp = buf_hpp;
+    co_cpp = buf_cpp }
 
 let cpp_rule_of_action reg_histories (rl_name, (kind, rl_body)) =
   { rl_external = kind = `ExternalRule; rl_name; rl_body;
@@ -1664,13 +1669,15 @@ let write_preamble dpath =
   let fpath = Filename.concat dpath cuttlesim_hpp_fname in
   Common.with_output_to_file fpath output_string cuttlesim_hpp
 
-let main target_dpath (kind: [< `Cpp | `Hpp | `Opt]) (cu: _ cpp_input_t) =
-  let hpp, cpp = compile cu in
-  let fpath_noext = Filename.concat target_dpath cu.cpp_classname in
+let write_output target_dpath (kind: [< `Cpp | `Hpp | `Opt]) ({ co_classname; co_hpp; co_cpp }: cpp_output_t) =
+  let fpath_noext = Filename.concat target_dpath co_classname in
   if kind = `Hpp || kind = `Opt then begin
       write_preamble target_dpath;
-      write_formatted fpath_noext ".hpp" hpp end;
+      write_formatted fpath_noext ".hpp" co_hpp end;
   if kind = `Cpp || kind = `Opt then
-    write_formatted fpath_noext ".cpp" cpp;
+    write_formatted fpath_noext ".cpp" co_cpp;
   if kind = `Opt then
     compile_cpp fpath_noext
+
+let main target_dpath (kind: [< `Cpp | `Hpp | `Opt]) (cu: _ cpp_input_t) =
+  write_output target_dpath kind (compile cu)
