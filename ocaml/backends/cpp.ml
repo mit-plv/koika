@@ -47,7 +47,7 @@ type ('pos_t, 'var_t, 'fn_name_t, 'rule_name_t, 'reg_t, 'ext_fn_t) cpp_input_t =
   }
 
 type cpp_output_t =
-  { co_classname: string; co_hpp: Buffer.t; co_cpp: Buffer.t }
+  { co_modname: string; co_hpp: Buffer.t; co_cpp: Buffer.t }
 
 let sprintf = Printf.sprintf
 let fprintf = Printf.fprintf
@@ -1568,7 +1568,7 @@ them before writing to the registers.\n"
 
   let buf_cpp = with_output_to_buffer p_cpp in
   let buf_hpp = with_output_to_buffer p_hpp in
-  { co_classname = hpp.cpp_classname;
+  { co_modname = hpp.cpp_module_name;
     co_hpp = buf_hpp;
     co_cpp = buf_cpp }
 
@@ -1669,8 +1669,8 @@ let write_preamble dpath =
   let fpath = Filename.concat dpath cuttlesim_hpp_fname in
   Common.with_output_to_file fpath output_string cuttlesim_hpp
 
-let write_output target_dpath (kind: [< `Cpp | `Hpp | `Opt]) ({ co_classname; co_hpp; co_cpp }: cpp_output_t) =
-  let fpath_noext = Filename.concat target_dpath co_classname in
+let write_output target_dpath (kind: [< `Cpp | `Hpp | `Opt]) ({ co_modname; co_hpp; co_cpp }: cpp_output_t) =
+  let fpath_noext = Filename.concat target_dpath co_modname in
   if kind = `Hpp || kind = `Opt then begin
       write_preamble target_dpath;
       write_formatted fpath_noext ".hpp" co_hpp end;
