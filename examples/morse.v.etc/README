@@ -1,0 +1,23 @@
+
+First we synthesis for ice40 with yosys:
+
+```
+yosys -p "read_verilog morse.v; read_verilog morse_top.v; synth_ice40 -blif morse.blif"
+```
+Then we place and route:
+
+```
+arachne-pnr -d 1k -P tq144 -p morse.pcf morse.blif -o morse.asc
+```
+the pcf constraint file that define the led and the clock used (12MHz) is provided
+
+then packaging the bitstream
+
+```
+icepack morse.asc morse.bin
+```
+
+then flashing the bitstream on the icestick
+```
+iceprog morse.bin
+```
