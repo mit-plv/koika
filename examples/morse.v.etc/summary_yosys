@@ -1,0 +1,17 @@
+
+=== morse_top ===
+
+   Number of wires:                109
+   Number of wire bits:            557
+   Number of public wires:         109
+   Number of public wire bits:     557
+   Number of memories:               0
+   Number of memory bits:            0
+   Number of processes:              0
+   Number of cells:                344
+     SB_CARRY                      105
+     SB_DFFE                         6
+     SB_DFFESR                      32
+     SB_DFFSR                        9
+     SB_LUT4                       192
+:
