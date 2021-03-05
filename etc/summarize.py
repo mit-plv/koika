@@ -124,8 +124,8 @@ COLORS = {
 def rcParams(fontsize=10, **extra):
     matplotlib.rcParams.update({
         "font.size": fontsize,
-        # "font.family": "serif",
-        # "font.serif": "Iosevka",
+        "font.family": "serif",
+        "font.serif": "Inconsolata",
         "font.weight": 400,
         "axes.titlesize": "small",
         "axes.labelsize": "small",
@@ -138,7 +138,9 @@ def rcParams(fontsize=10, **extra):
         "text.usetex": False,
         "figure.titleweight": 400,
         "savefig.bbox": "tight",
-        "savefig.pad_inches": 0.05
+        "savefig.pad_inches": 0.05,
+        "pdf.fonttype": 42,
+        "ps.fonttype": 42
     })
 
     matplotlib.rcParams.update(**extra)
