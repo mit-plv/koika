@@ -3,7 +3,7 @@ Require Import Koika.Frontend.
 Require Import Koika.Std.
 
 Module UART.
-  Definition CLOCK_SPEED := 12_000_000%N.
+  Definition CLOCK_SPEED := 25_000_000%N.
   Definition BAUD_RATE := 115200%N.
   Definition _CLOCK_SCALE := (CLOCK_SPEED / BAUD_RATE)%N.
   Definition CLOCK_DELAY_BITS := N.to_nat (N.log2_up _CLOCK_SCALE).

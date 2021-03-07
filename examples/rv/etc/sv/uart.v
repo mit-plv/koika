@@ -5,10 +5,10 @@ module uart(input wire CLK, input wire RST_N, output wire write_bit_arg, input w
 	reg[7:0] in_byte = 8'b0;
 	reg[2:0] in_byte_offset = 3'b0;
 	reg out_bit = 1'b1;
-	reg[6:0] delay = 7'b0;
+	reg[7:0] delay = 8'b0;
 	reg last_write_ack = 1'b0;
 
-	wire _cond0 = delay == 7'b0;
+	wire _cond0 = delay == 8'b0;
 	wire _cond1 = state == 2'b01;
 	wire _cond2 = state == 2'b10;
 	wire _cond3 = state == 2'b11;
@@ -25,14 +25,14 @@ module uart(input wire CLK, input wire RST_N, output wire write_bit_arg, input w
 			in_byte <= 8'b0;
 			in_byte_offset <= 3'b0;
 			out_bit <= 1'b1;
-			delay <= 7'b0;
+			delay <= 8'b0;
 			last_write_ack <= 1'b0;
 		end else begin
 			state <= _cond4 ? 2'b01 : _mux_ccontext0;
 			in_byte <= _cond4 ? read_byte_out[0 +: 8] : (_cond0 && ~(_cond1 || ~_cond2) ? in_byte >> 1'b1 : in_byte);
 			in_byte_offset <= _cond0 && ~(_cond1 || ~_cond2) ? in_byte_offset + 3'b001 : in_byte_offset;
 			out_bit <= _mux_ccontext1;
-			delay <= _cond0 ? 7'b1100111 : delay - 7'b0000001;
+			delay <= _cond0 ? 8'b11011000 : delay - 8'b0000001;
 			last_write_ack <= write_bit_out;
 		end
 	end
