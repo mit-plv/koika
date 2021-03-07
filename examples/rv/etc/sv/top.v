@@ -13,7 +13,6 @@ module top(input CLK, input RST_N, output uart_wr_valid, output[7:0] uart_wr_dat
 
    wire uart_rd_valid = 1'b0;
    wire[7:0] uart_rd_data = 8'b0;
-   wire uart_rd_ready;
 
    wire led_wr_valid;
    wire led_wr_data;
@@ -32,7 +31,7 @@ module top(input CLK, input RST_N, output uart_wr_valid, output[7:0] uart_wr_dat
              .ext_uart_write_arg({uart_wr_valid, uart_wr_data}),
              .ext_uart_write_out(uart_wr_ready),
 
-             .ext_uart_read_arg(uart_rd_ready),
+             .ext_uart_read_arg(),
              .ext_uart_read_out({uart_rd_valid, uart_rd_data}),
 
              .ext_led_arg({led_wr_valid, led_wr_data}),

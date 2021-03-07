@@ -12,7 +12,6 @@ module top_uart(input CLK, input RST_N, output LED, input uart_line_in, output u
    wire uart_wr_ready;
 
    wire[8:0] uart_rd_opt_byte = {1'b0, 8'b0};
-   wire uart_rd_ready;
 
    wire led_wr_valid;
    wire led_wr_data;
@@ -39,7 +38,7 @@ module top_uart(input CLK, input RST_N, output LED, input uart_line_in, output u
              .ext_uart_write_arg(uart_wr_opt_byte),
              .ext_uart_write_out(uart_wr_ready),
 
-             .ext_uart_read_arg(uart_rd_ready),
+             .ext_uart_read_arg(),
              .ext_uart_read_out(uart_rd_opt_byte),
 
              .ext_led_arg({led_wr_valid, led_wr_data}),
