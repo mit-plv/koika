@@ -4,6 +4,7 @@
 int getchar();
 int putchar(int c);
 void putchars(const char* str);
+void putln();
 
 int getled();
 int putled(int on);
