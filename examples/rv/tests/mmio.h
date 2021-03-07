@@ -10,4 +10,7 @@ int getled();
 int putled(int on);
 
 int host_is_fpga();
+
+void wait(long long int ncycles);
+void pause();
 #endif

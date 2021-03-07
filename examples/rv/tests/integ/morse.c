@@ -2,10 +2,6 @@
 
 const char* pattern = "-.- --- .. -.- .-";
 
-void wait(int duration) {
-  for (int i = 0; i < duration; i++);
-}
-
 void blink(char c, int DOT) {
   int on, duration;
 

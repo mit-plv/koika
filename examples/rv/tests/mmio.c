@@ -66,3 +66,11 @@ void putchars(const char* str) {
 void putln() {
   putchars("\r\n");
 }
+
+void wait(long long int ncycles) {
+  while (ncycles-- != 0);
+}
+
+void pause() {
+  wait(2000000);
+}
