@@ -5,7 +5,7 @@ elf2hex := elf2hex/elf2hex
 
 asm_rv32i_sources := $(wildcard riscv_tests/rv32ui/*.S) $(wildcard riscv_tests/rv32um/*.S) $(wildcard unit/*.S)
 c_rv32i_sources := $(wildcard unit/*.c) $(wildcard integ/*.c)
-c_rv32e_sources := $(filter-out $(wildcard integ/rvbench_*),$(c_rv32i_sources))
+c_rv32e_sources := $(filter-out integ/img.c,$(filter-out $(wildcard integ/rvbench_*),$(c_rv32i_sources)))
 
 asm_rv32i_stems := $(patsubst %.S,$(build)/rv32i/%,$(asm_rv32i_sources))
 c_rv32i_stems := $(patsubst %.c,$(build)/rv32i/%,$(c_rv32i_sources))
