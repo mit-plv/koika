@@ -2,18 +2,16 @@
 
 const char* pattern = "-.- --- .. -.- .-";
 
-#define DOT 20000
-#define DASH (3 * DOT)
-#define SPACE DOT
-#define LETTER_SPACE (3 * DOT)
-#define WORD_SPACE (7 * DOT)
-
 void wait(int duration) {
   for (int i = 0; i < duration; i++);
 }
 
-void blink(char c) {
+void blink(char c, int DOT) {
   int on, duration;
+
+  int DASH = (3 * DOT);
+  int SPACE = DOT;
+  int LETTER_SPACE = (3 * DOT);
 
   switch (c) {
   case '.':
@@ -33,14 +31,15 @@ void blink(char c) {
   wait(SPACE);
 }
 
-#define REPEAT 1
-
 int main() {
-  for (int i = 0; i < REPEAT; i++) {
+  int DOT = host_is_fpga() ? 600000 : 20000;
+  int WORD_SPACE = (7 * DOT);
+
+  do {
     wait(WORD_SPACE);
     const char* p = pattern;
     while (*p)
-      blink(*p++);
-  }
-  putchar('\n');
+      blink(*p++, DOT);
+    putln();
+  } while (host_is_fpga());
 }

@@ -21,8 +21,7 @@
 // THE SOFTWARE.
 
 #include <stdbool.h>
-
-int putchar(int c);
+#include "../mmio.h"
 
 #define LINE_LENGTH 27
 #define LINE_COUNT 13
@@ -133,7 +132,13 @@ int main() {
         return 1;
 #endif
     }
-    putchar('\n');
+    putln();
   }
+
+  if (host_is_fpga()) {
+    putln();
+    main();
+  }
+
   return 0;
 }
