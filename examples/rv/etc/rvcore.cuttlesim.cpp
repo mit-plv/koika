@@ -94,6 +94,10 @@ struct extfuns_t {
     return current;
   }
 
+  enum_hostID ext_host_id(bits<1>) {
+    return enum_hostID::Cuttlesim;
+  }
+
   template<typename simulator>
   bits<1> ext_finish(simulator& sim, struct_maybe_bits_8 req) {
     if (req.valid) {

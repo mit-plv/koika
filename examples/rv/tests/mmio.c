@@ -21,6 +21,18 @@ int putled(int on) {
 static int* const UART_ADDR    = (int*)0x40000000;
 static int* const LED_ADDR     = (int*)0x40000004;
 static int* const STOP_ADDR    = (int*)0x40001000;
+static int* const HOST_ID_ADDR = (int*)0x40001004;
+
+typedef enum {
+  FPGA = 128,
+  NATIVE = 127,
+  VERILATOR = 1,
+  CUTTLESIM = 0
+} hostID;
+
+int host_is_fpga() {
+  return *HOST_ID_ADDR & FPGA;
+}
 
 int getchar() {
   return 0;
