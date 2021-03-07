@@ -13,7 +13,7 @@ cuttlesim := $(objects_dir)/$(basename $(CUTTLESIM_DRIVER)).opt
 verilator := $(objects_dir)/obj_dir.opt/V$(basename $(VERILATOR_TOP))
 pyverilator := $(objects_dir)/rvcore.pyverilator.py
 
-PYVERILATOR_TOP ?= top.v
+PYVERILATOR_TOP ?= $(VERILATOR_TOP)
 PYVERILATOR_PROBES ?= '*inst*_count' '*cycle_count'
 cuttlesim_runner := tests/run.sh "$(cuttlesim)" {} -1
 verilator_runner := tests/run.sh "$(verilator)" +VMH={} -1
@@ -26,7 +26,7 @@ verbose := $(if $(VERBOSE),,@)
 
 all: cuttlesim-tests verilator-tests
 
-# The UART module is written in Kôika too, and copied here from the Examples folder
+# The UART module is written in Kôika too, and copied here from the `examples/` folder
 uart:
 	$(MAKE) -C ../.. examples/_objects/uart.v/
 	cp ../../examples/_objects/uart.v/uart.v etc/sv/
