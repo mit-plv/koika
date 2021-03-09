@@ -19,7 +19,7 @@ This README provides practical information to get started with Kôika.  For deta
 .. raw:: html
 
    <a href="https://github.com/mit-plv/koika/">
-     <img src="https://raw.githubusercontent.com/mit-plv/koika/master/etc/logos/cover.jpg" align="center" />
+     <img src="https://raw.githubusercontent.com/mit-plv/koika/master/etc/logo/cover.jpg" align="center" />
    </a>
 
 Getting started
