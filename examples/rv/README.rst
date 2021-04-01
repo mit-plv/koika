@@ -26,4 +26,6 @@ Additional targets (for debugging, tracing, profiling, etc.) are provided by the
 Synthesis
 =========
 
-We test regularly on a `TinyFPGA BX <https://tinyfpga.com/bx/guide.html>`_ board, and occasionally on a Xilinx Artix-7 (AC701). Follow the instructions at https://github.com/cliffordwolf/icestorm to set up NextPNR and IceStorm, then use the ``top_fpga.bin`` target of the generated Makefile.
+We test regularly on a `ULX3S <https://radiona.org/ulx3s/>`_ board, and occasionally on a Xilinx Artix-7 (AC701). Follow the instructions in the main makefile to build an example.
+
+The `TinyFPGA BX <https://tinyfpga.com/bx/guide.html>`_ is a reasonable target too, though it is too small to fit the RV32I core comfortably.  The RV32E core fits as long as you use the UART interface (``make ICE40_TOP=top_ice40_uart.v top_ice40_uart.bit``).  The alternative would be to connect through USB, but it's hard to fit both a USB controller and the core on the device.
