@@ -1568,7 +1568,7 @@ Section CompilerCorrectness.
       circuit_env_equiv ->
       forall (idx: reg_t),
         interp_circuit (REnv.(getenv) (compile_scheduler' rc rules external s) idx) =
-        REnv.(getenv) (interp_cycle cr csigma rules s) idx.
+        REnv.(getenv) (interp_cycle csigma rules s cr) idx.
   Proof.
     intros; unfold compile_scheduler', interp_cycle, interp_scheduler, commit_update, commit_rwdata.
     rewrite !getenv_map, !getenv_create; cbn.

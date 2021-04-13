@@ -42,10 +42,8 @@ Section Thm.
     Proof.
       cbv zeta; intros.
       setoid_rewrite compile_scheduler'_correct.
-      - rewrite scheduler_lowering_correct.
-        unfold lower_r, lower_log;
-          rewrite SemanticProperties.commit_update_log_map_values, getenv_map;
-          reflexivity.
+      - rewrite cycle_lowering_correct.
+        unfold lower_r, lower_log; rewrite getenv_map; reflexivity.
       - apply circuit_env_equiv_CReadRegister.
     Qed.
   End Standalone.
