@@ -19,9 +19,8 @@ Qed.
 Lemma beq_dec_false_iff {A} (EQ: EqDec A) a1 a2 :
   beq_dec a1 a2 = false <-> a1 <> a2.
 Proof.
-  unfold beq_dec; destruct eq_dec; subst.
-  - firstorder.
-  - split; intro; (eauto || congruence).
+  unfold beq_dec; destruct eq_dec; subst;
+    intuition congruence.
 Qed.
 
 Hint Extern 1 (EqDec _) => econstructor; decide equality : typeclass_instances.

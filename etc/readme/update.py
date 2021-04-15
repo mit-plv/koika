@@ -136,6 +136,7 @@ EXCLUDED = {
     "examples/rv/etc/bsv/wrappers/top_fpga.bsv",
     "examples/rv/etc/nangate45/retiming/multisize.v",
     "examples/rv/etc/sv/ext_finish.v",
+    "examples/rv/etc/sv/ext_host_id.v",
     "examples/rv/etc/sv/ext_mem_dmem.v",
     "examples/rv/etc/sv/ext_mem_imem.v",
     "examples/rv/etc/sv/uart.v",

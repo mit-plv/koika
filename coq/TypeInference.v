@@ -76,7 +76,7 @@ Section TypeInference.
 
     Notation EX Px := (existT _ _ Px).
 
-    Fixpoint actpos {reg_t ext_fn_t} pos (e: uaction reg_t ext_fn_t) :=
+    Definition actpos {reg_t ext_fn_t} pos (e: uaction reg_t ext_fn_t) :=
       match e with
       | UAPos p _ => p
       | _ => pos

@@ -35,7 +35,7 @@ Section LoweredSyntaxFunctions.
     Definition action_footprint {sig tau} (a: action sig tau) :=
       action_footprint' [] a.
 
-    Fixpoint action_registers {sig tau} {EQ: EqDec reg_t} (a: action sig tau) : list reg_t :=
+    Definition action_registers {sig tau} {EQ: EqDec reg_t} (a: action sig tau) : list reg_t :=
       dedup [] (List.map (fun '(rs, _) => rs) (action_footprint a)).
 
     Context (rules: rule_name_t -> rule).

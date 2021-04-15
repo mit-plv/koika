@@ -30,14 +30,9 @@ Installing dependencies and building from source
 
 * OCaml 4.07 through 4.09, `opam <https://opam.ocaml.org/doc/Install.html>`_ 2.0 or later, GNU make.
 
-* Coq 8.9, 8.10, or 8.11::
+* Coq 8.11 through 8.13::
 
-    opam install coq=8.10.2
-
-* Coq's Ltac2 plugin, if using Coq < 8.9 or 8.10 (newer versions have it built-in)::
-
-    opam repo add coq-released https://coq.inria.fr/opam/released
-    opam install coq-ltac2
+    opam install coq=8.12.2
 
 * Dune 2.5 or later::
 

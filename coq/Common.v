@@ -1,5 +1,6 @@
 (*! Utilities | Shared utilities !*)
-Require Export Coq.omega.Omega.
+Require Export Coq.micromega.Lia.
+Require Export Coq.Arith.Arith.
 Require Export Coq.Lists.List Coq.Bool.Bool Coq.Strings.String.
 Require Export Koika.EqDec Koika.Vect Koika.FiniteType Koika.Show.
 
@@ -288,7 +289,7 @@ Section Lists.
       skipn n (List.app l1 l2) = List.app (skipn n l1) l2.
   Proof.
     induction l1; destruct n; cbn; try (inversion 1; reflexivity).
-    - intros; apply IHl1; omega.
+    - intros; apply IHl1; lia.
   Qed.
 
   Lemma forallb_pointwise {A} :

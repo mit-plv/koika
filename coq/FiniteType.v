@@ -1,6 +1,7 @@
 (*! Utilities | Finiteness typeclass !*)
 Require Import Coq.Lists.List.
-Require Import Coq.omega.Omega.
+Require Import Coq.micromega.Lia.
+Require Import Coq.Arith.Arith.
 Import ListNotations.
 
 Class FiniteType {T} :=
@@ -41,15 +42,15 @@ Proof.
   induction l; intros n H n' Hle Habs.
   - auto.
   - apply Bool.andb_true_iff in H; destruct H; apply PeanoNat.Nat.ltb_lt in H.
-    destruct Habs as [ ? | ? ]; subst; try omega.
-    eapply IHl; [ eassumption | .. | eassumption ]; omega.
+    destruct Habs as [ ? | ? ]; subst; try lia.
+    eapply IHl; [ eassumption | .. | eassumption ]; lia.
 Qed.
 
 Lemma increasing_not_In' :
   forall l n, increasing (n :: l) = true -> forall n', n' <? n = true -> ~ In n' (n :: l).
 Proof.
   unfold not; intros l n Hincr n' Hlt [ -> | Hin ]; apply PeanoNat.Nat.ltb_lt in Hlt.
-  - omega.
+  - lia.
   - eapply increasing_not_In;
       [ eassumption | apply Nat.lt_le_incl | eassumption ]; eauto.
 Qed.

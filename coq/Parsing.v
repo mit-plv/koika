@@ -44,8 +44,8 @@ Notation "'()'"  := nil (in custom koika_args).
 (* Notation "'( )'"  := nil (in custom koika_args). *)
 Notation "'(' x ')'"  := x (in custom koika_args, x custom koika_middle_args).
 (* Koika_var *)
-Notation "a" := (ident_to_string a) (in custom koika_var at level 0, a constr at level 0, format "'[' a ']'",only parsing).
-Notation "a" := (a) (in custom koika_var at level 0, a constr at level 0, format "'[' a ']'",only printing).
+Notation "a" := (ident_to_string a) (in custom koika_var at level 0, a constr at level 0, only parsing).
+Notation "a" := (a) (in custom koika_var at level 0, a constr at level 0, format "'[' a ']'", only printing).
 
 (* Koika_types *)
 Notation " '(' x ':' y ')'" := (cons (prod_of_argsig {| arg_name := x%string; arg_type := y |}) nil) (in custom koika_types at level 60, x custom koika_var at level 0, y constr at level 12 ).

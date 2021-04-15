@@ -168,7 +168,7 @@ Module Display.
          int_retSig := unit_t;
          int_body := display_utf8 "\n" |}.
 
-    Fixpoint extend_printer f (offset: nat) (printer: intfun) : intfun :=
+    Definition extend_printer f (offset: nat) (printer: intfun) : intfun :=
       let opts :=
           {| display_newline := false; display_strings := false; display_style := dFull |} in
       let display_value arg :=

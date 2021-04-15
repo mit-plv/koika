@@ -42,7 +42,7 @@ Section CircuitOptimizer.
 
     Fixpoint unannot {sz} (c: circuit sz) : circuit sz :=
       match c with
-      | CAnnot annot c => unannot c
+      | CAnnot _ c => unannot c
       | c => c
       end.
 
@@ -55,7 +55,7 @@ Section CircuitOptimizer.
     Definition asconst {sz} (c: circuit sz) : option (bits sz) :=
       match unannot c with
       | CConst cst => Some cst
-      | c => None
+      | _ => None
       end.
 
     Definition isconst {sz} (c: circuit sz) (cst: bits sz) :=
@@ -368,7 +368,7 @@ Section CircuitOptimizer.
         if select ~~ b1 then fun _ => c1
         else if select ~~ b0 then fun _ => c2
              else fun c0 => c0
-      | c => fun c0 => c0
+      | _ => fun c0 => c0
       end c.
 
     (** This pass performs the following simplification:

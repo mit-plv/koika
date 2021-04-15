@@ -62,7 +62,7 @@ Section TypedSyntaxFunctions.
         dedup acc l
       end.
 
-    Fixpoint action_registers {sig tau} {EQ: EqDec reg_t} (a: action sig tau) : list reg_t :=
+    Definition action_registers {sig tau} {EQ: EqDec reg_t} (a: action sig tau) : list reg_t :=
       dedup [] (List.map (fun '(rs, _) => rs) (action_footprint a)).
 
     Context (rules: rule_name_t -> rule).
@@ -431,13 +431,13 @@ Section TypedSyntaxFunctions.
     | MemberTl (k, _) (k', _) sig' m' => beq_dec k k' || member_mentions_shadowed_binding m'
     end.
 
-  Fixpoint action_mentions_shadowed_var {EQ: EqDec var_t} {sig tau} (a: action sig tau) :=
+  Definition action_mentions_shadowed_var {EQ: EqDec var_t} {sig tau} (a: action sig tau) :=
     existsb_subterm (fun a => match a with
                            | AnyAction (Var m) => member_mentions_shadowed_binding m
                            | _ => false
                            end) a.
 
-  Fixpoint action_mentions_var {EQ: EqDec var_t} {sig tau} (k: var_t) (a: action sig tau) :=
+  Definition action_mentions_var {EQ: EqDec var_t} {sig tau} (k: var_t) (a: action sig tau) :=
     existsb_subterm (fun a => match a with
                            | AnyAction (@Var _ _ _ _ _ _ _ _ k' _ m) => beq_dec k k'
                            | _ => false

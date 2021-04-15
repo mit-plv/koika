@@ -375,7 +375,7 @@ Section Folds.
       | CtxCons k v ctx => cfoldl ctx (f k v init)
       end.
 
-    Fixpoint cfoldl' {sig} (ctx: context V sig) (init: T) :=
+    Definition cfoldl' {sig} (ctx: context V sig) (init: T) :=
       match sig return context V sig -> T with
       | [] => fun _ => init
       | k :: sig => fun ctx => cfoldl (ctl ctx) (f k (chd ctx) init)

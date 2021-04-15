@@ -234,7 +234,7 @@ Proof.
     + exact (MemberTl k k' (sig ++ infix ++ sig') (minfix _ infix sig sig' k m')).
 Defined.
 
-Fixpoint mprefix_pair {K sig} (k: K) (p: {k': K & member k' sig})
+Definition mprefix_pair {K sig} (k: K) (p: {k': K & member k' sig})
   : {k': K & member k' (k :: sig)} :=
   let '(existT _ k' m) := p in
   existT _ k' (MemberTl k' k _ m).

@@ -215,7 +215,7 @@ Section Compilation.
              (s: @koika_package_t pos_t var_t fn_name_t rule_name_t reg_t ext_fn_t)
              (opt: let circuit sz := circuit (lower_R s.(koika_reg_types))
                                             (lower_Sigma s.(koika_ext_fn_types)) sz in
-                   forall {sz}, circuit sz -> circuit sz)
+                   forall sz, circuit sz -> circuit sz)
     : circuit_package_t :=
     let _ := s.(koika_reg_finite) in
     let _ := s.(koika_var_names) in

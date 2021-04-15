@@ -7,7 +7,7 @@ Ltac min_t :=
   repeat match goal with
          | [ |- context[Min.min ?x ?y] ] =>
            first [rewrite (Min.min_l x y) by min_t | rewrite (Min.min_r x y) by min_t ]
-         | _ => omega
+         | _ => lia
          end.
 
 Lemma slice_end :
@@ -18,7 +18,7 @@ Proof.
   apply vect_to_list_inj.
   unfold Bits.slice, vect_skipn_plus, vect_extend_end_firstn, vect_extend_end.
   autorewrite with vect_to_list.
-  min_t; rewrite Nat.sub_diag by omega; cbn.
+  min_t; rewrite Nat.sub_diag by lia; cbn.
   rewrite app_nil_r.
   rewrite firstn_skipn.
   rewrite firstn_all2 by (rewrite vect_to_list_length; reflexivity).
@@ -72,10 +72,10 @@ Proof.
   unfold Bits.slice_subst, vect_skipn_plus, vect_firstn_plus, vect_extend_end_firstn, vect_extend_end.
   autorewrite with vect_to_list.
   rewrite !firstn_app.
-  rewrite firstn_length_le by (rewrite vect_to_list_length; omega).
+  rewrite firstn_length_le by (rewrite vect_to_list_length; lia).
   rewrite !minus_plus, vect_to_list_length, Nat.sub_diag; cbn.
-  rewrite firstn_firstn by omega; min_t.
-  rewrite (firstn_all2 (n := sz)) by (rewrite vect_to_list_length; omega).
+  rewrite firstn_firstn by lia; min_t.
+  rewrite (firstn_all2 (n := sz)) by (rewrite vect_to_list_length; lia).
   rewrite app_nil_r; reflexivity.
 Qed.
 
@@ -91,19 +91,19 @@ Proof.
     unfold Bits.slice_subst, vect_skipn_plus, vect_firstn_plus, vect_extend_end_firstn, vect_extend_end.
   autorewrite with vect_to_list.
   rewrite !firstn_app.
-  rewrite firstn_length_le by (rewrite vect_to_list_length; omega).
+  rewrite firstn_length_le by (rewrite vect_to_list_length; lia).
   rewrite vect_to_list_length; cbn.
   rewrite !firstn_firstn; repeat min_t.
-  rewrite firstn_length_le by (rewrite vect_to_list_length; omega).
+  rewrite firstn_length_le by (rewrite vect_to_list_length; lia).
   rewrite <- !app_assoc.
   rewrite skipn_firstn, firstn_firstn.
   min_t.
-  rewrite !(firstn_all2 (vect_to_list bs)) by (rewrite vect_to_list_length; omega).
-  replace (sz0 + sz - offset - width) with (sz0 + sz - (offset + width)) by omega.
-  replace (sz0 - offset - width) with (sz0 - (offset + width)) by omega.
+  rewrite !(firstn_all2 (vect_to_list bs)) by (rewrite vect_to_list_length; lia).
+  replace (sz0 + sz - offset - width) with (sz0 + sz - (offset + width)) by lia.
+  replace (sz0 - offset - width) with (sz0 - (offset + width)) by lia.
   rewrite <- !skipn_firstn.
-  rewrite (firstn_all2 (n := sz0 + sz)) by (rewrite vect_to_list_length; omega).
-  rewrite <- skipn_app by (rewrite firstn_length, vect_to_list_length; min_t; omega).
+  rewrite (firstn_all2 (n := sz0 + sz)) by (rewrite vect_to_list_length; lia).
+  rewrite <- skipn_app by (rewrite firstn_length, vect_to_list_length; min_t; lia).
   rewrite List.firstn_skipn.
   reflexivity.
 Qed.
@@ -237,7 +237,7 @@ Ltac vect_to_list_t_step :=
   | _ => progress (autounfold with vect_to_list)
   | _ => progress autorewrite with vect_to_list vect_to_list_cleanup
   | [ |- context[match ?x with _ => _ end] ] => destruct x
-  | _ => repeat rewrite ?Min.min_l, ?Min.min_r by omega
+  | _ => repeat rewrite ?Min.min_l, ?Min.min_r by lia
   end.
 
 Ltac vect_to_list_t :=
@@ -249,11 +249,11 @@ Lemma slice_subst_impl_correct :
     slice_subst_impl offset a1 a2.
 Proof.
   intros; vect_to_list_t.
-  - rewrite (firstn_all2 (n := sz - offset)) by (autorewrite with vect_to_list; omega).
+  - rewrite (firstn_all2 (n := sz - offset)) by (autorewrite with vect_to_list; lia).
     reflexivity.
-  - rewrite (skipn_all2 (n := offset + width)) by (autorewrite with vect_to_list; omega).
+  - rewrite (skipn_all2 (n := offset + width)) by (autorewrite with vect_to_list; lia).
     autorewrite with vect_to_list_cleanup; reflexivity.
-  - rewrite (firstn_all2 (n := sz)) by (autorewrite with vect_to_list; omega).
+  - rewrite (firstn_all2 (n := sz)) by (autorewrite with vect_to_list; lia).
     reflexivity.
 Qed.
 
@@ -262,7 +262,7 @@ Lemma slice_full {sz}:
     Bits.slice 0 sz bs = bs.
 Proof.
   intros; vect_to_list_t.
-  rewrite (firstn_all2 (n := sz)) by (autorewrite with vect_to_list; omega);
+  rewrite (firstn_all2 (n := sz)) by (autorewrite with vect_to_list; lia);
     reflexivity.
 Qed.
 
@@ -271,7 +271,7 @@ Lemma slice_concat_l {sz1 sz2} :
     Bits.slice 0 sz1 (bs1 ++ bs2)%vect = bs1.
 Proof.
   intros; vect_to_list_t.
-  rewrite (firstn_all2 (n := sz1)) by (autorewrite with vect_to_list; omega);
+  rewrite (firstn_all2 (n := sz1)) by (autorewrite with vect_to_list; lia);
     reflexivity.
 Qed.
 
@@ -280,9 +280,9 @@ Lemma slice_concat_r {sz1 sz2} :
     Bits.slice sz1 sz2 (bs1 ++ bs2)%vect = bs2.
 Proof.
   intros; vect_to_list_t.
-  rewrite (skipn_all2 (n := sz1)) by (autorewrite with vect_to_list; omega).
+  rewrite (skipn_all2 (n := sz1)) by (autorewrite with vect_to_list; lia).
   vect_to_list_t.
-  rewrite (firstn_all2 (n := sz2)) by (autorewrite with vect_to_list; omega).
+  rewrite (firstn_all2 (n := sz2)) by (autorewrite with vect_to_list; lia).
   reflexivity.
 Qed.
 
@@ -333,6 +333,11 @@ Section Arithmetic.
       apply N.log2_lt_pow2; lia.
   Qed.
 
+  Lemma pow2_nz :
+    forall n, N.pow 2 n <> 0%N.
+  Proof. intros; apply N.pow_nonzero; lia. Qed.
+  Hint Resolve pow2_nz: core.
+
   Lemma to_N_vect_unsnoc :
     forall sz (x: bits (S sz)),
       (Bits.to_N (snd (vect_unsnoc x)) = Bits.to_N x mod (2 ^ N.of_nat sz))%N.
@@ -342,7 +347,8 @@ Section Arithmetic.
     - simpl.
       destruct x. destruct vtl. cbn.
       destruct_match; reflexivity.
-    - destruct x.
+    - pose proof pow2_nz (N.of_nat sz).
+      destruct x.
       rewrite Nat2N.inj_succ, N.pow_succ_r'. cbn.
       specialize (IHsz vtl).
       destruct (vect_unsnoc vtl) eqn:H_unsnoc_vtl.
@@ -351,17 +357,13 @@ Section Arithmetic.
       rewrite (N.mod_small (if vhd then 1 else 0)).
       + rewrite (N.mod_small _ (2 * 2 ^ N.of_nat sz)).
         * f_equal.
-          rewrite N.mul_mod_distr_l by (destruct sz; cbn; lia).
-          reflexivity.
+          rewrite N.mul_mod_distr_l by lia;
+            reflexivity.
         * destruct vhd.
-          -- rewrite N.mul_mod_distr_l by (destruct sz; cbn; lia).
-             apply N.mul_2_mono_l.
-             apply N.mod_lt. destruct sz; cbn; lia.
-          -- apply N.mod_lt. destruct sz; cbn; lia.
-      + destruct vhd.
-        * apply N.lt_1_mul_pos. lia.
-          destruct sz; cbn; lia.
-        * destruct sz; cbn; lia.
+          -- rewrite N.mul_mod_distr_l by lia.
+             eauto using N.mul_2_mono_l, N.mod_lt.
+          -- apply N.mod_lt; lia.
+      + destruct vhd; lia.
   Qed.
 
   Lemma to_N_lsl1 :
@@ -374,9 +376,10 @@ Section Arithmetic.
       destruct x.
       reflexivity.
     - intros.
+      pose proof pow2_nz (N.of_nat sz).
       rewrite Nat2N.inj_succ, N.pow_succ_r'.
       cbn. rewrite (N.mul_comm _ 2).
-      rewrite N.mul_mod_distr_l by (destruct sz; cbn; lia).
+      rewrite N.mul_mod_distr_l by lia.
       f_equal.
       apply to_N_vect_unsnoc.
   Qed.
@@ -392,7 +395,7 @@ Section Arithmetic.
     - rewrite Nat2N.inj_succ, N.pow_succ_r'.
       cbn.
       rewrite IHn, to_N_lsl1.
-      rewrite N.mul_mod_idemp_l by (destruct sz; cbn; lia).
+      rewrite N.mul_mod_idemp_l by (pose proof pow2_nz (N.of_nat sz); lia).
       f_equal. ring.
   Qed.
 

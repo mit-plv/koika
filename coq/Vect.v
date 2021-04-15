@@ -1,7 +1,9 @@
 (*! Utilities | Vectors and bitvector library !*)
 Require Import Coq.Lists.List Coq.Bool.Bool.
-Require Import Coq.omega.Omega.
+Require Import Coq.micromega.Lia.
+Require Import Coq.Arith.Arith.
 Require Export Coq.NArith.NArith.          (* Coq bug: If this isn't exported, other files can't import Vect.vo *)
+Require Import Coq.ZArith.ZArith.
 Require Import Koika.EqDec.
 Import EqNotations.
 
@@ -107,8 +109,8 @@ Proof.
   induction sz; cbn; intros.
   - reflexivity.
   - destruct n.
-    + omega.
-    + try rewrite IHsz by omega; reflexivity.
+    + lia.
+    + rewrite IHsz by lia; reflexivity.
 Qed.
 
 Definition index_of_nat_lt (sz n: nat)
@@ -116,7 +118,7 @@ Definition index_of_nat_lt (sz n: nat)
 Proof.
   destruct (index_of_nat sz n) as [idx | ] eqn:Heq; intros Hlt.
   - exact idx.
-  - exfalso; apply index_of_nat_none_ge in Heq; omega.
+  - exfalso; apply index_of_nat_none_ge in Heq; lia.
 Defined.
 
 Fixpoint largest_index sz : index (S sz) :=
@@ -556,7 +558,7 @@ Proof.
   unfold vect_extend_end_firstn, vect_extend_end; intros.
   rewrite <- eq_trans_rew_distr.
   set (eq_trans _ _) as Heq; clearbody Heq.
-  revert Heq; replace (n - Nat.min n sz) with 0 by omega; intros.
+  revert Heq; replace (n - Nat.min n sz) with 0 by lia; intros.
   rewrite vect_app_nil.
   rewrite <- eq_trans_rew_distr.
   set (eq_trans _ _) as Heq'; clearbody Heq'.
@@ -1056,7 +1058,7 @@ Module Bits.
     Definition to_index {sz} sz' (bs: bits sz) : option (index sz') :=
       index_of_nat sz' (to_nat bs).
 
-    Fixpoint to_2cZ {sz} (bs: bits sz) : Z :=
+    Definition to_2cZ {sz} (bs: bits sz) : Z :=
       if msb bs then
         match to_N (neg bs) with
         | N0 => -1
@@ -1430,4 +1432,4 @@ Fixpoint z_range start len :=
   | S len => start :: z_range (Z.succ start) len
   end.
 
-(* Eval simpl in (List.map (fun z => Bits.of_2cZ 4 z) (range (-8) 16)). *)
+(* Eval simpl in (List.map (fun z => Bits.of_2cZ 4 z) (z_range (-8) 16)). *)

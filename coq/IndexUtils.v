@@ -143,8 +143,8 @@ Lemma list_sum_member_le:
     list_sum l.
 Proof.
   induction l; destruct idx.
-  - cbn; omega.
-  - specialize (IHl a0); unfold list_sum, list_sum' in *; cbn; omega.
+  - cbn; lia.
+  - specialize (IHl a0); unfold list_sum, list_sum' in *; cbn; lia.
 Qed.
 
 Instance Show_index (n: nat) : Show (index n) :=
