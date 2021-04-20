@@ -80,6 +80,7 @@ static inline void _sim_assert_fn(const char* repr,
 #define MULTIPRECISION_THRESHOLD 64
 
 #ifdef NEEDS_BOOST_MULTIPRECISION
+#include <boost/multiprecision/cpp_int.hpp>
 
 #if BOOST_VERSION < 106800
 // https://github.com/boostorg/multiprecision/commit/bbe819f8034a3c854deffc6191410b91ac27b3d6
@@ -87,7 +88,6 @@ static inline void _sim_assert_fn(const char* repr,
 #pragma message("Bignum truncation is broken in Boost < 1.68; if you run into issues, try upgrading.")
 #endif
 
-#include <boost/multiprecision/cpp_int.hpp>
 template<std::size_t size>
 using wbits_t = std::conditional_t<size <= 128, boost::multiprecision::uint128_t,
                 std::conditional_t<size <= 256, boost::multiprecision::uint256_t,
