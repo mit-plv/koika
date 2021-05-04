@@ -59,10 +59,12 @@ Notation "'Ob'" :=
     (at level 7, left associativity, only printing) : bits_printing.
 Notation "bs '~' 0" :=
   {| vhd := false; vtl := bs |}
-    (at level 7, left associativity, only printing) : bits_printing.
+    (at level 7, left associativity,
+     format "bs '~' 0", only printing) : bits_printing.
 Notation "bs '~' 1" :=
   {| vhd := true; vtl := bs |}
-    (at level 7, left associativity, only printing) : bits_printing.
+    (at level 7, left associativity,
+     format "bs '~' 1", only printing) : bits_printing.
 
 Open Scope context.
 Open Scope log_entries.
