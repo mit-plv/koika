@@ -470,6 +470,7 @@ Section CircuitOptimizer.
 
         c[0 +: |c|]            =>  c
         {c, 0b}, {0b, c}       =>  c
+        c[0b]                  =>  c (when c has size 1)
         {c1, c2}[0 +: |c1|]    => c1
         {c1, c2}[|c1| +: |c1|] => c2
         c == 0b~1, 0b~1 == c   =>  c
@@ -501,6 +502,11 @@ Section CircuitOptimizer.
         match unannot c with
         | CNot c' => fun _ => c'
         | _ => fun c0 => c0
+        end
+      | CBinop (Sel sz) c1 offset =>
+        match eq_dec sz 1 with
+        | left pr_width => fun _ => rew pr_width in c1
+        | right _ => fun c0 => c0
         end
       | CBinop (Concat sz1 sz2) c1 c2 =>
         match eq_dec sz1 0, eq_dec sz2 0 with
