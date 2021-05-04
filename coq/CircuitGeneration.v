@@ -100,6 +100,10 @@ Section CircuitCompilation.
   Defined.
 
   Section Action.
+    Lemma mul_1_r :
+      forall n : nat, n * 1 = n.
+    Proof. induction n; simpl; congruence. Defined.
+
     Definition compile_unop (fn: fbits1) (a: circuit (CSigma1 fn).(arg1Sig)):
       circuit (CSigma1 fn).(retSig) :=
       let cArg1 fn := circuit (CSigma1 fn).(arg1Sig) in
@@ -111,7 +115,7 @@ Section CircuitCompilation.
         | Not _ => fun a c => c
         | Repeat _ _ => fun a c => c
         | SExt sz width => fun a c =>
-          ltac:(subst cRet; simpl; rewrite <- vect_extend_end_cast, <- (Nat.mul_1_r (width - sz));
+          ltac:(subst cRet; simpl; rewrite <- vect_extend_end_cast, <- (mul_1_r (width - sz));
                   exact (CBinopOpt (Concat _ _)
                                    (CUnopOpt (Repeat 1 (width - sz))
                                              (CBinopOpt (Sel sz) a (CConst (Bits.of_nat (log2 sz) (pred sz)))))
