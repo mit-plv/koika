@@ -32,7 +32,7 @@ Section SyntaxFunctions.
         | USeq a1 a2 => USeq (r 0 a1) (r 1 a2)
         | UBind v ex body => UBind v (r 0 ex) (r 1 body)
         | UIf cond tbranch fbranch =>
-          UIf (r 0 cond) (r 1 tbranch) (r 3 fbranch)
+          UIf (r 0 cond) (r 1 tbranch) (r 2 fbranch)
         | URead port idx => URead port idx
         | UWrite port idx value => UWrite port idx (r 0 value)
         | UUnop ufn1 arg1 => UUnop ufn1 (r 0 arg1)
