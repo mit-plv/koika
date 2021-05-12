@@ -55,8 +55,11 @@ cd ~/cuttlesim
 git clone https://github.com/mit-plv/koika.git -b asplos2021 koika
 
 cd koika
-git worktree add ../koika_bthom-bp bthom-bp
-git worktree add ../koika_sim-multicore sim-multicore
+
+# 9acd9f3a39e3ec15fc254156785c4596096ebd16
+git worktree add ../koika_bthom-bp asplos2021-bthom-bp
+# 2b72b5f47630d6a139d17cd92897a737eeefaec3
+git worktree add ../koika_sim-multicore asplos2021-sim-multicore
 
 cd ~/cuttlesim/koika/examples/rv; make DUT=rv32i; make DUT=rv32e
 cd ~/cuttlesim/koika_bthom-bp/examples/rv; make DUT=rv32i
