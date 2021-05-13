@@ -44,8 +44,7 @@ Installing dependencies and building from source
 
 * To run the tests of our RISCV core, a `RISCV compilation toolchain <https://github.com/xpack-dev-tools/riscv-none-embed-gcc-xpack/releases/>`_.
 
-* To run C++ simulations: a recent C++ compiler (clang or gcc) and
-  ``libboost-dev``.
+* To run C++ simulations: a recent C++ compiler (clang or gcc), ``libboost-dev``, and optionally ``clang-format``.
 
 You can compile the full distribution, including examples, tests, and proofs by running ``make`` in the top-level directory of this repo.  Generated files are placed in ``_build``, ``examples/_objects/``,  ``tests/_objects/``, and  ``examples/rv/_objects/``.
 
