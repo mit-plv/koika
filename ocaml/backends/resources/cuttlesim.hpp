@@ -1399,9 +1399,9 @@ namespace cuttlesim {
 #define FAIL_UNLESS(can_fire) \
   { if (!(can_fire)) { FAIL(); }  }
 #define READ(read_fn, reg, source) \
-  ({ decltype(source.reg) tmp; \
+  ({ decltype(source.reg) _tmp; \
      FAIL_UNLESS(read_fn(&tmp, source.reg, log.rwset.reg, Log.rwset.reg)); \
-     tmp; })
+     _tmp; })
 #define WRITE(write_fn, reg, val) \
   FAIL_UNLESS(write_fn(log.state.reg, (val), log.rwset.reg))
 #define READ0(reg) \
@@ -1415,9 +1415,9 @@ namespace cuttlesim {
 #define FN_RETURN(val) \
   { (*__fn_ret) = val; return true; }
 #define CALL_FN(fname, ...) \
-  ({ PASTE_EXPANDED_3(ti_fn, RULE_NAME, fname) tmp; \
-     FAIL_UNLESS(PASTE_EXPANDED_3(fn, RULE_NAME, fname)(tmp,##__VA_ARGS__)); \
-     tmp; })
+  ({ PASTE_EXPANDED_3(ti_fn, RULE_NAME, fname) _tmp; \
+     FAIL_UNLESS(PASTE_EXPANDED_3(fn, RULE_NAME, fname)(_tmp,##__VA_ARGS__)); \
+     _tmp; })
 #define COMMIT() \
   { PASTE_EXPANDED_2(commit, RULE_NAME)(); return true; }
 
@@ -1440,9 +1440,9 @@ namespace cuttlesim {
   { if (!(can_fire)) { FAIL_DL(); } }
 #define READ_DL(read_fn, reg, source) \
   ({ dlog.push(reg_name_t::reg); \
-     decltype(source.reg) tmp; \
-     FAIL_UNLESS_DL(read_fn(&tmp, source.reg, log.rwset.reg, Log.rwset.reg)); \
-     tmp; })
+     decltype(source.reg) _tmp; \
+     FAIL_UNLESS_DL(read_fn(&_tmp, source.reg, log.rwset.reg, Log.rwset.reg)); \
+     _tmp; })
 #define WRITE_DL(write_fn, reg) \
   { dlog.push(reg_name_t::reg); \
     FAIL_UNLESS_DL(write_fn(log.state.reg, (val), log.rwset.reg)) }
@@ -1467,9 +1467,9 @@ namespace cuttlesim {
       offsetof(struct rwset_t, reg), sizeof(rwset_t::reg), })
 #define READ_DOL(read_fn, reg, source) \
   ({ PUSH_DOL(reg); \
-     decltype(source.reg) tmp; \
-     FAIL_UNLESS_DOL(read_fn(&tmp, source.reg, log.rwset.reg, Log.rwset.reg)); \
-     tmp; })
+     decltype(source.reg) _tmp; \
+     FAIL_UNLESS_DOL(read_fn(&_tmp, source.reg, log.rwset.reg, Log.rwset.reg)); \
+     _tmp; })
 #define WRITE_DOL(write_fn, reg, val) \
   { PUSH_DOL(reg); \
     FAIL_UNLESS_DOL(write_fn(log.state.reg, (val), log.rwset.reg)) }

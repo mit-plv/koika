@@ -1,0 +1,15 @@
+;;; Unit test for “tmp” variable
+
+(defun sum ((v1 (bits 16)) (v2 (bits 16))) (bits 16)
+  (+ v1 v2))
+
+(module tmp_var
+  (register r 16'b0)
+
+  (rule init
+    (let ((tmp 16'b0000111100001111)
+          (_tmp 16'b0000111100001111)
+          (tmp (sum tmp _tmp)))
+      (displn tmp)))
+
+  (scheduler s (sequence init)))
