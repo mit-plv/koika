@@ -1400,7 +1400,7 @@ namespace cuttlesim {
   { if (!(can_fire)) { FAIL(); }  }
 #define READ(read_fn, reg, source) \
   ({ decltype(source.reg) _tmp; \
-     FAIL_UNLESS(read_fn(&tmp, source.reg, log.rwset.reg, Log.rwset.reg)); \
+     FAIL_UNLESS(read_fn(&_tmp, source.reg, log.rwset.reg, Log.rwset.reg)); \
      _tmp; })
 #define WRITE(write_fn, reg, val) \
   FAIL_UNLESS(write_fn(log.state.reg, (val), log.rwset.reg))

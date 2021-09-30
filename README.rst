@@ -942,6 +942,7 @@ The following list shows the current state of the repo:
    - |tests/struct_init.v|_: Structure initialization
    - |tests/switches.v|_: Test various forms of switches
    - |tests/taint_analysis.lv|_: Unit tests to ensure that impure functions are not optimized out
+   - |tests/tmp_var.lv|_: Unit test for “tmp” variable
    - |tests/trivial_state_machine.v|_: Trivial state machine
    - |tests/unpack.v|_: Structure unpacking
 
@@ -1240,6 +1241,8 @@ The following list shows the current state of the repo:
 .. _tests/switches.v: tests/switches.v
 .. |tests/taint_analysis.lv| replace:: ``taint_analysis.lv``
 .. _tests/taint_analysis.lv: tests/taint_analysis.lv
+.. |tests/tmp_var.lv| replace:: ``tmp_var.lv``
+.. _tests/tmp_var.lv: tests/tmp_var.lv
 .. |tests/trivial_state_machine.etc/stm.v| replace:: ``stm.v``
 .. _tests/trivial_state_machine.etc/stm.v: tests/trivial_state_machine.etc/stm.v
 .. |tests/trivial_state_machine.v| replace:: ``trivial_state_machine.v``
