@@ -2,15 +2,15 @@
 Require Import Koika.Frontend.
 
 (*|
-=============================================================
+============================================================
  A simple combinational module and its proof of correctness
-=============================================================
+============================================================
 
 In this file we model a simple combinational block:
 
   input ---(the module)--> output
 
-Unlike in ``combinational_proof_tutorial.v``, we are not concerned here with properties related to timing, and for maximum simplicity we consider a single-cycle, non-combinational_proofd design.
+Unlike in ``combinational_proof_tutorial.v``, we are not concerned here with properties related to timing, and for maximum simplicity we consider a single-cycle, non-combinational proof design.
 
 We will start by verifying a Kôika function, and then show how to extend the proof to a single-rule design.
 
@@ -54,9 +54,9 @@ Compute model rotate_half Ob~1~1~1~1~0~0~0~0~1~0~1~0~1~0~1~0. (* .unfold *)
 Combinational implementation
 ============================
 
-We then define the Kôika implementation.  
-Let's consider a machine working with 8-bits instruction words. The machine should identify which 
-of the two instructions to perform based on a subset of the 8-bits of being high. 
+We then define the Kôika implementation.
+Let's consider a machine working with 8-bits instruction words. The machine should identify which
+of the two instructions to perform based on a subset of the 8-bits of being high.
 So we start by fixing a bit pattern to recognize for each operation :
 |*)
 
@@ -68,8 +68,9 @@ Definition ops :=
        vect_of_list [Ob~0~0~0~0~0~1~1~0; Ob~0~0~0~1~0~0~0~1] |}.
 
 (*|
-… and then we implement the design itself.  While the functional model was written for legibility, the design is written for performance. 
-For example here we replace the multiplier by 4 operator with a shift operator.
+… and then we implement the design itself.  While the functional model was written for legibility, the design is written for performance.
+For example here we replace the multiply-by-4 operation with bitvector operations (slice and append).
+
 Since we are writing a combinational function, the design is parametric on the set of registers `reg_t`:
 |*)
 
