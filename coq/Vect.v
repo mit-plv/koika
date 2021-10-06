@@ -1043,6 +1043,11 @@ Module Bits.
   Definition lsl {sz} nplaces (b: bits sz) :=
     vect_dotimes lsl1 nplaces b.
 
+  Definition rotate_l {sz} nplaces (b: bits sz) :=
+    vect_cycle_l nplaces b.
+  Definition rotate_r {sz} nplaces (b: bits sz) :=
+    vect_cycle_r nplaces b.
+
   Section Casts.
     Fixpoint to_N {sz: nat} (bs: bits sz) {struct sz} : N :=
       match sz return bits sz -> N with
