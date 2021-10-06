@@ -3,7 +3,7 @@ Require Import Koika.Frontend.
 
 (*|
 =============================================================
- A simple combinational module and it's proof of correctness
+ A simple combinational module and its proof of correctness
 =============================================================
 
 In this file we model a simple combinational block:
@@ -31,6 +31,7 @@ Inductive operation :=
 | rotate_half. (** Rotate the input left by half of its width **)
 
 (*|
+Note that this model does not specify the bit pattern to encode those two instructions.
 And we have a model of each of these operations:
 |*)
 
@@ -53,7 +54,10 @@ Compute model rotate_half Ob~1~1~1~1~0~0~0~0~1~0~1~0~1~0~1~0. (* .unfold *)
 Combinational implementation
 ============================
 
-We then define the Kôika implementation.  We start by fixing a bit pattern for each operation:
+We then define the Kôika implementation.  
+Let's consider a machine working with 8-bits instruction words. The machine should identify which 
+of the two instructions to perform based on a subset of the 8-bits of being high. 
+So we start by fixing a bit pattern to recognize for each operation :
 |*)
 
 Definition ops :=
@@ -64,7 +68,9 @@ Definition ops :=
        vect_of_list [Ob~0~0~0~0~0~1~1~0; Ob~0~0~0~1~0~0~0~1] |}.
 
 (*|
-… and then we implement the design itself.  While the model was written for legibility, the design is written for performance.  Since we are writing a combinational function, the design is parametric on the set of registers `reg_t`:
+… and then we implement the design itself.  While the functional model was written for legibility, the design is written for performance. 
+For example here we replace the multiplier by 4 operator with a shift operator.
+Since we are writing a combinational function, the design is parametric on the set of registers `reg_t`:
 |*)
 
   Definition design reg_t : UInternalFunction reg_t empty_ext_fn_t := {{
