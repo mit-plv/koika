@@ -56,11 +56,9 @@ Ltac remember_bits_to_N :=
 Ltac pose_bits_bound_proofs :=
   repeat match goal with
          | [ H: context[Bits.to_N ?bs] |- _ ] =>
-           let sz := eval hnf in (bits_get_size bs) in
-               pose_once Bits.to_N_bounded sz bs
+           pose_once Bits.to_N_bounded bs
          | [ |- context[Bits.to_N ?bs] ] =>
-           let sz := eval hnf in (bits_get_size bs) in
-               pose_once Bits.to_N_bounded sz bs
+           pose_once Bits.to_N_bounded bs
          end.
 
 (** Lia with some support for the Bits.to_N function **)

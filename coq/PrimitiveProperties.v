@@ -325,7 +325,7 @@ Section Arithmetic.
     - apply index_of_nat_none_ge in Hindex.
       unfold Bits.to_nat in Hindex.
       assert (Bits.to_N idx >= N.of_nat sz)%N as Hle by lia.
-      pose proof (Bits.to_N_bounded _ bs).
+      pose proof (Bits.to_N_bounded bs).
       destruct (Bits.to_N bs); [ reflexivity | ].
       symmetry. apply N.bits_above_log2.
       apply N.ge_le in Hle.

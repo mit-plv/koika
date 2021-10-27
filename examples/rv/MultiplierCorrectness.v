@@ -181,7 +181,7 @@ Module MultiplierProofs.
     unfold invariant, step_invariant, finished_invariant, result_invariant in *.
     interp_action_all_t;
     Bits_to_N_t; try (assumption);
-    rewrite Bits.to_N_of_N;
+    rewrite Bits.to_N_of_N_lt;
     lia_bits.
   Qed.
 
@@ -205,8 +205,8 @@ Module MultiplierProofs.
     | [ H: context[_ = partial_mul _ _ _] |- _ ] =>
       setoid_rewrite H; try assumption
     end; cbn in *.
-    - rewrite Bits.to_N_of_N.
-      + rewrite Bits.to_N_of_N by lia_bits.
+    - rewrite Bits.to_N_of_N_lt.
+      + rewrite Bits.to_N_of_N_lt by lia_bits.
         cbn. rewrite_all_hypotheses. cbn.
         rewrite N.add_1_r.
         rewrite partial_mul_step.
@@ -239,7 +239,7 @@ Module MultiplierProofs.
           -- apply N.mul_le_mono.
              ++ lia_bits.
              ++ apply N.pow_le_mono_r; lia_bits.
-    - rewrite Bits.to_N_of_N by lia_bits.
+    - rewrite Bits.to_N_of_N_lt by lia_bits.
       cbn. rewrite N.add_1_r.
       rewrite partial_mul_step.
       setoid_rewrite_all_hypotheses. cbn.
@@ -272,7 +272,7 @@ Module MultiplierProofs.
     end;
     cbn in *.
     - rewrite_all_hypotheses.
-      rewrite Bits.to_N_of_N.
+      rewrite Bits.to_N_of_N_lt.
       + rewrite N.mod_small by lia_bits.
         rewrite (mul_to_partial_mul (N.of_nat n) (Bits.to_N _) (Bits.to_N _)) by lia_bits.
         cbn.
