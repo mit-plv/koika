@@ -864,6 +864,7 @@ The following list shows the current state of the repo:
 
    - |examples/collatz.lv|_: Computing terms of the Collatz sequence (Lispy Verilog version)
    - |examples/collatz.v|_: Computing terms of the Collatz sequence (Coq version)
+   - |examples/combinational_proof_tutorial.v|_: Tutorial: Verifying a small combinational circuit
    - |examples/conflicts.v|_: Understanding conflicts and forwarding
    - |examples/conflicts_modular.v|_: Understanding conflicts and forwarding, with modules
    - |examples/cosimulation.v|_: Using black-box Verilog models (combining Cuttlesim and Verilator)
@@ -1055,6 +1056,8 @@ The following list shows the current state of the repo:
 .. _examples/collatz.lv: examples/collatz.lv
 .. |examples/collatz.v| replace:: ``collatz.v``
 .. _examples/collatz.v: examples/collatz.v
+.. |examples/combinational_proof_tutorial.v| replace:: ``combinational_proof_tutorial.v``
+.. _examples/combinational_proof_tutorial.v: examples/combinational_proof_tutorial.v
 .. |examples/conflicts.v| replace:: ``conflicts.v``
 .. _examples/conflicts.v: examples/conflicts.v
 .. |examples/conflicts_modular.v| replace:: ``conflicts_modular.v``
