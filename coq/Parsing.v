@@ -176,6 +176,23 @@ Notation "'substbits' '(' t ',' v ',' f ',' a ')'" :=
         a custom koika at level 13, f custom koika_var at level 0,
         format "'substbits' '(' t ','  v ','  f ',' a ')'").
 
+Notation "'aref' '(' v ',' f ')'" :=
+  (UUnop (UArray1 (UGetElement f)) v)
+    (in custom koika, v custom koika at level 13, f constr at level 0, format "'aref' '(' v ','  f ')'").
+Notation "'arefbits' '(' t ',' v ',' f ')'" :=
+  (UUnop (UArray1 (UGetElementBits t f)) v)
+    (in custom koika, t constr at level 11, v custom koika at level 13,
+        f constr at level 0,
+        format "'arefbits' '(' t ','  v ','  f ')'").
+Notation "'asubst' '(' v ',' f ',' a ')'" :=
+  (UBinop (UArray2 (USubstElement f)) v a)
+    (in custom koika, v custom koika at level 13, a custom koika at level 13, f constr at level 0, format "'asubst' '(' v ','  f ',' a ')'").
+Notation "'asubstbits' '(' t ',' v ',' f ',' a ')'" :=
+  (UBinop (UArray2 (USubstElementBits t f)) v a)
+    (in custom koika, t constr at level 11, v custom koika at level 13,
+        a custom koika at level 13, f constr at level 0,
+        format "'asubstbits' '(' t ','  v ','  f ',' a ')'").
+
 Declare Custom Entry koika_structs_init.
 
 Notation "f ':=' expr" := (cons (f,expr) nil) (in custom koika_structs_init at level 20, f custom koika_var at level 0, expr custom koika at level 88).
