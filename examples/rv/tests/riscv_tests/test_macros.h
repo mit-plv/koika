@@ -399,7 +399,7 @@ test_ ## testnum: \
 #-----------------------------------------------------------------------
 # Pass and fail code (assumes test num is in TESTNUM)
 # We reach here normally when we pass all tests.
-# We just addtionally check TESTNUM > 0.
+# We just additionally check TESTNUM > 0.
 #-----------------------------------------------------------------------
 
 #define TEST_PASSFAIL \
