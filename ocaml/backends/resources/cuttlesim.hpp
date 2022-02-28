@@ -8,13 +8,20 @@
 #include <cstdint> // For uintN_t
 #include <cstring> // For memcpy
 #include <limits> // For std::numeric_limits used in prims::mask
+#include <ostream> // For std::ostream used in operator<<
 #include <string> // For prims::display
+#include <utility> // for std::forward
 #include <type_traits> // For std::conditional_t
 
 #ifndef SIM_MINIMAL
 #include <chrono> // For VCD headers
+#include <ctime>  // for gmtime
+#include <cctype> // For isgraph
+#include <cstdlib> // For getenv
+#include <initializer_list>
 #include <iomanip> // For std::setfill
 #include <iostream>
+#include <sstream> // For std::ostringstream
 #include <fstream> // For VCD files
 #include <random> // For executing rules in random order
 #endif // #ifndef SIM_MINIMAL
@@ -317,7 +324,7 @@ namespace prims {
   /// ## Bitvector literals
 
   namespace literal_parsing {
-    template<uint base, char c>
+    template<unsigned int base, char c>
     constexpr bool valid_digit() {
       switch (base) {
       case 2:
@@ -332,8 +339,8 @@ namespace prims {
       }
     }
 
-    template <uint base, char c>
-    constexpr uint parse_digit() noexcept {
+    template <unsigned int base, char c>
+    constexpr unsigned int parse_digit() noexcept {
       static_assert(base == 2 || base == 10 || base == 16, "Invalid base");
       static_assert(valid_digit<base, c>(), "Invalid digit");
       if ('0' <= c && c <= '9') {
@@ -343,17 +350,17 @@ namespace prims {
       } else if ('A' <= c && c <= 'F') {
         return c - 'A' + 10;
       } else {
-        unreachable<uint>();
+        unreachable<unsigned int>();
       }
     }
 
-    template <uint base, std::uint64_t max, std::uint64_t num>
+    template <unsigned int base, std::uint64_t max, std::uint64_t num>
     constexpr std::uint64_t parse_u64() noexcept {
       static_assert(max >= num, "Overflow in literal parsing");
       return num;
     }
 
-    template <uint base, std::uint64_t max, std::uint64_t num, char c, char... cs>
+    template <unsigned int base, std::uint64_t max, std::uint64_t num, char c, char... cs>
     constexpr std::uint64_t parse_u64() noexcept {
       const std::uint64_t digit = parse_digit<base, c>();
       static_assert((max - digit) / base >= num, "Overflow in literal parsing");
@@ -362,7 +369,7 @@ namespace prims {
 
     enum class parser { u64, u128, u256, u512, u1024, unsupported };
 
-    template <parser p, uint base, bitwidth sz, char... cs>
+    template <parser p, unsigned int base, bitwidth sz, char... cs>
     struct parse_number {
       static_assert(p != parser::unsupported, "Unsupported bitsize.");
 #ifndef NEEDS_BOOST_MULTIPRECISION
@@ -371,7 +378,7 @@ namespace prims {
       static_assert(p == parser::u64 || base == 16, "boost::multiprecision only supports base-16 literals.");
     };
 
-    template <uint base, bitwidth sz, char... cs>
+    template <unsigned int base, bitwidth sz, char... cs>
     struct parse_number<parser::u64, base, sz, cs...> {
       // Not using bits<sz>::bitmask because it isn't constexpr
       static constexpr std::uint64_t max = std::numeric_limits<bits_t<sz>>::max() >> bits<sz>::padding_width();
@@ -418,21 +425,21 @@ namespace prims {
       }
     }
 
-    template <bool imm, uint base, bitwidth sz, char... cs>
+    template <bool imm, unsigned int base, bitwidth sz, char... cs>
     struct parse_literal;
 
-    template <uint base, bitwidth sz, char... cs>
+    template <unsigned int base, bitwidth sz, char... cs>
     struct parse_literal<true, base, sz, '\'', cs...> {
       static_assert(sz <= 64, "Immediates can't have size > 64.");
       static constexpr bits_t<sz> v = parse_number<get_parser(sz), base, sz, cs...>::v;
     };
 
-    template <uint base, bitwidth sz, char... cs>
+    template <unsigned int base, bitwidth sz, char... cs>
     struct parse_literal<false, base, sz, '\'', cs...> {
       static constexpr bits<sz> v = bits<sz>{parse_number<get_parser(sz), base, sz, cs...>::v};
     };
 
-    template <bool imm, uint base, bitwidth sz, char c, char... cs>
+    template <bool imm, unsigned int base, bitwidth sz, char c, char... cs>
     struct parse_literal<imm, base, sz, c, cs...> {
       static constexpr bitwidth sz_digit = parse_digit<10, c>();
       static constexpr auto v = parse_literal<imm, base, 10 * sz + sz_digit, cs...>::v;
