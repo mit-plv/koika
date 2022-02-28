@@ -1,3 +1,17 @@
+################################################
+#            Check makefile version            #
+# (https://github.com/mit-plv/koika/issues/18) #
+################################################
+
+ifeq ($(filter output-sync,$(value .FEATURES)),)
+$(info You have Make version $(MAKE_VERSION).)
+$(error Unsupported version of Make. Please use GNU Make >= 4.0)
+endif
+
+####################
+# Global variables #
+####################
+
 OBJ_DIR := _obj
 BUILD_DIR := _build/default
 COQ_BUILD_DIR := ${BUILD_DIR}/coq
