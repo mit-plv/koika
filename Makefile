@@ -70,8 +70,8 @@ endef
 
 # Execute follow-ups if any
 define cuttlec_recipe_coda =
-	$(verbose)if [ -d $<.etc ]; then cp -rf $<.etc/. -t "$@"; fi
-	$(verbose)if [ -d $(dir $<)etc ]; then cp -rf $(dir $<)etc/. -t "$@"; fi
+	$(verbose)if [ -d $<.etc ]; then cp -rf $<.etc/. "$@"; fi
+	$(verbose)if [ -d $(dir $<)etc ]; then cp -rf $(dir $<)etc/. "$@"; fi
 	$(verbose)if [ -f "$@/Makefile" ]; then $(MAKE) -C "$@"; fi
 endef
 
