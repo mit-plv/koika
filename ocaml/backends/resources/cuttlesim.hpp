@@ -233,6 +233,14 @@ namespace prims {
       return bool(v); // Writing bool(v & bitmask()) works just as well
     }
 
+    // Add an implicit cast to bool for size sz == 1
+    // https://github.com/mit-plv/koika/issues/18
+    template <int sz_ = sz>
+    operator std::enable_if_t<sz_ == 1, bool> () const {
+      invariant();
+      return bool(v);
+    }
+
     explicit operator bits_t<sz>() const {
       return v;
     }
