@@ -9,6 +9,7 @@ depends: [
   ("coq" {>= "8.11"} | "coq-ltac2" {>= "0.3"})
   "base" {>= "0.12.2"}
   "core" {>= "0.12.4"}
+  "core_unix" {>= "0.14.0"}
   "dune" {build & >= "2.5"}
   "hashcons" {>= "1.3"}
   "parsexp" {>= "0.12.0"}

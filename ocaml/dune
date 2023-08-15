@@ -10,7 +10,7 @@
  (modules cuttlec)
  ; (modes byte)
  (preprocess (pps ppx_jane))
- (libraries str zarith dynlink core common cuttlebone frontends backends registry))
+ (libraries str zarith dynlink core common cuttlebone frontends backends registry core_unix core_unix.command_unix core_unix.filename_unix))
 
 (library
  (name interop)

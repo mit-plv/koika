@@ -23,6 +23,18 @@ Extraction \"collatz.ml\" collatz.prog."))
 
 
 ;; -*- dune -*-
+(subdir "_objects/combinational_proof_tutorial.v"
+ (rule (write-file "combinational_proof_tutorial_extr.v"
+                   "Require Coq.extraction.Extraction examples.combinational_proof_tutorial.
+Extraction \"combinational_proof_tutorial.ml\" combinational_proof_tutorial.prog."))
+ (coq.extraction
+  (prelude combinational_proof_tutorial_extr)
+  (extracted_modules combinational_proof_tutorial)
+  (theories Koika examples)
+  (flags "-w" "-overriding-logical-loadpath")))
+
+
+;; -*- dune -*-
 (subdir "_objects/conflicts.v"
  (rule (write-file "conflicts_extr.v"
                    "Require Coq.extraction.Extraction examples.conflicts.

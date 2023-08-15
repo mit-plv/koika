@@ -147,7 +147,8 @@ module RelPath = struct
 
   let abspath (path: string) =
     if Filename.is_relative path then
-      Filename.concat (Sys.getcwd ()) path
+      let cwd = Core_unix.getcwd () in
+      Filename.concat cwd path
     else path
 
   let rec skip_common_prefix l1 l2 =
@@ -241,10 +242,10 @@ let cli =
     ~summary:"Compile Koika programs"
     (let%map_open
         expect_errors = flag "--expect-errors" no_arg ~doc:"flip the exit code (1 for success, 0 for errors)"
-     and src_fpath = anon ("input" %: Filename.arg_type)
+     and src_fpath = anon ("input" %: Filename_unix.arg_type)
      and dst_dpath = flag "-o" (optional string) ~doc:"dir output to this directory"
      and output_specs = flag "-T" (listed string) ~doc:"fmt output in this format"
      in fun () -> run_cli expect_errors src_fpath dst_dpath output_specs)
 
 let _: unit =
-  Core.Command.run cli
+  Command_unix.run cli
