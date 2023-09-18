@@ -1,6 +1,7 @@
 /*! C++ driver for rv32i simulation with Cuttlesim !*/
 #include <iostream>
 #include <optional>
+#include <memory>
 
 #include "rv32.hpp"
 #include "elf.hpp"
